@@ -6,12 +6,9 @@ import { storeCredential } from "@/lib/credentials";
 import { registerWebhookForTenant } from "@/lib/platforms/booking";
 import { CalendlyClient } from "@/lib/platforms/booking";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
+import { getSession } from "@/lib/session";
 import crypto from "crypto";
 
-/**
- * Extracts brand voice profile from a raw text corpus using Claude Sonnet.
- * Falls back to a neutral default profile if corpus is too thin (<500 words).
- */
 async function extractVoiceProfile(corpus: string, runId: string): Promise<any> {
   const wordCount = corpus.trim().split(/\s+/).length;
 
@@ -59,7 +56,6 @@ Return nothing but the JSON object. No preamble, no markdown.`,
     const parsed = JSON.parse(result.text);
     return { ...parsed, source_path: "scrape", extracted_at: new Date().toISOString() };
   } catch {
-    // Claude returned malformed JSON — use default
     return {
       source_path: "default",
       extracted_at: new Date().toISOString(),
@@ -72,10 +68,16 @@ export async function POST(request: Request) {
   const runId = crypto.randomUUID();
 
   try {
+    // FIXED: Enforce session verification parameters to pull whopUserId safely
+    const session = await getSession();
+    if (!session?.whopUserId) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+    const whopUserId = session.whopUserId;
+
     const body = await request.json();
     const {
       engagementId,
-      whopUserId,
       buyerName,
       offerDetails,
       stack,
@@ -83,20 +85,15 @@ export async function POST(request: Request) {
       topObjections,
       prospectMeets,
       rawVoiceCorpus,
-      // Credentials submitted by the buyer — stored encrypted, never in env vars
-      credentials, // { booking: "key", email: "key", slack_webhook_url: "url", ... }
+      credentials,
     } = body;
 
-    if (!engagementId || !whopUserId || !buyerName) {
-      return new Response("Missing required fields: engagementId, whopUserId, buyerName", {
-        status: 400,
-      });
+    if (!engagementId || !buyerName) {
+      return new Response("Missing required fields: engagementId, buyerName", { status: 400 });
     }
 
     if (!stack?.booking_platform || !stack?.email_platform) {
-      return new Response("Missing required stack config: booking_platform and email_platform", {
-        status: 400,
-      });
+      return new Response("Missing required stack config: booking_platform and email_platform", { status: 400 });
     }
 
     await db.insert(skillRuns).values({
@@ -108,11 +105,8 @@ export async function POST(request: Request) {
       startedAt: new Date(),
     });
 
-    // ── Step 1: Store credentials encrypted in DB ─────────────────────
-    await db
-      .update(skillRuns)
-      .set({ phase: "credential_storage" })
-      .where(eq(skillRuns.id, runId));
+    // Step 1: Store credentials encrypted in DB
+    await db.update(skillRuns).set({ phase: "credential_storage" }).where(eq(skillRuns.id, runId));
 
     if (credentials?.booking) {
       await storeCredential(
@@ -131,25 +125,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // ── Step 2: Extract brand voice profile ───────────────────────────
-    await db
-      .update(skillRuns)
-      .set({ phase: "voice_extraction" })
-      .where(eq(skillRuns.id, runId));
-
+    // Step 2: Extract brand voice profile
+    await db.update(skillRuns).set({ phase: "voice_extraction" }).where(eq(skillRuns.id, runId));
     const voiceProfile = await extractVoiceProfile(rawVoiceCorpus ?? "", runId);
 
-    // ── Step 3: Build confirmation page URL ───────────────────────────
+    // Step 3: Build confirmation page URL
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.muddventures.com";
     const confirmationPageUrl = `${appUrl}/confirm/${engagementId}`;
-    // TODO: trigger page-deployer.ts for Webflow/GHL deployments
-    // For nextjs_vercel hosting, the route exists at /confirm/[engagementId]
 
-    // ── Step 4: Upsert engagement row ─────────────────────────────────
-    await db
-      .update(skillRuns)
-      .set({ phase: "engagement_upsert" })
-      .where(eq(skillRuns.id, runId));
+    // Step 4: Upsert engagement row
+    await db.update(skillRuns).set({ phase: "engagement_upsert" }).where(eq(skillRuns.id, runId));
 
     const engagementValues = {
       id: crypto.randomUUID(),
@@ -159,7 +144,6 @@ export async function POST(request: Request) {
       schemaVersion: "1.0",
       stack: {
         ...stack,
-        // Store webhook URL directly on stack (not in credentials_refs)
         slack_webhook_url: credentials?.slack_webhook_url ?? stack.slack_webhook_url,
       },
       offerDetails,
@@ -176,7 +160,7 @@ export async function POST(request: Request) {
       .insert(engagements)
       .values(engagementValues)
       .onConflictDoUpdate({
-        target: engagements.engagementId, // column reference, not string
+        target: engagements.engagementId,
         set: {
           stack: engagementValues.stack,
           offerDetails,
@@ -189,11 +173,8 @@ export async function POST(request: Request) {
         },
       });
 
-    // ── Step 5: Register webhook on booking platform ───────────────────
-    await db
-      .update(skillRuns)
-      .set({ phase: "webhook_registration" })
-      .where(eq(skillRuns.id, runId));
+    // Step 5: Register webhook on booking platform
+    await db.update(skillRuns).set({ phase: "webhook_registration" }).where(eq(skillRuns.id, runId));
 
     if (credentials?.booking) {
       const receiverUrl = `${appUrl}/api/webhooks/booking-event?engagement_id=${engagementId}`;
@@ -205,7 +186,6 @@ export async function POST(request: Request) {
           stack.booking_platform_meta
         );
 
-        // Store subscription ID so we can manage it later
         if (subscriptionId) {
           await db
             .update(engagements)
@@ -219,16 +199,12 @@ export async function POST(request: Request) {
             .where(eq(engagements.engagementId, engagementId));
         }
       } catch (e: any) {
-        // Non-fatal — log but don't fail the whole setup
         console.error(`[pin-down] Webhook registration failed: ${e.message}`);
       }
     }
 
-    // ── Step 6: Configure post-booking redirect (Calendly only) ──────
-    await db
-      .update(skillRuns)
-      .set({ phase: "redirect_config" })
-      .where(eq(skillRuns.id, runId));
+    // Step 6: Configure post-booking redirect (Calendly only)
+    await db.update(skillRuns).set({ phase: "redirect_config" }).where(eq(skillRuns.id, runId));
 
     if (
       stack.booking_platform === "calendly" &&
@@ -246,10 +222,7 @@ export async function POST(request: Request) {
       }
     }
 
-    await db
-      .update(skillRuns)
-      .set({ status: "success", completedAt: new Date() })
-      .where(eq(skillRuns.id, runId));
+    await db.update(skillRuns).set({ status: "success", completedAt: new Date() }).where(eq(skillRuns.id, runId));
 
     return NextResponse.json({
       success: true,
@@ -259,11 +232,7 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error("[pin-down setup]", error.message);
-    await db
-      .update(skillRuns)
-      .set({ status: "failed", completedAt: new Date() })
-      .where(eq(skillRuns.id, runId))
-      .catch(() => {});
+    await db.update(skillRuns).set({ status: "failed", completedAt: new Date() }).where(eq(skillRuns.id, runId)).catch(() => {});
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
