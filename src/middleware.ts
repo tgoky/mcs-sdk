@@ -3,12 +3,16 @@ import type { NextRequest } from "next/server";
 import { getIronSession } from "iron-session";
 import type { SessionData } from "@/lib/session";
 
-const PUBLIC_PATHS = ["/", "/api/auth/login", "/api/auth/callback"];
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  // Explicitly allow public authentication endpoints, webhooks, and cron workers to pass through
+  if (
+    pathname === "/" ||
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/webhooks") ||
+    pathname.startsWith("/api/crons")
+  ) {
     return NextResponse.next();
   }
 
