@@ -1,18 +1,16 @@
-import { cookies } from "next/headers";
+// src/app/api/auth/login/route.ts
+import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import crypto from "crypto";
-import { generateAuthUrl } from "@/lib/whop";
 
 export async function GET() {
-  const state = crypto.randomBytes(16).toString("hex");
-  const codeVerifier = crypto.randomBytes(32).toString("base64url");
+  const session = await getSession();
+  
+  // Directly inject a mock session structure
+  session.whopUserId = "dev_sandbox_user";
+  session.email = "developer@muddventures.local";
+  session.subscriptionStatus = "active";
+  await session.save();
 
-  const cookieStore = await cookies();
-  cookieStore.set("oauth_state", state, { httpOnly: true, maxAge: 600 });
-  cookieStore.set("code_verifier", codeVerifier, {
-    httpOnly: true,
-    maxAge: 600,
-  });
-
-  redirect(generateAuthUrl(state, codeVerifier));
+  // Route straight into the dashboard
+  redirect("/dashboard");
 }

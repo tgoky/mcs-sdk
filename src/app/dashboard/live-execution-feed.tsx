@@ -114,7 +114,8 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
                         : "bg-amber-500/5 text-amber-400 border-amber-500/10 animate-pulse"
                     }`}
                   >
-                    {run.status.toUpperCase()}
+                    {/* {run.status.toUpperCase()} */}
+                    {(run.status ?? "running").toUpperCase()}
                   </span>
                 </td>
                 <td className="p-2.5 font-mono text-[10px] text-zinc-300">
