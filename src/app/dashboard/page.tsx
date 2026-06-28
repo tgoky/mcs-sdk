@@ -3,10 +3,11 @@ import { skillRuns, engagements, activeAlerts } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { LiveExecutionFeed } from "./live-execution-feed";
+import { DASHBOARD_COPY as copy } from "@/lib/copy";
 
 export const revalidate = 0;
 
-export default async function TelemetryHubPage() {
+export default async function DashboardPage() {
   const session = await getSession();
 
   const userEngagements = await db
@@ -61,92 +62,92 @@ export default async function TelemetryHubPage() {
 
   return (
     <div className="space-y-5 w-full text-zinc-400 font-sans tracking-tight antialiased select-none px-1">
-      
-      {/* Consolidated Master Header Panel */}
+
+      {/* Header */}
       <div className="flex flex-col space-y-3 lg:flex-row lg:justify-between lg:items-center lg:space-y-0 border-b border-zinc-900 pb-3">
         <div className="space-y-1">
           <h1 className="text-lg font-medium text-zinc-100 tracking-tight">
-            System Telemetry Node
+            {copy.pageTitle}
           </h1>
           <p className="text-sm font-normal text-zinc-500">
-            Real-time multi-tenant core module orchestration and background execution pipeline tracing.
+            {copy.pageSubtitle}
           </p>
         </div>
-        
-        {/* Compact Navigation Utility Links */}
+
+        {/* Quick links */}
         <div className="flex items-center space-x-1.5 self-start lg:self-auto text-sm">
           <a
             href="/dashboard/engagements"
-            className="px-2 py-1 font-mono text-zinc-500 hover:text-zinc-200 transition-colors uppercase text-xs"
+            className="px-2 py-1 text-zinc-500 hover:text-zinc-200 transition-colors text-xs"
           >
-            [ Accounts ]
+            {copy.accountsLink}
           </a>
           <a
             href="/dashboard/credentials"
-            className="px-2 py-1 font-mono text-zinc-500 hover:text-zinc-200 transition-colors uppercase text-xs"
+            className="px-2 py-1 text-zinc-500 hover:text-zinc-200 transition-colors text-xs"
           >
-            [ Vault ]
+            {copy.credentialsLink}
           </a>
           <a
             href="/dashboard/engagements/new"
-            className="ml-2 inline-flex items-center px-3 py-1 font-mono text-xs border border-zinc-800 text-zinc-400 rounded hover:border-zinc-600 hover:text-zinc-100 transition-colors uppercase tracking-wider"
+            className="ml-2 inline-flex items-center px-3 py-1 text-xs border border-zinc-800 text-zinc-400 rounded hover:border-zinc-600 hover:text-zinc-100 transition-colors"
           >
-            Initialize Setup
+            {copy.newClientButton}
           </a>
         </div>
       </div>
 
-      {/* SECTION 1: High-Density Horizontal Metric Ribbon */}
+      {/* Overview stats */}
       <div className="border-b border-zinc-900 pb-4">
-        <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-3">
-          [ Metric Summary ]
+        <p className="text-xs font-medium text-zinc-500 mb-3">
+          {copy.overviewSectionTitle}
         </p>
-        
+
         <div className="grid gap-4 sm:grid-cols-3 pt-1 border-t border-zinc-900/20">
           <div className="space-y-1">
-            <p className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Active Accounts</p>
+            <p className="text-xs text-zinc-500">{copy.stat.activeAccounts}</p>
             <div className="flex items-baseline space-x-2">
               <span className="text-3xl font-light text-zinc-100">{userEngagements.length}</span>
-              <span className="text-xs font-mono text-zinc-500 uppercase">
-                {runningCount > 0 ? `${runningCount} running` : "nominal"}
+              <span className="text-xs text-zinc-500">
+                {runningCount > 0 ? copy.stat.activeAccountsRunning(runningCount) : copy.stat.activeAccountsAllGood}
               </span>
             </div>
           </div>
 
           <div className="space-y-1 sm:border-l sm:border-zinc-900 sm:pl-4">
-            <p className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Automated Actions</p>
+            <p className="text-xs text-zinc-500">{copy.stat.automatedActions}</p>
             <div className="flex items-baseline space-x-1.5">
               <span className="text-3xl font-light text-zinc-100">{completedActions}</span>
-              <span className="text-xs font-mono text-zinc-500 uppercase">Tasks</span>
+              <span className="text-xs text-zinc-500">{copy.stat.automatedActionsUnit}</span>
             </div>
           </div>
 
           <div className="space-y-1 sm:border-l sm:border-zinc-900 sm:pl-4">
-            <p className="text-xs font-mono text-zinc-500 uppercase tracking-widest">System Integrity</p>
+            <p className="text-xs text-zinc-500">{copy.stat.systemIntegrity}</p>
             <div className="flex items-baseline space-x-2">
               <span className="text-3xl font-light text-zinc-100">{criticalAlerts.length}</span>
-              <span className={`text-xs font-mono uppercase tracking-wide ${
+              <span className={`text-xs ${
                 criticalAlerts.length > 0 ? "text-rose-400" : "text-zinc-600"
               }`}>
-                {criticalAlerts.length > 0 ? "Action Required" : "Zero Errors"}
+                {criticalAlerts.length > 0 ? copy.stat.systemIntegrityFound : copy.stat.systemIntegrityClear}
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* SECTION 2: Borderless Pure Execution Log Section */}
+      {/* Activity feed */}
       <div className="pt-2">
-        <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-3">
-          [ Live Pipeline Stream Log ]
+        <p className="text-xs font-medium text-zinc-500 mb-3">
+          {copy.activityLogSectionTitle}
         </p>
-        
+
         <div className="pt-1 border-t border-zinc-900/20">
           <LiveExecutionFeed initialRuns={recentRuns} />
         </div>
       </div>
 
-      {/* Clean Utility Shortcut Grid */}
+      {/* Shortcuts */}
       {userEngagements.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 pt-4 border-t border-zinc-900">
           <a
@@ -154,10 +155,10 @@ export default async function TelemetryHubPage() {
             className="group block p-4 rounded-lg bg-zinc-900/10 border border-zinc-900/60 hover:border-zinc-800 hover:bg-zinc-900/20 transition-all"
           >
             <p className="text-sm font-medium text-zinc-400 group-hover:text-zinc-100 transition-colors">
-              Manage Active Engagements →
+              {copy.shortcuts.manageEngagements.title} →
             </p>
             <p className="text-xs font-normal text-zinc-600 mt-1">
-              Review custom business strategies and configuration matrices per account.
+              {copy.shortcuts.manageEngagements.description}
             </p>
           </a>
           <a
@@ -165,10 +166,10 @@ export default async function TelemetryHubPage() {
             className="group block p-4 rounded-lg bg-zinc-900/10 border border-zinc-900/60 hover:border-zinc-800 hover:bg-zinc-900/20 transition-all"
           >
             <p className="text-sm font-medium text-zinc-400 group-hover:text-zinc-100 transition-colors">
-              Access Credentials Vault →
+              {copy.shortcuts.manageCredentials.title} →
             </p>
             <p className="text-xs font-normal text-zinc-600 mt-1">
-              Securely deploy or revoke encrypted platform API authorization tokens.
+              {copy.shortcuts.manageCredentials.description}
             </p>
           </a>
         </div>

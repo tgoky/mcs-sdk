@@ -3,9 +3,10 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { engagements, skillRuns } from "@/models/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, count } from "drizzle-orm";
 import { MobileNav } from "./mobile-nav";
 import Link from "next/link";
+import { Bubbles, BrushCleaning, CookingPot, } from "lucide-react";
 
 const SKILLS = [
   "pin-down",
@@ -17,6 +18,47 @@ const SKILLS = [
 
 type SkillName = (typeof SKILLS)[number];
 type SkillStatus = "live" | "failed" | "not_run";
+
+const SKILL_INFO: Record<SkillName, { name: string; description: string }> = {
+  "pin-down": {
+    name: "Pin Down",
+    description: "Sets up a new client account and onboarding flow.",
+  },
+  "pile-on": {
+    name: "Pile On",
+    description: "Automatically follows up with leads who haven't booked yet.",
+  },
+  "pre-call-read": {
+    name: "Pre-Call Read",
+    description: "Sends your team a quick briefing before every call.",
+  },
+  "win-back": {
+    name: "Win-Back",
+    description: "Re-engages prospects who went cold.",
+  },
+  "leak-map": {
+    name: "Leak Map",
+    description: "Weekly check for where you're losing customers.",
+  },
+};
+
+const STATUS_TOOLTIPS: Record<SkillStatus, string> = {
+  live: "Active & running",
+  failed: "Needs attention",
+  not_run: "Ready to start",
+};
+
+function timeAgo(date: Date): string {
+  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString();
+}
 
 export default async function DashboardLayout({
   children,
@@ -41,68 +83,64 @@ export default async function DashboardLayout({
     "leak-map": "not_run",
   };
 
+  const skillLastRun: Record<SkillName, Date | null> = {
+    "pin-down": null,
+    "pile-on": null,
+    "pre-call-read": null,
+    "win-back": null,
+    "leak-map": null,
+  };
+
+  const skillRunCounts: Record<SkillName, number> = {
+    "pin-down": 0,
+    "pile-on": 0,
+    "pre-call-read": 0,
+    "win-back": 0,
+    "leak-map": 0,
+  };
+
   if (userEngagements.length > 0) {
     const recentRuns = await db
       .select({
         skillName: skillRuns.skillName,
         status: skillRuns.status,
+        startedAt: skillRuns.startedAt,
       })
       .from(skillRuns)
       .orderBy(desc(skillRuns.startedAt))
-      .limit(50);
+      .limit(100);
 
     for (const run of recentRuns) {
       const skill = run.skillName as SkillName;
-      if (SKILLS.includes(skill) && skillStatuses[skill] === "not_run") {
-        skillStatuses[skill] = run.status === "success" ? "live" : "failed";
+      if (SKILLS.includes(skill)) {
+        skillRunCounts[skill]++;
+        if (!skillLastRun[skill] && run.startedAt) {
+          skillLastRun[skill] = new Date(run.startedAt);
+        }
+        if (skillStatuses[skill] === "not_run") {
+          skillStatuses[skill] = run.status === "success" ? "live" : "failed";
+        }
       }
     }
   }
 
-  const displayName = session.email?.split("@")[0] ?? "operator";
+  const displayName = session.email?.split("@")[0] ?? "Member";
 
-  const statusIcons: Record<SkillStatus, ReactNode> = {
-    live: (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="6" width="2" height="6" rx="0.5" fill="currentColor"/>
-        <rect x="6" y="3" width="2" height="9" rx="0.5" fill="currentColor"/>
-        <rect x="10" y="1" width="2" height="11" rx="0.5" fill="currentColor"/>
-      </svg>
-    ),
-    failed: (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="9" width="2" height="3" rx="0.5" fill="currentColor"/>
-        <rect x="6" y="6" width="2" height="6" rx="0.5" fill="currentColor"/>
-        <rect x="10" y="10" width="2" height="2" rx="0.5" fill="currentColor"/>
-      </svg>
-    ),
-    not_run: (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="10" width="2" height="2" rx="0.5" fill="currentColor"/>
-        <rect x="6" y="10" width="2" height="2" rx="0.5" fill="currentColor"/>
-        <rect x="10" y="10" width="2" height="2" rx="0.5" fill="currentColor"/>
-      </svg>
-    ),
-  };
-
-  const statusTooltips: Record<SkillStatus, string> = {
-    live: "Operational",
-    failed: "Degraded",
-    not_run: "Standby",
-  };
+  const activeCount = Object.values(skillStatuses).filter(s => s === "live").length;
+  const failedCount = Object.values(skillStatuses).filter(s => s === "failed").length;
 
   const navLinks = [
-    { 
-      href: "/dashboard", 
-      label: "Telemetry Hub",
+    {
+      href: "/dashboard",
+      label: "Dashboard",
       icon: (
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M2 8H5L7 4L9 12L11 8H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       )
     },
-    { 
-      href: "/dashboard/engagements", 
+    {
+      href: "/dashboard/engagements",
       label: "Engagements",
       icon: (
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -113,8 +151,8 @@ export default async function DashboardLayout({
         </svg>
       )
     },
-    { 
-      href: "/dashboard/credentials", 
+    {
+      href: "/dashboard/credentials",
       label: "Credentials",
       icon: (
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -128,11 +166,9 @@ export default async function DashboardLayout({
   ];
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-zinc-950 text-zinc-400 font-sans antialiased">
-      
-      <aside className="w-56 border-r border-zinc-900 bg-zinc-950 flex flex-col justify-between hidden md:flex shrink-0">
-        <div className="flex flex-col flex-1 py-8 px-5 space-y-8">
-          
+    <div className="flex h-screen overflow-hidden bg-zinc-950 text-zinc-400 font-sans antialiased">
+      <aside className="w-64 border-r border-zinc-900 bg-zinc-950 flex-col justify-between hidden md:flex">
+        <div className="flex flex-col flex-1 pt-5 pb-16 px-5 space-y-6 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           <div className="px-1">
             <span className="font-mono text-sm font-semibold tracking-wider text-zinc-100">
               SHOWTIME
@@ -154,33 +190,109 @@ export default async function DashboardLayout({
             ))}
           </nav>
 
-          <div className="space-y-4 pt-4 border-t border-zinc-900">
-            <p className="text-xs font-mono text-zinc-500 uppercase tracking-wider px-1">
-              Modules
-            </p>
-            <div className="flex flex-col space-y-0.5">
-              {SKILLS.map((skill) => {
+          <div className="pt-4 border-t border-zinc-900">
+            <div className="px-1 mb-3 space-y-1">
+              <p className="text-xs font-mono text-zinc-500 uppercase tracking-wider">
+                System Health
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-mono text-zinc-500">
+                  <span className="text-zinc-400">{activeCount} active</span>
+                  {failedCount > 0 && <span className="text-zinc-600 mx-1">·</span>}
+                  {failedCount > 0 && <span className="text-zinc-500">{failedCount} issue{failedCount !== 1 ? 's' : ''}</span>}
+                </span>
+              </div>
+            </div>
+            
+            <div className="bg-zinc-900/50 border border-zinc-900 rounded-lg overflow-hidden">
+              {SKILLS.map((skill, index) => {
                 const status = skillStatuses[skill];
+                const info = SKILL_INFO[skill];
+                const lastRun = skillLastRun[skill];
+                const runCount = skillRunCounts[skill];
+                
                 return (
-                  <div 
-                    key={skill} 
-                    className="flex items-center justify-between px-1 py-1.5 rounded hover:bg-zinc-900/30 transition-colors group"
-                    title={statusTooltips[status]}
+                  <Link
+                    key={skill}
+                    href={`/dashboard/modules/${skill}`}
+                    className={`
+                      block px-3 py-2.5 transition-colors
+                      hover:bg-zinc-800/80 cursor-pointer
+                      group relative
+                      ${index !== SKILLS.length - 1 ? 'border-b border-zinc-900' : ''}
+                    `}
                   >
-                    <span className="font-mono text-xs text-zinc-400">
-                      {skill}
-                    </span>
-                    <span className="text-zinc-600 group-hover:text-zinc-500 transition-colors">
-                      {statusIcons[status]}
-                    </span>
-                  </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-medium text-zinc-200 group-hover:text-zinc-100 transition-colors truncate">
+                          {info.name}
+                        </span>
+                        <svg 
+                          className="w-3 h-3 opacity-0 group-hover:opacity-100 text-zinc-500 shrink-0 transition-all duration-200" 
+                          fill="none" 
+                          viewBox="0 0 24 24" 
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+
+                      <div className="flex items-center shrink-0 relative group/icon">
+                        {status === "live" && (
+                          <>
+                            <CookingPot size={16} className="text-zinc-400" />
+                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl z-10">
+                              {STATUS_TOOLTIPS.live}
+                            </span>
+                          </>
+                        )}
+                        {status === "failed" && (
+                          <>
+                            <BrushCleaning size={16} className="text-zinc-400" />
+                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl z-10">
+                              {STATUS_TOOLTIPS.failed}
+                            </span>
+                          </>
+                        )}
+                        {status === "not_run" && (
+                          <>
+                            <Bubbles size={16} className="text-zinc-500" />
+                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl z-10">
+                              {STATUS_TOOLTIPS.not_run}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-zinc-500 leading-snug mt-0.5">
+                      {info.description}
+                    </p>
+
+                    <div className="flex items-center gap-3 mt-1">
+                      {lastRun ? (
+                        <span className="text-[10px] text-zinc-600 tabular-nums">
+                          Last run {timeAgo(lastRun)}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-zinc-700">
+                          Never run
+                        </span>
+                      )}
+                      {runCount > 0 && (
+                        <span className="text-[10px] text-zinc-700 tabular-nums">
+                          {runCount} run{runCount !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
                 );
               })}
             </div>
           </div>
         </div>
 
-        <div className="p-5 border-t border-zinc-900 flex items-center justify-between">
+        <div className="p-5 border-t border-zinc-900 flex items-center justify-between shrink-0">
           <span className="text-sm text-zinc-300 font-medium">
             {displayName}
           </span>
@@ -193,12 +305,12 @@ export default async function DashboardLayout({
         </div>
       </aside>
 
-      <div className="flex flex-col flex-1 overflow-y-auto min-w-0 bg-zinc-950">
+      <div className="flex flex-col flex-1 min-w-0 bg-zinc-950">
         <header className="h-14 border-b border-zinc-900 bg-zinc-950 flex items-center px-6 shrink-0">
           <MobileNav links={navLinks} />
         </header>
 
-        <main className="flex-1 p-6 md:p-8 w-full">
+        <main className="flex-1 p-6 md:p-8 w-full overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {children}
         </main>
       </div>
