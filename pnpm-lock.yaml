@@ -29,6 +29,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      common-last-names:
+        specifier: ^1.1.3
+        version: 1.1.3
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(postgres@3.4.9)
@@ -2384,6 +2387,9 @@ packages:
     resolution: {integrity: sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==}
     engines: {node: '>=20'}
 
+  common-last-names@1.1.3:
+    resolution: {integrity: sha512-XLkx0pxK7MEgw5/iCw0Rol6dYT6hnT8BfDH6OWFN2rZS4gtKQlND7vXy4rlNIIsB6/CJrUOfaoGrlqnKNDNAog==}
+
   concat-map@0.0.1:
     resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
 
@@ -4319,6 +4325,14 @@ packages:
   unicorn-magic@0.3.0:
     resolution: {integrity: sha512-+QBBXBCvifc56fsbuxZQ6Sic3wqqc3WWaqxs58gvJrcOuN83HGTCwz3oS5phzU9LthRNE9VrJCFCLUgHeeFnfA==}
     engines: {node: '>=18'}
+
+  unique-random-array@1.0.1:
+    resolution: {integrity: sha512-z9J/SV8CUIhIRROcHe9YUoAT6XthUJt0oUyLGgobiXJprDP9O9dsErNevvSaAv5BkhwFEVPn6nIEOKeNE6Ck1Q==}
+    engines: {node: '>=0.10.0'}
+
+  unique-random@1.0.0:
+    resolution: {integrity: sha512-K1sUkPf9EXCZFNIlMCoX4icAqcvkR4FMPH4Z61HbyiWhQl1ZGo0zYeV2bJmocK8Cp6tnKYrCnpkeKGebXZoRTQ==}
+    engines: {node: '>=0.10.0'}
 
   universalify@2.0.1:
     resolution: {integrity: sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw==}
@@ -6535,6 +6549,10 @@ snapshots:
 
   commander@14.0.3: {}
 
+  common-last-names@1.1.3:
+    dependencies:
+      unique-random-array: 1.0.1
+
   concat-map@0.0.1: {}
 
   conf@10.2.0:
@@ -8719,6 +8737,12 @@ snapshots:
   undici@7.28.0: {}
 
   unicorn-magic@0.3.0: {}
+
+  unique-random-array@1.0.1:
+    dependencies:
+      unique-random: 1.0.0
+
+  unique-random@1.0.0: {}
 
   universalify@2.0.1: {}
 

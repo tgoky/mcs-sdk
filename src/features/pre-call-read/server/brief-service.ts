@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { skillRuns, briefedCallsLog, engagements } from "@/models/schema";
 import { and, eq, gte } from "drizzle-orm";
-import { evaluatePersonMatch } from "./person-match";
+import { evaluatePersonMatch } from "../person-match";
 import { resolveCredential } from "@/lib/credentials";
 import { fetchTomorrowCallsForTenant } from "@/lib/platforms/booking";
 import { deliverBrief } from "@/lib/platforms/email";

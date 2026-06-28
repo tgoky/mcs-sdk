@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { skillRuns, engagements, activeAlerts } from "@/models/schema";
 import { getSession } from "@/lib/session";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { LiveExecutionFeed } from "./live-execution-feed";
 
 export const revalidate = 0;
@@ -19,28 +19,30 @@ export default async function TelemetryHubPage() {
     .from(activeAlerts)
     .where(eq(activeAlerts.severity, "critical"));
 
-  // Real cost: sum of all skill runs across user's engagements
-  const totalCostResult = await db
-    .select({ total: sql<number>`coalesce(sum(${skillRuns.costInCents}), 0)` })
+  // PRODUCT UPDATE: Count total processed automation tasks instead of showing internal billing
+  const totalRunsResult = await db
+    .select({ count: sql<number>`count(*)` })
     .from(skillRuns)
-    .innerJoin(
-      engagements,
-      eq(skillRuns.engagementId, engagements.engagementId)
-    )
-    .where(eq(engagements.whopUserId, session.whopUserId!));
+    .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+    .where(
+      and(
+        eq(engagements.whopUserId, session.whopUserId!),
+        eq(skillRuns.status, "success")
+      )
+    );
 
-  const totalSpendCents = totalCostResult[0]?.total ?? 0;
-  const formattedSpend = (totalSpendCents / 100).toFixed(2);
+  const completedActions = totalRunsResult[0]?.count ?? 0;
 
-  // Running count — skill runs currently in "running" state
   const runningCount = await db
     .select({ count: sql<number>`count(*)` })
     .from(skillRuns)
-    .innerJoin(
-      engagements,
-      eq(skillRuns.engagementId, engagements.engagementId)
+    .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+    .where(
+      and(
+        eq(engagements.whopUserId, session.whopUserId!), 
+        eq(skillRuns.status, "running")
+      )
     )
-    .where(eq(engagements.whopUserId, session.whopUserId!))
     .then((r) => Number(r[0]?.count ?? 0));
 
   const recentRuns = await db
@@ -49,123 +51,116 @@ export default async function TelemetryHubPage() {
       skillName: skillRuns.skillName,
       status: skillRuns.status,
       phase: skillRuns.phase,
-      costInCents: skillRuns.costInCents,
       startedAt: skillRuns.startedAt,
     })
     .from(skillRuns)
-    .innerJoin(
-      engagements,
-      eq(skillRuns.engagementId, engagements.engagementId)
-    )
+    .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
     .where(eq(engagements.whopUserId, session.whopUserId!))
     .orderBy(desc(skillRuns.startedAt))
     .limit(8);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto tracking-tight">
+    <div className="space-y-10 max-w-5xl tracking-tight">
       {/* Header */}
-      <div className="flex flex-col space-y-3 md:flex-row md:justify-between md:items-center md:space-y-0 pb-2 border-b border-zinc-900">
+      <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 border-b border-zinc-900 pb-5">
         <div>
-          <h1 className="text-xl font-medium tracking-tighter text-zinc-100">
+          <h1 className="text-lg font-medium text-zinc-100 tracking-tight">
             System Telemetry Node
           </h1>
-          <p className="text-[11px] font-light text-zinc-500">
-            Live runtime execution state and billing telemetry.
+          <p className="text-xs font-normal text-zinc-500 mt-0.5">
+            Real-time execution performance and automated revenue infrastructure state.
           </p>
         </div>
         <a
           href="/dashboard/engagements/new"
-          className="inline-flex items-center px-3 py-1.5 text-[10px] font-mono font-medium bg-zinc-100 text-zinc-950 rounded hover:bg-zinc-200 transition-colors self-start md:self-auto"
+          className="inline-flex items-center px-3 py-1.5 text-[11px] font-sans font-medium bg-zinc-100 text-zinc-950 rounded hover:bg-zinc-200 transition-colors"
         >
-          + RUN PIN-DOWN
+          Initialize Setup
         </a>
       </div>
 
-      {/* Stat grid */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded border border-zinc-900 bg-zinc-950/40 p-4 space-y-1">
-          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-            Active Engagements
+      {/* Flat Minimalist Stat Layout */}
+      <div className="grid gap-6 sm:grid-cols-3">
+        <div className="space-y-1.5 px-1">
+          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+            Active Accounts
           </p>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-light font-sans text-zinc-200 tracking-tighter">
+          <div className="flex items-baseline space-x-3">
+            <span className="text-3xl font-light font-sans text-zinc-100">
               {userEngagements.length}
             </span>
-            <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-1.5 py-0.5 rounded">
-              {runningCount > 0 ? `${runningCount} RUNNING` : "NOMINAL"}
+            <span className="text-[10px] font-mono text-zinc-500 uppercase">
+              {runningCount > 0 ? `${runningCount} running` : "nominal"}
             </span>
           </div>
         </div>
 
-        <div className="rounded border border-zinc-900 bg-zinc-950/40 p-4 space-y-1">
-          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-            Total API Spend
+        {/* SWAPPED: Spent dollars changed to value-centric AI Actions Executed */}
+        <div className="space-y-1.5 px-1 sm:border-l sm:border-zinc-900 sm:pl-6">
+          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+            Automated  Actions
           </p>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-light font-sans text-zinc-200 tracking-tighter">
-              ${formattedSpend}
+          <div className="flex items-baseline space-x-2">
+            <span className="text-3xl font-light font-sans text-zinc-100">
+              {completedActions}
             </span>
-            <span className="text-[10px] font-mono text-zinc-600">USD</span>
+            <span className="text-[10px] font-mono text-zinc-500 uppercase">Tasks</span>
           </div>
         </div>
 
-        <div className="rounded border border-zinc-900 bg-zinc-950/40 p-4 space-y-1">
-          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-            Active Alerts
+        <div className="space-y-1.5 px-1 sm:border-l sm:border-zinc-900 sm:pl-6">
+          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+            System Integrity
           </p>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-light font-sans text-zinc-200 tracking-tighter">
+          <div className="flex items-baseline space-x-3">
+            <span className="text-3xl font-light font-sans text-zinc-100">
               {criticalAlerts.length}
             </span>
             <span
-              className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
-                criticalAlerts.length > 0
-                  ? "bg-rose-500/5 text-rose-400 border-rose-500/10 animate-pulse"
-                  : "bg-zinc-900 text-zinc-600 border-zinc-800"
+              className={`text-[10px] font-mono uppercase tracking-wide ${
+                criticalAlerts.length > 0 ? "text-rose-400" : "text-zinc-500"
               }`}
             >
-              {criticalAlerts.length > 0 ? "INTERRUPT" : "ZERO_ERR"}
+              {criticalAlerts.length > 0 ? "Attention Required" : "Zero Errors"}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Live feed */}
-      <div className="rounded border border-zinc-900 bg-zinc-950/10 p-5 space-y-4">
+      {/* Execution Log */}
+      <div className="space-y-4 pt-4">
         <div>
-          <h2 className="text-sm font-medium text-zinc-300">
-            Live Execution Log
-          </h2>
-          <p className="text-[11px] font-light text-zinc-500">
-            Refreshes every 5 seconds. Pause to freeze the view.
+          <h2 className="text-sm font-medium text-zinc-200">Execution Log Feed</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Live pipeline stream parsing current automation runs.
           </p>
         </div>
         <LiveExecutionFeed initialRuns={recentRuns} />
       </div>
 
-      {/* Quick links */}
+      {/* Quick Links */}
       {userEngagements.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 pt-4 border-t border-zinc-900">
           <a
             href="/dashboard/engagements"
-            className="rounded border border-zinc-900 bg-zinc-950/40 p-4 hover:border-zinc-700 transition-colors group"
+            className="group block p-4 rounded-lg bg-zinc-900/10 border border-zinc-900/60 hover:border-zinc-800 hover:bg-zinc-900/20 transition-all"
           >
-            <p className="text-xs font-medium text-zinc-300 group-hover:text-zinc-100">
-              Active Engagements →
+            <p className="text-xs font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">
+              Manage Active Engagements →
             </p>
-            <p className="text-[11px] font-light text-zinc-600 mt-0.5">
-              View skill status and run history per buyer
+            <p className="text-[11px] font-normal text-zinc-500 mt-0.5">
+              Review custom business strategies and configuration matrices per account.
             </p>
           </a>
           <a
             href="/dashboard/credentials"
-            className="rounded border border-zinc-900 bg-zinc-950/40 p-4 hover:border-zinc-700 transition-colors group"
+            className="group block p-4 rounded-lg bg-zinc-900/10 border border-zinc-900/60 hover:border-zinc-800 hover:bg-zinc-900/20 transition-all"
           >
-            <p className="text-xs font-medium text-zinc-300 group-hover:text-zinc-100">
-              Credentials Vault →
+            <p className="text-xs font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">
+              Access Credentials Vault →
             </p>
-            <p className="text-[11px] font-light text-zinc-600 mt-0.5">
-              Add or update platform API keys
+            <p className="text-[11px] font-normal text-zinc-500 mt-0.5">
+              Securely deploy or revoke encrypted platform API authorization tokens.
             </p>
           </a>
         </div>
