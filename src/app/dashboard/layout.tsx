@@ -63,19 +63,24 @@ export default async function DashboardLayout({
 
   const statusIcons: Record<SkillStatus, ReactNode> = {
     live: (
-      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M1 5L4 8L9 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="6" width="2" height="6" rx="0.5" fill="currentColor"/>
+        <rect x="6" y="3" width="2" height="9" rx="0.5" fill="currentColor"/>
+        <rect x="10" y="1" width="2" height="11" rx="0.5" fill="currentColor"/>
       </svg>
     ),
     failed: (
-      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M2 2L8 8M8 2L2 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="9" width="2" height="3" rx="0.5" fill="currentColor"/>
+        <rect x="6" y="6" width="2" height="6" rx="0.5" fill="currentColor"/>
+        <rect x="10" y="10" width="2" height="2" rx="0.5" fill="currentColor"/>
       </svg>
     ),
     not_run: (
-      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="5" cy="5" r="1" fill="currentColor"/>
-        <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1"/>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="10" width="2" height="2" rx="0.5" fill="currentColor"/>
+        <rect x="6" y="10" width="2" height="2" rx="0.5" fill="currentColor"/>
+        <rect x="10" y="10" width="2" height="2" rx="0.5" fill="currentColor"/>
       </svg>
     ),
   };
@@ -92,10 +97,7 @@ export default async function DashboardLayout({
       label: "Telemetry Hub",
       icon: (
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-          <rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-          <rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-          <rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5"/>
+          <path d="M2 8H5L7 4L9 12L11 8H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       )
     },
@@ -104,11 +106,10 @@ export default async function DashboardLayout({
       label: "Engagements",
       icon: (
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="6" cy="5" r="2" stroke="currentColor" strokeWidth="1.5"/>
-          <path d="M2 14C2 11.2386 4.23858 9 7 9H9C9.55228 9 10 9.44772 10 10V14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          <circle cx="11" cy="4" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
-          <path d="M11 6V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          <path d="M9 10H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          <circle cx="6" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
+          <path d="M10 7C10 4.79086 8.20914 3 6 3C3.79086 3 2 4.79086 2 7V13H10V7Z" stroke="currentColor" strokeWidth="1.5"/>
+          <path d="M10 10H14V7C14 5.34315 12.6569 4 11 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          <circle cx="11.5" cy="3" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
         </svg>
       )
     },
@@ -117,9 +118,10 @@ export default async function DashboardLayout({
       label: "Credentials",
       icon: (
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="2.5" y="6" width="11" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
-          <path d="M5.5 6V4.5C5.5 3.11929 6.61929 2 8 2C9.38071 2 10.5 3.11929 10.5 4.5V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          <circle cx="8" cy="10" r="1" fill="currentColor"/>
+          <path d="M3 6V4.5C3 2.01472 5.01472 0 7.5 0C9.98528 0 12 2.01472 12 4.5V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          <rect x="1" y="6" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+          <circle cx="8" cy="10.5" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+          <path d="M8 10.5V13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
       )
     },
