@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation";
 type Step = "offer" | "stack" | "credentials" | "voice" | "confirm";
 
 const STEPS: { id: Step; label: string }[] = [
-  { id: "offer", label: "Offer" },
-  { id: "stack", label: "Stack" },
-  { id: "credentials", label: "Credentials" },
-  { id: "voice", label: "Voice" },
-  { id: "confirm", label: "Confirm" },
+  { id: "offer", label: "Offer Details" },
+  { id: "stack", label: "Platform Stack" },
+  { id: "credentials", label: "API Credentials" },
+  { id: "voice", label: "Voice Extraction" },
+  { id: "confirm", label: "Final Review" },
 ];
 
 interface FormData {
@@ -76,36 +76,24 @@ function StepIndicator({
 }) {
   const currentIdx = steps.findIndex((s) => s.id === current);
   return (
-    <div className="flex items-center gap-2">
-      {steps.map((step, i) => (
-        <div key={step.id} className="flex items-center gap-2">
-          <div
-            className={`flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-mono font-medium border ${
-              i < currentIdx
-                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                : i === currentIdx
-                ? "bg-zinc-100 text-zinc-950 border-zinc-100"
-                : "bg-zinc-900 text-zinc-600 border-zinc-800"
-            }`}
-          >
-            {i < currentIdx ? "✓" : i + 1}
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 select-none border-b border-zinc-900 pb-4">
+      {steps.map((step, i) => {
+        const isComplete = i < currentIdx;
+        const isActive = i === currentIdx;
+
+        return (
+          <div key={step.id} className="flex items-center space-x-2 text-xs">
+            <span className={`font-mono ${
+              isComplete ? "text-zinc-400" : isActive ? "text-zinc-100 font-medium" : "text-zinc-600"
+            }`}>
+              {isComplete ? "[✓]" : isActive ? "[•]" : "[ ]"} {step.label}
+            </span>
+            {i < steps.length - 1 && (
+              <span className="text-zinc-800 font-mono">/</span>
+            )}
           </div>
-          <span
-            className={`text-[10px] font-mono ${
-              i === currentIdx ? "text-zinc-300" : "text-zinc-600"
-            }`}
-          >
-            {step.label}
-          </span>
-          {i < steps.length - 1 && (
-            <div
-              className={`h-px w-6 ${
-                i < currentIdx ? "bg-zinc-700" : "bg-zinc-900"
-              }`}
-            />
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -128,20 +116,19 @@ function InputField({
   required?: boolean;
 }) {
   return (
-    <div className="space-y-1.5">
-      <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-        {label}
-        {required && <span className="text-rose-400 ml-1">*</span>}
+    <div className="space-y-1.5 w-full">
+      <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block">
+        {label} {required && <span className="text-zinc-400 ml-0.5">*</span>}
       </label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs font-mono text-zinc-200 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-600"
+        className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-1.5 text-sm font-mono text-zinc-200 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-700"
       />
       {helpText && (
-        <p className="text-[10px] text-zinc-600">{helpText}</p>
+        <p className="text-[11px] text-zinc-600 font-normal italic leading-normal">{helpText}</p>
       )}
     </div>
   );
@@ -161,14 +148,14 @@ function SelectField({
   helpText?: string;
 }) {
   return (
-    <div className="space-y-1.5">
-      <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+    <div className="space-y-1.5 w-full">
+      <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block">
         {label}
       </label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-zinc-600"
+        className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-1.5 text-sm font-mono text-zinc-200 focus:outline-none focus:border-zinc-700"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -177,7 +164,7 @@ function SelectField({
         ))}
       </select>
       {helpText && (
-        <p className="text-[10px] text-zinc-600">{helpText}</p>
+        <p className="text-[11px] text-zinc-600 font-normal italic leading-normal">{helpText}</p>
       )}
     </div>
   );
@@ -214,7 +201,7 @@ export default function PinDownWizardPage() {
 
     const payload = {
       engagementId,
-      whopUserId: "from_session", // session is read server-side via route auth
+      whopUserId: "from_session",
       buyerName: form.buyerName,
       offerDetails: {
         name: form.offerName,
@@ -268,7 +255,7 @@ export default function PinDownWizardPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? "Setup failed. Check the fields and try again.");
+        setError(data.error ?? "Setup failed. Check fields and try again.");
         setSubmitting(false);
         return;
       }
@@ -283,381 +270,368 @@ export default function PinDownWizardPage() {
     }
   }
 
+  // Success Confirmation Screen
   if (result) {
     return (
-      <div className="max-w-xl space-y-6">
-        <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
-            <p className="text-sm font-medium text-emerald-400">
-              Pin-Down complete
-            </p>
+      <div className="space-y-6 w-full max-w-none px-1 text-zinc-400">
+        <div className="border border-zinc-900 bg-zinc-950/20 p-5 rounded-lg space-y-2">
+          <div className="flex items-center space-x-2">
+            <span className="text-xs font-mono text-zinc-200 uppercase">[ PIPELINE_STATUS // LIVE ]</span>
           </div>
-          <p className="text-xs text-zinc-400 font-light">
-            Your engagement has been created. The webhook is registered and the
-            confirmation page is live. The other four skills are now ready to
-            run.
+          <p className="text-sm text-zinc-400 font-normal">
+            Account framework successfully synchronized. Webhook routing has been initialized and the public confirmation template is online. Remaining pack sub-modules are ready for processing loops.
           </p>
         </div>
 
-        <div className="rounded border border-zinc-900 bg-zinc-950/40 p-4 space-y-2">
-          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-            Engagement ID
-          </p>
-          <p className="font-mono text-xs text-zinc-200">{result.engagementId}</p>
-        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="border border-zinc-900 bg-zinc-950/20 p-4 rounded-lg space-y-1">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">Engagement ID</p>
+            <p className="font-mono text-sm text-zinc-200">{result.engagementId}</p>
+          </div>
 
-        <div className="rounded border border-zinc-900 bg-zinc-950/40 p-4 space-y-2">
-          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-            Confirmation Page URL
-          </p>
-          <a
-            href={result.confirmationPageUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="font-mono text-xs text-zinc-300 underline underline-offset-2 hover:text-zinc-100 break-all"
-          >
-            {result.confirmationPageUrl}
-          </a>
-          <p className="text-[10px] text-zinc-600">
-            This URL has been set as your post-booking redirect in{" "}
-            {form.bookingPlatform}.
-          </p>
+          <div className="border border-zinc-900 bg-zinc-950/20 p-4 rounded-lg space-y-1">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">Confirmation Route URL</p>
+            <a
+              href={result.confirmationPageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-sm text-zinc-300 underline underline-offset-4 hover:text-zinc-100 break-all block"
+            >
+              {result.confirmationPageUrl}
+            </a>
+          </div>
         </div>
 
         <button
           onClick={() => router.push(`/dashboard/engagements/${result.engagementId}`)}
-          className="px-4 py-2 text-[10px] font-mono font-medium bg-zinc-100 text-zinc-950 rounded hover:bg-zinc-200 transition-colors"
+          className="px-4 py-2 text-xs font-mono font-normal border border-zinc-800 text-zinc-300 rounded hover:border-zinc-600 hover:text-zinc-100 transition-colors uppercase tracking-wider bg-zinc-900/10 cursor-pointer"
         >
-          VIEW ENGAGEMENT →
+          [ Access Deployment Node ]
         </button>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div className="pb-2 border-b border-zinc-900">
-        <h1 className="text-xl font-medium tracking-tighter text-zinc-100">
-          Pin-Down Setup
+    <div className="space-y-6 w-full max-w-none px-1 text-zinc-400">
+      
+      {/* Header */}
+      <div className="pb-3 border-b border-zinc-900">
+        <h1 className="text-lg font-medium tracking-tight text-zinc-100">
+          Pin-Down Setup Pipeline
         </h1>
-        <p className="text-[11px] font-light text-zinc-500 mt-1">
-          One-time configuration. Creates your engagement, extracts your brand
-          voice, and wires your booking platform webhooks automatically.
+        <p className="text-xs font-normal text-zinc-500 mt-0.5">
+          One-time infrastructure configuration. Initializes the client asset node, maps the tracking framework, and registers data hook integrations.
         </p>
       </div>
 
       <StepIndicator steps={STEPS} current={step} />
 
-      <div className="rounded border border-zinc-900 bg-zinc-950/40 p-5 space-y-5">
-        {/* Step: Offer */}
+      {/* FIXED: Shifted interior layout block to a clean full-width background surface */}
+      <div className="bg-transparent space-y-6 pt-2">
+        
+        {/* Step: Offer Details */}
         {step === "offer" && (
-          <>
-            <h2 className="text-xs font-medium text-zinc-300">
-              Offer details
-            </h2>
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
             <InputField
-              label="Your name / company"
+              label="Buyer Identifier / Company Name"
               value={form.buyerName}
               onChange={(v) => set("buyerName", v)}
-              placeholder="Acme Corp"
+              placeholder="e.g. Acme Corporation"
               required
             />
             <InputField
-              label="Offer name"
+              label="Core Offer Title"
               value={form.offerName}
               onChange={(v) => set("offerName", v)}
-              placeholder="High-Ticket Coaching Program"
+              placeholder="e.g. Enterprise Consulting Structure"
               required
             />
             <InputField
-              label="Price"
+              label="Financial Price Value"
               value={form.offerPrice}
               onChange={(v) => set("offerPrice", v)}
-              placeholder="$5,000"
-            />
-            <InputField
-              label="Ideal customer profile (ICP)"
-              value={form.offerIcp}
-              onChange={(v) => set("offerIcp", v)}
-              placeholder="SaaS founders doing $1M–$10M ARR with a sales team of 2–5"
+              placeholder="e.g. $10,000"
             />
             <SelectField
-              label="Traffic temperature"
+              label="Funnel Traffic Temperature"
               value={form.trafficTemperature}
               onChange={(v) => set("trafficTemperature", v)}
               options={[
-                { value: "cold", label: "Cold — paid ads, outbound" },
-                { value: "warm", label: "Warm — content, referrals" },
-                { value: "hot", label: "Hot — existing community, high intent" },
+                { value: "cold", label: "Cold — Outbound streams / paid tracking" },
+                { value: "warm", label: "Warm — Inbound content assets / referrals" },
+                { value: "hot", label: "Hot — Existing verified network lists" },
               ]}
             />
-            <div className="flex items-center gap-3">
+            <div className="md:col-span-2">
+              <InputField
+                label="Ideal Customer Profile (ICP) Parameters"
+                value={form.offerIcp}
+                onChange={(v) => set("offerIcp", v)}
+                placeholder="e.g. B2B operators managing ARR benchmarks from $1M-$10M"
+              />
+            </div>
+            <InputField
+              label="Assigned Meeting Representative Role"
+              value={form.prospectMeets}
+              onChange={(v) => set("prospectMeets", v)}
+              placeholder="e.g. Lead Strategist"
+              helpText="Specify internal role assignment (e.g., closer, executive account lead)."
+            />
+            
+            <div className="flex items-center space-x-3 pt-4 select-none md:col-span-1">
               <input
                 type="checkbox"
                 id="hybrid"
                 checked={form.hybridMode}
                 onChange={(e) => set("hybridMode", e.target.checked)}
-                className="accent-zinc-200"
+                className="w-4 h-4 bg-zinc-950 border border-zinc-900 rounded accent-zinc-200"
               />
-              <label htmlFor="hybrid" className="text-xs text-zinc-400">
-                Enable hybrid mode (AI-personalized confirmation emails per booking)
+              <label htmlFor="hybrid" className="text-xs text-zinc-400 cursor-pointer">
+                Enable contextual AI personalization parameters per inbound booking event.
               </label>
             </div>
-            <InputField
-              label="Who the prospect meets"
-              value={form.prospectMeets}
-              onChange={(v) => set("prospectMeets", v)}
-              placeholder="founder"
-              helpText="e.g. founder, closer, account executive"
-            />
-          </>
+          </div>
         )}
 
-        {/* Step: Stack */}
+        {/* Step: Platform Stack */}
         {step === "stack" && (
-          <>
-            <h2 className="text-xs font-medium text-zinc-300">
-              Platform stack
-            </h2>
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
             <SelectField
-              label="Booking platform"
+              label="Calendar Booking Infrastructure Engine"
               value={form.bookingPlatform}
               onChange={(v) => set("bookingPlatform", v)}
               options={[
-                { value: "calendly", label: "Calendly" },
-                { value: "cal_com", label: "Cal.com" },
-                { value: "ghl_calendar", label: "GoHighLevel Calendar" },
-                { value: "oncehub", label: "OnceHub" },
+                { value: "calendly", label: "Calendly Integration Service" },
+                { value: "cal_com", label: "Cal.com Platform Engine" },
+                { value: "ghl_calendar", label: "GoHighLevel Calendar Module" },
+                { value: "oncehub", label: "OnceHub Router Link" },
               ]}
             />
+
             {form.bookingPlatform === "calendly" && (
               <>
                 <InputField
-                  label="Organization URI"
+                  label="Calendly Organization URI Token"
                   value={form.bookingOrgUri}
                   onChange={(v) => set("bookingOrgUri", v)}
-                  placeholder="https://api.calendly.com/organizations/AAAA..."
-                  helpText="From Calendly API → GET /users/me → current_organization"
+                  placeholder="https://api.calendly.com/organizations/..."
+                  helpText="Extracted from the workspace metadata payload."
                 />
                 <InputField
-                  label="Event type UUID"
+                  label="Target Event Type UUID"
                   value={form.bookingEventTypeUuid}
                   onChange={(v) => set("bookingEventTypeUuid", v)}
-                  placeholder="abc123..."
-                  helpText="The UUID of the event type where prospects book calls"
+                  placeholder="e.g. abc123xyz"
+                  helpText="The alphanumeric sequence mapping specific call instances."
                 />
               </>
             )}
+
             {form.bookingPlatform === "ghl_calendar" && (
               <InputField
-                label="GHL Location ID"
+                label="GHL Location Account Identifier"
                 value={form.bookingLocationId}
                 onChange={(v) => set("bookingLocationId", v)}
-                placeholder="abc123..."
+                placeholder="e.g. loc_abc123"
               />
             )}
+
             <SelectField
-              label="Email / CRM platform"
+              label="CRM / Core Distribution Email Platform"
               value={form.emailPlatform}
               onChange={(v) => set("emailPlatform", v)}
               options={[
-                { value: "klaviyo", label: "Klaviyo" },
-                { value: "hubspot", label: "HubSpot" },
-                { value: "activecampaign", label: "ActiveCampaign" },
-                { value: "ghl", label: "GoHighLevel CRM" },
+                { value: "klaviyo", label: "Klaviyo Flow Architecture" },
+                { value: "hubspot", label: "HubSpot Communications Engine" },
+                { value: "activecampaign", label: "ActiveCampaign Pipeline" },
+                { value: "ghl", label: "GoHighLevel Central CRM" },
               ]}
             />
-            {(form.emailPlatform === "klaviyo" ||
-              form.emailPlatform === "activecampaign") && (
+
+            {(form.emailPlatform === "klaviyo" || form.emailPlatform === "activecampaign") && (
               <>
                 <InputField
-                  label="Pre-call sequence list ID"
+                  label="Pre-Call Automation List ID"
                   value={form.targetListId}
                   onChange={(v) => set("targetListId", v)}
-                  placeholder="ABC123"
-                  helpText="The list/sequence new bookings are enrolled into"
+                  placeholder="e.g. LIST_01"
+                  helpText="Target sequence group where inbound entries enroll."
                 />
                 <InputField
-                  label="Win-back recovery list ID"
+                  label="Recovery Sequence List ID"
                   value={form.recoveryListId}
                   onChange={(v) => set("recoveryListId", v)}
-                  placeholder="XYZ789"
-                  helpText="The list/sequence cancelled/no-show prospects enter"
+                  placeholder="e.g. LIST_02"
+                  helpText="Terminal sequence bucket for cancelled or missing records."
                 />
               </>
             )}
+
             <SelectField
-              label="Brief delivery destination"
+              label="Closer Brief Landing Target"
               value={form.briefDestination}
               onChange={(v) => set("briefDestination", v)}
               options={[
-                { value: "slack", label: "Slack" },
-                { value: "crm_note", label: "CRM note" },
+                { value: "slack", label: "Slack DM / Workspace Matrix Channel" },
+                { value: "crm_note", label: "CRM Internal Profile Timeline Note" },
               ]}
             />
+
             {form.briefDestination === "slack" && (
               <InputField
-                label="Slack incoming webhook URL"
+                label="Slack Incoming Webhook Endpoint"
                 value={form.slackWebhookUrl}
                 onChange={(v) => set("slackWebhookUrl", v)}
                 placeholder="https://hooks.slack.com/services/..."
-                helpText="From api.slack.com → Your Apps → Incoming Webhooks"
+                helpText="Workspace app routing configuration endpoint."
               />
             )}
+
             <SelectField
-              label="Hosting platform"
+              label="Confirmation Route Hosting Platform"
               value={form.hostingPlatform}
               onChange={(v) => set("hostingPlatform", v)}
               options={[
-                { value: "nextjs_vercel", label: "Next.js / Vercel (this app)" },
-                { value: "webflow", label: "Webflow" },
-                { value: "ghl", label: "GoHighLevel Funnels" },
-                { value: "wordpress", label: "WordPress" },
-                { value: "plain_html", label: "Plain HTML" },
+                { value: "nextjs_vercel", label: "Next.js Architecture on Vercel Node" },
+                { value: "webflow", label: "Webflow Layout Engine" },
+                { value: "ghl", label: "GoHighLevel Funnel Matrix" },
+                { value: "wordpress", label: "WordPress Open Stack Core" },
+                { value: "plain_html", label: "Plain Structural Static HTML CDN" },
               ]}
             />
+
             <InputField
-              label="Your domain"
+              label="Target System Publishing Domain"
               value={form.publishDomain}
               onChange={(v) => set("publishDomain", v)}
               placeholder="yoursite.com"
-              helpText="Used to construct the confirmation page URL"
+              helpText="Used to map down the secure confirmation routing URL keys."
             />
-          </>
+          </div>
         )}
 
-        {/* Step: Credentials */}
+        {/* Step: API Credentials */}
         {step === "credentials" && (
-          <>
-            <h2 className="text-xs font-medium text-zinc-300">
-              API credentials
-            </h2>
-            <p className="text-[11px] text-zinc-500 font-light">
-              Keys are encrypted with AES-256-GCM before storage. They are
-              never logged or accessible to anyone including Mudd staff.
-            </p>
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+            <div className="md:col-span-2 text-xs">
+              <p className="font-mono text-zinc-500 uppercase tracking-wide">Security Protocols Enabled</p>
+              <p className="text-zinc-500 font-light mt-0.5">Authorization tokens undergo local AES-256-GCM symmetric block cipher encryption prior to database trace persistence. Keys remain cryptographically unexposed.</p>
+            </div>
             <InputField
-              label={`${form.bookingPlatform} API key / token`}
+              label={`${form.bookingPlatform.replace(/_/g, " ").toUpperCase()} Authorization token`}
               value={form.bookingApiKey}
               onChange={(v) => set("bookingApiKey", v)}
               type="password"
-              placeholder="Paste your key here"
+              placeholder="Paste integration key..."
               required
             />
             <InputField
-              label={`${form.emailPlatform} API key`}
+              label={`${form.emailPlatform.replace(/_/g, " ").toUpperCase()} Core API Secret Key`}
               value={form.emailApiKey}
               onChange={(v) => set("emailApiKey", v)}
               type="password"
-              placeholder="Paste your key here"
+              placeholder="Paste communication key..."
               required
             />
-          </>
+          </div>
         )}
 
-        {/* Step: Voice */}
+        {/* Step: Brand Voice Copy Corpus */}
         {step === "voice" && (
-          <>
-            <h2 className="text-xs font-medium text-zinc-300">
-              Brand voice extraction
-            </h2>
-            <p className="text-[11px] text-zinc-500 font-light">
-              Paste at least 500 words of your existing copy — sales page,
-              emails, social posts, video transcripts. The more the better.
-              This shapes the tone of every email and brief the system
-              generates.
-            </p>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-                Marketing copy corpus
+          <div className="space-y-6 w-full">
+            <div className="space-y-1.5 w-full">
+              <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block">
+                Brand Marketing Corpus (500 Words Minimum)
               </label>
               <textarea
                 value={form.rawVoiceCorpus}
                 onChange={(e) => set("rawVoiceCorpus", e.target.value)}
-                placeholder="Paste your sales page, email sequences, video transcripts..."
-                rows={10}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs font-mono text-zinc-300 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-600 resize-y"
+                placeholder="Paste active sales parameters, text assets, scripts, sequence copy blocks, or transcription transcripts..."
+                rows={8}
+                className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs font-mono text-zinc-300 placeholder:text-zinc-800 focus:outline-none focus:border-zinc-700 resize-y"
               />
-              <p className="text-[10px] text-zinc-600">
-                {form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length}{" "}
-                words pasted.
+              <p className="text-[10px] font-mono text-zinc-600 tracking-wide">
+                Parsed Metrics: {form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length} words mapped.
                 {form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length < 500
-                  ? " Need at least 500 for accurate extraction."
-                  : " ✓"}
+                  ? " [ STANDBY — Minimum 500 words required for precise voice signature extraction ]"
+                  : " [ NOMINAL ]"}
               </p>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-                Top call questions (one per line)
-              </label>
-              <textarea
-                value={form.topCallQuestions}
-                onChange={(e) => set("topCallQuestions", e.target.value)}
-                placeholder={"How much is the investment?\nWhat results can I expect?\nHow long does it take?"}
-                rows={4}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs font-mono text-zinc-300 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-600 resize-y"
-              />
+
+            <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+              <div className="space-y-1.5 w-full">
+                <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block">
+                  Top Roster Call Questions (One parameter entry per line)
+                </label>
+                <textarea
+                  value={form.topCallQuestions}
+                  onChange={(e) => set("topCallQuestions", e.target.value)}
+                  placeholder={"What is the structural onboarding timeline?\nWhat conversion tracking metrics are generated?"}
+                  rows={4}
+                  className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs font-mono text-zinc-300 placeholder:text-zinc-800 focus:outline-none focus:border-zinc-700 resize-y"
+                />
+              </div>
+
+              <div className="space-y-1.5 w-full">
+                <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block">
+                  Top System Objections (One parameter entry per line)
+                </label>
+                <textarea
+                  value={form.topObjections}
+                  onChange={(e) => set("topObjections", e.target.value)}
+                  placeholder={"The pricing scale exceeds our current allocation budget.\nThe structural sequence execution timing is misaligned."}
+                  rows={4}
+                  className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs font-mono text-zinc-300 placeholder:text-zinc-800 focus:outline-none focus:border-zinc-700 resize-y"
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-                Top objections (one per line)
-              </label>
-              <textarea
-                value={form.topObjections}
-                onChange={(e) => set("topObjections", e.target.value)}
-                placeholder={"I need to think about it.\nI need to talk to my partner.\nNow isn't the right time."}
-                rows={4}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs font-mono text-zinc-300 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-600 resize-y"
-              />
-            </div>
-          </>
+          </div>
         )}
 
-        {/* Step: Confirm */}
+        {/* Step: Final Review Review */}
         {step === "confirm" && (
-          <>
-            <h2 className="text-xs font-medium text-zinc-300">
-              Review and launch
-            </h2>
-            <div className="space-y-2 text-[11px] font-light">
+          <div className="space-y-3 w-full">
+            <h2 className="text-xs font-mono text-zinc-500 uppercase tracking-widest">[ Deployment Matrix Review ]</h2>
+            <div className="text-xs font-sans space-y-2 border border-zinc-900 bg-zinc-950/20 rounded-lg p-4">
               {[
-                ["Buyer", form.buyerName],
-                ["Offer", form.offerName],
-                ["Price", form.offerPrice],
-                ["Booking platform", form.bookingPlatform],
-                ["Email platform", form.emailPlatform],
-                ["Brief destination", form.briefDestination],
-                ["Corpus words", form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length.toString()],
-                ["Call questions", form.topCallQuestions.split("\n").filter(Boolean).length.toString()],
-                ["Objections", form.topObjections.split("\n").filter(Boolean).length.toString()],
+                ["Target Mapped Account", form.buyerName],
+                ["Offer Title Parameter", form.offerName],
+                ["Financial Pricing Scale", form.offerPrice || "—"],
+                ["Booking Engine Target", form.bookingPlatform.toUpperCase()],
+                ["Communication CRM Node", form.emailPlatform.toUpperCase()],
+                ["Closer Matrix Destination", form.briefDestination.toUpperCase()],
+                ["Extracted Copy Metrics", `${form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length} words`],
+                ["Configured Call Questions", `${form.topCallQuestions.split("\n").filter(Boolean).length} items`],
+                ["Configured Funnel Objections", `${form.topObjections.split("\n").filter(Boolean).length} items`],
               ].map(([label, value]) => (
-                <div key={label} className="flex justify-between border-b border-zinc-900 pb-1">
+                <div key={label} className="flex justify-between border-b border-zinc-900/40 pb-1.5 last:border-0 last:pb-0">
                   <span className="text-zinc-500">{label}</span>
-                  <span className="text-zinc-300 font-mono">{value || "—"}</span>
+                  <span className="text-zinc-300 font-mono text-[11px]">{value}</span>
                 </div>
               ))}
             </div>
+
             {error && (
-              <div className="rounded border border-rose-500/20 bg-rose-500/5 p-3">
-                <p className="text-[11px] text-rose-400 font-mono">{error}</p>
-              </div>
+              <p className="text-xs font-mono text-rose-400 mt-2">
+                [ CORE_PIPELINE_ERROR // {error} ]
+              </p>
             )}
-          </>
+          </div>
         )}
       </div>
 
-      {/* Navigation */}
-      <div className="flex justify-between">
+      {/* Execution Navigation Controls */}
+      <div className="flex justify-between pt-4 border-t border-zinc-900">
         <button
           onClick={() => {
             const idx = STEPS.findIndex((s) => s.id === step);
             if (idx > 0) setStep(STEPS[idx - 1].id);
           }}
           disabled={step === "offer"}
-          className="px-4 py-2 text-[10px] font-mono font-medium border border-zinc-800 text-zinc-400 rounded hover:border-zinc-600 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          className="px-4 py-1.5 text-xs font-mono font-normal border border-zinc-900 text-zinc-500 rounded hover:border-zinc-700 hover:text-zinc-200 disabled:opacity-20 disabled:cursor-not-allowed transition-all uppercase tracking-wider cursor-pointer"
         >
-          ← BACK
+          [ Back ]
         </button>
 
         {step !== "confirm" ? (
@@ -666,17 +640,17 @@ export default function PinDownWizardPage() {
               const idx = STEPS.findIndex((s) => s.id === step);
               if (idx < STEPS.length - 1) setStep(STEPS[idx + 1].id);
             }}
-            className="px-4 py-2 text-[10px] font-mono font-medium bg-zinc-100 text-zinc-950 rounded hover:bg-zinc-200 transition-colors"
+            className="px-4 py-1.5 text-xs font-mono font-normal border border-zinc-800 text-zinc-300 rounded hover:border-zinc-600 hover:text-zinc-100 transition-colors uppercase tracking-wider bg-zinc-900/10 cursor-pointer"
           >
-            NEXT →
+            [ Next ]
           </button>
         ) : (
           <button
             onClick={submit}
             disabled={submitting || !form.buyerName || !form.bookingApiKey}
-            className="px-4 py-2 text-[10px] font-mono font-medium bg-zinc-100 text-zinc-950 rounded hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-1.5 text-xs font-mono font-normal border border-zinc-700 text-zinc-300 rounded hover:border-zinc-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors uppercase tracking-wider bg-zinc-900/20 cursor-pointer"
           >
-            {submitting ? "RUNNING PIN-DOWN..." : "LAUNCH →"}
+            {submitting ? "[ RUNNING INITIAL_PROVISIONING... ]" : "[ LAUNCH CONFIG_NODE ]"}
           </button>
         )}
       </div>

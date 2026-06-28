@@ -19,7 +19,7 @@ export default async function TelemetryHubPage() {
     .from(activeAlerts)
     .where(eq(activeAlerts.severity, "critical"));
 
-  // PRODUCT UPDATE: Count total processed automation tasks instead of showing internal billing
+  // Calculate total successful background tasks executed
   const totalRunsResult = await db
     .select({ count: sql<number>`count(*)` })
     .from(skillRuns)
@@ -60,95 +60,103 @@ export default async function TelemetryHubPage() {
     .limit(8);
 
   return (
-    <div className="space-y-10 max-w-5xl tracking-tight">
-      {/* Header */}
-      <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 border-b border-zinc-900 pb-5">
-        <div>
+    <div className="space-y-5 w-full text-zinc-400 font-sans tracking-tight antialiased select-none px-1">
+      
+      {/* Consolidated Master Header Panel */}
+      <div className="flex flex-col space-y-3 lg:flex-row lg:justify-between lg:items-center lg:space-y-0 border-b border-zinc-900 pb-3">
+        <div className="space-y-1">
           <h1 className="text-lg font-medium text-zinc-100 tracking-tight">
             System Telemetry Node
           </h1>
-          <p className="text-xs font-normal text-zinc-500 mt-0.5">
-            Real-time execution performance and automated revenue infrastructure state.
+          <p className="text-sm font-normal text-zinc-500">
+            Real-time multi-tenant core module orchestration and background execution pipeline tracing.
           </p>
         </div>
-        <a
-          href="/dashboard/engagements/new"
-          className="inline-flex items-center px-3 py-1.5 text-[11px] font-sans font-medium bg-zinc-100 text-zinc-950 rounded hover:bg-zinc-200 transition-colors"
-        >
-          Initialize Setup
-        </a>
-      </div>
-
-      {/* Flat Minimalist Stat Layout */}
-      <div className="grid gap-6 sm:grid-cols-3">
-        <div className="space-y-1.5 px-1">
-          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
-            Active Accounts
-          </p>
-          <div className="flex items-baseline space-x-3">
-            <span className="text-3xl font-light font-sans text-zinc-100">
-              {userEngagements.length}
-            </span>
-            <span className="text-[10px] font-mono text-zinc-500 uppercase">
-              {runningCount > 0 ? `${runningCount} running` : "nominal"}
-            </span>
-          </div>
-        </div>
-
-        {/* SWAPPED: Spent dollars changed to value-centric AI Actions Executed */}
-        <div className="space-y-1.5 px-1 sm:border-l sm:border-zinc-900 sm:pl-6">
-          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
-            Automated  Actions
-          </p>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-3xl font-light font-sans text-zinc-100">
-              {completedActions}
-            </span>
-            <span className="text-[10px] font-mono text-zinc-500 uppercase">Tasks</span>
-          </div>
-        </div>
-
-        <div className="space-y-1.5 px-1 sm:border-l sm:border-zinc-900 sm:pl-6">
-          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
-            System Integrity
-          </p>
-          <div className="flex items-baseline space-x-3">
-            <span className="text-3xl font-light font-sans text-zinc-100">
-              {criticalAlerts.length}
-            </span>
-            <span
-              className={`text-[10px] font-mono uppercase tracking-wide ${
-                criticalAlerts.length > 0 ? "text-rose-400" : "text-zinc-500"
-              }`}
-            >
-              {criticalAlerts.length > 0 ? "Attention Required" : "Zero Errors"}
-            </span>
-          </div>
+        
+        {/* Compact Navigation Utility Links */}
+        <div className="flex items-center space-x-1.5 self-start lg:self-auto text-sm">
+          <a
+            href="/dashboard/engagements"
+            className="px-2 py-1 font-mono text-zinc-500 hover:text-zinc-200 transition-colors uppercase text-xs"
+          >
+            [ Accounts ]
+          </a>
+          <a
+            href="/dashboard/credentials"
+            className="px-2 py-1 font-mono text-zinc-500 hover:text-zinc-200 transition-colors uppercase text-xs"
+          >
+            [ Vault ]
+          </a>
+          <a
+            href="/dashboard/engagements/new"
+            className="ml-2 inline-flex items-center px-3 py-1 font-mono text-xs border border-zinc-800 text-zinc-400 rounded hover:border-zinc-600 hover:text-zinc-100 transition-colors uppercase tracking-wider"
+          >
+            Initialize Setup
+          </a>
         </div>
       </div>
 
-      {/* Execution Log */}
-      <div className="space-y-4 pt-4">
-        <div>
-          <h2 className="text-sm font-medium text-zinc-200">Execution Log Feed</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Live pipeline stream parsing current automation runs.
-          </p>
+      {/* SECTION 1: High-Density Horizontal Metric Ribbon */}
+      <div className="border-b border-zinc-900 pb-4">
+        <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-3">
+          [ Metric Summary ]
+        </p>
+        
+        <div className="grid gap-4 sm:grid-cols-3 pt-1 border-t border-zinc-900/20">
+          <div className="space-y-1">
+            <p className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Active Accounts</p>
+            <div className="flex items-baseline space-x-2">
+              <span className="text-3xl font-light text-zinc-100">{userEngagements.length}</span>
+              <span className="text-xs font-mono text-zinc-500 uppercase">
+                {runningCount > 0 ? `${runningCount} running` : "nominal"}
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-1 sm:border-l sm:border-zinc-900 sm:pl-4">
+            <p className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Automated Actions</p>
+            <div className="flex items-baseline space-x-1.5">
+              <span className="text-3xl font-light text-zinc-100">{completedActions}</span>
+              <span className="text-xs font-mono text-zinc-500 uppercase">Tasks</span>
+            </div>
+          </div>
+
+          <div className="space-y-1 sm:border-l sm:border-zinc-900 sm:pl-4">
+            <p className="text-xs font-mono text-zinc-500 uppercase tracking-widest">System Integrity</p>
+            <div className="flex items-baseline space-x-2">
+              <span className="text-3xl font-light text-zinc-100">{criticalAlerts.length}</span>
+              <span className={`text-xs font-mono uppercase tracking-wide ${
+                criticalAlerts.length > 0 ? "text-rose-400" : "text-zinc-600"
+              }`}>
+                {criticalAlerts.length > 0 ? "Action Required" : "Zero Errors"}
+              </span>
+            </div>
+          </div>
         </div>
-        <LiveExecutionFeed initialRuns={recentRuns} />
       </div>
 
-      {/* Quick Links */}
+      {/* SECTION 2: Borderless Pure Execution Log Section */}
+      <div className="pt-2">
+        <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-3">
+          [ Live Pipeline Stream Log ]
+        </p>
+        
+        <div className="pt-1 border-t border-zinc-900/20">
+          <LiveExecutionFeed initialRuns={recentRuns} />
+        </div>
+      </div>
+
+      {/* Clean Utility Shortcut Grid */}
       {userEngagements.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 pt-4 border-t border-zinc-900">
           <a
             href="/dashboard/engagements"
             className="group block p-4 rounded-lg bg-zinc-900/10 border border-zinc-900/60 hover:border-zinc-800 hover:bg-zinc-900/20 transition-all"
           >
-            <p className="text-xs font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">
+            <p className="text-sm font-medium text-zinc-400 group-hover:text-zinc-100 transition-colors">
               Manage Active Engagements →
             </p>
-            <p className="text-[11px] font-normal text-zinc-500 mt-0.5">
+            <p className="text-xs font-normal text-zinc-600 mt-1">
               Review custom business strategies and configuration matrices per account.
             </p>
           </a>
@@ -156,10 +164,10 @@ export default async function TelemetryHubPage() {
             href="/dashboard/credentials"
             className="group block p-4 rounded-lg bg-zinc-900/10 border border-zinc-900/60 hover:border-zinc-800 hover:bg-zinc-900/20 transition-all"
           >
-            <p className="text-xs font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">
+            <p className="text-sm font-medium text-zinc-400 group-hover:text-zinc-100 transition-colors">
               Access Credentials Vault →
             </p>
-            <p className="text-[11px] font-normal text-zinc-500 mt-0.5">
+            <p className="text-xs font-normal text-zinc-600 mt-1">
               Securely deploy or revoke encrypted platform API authorization tokens.
             </p>
           </a>

@@ -8,6 +8,8 @@ export const revalidate = 0;
 
 const SKILLS = ["pin-down", "pile-on", "pre-call-read", "win-back", "leak-map"] as const;
 
+type SkillStatus = "online" | "degraded" | "standby" | "running";
+
 function SkillStatusBadge({
   skillName,
   runs,
@@ -19,34 +21,32 @@ function SkillStatusBadge({
 
   if (!skillRun) {
     return (
-      <div className="flex items-center space-x-1.5 opacity-40">
-        <span className="h-1 w-1 rounded-full bg-zinc-700" />
-        <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-wide">
-          IDLE
+      <div className="flex items-center space-x-1 select-none opacity-40">
+        <span className="text-xs font-mono text-zinc-600 uppercase tracking-tight">
+          [standby]
         </span>
       </div>
     );
   }
 
-  const dotColors: Record<string, string> = {
-    success: "bg-emerald-500",
-    failed: "bg-rose-500",
-    running: "bg-amber-500 animate-pulse",
+  const statusLabels: Record<string, string> = {
+    success: "online",
+    failed: "degraded",
+    running: "running",
   };
 
-  const textColors: Record<string, string> = {
-    success: "text-zinc-400",
-    failed: "text-rose-400/90",
-    running: "text-amber-400/90",
+  const statusStyles: Record<string, string> = {
+    success: "text-zinc-300 font-medium",
+    failed: "text-zinc-500 line-through opacity-60",
+    running: "text-zinc-400 font-normal italic",
   };
 
   const statusValue = skillRun.status.toLowerCase();
 
   return (
-    <div className="flex items-center space-x-1.5">
-      <span className={`h-1 w-1 rounded-full ${dotColors[statusValue] ?? "bg-zinc-600"}`} />
-      <span className={`text-[10px] font-mono uppercase tracking-wide ${textColors[statusValue] ?? "text-zinc-500"}`}>
-        {statusValue === "success" ? "active" : statusValue === "failed" ? "err" : "running"}
+    <div className="flex items-center space-x-1">
+      <span className={`text-xs font-mono uppercase tracking-tight ${statusStyles[statusValue] || "text-zinc-400"}`}>
+        [{statusLabels[statusValue] || "running"}]
       </span>
     </div>
   );
@@ -77,38 +77,43 @@ export default async function EngagementsPage() {
     : [];
 
   return (
-    <div className="space-y-10 max-w-5xl tracking-tight antialiased">
+    <div className="space-y-5 w-full mx-auto tracking-tight antialiased select-none px-1 text-zinc-400">
       
-      {/* Premium Minimal Header */}
-      <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 border-b border-zinc-900 pb-5">
-        <div>
-          <h1 className="text-lg font-medium text-zinc-100 tracking-tight">Active Accounts</h1>
-          <p className="text-xs font-normal text-zinc-500 mt-0.5">
-            Registered customer deployment matrices. Select a node row to access automated controls.
+      {/* Consolidated Master Header Panel — Fonts matched exactly to Telemetry Node */}
+      <div className="flex flex-col space-y-3 lg:flex-row lg:justify-between lg:items-center lg:space-y-0 border-b border-zinc-900 pb-3">
+        <div className="space-y-1">
+          <h1 className="text-lg font-medium text-zinc-100 tracking-tight">
+            Active Accounts
+          </h1>
+          <p className="text-sm font-normal text-zinc-500">
+            Registered customer deployment matrices. Select an account node to access manual triggers and details.
           </p>
         </div>
-        <Link
-          href="/dashboard/engagements/new"
-          className="inline-flex items-center px-3 py-1.5 text-[11px] font-sans font-medium bg-zinc-100 text-zinc-950 rounded hover:bg-zinc-200 transition-colors self-start sm:self-auto"
-        >
-          + Initialize Node
-        </Link>
+        
+        <div className="flex items-center space-x-1.5 self-start lg:self-auto text-sm">
+          <Link
+            href="/dashboard/engagements/new"
+            className="inline-flex items-center px-3 py-1 font-mono text-xs border border-zinc-800 text-zinc-400 rounded hover:border-zinc-600 hover:text-zinc-100 transition-colors uppercase tracking-wider"
+          >
+            + Initialize Node
+          </Link>
+        </div>
       </div>
 
       {/* Empty State Vector Frame */}
       {userEngagements.length === 0 ? (
-        <div className="h-48 border border-dashed border-zinc-900 rounded-lg flex flex-col items-center justify-center space-y-2">
-          <p className="text-xs font-normal text-zinc-500">No active accounts mapped yet.</p>
+        <div className="h-36 border border-dashed border-zinc-900 rounded-lg flex flex-col items-center justify-center space-y-1.5">
+          <p className="text-sm font-normal text-zinc-500">No active accounts mapped yet.</p>
           <Link 
             href="/dashboard/engagements/new" 
-            className="text-[11px] font-mono text-zinc-400 underline underline-offset-4 hover:text-zinc-200 transition-colors"
+            className="text-xs font-mono text-zinc-400 underline underline-offset-4 hover:text-zinc-200 transition-colors"
           >
             Initialize your first Pin-Down setup →
           </Link>
         </div>
       ) : (
-        /* Flat Minimalist Node List Stack */
-        <div className="space-y-4">
+        /* Expanded Full-Width Node List Stack */
+        <div className="space-y-3 w-full">
           {userEngagements.map((eng) => {
             const engRuns = allRuns.filter((r) => r.engagementId === eng.engagementId);
             const stack = eng.stack as any;
@@ -135,19 +140,19 @@ export default async function EngagementsPage() {
               <Link
                 key={eng.id}
                 href={`/dashboard/engagements/${eng.engagementId}`}
-                className="group block rounded-lg border border-zinc-900 bg-zinc-950/20 p-4 hover:border-zinc-800 hover:bg-zinc-900/10 transition-all duration-150"
+                className="group block rounded-lg border border-zinc-900 bg-zinc-950/20 p-4 hover:border-zinc-800 hover:bg-zinc-900/5 transition-all duration-150 w-full"
               >
                 {/* Meta Summary Line */}
-                <div className="flex items-start justify-between border-b border-zinc-900/40 pb-3">
+                <div className="flex items-start justify-between border-b border-zinc-900/40 pb-2.5">
                   <div className="space-y-0.5">
                     <p className="text-sm font-medium text-zinc-200 group-hover:text-zinc-100 transition-colors">
                       {eng.buyer}
                     </p>
-                    <p className="text-[10px] font-mono text-zinc-500 tracking-wider">
-                      {eng.engagementId}
+                    <p className="text-[11px] font-mono text-zinc-500 tracking-wider">
+                      SYS_ID // {eng.engagementId}
                     </p>
                   </div>
-                  <span className="text-[10px] font-mono text-zinc-600">
+                  <span className="text-xs font-mono text-zinc-500">
                     {new Date(eng.createdAt).toLocaleDateString(undefined, {
                       month: "short",
                       day: "numeric",
@@ -157,29 +162,29 @@ export default async function EngagementsPage() {
                 </div>
 
                 {/* Sub-Badge Stack Layout */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-3 gap-4 sm:gap-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-2.5 gap-3 sm:gap-0">
                   {/* Platform Asset Labels */}
                   <div className="flex flex-wrap gap-2">
-                    <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-900/60">
+                    <span className="text-xs font-mono text-zinc-400 bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-900/60">
                       🗺️ {bookingLabel}
                     </span>
-                    <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-900/60">
+                    <span className="text-xs font-mono text-zinc-400 bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-900/60">
                       🔄 {emailLabel}
                     </span>
-                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                    <span className={`text-xs font-mono px-2 py-0.5 rounded border ${
                       smsActive
-                        ? "text-emerald-400 bg-emerald-500/5 border-emerald-500/10"
-                        : "text-zinc-500 bg-zinc-900/10 border-zinc-900/40"
+                        ? "text-zinc-300 font-medium bg-zinc-900/60 border-zinc-800"
+                        : "text-zinc-600 font-light bg-zinc-900/10 border-zinc-900/40"
                     }`}>
                       📱 {smsLabel}
                     </span>
                   </div>
 
-                  {/* Engine Module Grid Status Lights */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-zinc-900/20 sm:border-t-0 pt-2 sm:pt-0">
+                  {/* Engine Module Grid Status Tags */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-zinc-900/20 sm:border-t-0 pt-2.5 sm:pt-0">
                     {SKILLS.map((skill) => (
                       <div key={skill} className="flex items-center space-x-2">
-                        <span className="text-[10px] font-mono text-zinc-600">{skill}</span>
+                        <span className="text-xs font-mono text-zinc-500">{skill}</span>
                         <SkillStatusBadge skillName={skill} runs={engRuns} />
                       </div>
                     ))}
