@@ -1,4 +1,6 @@
 // src/lib/db.ts
+// COMPLETELY OFFLINE CONCURRENCY-SAFE MOCK ENGINE FOR FRONTEND UI DESIGN
+
 const mockEngagements = [
   {
     id: "1",
@@ -17,102 +19,10 @@ const mockEngagements = [
 ];
 
 const mockSkillRuns = [
-  { 
-    id: "r1", 
-    skillName: "pin-down", 
-    phase: "redirect_config", 
-    status: "success", 
-    costInCents: 4500, 
-    startedAt: new Date(Date.now() - 3600000), 
-    completedAt: new Date(Date.now() - 3540000),
-    tokenUsage: { input_tokens: 14820, output_tokens: 3204 },
-    logPayload: {
-      attempted: "Configured Calendly redirect on event type and built confirmation page on Webflow.",
-      worked: [
-        "Calendly redirect set and verified cleanly.",
-        "Webflow page successfully deployed at custom path alias."
-      ],
-      failed: null,
-      openItems: [
-        "[needs:hosted-video-link] Awaiting customer upload for Hero video.",
-        "[needs:hosted-video-link] Awaiting asset path links for Breakout 1."
-      ],
-      decisions: [
-        "Hero approach selected: FAQ model.",
-        "Page layout sequence defaulted to standard content pillar order."
-      ]
-    }
-  },
-  { 
-    id: "r2", 
-    skillName: "pile-on", 
-    phase: "hybrid_synthesis", 
-    status: "running", 
-    costInCents: 1200, 
-    startedAt: new Date(Date.now() - 60000),
-    completedAt: null,
-    tokenUsage: { input_tokens: 32100, output_tokens: 4200 },
-    logPayload: {
-      attempted: "Initializing async contact subscription and spinning background personalization macros.",
-      worked: [
-        "Resolved list authentication schema references from local key vault."
-      ],
-      failed: null,
-      openItems: [
-        "Monitoring Claude scheduled macro tasks pipeline until terminal complete signal logs."
-      ],
-      decisions: [
-        "Enforced daily send volume safety ceiling boundaries."
-      ]
-    }
-  },
-  { 
-    id: "r3", 
-    skillName: "pre-call-read", 
-    phase: "brief_synthesis", 
-    status: "success", 
-    costInCents: 1550, 
-    startedAt: new Date(Date.now() - 7200000),
-    completedAt: new Date(Date.now() - 7140000),
-    tokenUsage: { input_tokens: 28400, output_tokens: 12800 },
-    logPayload: {
-      attempted: "Scanned lookahead calendar window and initiated custom background lookup passes.",
-      worked: [
-        "Cross-referenced historical engagement click arrays perfectly.",
-        "Delivered structured briefing packet to team Slack operational target."
-      ],
-      failed: null,
-      openItems: [
-        "Awaiting next morning cron wake sequence orchestration pass."
-      ],
-      decisions: [
-        "Omitted deep out-of-network lookups due to strict Rule 14 confidence threshold limits."
-      ]
-    }
-  },
-  { 
-    id: "r4", 
-    skillName: "leak-map", 
-    phase: "stage_5_report", 
-    status: "failed", 
-    costInCents: 3000, 
-    startedAt: new Date(Date.now() - 14400000),
-    completedAt: new Date(Date.now() - 14350000),
-    tokenUsage: { input_tokens: 52500, output_tokens: 22900 },
-    logPayload: {
-      attempted: "Triggering weekly analytical metrics aggregation pipeline across out-of-network endpoints.",
-      worked: [
-        "Compiled internal metric logs for volume tracking analysis frames."
-      ],
-      failed: "Network connection timeout error during external data API lookup passes.",
-      openItems: [
-        "Requires manual account credential validation checking before re-run deployment."
-      ],
-      decisions: [
-        "Flagged data-gap status as high severity inside global audit log record."
-      ]
-    }
-  }
+  { id: "r1", skillName: "pin-down", phase: "redirect_config", status: "success", costInCents: 4500, startedAt: new Date() },
+  { id: "r2", skillName: "pile-on", phase: "hybrid_synthesis", status: "running", costInCents: 1200, startedAt: new Date() },
+  { id: "r3", skillName: "pre-call-read", phase: "brief_synthesis", status: "success", costInCents: 1550, startedAt: new Date() },
+  { id: "r4", skillName: "leak-map", phase: "stage_5_report", status: "failed", costInCents: 3000, startedAt: new Date() }
 ];
 
 const mockAlerts = [
@@ -141,11 +51,14 @@ function createMockChain(initialTable = "") {
 
   const resolveData = () => {
     const t = currentTable.toLowerCase();
+    
+    // CRITICAL FIX: Match the explicit table names cleanly before checking broad substrings
     if (t.includes("skill_runs") || t.includes("skillname")) return mockSkillRuns;
     if (t.includes("active_alerts") || t.includes("metricname")) return mockAlerts;
     if (t.includes("briefed_calls") || t.includes("prospectname")) return mockBriefs;
     if (t.includes("audit_runs")) return mockAudits;
     if (t.includes("engagement")) return mockEngagements;
+    
     return [];
   };
 

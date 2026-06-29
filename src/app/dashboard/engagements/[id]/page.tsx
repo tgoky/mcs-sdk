@@ -5,7 +5,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { TriggerSkillButton } from "./trigger-skill-button";
-import { CheckCircle2, XCircle, Loader2, AlertCircle, ChevronLeft } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
 import {
   SKILL_INFO,
   SKILLS,
@@ -105,18 +105,18 @@ export default async function EngagementDetailPage({
     <div className="space-y-6 w-full mx-auto tracking-tight antialiased px-1 text-zinc-400">
 
       {/* Back + header */}
-      <div className="space-y-4 border-b border-zinc-900 pb-5">
+      <div className="space-y-3 border-b border-zinc-900 pb-4">
         <Link
           href="/dashboard/engagements"
-          className="inline-flex items-center text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors gap-0.5"
+          className="inline-flex items-center text-sm font-medium text-zinc-400 hover:text-zinc-200 transition-colors gap-1"
         >
-          <ChevronLeft size={14} />
+          <span className="text-zinc-500 mr-1">←</span>
           All Clients
         </Link>
 
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div className="space-y-1">
-            <h1 className="text-lg font-semibold text-zinc-100 tracking-tight">
+            <h1 className="text-lg font-medium text-zinc-100 tracking-tight">
               {engagement.buyer}
             </h1>
             <p className="text-[11px] font-mono text-zinc-600">
@@ -125,14 +125,14 @@ export default async function EngagementDetailPage({
           </div>
 
           <div className="flex flex-wrap gap-2 self-start">
-            <span className="text-xs text-zinc-400 bg-zinc-900/60 px-2.5 py-1 rounded-md border border-zinc-800/80 font-medium">
+            <span className="text-xs text-zinc-500 bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-900/60">
               {bookingPlatformLabel(stack?.booking_platform)}
             </span>
-            <span className="text-xs text-zinc-400 bg-zinc-900/60 px-2.5 py-1 rounded-md border border-zinc-800/80 font-medium">
+            <span className="text-xs text-zinc-500 bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-900/60">
               {emailPlatformLabel(stack?.email_platform)}
             </span>
             {offerDetails?.traffic_temperature && (
-              <span className="text-xs text-zinc-400 bg-zinc-900/60 px-2.5 py-1 rounded-md border border-zinc-800/80 font-medium capitalize">
+              <span className="text-xs text-zinc-500 bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-900/60 capitalize">
                 {String(offerDetails.traffic_temperature)} traffic
               </span>
             )}

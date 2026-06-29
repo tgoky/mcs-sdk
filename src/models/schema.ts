@@ -1,4 +1,3 @@
-// src/models/schema.ts
 import {
   pgTable,
   text,
@@ -13,11 +12,15 @@ export type EngagementStack = {
   booking_platform: "calendly" | "cal_com" | "ghl_calendar" | "oncehub" | "unsupported";
   booking_platform_credentials_ref: string;
   booking_platform_meta?: {
+    // Calendly
     organization_uri?: string;
     event_type_uuid?: string;
+    // Cal.com
     username?: string;
+    // GHL
     location_id?: string;
     calendar_id?: string;
+    // OnceHub
     account_id?: string;
   };
   hosting_platform: "webflow" | "lovable" | "ghl" | "wordpress" | "nextjs_vercel" | "plain_html";
@@ -26,23 +29,17 @@ export type EngagementStack = {
   publish_domain?: string;
   email_platform?: "klaviyo" | "hubspot" | "activecampaign" | "convertkit" | "mailchimp";
   email_platform_credentials_ref?: string;
+  // Klaviyo list IDs for pile-on and win-back
   target_list_id?: string;
   recovery_list_id?: string;
+  // Brief delivery
   brief_landing_destination?: "slack" | "crm_note" | "calendar_event";
-  slack_webhook_url?: string;       
-  brief_lead_time_hours?: number;   
-  person_match_confidence_threshold?: number; 
-  webhook_subscription_id?: string; 
+  slack_webhook_url?: string;       // per-engagement, never global
+  brief_lead_time_hours?: number;   // default 12, range 1-48
+  person_match_confidence_threshold?: number; // default 99
+  // Webhook tracking
+  webhook_subscription_id?: string; // Calendly/Cal.com subscription URI
   webhook_signing_secret?: string;
-};
-
-// ── Phase Log Compaction Payload Schema ──
-export type PhaseLogCompactionPayload = {
-  attempted: string;
-  worked: string[];
-  failed: string | null;
-  openItems: string[];
-  decisions: string[];
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────
@@ -63,6 +60,7 @@ export const engagements = pgTable("engagements", {
   buyer: text("buyer").notNull(),
   schemaVersion: text("schema_version").notNull().default("1.0"),
 
+  // pin-down writes these once — .$type<T>() gives us TS safety on the jsonb
   stack: jsonb("stack").$type<EngagementStack>(),
   offerDetails: jsonb("offer_details").$type<{
     name: string;
@@ -77,6 +75,7 @@ export const engagements = pgTable("engagements", {
   topObjections: jsonb("top_objections").$type<string[]>(),
   prospectMeets: text("prospect_meets"),
 
+  // each skill writes only its own section
   pileOnSequenceAssetMap: jsonb("pile_on_sequence_asset_map"),
   winBackCounts: jsonb("win_back_counts").$type<{
     recovery_count: number;
@@ -101,7 +100,6 @@ export const skillRuns = pgTable("skill_runs", {
     output_tokens: number;
   }>(),
   costInCents: integer("cost_in_cents"),
-  logPayload: jsonb("log_payload").$type<PhaseLogCompactionPayload>(), // Enforced 5-Field Payload column
   startedAt: timestamp("started_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
 });
@@ -112,7 +110,7 @@ export const briefedCallsLog = pgTable("briefed_calls_log", {
   engagementId: text("engagement_id")
     .notNull()
     .references(() => engagements.engagementId),
-  callId: text("call_id").notNull().unique(), 
+  callId: text("call_id").notNull().unique(), // idempotency key
   callTime: timestamp("call_time").notNull(),
   prospectName: text("prospect_name"),
   briefDeliveredAt: timestamp("brief_delivered_at"),
@@ -146,20 +144,21 @@ export const activeAlerts = pgTable("active_alerts", {
   evaluationPeriod: text("evaluation_period").notNull(),
   severity: text("severity").notNull(),
   source: text("source").notNull(),
+  // last_fired_at for cooldown — cleaner than abusing skillRuns
   lastFiredAt: timestamp("last_fired_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// ── Credentials Refs ──────────────────────────────────────────────────────
+// ── Credentials Refs (encrypted value, not raw) ───────────────────────────
 export const credentialsRefs = pgTable("credentials_refs", {
   id: uuid("id").defaultRandom().primaryKey(),
   engagementId: text("engagement_id")
     .notNull()
     .references(() => engagements.engagementId),
   provider: text("provider").notNull(),
-  refKey: text("ref_key").notNull(),       
-  encryptedValue: text("encrypted_value").notNull(), 
-  iv: text("iv").notNull(),                
+  refKey: text("ref_key").notNull(),       // secrets://acme/calendly_pat
+  encryptedValue: text("encrypted_value").notNull(), // AES-256-GCM encrypted
+  iv: text("iv").notNull(),                // initialization vector
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
