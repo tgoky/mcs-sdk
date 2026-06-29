@@ -3,62 +3,26 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { engagements, skillRuns } from "@/models/schema";
-import { eq, desc, count } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { MobileNav } from "./mobile-nav";
+import { LiveTime } from "./live-time";
 import Link from "next/link";
-import { Bubbles, BrushCleaning, CookingPot, Loader2 } from "lucide-react";
+import { CheckCircle2, AlertCircle, Circle, Loader2 } from "lucide-react";
+import {
+  SKILL_INFO,
+  SKILLS,
+  MODULE_STATUS_LABELS,
+  type SkillName,
+  type ModuleStatus,
+} from "@/lib/copy";
 
-const SKILLS = [
-  "pin-down",
-  "pile-on",
-  "pre-call-read",
-  "win-back",
-  "leak-map",
-] as const;
-
-type SkillName = (typeof SKILLS)[number];
 type SkillStatus = "live" | "failed" | "not_run" | "running";
 
-const SKILL_INFO: Record<SkillName, { name: string; description: string }> = {
-  "pin-down": {
-    name: "Pin Down",
-    description: "Sets up a new client account and onboarding flow.",
-  },
-  "pile-on": {
-    name: "Pile On",
-    description: "Automatically follows up with leads who haven't booked yet.",
-  },
-  "pre-call-read": {
-    name: "Pre-Call Read",
-    description: "Sends your team a quick briefing before every call.",
-  },
-  "win-back": {
-    name: "Win-Back",
-    description: "Re-engages prospects who went cold.",
-  },
-  "leak-map": {
-    name: "Leak Map",
-    description: "Weekly check for where you're losing customers.",
-  },
-};
+export const revalidate = 0;
 
-const STATUS_TOOLTIPS: Record<SkillStatus, string> = {
-  live: "Active & running",
-  failed: "Needs attention",
-  not_run: "Ready to start",
-  running: "Executing now",
-};
-
-function timeAgo(date: Date): string {
-  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString();
+function getStatusTooltip(status: SkillStatus): string {
+  if (status === "running") return "Executing now";
+  return MODULE_STATUS_LABELS[status as ModuleStatus] ?? "Not started yet";
 }
 
 export default async function DashboardLayout({
@@ -247,9 +211,9 @@ export default async function DashboardLayout({
                       <div className="flex items-center shrink-0 relative group/icon">
                         {status === "live" && (
                           <>
-                            <CookingPot size={16} className="text-zinc-400" />
+                            <CheckCircle2 size={16} className="text-emerald-500" />
                             <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl z-10">
-                              {STATUS_TOOLTIPS.live}
+                              {getStatusTooltip(status)}
                             </span>
                           </>
                         )}
@@ -257,23 +221,23 @@ export default async function DashboardLayout({
                           <>
                             <Loader2 size={16} className="text-zinc-400 animate-spin" />
                             <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl z-10">
-                              {STATUS_TOOLTIPS.running}
+                              {getStatusTooltip(status)}
                             </span>
                           </>
                         )}
                         {status === "failed" && (
                           <>
-                            <BrushCleaning size={16} className="text-zinc-400" />
+                            <AlertCircle size={16} className="text-rose-400" />
                             <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl z-10">
-                              {STATUS_TOOLTIPS.failed}
+                              {getStatusTooltip(status)}
                             </span>
                           </>
                         )}
                         {status === "not_run" && (
                           <>
-                            <Bubbles size={16} className="text-zinc-500" />
+                            <Circle size={16} className="text-zinc-700" />
                             <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl z-10">
-                              {STATUS_TOOLTIPS.not_run}
+                              {getStatusTooltip(status)}
                             </span>
                           </>
                         )}
@@ -290,10 +254,7 @@ export default async function DashboardLayout({
                           Running...
                         </span>
                       ) : lastRun ? (
-                        <span className="text-[10px] text-zinc-600 tabular-nums flex items-center gap-1">
-                          <Loader2 size={10} className="text-zinc-500 animate-spin" />
-                          Last run {timeAgo(lastRun)}
-                        </span>
+                        <LiveTime isoString={lastRun.toISOString()} />
                       ) : (
                         <span className="text-[10px] text-zinc-700">
                           Never run
