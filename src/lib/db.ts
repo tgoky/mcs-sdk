@@ -5,7 +5,7 @@ const mockEngagements = [
   {
     id: "1",
     engagementId: "eng_acme_corp_001",
-    buyer: "Acme Enterprise Group",
+    buyer: "OCSB Enterprise Group",
     createdAt: new Date(),
     stack: { booking_platform: "calendly", email_platform: "klaviyo" }
   },

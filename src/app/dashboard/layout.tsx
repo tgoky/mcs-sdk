@@ -6,7 +6,7 @@ import { engagements, skillRuns } from "@/models/schema";
 import { eq, desc, count } from "drizzle-orm";
 import { MobileNav } from "./mobile-nav";
 import Link from "next/link";
-import { Bubbles, BrushCleaning, CookingPot, } from "lucide-react";
+import { Bubbles, BrushCleaning, CookingPot, Loader2 } from "lucide-react";
 
 const SKILLS = [
   "pin-down",
@@ -17,7 +17,7 @@ const SKILLS = [
 ] as const;
 
 type SkillName = (typeof SKILLS)[number];
-type SkillStatus = "live" | "failed" | "not_run";
+type SkillStatus = "live" | "failed" | "not_run" | "running";
 
 const SKILL_INFO: Record<SkillName, { name: string; description: string }> = {
   "pin-down": {
@@ -46,6 +46,7 @@ const STATUS_TOOLTIPS: Record<SkillStatus, string> = {
   live: "Active & running",
   failed: "Needs attention",
   not_run: "Ready to start",
+  running: "Executing now",
 };
 
 function timeAgo(date: Date): string {
@@ -118,7 +119,13 @@ export default async function DashboardLayout({
           skillLastRun[skill] = new Date(run.startedAt);
         }
         if (skillStatuses[skill] === "not_run") {
-          skillStatuses[skill] = run.status === "success" ? "live" : "failed";
+          if (run.status === "running") {
+            skillStatuses[skill] = "running";
+          } else if (run.status === "success") {
+            skillStatuses[skill] = "live";
+          } else if (run.status === "failed") {
+            skillStatuses[skill] = "failed";
+          }
         }
       }
     }
@@ -126,7 +133,7 @@ export default async function DashboardLayout({
 
   const displayName = session.email?.split("@")[0] ?? "Member";
 
-  const activeCount = Object.values(skillStatuses).filter(s => s === "live").length;
+  const activeCount = Object.values(skillStatuses).filter(s => s === "live" || s === "running").length;
   const failedCount = Object.values(skillStatuses).filter(s => s === "failed").length;
 
   const navLinks = [
@@ -193,7 +200,7 @@ export default async function DashboardLayout({
           <div className="pt-4 border-t border-zinc-900">
             <div className="px-1 mb-3 space-y-1">
               <p className="text-xs font-mono text-zinc-500 uppercase tracking-wider">
-                System Health
+                EXECUTIONS
               </p>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-mono text-zinc-500">
@@ -246,6 +253,14 @@ export default async function DashboardLayout({
                             </span>
                           </>
                         )}
+                        {status === "running" && (
+                          <>
+                            <Loader2 size={16} className="text-zinc-400 animate-spin" />
+                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl z-10">
+                              {STATUS_TOOLTIPS.running}
+                            </span>
+                          </>
+                        )}
                         {status === "failed" && (
                           <>
                             <BrushCleaning size={16} className="text-zinc-400" />
@@ -270,8 +285,13 @@ export default async function DashboardLayout({
                     </p>
 
                     <div className="flex items-center gap-3 mt-1">
-                      {lastRun ? (
-                        <span className="text-[10px] text-zinc-600 tabular-nums">
+                      {status === "running" ? (
+                        <span className="text-[10px] text-zinc-400 tabular-nums animate-pulse">
+                          Running...
+                        </span>
+                      ) : lastRun ? (
+                        <span className="text-[10px] text-zinc-600 tabular-nums flex items-center gap-1">
+                          <Loader2 size={10} className="text-zinc-500 animate-spin" />
                           Last run {timeAgo(lastRun)}
                         </span>
                       ) : (

@@ -32,7 +32,7 @@ export const SKILL_INFO: Record<SkillName, { name: string; description: string }
   },
   "pile-on": {
     name: "Pile On",
-    description: "Automatically follows up with leads who haven't booked yet.",
+    description: "Runs a pre-call email and SMS sequence for every new booking.",
   },
   "pre-call-read": {
     name: "Pre-Call Read",
@@ -40,11 +40,11 @@ export const SKILL_INFO: Record<SkillName, { name: string; description: string }
   },
   "win-back": {
     name: "Win-Back",
-    description: "Re-engages prospects who went cold.",
+    description: "Re-engages prospects who no-showed or went cold.",
   },
   "leak-map": {
     name: "Leak Map",
-    description: "Weekly check for where you're losing customers.",
+    description: "Weekly check for where you're losing customers in the funnel.",
   },
 };
 
@@ -55,7 +55,7 @@ export function skillName(raw: string | null | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
-// Overall module status (sidebar — "is this module healthy right now?")
+// Overall module status (per-client module cards)
 // ---------------------------------------------------------------------------
 
 export type ModuleStatus = "live" | "failed" | "not_run";
@@ -204,7 +204,8 @@ export const DASHBOARD_COPY = {
   newClientButton: "Add a New Client",
   overviewSectionTitle: "Overview",
   activityLogSectionTitle: "Recent Activity",
-  noActivityYet: "Nothing has run yet — once you add a client, activity will show up here.",
+  noActivityYet:
+    "Nothing has run yet — once you add a client, activity will show up here.",
   stat: {
     activeAccounts: "Active Accounts",
     activeAccountsAllGood: "All good",
@@ -236,9 +237,10 @@ export const ACTIVITY_FEED_COPY = {
   emptySubtitle: "Once a module runs, you'll see it here in real time.",
   liveLabel: "Live",
   pausedLabel: "Paused",
-  lastUpdatedPrefix: "Last updated",
+  lastUpdatedPrefix: "Last updated ",
   pauseButton: "Pause updates",
   resumeButton: "Resume updates",
+  columnClient: "Client",
   columnModule: "Module",
   columnStep: "Current Step",
   columnStatus: "Status",

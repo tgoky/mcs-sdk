@@ -155,7 +155,7 @@ export default async function DashboardPage() {
             className="group block p-4 rounded-lg bg-zinc-900/10 border border-zinc-900/60 hover:border-zinc-800 hover:bg-zinc-900/20 transition-all"
           >
             <p className="text-sm font-medium text-zinc-400 group-hover:text-zinc-100 transition-colors">
-              {copy.shortcuts.manageEngagements.title} →
+              {copy.shortcuts.manageEngagements.title} 
             </p>
             <p className="text-xs font-normal text-zinc-600 mt-1">
               {copy.shortcuts.manageEngagements.description}
@@ -166,7 +166,7 @@ export default async function DashboardPage() {
             className="group block p-4 rounded-lg bg-zinc-900/10 border border-zinc-900/60 hover:border-zinc-800 hover:bg-zinc-900/20 transition-all"
           >
             <p className="text-sm font-medium text-zinc-400 group-hover:text-zinc-100 transition-colors">
-              {copy.shortcuts.manageCredentials.title} →
+              {copy.shortcuts.manageCredentials.title} 
             </p>
             <p className="text-xs font-normal text-zinc-600 mt-1">
               {copy.shortcuts.manageCredentials.description}

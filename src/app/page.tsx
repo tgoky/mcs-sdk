@@ -9,10 +9,10 @@ export default async function LandingIndexPage() {
       <main className="w-full max-w-xl border border-zinc-200 rounded-2xl bg-white dark:border-zinc-900 dark:bg-zinc-950 p-10 shadow-sm text-center space-y-6 select-none tracking-tight">
         
         {/* Clean, Non-Intimidating Core Logo Mark */}
-        <div className="inline-flex h-10 w-10 rounded-xl bg-zinc-900 dark:bg-zinc-100 items-center justify-center text-white dark:text-zinc-950 font-sans text-base font-bold shadow-sm">
+        {/* <div className="inline-flex h-10 w-10 rounded-xl bg-zinc-900 dark:bg-zinc-100 items-center justify-center text-white dark:text-zinc-950 font-sans text-base font-bold shadow-sm">
           S
         </div>
-        
+         */}
         {/* Plain English Value Copy */}
         <div className="space-y-2">
           <h1 className="text-xl font-medium tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-2xl">
