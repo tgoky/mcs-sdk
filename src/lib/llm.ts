@@ -1,50 +1,33 @@
 import { db } from "@/lib/db";
 import { skillRuns } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm"; // ✅ Added sql import
 
 // ── Provider config ───────────────────────────────────────────────────────
-// Set USE_OPENROUTER=true in env to route through OpenRouter.
-// Default: Anthropic direct.
 const USE_OPENROUTER = process.env.USE_OPENROUTER === "true";
 
-// Anthropic model strings (used when USE_OPENROUTER=false)
 const ANTHROPIC_MODELS = {
   SYNTHESIS: "claude-sonnet-4-6",
   FAST: "claude-haiku-4-5-20251001",
 } as const;
 
-// OpenRouter model strings — same capability tiers, routed through OpenRouter.
-// Swap these freely without touching any other file.
 const OPENROUTER_MODELS = {
-  // Keep on Anthropic via OpenRouter (same models, single billing account):
   SYNTHESIS: "anthropic/claude-sonnet-4-6",
   FAST: "anthropic/claude-haiku-4-5",
-  // Or switch to other providers:
-  // SYNTHESIS: "openai/gpt-4o",
-  // SYNTHESIS: "google/gemini-2.5-pro",
-  // FAST: "meta-llama/llama-3.3-8b-instruct:free",
 } as const;
 
 export const MODEL = {
-  // Synthesis: briefs, email copy, voice extraction, audit reports
   SYNTHESIS: "SYNTHESIS" as const,
-  // Fast: alert messages, short classifications, parsing tasks
   FAST: "FAST" as const,
 };
 
 type ModelKey = keyof typeof MODEL;
 
 // ── Pricing (cents per million tokens) ───────────────────────────────────
-// Used for cost telemetry written back to skillRuns.costInCents.
-// Update if provider pricing changes.
 const ANTHROPIC_PRICING: Record<string, { input: number; output: number }> = {
-  "claude-sonnet-4-6":        { input: 300,  output: 1500 },
-  "claude-haiku-4-5-20251001":{ input: 25,   output: 125  },
+  "claude-sonnet-4-6":         { input: 300,  output: 1500 },
+  "claude-haiku-4-5-20251001": { input: 25,   output: 125  },
 };
 
-// OpenRouter passes through usage — use the same pricing when routing
-// to the same underlying Anthropic models.
-// For other models via OpenRouter, adjust here.
 const OPENROUTER_PRICING: Record<string, { input: number; output: number }> = {
   "anthropic/claude-sonnet-4-6": { input: 300,  output: 1500 },
   "anthropic/claude-haiku-4-5":  { input: 25,   output: 125  },
@@ -59,7 +42,7 @@ export interface ClaudeCallOptions {
   system: string;
   userMessage: string;
   maxTokens?: number;
-  runId?: string; // if provided, writes cost telemetry back to skillRuns
+  runId?: string;
 }
 
 export interface ClaudeResult {
@@ -82,9 +65,7 @@ export async function callClaude(opts: ClaudeCallOptions): Promise<ClaudeResult>
 async function callViaAnthropic(opts: ClaudeCallOptions): Promise<ClaudeResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "ANTHROPIC_API_KEY not set. Add it to your environment variables."
-    );
+    throw new Error("ANTHROPIC_API_KEY not set. Add it to your environment variables.");
   }
 
   const modelString = ANTHROPIC_MODELS[opts.model];
@@ -120,12 +101,18 @@ async function callViaAnthropic(opts: ClaudeCallOptions): Promise<ClaudeResult> 
     (outputTokens / 1_000_000) * pricing.output
   );
 
+  // ✅ FIXED: Atomic increment instead of overwrite
   if (opts.runId) {
     await db
       .update(skillRuns)
       .set({
-        tokenUsage: { input_tokens: inputTokens, output_tokens: outputTokens },
-        costInCents,
+        costInCents: sql`COALESCE(${skillRuns.costInCents}, 0) + ${costInCents}`,
+        tokenUsage: sql`
+          jsonb_build_object(
+            'input_tokens', COALESCE((${skillRuns.tokenUsage}->>'input_tokens')::int, 0) + ${inputTokens},
+            'output_tokens', COALESCE((${skillRuns.tokenUsage}->>'output_tokens')::int, 0) + ${outputTokens}
+          )
+        `,
       })
       .where(eq(skillRuns.id, opts.runId));
   }
@@ -155,13 +142,11 @@ async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult>
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      // Required by OpenRouter for attribution + rate limit tracking
       "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://app.muddventures.com",
       "X-Title": "Mudd Ventures Unified Interface",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      // OpenRouter uses OpenAI message format — system goes in messages array
       model: modelString,
       max_tokens: opts.maxTokens ?? 1500,
       messages: [
@@ -177,11 +162,7 @@ async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult>
   }
 
   const data = await res.json();
-
-  // OpenRouter returns OpenAI-format response
   const text: string = data.choices?.[0]?.message?.content ?? "";
-
-  // Token usage — OpenRouter uses OpenAI naming (prompt_tokens, completion_tokens)
   const inputTokens: number = data.usage?.prompt_tokens ?? 0;
   const outputTokens: number = data.usage?.completion_tokens ?? 0;
 
@@ -191,12 +172,18 @@ async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult>
     (outputTokens / 1_000_000) * pricing.output
   );
 
+  // ✅ FIXED: Atomic increment instead of overwrite
   if (opts.runId) {
     await db
       .update(skillRuns)
       .set({
-        tokenUsage: { input_tokens: inputTokens, output_tokens: outputTokens },
-        costInCents,
+        costInCents: sql`COALESCE(${skillRuns.costInCents}, 0) + ${costInCents}`,
+        tokenUsage: sql`
+          jsonb_build_object(
+            'input_tokens', COALESCE((${skillRuns.tokenUsage}->>'input_tokens')::int, 0) + ${inputTokens},
+            'output_tokens', COALESCE((${skillRuns.tokenUsage}->>'output_tokens')::int, 0) + ${outputTokens}
+          )
+        `,
       })
       .where(eq(skillRuns.id, opts.runId));
   }

@@ -1,26 +1,121 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { engagements } from "@/models/schema";
+import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { handleInboundBookingEvent, classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
 import { startRun, failRun } from "@/lib/run-log";
 import crypto from "crypto";
 
+// ── Signature verification helpers ─────────────────────────────────────────
+
+/**
+ * Timing-safe string comparison to prevent timing attacks.
+ * Returns false immediately if lengths differ (safe — length is public info).
+ */
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+/**
+ * Calendly webhook signature verification.
+ * Header format: Calendly-Webhook-Signature: t=<timestamp>,v1=<signature>
+ * Computed as: HMAC-SHA256(secret, timestamp + "." + rawBody)
+ */
+function verifyCalendlySignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string
+): boolean {
+  if (!signatureHeader || !secret) return false;
+
+  const parts = signatureHeader.split(",");
+  let t = "";
+  let v1 = "";
+  for (const part of parts) {
+    const [key, val] = part.split("=");
+    if (key === "t") t = val;
+    if (key === "v1") v1 = val;
+  }
+
+  if (!t || !v1) return false;
+
+  // Reject timestamps older than 3 minutes (replay attack prevention)
+  const threeMinutesSec = 3 * 60;
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (nowSec - parseInt(t, 10) > threeMinutesSec) {
+    return false;
+  }
+
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(`${t}.${rawBody}`)
+    .digest("hex");
+
+  return safeEqual(v1, expected);
+}
+
+/**
+ * Cal.com webhook signature verification.
+ * Header: x-calcom-signature-256: sha256=<signature>
+ * Computed as: HMAC-SHA256(secret, rawBody)
+ */
+function verifyCalComSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string
+): boolean {
+  if (!signatureHeader || !secret) return false;
+
+  const provided = signatureHeader.replace(/^sha256=/, "");
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody)
+    .digest("hex");
+
+  return safeEqual(provided, expected);
+}
+
+/**
+ * Generic HMAC-SHA256 verification for GHL / OnceHub / unknown providers
+ * that pass an X-Signature header with hex-encoded HMAC of the raw body.
+ */
+function verifyGenericHmacSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string
+): boolean {
+  if (!signatureHeader || !secret) return false;
+
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody)
+    .digest("hex");
+
+  return safeEqual(signatureHeader, expected);
+}
+
+// ── Route handler ──────────────────────────────────────────────────────────
+
 export async function POST(request: Request) {
   const runId = crypto.randomUUID();
 
   try {
-    const bodyText = await request.text();
-    const payload = JSON.parse(bodyText);
+    // ── 1. Read raw body FIRST (needed for signature verification) ──
+    const rawBody = await request.text();
 
+    // ── 2. Extract engagement_id from query params ──
+    // This is just a routing key, not authentication — the signature proves authenticity.
     const { searchParams } = new URL(request.url);
-    const engagementId =
-      searchParams.get("engagement_id") ?? payload.engagement_id;
+    const engagementId = searchParams.get("engagement_id");
 
     if (!engagementId) {
       return new Response("Missing engagement_id parameter", { status: 400 });
     }
 
+    // ── 3. Look up tenant to retrieve signing secret ──
     const tenant = await db
       .select()
       .from(engagements)
@@ -31,13 +126,66 @@ export async function POST(request: Request) {
       return new Response("Engagement not found", { status: 404 });
     }
 
-    // FIXED: classify the event BEFORE startRun so the correct skillName
-    // ("pile-on" vs "win-back") is set on the very first row insert. This
-    // used to be hardcoded to "pile-on" here and "corrected" mid-run by
-    // enrollment-service via a rename side-channel whenever the event
-    // turned out to be a cancellation — two separate event-type checks
-    // that could drift apart, plus a brief window where every win-back run
-    // was mislabeled as pile-on in the dashboard.
+    // ── 4. VERIFY SIGNATURE before touching any data ──
+    const stack = tenant.stack as EngagementStack | null;
+    const signingSecret = stack?.webhook_signing_secret;
+    const platform = stack?.booking_platform ?? "unsupported";
+
+    if (!signingSecret) {
+      console.error(
+        `[webhook] No signing secret configured for engagement ${engagementId} (platform: ${platform})`
+      );
+      return new Response(
+        "Webhook signing secret not configured",
+        { status: 401 }
+      );
+    }
+
+    let signatureValid = false;
+
+    switch (platform) {
+      case "calendly": {
+        const header = request.headers.get("calendly-webhook-signature");
+        signatureValid = verifyCalendlySignature(rawBody, header, signingSecret);
+        break;
+      }
+      case "cal_com": {
+        const header = request.headers.get("x-calcom-signature-256");
+        signatureValid = verifyCalComSignature(rawBody, header, signingSecret);
+        break;
+      }
+      case "ghl_calendar":
+      case "oncehub": {
+        // These typically send X-Signature or X-Webhook-Signature
+        const header =
+          request.headers.get("x-signature") ??
+          request.headers.get("x-webhook-signature");
+        signatureValid = verifyGenericHmacSignature(rawBody, header, signingSecret);
+        break;
+      }
+      case "unsupported":
+      default: {
+        // For truly unknown platforms, we can't verify — reject rather than trust
+        console.error(
+          `[webhook] Cannot verify signature for unsupported platform: ${platform}`
+        );
+        return new Response(
+          "Unsupported booking platform — no verification method available",
+          { status: 401 }
+        );
+      }
+    }
+
+    if (!signatureValid) {
+      console.warn(
+        `[webhook] Signature verification FAILED for engagement ${engagementId}`
+      );
+      return new Response("Invalid webhook signature", { status: 401 });
+    }
+
+    // ── 5. NOW parse the verified payload and process ──
+    const payload = JSON.parse(rawBody);
+
     const eventKind = classifyBookingEvent(payload);
     const skillName = eventKind === "cancelled" ? "win-back" : "pile-on";
 
@@ -59,7 +207,9 @@ export async function POST(request: Request) {
         whatWasAttempted: ["Process inbound booking webhook event."],
         whatWorked: [],
         whatFailed: [error.message],
-        openItems: ["This booking event was not enrolled in any sequence — check the payload shape against the configured booking platform."],
+        openItems: [
+          "This booking event was not enrolled in any sequence — check the payload shape against the configured booking platform.",
+        ],
         decisionsMade: [],
       },
     });
