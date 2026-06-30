@@ -1,10 +1,11 @@
 import { db } from "@/lib/db";
-import { engagements, skillRuns, briefedCallsLog, auditRunsLog } from "@/models/schema";
+import { engagements, briefedCallsLog, auditRunsLog } from "@/models/schema"; // Removed unused skillRuns import
 import { eq, and, gte, lte } from "drizzle-orm";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { resolveCredential } from "@/lib/credentials";
 import { KlaviyoClient } from "@/lib/platforms/email";
 import { CalendlyClient } from "@/lib/platforms/booking";
+import { startRun, logStep, failRun } from "@/lib/run-log"; // ✅ Unified logging imports
 import crypto from "crypto";
 
 interface MetricResult {
@@ -31,13 +32,13 @@ export class AuditEngine {
     const runId = crypto.randomUUID();
     const lookbackDays = type === "weekly" ? 7 : 30;
 
-    await db.insert(skillRuns).values({
+    // ✅ FIXED: Use unified startRun instead of raw db.insert(skillRuns)
+    await startRun({
       id: runId,
       engagementId,
       skillName: "leak-map",
       phase: "stage_1_data_pull",
-      status: "running",
-      startedAt: new Date(),
+      label: `${type} audit`,
     });
 
     try {
@@ -77,10 +78,8 @@ export class AuditEngine {
         );
 
       // ── STAGE 2: Compute metrics ─────────────────────────────────────
-      await db
-        .update(skillRuns)
-        .set({ phase: "stage_2_compute" })
-        .where(eq(skillRuns.id, runId));
+      // ✅ FIXED: Uniform timeline log instead of scalar phase overwrite
+      await logStep(runId, { phase: "stage_2_compute", status: "success" });
 
       const metrics: MetricResult[] = [];
       const gaps: string[] = [];
@@ -143,10 +142,8 @@ export class AuditEngine {
       // ── STAGE 3: Gap flagging already done above ─────────────────────
 
       // ── STAGE 4: Overall severity ────────────────────────────────────
-      await db
-        .update(skillRuns)
-        .set({ phase: "stage_4_severity" })
-        .where(eq(skillRuns.id, runId));
+      // ✅ FIXED: Uniform timeline log
+      await logStep(runId, { phase: "stage_4_severity", status: "success" });
 
       const highestSeverity = metrics.reduce<"high" | "medium" | "low" | "none">(
         (acc, m) => {
@@ -178,16 +175,14 @@ export class AuditEngine {
       });
 
       // ── STAGE 5: Claude report synthesis ────────────────────────────
-      await db
-        .update(skillRuns)
-        .set({ phase: "stage_5_report" })
-        .where(eq(skillRuns.id, runId));
+      // ✅ FIXED: Uniform timeline log
+      await logStep(runId, { phase: "stage_5_report", status: "success" });
 
       let report = "All tracked metrics nominal. No funnel leaks detected.";
 
       if (highestSeverity !== "none") {
         const userMessage = `Generate a 6-field Leak Map recommendation report for these funnel metrics:
-${JSON.stringify(metrics, null, 2)}
+ ${JSON.stringify(metrics, null, 2)}
 
 Gaps noted: ${gaps.join("; ") || "none"}
 Overall severity: ${highestSeverity}
@@ -210,18 +205,21 @@ Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})
         report = llmResult.text;
       }
 
-      await db
-        .update(skillRuns)
-        .set({ status: "success", completedAt: new Date() })
-        .where(eq(skillRuns.id, runId));
+      // ✅ FIXED: Final success state via logStep (populates timeline terminal node)
+      await logStep(runId, { phase: "completed", status: "success" });
 
       return report;
     } catch (err: any) {
-      await db
-        .update(skillRuns)
-        .set({ status: "failed", completedAt: new Date() })
-        .where(eq(skillRuns.id, runId))
-        .catch(() => {});
+      // ✅ FIXED: Use unified failRun to capture error properly in observability loop
+      await failRun(runId, err, {
+        summary: {
+          whatWasAttempted: ["Execute Leak Map audit pipeline."],
+          whatWorked: [],
+          whatFailed: [err.message],
+          openItems: ["Audit did not complete. Review error details."],
+          decisionsMade: [],
+        },
+      }).catch(() => {}); // Swallow to prevent double-throw chaos in cron handler
       throw err;
     }
   }
@@ -259,7 +257,6 @@ async function pullBookingShowRate(
   const apiKey = await resolveCredential(engagementId, "calendly");
   const client = new CalendlyClient(apiKey);
 
-  // Fetch events in both windows and count active vs cancelled
   async function getShowRate(start: Date, end: Date): Promise<number> {
     const res = await fetch(
       `https://api.calendly.com/scheduled_events?min_start_time=${start.toISOString()}&max_start_time=${end.toISOString()}&count=100`,
@@ -294,7 +291,6 @@ async function pullKlaviyoOpenRate(
   const apiKey = await resolveCredential(engagementId, "klaviyo");
   const client = new KlaviyoClient(apiKey);
 
-  // Fetch last 2 campaigns and compare open rates
   const res = await fetch(
     "https://a.klaviyo.com/api/campaigns/?filter=equals(status,'sent')&sort=-send_time&page[size]=4",
     {
@@ -309,7 +305,6 @@ async function pullKlaviyoOpenRate(
   const campaigns: any[] = data.data ?? [];
   if (campaigns.length < 2) return null;
 
-  // Current = most recent campaign, prior = one before that
   const getOpenRate = (campaign: any): number =>
     campaign.attributes?.statistics?.open_rate
       ? Math.round(campaign.attributes.statistics.open_rate * 100)
