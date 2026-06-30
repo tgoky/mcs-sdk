@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, XCircle, Loader2, AlertCircle, Hash, ArrowRight } from "lucide-react";
 import { skillName, phaseLabel, SKILL_INFO, type SkillName } from "@/lib/copy";
@@ -29,7 +30,7 @@ function actionSummary(run: SkillRun): string {
   if (s === "running") return phaseLabel(run.phase);
   if (s === "failed") {
     if (run.errorMessage && run.errorMessage.length < 80) return run.errorMessage;
-    return "Failed — click to see the error";
+    return "Failed — click to view run telemetry";
   }
 
   const summaries: Partial<Record<SkillName, string>> = {
@@ -45,23 +46,17 @@ function actionSummary(run: SkillRun): string {
 
 function RunStatusIcon({ status }: { status: string }) {
   const s = status.toLowerCase();
-  if (s === "success" || s === "completed")
-    return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
-  if (s === "failed" || s === "error")
-    return <XCircle className="w-4 h-4 text-rose-500" />;
-  if (s === "running" || s === "in_progress")
-    return <Loader2 className="w-4 h-4 text-zinc-400 animate-spin" />;
+  if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
+  if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 text-rose-500" />;
+  if (s === "running" || s === "in_progress") return <Loader2 className="w-4 h-4 text-zinc-400 animate-spin" />;
   return <AlertCircle className="w-4 h-4 text-zinc-600" />;
 }
 
 function StatusLabel({ status }: { status: string }) {
   const s = status.toLowerCase();
-  if (s === "success" || s === "completed")
-    return <span className="text-xs font-normal text-emerald-500">Done</span>;
-  if (s === "failed" || s === "error")
-    return <span className="text-xs font-normal text-rose-400">Failed</span>;
-  if (s === "running" || s === "in_progress")
-    return <span className="text-xs font-normal text-zinc-400 italic">Running</span>;
+  if (s === "success" || s === "completed") return <span className="text-xs font-normal text-emerald-500">Done</span>;
+  if (s === "failed" || s === "error") return <span className="text-xs font-normal text-rose-400">Failed</span>;
+  if (s === "running" || s === "in_progress") return <span className="text-xs font-normal text-zinc-400 italic">Running</span>;
   return <span className="text-xs font-normal text-zinc-600">Pending</span>;
 }
 
@@ -101,6 +96,7 @@ function RelativeTime({ isoString }: { isoString: string }) {
 }
 
 export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
+  const router = useRouter();
   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
   const [polling, setPolling] = useState(true);
 
@@ -152,7 +148,7 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[680px]">
           <thead>
-            <tr className="border-b border-zinc-800/50">
+            <tr className="border-b border-zinc-800/50 select-none">
               <th className="text-left px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider w-[180px]">Client</th>
               <th className="text-left px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">Module</th>
               <th className="text-left px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">Action</th>
@@ -170,7 +166,7 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
                 <tr
                   key={run.id}
                   className={`group hover:bg-zinc-900/40 transition-colors cursor-pointer ${isRunning ? "bg-zinc-900/20" : ""}`}
-                  onClick={() => { window.location.href = `/dashboard/runs/${run.id}`; }}
+                  onClick={() => { router.push(`/dashboard/runs/${run.id}`); }}
                 >
                   <td className="px-4 py-2.5 max-w-[180px]" onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
                     {run.buyerName && run.engagementId ? (
@@ -214,7 +210,7 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
                   </td>
 
                   <td className="pr-3 text-right">
-                    <ArrowRight className="w-3.5 h-3.5 text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <ArrowRight className="w-3.5 h-3.5 text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-[-2px] group-hover:translate-x-0 transition-all duration-150" />
                   </td>
                 </tr>
               );

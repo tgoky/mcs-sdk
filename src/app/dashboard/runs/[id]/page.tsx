@@ -1,27 +1,26 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   CheckCircle2,
   XCircle,
   Loader2,
-  AlertCircle,
-  Clock,
   SkipForward,
   ChevronDown,
   ChevronUp,
+  Cpu,
+  Terminal,
+  Coins,
+  ChevronLeft
 } from "lucide-react";
 import {
   skillName,
   phaseLabel,
   runStatusLabel,
-  runStatusColor,
 } from "@/lib/copy";
 import type { RunStep, RunSummary } from "@/models/schema";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface RunDetail {
   id: string;
@@ -39,8 +38,6 @@ interface RunDetail {
   buyerName: string | null;
   durationMs: number | null;
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDuration(ms: number | null): string {
   if (ms === null) return "—";
@@ -76,148 +73,12 @@ function formatDate(iso: string): string {
   });
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function StepIcon({ status }: { status: RunStep["status"] }) {
-  if (status === "success")
-    return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />;
-  if (status === "failed")
-    return <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />;
-  if (status === "skipped")
-    return <SkipForward className="w-4 h-4 text-zinc-600 shrink-0 mt-0.5" />;
+function StepCenterIcon({ status }: { status: RunStep["status"] }) {
+  if (status === "success") return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />;
+  if (status === "failed") return <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />;
+  if (status === "skipped") return <SkipForward className="w-4 h-4 text-zinc-600 shrink-0 mt-0.5" />;
   return <Loader2 className="w-4 h-4 text-zinc-400 animate-spin shrink-0 mt-0.5" />;
 }
-
-function StepCard({ step, index }: { step: RunStep; index: number }) {
-  const stepDurationMs =
-    step.completedAt && step.startedAt
-      ? new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime()
-      : null;
-
-  return (
-    <div className="flex gap-3 group">
-      {/* Timeline spine */}
-      <div className="flex flex-col items-center">
-        <StepIcon status={step.status} />
-        <div className="w-px flex-1 mt-1 bg-zinc-800/60 group-last:hidden" />
-      </div>
-
-      {/* Content */}
-      <div className="pb-4 min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2 flex-wrap">
-          <div>
-            <span className="text-sm font-medium text-zinc-200">
-              {phaseLabel(step.phase)}
-            </span>
-            {step.label && (
-              <span className="ml-2 text-xs text-zinc-500">
-                {step.label}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-zinc-600 shrink-0">
-            {stepDurationMs !== null && (
-              <span className="font-mono">{formatDuration(stepDurationMs)}</span>
-            )}
-            <span>{formatTime(step.startedAt)}</span>
-          </div>
-        </div>
-
-        {step.detail && (
-          <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
-            {step.detail}
-          </p>
-        )}
-
-        {/* Step phase key for debugging */}
-        <span className="mt-1 inline-block text-[10px] font-mono text-zinc-700">
-          {step.phase}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function SummarySection({
-  summary,
-  defaultOpen = true,
-}: {
-  summary: RunSummary;
-  defaultOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-
-  const fields: { key: keyof RunSummary; label: string; color: string }[] = [
-    { key: "whatWasAttempted", label: "What was attempted", color: "text-zinc-400" },
-    { key: "whatWorked",       label: "What worked",        color: "text-emerald-400" },
-    { key: "whatFailed",       label: "What failed",        color: "text-rose-400"    },
-    { key: "openItems",        label: "Open items",         color: "text-amber-400"   },
-    { key: "decisionsMade",    label: "Decisions made",     color: "text-sky-400"     },
-  ];
-
-  const hasContent = fields.some((f) => (summary[f.key]?.length ?? 0) > 0);
-  if (!hasContent) return null;
-
-  return (
-    <div className="border border-zinc-800 rounded-lg overflow-hidden">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-zinc-950/60 hover:bg-zinc-900/40 transition-colors"
-      >
-        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-          Five-Field Summary
-        </span>
-        {open ? (
-          <ChevronUp className="w-4 h-4 text-zinc-600" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-zinc-600" />
-        )}
-      </button>
-
-      {open && (
-        <div className="divide-y divide-zinc-800/50">
-          {fields.map(({ key, label, color }) => {
-            const items = summary[key] ?? [];
-            if (items.length === 0) return null;
-            return (
-              <div key={key} className="px-4 py-3 space-y-1.5">
-                <p className={`text-[11px] font-semibold uppercase tracking-wider ${color}`}>
-                  {label}
-                </p>
-                <ul className="space-y-1">
-                  {items.map((item, i) => (
-                    <li key={i} className="text-xs text-zinc-400 leading-relaxed flex gap-2">
-                      <span className="text-zinc-700 shrink-0">·</span>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function RunStatusBadge({ status }: { status: string }) {
-  const s = status.toLowerCase();
-  const cfg = {
-    success: { icon: <CheckCircle2 className="w-4 h-4" />, cls: "text-emerald-400 border-emerald-900/50 bg-emerald-950/30" },
-    failed:  { icon: <XCircle className="w-4 h-4" />,      cls: "text-rose-400 border-rose-900/50 bg-rose-950/30"         },
-    running: { icon: <Loader2 className="w-4 h-4 animate-spin" />, cls: "text-zinc-400 border-zinc-800 bg-zinc-950/30"   },
-  }[s] ?? { icon: <AlertCircle className="w-4 h-4" />, cls: "text-zinc-500 border-zinc-800 bg-zinc-950/30" };
-
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${cfg.cls}`}>
-      {cfg.icon}
-      {runStatusLabel(status)}
-    </span>
-  );
-}
-
-// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function RunDetailPage() {
   const params = useParams();
@@ -226,13 +87,22 @@ export default function RunDetailPage() {
   const [run, setRun] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [summaryOpen, setSummaryOpen] = useState(true);
+
+  // Mutable ref captures execution status transitions without re-triggering effects
+  const statusRef = useRef<string | null>(null);
+
+  // Sync the ref with the latest status state on every render pass cleanly
+  useEffect(() => {
+    statusRef.current = run?.status ?? null;
+  });
 
   const fetchRun = useCallback(async () => {
     try {
       const res = await fetch(`/api/skill-runs/${runId}`, { cache: "no-store" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body.error ?? "Failed to load run");
+        setError(body.error ?? "Failed to load run data");
         return;
       }
       const data = await res.json();
@@ -244,21 +114,27 @@ export default function RunDetailPage() {
     }
   }, [runId]);
 
+  // Unified data pipeline hook: handles initial mount and isolated polling loops
   useEffect(() => {
-    fetchRun();
-  }, [fetchRun]);
+    if (!runId) return;
 
-  // Poll while the run is still active
-  useEffect(() => {
-    if (run?.status !== "running") return;
-    const id = setInterval(fetchRun, 3000);
-    return () => clearInterval(id);
-  }, [run?.status, fetchRun]);
+    // Execute the initial data ingestion pass safely on mount
+    fetchRun();
+
+    // Poll every 3 seconds ONLY if the mutable reference matches "running"
+    const intervalId = setInterval(() => {
+      if (statusRef.current === "running") {
+        fetchRun();
+      }
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [runId, fetchRun]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 text-zinc-600 animate-spin" />
+        <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
       </div>
     );
   }
@@ -266,15 +142,12 @@ export default function RunDetailPage() {
   if (error || !run) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center text-sm text-zinc-500 hover:text-zinc-200 transition-colors"
-        >
+        <Link href="/dashboard" className="inline-flex items-center text-sm text-zinc-500 hover:text-zinc-200 transition-colors">
           <span className="mr-1">←</span> Dashboard
         </Link>
         <div className="border border-rose-900/40 bg-rose-950/20 rounded-lg p-6 text-center">
           <XCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
-          <p className="text-sm text-rose-300">{error ?? "Run not found"}</p>
+          <p className="text-sm text-rose-300">{error ?? "Run trace not found"}</p>
         </div>
       </div>
     );
@@ -282,140 +155,195 @@ export default function RunDetailPage() {
 
   const steps = run.steps ?? [];
   const isRunning = run.status === "running";
+  const summary = run.summary;
+
+  const summaryFields: { key: keyof RunSummary; label: string; color: string }[] = [
+    { key: "whatWasAttempted", label: "1. What Was Attempted", color: "text-zinc-400 font-mono" },
+    { key: "whatWorked",       label: "2. What Worked",        color: "text-emerald-400 font-mono" },
+    { key: "whatFailed",       label: "3. What Failed",        color: "text-rose-400 font-mono"    },
+    { key: "openItems",        label: "4. Open Items",         color: "text-amber-400 font-mono"   },
+    { key: "decisionsMade",    label: "5. Decisions Made",     color: "text-sky-400 font-mono"     },
+  ];
 
   return (
     <div className="space-y-6 w-full mx-auto tracking-tight antialiased px-1 text-zinc-400">
 
-      {/* Back navigation */}
-      <div className="flex items-center gap-3 flex-wrap border-b border-zinc-900 pb-4">
-        {run.engagementId && (
-          <Link
-            href={`/dashboard/engagements/${run.engagementId}`}
-            className="inline-flex items-center text-sm font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
-          >
-            <span className="mr-1 text-zinc-500">←</span>
-            {run.buyerName ?? run.engagementId}
-          </Link>
-        )}
-        {!run.engagementId && (
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center text-sm font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
-          >
-            <span className="mr-1 text-zinc-500">←</span> Dashboard
-          </Link>
-        )}
-      </div>
+      {/* Top Header Breadcrumbs */}
+      <div className="space-y-3 border-b border-zinc-900 pb-4">
+        <Link
+          href={`/dashboard/engagements/${run.engagementId}`}
+          className="inline-flex items-center text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors gap-0.5"
+        >
+          <ChevronLeft size={14} />
+          Back to {run.buyerName ?? "Client Workspace"}
+        </Link>
 
-      {/* Header */}
-      <div className="space-y-3">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 w-full pt-1">
           <div className="space-y-1">
-            <h1 className="text-lg font-medium text-zinc-100 tracking-tight">
-              {skillName(run.skillName)} — Run Detail
+            <h1 className="text-lg font-semibold text-zinc-100 tracking-tight">
+              {skillName(run.skillName)} — Telemetry Audit
             </h1>
-            <p className="text-[11px] font-mono text-zinc-600">{run.id}</p>
+            <p className="text-[11px] font-mono text-zinc-600">Run ID: {run.id}</p>
           </div>
           <div className="flex items-center gap-2">
-            <RunStatusBadge status={run.status} />
-            {isRunning && (
-              <span className="text-[10px] text-zinc-600 animate-pulse">
-                Live — refreshing every 3s
-              </span>
-            )}
+            <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${
+              run.status.toLowerCase() === 'success' ? 'text-emerald-400 border-emerald-900/50 bg-emerald-950/30' :
+              run.status.toLowerCase() === 'failed' ? 'text-rose-400 border-rose-900/50 bg-rose-950/30' :
+              'text-zinc-400 border-zinc-800 bg-zinc-950/30'
+            }`}>
+              {run.status.toLowerCase() === 'success' ? <CheckCircle2 className="w-3.5 h-3.5" /> :
+               run.status.toLowerCase() === 'failed' ? <XCircle className="w-3.5 h-3.5" /> :
+               <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {runStatusLabel(run.status)}
+            </span>
           </div>
-        </div>
-
-        {/* Meta stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            {
-              label: "Started",
-              value: `${formatDate(run.startedAt)} ${formatTime(run.startedAt)}`,
-            },
-            {
-              label: "Duration",
-              value: isRunning ? "In progress…" : formatDuration(run.durationMs),
-            },
-            {
-              label: "Token usage",
-              value: formatTokens(run.tokenUsage),
-            },
-            {
-              label: "Cost",
-              value: formatCost(run.costInCents),
-            },
-          ].map(({ label, value }) => (
-            <div
-              key={label}
-              className="rounded-lg border border-zinc-900 bg-zinc-950/20 p-3 space-y-1"
-            >
-              <p className="text-[11px] text-zinc-600">{label}</p>
-              <p className="text-xs text-zinc-300 leading-snug font-mono">{value}</p>
-            </div>
-          ))}
         </div>
       </div>
 
-      {/* Error box — only when failed and errorMessage is present */}
+      {/* Overview Metric Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="rounded-lg border border-zinc-900 bg-zinc-950/20 p-3.5 space-y-1">
+          <div className="flex items-center gap-1.5 text-zinc-600">
+            <Cpu size={13} />
+            <span className="text-[11px] font-medium uppercase tracking-wider">Pipeline</span>
+          </div>
+          <p className="text-xs text-zinc-200 font-medium truncate">{phaseLabel(run.phase)}</p>
+        </div>
+
+        <div className="rounded-lg border border-zinc-900 bg-zinc-950/20 p-3.5 space-y-1">
+          <div className="flex items-center gap-1.5 text-zinc-600">
+            <Clock size={13} />
+            <span className="text-[11px] font-medium uppercase tracking-wider">Duration</span>
+          </div>
+          <p className="text-xs text-zinc-200 font-mono">{isRunning ? "In progress…" : formatDuration(run.durationMs)}</p>
+        </div>
+
+        <div className="rounded-lg border border-zinc-900 bg-zinc-950/20 p-3.5 space-y-1">
+          <div className="flex items-center gap-1.5 text-zinc-600">
+            <Terminal size={13} />
+            <span className="text-[11px] font-medium uppercase tracking-wider">Context Volume</span>
+          </div>
+          <p className="text-xs text-zinc-200 font-mono truncate">{formatTokens(run.tokenUsage)}</p>
+        </div>
+
+        <div className="rounded-lg border border-zinc-900 bg-zinc-950/20 p-3.5 space-y-1">
+          <div className="flex items-center gap-1.5 text-zinc-600">
+            <Coins size={13} />
+            <span className="text-[11px] font-medium uppercase tracking-wider">Cost</span>
+          </div>
+          <p className="text-xs text-emerald-400 font-mono">{formatCost(run.costInCents)}</p>
+        </div>
+      </div>
+
+      {/* Stack Error Trace Window */}
       {run.status === "failed" && run.errorMessage && (
         <div className="border border-rose-900/40 bg-rose-950/10 rounded-lg p-4 space-y-1">
-          <p className="text-xs font-semibold text-rose-400 uppercase tracking-wider">
-            Error
-          </p>
-          <p className="text-sm text-rose-300 font-mono leading-relaxed">
-            {run.errorMessage}
-          </p>
+          <p className="text-xs font-semibold text-rose-400 uppercase tracking-wider">Fatal Pipeline Exception</p>
+          <p className="text-xs text-rose-300 font-mono leading-relaxed">{run.errorMessage}</p>
         </div>
       )}
 
-      {/* Step timeline */}
+      {/* 5-Field Summary Matrix */}
+      {summary ? (
+        <div className="border border-zinc-900 rounded-xl overflow-hidden bg-zinc-950/40">
+          <button
+            onClick={() => setSummaryOpen((o) => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 border-b border-zinc-900 bg-zinc-950/60 hover:bg-zinc-900/20 transition-colors text-left"
+          >
+            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+              Phase Log Compaction Summary
+            </span>
+            {summaryOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+
+          {summaryOpen && (
+            <div className="divide-y divide-zinc-900/60 text-xs font-sans">
+              {summaryFields.map(({ key, label, color }) => {
+                const items = summary[key] ?? [];
+                if (items.length === 0 && key !== "whatFailed") return null;
+
+                return (
+                  <div key={key} className="p-4 space-y-1.5">
+                    <p className={`text-[11px] font-semibold uppercase tracking-wider ${color}`}>{label}</p>
+                    {items.length > 0 ? (
+                      <ul className="space-y-1">
+                        {items.map((item, i) => (
+                          <li key={i} className="text-xs text-zinc-400 leading-relaxed flex gap-2 font-light">
+                            <span className="text-zinc-700 shrink-0">·</span>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-zinc-600 italic font-light">No structural errors or processing anomalies detected in this frame slice.</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : !isRunning && (
+        <div className="border border-dashed border-zinc-900 rounded-lg p-4 text-center">
+          <p className="text-xs text-zinc-600">No operational compaction summary recorded for this historical run.</p>
+        </div>
+      )}
+
+      {/* Timeline Tracking Tree */}
       <div className="space-y-2">
         <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-          Execution Timeline
-          <span className="ml-2 font-normal text-zinc-700 normal-case">
-            {steps.length} step{steps.length !== 1 ? "s" : ""}
+          Task Execution History Tree 
+          <span className="ml-2 font-mono text-[10px] text-zinc-700 font-normal lowercase">
+            ({steps.length} step{steps.length !== 1 ? "s" : ""})
           </span>
         </h2>
 
         {steps.length === 0 ? (
-          <div className="border border-dashed border-zinc-800 rounded-lg p-6 text-center">
-            <p className="text-sm text-zinc-600">
-              {isRunning
-                ? "Waiting for the first step to be recorded…"
-                : "No step log was recorded for this run. This may be an older run created before step logging was enabled."}
-            </p>
+          <div className="border border-dashed border-zinc-900 rounded-lg p-6 text-center">
+            <p className="text-xs text-zinc-600">Awaiting runtime diagnostics pipeline steps...</p>
           </div>
         ) : (
-          <div className="border border-zinc-800 rounded-lg bg-zinc-950/20 p-4">
-            {steps.map((step, i) => (
-              <StepCard key={`${step.phase}-${i}`} step={step} index={i} />
-            ))}
+          <div className="border border-zinc-900 bg-zinc-950/20 rounded-xl p-5 space-y-1">
+            {steps.map((step, i) => {
+              const stepDurationMs =
+                step.completedAt && step.startedAt
+                  ? new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime()
+                  : null;
 
-            {/* Live spinner appended at the bottom while running */}
+              return (
+                <div key={`${step.phase}-${i}`} className="flex gap-3 group">
+                  <div className="flex flex-col items-center">
+                    <StepCenterIcon status={step.status} />
+                    <div className="w-px flex-1 mt-1 bg-zinc-900 group-last:hidden" />
+                  </div>
+
+                  <div className="pb-4 min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div>
+                        <span className="text-sm font-medium text-zinc-200">{phaseLabel(step.phase)}</span>
+                        {step.label && <span className="ml-2 text-xs text-zinc-500 font-mono">[{step.label}]</span>}
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-zinc-600 shrink-0 font-mono">
+                        {stepDurationMs !== null && <span>{formatDuration(stepDurationMs)}</span>}
+                        <span>{formatTime(step.startedAt)}</span>
+                      </div>
+                    </div>
+                    {step.detail && <p className="mt-1 text-xs text-zinc-500 leading-relaxed font-light">{step.detail}</p>}
+                  </div>
+                </div>
+              );
+            })}
+
             {isRunning && (
               <div className="flex gap-3 mt-1">
                 <Loader2 className="w-4 h-4 text-zinc-600 animate-spin shrink-0 mt-0.5" />
-                <span className="text-xs text-zinc-600 italic">Next step incoming…</span>
+                <span className="text-xs text-zinc-600 italic font-light">Next automated task compiling…</span>
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* Five-field summary */}
-      {run.summary && (
-        <SummarySection summary={run.summary} defaultOpen={run.status !== "running"} />
-      )}
-
-      {/* Empty summary notice for terminal runs without one */}
-      {!run.summary && run.status !== "running" && (
-        <div className="border border-dashed border-zinc-800 rounded-lg p-4">
-          <p className="text-xs text-zinc-600">
-            No structured summary was recorded for this run. Re-triggering the module will produce a full five-field summary going forward.
-          </p>
-        </div>
-      )}
     </div>
   );
 }

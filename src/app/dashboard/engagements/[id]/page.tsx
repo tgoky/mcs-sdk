@@ -165,7 +165,7 @@ export default async function EngagementDetailPage({
                       <p className="text-[11px] text-zinc-600">Last run</p>
                       <Link
                         href={`/dashboard/runs/${latestRun.id}`}
-                        className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-0.5"
+                        className="text-[10px] text-zinc-400 hover:text-zinc-200 transition-colors flex items-center gap-0.5 font-medium"
                       >
                         View run <ArrowRight className="w-2.5 h-2.5" />
                       </Link>
@@ -202,7 +202,7 @@ export default async function EngagementDetailPage({
         </div>
       </div>
 
-      {/* Run history — clickable rows with step count + error snippets */}
+      {/* Run history */}
       {runs.length > 0 && (
         <div className="space-y-2">
           <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Run History</h2>
@@ -210,13 +210,13 @@ export default async function EngagementDetailPage({
           <div className="w-full overflow-hidden border border-zinc-900 rounded-lg bg-zinc-950/10">
             <table className="w-full text-left border-collapse text-xs font-sans tracking-tight">
               <thead>
-                <tr className="border-b border-zinc-900 bg-zinc-900/20 text-zinc-500 text-[11px] uppercase tracking-wide">
+                <tr className="border-b border-zinc-900 bg-zinc-900/20 text-zinc-500 text-[11px] uppercase tracking-wide select-none">
                   <th className="p-3 font-normal">Module</th>
                   <th className="p-3 font-normal">Last Phase</th>
                   <th className="p-3 font-normal">Steps</th>
                   <th className="p-3 font-normal">Result</th>
                   <th className="p-3 font-normal text-right">Date</th>
-                  <th className="w-8 px-2" />
+                  <th className="w-10 px-2" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900/50">
@@ -225,10 +225,19 @@ export default async function EngagementDetailPage({
                   return (
                     <tr
                       key={run.id}
-                      onClick={() => { window.location.href = `/dashboard/runs/${run.id}`; }}
-                      className="group hover:bg-zinc-900/20 transition-colors duration-150 cursor-pointer"
+                      className="group hover:bg-zinc-900/20 transition-colors duration-150 relative"
                     >
-                      <td className="p-3 text-zinc-200 font-medium">{skillName(run.skillName)}</td>
+                      <td className="p-3 text-zinc-200 font-medium">
+                        {/* The single full-row Link lives inside the first cell to maintain 
+                          valid HTML semantics, while expanding to intercept row clicks.
+                        */}
+                        <Link
+                          href={`/dashboard/runs/${run.id}`}
+                          className="absolute inset-0 z-10"
+                          aria-label={`View run details for ${skillName(run.skillName)}`}
+                        />
+                        <span className="relative z-0">{skillName(run.skillName)}</span>
+                      </td>
                       <td className="p-3">
                         <div className="space-y-0.5">
                           <div className="text-zinc-500">{phaseLabel(run.phase)}</div>
@@ -265,6 +274,7 @@ export default async function EngagementDetailPage({
         </div>
       )}
 
+      {/* Empty state */}
       {runs.length === 0 && (
         <div className="h-32 border border-dashed border-zinc-900 rounded-lg flex flex-col items-center justify-center space-y-1.5">
           <p className="text-sm font-normal text-zinc-500">No modules have run yet for this client.</p>
