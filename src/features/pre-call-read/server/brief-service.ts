@@ -6,13 +6,11 @@ import { resolveCredential } from "@/lib/credentials";
 import { fetchTomorrowCallsForTenant } from "@/lib/platforms/booking";
 import { deliverBrief } from "@/lib/platforms/email";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
-import { startRun, logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
+import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import crypto from "crypto";
 
 /**
  * Builds the 7-block brief system prompt.
- * Sections: Prospect Overview, Company Context, Engagement History,
- * Likely Objections, Recommended Opening, Red Flags, Conversation Notes.
  */
 function buildBriefSystemPrompt(tenant: any): string {
   return `You are the Pre-Call Read briefing engine for Showtime.
@@ -28,27 +26,14 @@ If research was omitted due to low identity confidence, write "Research omitted 
 }
 
 /**
- * Nightly briefing cycle — called once per active engagement from the cron route.
- * Returns the count of briefs successfully delivered.
- *
- * NOTE: this single runId covers every call processed tonight for this
- * engagement. Before run-log instrumentation, that meant only the very last
- * call's phase was ever visible — every earlier call's progress (and any
- * skipped/failed calls in between) was overwritten and lost. Each call now
- * gets its own step entries (and is named in the label), so the run-detail
- * timeline shows the real per-prospect sequence.
+ * Core briefing cycle execution runtime block.
  */
-export async function executeNightlyBriefingCycle(tenant: any): Promise<number> {
-  const runId = crypto.randomUUID();
+export async function executeNightlyBriefingCycle(tenant: any, runId: string): Promise<number> {
   let deliveredCount = 0;
   const summary = emptySummary();
 
-  await startRun({
-    id: runId,
-    engagementId: tenant.engagementId,
-    skillName: "pre-call-read",
-    phase: "roster_fetch",
-  });
+  // Push the initial status directly into the seeded trace row
+  await logStep(runId, { phase: "roster_fetch", status: "running" });
 
   try {
     const stack = tenant.stack as any;
@@ -92,7 +77,6 @@ export async function executeNightlyBriefingCycle(tenant: any): Promise<number> 
           .limit(1);
 
         if (existing.length > 0) {
-          // Already briefed this call in the last 24h — skip
           await logStep(runId, { phase: "duplicate_check", status: "skipped", label: callLabel, detail: "Already briefed in the last 24h — skipped" });
           continue;
         }
@@ -128,7 +112,7 @@ Research omitted: ${!matchResult.passed}`;
           system: buildBriefSystemPrompt(tenant),
           userMessage,
           maxTokens: 1500,
-          runId, // writes cost back to skillRuns
+          runId,
         });
 
         await logStep(runId, { phase: "brief_synthesis", status: "success", label: callLabel, detail: "7-section brief generated" });
@@ -136,8 +120,6 @@ Research omitted: ${!matchResult.passed}`;
         // ── Delivery ─────────────────────────────────────────────────────
         await logStep(runId, { phase: "delivery", status: "running", label: callLabel });
 
-        // Resolve email platform key only if the platform is configured.
-        // Provider key must match what was stored during Pin-Down setup.
         const emailProvider = stack.email_platform;
         const emailApiKey = emailProvider
           ? await resolveCredential(tenant.engagementId, emailProvider).catch(() => undefined)
@@ -179,14 +161,6 @@ Research omitted: ${!matchResult.passed}`;
 
         deliveredCount++;
       } catch (callErr: any) {
-        // FIXED: previously any error here (e.g. one bad email send) threw
-        // straight past the loop and aborted the ENTIRE night's roster — any
-        // prospects after this one were silently never attempted, with no
-        // record they were skipped. Now we log exactly which prospect and
-        // which step failed, record it in the summary, and move on to the
-        // next call. The run still ends up "failed" overall (see the count
-        // check below) so it's visible, but it no longer kills briefs that
-        // had nothing to do with this prospect's failure.
         console.error(`[pre-call-read] Failed to brief ${callLabel}:`, callErr.message);
         await logStep(runId, {
           phase: "delivery",
@@ -202,11 +176,6 @@ Research omitted: ${!matchResult.passed}`;
       summary.openItems.push("Every call on tomorrow's roster was already briefed in the last 24h — no new briefs sent.");
     }
 
-    // A run that delivered at least one brief but hit some per-call failures
-    // is still meaningfully successful — most of the night's work got done.
-    // Only mark the whole run "failed" if NOTHING was delivered despite
-    // there being calls to brief, or if the roster fetch itself never
-    // returned (that path throws before reaching here and is caught below).
     const hadFailures = summary.whatFailed.length > 0;
     if (hadFailures && deliveredCount === 0 && tomorrowCalls.length > 0) {
       await failRun(runId, new Error(`All ${tomorrowCalls.length} call(s) failed to brief — see summary for per-call errors.`), { summary });
@@ -218,7 +187,6 @@ Research omitted: ${!matchResult.passed}`;
     }
 
     await finishRun(runId, { summary });
-
     return deliveredCount;
   } catch (err: any) {
     summary.whatFailed.push(err.message);

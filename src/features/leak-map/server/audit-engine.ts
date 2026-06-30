@@ -1,11 +1,11 @@
 import { db } from "@/lib/db";
-import { engagements, briefedCallsLog, auditRunsLog } from "@/models/schema"; // Removed unused skillRuns import
+import { engagements, skillRuns, briefedCallsLog, auditRunsLog } from "@/models/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { resolveCredential } from "@/lib/credentials";
 import { KlaviyoClient } from "@/lib/platforms/email";
 import { CalendlyClient } from "@/lib/platforms/booking";
-import { startRun, logStep, failRun } from "@/lib/run-log"; // ✅ Unified logging imports
+import { logStep, finishRun, failRun } from "@/lib/run-log";
 import crypto from "crypto";
 
 interface MetricResult {
@@ -18,28 +18,17 @@ interface MetricResult {
 
 /**
  * 5-Stage Leak Map Audit Pipeline.
- * Stage 1: Pull data from internal DB logs + external platforms.
- * Stage 2: Compute period-over-period deltas per metric.
- * Stage 3: Flag gaps (low sample sizes, missing data sources).
- * Stage 4: Assign severity tiers.
- * Stage 5: Generate 6-field recommendation report via Claude Sonnet.
  */
 export class AuditEngine {
   async runAuditPipeline(
     engagementId: string,
-    type: "weekly" | "monthly"
+    type: "weekly" | "monthly",
+    runId: string
   ): Promise<string> {
-    const runId = crypto.randomUUID();
     const lookbackDays = type === "weekly" ? 7 : 30;
 
-    // ✅ FIXED: Use unified startRun instead of raw db.insert(skillRuns)
-    await startRun({
-      id: runId,
-      engagementId,
-      skillName: "leak-map",
-      phase: "stage_1_data_pull",
-      label: `${type} audit`,
-    });
+    // Push execution state on tracking node
+    await logStep(runId, { phase: "stage_1_data_pull", status: "running" });
 
     try {
       const tenant = await db
@@ -78,7 +67,6 @@ export class AuditEngine {
         );
 
       // ── STAGE 2: Compute metrics ─────────────────────────────────────
-      // ✅ FIXED: Uniform timeline log instead of scalar phase overwrite
       await logStep(runId, { phase: "stage_2_compute", status: "success" });
 
       const metrics: MetricResult[] = [];
@@ -97,7 +85,7 @@ export class AuditEngine {
         gaps.push(`Low sample size (${currentBriefs.length} briefs). Deltas may not be statistically significant.`);
       }
 
-      // Metric B: Rule 14 accuracy (person match confidence avg)
+      // Metric B: Rule 14 accuracy
       const currentAccuracy =
         currentBriefs.reduce((a, b) => a + (b.personMatchScore ?? 0), 0) /
         (currentBriefs.length || 1);
@@ -113,7 +101,7 @@ export class AuditEngine {
       );
       metrics.push(accuracyMetric);
 
-      // Metric C: External booking show-rate (pulled from platform if available)
+      // Metric C: External booking show-rate
       if (stack?.booking_platform && stack?.booking_platform !== "unsupported") {
         try {
           const showRateMetric = await pullBookingShowRate(
@@ -129,7 +117,7 @@ export class AuditEngine {
         }
       }
 
-      // Metric D: Email open rate (pulled from Klaviyo if configured)
+      // Metric D: Email open rate
       if (stack?.email_platform === "klaviyo") {
         try {
           const openRateMetric = await pullKlaviyoOpenRate(engagementId, stack);
@@ -139,10 +127,7 @@ export class AuditEngine {
         }
       }
 
-      // ── STAGE 3: Gap flagging already done above ─────────────────────
-
       // ── STAGE 4: Overall severity ────────────────────────────────────
-      // ✅ FIXED: Uniform timeline log
       await logStep(runId, { phase: "stage_4_severity", status: "success" });
 
       const highestSeverity = metrics.reduce<"high" | "medium" | "low" | "none">(
@@ -175,14 +160,13 @@ export class AuditEngine {
       });
 
       // ── STAGE 5: Claude report synthesis ────────────────────────────
-      // ✅ FIXED: Uniform timeline log
-      await logStep(runId, { phase: "stage_5_report", status: "success" });
+      await logStep(runId, { phase: "stage_5_report", status: "running" });
 
       let report = "All tracked metrics nominal. No funnel leaks detected.";
 
       if (highestSeverity !== "none") {
         const userMessage = `Generate a 6-field Leak Map recommendation report for these funnel metrics:
- ${JSON.stringify(metrics, null, 2)}
+${JSON.stringify(metrics, null, 2)}
 
 Gaps noted: ${gaps.join("; ") || "none"}
 Overall severity: ${highestSeverity}
@@ -205,21 +189,22 @@ Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})
         report = llmResult.text;
       }
 
-      // ✅ FIXED: Final success state via logStep (populates timeline terminal node)
-      await logStep(runId, { phase: "completed", status: "success" });
+      await logStep(runId, { phase: "stage_5_report", status: "success" });
+      
+      // Clean terminal execution closeout
+      await finishRun(runId);
 
       return report;
     } catch (err: any) {
-      // ✅ FIXED: Use unified failRun to capture error properly in observability loop
       await failRun(runId, err, {
         summary: {
           whatWasAttempted: ["Execute Leak Map audit pipeline."],
           whatWorked: [],
           whatFailed: [err.message],
-          openItems: ["Audit did not complete. Review error details."],
+          openItems: ["Audit engine encountered a pipeline processing error."],
           decisionsMade: [],
         },
-      }).catch(() => {}); // Swallow to prevent double-throw chaos in cron handler
+      });
       throw err;
     }
   }
@@ -241,10 +226,6 @@ function computeDelta(
   return { name, current, prior, delta, severity };
 }
 
-/**
- * Pulls booking show-rate from the configured booking platform.
- * Only Calendly implemented for now — other platforms return null gracefully.
- */
 async function pullBookingShowRate(
   engagementId: string,
   stack: any,
@@ -255,7 +236,6 @@ async function pullBookingShowRate(
   if (stack.booking_platform !== "calendly") return null;
 
   const apiKey = await resolveCredential(engagementId, "calendly");
-  const client = new CalendlyClient(apiKey);
 
   async function getShowRate(start: Date, end: Date): Promise<number> {
     const res = await fetch(
@@ -281,15 +261,11 @@ async function pullBookingShowRate(
   });
 }
 
-/**
- * Pulls email open rate from Klaviyo campaign metrics.
- */
 async function pullKlaviyoOpenRate(
   engagementId: string,
   stack: any
 ): Promise<MetricResult | null> {
   const apiKey = await resolveCredential(engagementId, "klaviyo");
-  const client = new KlaviyoClient(apiKey);
 
   const res = await fetch(
     "https://a.klaviyo.com/api/campaigns/?filter=equals(status,'sent')&sort=-send_time&page[size]=4",

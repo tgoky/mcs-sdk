@@ -2,23 +2,19 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { startRun } from "@/lib/run-log";
 import { and, eq } from "drizzle-orm";
-import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/brief-service";
-import { AuditEngine } from "@/features/leak-map/server/audit-engine";
+import { inngest } from "@/lib/inngest";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 
 /**
- * Unified manual trigger endpoint called by the TriggerSkillButton in the
- * dashboard. Previously the button component expected an `endpoint` prop
- * (pointing directly at cron routes) but the parent page was passing
- * `engagementId` + `skillName` — so every button was dead.
- *
- * This route:
- *  - Accepts POST { engagementId, skillName }
- *  - Verifies the session and engagement ownership
- *  - Routes to the correct service function
- *  - Returns { runId, message } so the button can link to the run detail page
+ * Unified manual trigger endpoint.
+ * * DECOUPLED ARCHITECTURE:
+ * Synchronously seeds the run execution record in Postgres to prevent frontend
+ * 404 race conditions, dispatches the long-running task to the background queue,
+ * and instantly releases the request loop thread with a 202 Accepted payload.
  */
 export async function POST(request: Request) {
   try {
@@ -40,7 +36,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Ownership check — the user can only trigger runs for their own engagements
+    // Ownership check — validation lookup before execution
     const [tenant] = await db
       .select()
       .from(engagements)
@@ -56,44 +52,56 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
     }
 
+    // ── Delegate long-running tasks to background queue ────────────────
+    if (skillName === "pre-call-read" || skillName === "leak-map") {
+      const runId = crypto.randomUUID();
+      
+      // Seed the run log row instantly before returning to clear the UI race path
+      await startRun({
+        id: runId,
+        engagementId,
+        skillName,
+        phase: skillName === "pre-call-read" ? "roster_fetch" : "stage_1_data_pull",
+        label: "Manually triggered via dashboard",
+      });
+
+      // Forward event to background task loop
+      await inngest.send({
+        name: "skill/run.execute",
+        data: {
+          runId,
+          engagementId,
+          skillName,
+          tenant,
+          ...(skillName === "leak-map" && { auditType: "weekly" }),
+        },
+      });
+
+      return NextResponse.json(
+        { 
+          success: true, 
+          runId, 
+          message: "Run initiated. Processing in background." 
+        }, 
+        { status: 202 }
+      );
+    }
+
+    // ── Handle synchronous / invalid skill triggers ────────────────────
     switch (skillName) {
-      case "pre-call-read": {
-        const count = await executeNightlyBriefingCycle(tenant);
-        return NextResponse.json({
-          success: true,
-          message: `${count} brief${count === 1 ? "" : "s"} delivered`,
-        });
-      }
-
-      case "leak-map": {
-        const engine = new AuditEngine();
-        await engine.runAuditPipeline(engagementId, "weekly");
-        return NextResponse.json({
-          success: true,
-          message: "Weekly funnel health check completed",
-        });
-      }
-
-      // Pin-Down is wizard-driven (full credential setup form); we can't
-      // meaningfully re-trigger it without the wizard payload. Direct user
-      // to the setup page instead.
       case "pin-down":
         return NextResponse.json(
           {
-            error:
-              "Pin Down requires the full setup wizard. Go to Add a New Client to re-run it.",
+            error: "Pin Down requires the full setup wizard. Go to Add a New Client to re-run it.",
           },
           { status: 422 }
         );
 
-      // Pile-On and Win-Back fire from booking webhooks automatically.
-      // They can be tested by sending a test webhook from the booking platform.
       case "pile-on":
       case "win-back":
         return NextResponse.json(
           {
-            error:
-              "This module fires automatically on bookings. Send a test event from your booking platform to trigger it.",
+            error: "This module fires automatically on bookings. Send a test event from your booking platform to trigger it.",
           },
           { status: 422 }
         );
