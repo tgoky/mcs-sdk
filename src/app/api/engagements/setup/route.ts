@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { engagements, skillRuns } from "@/models/schema";
+import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { storeCredential } from "@/lib/credentials";
 import { registerWebhookForTenant } from "@/lib/platforms/booking";
 import { CalendlyClient } from "@/lib/platforms/booking";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { getSession } from "@/lib/session";
+import { startRun, logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import crypto from "crypto";
 
 async function extractVoiceProfile(corpus: string, runId: string): Promise<any> {
@@ -66,6 +67,7 @@ Return nothing but the JSON object. No preamble, no markdown.`,
 
 export async function POST(request: Request) {
   const runId = crypto.randomUUID();
+  const summary = emptySummary();
 
   try {
     // FIXED: Enforce session verification parameters to pull whopUserId safely
@@ -96,17 +98,16 @@ export async function POST(request: Request) {
       return new Response("Missing required stack config: booking_platform and email_platform", { status: 400 });
     }
 
-    await db.insert(skillRuns).values({
+    await startRun({
       id: runId,
       engagementId,
       skillName: "pin-down",
       phase: "onboarding_start",
-      status: "running",
-      startedAt: new Date(),
+      label: buyerName,
     });
 
     // Step 1: Store credentials encrypted in DB
-    await db.update(skillRuns).set({ phase: "credential_storage" }).where(eq(skillRuns.id, runId));
+    await logStep(runId, { phase: "credential_storage", status: "running" });
 
     if (credentials?.booking) {
       await storeCredential(
@@ -124,17 +125,39 @@ export async function POST(request: Request) {
         credentials.email
       );
     }
+    summary.whatWasAttempted.push(
+      `Stored ${[credentials?.booking && stack.booking_platform, credentials?.email && stack.email_platform].filter(Boolean).join(" + ") || "no"} credentials.`
+    );
+    summary.whatWorked.push("Credentials encrypted and stored.");
+    await logStep(runId, {
+      phase: "credential_storage",
+      status: "success",
+      detail: credentials?.booking || credentials?.email ? "Credentials stored" : "No credentials supplied",
+    });
 
     // Step 2: Extract brand voice profile
-    await db.update(skillRuns).set({ phase: "voice_extraction" }).where(eq(skillRuns.id, runId));
+    await logStep(runId, { phase: "voice_extraction", status: "running" });
     const voiceProfile = await extractVoiceProfile(rawVoiceCorpus ?? "", runId);
+    const corpusWordCount = (rawVoiceCorpus ?? "").trim().split(/\s+/).filter(Boolean).length;
+    summary.whatWasAttempted.push(`Extracted brand voice profile from a ${corpusWordCount}-word corpus.`);
+    if (voiceProfile?.source_path === "scrape") {
+      summary.whatWorked.push("Brand voice profile extracted from buyer-supplied corpus via Claude.");
+    } else {
+      summary.whatWorked.push("Brand voice profile set to neutral default (corpus under 500 words).");
+      summary.openItems.push("Corpus was too short for a real voice extraction — using the operator-grade default tone.");
+    }
+    await logStep(runId, {
+      phase: "voice_extraction",
+      status: "success",
+      detail: voiceProfile?.source_path === "scrape" ? "Tone profile extracted from corpus" : "Neutral default tone applied",
+    });
 
     // Step 3: Build confirmation page URL
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.muddventures.com";
     const confirmationPageUrl = `${appUrl}/confirm/${engagementId}`;
 
     // Step 4: Upsert engagement row
-    await db.update(skillRuns).set({ phase: "engagement_upsert" }).where(eq(skillRuns.id, runId));
+    await logStep(runId, { phase: "engagement_upsert", status: "running" });
 
     const engagementValues = {
       id: crypto.randomUUID(),
@@ -172,12 +195,16 @@ export async function POST(request: Request) {
           updatedAt: new Date(),
         },
       });
+    await logStep(runId, { phase: "engagement_upsert", status: "success", detail: `Engagement row created for ${buyerName}` });
+    summary.whatWasAttempted.push(`Created confirmation page at ${confirmationPageUrl}.`);
+    summary.whatWorked.push("Engagement record created/updated in Postgres.");
 
     // Step 5: Register webhook on booking platform
-    await db.update(skillRuns).set({ phase: "webhook_registration" }).where(eq(skillRuns.id, runId));
+    await logStep(runId, { phase: "webhook_registration", status: "running" });
 
     if (credentials?.booking) {
       const receiverUrl = `${appUrl}/api/webhooks/booking-event?engagement_id=${engagementId}`;
+      summary.whatWasAttempted.push(`Registered ${stack.booking_platform} webhook → ${receiverUrl}.`);
       try {
         const subscriptionId = await registerWebhookForTenant(
           stack.booking_platform,
@@ -197,32 +224,57 @@ export async function POST(request: Request) {
               updatedAt: new Date(),
             })
             .where(eq(engagements.engagementId, engagementId));
+          summary.whatWorked.push(`${stack.booking_platform} webhook registered (subscription ${subscriptionId}).`);
+          await logStep(runId, { phase: "webhook_registration", status: "success", detail: `Subscription ${subscriptionId}` });
+        } else {
+          summary.openItems.push(`${stack.booking_platform} webhook registration returned no subscription ID — bookings may need manual verification.`);
+          await logStep(runId, { phase: "webhook_registration", status: "skipped", detail: "No subscription ID returned" });
         }
       } catch (e: any) {
+        // FIXED: this used to be console.error'd and discarded — now persisted
+        // to the run log so the dashboard shows exactly why bookings won't
+        // trigger Pile-On for this client.
         console.error(`[pin-down] Webhook registration failed: ${e.message}`);
+        summary.whatFailed.push(`${stack.booking_platform} webhook registration failed: ${e.message}`);
+        summary.openItems.push("Booking webhook is not connected — Pile-On and Win-Back won't fire automatically until this is fixed.");
+        await logStep(runId, { phase: "webhook_registration", status: "failed", detail: e.message });
       }
+    } else {
+      await logStep(runId, { phase: "webhook_registration", status: "skipped", detail: "No booking credentials supplied" });
     }
 
     // Step 6: Configure post-booking redirect (Calendly only)
-    await db.update(skillRuns).set({ phase: "redirect_config" }).where(eq(skillRuns.id, runId));
+    await logStep(runId, { phase: "redirect_config", status: "running" });
 
     if (
       stack.booking_platform === "calendly" &&
       credentials?.booking &&
       stack.booking_platform_meta?.event_type_uuid
     ) {
+      summary.whatWasAttempted.push(`Configured Calendly redirect for event type ${stack.booking_platform_meta.event_type_uuid}.`);
       try {
         const calendlyClient = new CalendlyClient(credentials.booking);
         await calendlyClient.configurePostBookingRedirect(
           stack.booking_platform_meta.event_type_uuid,
           confirmationPageUrl
         );
+        summary.whatWorked.push("Calendly post-booking redirect configured.");
+        await logStep(runId, { phase: "redirect_config", status: "success" });
       } catch (e: any) {
         console.error(`[pin-down] Calendly redirect config failed: ${e.message}`);
+        summary.whatFailed.push(`Calendly redirect configuration failed: ${e.message}`);
+        summary.openItems.push("Calendly isn't redirecting to the confirmation page yet — set this manually or re-run setup.");
+        await logStep(runId, { phase: "redirect_config", status: "failed", detail: e.message });
       }
+    } else {
+      await logStep(runId, { phase: "redirect_config", status: "skipped", detail: "Not applicable for this booking platform" });
     }
 
-    await db.update(skillRuns).set({ status: "success", completedAt: new Date() }).where(eq(skillRuns.id, runId));
+    summary.decisionsMade.push(
+      `Brief landing destination: ${stack.brief_landing_destination ?? "slack"} (${credentials?.slack_webhook_url || stack.slack_webhook_url ? "webhook configured" : "default"}).`
+    );
+
+    await finishRun(runId, { summary });
 
     return NextResponse.json({
       success: true,
@@ -232,7 +284,8 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error("[pin-down setup]", error.message);
-    await db.update(skillRuns).set({ status: "failed", completedAt: new Date() }).where(eq(skillRuns.id, runId)).catch(() => {});
+    summary.whatFailed.push(error.message);
+    await failRun(runId, error, { summary });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

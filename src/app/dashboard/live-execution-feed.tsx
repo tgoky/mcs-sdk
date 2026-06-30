@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { CheckCircle2, XCircle, Loader2, AlertCircle, Hash } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, AlertCircle, Hash, ArrowRight } from "lucide-react";
 import { skillName, phaseLabel, SKILL_INFO, type SkillName } from "@/lib/copy";
 
 interface SkillRun {
@@ -11,8 +11,11 @@ interface SkillRun {
   status: string;
   phase: string | null;
   startedAt: string;
+  completedAt?: string | null;
   engagementId?: string | null;
   buyerName?: string | null;
+  errorMessage?: string | null;
+  stepCount?: number;
 }
 
 interface LiveExecutionFeedProps {
@@ -23,12 +26,10 @@ function actionSummary(run: SkillRun): string {
   const s = run.status.toLowerCase();
   const skill = run.skillName as SkillName;
 
-  if (s === "running") {
-    return phaseLabel(run.phase);
-  }
-
+  if (s === "running") return phaseLabel(run.phase);
   if (s === "failed") {
-    return "Stopped — check credentials or re-trigger";
+    if (run.errorMessage && run.errorMessage.length < 80) return run.errorMessage;
+    return "Failed — click to see the error";
   }
 
   const summaries: Partial<Record<SkillName, string>> = {
@@ -44,40 +45,31 @@ function actionSummary(run: SkillRun): string {
 
 function RunStatusIcon({ status }: { status: string }) {
   const s = status.toLowerCase();
-
-  if (s === "success" || s === "completed") {
+  if (s === "success" || s === "completed")
     return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
-  }
-  if (s === "failed" || s === "error") {
-    return <XCircle className="w-4 h-4 text-zinc-500" />;
-  }
-  if (s === "running" || s === "in_progress") {
+  if (s === "failed" || s === "error")
+    return <XCircle className="w-4 h-4 text-rose-500" />;
+  if (s === "running" || s === "in_progress")
     return <Loader2 className="w-4 h-4 text-zinc-400 animate-spin" />;
-  }
   return <AlertCircle className="w-4 h-4 text-zinc-600" />;
 }
 
 function StatusLabel({ status }: { status: string }) {
   const s = status.toLowerCase();
-
-  if (s === "success" || s === "completed") {
-    return <span className="text-xs font-normal text-zinc-400">Complete</span>;
-  }
-  if (s === "failed" || s === "error") {
-    return <span className="text-xs font-normal text-zinc-500">Failed</span>;
-  }
-  if (s === "running" || s === "in_progress") {
-    return <span className="text-xs font-normal text-zinc-400">Running</span>;
-  }
+  if (s === "success" || s === "completed")
+    return <span className="text-xs font-normal text-emerald-500">Done</span>;
+  if (s === "failed" || s === "error")
+    return <span className="text-xs font-normal text-rose-400">Failed</span>;
+  if (s === "running" || s === "in_progress")
+    return <span className="text-xs font-normal text-zinc-400 italic">Running</span>;
   return <span className="text-xs font-normal text-zinc-600">Pending</span>;
 }
 
 function ClientCell({ run }: { run: SkillRun }) {
   const displayName = run.buyerName ?? run.engagementId ?? "Unknown client";
   const showHashIcon = !run.buyerName && !!run.engagementId;
-  const isLink = !!run.buyerName && !!run.engagementId;
 
-  const inner = (
+  return (
     <div className="flex items-center gap-2 min-w-0" title={displayName}>
       {showHashIcon && <Hash size={12} className="text-zinc-600 shrink-0" />}
       <span className="text-sm font-medium text-zinc-200 truncate">
@@ -85,19 +77,6 @@ function ClientCell({ run }: { run: SkillRun }) {
       </span>
     </div>
   );
-
-  if (isLink) {
-    return (
-      <Link
-        href={`/dashboard/engagements/${run.engagementId}`}
-        className="block hover:text-white transition-colors"
-      >
-        {inner}
-      </Link>
-    );
-  }
-
-  return inner;
 }
 
 function RelativeTime({ isoString }: { isoString: string }) {
@@ -117,9 +96,7 @@ function RelativeTime({ isoString }: { isoString: string }) {
   }, [isoString]);
 
   return (
-    <span className="text-xs font-mono text-zinc-600 tabular-nums">
-      {label}
-    </span>
+    <span className="text-xs font-mono text-zinc-600 tabular-nums">{label}</span>
   );
 }
 
@@ -157,15 +134,12 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
 
   return (
     <div className="border border-zinc-800 rounded-lg bg-zinc-950/30 overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800 bg-zinc-950/50">
         <div className="flex items-center gap-2">
           <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
             Live Executions
           </h3>
-          <span className="text-xs font-mono text-zinc-600">
-            {runs.length}
-          </span>
+          <span className="text-xs font-mono text-zinc-600">{runs.length}</span>
         </div>
         <button
           onClick={() => setPolling((p) => !p)}
@@ -175,66 +149,59 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
         </button>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px]">
+        <table className="w-full min-w-[680px]">
           <thead>
             <tr className="border-b border-zinc-800/50">
-              <th className="text-left px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider w-[200px]">
-                Client
-              </th>
-              <th className="text-left px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">
-                Module
-              </th>
-              <th className="text-left px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">
-                Action
-              </th>
-              <th className="text-left px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider w-28">
-                Status
-              </th>
-              <th className="text-right px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider w-12">
-                Age
-              </th>
+              <th className="text-left px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider w-[180px]">Client</th>
+              <th className="text-left px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">Module</th>
+              <th className="text-left px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">Action</th>
+              <th className="text-left px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider w-24">Status</th>
+              <th className="text-right px-4 py-2 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider w-12">Age</th>
+              <th className="w-8 px-2" />
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/30">
             {runs.map((run) => {
               const isRunning = run.status.toLowerCase() === "running";
+              const isFailed = run.status.toLowerCase() === "failed";
 
               return (
                 <tr
                   key={run.id}
-                  className={`
-                    hover:bg-zinc-900/40 transition-colors
-                    ${isRunning ? "bg-zinc-900/20" : ""}
-                  `}
+                  className={`group hover:bg-zinc-900/40 transition-colors cursor-pointer ${isRunning ? "bg-zinc-900/20" : ""}`}
+                  onClick={() => { window.location.href = `/dashboard/runs/${run.id}`; }}
                 >
-                  {/* Client */}
-                  <td className="px-4 py-2.5 max-w-[200px]">
-                    <ClientCell run={run} />
+                  <td className="px-4 py-2.5 max-w-[180px]" onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
+                    {run.buyerName && run.engagementId ? (
+                      <Link href={`/dashboard/engagements/${run.engagementId}`} onClick={(e) => e.stopPropagation()} className="hover:text-white transition-colors">
+                        <ClientCell run={run} />
+                      </Link>
+                    ) : (
+                      <ClientCell run={run} />
+                    )}
                   </td>
 
-                  {/* Module */}
                   <td className="px-4 py-2.5">
                     <span className="text-sm text-zinc-400 whitespace-nowrap">
                       {skillName(run.skillName)}
                     </span>
+                    {(run.stepCount ?? 0) > 0 && (
+                      <span className="ml-2 text-[10px] font-mono text-zinc-700">
+                        {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
+                      </span>
+                    )}
                   </td>
 
-                  {/* Action */}
-                  <td className="px-4 py-2.5 max-w-[300px]">
+                  <td className="px-4 py-2.5 max-w-[280px]">
                     <span
-                      className={`
-                        text-sm truncate block
-                        ${isRunning ? "text-zinc-300" : "text-zinc-500"}
-                      `}
+                      className={`text-sm truncate block ${isFailed ? "text-rose-400/80" : isRunning ? "text-zinc-300" : "text-zinc-500"}`}
                       title={actionSummary(run)}
                     >
                       {actionSummary(run)}
                     </span>
                   </td>
 
-                  {/* Status */}
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <RunStatusIcon status={run.status} />
@@ -242,9 +209,12 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
                     </div>
                   </td>
 
-                  {/* Age */}
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     <RelativeTime isoString={run.startedAt} />
+                  </td>
+
+                  <td className="pr-3 text-right">
+                    <ArrowRight className="w-3.5 h-3.5 text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </td>
                 </tr>
               );

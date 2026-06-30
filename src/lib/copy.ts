@@ -112,6 +112,9 @@ export function runStatusColor(status: string | null | undefined): string {
 // ---------------------------------------------------------------------------
 
 export const PHASE_LABELS: Record<string, string> = {
+  // Shared across all skills
+  run_started: "Run started",
+
   // Client Setup (pin-down)
   onboarding_start: "Starting setup",
   credential_storage: "Saving your account keys",
@@ -127,6 +130,7 @@ export const PHASE_LABELS: Record<string, string> = {
 
   // Pre-Call Briefs (pre-call-read)
   roster_fetch: "Checking today's calls",
+  duplicate_check: "Checking for a duplicate brief",
   rule_14_gate: "Reviewing call eligibility",
   brief_synthesis: "Writing your call brief",
   delivery: "Sending the brief to your team",

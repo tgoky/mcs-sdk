@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { eq, desc } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -14,8 +15,6 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Join skill_runs -> engagements so the feed knows which client each run belongs to.
-    // We filter by whopUserId via the engagements join so users only see their own runs.
     const rows = await db
       .select({
         id: skillRuns.id,
@@ -23,8 +22,12 @@ export async function GET() {
         status: skillRuns.status,
         phase: skillRuns.phase,
         startedAt: skillRuns.startedAt,
+        completedAt: skillRuns.completedAt,
         engagementId: skillRuns.engagementId,
         buyerName: engagements.buyer,
+        errorMessage: skillRuns.errorMessage,
+        // jsonb_array_length returns NULL when the column is NULL, so coalesce to 0
+        stepCount: sql<number>`coalesce(jsonb_array_length(${skillRuns.steps}), 0)`,
       })
       .from(skillRuns)
       .innerJoin(

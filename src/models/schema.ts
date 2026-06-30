@@ -7,6 +7,35 @@ import {
   integer,
 } from "drizzle-orm/pg-core";
 
+// ── Run instrumentation types ───────────────────────────────────────────────
+// Mirrors the five-field phase-log format from the OG skill pack
+// (skcs/skills/*/SKILL.md, config_schema.md "Five-field summary format"):
+// What was attempted / What worked / What failed / Open items / Decisions made.
+// Pin-Down etc. write this to /memories/{engagement_id}/phase_logs/*.md today;
+// `summary` below is the Postgres-side mirror so the dashboard can render it
+// without reading the agent's filesystem.
+export type RunSummary = {
+  whatWasAttempted: string[];
+  whatWorked: string[];
+  whatFailed: string[];
+  openItems: string[];
+  decisionsMade: string[];
+};
+
+// One entry per phase *transition* or per discrete unit of work inside a
+// phase (e.g. one entry per prospect processed in a pre-call-read run that
+// loops over many calls under a single runId). Append-only — never edit an
+// existing entry, only push new ones. This is what lets the dashboard show
+// the actual sequence of what happened instead of only the latest phase.
+export type RunStep = {
+  phase: string;            // internal phase key, e.g. "voice_extraction" — pass through phaseLabel() to render
+  label?: string;           // optional human-readable detail beyond the phase name, e.g. "Sarah Jenkins (sarah@acme.com)"
+  status: "running" | "success" | "failed" | "skipped";
+  detail?: string;          // free-text outcome for this specific step, e.g. "Identity confidence 98/100 — brief sent via Slack"
+  startedAt: string;        // ISO timestamp
+  completedAt?: string;     // ISO timestamp, set when the step finishes
+};
+
 // ── Typed stack shape — applied to the jsonb column so TS catches misuse ──
 export type EngagementStack = {
   booking_platform: "calendly" | "cal_com" | "ghl_calendar" | "oncehub" | "unsupported";
@@ -93,8 +122,21 @@ export const skillRuns = pgTable("skill_runs", {
     .notNull()
     .references(() => engagements.engagementId),
   skillName: text("skill_name").notNull(),
+  // Scalar "current phase" — kept for backward compat with existing UI
+  // (phaseLabel() lookups, module status cards). Treat `steps` below as the
+  // source of truth for anything that needs the full history.
   phase: text("phase"),
   status: text("status").notNull().default("running"),
+  // Append-only log of every phase transition / unit of work this run did.
+  // Never overwritten — always pushed to. This is what the run-detail page
+  // renders as a timeline.
+  steps: jsonb("steps").$type<RunStep[]>().default([]),
+  // Five-field structured breakdown, written when the run reaches a terminal
+  // state (or progressively at phase boundaries for long-running skills).
+  summary: jsonb("summary").$type<RunSummary>(),
+  // The actual error, when status = "failed". Previously discarded after
+  // console.error — never written to the DB anywhere in this codebase.
+  errorMessage: text("error_message"),
   tokenUsage: jsonb("token_usage").$type<{
     input_tokens: number;
     output_tokens: number;

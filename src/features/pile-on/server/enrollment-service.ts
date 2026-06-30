@@ -1,21 +1,69 @@
-import { db } from "@/lib/db";
-import { skillRuns } from "@/models/schema";
-import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { enrollInPreCallSequence, enrollInWinBackSequence } from "@/lib/platforms/email";
 import { callClaude, MODEL } from "@/lib/llm";
+import { logStep, finishRun, type RunSummary } from "@/lib/run-log";
+
+/**
+ * Single source of truth for classifying a booking-platform webhook payload
+ * as a new booking (pile-on) or a cancellation/no-show (win-back).
+ *
+ * Previously the webhook route hardcoded skillName: "pile-on" at startRun
+ * time, before it had even looked at the payload — then handleInboundBookingEvent
+ * "corrected" it mid-run via a rename side-channel on logStep whenever the
+ * event actually turned out to be a cancellation. That meant two independent
+ * lists of event-type strings (one in the route's label extraction, one
+ * here) could silently drift apart, and for a few milliseconds every
+ * win-back run was mislabeled as pile-on in the dashboard. Exporting this
+ * classifier lets the route call it BEFORE startRun so the correct
+ * skillName is set from the very first row, with one definition of "what
+ * counts as a cancellation" shared by both call sites.
+ */
+export function classifyBookingEvent(payload: any): "created" | "cancelled" | "unknown" {
+  const eventType: string =
+    payload.event ?? payload.trigger ?? payload.payload?.event ?? "booking.created";
+
+  if (
+    eventType === "booking.created" ||
+    eventType === "invitee.created" ||
+    eventType === "BOOKING_CREATED" ||
+    eventType === "AppointmentCreate"
+  ) {
+    return "created";
+  }
+
+  if (
+    eventType === "booking.cancelled" ||
+    eventType === "booking.no-showed" ||
+    eventType === "invitee.canceled" ||
+    eventType === "BOOKING_CANCELLED" ||
+    eventType === "AppointmentDelete"
+  ) {
+    return "cancelled";
+  }
+
+  return "unknown";
+}
 
 /**
  * Routes inbound booking webhook events to pile-on (booking.created)
- * or win-back (booking.cancelled / booking.no-showed).
+ * or win-back (booking.cancelled / booking.no-showed). The caller (the
+ * webhook route) is expected to have already called classifyBookingEvent()
+ * to pick the correct skillName before startRun — this function trusts
+ * that classification rather than re-deriving it, so the two can't diverge.
  */
 export async function handleInboundBookingEvent(
   payload: any,
   tenant: any,
-  runId: string
+  runId: string,
+  eventKind: "created" | "cancelled" | "unknown"
 ): Promise<void> {
-  const eventType: string =
-    payload.event ?? payload.trigger ?? payload.payload?.event ?? "booking.created";
+  const summary: RunSummary = {
+    whatWasAttempted: [],
+    whatWorked: [],
+    whatFailed: [],
+    openItems: [],
+    decisionsMade: [],
+  };
 
   // Normalize email/name across all platform webhook shapes
   const prospectEmail: string =
@@ -48,13 +96,15 @@ export async function handleInboundBookingEvent(
   const emailApiKey = await resolveCredential(tenant.engagementId, stack.email_platform);
 
   // ── booking.created → Pile-On ─────────────────────────────────────────
-  if (eventType === "booking.created" || eventType === "invitee.created" ||
-      eventType === "BOOKING_CREATED" || eventType === "AppointmentCreate") {
+  if (eventKind === "created") {
 
-    await db
-      .update(skillRuns)
-      .set({ phase: "pile_on_enrollment" })
-      .where(eq(skillRuns.id, runId));
+    await logStep(runId, {
+      phase: "pile_on_enrollment",
+      status: "running",
+      label: `${prospectName} <${prospectEmail}>`,
+    });
+
+    summary.whatWasAttempted.push(`Enroll ${prospectName} (${prospectEmail}) in the pre-call follow-up sequence on ${stack.email_platform}.`);
 
     await enrollInPreCallSequence(
       stack.email_platform,
@@ -69,12 +119,12 @@ export async function handleInboundBookingEvent(
       }
     );
 
+    summary.whatWorked.push(`Enrolled in ${stack.email_platform} pre-call sequence.`);
+    await logStep(runId, { phase: "pile_on_enrollment", status: "success", detail: `Enrolled ${prospectName} in pre-call sequence` });
+
     // Hybrid mode: generate a personalized intro paragraph via Claude
     if (tenant.offerDetails?.hybrid_mode_enabled) {
-      await db
-        .update(skillRuns)
-        .set({ phase: "hybrid_synthesis" })
-        .where(eq(skillRuns.id, runId));
+      await logStep(runId, { phase: "hybrid_synthesis", status: "running" });
 
       const result = await callClaude({
         model: MODEL.SYNTHESIS,
@@ -87,28 +137,31 @@ Write a personalized booking confirmation intro paragraph. Under 70 words. No ge
         runId,
       });
 
-      // The generated text is available as result.text
-      // Delivery of this text into the email platform's transactional send
-      // is platform-specific and configured per buyer — log it for now
-      console.log(
-        `[pile-on] Hybrid personalization ready for ${prospectEmail}:`,
-        result.text.substring(0, 100) + "..."
+      // FIXED: the generated text used to be console.log'd and discarded —
+      // it never actually shipped anywhere. This is flagged as an open item
+      // rather than silently claiming success, since delivery still needs a
+      // platform-specific transactional-send wire-up per buyer.
+      summary.whatWasAttempted.push("Generate a hybrid-mode personalized intro paragraph.");
+      summary.openItems.push(
+        "Hybrid personalization text was generated but has no delivery path configured for this platform yet — it is not currently being sent."
       );
+      await logStep(runId, {
+        phase: "hybrid_synthesis",
+        status: "success",
+        detail: `Generated (not yet delivered): "${result.text.slice(0, 100)}${result.text.length > 100 ? "…" : ""}"`,
+      });
     }
   }
 
   // ── booking.cancelled / no-showed → Win-Back ─────────────────────────
-  else if (
-    eventType === "booking.cancelled" ||
-    eventType === "booking.no-showed" ||
-    eventType === "invitee.canceled" ||
-    eventType === "BOOKING_CANCELLED" ||
-    eventType === "AppointmentDelete"
-  ) {
-    await db
-      .update(skillRuns)
-      .set({ skillName: "win-back", phase: "recovery_enrollment" })
-      .where(eq(skillRuns.id, runId));
+  else if (eventKind === "cancelled") {
+    await logStep(runId, {
+      phase: "recovery_enrollment",
+      status: "running",
+      label: `${prospectName} <${prospectEmail}>`,
+    });
+
+    summary.whatWasAttempted.push(`Enroll ${prospectName} (${prospectEmail}) in the win-back sequence on ${stack.email_platform}.`);
 
     await enrollInWinBackSequence(
       stack.email_platform,
@@ -122,10 +175,12 @@ Write a personalized booking confirmation intro paragraph. Under 70 words. No ge
         activecampaign_base_url: stack.activecampaign_base_url,
       }
     );
+
+    summary.whatWorked.push(`Enrolled in ${stack.email_platform} win-back sequence.`);
+    await logStep(runId, { phase: "recovery_enrollment", status: "success", detail: `Enrolled ${prospectName} in win-back sequence` });
+  } else {
+    summary.openItems.push(`Unrecognized webhook event — no sequence enrollment performed.`);
   }
 
-  await db
-    .update(skillRuns)
-    .set({ status: "success", completedAt: new Date() })
-    .where(eq(skillRuns.id, runId));
+  await finishRun(runId, { summary });
 }

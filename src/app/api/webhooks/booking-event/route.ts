@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { engagements, skillRuns } from "@/models/schema";
+import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
-import { handleInboundBookingEvent } from "@/features/pile-on/server/enrollment-service";
+import { handleInboundBookingEvent, classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
+import { startRun, failRun } from "@/lib/run-log";
 import crypto from "crypto";
 
 export async function POST(request: Request) {
@@ -30,25 +31,38 @@ export async function POST(request: Request) {
       return new Response("Engagement not found", { status: 404 });
     }
 
-    await db.insert(skillRuns).values({
+    // FIXED: classify the event BEFORE startRun so the correct skillName
+    // ("pile-on" vs "win-back") is set on the very first row insert. This
+    // used to be hardcoded to "pile-on" here and "corrected" mid-run by
+    // enrollment-service via a rename side-channel whenever the event
+    // turned out to be a cancellation — two separate event-type checks
+    // that could drift apart, plus a brief window where every win-back run
+    // was mislabeled as pile-on in the dashboard.
+    const eventKind = classifyBookingEvent(payload);
+    const skillName = eventKind === "cancelled" ? "win-back" : "pile-on";
+
+    await startRun({
       id: runId,
       engagementId: tenant.engagementId,
-      skillName: "pile-on",
+      skillName,
       phase: "webhook_received",
-      status: "running",
-      startedAt: new Date(),
+      label: payload.event ?? payload.trigger ?? "booking event",
     });
 
-    await handleInboundBookingEvent(payload, tenant, runId);
+    await handleInboundBookingEvent(payload, tenant, runId, eventKind);
 
     return NextResponse.json({ success: true, runId });
   } catch (error: any) {
     console.error("[webhook] booking-event failure:", error.message);
-    await db
-      .update(skillRuns)
-      .set({ status: "failed", completedAt: new Date() })
-      .where(eq(skillRuns.id, runId))
-      .catch(() => {});
+    await failRun(runId, error, {
+      summary: {
+        whatWasAttempted: ["Process inbound booking webhook event."],
+        whatWorked: [],
+        whatFailed: [error.message],
+        openItems: ["This booking event was not enrolled in any sequence — check the payload shape against the configured booking platform."],
+        decisionsMade: [],
+      },
+    });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

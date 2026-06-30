@@ -1,11 +1,12 @@
 import { db } from "@/lib/db";
-import { skillRuns, briefedCallsLog, engagements } from "@/models/schema";
+import { briefedCallsLog } from "@/models/schema";
 import { and, eq, gte } from "drizzle-orm";
 import { evaluatePersonMatch } from "../person-match";
 import { resolveCredential } from "@/lib/credentials";
 import { fetchTomorrowCallsForTenant } from "@/lib/platforms/booking";
 import { deliverBrief } from "@/lib/platforms/email";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
+import { startRun, logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import crypto from "crypto";
 
 /**
@@ -29,18 +30,24 @@ If research was omitted due to low identity confidence, write "Research omitted 
 /**
  * Nightly briefing cycle — called once per active engagement from the cron route.
  * Returns the count of briefs successfully delivered.
+ *
+ * NOTE: this single runId covers every call processed tonight for this
+ * engagement. Before run-log instrumentation, that meant only the very last
+ * call's phase was ever visible — every earlier call's progress (and any
+ * skipped/failed calls in between) was overwritten and lost. Each call now
+ * gets its own step entries (and is named in the label), so the run-detail
+ * timeline shows the real per-prospect sequence.
  */
 export async function executeNightlyBriefingCycle(tenant: any): Promise<number> {
   const runId = crypto.randomUUID();
   let deliveredCount = 0;
+  const summary = emptySummary();
 
-  await db.insert(skillRuns).values({
+  await startRun({
     id: runId,
     engagementId: tenant.engagementId,
     skillName: "pre-call-read",
     phase: "roster_fetch",
-    status: "running",
-    startedAt: new Date(),
   });
 
   try {
@@ -60,43 +67,55 @@ export async function executeNightlyBriefingCycle(tenant: any): Promise<number> 
       stack.booking_platform_meta
     );
 
+    summary.whatWasAttempted.push(`Fetched tomorrow's roster from ${stack.booking_platform}: ${tomorrowCalls.length} call(s) found.`);
+    await logStep(runId, { phase: "roster_fetch", status: "success", detail: `${tomorrowCalls.length} call(s) on tomorrow's roster` });
+
+    if (tomorrowCalls.length === 0) {
+      summary.whatWorked.push("No calls scheduled tomorrow — nothing to brief.");
+    }
+
     for (const call of tomorrowCalls) {
-      // ── Idempotency gate ──────────────────────────────────────────────
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const existing = await db
-        .select({ id: briefedCallsLog.id })
-        .from(briefedCallsLog)
-        .where(
-          and(
-            eq(briefedCallsLog.callId, call.id),
-            gte(briefedCallsLog.createdAt, oneDayAgo)
+      const callLabel = `${call.name} (${call.email})`;
+
+      try {
+        // ── Idempotency gate ────────────────────────────────────────────
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const existing = await db
+          .select({ id: briefedCallsLog.id })
+          .from(briefedCallsLog)
+          .where(
+            and(
+              eq(briefedCallsLog.callId, call.id),
+              gte(briefedCallsLog.createdAt, oneDayAgo)
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (existing.length > 0) {
-        // Already briefed this call in the last 24h — skip
-        continue;
-      }
+        if (existing.length > 0) {
+          // Already briefed this call in the last 24h — skip
+          await logStep(runId, { phase: "duplicate_check", status: "skipped", label: callLabel, detail: "Already briefed in the last 24h — skipped" });
+          continue;
+        }
 
-      // ── Rule 14 identity gate ─────────────────────────────────────────
-      await db
-        .update(skillRuns)
-        .set({ phase: "rule_14_gate" })
-        .where(eq(skillRuns.id, runId));
+        // ── Rule 14 identity gate ───────────────────────────────────────
+        await logStep(runId, { phase: "rule_14_gate", status: "running", label: callLabel });
 
-      const matchResult = await evaluatePersonMatch(
-        { email: call.email, name: call.name, companySupplied: call.company },
-        stack.person_match_confidence_threshold ?? 99
-      );
+        const matchResult = await evaluatePersonMatch(
+          { email: call.email, name: call.name, companySupplied: call.company },
+          stack.person_match_confidence_threshold ?? 99
+        );
 
-      // ── Brief synthesis ───────────────────────────────────────────────
-      await db
-        .update(skillRuns)
-        .set({ phase: "brief_synthesis" })
-        .where(eq(skillRuns.id, runId));
+        await logStep(runId, {
+          phase: "rule_14_gate",
+          status: matchResult.passed ? "success" : "skipped",
+          label: callLabel,
+          detail: `Identity confidence ${matchResult.totalScore}/100${matchResult.passed ? "" : " — research omitted"}`,
+        });
 
-      const userMessage = `Compile brief for prospect:
+        // ── Brief synthesis ─────────────────────────────────────────────
+        await logStep(runId, { phase: "brief_synthesis", status: "running", label: callLabel });
+
+        const userMessage = `Compile brief for prospect:
 Name: ${call.name}
 Email: ${call.email}
 Company: ${call.company}
@@ -104,66 +123,106 @@ Call time: ${call.callTime.toISOString()}
 Identity confidence score: ${matchResult.totalScore}/100
 Research omitted: ${!matchResult.passed}`;
 
-      const llmResult = await callClaudeWithRetry({
-        model: MODEL.SYNTHESIS,
-        system: buildBriefSystemPrompt(tenant),
-        userMessage,
-        maxTokens: 1500,
-        runId, // writes cost back to skillRuns
-      });
+        const llmResult = await callClaudeWithRetry({
+          model: MODEL.SYNTHESIS,
+          system: buildBriefSystemPrompt(tenant),
+          userMessage,
+          maxTokens: 1500,
+          runId, // writes cost back to skillRuns
+        });
 
-      // ── Delivery ──────────────────────────────────────────────────────
-      await db
-        .update(skillRuns)
-        .set({ phase: "delivery" })
-        .where(eq(skillRuns.id, runId));
+        await logStep(runId, { phase: "brief_synthesis", status: "success", label: callLabel, detail: "7-section brief generated" });
 
-      // Resolve email platform key only if the platform is configured.
-      // Provider key must match what was stored during Pin-Down setup.
-      const emailProvider = stack.email_platform;
-      const emailApiKey = emailProvider
-        ? await resolveCredential(tenant.engagementId, emailProvider).catch(() => undefined)
-        : undefined;
+        // ── Delivery ─────────────────────────────────────────────────────
+        await logStep(runId, { phase: "delivery", status: "running", label: callLabel });
 
-      await deliverBrief(
-        stack.brief_landing_destination ?? "slack",
-        llmResult.text,
-        call.email,
-        stack.slack_webhook_url,
-        emailApiKey,
-        stack.email_platform
-          ? { platform: stack.email_platform, location_id: stack.booking_platform_meta?.location_id }
-          : undefined
-      );
+        // Resolve email platform key only if the platform is configured.
+        // Provider key must match what was stored during Pin-Down setup.
+        const emailProvider = stack.email_platform;
+        const emailApiKey = emailProvider
+          ? await resolveCredential(tenant.engagementId, emailProvider).catch(() => undefined)
+          : undefined;
 
-      // ── Log ───────────────────────────────────────────────────────────
-      await db.insert(briefedCallsLog).values({
-        id: crypto.randomUUID(),
-        engagementId: tenant.engagementId,
-        callId: call.id,
-        callTime: call.callTime,
-        prospectName: call.name,
-        briefDeliveredAt: new Date(),
-        destinationDelivered: stack.brief_landing_destination ?? "slack",
-        personMatchScore: matchResult.totalScore,
-        createdAt: new Date(),
-      });
+        await deliverBrief(
+          stack.brief_landing_destination ?? "slack",
+          llmResult.text,
+          call.email,
+          stack.slack_webhook_url,
+          emailApiKey,
+          stack.email_platform
+            ? { platform: stack.email_platform, location_id: stack.booking_platform_meta?.location_id }
+            : undefined
+        );
 
-      deliveredCount++;
+        // ── Log ─────────────────────────────────────────────────────────
+        await db.insert(briefedCallsLog).values({
+          id: crypto.randomUUID(),
+          engagementId: tenant.engagementId,
+          callId: call.id,
+          callTime: call.callTime,
+          prospectName: call.name,
+          briefDeliveredAt: new Date(),
+          destinationDelivered: stack.brief_landing_destination ?? "slack",
+          personMatchScore: matchResult.totalScore,
+          createdAt: new Date(),
+        });
+
+        await logStep(runId, {
+          phase: "delivery",
+          status: "success",
+          label: callLabel,
+          detail: `Brief sent via ${stack.brief_landing_destination ?? "slack"}`,
+        });
+
+        summary.whatWasAttempted.push(`Brief ${callLabel} for call at ${call.callTime.toISOString()}.`);
+        summary.whatWorked.push(`Delivered brief for ${callLabel} via ${stack.brief_landing_destination ?? "slack"} (confidence ${matchResult.totalScore}/100).`);
+
+        deliveredCount++;
+      } catch (callErr: any) {
+        // FIXED: previously any error here (e.g. one bad email send) threw
+        // straight past the loop and aborted the ENTIRE night's roster — any
+        // prospects after this one were silently never attempted, with no
+        // record they were skipped. Now we log exactly which prospect and
+        // which step failed, record it in the summary, and move on to the
+        // next call. The run still ends up "failed" overall (see the count
+        // check below) so it's visible, but it no longer kills briefs that
+        // had nothing to do with this prospect's failure.
+        console.error(`[pre-call-read] Failed to brief ${callLabel}:`, callErr.message);
+        await logStep(runId, {
+          phase: "delivery",
+          status: "failed",
+          label: callLabel,
+          detail: callErr.message,
+        });
+        summary.whatFailed.push(`Failed to brief ${callLabel}: ${callErr.message}`);
+      }
     }
 
-    await db
-      .update(skillRuns)
-      .set({ status: "success", completedAt: new Date() })
-      .where(eq(skillRuns.id, runId));
+    if (deliveredCount === 0 && tomorrowCalls.length > 0) {
+      summary.openItems.push("Every call on tomorrow's roster was already briefed in the last 24h — no new briefs sent.");
+    }
+
+    // A run that delivered at least one brief but hit some per-call failures
+    // is still meaningfully successful — most of the night's work got done.
+    // Only mark the whole run "failed" if NOTHING was delivered despite
+    // there being calls to brief, or if the roster fetch itself never
+    // returned (that path throws before reaching here and is caught below).
+    const hadFailures = summary.whatFailed.length > 0;
+    if (hadFailures && deliveredCount === 0 && tomorrowCalls.length > 0) {
+      await failRun(runId, new Error(`All ${tomorrowCalls.length} call(s) failed to brief — see summary for per-call errors.`), { summary });
+      return deliveredCount;
+    }
+
+    if (hadFailures) {
+      summary.openItems.push(`${summary.whatFailed.length} of ${tomorrowCalls.length} call(s) failed to brief tonight — see What Failed above.`);
+    }
+
+    await finishRun(runId, { summary });
 
     return deliveredCount;
   } catch (err: any) {
-    await db
-      .update(skillRuns)
-      .set({ status: "failed", completedAt: new Date() })
-      .where(eq(skillRuns.id, runId))
-      .catch(() => {});
+    summary.whatFailed.push(err.message);
+    await failRun(runId, err, { summary });
     throw err;
   }
 }
