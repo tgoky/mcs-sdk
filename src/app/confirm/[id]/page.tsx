@@ -6,14 +6,14 @@ import { notFound } from "next/navigation";
 export const revalidate = 0;
 
 interface ConfirmPageProps {
-  params: { id: string };
-  searchParams: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{
     invitee_first_name?: string;
     invitee_last_name?: string;
     invitee_email?: string;
     assigned_to?: string;
     event_start_time?: string;
-  };
+  }>;
 }
 
 /**
@@ -25,7 +25,8 @@ export default async function PublicBookingConfirmationPage({
   params,
   searchParams,
 }: ConfirmPageProps) {
-  const engagementId = params.id;
+  const { id: engagementId } = await params;
+  const resolvedSearchParams = await searchParams;
 
   // Retrieve matching profile parameters to ensure this space exists
   const tenant = await db
@@ -40,17 +41,17 @@ export default async function PublicBookingConfirmationPage({
   if (!tenant) notFound();
 
   // Parse incoming scheduler metadata fields safely
-  const rawFirstName = searchParams.invitee_first_name ?? "";
-  const rawLastName = searchParams.invitee_last_name ?? "";
+  const rawFirstName = resolvedSearchParams.invitee_first_name ?? "";
+  const rawLastName = resolvedSearchParams.invitee_last_name ?? "";
   const prospectName = `${rawFirstName} ${rawLastName}`.trim() || "Prospect";
   
-  const assignedHost = searchParams.assigned_to ?? tenant.prospectMeets ?? "our lead strategist";
+  const assignedHost = resolvedSearchParams.assigned_to ?? tenant.prospectMeets ?? "our lead strategist";
   
   // Cleanly format execution dates if available
   let localizedTimeText = "your requested interval slot";
-  if (searchParams.event_start_time) {
+  if (resolvedSearchParams.event_start_time) {
     try {
-      localizedTimeText = new Date(searchParams.event_start_time).toLocaleDateString(undefined, {
+      localizedTimeText = new Date(resolvedSearchParams.event_start_time).toLocaleDateString(undefined, {
         weekday: "long",
         month: "short",
         day: "numeric",

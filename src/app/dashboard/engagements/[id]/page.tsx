@@ -52,10 +52,10 @@ function PhaseTag({ phase, status }: { phase: string | null; status: string }) {
 export default async function EngagementDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const session = await getSession();
-  const { id } = params;
+  const { id } = await params;
 
   const [engagement] = await db
     .select()

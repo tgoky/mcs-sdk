@@ -9,9 +9,11 @@ export const revalidate = 0;
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+
     const session = await getSession();
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,7 +40,7 @@ export async function GET(
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
       .where(
         and(
-          eq(skillRuns.id, params.id),
+          eq(skillRuns.id, id),
           eq(engagements.whopUserId, session.whopUserId)
         )
       )
