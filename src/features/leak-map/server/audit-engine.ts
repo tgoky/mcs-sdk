@@ -7,6 +7,9 @@ import { KlaviyoClient } from "@/lib/platforms/email";
 import { CalendlyClient } from "@/lib/platforms/booking";
 import { logStep, finishRun, failRun } from "@/lib/run-log";
 import crypto from "crypto";
+import type { GetStepTools, Inngest } from "inngest";
+
+type StepTools = GetStepTools<Inngest.Any>;
 
 interface MetricResult {
   name: string;
@@ -23,12 +26,18 @@ export class AuditEngine {
   async runAuditPipeline(
     engagementId: string,
     type: "weekly" | "monthly",
-    runId: string
+    runId: string,
+    step?: StepTools
   ): Promise<string> {
     const lookbackDays = type === "weekly" ? 7 : 30;
-
-    // Push execution state on tracking node
-    await logStep(runId, { phase: "stage_1_data_pull", status: "running" });
+    // Wrap each stage in step.run when called from the Inngest worker, so a
+    // checkpoint-resumed replay skips stages already completed instead of
+    // re-pulling data / re-inserting auditRunsLog rows / re-billing the
+    // Claude call. Falls back to running inline when called directly
+    // (the still-not-fully-migrated cron routes).
+    const run = step
+      ? <T,>(id: string, fn: () => Promise<T>) => step.run(id, fn)
+      : <T,>(_id: string, fn: () => Promise<T>) => fn();
 
     try {
       const tenant = await db
@@ -45,127 +54,138 @@ export class AuditEngine {
       const stack = tenant.stack as any;
 
       // ── STAGE 1: Pull internal data ──────────────────────────────────
-      const currentBriefs = await db
-        .select()
-        .from(briefedCallsLog)
-        .where(
-          and(
-            eq(briefedCallsLog.engagementId, engagementId),
-            gte(briefedCallsLog.createdAt, currentStart)
-          )
-        );
+      // logStep calls live INSIDE the step.run callback now, not before/
+      // after it. A retry replays the whole function from the top, and
+      // any logStep() call sitting outside a step.run boundary fires on
+      // every single replay even when the step it surrounds is already
+      // memoized — that's what was producing duplicate timeline nodes.
+      // Folding the running/success markers into the same memoized unit
+      // as the work they describe means the pair either both happened
+      // (memoized, never replayed) or neither did.
+      const { currentBriefs, priorBriefs } = await run("stage-1-data-pull", async () => {
+        await logStep(runId, { phase: "stage_1_data_pull", status: "running" });
 
-      const priorBriefs = await db
-        .select()
-        .from(briefedCallsLog)
-        .where(
-          and(
-            eq(briefedCallsLog.engagementId, engagementId),
-            gte(briefedCallsLog.createdAt, priorStart),
-            lte(briefedCallsLog.createdAt, currentStart)
-          )
-        );
-
-      // ── STAGE 2: Compute metrics ─────────────────────────────────────
-      await logStep(runId, { phase: "stage_2_compute", status: "success" });
-
-      const metrics: MetricResult[] = [];
-      const gaps: string[] = [];
-
-      // Metric A: Brief delivery volume
-      const deliveryMetric = computeDelta(
-        "Brief delivery volume",
-        currentBriefs.length,
-        priorBriefs.length,
-        { highThreshold: -10, medThreshold: -5 }
-      );
-      metrics.push(deliveryMetric);
-
-      if (currentBriefs.length < 5) {
-        gaps.push(`Low sample size (${currentBriefs.length} briefs). Deltas may not be statistically significant.`);
-      }
-
-      // Metric B: Rule 14 accuracy
-      const currentAccuracy =
-        currentBriefs.reduce((a, b) => a + (b.personMatchScore ?? 0), 0) /
-        (currentBriefs.length || 1);
-      const priorAccuracy =
-        priorBriefs.reduce((a, b) => a + (b.personMatchScore ?? 0), 0) /
-        (priorBriefs.length || 1);
-
-      const accuracyMetric = computeDelta(
-        "Identity match accuracy",
-        currentAccuracy,
-        priorAccuracy,
-        { highThreshold: -15, medThreshold: -8 }
-      );
-      metrics.push(accuracyMetric);
-
-      // Metric C: External booking show-rate
-      if (stack?.booking_platform && stack?.booking_platform !== "unsupported") {
-        try {
-          const showRateMetric = await pullBookingShowRate(
-            engagementId,
-            stack,
-            currentStart,
-            priorStart,
-            now
+        const currentBriefs = await db
+          .select()
+          .from(briefedCallsLog)
+          .where(
+            and(
+              eq(briefedCallsLog.engagementId, engagementId),
+              gte(briefedCallsLog.createdAt, currentStart)
+            )
           );
-          if (showRateMetric) metrics.push(showRateMetric);
-        } catch (e: any) {
-          gaps.push(`Could not pull booking show-rate from ${stack.booking_platform}: ${e.message}`);
+
+        const priorBriefs = await db
+          .select()
+          .from(briefedCallsLog)
+          .where(
+            and(
+              eq(briefedCallsLog.engagementId, engagementId),
+              gte(briefedCallsLog.createdAt, priorStart),
+              lte(briefedCallsLog.createdAt, currentStart)
+            )
+          );
+
+        await logStep(runId, { phase: "stage_1_data_pull", status: "success", detail: `${currentBriefs.length} brief(s) in current window` });
+        return { currentBriefs, priorBriefs };
+      });
+
+      // ── STAGE 2 + 4: Compute metrics and overall severity ─────────────
+      // Folded together — stage 4 was pure derived computation over
+      // stage 2's output with no I/O of its own, so there's no benefit to
+      // a separate checkpoint boundary, just another naked-logStep risk.
+      const { metrics, gaps, highestSeverity, alertsFired } = await run("stage-2-compute", async () => {
+        await logStep(runId, { phase: "stage_2_compute", status: "running" });
+
+        const metrics: MetricResult[] = [];
+        const gaps: string[] = [];
+
+        // Metric A: Brief delivery volume
+        const deliveryMetric = computeDelta(
+          "Brief delivery volume",
+          currentBriefs.length,
+          priorBriefs.length,
+          { highThreshold: -10, medThreshold: -5 }
+        );
+        metrics.push(deliveryMetric);
+
+        if (currentBriefs.length < 5) {
+          gaps.push(`Low sample size (${currentBriefs.length} briefs). Deltas may not be statistically significant.`);
         }
-      }
 
-      // Metric D: Email open rate
-      if (stack?.email_platform === "klaviyo") {
-        try {
-          const openRateMetric = await pullKlaviyoOpenRate(engagementId, stack);
-          if (openRateMetric) metrics.push(openRateMetric);
-        } catch (e: any) {
-          gaps.push(`Could not pull email open-rate from Klaviyo: ${e.message}`);
+        // Metric B: Rule 14 accuracy
+        const currentAccuracy =
+          currentBriefs.reduce((a, b) => a + (b.personMatchScore ?? 0), 0) /
+          (currentBriefs.length || 1);
+        const priorAccuracy =
+          priorBriefs.reduce((a, b) => a + (b.personMatchScore ?? 0), 0) /
+          (priorBriefs.length || 1);
+
+        const accuracyMetric = computeDelta(
+          "Identity match accuracy",
+          currentAccuracy,
+          priorAccuracy,
+          { highThreshold: -15, medThreshold: -8 }
+        );
+        metrics.push(accuracyMetric);
+
+        // Metric C: External booking show-rate
+        if (stack?.booking_platform && stack?.booking_platform !== "unsupported") {
+          try {
+            const showRateMetric = await pullBookingShowRate(
+              engagementId,
+              stack,
+              currentStart,
+              priorStart,
+              now
+            );
+            if (showRateMetric) metrics.push(showRateMetric);
+          } catch (e: any) {
+            gaps.push(`Could not pull booking show-rate from ${stack.booking_platform}: ${e.message}`);
+          }
         }
-      }
 
-      // ── STAGE 4: Overall severity ────────────────────────────────────
-      await logStep(runId, { phase: "stage_4_severity", status: "success" });
+        // Metric D: Email open rate
+        if (stack?.email_platform === "klaviyo") {
+          try {
+            const openRateMetric = await pullKlaviyoOpenRate(engagementId, stack);
+            if (openRateMetric) metrics.push(openRateMetric);
+          } catch (e: any) {
+            gaps.push(`Could not pull email open-rate from Klaviyo: ${e.message}`);
+          }
+        }
 
-      const highestSeverity = metrics.reduce<"high" | "medium" | "low" | "none">(
-        (acc, m) => {
-          const order = { high: 3, medium: 2, low: 1, none: 0 };
-          return order[m.severity] > order[acc] ? m.severity : acc;
-        },
-        "none"
-      );
+        await logStep(runId, { phase: "stage_2_compute", status: "success" });
 
-      const alertsFired = metrics
-        .filter((m) => m.severity === "high")
-        .map((m) => m.name);
+        // ── STAGE 4: Overall severity (folded in, see comment above) ────
+        const highestSeverity = metrics.reduce<"high" | "medium" | "low" | "none">(
+          (acc, m) => {
+            const order = { high: 3, medium: 2, low: 1, none: 0 };
+            return order[m.severity] > order[acc] ? m.severity : acc;
+          },
+          "none"
+        );
 
-      // Persist audit record
-      await db.insert(auditRunsLog).values({
-        id: crypto.randomUUID(),
-        engagementId: tenant.engagementId,
-        runType: type,
-        topIssues: metrics.map((m) => ({
-          name: m.name,
-          current: m.current,
-          prior: m.prior,
-          delta: m.delta,
-          severity: m.severity,
-        })),
-        alertsFired,
-        gaps: gaps.length > 0 ? gaps : ["No data gaps detected."],
-        createdAt: new Date(),
+        const alertsFired = metrics
+          .filter((m) => m.severity === "high")
+          .map((m) => m.name);
+
+        await logStep(runId, { phase: "stage_4_severity", status: "success", detail: `Overall severity: ${highestSeverity}` });
+
+        return { metrics, gaps, highestSeverity, alertsFired };
       });
 
       // ── STAGE 5: Claude report synthesis ────────────────────────────
-      await logStep(runId, { phase: "stage_5_report", status: "running" });
+      // Still happens before the auditRunsLog insert (see prior fix —
+      // prevents the duplicate-row-on-retry bug your auditor's version
+      // also correctly preserved).
+      const report = await run("stage-5-report", async () => {
+        await logStep(runId, { phase: "stage_5_report", status: "running" });
 
-      let report = "All tracked metrics nominal. No funnel leaks detected.";
+        let result = "All tracked metrics nominal. No funnel leaks detected.";
 
-      if (highestSeverity !== "none") {
-        const userMessage = `Generate a 6-field Leak Map recommendation report for these funnel metrics:
+        if (highestSeverity !== "none") {
+          const userMessage = `Generate a 6-field Leak Map recommendation report for these funnel metrics:
 ${JSON.stringify(metrics, null, 2)}
 
 Gaps noted: ${gaps.join("; ") || "none"}
@@ -176,21 +196,45 @@ For each issue found, structure the response as:
 
 Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})}`;
 
-        const llmResult = await callClaudeWithRetry({
-          model: MODEL.SYNTHESIS,
-          system:
-            "You are the Leak Map report synthesis engine. " +
-            "You identify and explain funnel performance drops for high-ticket sales operators. " +
-            "Be direct, specific, and actionable. Never blame the buyer.",
-          userMessage,
-          maxTokens: 1500,
-          runId,
-        });
-        report = llmResult.text;
-      }
+          const llmResult = await callClaudeWithRetry({
+            model: MODEL.SYNTHESIS,
+            system:
+              "You are the Leak Map report synthesis engine. " +
+              "You identify and explain funnel performance drops for high-ticket sales operators. " +
+              "Be direct, specific, and actionable. Never blame the buyer.",
+            userMessage,
+            maxTokens: 1500,
+            runId,
+          });
+          result = llmResult.text;
+        }
 
-      await logStep(runId, { phase: "stage_5_report", status: "success" });
-      
+        await logStep(runId, { phase: "stage_5_report", status: "success" });
+        return result;
+      });
+
+      // Persist audit record — folded into the same step as nothing else
+      // needs to happen after it; still strictly after stage-5 completes,
+      // so a retry that's already past this point hits a memoized step
+      // and never inserts twice.
+      await run("persist-audit-record", async () => {
+        await db.insert(auditRunsLog).values({
+          id: crypto.randomUUID(),
+          engagementId: tenant.engagementId,
+          runType: type,
+          topIssues: metrics.map((m) => ({
+            name: m.name,
+            current: m.current,
+            prior: m.prior,
+            delta: m.delta,
+            severity: m.severity,
+          })),
+          alertsFired,
+          gaps: gaps.length > 0 ? gaps : ["No data gaps detected."],
+          createdAt: new Date(),
+        });
+      });
+
       // Clean terminal execution closeout
       await finishRun(runId);
 

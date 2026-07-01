@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
-import { startRun } from "@/lib/run-log";
+import { startRun, failRun } from "@/lib/run-log";
 import { and, eq } from "drizzle-orm";
-import { inngest } from "@/lib/inngest";
+import { inngest, skillRunExecute } from "@/lib/inngest";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
@@ -65,17 +65,32 @@ export async function POST(request: Request) {
         label: "Manually triggered via dashboard",
       });
 
-      // Forward event to background task loop
-      await inngest.send({
-        name: "skill/run.execute",
-        data: {
-          runId,
-          engagementId,
-          skillName,
-          tenant,
-          ...(skillName === "leak-map" && { auditType: "weekly" }),
-        },
-      });
+      // Forward event to background task loop. Only engagementId is sent —
+      // not the full tenant row — the worker re-fetches it itself (see
+      // src/inngest/skill.ts). The old version serialized stack-level
+      // secrets (slack_webhook_url, webhook_signing_secret) into the event
+      // payload, which Inngest Cloud stores.
+      try {
+        await inngest.send(
+          skillRunExecute.create({
+            runId,
+            engagementId,
+            skillName,
+            ...(skillName === "leak-map" && { auditType: "weekly" as const }),
+          })
+        );
+      } catch (dispatchErr: any) {
+        // startRun() already committed a "running" row above. If dispatch
+        // to Inngest fails (outage, network blip), that row would
+        // otherwise sit at "running" forever with nothing to ever close
+        // it — the UI's polling would spin indefinitely. Close it out
+        // explicitly instead.
+        await failRun(runId, dispatchErr);
+        return NextResponse.json(
+          { error: "Failed to dispatch run to background queue" },
+          { status: 502 }
+        );
+      }
 
       return NextResponse.json(
         { 

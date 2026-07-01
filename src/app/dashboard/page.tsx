@@ -46,7 +46,7 @@ export default async function DashboardPage() {
     )
     .then((r) => Number(r[0]?.count ?? 0));
 
-  const recentRuns = await db
+  const recentRunsRaw = await db
     .select({
       id: skillRuns.id,
       skillName: skillRuns.skillName,
@@ -59,6 +59,15 @@ export default async function DashboardPage() {
     .where(eq(engagements.whopUserId, session.whopUserId!))
     .orderBy(desc(skillRuns.startedAt))
     .limit(8);
+
+  // LiveExecutionFeed (client component) expects startedAt as an ISO
+  // string. Drizzle returns a native Date for the timestamp column —
+  // convert at the server/client boundary instead of relying on whatever
+  // the RSC flight protocol happens to do with raw Date props.
+  const recentRuns = recentRunsRaw.map((r) => ({
+    ...r,
+    startedAt: r.startedAt.toISOString(),
+  }));
 
   return (
     <div className="space-y-5 w-full text-zinc-400 font-sans tracking-tight antialiased select-none px-1">

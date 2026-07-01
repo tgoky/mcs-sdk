@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
-import { AuditEngine } from "@/features/leak-map/server/audit-engine";
 import { getSession } from "@/lib/session";
 import { eq } from "drizzle-orm";
+import { startRun } from "@/lib/run-log";
+import { inngest, skillRunExecute } from "@/lib/inngest";
+import crypto from "crypto";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("Authorization");
@@ -35,12 +37,37 @@ export async function GET(request: Request) {
     targets = await db.select().from(engagements);
   }
 
-  const engine = new AuditEngine();
+  // Dispatches each engagement's audit through the same Inngest pipeline
+  // the manual trigger uses, instead of calling AuditEngine directly.
+  // The direct call (`engine.runAuditPipeline(tenant.engagementId, type)`)
+  // no longer compiles now that runId is a required argument — and even if
+  // it did, running every tenant's audit synchronously in a loop inside
+  // one request is exactly the kind of long-running work this whole
+  // refactor was meant to get off the request thread.
+  const dispatched: string[] = [];
   const errors: string[] = [];
 
   for (const tenant of targets) {
     try {
-      await engine.runAuditPipeline(tenant.engagementId, type);
+      const runId = crypto.randomUUID();
+      await startRun({
+        id: runId,
+        engagementId: tenant.engagementId,
+        skillName: "leak-map",
+        phase: "stage_1_data_pull",
+        label: `${type} cron`,
+      });
+
+      await inngest.send(
+        skillRunExecute.create({
+          runId,
+          engagementId: tenant.engagementId,
+          skillName: "leak-map",
+          auditType: type,
+        })
+      );
+
+      dispatched.push(tenant.engagementId);
     } catch (err: any) {
       errors.push(`${tenant.engagementId}: ${err.message}`);
     }
@@ -48,7 +75,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     success: true,
-    engagementsAudited: targets.length,
+    engagementsDispatched: dispatched.length,
     auditType: type,
     errors,
   });
