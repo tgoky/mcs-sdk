@@ -2,6 +2,23 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getIronSession } from "iron-session";
 import type { SessionData } from "@/lib/session";
+import { checkActiveMembership } from "@/lib/whop-access";
+
+// Next.js middleware defaults to the edge runtime, which can't do the
+// server-side Whop API call below. Node.js middleware has been stable
+// since Next 15.2 — this is what makes `checkActiveMembership` (a plain
+// fetch through @whop/sdk) safe to call here instead of needing a
+// separate route handler just to do the revalidation hop.
+export const runtime = "nodejs";
+
+// How long a verified subscriptionStatus is trusted before middleware
+// re-checks it against Whop. Short enough that a cancellation or failed
+// payment gets caught within one window instead of persisting until the
+// next full OAuth login (which could be weeks away); long enough that
+// we're not hitting the Whop API on every single request.
+const MEMBERSHIP_REVALIDATE_MS = 10 * 60 * 1000; // 10 minutes
+
+const ACTIVE_STATUSES = new Set(["active", "trialing", "canceling"]);
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -24,6 +41,34 @@ export async function middleware(request: NextRequest) {
 
   if (!session.whopUserId) {
     return NextResponse.redirect(new URL("/api/auth/login", request.url));
+  }
+
+  // Cached status from login or the last revalidation. This is the only
+  // gate that used to exist here — a whopUserId cookie by itself proves
+  // nothing about payment status, since the OAuth callback used to stamp
+  // every login "active" unconditionally regardless of membership state.
+  const verifiedAt = session.subscriptionVerifiedAt ?? 0;
+  const isStale = Date.now() - verifiedAt > MEMBERSHIP_REVALIDATE_MS;
+
+  if (isStale) {
+    try {
+      const membership = await checkActiveMembership(session.whopUserId);
+      session.subscriptionStatus = membership.status;
+      session.subscriptionVerifiedAt = Date.now();
+      await session.save();
+    } catch (err) {
+      // A Whop API hiccup shouldn't instantly lock out a buyer whose last
+      // confirmed status was active — fail open on transient errors and
+      // fall through to the cached (now-stale) status below rather than
+      // hard-blocking on a network blip.
+      console.error("[middleware] membership revalidation failed:", err);
+    }
+  }
+
+  if (!ACTIVE_STATUSES.has(session.subscriptionStatus)) {
+    return NextResponse.redirect(
+      new URL("/?membership=required", request.url)
+    );
   }
 
   return response;

@@ -127,9 +127,39 @@ export class KlaviyoClient {
       }),
     });
   }
-}
+  /**
+   * Sets a profile property to signal "this person is out of win-back."
+   * The buyer's Klaviyo flow is expected to have a conditional split
+   * checking showtime_status != "win_back" (or checking rebooked_at is
+   * set) as its exit condition — we don't run the cadence ourselves, so
+   * writing this signal reliably is the one piece of the exit condition
+   * that's actually our responsibility.
+   */
+  async setProfileProperty(
+    email: string,
+    properties: Record<string, string | boolean>
+  ): Promise<void> {
+    const profileRes = await fetch(`${this.baseUrl}/profiles/match/`, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({
+        data: { type: "profile", attributes: { email } },
+      }),
+    });
+    if (!profileRes.ok) return;
+    const profileData = await profileRes.json();
+    const profileId = profileData.data?.id;
+    if (!profileId) return;
 
-// ── HubSpot ───────────────────────────────────────────────────────────────
+    await fetch(`${this.baseUrl}/profiles/${profileId}/`, {
+      method: "PATCH",
+      headers: this.headers,
+      body: JSON.stringify({
+        data: { type: "profile", id: profileId, attributes: { properties } },
+      }),
+    });
+  }
+}
 
 export class HubSpotClient {
   private baseUrl = "https://api.hubapi.com/crm/v3/objects";
@@ -211,6 +241,39 @@ export class HubSpotClient {
       }),
     });
   }
+
+  /**
+   * Signals "this contact rebooked, stop the win-back cadence." Always
+   * updates the property (reliable, and the buyer's workflow enrollment
+   * trigger/branch should key off it). Also attempts a direct workflow
+   * unenroll as a best-effort belt-and-suspenders move — HubSpot's
+   * workflow-enrollment API can be finicky across account tiers, so this
+   * is wrapped so a failure here never blocks the property update from
+   * having already landed.
+   */
+  async markRebooked(email: string, workflowId?: string): Promise<void> {
+    const contactId = await this.findContactId(email);
+    if (!contactId) return;
+
+    await fetch(`${this.baseUrl}/contacts/${contactId}`, {
+      method: "PATCH",
+      headers: this.headers,
+      body: JSON.stringify({
+        properties: { showtime_status: "rebooked" },
+      }),
+    });
+
+    if (workflowId) {
+      try {
+        await fetch(
+          `https://api.hubapi.com/automation/v4/workflows/${workflowId}/enrollments/${contactId}`,
+          { method: "DELETE", headers: this.headers }
+        );
+      } catch {
+        // best-effort — the property update above is the reliable signal
+      }
+    }
+  }
 }
 
 // ── ActiveCampaign ────────────────────────────────────────────────────────
@@ -250,6 +313,55 @@ export class ActiveCampaignClient {
         contactList: { list: listId, contact: contactId, status: 1 },
       }),
     });
+  }
+
+  private async findContactId(email: string): Promise<string | null> {
+    const res = await fetch(
+      `${this.baseUrl}/contacts?email=${encodeURIComponent(email)}`,
+      { headers: this.headers }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.contacts?.[0]?.id ?? null;
+  }
+
+  /**
+   * Signals "this contact rebooked, stop the win-back cadence" by tagging
+   * the contact (reliable — the buyer's automation's "stop on tag" exit
+   * condition should key off this) and, best-effort, removing them from
+   * the specific recovery automation if we can resolve the contactAutomation
+   * association ID.
+   */
+  async markRebooked(email: string, automationId?: string): Promise<void> {
+    const contactId = await this.findContactId(email);
+    if (!contactId) return;
+
+    await fetch(`${this.baseUrl}/contactTags`, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({ contactTag: { contact: contactId, tag: "showtime_rebooked" } }),
+    }).catch(() => {});
+
+    if (automationId) {
+      try {
+        const assocRes = await fetch(
+          `${this.baseUrl}/contactAutomations?filters[contact]=${contactId}&filters[automation]=${automationId}`,
+          { headers: this.headers }
+        );
+        if (assocRes.ok) {
+          const assocData = await assocRes.json();
+          const contactAutomationId = assocData.contactAutomations?.[0]?.id;
+          if (contactAutomationId) {
+            await fetch(`${this.baseUrl}/contactAutomations/${contactAutomationId}`, {
+              method: "DELETE",
+              headers: this.headers,
+            });
+          }
+        }
+      } catch {
+        // best-effort — the tag above is the reliable signal
+      }
+    }
   }
 }
 
@@ -300,6 +412,34 @@ export class GHLCRMClient {
       headers: this.headers,
       body: JSON.stringify({ body: noteText }),
     });
+  }
+
+  /**
+   * Signals "this contact rebooked, stop the win-back cadence." GHL's
+   * workflow endpoint supports DELETE on the same path used to enroll, so
+   * this is a direct removal rather than a property-based signal — the
+   * cleanest of the four platforms for this specific exit condition.
+   */
+  async markRebooked(email: string, workflowId?: string): Promise<void> {
+    const contactId = await this.findContactId(email);
+    if (!contactId) return;
+
+    await fetch(`${this.baseUrl}/contacts/${contactId}`, {
+      method: "PUT",
+      headers: this.headers,
+      body: JSON.stringify({ customFields: [{ key: "showtime_status", field_value: "rebooked" }] }),
+    }).catch(() => {});
+
+    if (workflowId) {
+      try {
+        await fetch(
+          `${this.baseUrl}/contacts/${contactId}/workflow/${workflowId}`,
+          { method: "DELETE", headers: this.headers }
+        );
+      } catch {
+        // best-effort — the custom field update above is the reliable signal
+      }
+    }
   }
 }
 
@@ -389,6 +529,53 @@ export async function enrollInWinBackSequence(
 
     default:
       throw new Error(`Unsupported email platform for win-back: ${platform}`);
+  }
+}
+
+/**
+ * Fires the "stop the win-back cadence" exit signal for a prospect who just
+ * rebooked. Called on every booking.created event, not just ones we know
+ * came from a prior cancellation — resolving whether someone was
+ * previously win-back-enrolled would require a lookup we don't have a
+ * cheap path to, and the signal itself is a harmless no-op for prospects
+ * who were never in the recovery flow. This is the one piece of the
+ * "stop pestering someone who already came back" requirement that is
+ * actually our responsibility, since the cadence itself runs as a native
+ * automation in the buyer's platform, not in our worker.
+ */
+export async function exitWinBackSequence(
+  platform: string,
+  apiKey: string,
+  email: string,
+  meta: Record<string, any>
+): Promise<void> {
+  switch (platform) {
+    case "klaviyo":
+      return new KlaviyoClient(apiKey).setProfileProperty(email, {
+        showtime_status: "rebooked",
+        rebooked_at: new Date().toISOString(),
+      });
+
+    case "hubspot":
+      return new HubSpotClient(apiKey).markRebooked(email, meta.recovery_workflow_id);
+
+    case "activecampaign":
+      if (!meta.activecampaign_base_url) return;
+      return new ActiveCampaignClient(meta.activecampaign_base_url, apiKey).markRebooked(
+        email,
+        meta.recovery_automation_id
+      );
+
+    case "ghl":
+      if (!meta.location_id) return;
+      return new GHLCRMClient(apiKey, meta.location_id).markRebooked(
+        email,
+        meta.recovery_workflow_id
+      );
+
+    default:
+      // No exit signal path for this platform — not fatal, just nothing to do.
+      return;
   }
 }
 

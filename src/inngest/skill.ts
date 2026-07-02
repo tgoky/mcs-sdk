@@ -4,6 +4,7 @@ import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/brief-service";
 import { AuditEngine } from "@/features/leak-map/server/audit-engine";
+import { generateRecoveryCadence } from "@/features/win-back/server/recovery-service";
 import { failRun } from "@/lib/run-log";
 
 /**
@@ -61,6 +62,10 @@ export const executeSkillRun = inngest.createFunction(
       if (skillName === "leak-map") {
         const engine = new AuditEngine();
         await engine.runAuditPipeline(engagementId, auditType ?? "weekly", runId, step);
+      }
+
+      if (skillName === "win-back") {
+        await generateRecoveryCadence(tenant, runId, step);
       }
     } catch (err: any) {
       // Safety net only — brief-service.ts and audit-engine.ts already call

@@ -40,12 +40,16 @@ export type RunStep = {
 export type EngagementStack = {
   booking_platform: "calendly" | "cal_com" | "ghl_calendar" | "oncehub" | "unsupported";
   booking_platform_credentials_ref: string;
+  // The buyer's standard, always-open booking page URL — used as the
+  // reschedule fallback when live slot pre-fetch returns zero results.
+  booking_standing_link?: string;
   booking_platform_meta?: {
     // Calendly
     organization_uri?: string;
     event_type_uuid?: string;
     // Cal.com
     username?: string;
+    cal_event_type_id?: string;
     // GHL
     location_id?: string;
     calendar_id?: string;
@@ -56,11 +60,36 @@ export type EngagementStack = {
   hosting_platform_credentials_ref: string;
   hosting_site_id?: string;
   publish_domain?: string;
+  hosting_platform_meta?: {
+    // Webflow
+    webflow_site_id?: string;
+    webflow_collection_id?: string;
+    webflow_page_id?: string;
+    // WordPress
+    wordpress_site_url?: string;
+    wordpress_page_id?: number;
+    // Vercel
+    vercel_project_name?: string;
+    vercel_team_id?: string;
+  };
   email_platform?: "klaviyo" | "hubspot" | "activecampaign" | "convertkit" | "mailchimp";
   email_platform_credentials_ref?: string;
   // Klaviyo list IDs for pile-on and win-back
   target_list_id?: string;
   recovery_list_id?: string;
+  // HubSpot/GHL workflow + ActiveCampaign automation IDs for win-back,
+  // used both to enroll and (on rebook) to fire the exit signal.
+  recovery_workflow_id?: string;
+  recovery_automation_id?: string;
+  target_workflow_id?: string; // pile-on equivalent (GHL)
+  activecampaign_base_url?: string;
+  // Win-back cadence config (see recovery_sequence.md). Defaults to a
+  // 30-day window if unset.
+  recovery_window_days?: 14 | 21 | 30 | 45 | 60;
+  daily_send_tolerance?: number; // max touches/day; default 2 (email+SMS same day allowed)
+  // Leak-Map sample-size floor (LEAK-002). Below this, a metric's delta is
+  // suppressed rather than reported, regardless of how large it looks.
+  sample_size_minimum?: number; // default 5
   // Brief delivery
   brief_landing_destination?: "slack" | "crm_note" | "calendar_event";
   slack_webhook_url?: string;       // per-engagement, never global
@@ -99,13 +128,42 @@ export const engagements = pgTable("engagements", {
     hybrid_mode_enabled: boolean;
   }>(),
   brandVoiceProfile: jsonb("brand_voice_profile"),
+  // Live URL on the buyer's own domain when the hosting adapter deploy
+  // succeeds; falls back to our internal /confirm/[id] preview page when
+  // the buyer's platform has no publish API (ghl, lovable, plain_html) or
+  // the deploy attempt failed. Never the buyer's ONLY confirmation surface
+  // when a live deploy succeeded — that would violate "buyer owns the
+  // asset."
   confirmationPageUrl: text("confirmation_page_url"),
+  confirmationPageDeployment: jsonb("confirmation_page_deployment").$type<{
+    mode: "live" | "paste_ready" | "not_deployed";
+    deployedVia?: string;
+    reason?: string;
+    lastAttemptedAt: string;
+  }>(),
   topCallQuestions: jsonb("top_call_questions").$type<string[]>(),
   topObjections: jsonb("top_objections").$type<string[]>(),
   prospectMeets: text("prospect_meets"),
+  // Ships the proof block on the confirmation page only when at least one
+  // entry has name, role, and quote populated (OG SKILL.md Phase 2 rule).
+  existingProof: jsonb("existing_proof").$type<{
+    testimonials: Array<{
+      name: string;
+      role: string;
+      company?: string;
+      quote: string;
+      sourceUrl?: string;
+    }>;
+  }>(),
 
   // each skill writes only its own section
   pileOnSequenceAssetMap: jsonb("pile_on_sequence_asset_map"),
+  winBackSequenceAssetMap: jsonb("win_back_sequence_asset_map").$type<{
+    windowDays: number;
+    generatedAt: string;
+    emails: Array<{ id: string; offsetDays: number; subject?: string; body: string }>;
+    sms: Array<{ id: string; offsetDays: number; body: string }>;
+  }>(),
   winBackCounts: jsonb("win_back_counts").$type<{
     recovery_count: number;
     lost_count: number;

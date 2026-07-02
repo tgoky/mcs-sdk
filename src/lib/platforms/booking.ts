@@ -113,6 +113,41 @@ export class CalendlyClient {
       throw new Error(`Calendly redirect config failed [${res.status}]: ${await res.text()}`);
     }
   }
+
+  /**
+   * Fetches the next open slots within a lookahead window, for the
+   * reschedule-link pre-fetch layer. Calendly's available-times endpoint
+   * caps each call's range at 7 days, which is exactly WIN-002's
+   * "7-day lookahead" boundary — not a coincidence, that's the platform's
+   * actual constraint driving the spec, not an arbitrary choice.
+   */
+  async getAvailableSlots(
+    eventTypeUuid: string,
+    count = 3,
+    lookaheadDays = 7
+  ): Promise<Date[]> {
+    const start = new Date();
+    const end = new Date();
+    end.setDate(end.getDate() + Math.min(lookaheadDays, 7));
+
+    const res = await fetch(
+      `${this.baseUrl}/event_type_available_times?` +
+        `event_type=${encodeURIComponent(`${this.baseUrl}/event_types/${eventTypeUuid}`)}` +
+        `&start_time=${start.toISOString()}&end_time=${end.toISOString()}`,
+      { headers: this.headers }
+    );
+    if (!res.ok) {
+      // Calendly returns 400 if the window is fully booked in some edge
+      // cases rather than an empty array — treat any failure here as "no
+      // slots" so the caller falls back to the standing booking link
+      // instead of surfacing an error to the prospect.
+      return [];
+    }
+    const data = await res.json();
+    return (data.collection ?? [])
+      .slice(0, count)
+      .map((slot: any) => new Date(slot.start_time));
+  }
 }
 
 // ── Cal.com ───────────────────────────────────────────────────────────────
@@ -178,6 +213,34 @@ export class CalComClient {
     if (!res.ok) {
       throw new Error(`Cal.com webhook subscription failed [${res.status}]: ${await res.text()}`);
     }
+  }
+
+  /** Fetches the next open slots for the reschedule pre-fetch layer. */
+  async getAvailableSlots(
+    eventTypeId: string,
+    count = 3,
+    lookaheadDays = 7
+  ): Promise<Date[]> {
+    const start = new Date();
+    const end = new Date();
+    end.setDate(end.getDate() + lookaheadDays);
+
+    const res = await fetch(
+      `${this.baseUrl}/slots?eventTypeId=${eventTypeId}` +
+        `&start=${start.toISOString()}&end=${end.toISOString()}`,
+      { headers: this.headers }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    // Cal.com v2 groups slots by date: { data: { "2026-07-05": [{start: "..."}], ... } }
+    const slots: Date[] = [];
+    for (const day of Object.values<any>(data.data ?? {})) {
+      for (const slot of day) {
+        slots.push(new Date(slot.start));
+        if (slots.length >= count) return slots;
+      }
+    }
+    return slots;
   }
 }
 
@@ -352,5 +415,48 @@ export async function registerWebhookForTenant(
 
     default:
       return;
+  }
+}
+
+/**
+ * Fetches the next open slots for the win-back reschedule pre-fetch layer.
+ * GHL Calendar and OnceHub don't have a documented public "free/busy" slots
+ * endpoint suitable for this — rather than guess at an undocumented one,
+ * they return [] here, which the caller (the reschedule redirect route)
+ * treats identically to "calendar fully booked": fall back to the standard
+ * booking page link, per WIN-002's own zero-slots fallback rule.
+ */
+export async function getAvailableSlotsForTenant(
+  bookingPlatform: string,
+  apiKey: string,
+  meta: Record<string, any> | undefined,
+  count = 3,
+  lookaheadDays = 7
+): Promise<Date[]> {
+  try {
+    switch (bookingPlatform) {
+      case "calendly":
+        if (!meta?.event_type_uuid) return [];
+        return new CalendlyClient(apiKey).getAvailableSlots(
+          meta.event_type_uuid,
+          count,
+          lookaheadDays
+        );
+
+      case "cal_com":
+        if (!meta?.cal_event_type_id) return [];
+        return new CalComClient(apiKey).getAvailableSlots(
+          meta.cal_event_type_id,
+          count,
+          lookaheadDays
+        );
+
+      default:
+        return [];
+    }
+  } catch {
+    // Any failure here is a fallback-to-standard-link situation, never a
+    // user-facing error — the prospect should always get a working link.
+    return [];
   }
 }
