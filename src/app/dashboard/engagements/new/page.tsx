@@ -19,6 +19,13 @@ const STEPS: { id: Step; label: string }[] = [
   { id: "confirm", label: "Review & Finish" },
 ];
 
+interface Testimonial {
+  name: string;
+  role: string;
+  company: string;
+  quote: string;
+}
+
 interface FormData {
   engagementId: string;
   buyerName: string;
@@ -31,9 +38,16 @@ interface FormData {
   bookingOrgUri: string;
   bookingEventTypeUuid: string;
   bookingLocationId: string;
+  bookingStandingLink: string;
   emailPlatform: string;
   hostingPlatform: string;
   publishDomain: string;
+  hostingWebflowSiteId: string;
+  hostingWebflowCollectionId: string;
+  hostingWordpressSiteUrl: string;
+  hostingVercelProjectName: string;
+  hostingVercelTeamId: string;
+  hostingApiKey: string;
   briefDestination: string;
   slackWebhookUrl: string;
   topCallQuestions: string;
@@ -44,6 +58,7 @@ interface FormData {
   rawVoiceCorpus: string;
   bookingApiKey: string;
   emailApiKey: string;
+  testimonials: Testimonial[];
 }
 
 const DEFAULT_FORM: FormData = {
@@ -58,9 +73,16 @@ const DEFAULT_FORM: FormData = {
   bookingOrgUri: "",
   bookingEventTypeUuid: "",
   bookingLocationId: "",
+  bookingStandingLink: "",
   emailPlatform: "klaviyo",
   hostingPlatform: "nextjs_vercel",
   publishDomain: "",
+  hostingWebflowSiteId: "",
+  hostingWebflowCollectionId: "",
+  hostingWordpressSiteUrl: "",
+  hostingVercelProjectName: "",
+  hostingVercelTeamId: "",
+  hostingApiKey: "",
   briefDestination: "slack",
   slackWebhookUrl: "",
   topCallQuestions: "",
@@ -71,6 +93,7 @@ const DEFAULT_FORM: FormData = {
   rawVoiceCorpus: "",
   bookingApiKey: "",
   emailApiKey: "",
+  testimonials: [],
 };
 
 function StepIndicator({
@@ -201,10 +224,34 @@ export default function NewEngagementPage() {
   const [result, setResult] = useState<{
     engagementId: string;
     confirmationPageUrl: string;
+    confirmationPageDeployment?: { mode: "live" | "paste_ready" | "not_deployed"; reason?: string };
+    pasteReadyHtml?: string;
+    pasteReadyInstructions?: string;
   } | null>(null);
 
   function set(field: keyof FormData, value: string | boolean) {
     setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  function addTestimonial() {
+    setForm((f) => ({
+      ...f,
+      testimonials: [...f.testimonials, { name: "", role: "", company: "", quote: "" }],
+    }));
+  }
+
+  function updateTestimonial(index: number, field: keyof Testimonial, value: string) {
+    setForm((f) => ({
+      ...f,
+      testimonials: f.testimonials.map((t, i) => (i === index ? { ...t, [field]: value } : t)),
+    }));
+  }
+
+  function removeTestimonial(index: number) {
+    setForm((f) => ({
+      ...f,
+      testimonials: f.testimonials.filter((_, i) => i !== index),
+    }));
   }
 
   function generateEngagementId() {
@@ -220,6 +267,22 @@ export default function NewEngagementPage() {
     setError(null);
 
     const engagementId = form.engagementId || generateEngagementId();
+
+    const hostingMetaByPlatform: Record<string, Record<string, string>> = {
+      webflow: {
+        webflow_site_id: form.hostingWebflowSiteId,
+        webflow_collection_id: form.hostingWebflowCollectionId,
+      },
+      wordpress: {
+        wordpress_site_url: form.hostingWordpressSiteUrl,
+      },
+      nextjs_vercel: {
+        vercel_project_name: form.hostingVercelProjectName,
+        vercel_team_id: form.hostingVercelTeamId,
+      },
+    };
+
+    const testimonials = form.testimonials.filter((t) => t.name && t.role && t.quote);
 
     const payload = {
       engagementId,
@@ -240,10 +303,13 @@ export default function NewEngagementPage() {
           event_type_uuid: form.bookingEventTypeUuid,
           location_id: form.bookingLocationId,
         },
+        booking_standing_link: form.bookingStandingLink || undefined,
         email_platform: form.emailPlatform,
         email_platform_credentials_ref: `secrets://${engagementId}/${form.emailPlatform}_key`,
         hosting_platform: form.hostingPlatform,
+        hosting_platform_credentials_ref: `secrets://${engagementId}/${form.hostingPlatform}_key`,
         publish_domain: form.publishDomain,
+        hosting_platform_meta: hostingMetaByPlatform[form.hostingPlatform] ?? undefined,
         brief_landing_destination: form.briefDestination,
         slack_webhook_url: form.slackWebhookUrl,
         person_match_confidence_threshold: 99,
@@ -258,9 +324,11 @@ export default function NewEngagementPage() {
         .filter(Boolean),
       prospectMeets: form.prospectMeets,
       rawVoiceCorpus: form.rawVoiceCorpus,
+      existingProof: testimonials.length ? { testimonials } : undefined,
       credentials: {
         booking: form.bookingApiKey,
         email: form.emailApiKey,
+        hosting: form.hostingApiKey || undefined,
         slack_webhook_url: form.slackWebhookUrl,
       },
     };
@@ -283,6 +351,9 @@ export default function NewEngagementPage() {
       setResult({
         engagementId: data.engagementId,
         confirmationPageUrl: data.confirmationPageUrl,
+        confirmationPageDeployment: data.confirmationPageDeployment,
+        pasteReadyHtml: data.pasteReadyHtml,
+        pasteReadyInstructions: data.pasteReadyInstructions,
       });
     } catch (e: any) {
       setError(e.message);
@@ -292,22 +363,59 @@ export default function NewEngagementPage() {
 
   // Success screen
   if (result) {
+    const isPasteReady = result.confirmationPageDeployment?.mode === "paste_ready";
+
     return (
       <div className="space-y-6 w-full max-w-none px-1" style={{ color: "var(--text-secondary)" }}>
         <div className="rounded-lg p-5 space-y-2.5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
           <div className="flex items-center space-x-2">
             <span
               className="w-5 h-5 rounded-full flex items-center justify-center text-xs"
-              style={{ background: "var(--success)", color: "#04140f" }}
+              style={{ background: isPasteReady ? "var(--accent)" : "var(--success)", color: isPasteReady ? "#fff" : "#04140f" }}
             >
-              ✓
+              {isPasteReady ? "!" : "✓"}
             </span>
-            <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Setup complete</span>
+            <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              {isPasteReady ? "Setup complete — one manual step left" : "Setup complete"}
+            </span>
           </div>
           <p className="text-sm font-normal">
-            This client's account is ready. Bookings will now flow in automatically, and their confirmation page is live and ready for prospects.
+            {isPasteReady
+              ? "Bookings will now flow in automatically. The confirmation page couldn't be auto-published to the client's hosting platform, so it's ready to paste in manually below."
+              : "This client's account is ready. Bookings will now flow in automatically, and their confirmation page is live on their own site, ready for prospects."}
           </p>
         </div>
+
+        {isPasteReady && result.pasteReadyHtml && (
+          <div className="rounded-lg p-4 space-y-2" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+            <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+              {result.pasteReadyInstructions}
+            </p>
+            {result.confirmationPageDeployment?.reason && (
+              <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                Reason: {result.confirmationPageDeployment.reason}
+              </p>
+            )}
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>Page HTML</span>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(result.pasteReadyHtml ?? "")}
+                className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer"
+                style={{ border: "1px solid var(--border)", color: "var(--text-primary)" }}
+              >
+                Copy HTML
+              </button>
+            </div>
+            <textarea
+              readOnly
+              value={result.pasteReadyHtml}
+              rows={6}
+              className="w-full rounded-md px-3 py-2 text-[11px] font-mono resize-y focus:outline-none"
+              style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+            />
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-lg p-4 space-y-1" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -316,7 +424,9 @@ export default function NewEngagementPage() {
           </div>
 
           <div className="rounded-lg p-4 space-y-1" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>Confirmation Page Link</p>
+            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+              {isPasteReady ? "Preview Link (temporary)" : "Confirmation Page Link"}
+            </p>
             <a
               href={result.confirmationPageUrl}
               target="_blank"
@@ -463,6 +573,14 @@ export default function NewEngagementPage() {
               />
             )}
 
+            <InputField
+              label="Standing booking page link"
+              value={form.bookingStandingLink}
+              onChange={(v) => set("bookingStandingLink", v)}
+              placeholder="https://calendly.com/client/discovery-call"
+              helpText="The client's always-open booking page. Used as a fallback link in win-back messages when live availability can't be pulled."
+            />
+
             <SelectField
               label="Email Platform"
               value={form.emailPlatform}
@@ -506,6 +624,7 @@ export default function NewEngagementPage() {
               value={form.hostingPlatform}
               onChange={(v) => set("hostingPlatform", v)}
               options={Object.entries(HOSTING_PLATFORM_LABELS).map(([value, label]) => ({ value, label }))}
+              helpText="The confirmation page publishes directly onto the client's own site — it never lives on our domain."
             />
 
             <InputField
@@ -515,6 +634,67 @@ export default function NewEngagementPage() {
               placeholder="yoursite.com"
               helpText="Used to build the confirmation link people land on after booking."
             />
+
+            {form.hostingPlatform === "webflow" && (
+              <>
+                <InputField
+                  label="Webflow Site ID"
+                  value={form.hostingWebflowSiteId}
+                  onChange={(v) => set("hostingWebflowSiteId", v)}
+                  placeholder="e.g. 5f1a2b3c..."
+                  helpText="Webflow → Site Settings → General → Site ID."
+                />
+                <InputField
+                  label="Webflow Collection ID"
+                  value={form.hostingWebflowCollectionId}
+                  onChange={(v) => set("hostingWebflowCollectionId", v)}
+                  placeholder="e.g. 6a2b3c4d..."
+                  helpText="The CMS collection the confirmation page item gets created in. Ask the client to set up a 'Confirmation Pages' collection if one doesn't exist yet."
+                />
+              </>
+            )}
+
+            {form.hostingPlatform === "wordpress" && (
+              <div className="md:col-span-2">
+                <InputField
+                  label="WordPress Site URL"
+                  value={form.hostingWordpressSiteUrl}
+                  onChange={(v) => set("hostingWordpressSiteUrl", v)}
+                  placeholder="https://client-site.com"
+                  helpText="The client's WordPress base URL. Publishing uses a WordPress Application Password, added in the next step."
+                />
+              </div>
+            )}
+
+            {form.hostingPlatform === "nextjs_vercel" && (
+              <>
+                <InputField
+                  label="Vercel Project Name"
+                  value={form.hostingVercelProjectName}
+                  onChange={(v) => set("hostingVercelProjectName", v)}
+                  placeholder="e.g. client-confirmation-page"
+                  helpText="Deployed under the client's own Vercel account/team, not ours."
+                />
+                <InputField
+                  label="Vercel Team ID (optional)"
+                  value={form.hostingVercelTeamId}
+                  onChange={(v) => set("hostingVercelTeamId", v)}
+                  placeholder="e.g. team_abc123"
+                  helpText="Only needed if the client's Vercel account belongs to a team."
+                />
+              </>
+            )}
+
+            {(form.hostingPlatform === "ghl" || form.hostingPlatform === "plain_html") && (
+              <div
+                className="md:col-span-2 rounded-lg p-3 text-xs"
+                style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
+              >
+                {form.hostingPlatform === "ghl"
+                  ? "GoHighLevel's funnel builder doesn't support automatic publishing yet. We'll generate the page as ready-to-paste HTML with step-by-step instructions instead."
+                  : "Plain HTML sites are published manually. We'll generate a self-contained HTML file the client uploads to their own host."}
+              </div>
+            )}
           </div>
         )}
 
@@ -543,6 +723,22 @@ export default function NewEngagementPage() {
               placeholder="Paste your API key here..."
               required
             />
+            {form.hostingPlatform !== "ghl" && form.hostingPlatform !== "plain_html" && (
+              <InputField
+                label={`${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform} ${
+                  form.hostingPlatform === "wordpress" ? "Application Password (user:password)" : "API Token"
+                }`}
+                value={form.hostingApiKey}
+                onChange={(v) => set("hostingApiKey", v)}
+                type="password"
+                placeholder="Paste your API key or token here..."
+                helpText={
+                  form.hostingPlatform === "wordpress"
+                    ? "WordPress → Users → Profile → Application Passwords. Format: username:generated_password."
+                    : "If this isn't available yet, we'll generate the page as ready-to-paste HTML instead of publishing it live."
+                }
+              />
+            )}
           </div>
         )}
 
@@ -646,10 +842,79 @@ export default function NewEngagementPage() {
                 />
               </div>
             </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-medium block" style={{ color: "var(--text-primary)" }}>
+                    Testimonials (optional)
+                  </label>
+                  <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                    Shown on the confirmation page as social proof. Skip this and the page ships without that section.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addTestimonial}
+                  className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer shrink-0"
+                  style={{ border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                >
+                  + Add testimonial
+                </button>
+              </div>
+
+              {form.testimonials.map((t, i) => (
+                <div
+                  key={i}
+                  className="grid gap-3 grid-cols-1 md:grid-cols-2 rounded-lg p-3"
+                  style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                >
+                  <InputField
+                    label="Name"
+                    value={t.name}
+                    onChange={(v) => updateTestimonial(i, "name", v)}
+                    placeholder="e.g. Jamie Chen"
+                  />
+                  <InputField
+                    label="Role"
+                    value={t.role}
+                    onChange={(v) => updateTestimonial(i, "role", v)}
+                    placeholder="e.g. Head of Growth"
+                  />
+                  <InputField
+                    label="Company (optional)"
+                    value={t.company}
+                    onChange={(v) => updateTestimonial(i, "company", v)}
+                    placeholder="e.g. Acme Corp"
+                  />
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={() => removeTestimonial(i)}
+                      className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer"
+                      style={{ color: "var(--error)" }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="md:col-span-2 space-y-1.5">
+                    <label className="text-xs font-medium block" style={{ color: "var(--text-primary)" }}>
+                      Quote
+                    </label>
+                    <textarea
+                      value={t.quote}
+                      onChange={(e) => updateTestimonial(i, "quote", e.target.value)}
+                      placeholder="What they said about working with this client..."
+                      rows={2}
+                      className="w-full rounded-md px-3 py-2 text-xs resize-y focus:outline-none transition-colors"
+                      style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
-
-        {/* Step: Review & Finish */}
         {step === "confirm" && (
           <div className="space-y-3 w-full">
             <h2 className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Review your setup</h2>
@@ -660,10 +925,12 @@ export default function NewEngagementPage() {
                 ["Price", form.offerPrice || "—"],
                 ["Booking Calendar", BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform],
                 ["Email Platform", EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform],
+                ["Confirmation Page Hosting", HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform],
                 ["Brief Delivery", BRIEF_DESTINATION_LABELS[form.briefDestination] ?? form.briefDestination],
                 ["Brand Voice Sample", `${form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length} words`],
                 ["Call Questions Added", `${form.topCallQuestions.split("\n").filter(Boolean).length}`],
                 ["Objections Added", `${form.topObjections.split("\n").filter(Boolean).length}`],
+                ["Testimonials Added", `${form.testimonials.filter((t) => t.name && t.role && t.quote).length}`],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between pb-1.5 last:pb-0" style={{ borderBottom: "1px solid var(--border)" }}>
                   <span style={{ color: "var(--text-muted)" }}>{label}</span>

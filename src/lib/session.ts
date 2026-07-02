@@ -12,6 +12,10 @@ export type SessionData = {
   // payment failure gets picked up within one revalidation window instead
   // of only at the next full login.
   subscriptionVerifiedAt: number;
+  // Whop's refresh token, needed to revoke on logout (see /oauth/revoke in
+  // src/lib/whop.ts). Stored only inside the encrypted, httpOnly
+  // iron-session cookie — never sent to the client in plaintext.
+  refreshToken?: string;
 };
 
 const sessionOptions: SessionOptions = {

@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 
-const ACTIVE_STATUSES = new Set(["active", "trialing", "canceling"]);
+const ACTIVE_STATUSES = new Set(["active", "trialing", "canceling", "admin"]);
 
 export default async function LandingIndexPage({
   searchParams,

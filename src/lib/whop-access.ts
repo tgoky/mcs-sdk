@@ -48,6 +48,25 @@ export type MembershipCheckResult = {
   membershipId?: string;
 };
 
+// Comma-separated allowlist of Whop-account emails that should bypass the
+// $27 paywall entirely — for the dev/owner/admin, not for comping real
+// customers (use a Whop discount/membership for that instead). Set in env,
+// never hardcoded, so it's not committed to the repo:
+//   ADMIN_WHOP_EMAILS=you@yourdomain.com,cofounder@yourdomain.com
+// Matching is case-insensitive since Whop emails aren't guaranteed to come
+// back lowercase.
+const ADMIN_EMAILS = new Set(
+  (process.env.ADMIN_WHOP_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+export function isAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return ADMIN_EMAILS.has(email.toLowerCase());
+}
+
 /**
  * Checks whether whopUserId currently holds a payable membership for this
  * company (and, if configured, one of WHOP_ACCESS_PRODUCT_IDS).

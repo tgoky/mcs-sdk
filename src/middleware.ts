@@ -18,7 +18,10 @@ export const runtime = "nodejs";
 // we're not hitting the Whop API on every single request.
 const MEMBERSHIP_REVALIDATE_MS = 10 * 60 * 1000; // 10 minutes
 
-const ACTIVE_STATUSES = new Set(["active", "trialing", "canceling"]);
+// "admin" is stamped by the OAuth callback for allowlisted dev/owner emails
+// (see ADMIN_WHOP_EMAILS in src/lib/whop-access.ts) — those accounts never
+// go through checkActiveMembership at all, so it must be trusted here too.
+const ACTIVE_STATUSES = new Set(["active", "trialing", "canceling", "admin"]);
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -50,7 +53,11 @@ export async function middleware(request: NextRequest) {
   const verifiedAt = session.subscriptionVerifiedAt ?? 0;
   const isStale = Date.now() - verifiedAt > MEMBERSHIP_REVALIDATE_MS;
 
-  if (isStale) {
+  // Admins were never granted access via a real Whop membership, so
+  // re-checking them against checkActiveMembership would just find "none"
+  // and lock them out. Their status is trusted for the life of the
+  // session instead of being periodically revalidated.
+  if (isStale && session.subscriptionStatus !== "admin") {
     try {
       const membership = await checkActiveMembership(session.whopUserId);
       session.subscriptionStatus = membership.status;

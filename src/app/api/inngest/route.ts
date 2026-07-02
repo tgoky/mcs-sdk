@@ -1,6 +1,12 @@
 import { serve } from "inngest/next"; 
 import { inngest } from "@/lib/inngest";
 import { executeSkillRun } from "@/inngest/skill";
+import {
+  nightlyBriefsCron,
+  weeklyLeakMapCron,
+  monthlyLeakMapCron,
+  alertMonitorCron,
+} from "@/inngest/crons";
 
 // Explicit duration floor for this route, paired with checkpointing's
 // maxRuntime in src/lib/inngest.ts (45s). Vercel's default is
@@ -17,5 +23,14 @@ export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
     executeSkillRun, // ✅ Registers your worker function into the serverless endpoint mesh
+    // All four run on Inngest's own scheduler (see src/inngest/crons.ts) —
+    // none of these are Vercel Cron Jobs, so Vercel's Hobby-plan
+    // once-per-day cadence cap doesn't apply to any of them, including
+    // the 6-hourly alert monitor which would fail to deploy as a real
+    // vercel.json cron on Hobby.
+    nightlyBriefsCron,
+    weeklyLeakMapCron,
+    monthlyLeakMapCron,
+    alertMonitorCron,
   ],
 });
