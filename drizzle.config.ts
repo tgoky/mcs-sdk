@@ -1,4 +1,8 @@
 import type { Config } from "drizzle-kit";
+import * as dotenv from "dotenv";
+
+// ‼️ ADD THIS LINE: This forces the terminal to read your Next.js env file
+dotenv.config({ path: ".env" });
 
 /**
  * Drizzle Kit config for migrations.
@@ -8,12 +12,12 @@ import type { Config } from "drizzle-kit";
  * connection for push/migrate, never in production runtime code.
  *
  * Add to .env:
- *   DIRECT_URL=postgresql://postgres:password@db.xxxx.supabase.co:5432/postgres
+ * DIRECT_URL=postgresql://postgres:password@db.xxxx.supabase.co:5432/postgres
  *
  * Commands:
- *   npx drizzle-kit push        — push schema directly (dev)
- *   npx drizzle-kit generate    — generate migration SQL files
- *   npx drizzle-kit migrate     — apply migration files
+ * npx drizzle-kit push        — push schema directly (dev)
+ * npx drizzle-kit generate    — generate migration SQL files
+ * npx drizzle-kit migrate     — apply migration files
  */
 export default {
   schema: "./src/models/schema.ts",

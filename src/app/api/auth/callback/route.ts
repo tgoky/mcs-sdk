@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { exchangeCode, getWhopUser } from "@/lib/whop";
 import { getSession } from "@/lib/session";
+import { checkActiveMembership } from "@/lib/whop-access";
 import { db } from "@/lib/db";
 import { users } from "@/models/schema";
 import { eq } from "drizzle-orm";
@@ -22,18 +23,24 @@ export async function GET(request: Request) {
   const tokens = await exchangeCode(code, codeVerifier);
   const whopUser = await getWhopUser(tokens.access_token);
 
-  // upsert user into our DB
+  // Actually check whether this person holds a payable membership for this
+  // company/product — OAuth login alone only proves they have a Whop
+  // account, not that they ever bought anything. See src/lib/whop-access.ts.
+  const membership = await checkActiveMembership(whopUser.id);
+
+  // upsert user into our DB with the real status, not an assumed one
   await db
     .insert(users)
     .values({
       whopUserId: whopUser.id,
       email: whopUser.email,
-      subscriptionStatus: "active",
+      subscriptionStatus: membership.status,
     })
     .onConflictDoUpdate({
       target: users.whopUserId,
       set: {
         email: whopUser.email,
+        subscriptionStatus: membership.status,
         updatedAt: new Date(),
       },
     });
@@ -41,11 +48,16 @@ export async function GET(request: Request) {
   const session = await getSession();
   session.whopUserId = whopUser.id;
   session.email = whopUser.email;
-  session.subscriptionStatus = "active";
+  session.subscriptionStatus = membership.status;
+  session.subscriptionVerifiedAt = Date.now();
   await session.save();
 
   cookieStore.delete("oauth_state");
   cookieStore.delete("code_verifier");
+
+  if (!membership.hasAccess) {
+    redirect("/?membership=required");
+  }
 
   redirect("/dashboard");
 }

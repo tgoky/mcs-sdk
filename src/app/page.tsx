@@ -1,8 +1,17 @@
 import { getSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 
-export default async function LandingIndexPage() {
+const ACTIVE_STATUSES = new Set(["active", "trialing", "canceling"]);
+
+export default async function LandingIndexPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ membership?: string }>;
+}) {
   const session = await getSession();
+  const { membership } = await searchParams;
+  const hasAccess = ACTIVE_STATUSES.has(session.subscriptionStatus ?? "");
+  const membershipRequired = membership === "required";
 
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-zinc-950 p-6 min-h-screen">
@@ -23,12 +32,29 @@ export default async function LandingIndexPage() {
           </p>
         </div>
 
-        {/* Unchanged Structural Auth Gates & Routing Mechanics */}
+        {membershipRequired && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+            {session.whopUserId
+              ? "Your Whop account is signed in, but we don't see an active membership for this app. Grab or renew access on Whop, then come back."
+              : "An active membership is required to open the dashboard. Sign in with Whop to check your access."}
+          </div>
+        )}
+
+        {/* Auth + access gates */}
         <div className="pt-2 flex justify-center w-full">
-          {session.whopUserId ? (
+          {session.whopUserId && hasAccess ? (
             <a href="/dashboard" className="w-full sm:w-auto">
               <Button variant="outline" className="w-full sm:w-48 text-xs font-mono uppercase tracking-wider cursor-pointer">
                 [ Go to Dashboard ]
+              </Button>
+            </a>
+          ) : session.whopUserId ? (
+            <a
+              href={process.env.WHOP_COMPANY_CHECKOUT_URL ?? "https://whop.com"}
+              className="w-full sm:w-auto"
+            >
+              <Button className="w-full sm:w-48 text-xs font-sans font-medium bg-zinc-100 text-zinc-950 rounded-lg hover:bg-zinc-200 transition-colors cursor-pointer">
+                Get access on Whop
               </Button>
             </a>
           ) : (

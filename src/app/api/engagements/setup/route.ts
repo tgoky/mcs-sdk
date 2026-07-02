@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import { storeCredential } from "@/lib/credentials";
 import { registerWebhookForTenant } from "@/lib/platforms/booking";
 import { CalendlyClient } from "@/lib/platforms/booking";
+import { publishConfirmationPage } from "@/lib/platforms/hosting";
+import { buildConfirmationPageHtml } from "@/features/pin-down/server/page-builder";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { getSession } from "@/lib/session";
 import { startRun, logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
@@ -125,8 +127,20 @@ export async function POST(request: Request) {
         credentials.email
       );
     }
+    if (credentials?.hosting) {
+      await storeCredential(
+        engagementId,
+        stack.hosting_platform,
+        `secrets://${engagementId}/${stack.hosting_platform}_key`,
+        credentials.hosting
+      );
+    }
     summary.whatWasAttempted.push(
-      `Stored ${[credentials?.booking && stack.booking_platform, credentials?.email && stack.email_platform].filter(Boolean).join(" + ") || "no"} credentials.`
+      `Stored ${[
+        credentials?.booking && stack.booking_platform,
+        credentials?.email && stack.email_platform,
+        credentials?.hosting && stack.hosting_platform,
+      ].filter(Boolean).join(" + ") || "no"} credentials.`
     );
     summary.whatWorked.push("Credentials encrypted and stored.");
     await logStep(runId, {
@@ -152,9 +166,78 @@ export async function POST(request: Request) {
       detail: voiceProfile?.source_path === "scrape" ? "Tone profile extracted from corpus" : "Neutral default tone applied",
     });
 
-    // Step 3: Build confirmation page URL
+    // Step 3: Publish the confirmation page onto the buyer's own hosting
+    // stack (Webflow/WordPress/Vercel via real API, or a paste-ready
+    // fallback for ghl/lovable/plain_html and any failed deploy). Buyer
+    // assets live in the buyer's stack, never ours — see hosting.ts.
+    await logStep(runId, { phase: "confirmation_page_deploy", status: "running" });
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.muddventures.com";
-    const confirmationPageUrl = `${appUrl}/confirm/${engagementId}`;
+    const internalFallbackUrl = `${appUrl}/confirm/${engagementId}`;
+
+    const pageContent = buildConfirmationPageHtml({
+      buyer: buyerName,
+      offerDetails,
+      brandVoiceProfile: voiceProfile,
+      topCallQuestions: topCallQuestions ?? [],
+      prospectMeets: prospectMeets ?? "founder",
+      existingProof: body.existingProof,
+    });
+
+    const deployResult = await publishConfirmationPage(
+      stack.hosting_platform,
+      credentials?.hosting ?? null,
+      stack.hosting_platform_meta,
+      pageContent,
+      engagementId
+    );
+
+    let confirmationPageUrl: string;
+    let confirmationPageDeployment: {
+      mode: "live" | "paste_ready" | "not_deployed";
+      deployedVia?: string;
+      reason?: string;
+      lastAttemptedAt: string;
+    };
+
+    if (deployResult.mode === "live") {
+      confirmationPageUrl = deployResult.url;
+      confirmationPageDeployment = {
+        mode: "live",
+        deployedVia: deployResult.deployedVia,
+        lastAttemptedAt: new Date().toISOString(),
+      };
+      summary.whatWorked.push(
+        `Confirmation page published live on the buyer's own ${stack.hosting_platform} at ${deployResult.url}.`
+      );
+      await logStep(runId, {
+        phase: "confirmation_page_deploy",
+        status: "success",
+        detail: `Live on buyer's ${stack.hosting_platform}: ${deployResult.url}`,
+      });
+    } else {
+      // Falls back to our internal preview page so the booking redirect
+      // and downstream skills always have a working URL, but this is a
+      // preview surface, not the buyer's live asset — the paste-ready
+      // HTML + instructions are what actually needs to go live.
+      confirmationPageUrl = internalFallbackUrl;
+      confirmationPageDeployment = {
+        mode: "paste_ready",
+        reason: deployResult.reason,
+        lastAttemptedAt: new Date().toISOString(),
+      };
+      summary.whatFailed.push(
+        `Could not auto-publish to ${stack.hosting_platform}: ${deployResult.reason}`
+      );
+      summary.openItems.push(
+        `[needs:manual-page-publish] Paste-ready HTML and instructions are ready for ${stack.hosting_platform} — the buyer needs to publish it manually. Using the internal preview page at ${internalFallbackUrl} until then.`
+      );
+      await logStep(runId, {
+        phase: "confirmation_page_deploy",
+        status: "failed",
+        detail: deployResult.reason,
+      });
+    }
 
     // Step 4: Upsert engagement row
     await logStep(runId, { phase: "engagement_upsert", status: "running" });
@@ -172,6 +255,8 @@ export async function POST(request: Request) {
       offerDetails,
       brandVoiceProfile: voiceProfile,
       confirmationPageUrl,
+      confirmationPageDeployment,
+      existingProof: body.existingProof,
       topCallQuestions: topCallQuestions ?? [],
       topObjections: topObjections ?? [],
       prospectMeets: prospectMeets ?? "founder",
@@ -189,6 +274,8 @@ export async function POST(request: Request) {
           offerDetails,
           brandVoiceProfile: voiceProfile,
           confirmationPageUrl,
+          confirmationPageDeployment,
+          existingProof: body.existingProof,
           topCallQuestions: topCallQuestions ?? [],
           topObjections: topObjections ?? [],
           prospectMeets: prospectMeets ?? "founder",
@@ -280,6 +367,10 @@ export async function POST(request: Request) {
       success: true,
       engagementId,
       confirmationPageUrl,
+      confirmationPageDeployment,
+      pasteReadyHtml: deployResult.mode === "paste_ready" ? deployResult.html : undefined,
+      pasteReadyInstructions:
+        deployResult.mode === "paste_ready" ? deployResult.instructions : undefined,
       runId,
     });
   } catch (error: any) {

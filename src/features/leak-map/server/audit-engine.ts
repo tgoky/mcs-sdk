@@ -17,6 +17,12 @@ interface MetricResult {
   prior: number;
   delta: number;
   severity: "high" | "medium" | "low" | "none";
+  sampleSize: { current: number; prior: number };
+  /** True when min(sampleSize.current, sampleSize.prior) < sample_size_minimum.
+   * Severity is forced to "none" and delta is treated as unquantified —
+   * this metric must not drive alertsFired/highestSeverity or generate a
+   * down-funnel recommendation card. See LEAK-002. */
+  insufficientData: boolean;
 }
 
 /**
@@ -99,21 +105,21 @@ export class AuditEngine {
 
         const metrics: MetricResult[] = [];
         const gaps: string[] = [];
+        const sampleSizeMinimum: number = stack?.sample_size_minimum ?? 5;
 
-        // Metric A: Brief delivery volume
+        // Metric A: Brief delivery volume. Its own sample IS the count
+        // being compared, so sampleSize == the raw values themselves.
         const deliveryMetric = computeDelta(
           "Brief delivery volume",
           currentBriefs.length,
           priorBriefs.length,
-          { highThreshold: -10, medThreshold: -5 }
+          { highThreshold: -10, medThreshold: -5 },
+          { current: currentBriefs.length, prior: priorBriefs.length },
+          sampleSizeMinimum
         );
         metrics.push(deliveryMetric);
 
-        if (currentBriefs.length < 5) {
-          gaps.push(`Low sample size (${currentBriefs.length} briefs). Deltas may not be statistically significant.`);
-        }
-
-        // Metric B: Rule 14 accuracy
+        // Metric B: Rule 14 accuracy — same underlying sample as Metric A.
         const currentAccuracy =
           currentBriefs.reduce((a, b) => a + (b.personMatchScore ?? 0), 0) /
           (currentBriefs.length || 1);
@@ -125,33 +131,53 @@ export class AuditEngine {
           "Identity match accuracy",
           currentAccuracy,
           priorAccuracy,
-          { highThreshold: -15, medThreshold: -8 }
+          { highThreshold: -15, medThreshold: -8 },
+          { current: currentBriefs.length, prior: priorBriefs.length },
+          sampleSizeMinimum
         );
         metrics.push(accuracyMetric);
 
-        // Metric C: External booking show-rate
+        // Metrics C + D: external platform pulls. LEAK-001 — fanned out
+        // through a concurrency-capped pool (max 3 in flight) rather than
+        // sequential awaits, so adding more external sources later (the
+        // stack currently has 2: Calendly show-rate, Klaviyo open-rate)
+        // doesn't turn stage 2 into a serial chain of network round trips.
+        const externalPulls: Array<{ label: string; fn: () => Promise<MetricResult | null> }> = [];
+
         if (stack?.booking_platform && stack?.booking_platform !== "unsupported") {
-          try {
-            const showRateMetric = await pullBookingShowRate(
-              engagementId,
-              stack,
-              currentStart,
-              priorStart,
-              now
-            );
-            if (showRateMetric) metrics.push(showRateMetric);
-          } catch (e: any) {
-            gaps.push(`Could not pull booking show-rate from ${stack.booking_platform}: ${e.message}`);
+          externalPulls.push({
+            label: `booking show-rate from ${stack.booking_platform}`,
+            fn: () =>
+              pullBookingShowRate(engagementId, stack, currentStart, priorStart, now, sampleSizeMinimum),
+          });
+        }
+        if (stack?.email_platform === "klaviyo") {
+          externalPulls.push({
+            label: "email open-rate from Klaviyo",
+            fn: () => pullKlaviyoOpenRate(engagementId, stack, sampleSizeMinimum),
+          });
+        }
+
+        const externalResults = await runWithConcurrencyCap(externalPulls, 3);
+        for (const r of externalResults) {
+          if (r.status === "fulfilled" && r.value) {
+            metrics.push(r.value);
+          } else if (r.status === "rejected") {
+            gaps.push(`Could not pull ${r.label}: ${r.reason?.message ?? r.reason}`);
           }
         }
 
-        // Metric D: Email open rate
-        if (stack?.email_platform === "klaviyo") {
-          try {
-            const openRateMetric = await pullKlaviyoOpenRate(engagementId, stack);
-            if (openRateMetric) metrics.push(openRateMetric);
-          } catch (e: any) {
-            gaps.push(`Could not pull email open-rate from Klaviyo: ${e.message}`);
+        // Per-metric data-caveat markers (LEAK-002) — these are the actual
+        // gate, not an FYI. A metric flagged insufficientData already has
+        // severity forced to "none" by computeDelta, which keeps it out of
+        // alertsFired/highestSeverity below; this gaps entry is what tells
+        // stage 5 to skip generating a recommendation card for it, instead
+        // of just noting a vague low-sample-size caveat at the report level.
+        for (const m of metrics) {
+          if (m.insufficientData) {
+            gaps.push(
+              `[insufficient-data] ${m.name}: sample too small (current n=${m.sampleSize.current}, prior n=${m.sampleSize.prior}, floor=${sampleSizeMinimum}). Delta suppressed, no recommendation should be generated for this metric.`
+            );
           }
         }
 
@@ -191,7 +217,14 @@ ${JSON.stringify(metrics, null, 2)}
 Gaps noted: ${gaps.join("; ") || "none"}
 Overall severity: ${highestSeverity}
 
-For each issue found, structure the response as:
+IMPORTANT: Any metric with insufficientData: true must NOT get a
+recommendation card. Its sample size is below the statistical floor, so a
+delta computed from it is unreliable. For those metrics, add at most one
+line to a "Data gaps" note (e.g. "Booking show-rate: not enough bookings
+yet to call a trend") and do not speculate about cause, severity, or action.
+
+For each remaining issue (insufficientData: false, severity !== "none"),
+structure the response as:
 **Issue** | **Severity** | **Likely Cause** | **Recommended Action** | **Expected Impact** | **Estimated Effort**
 
 Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})}`;
@@ -256,18 +289,74 @@ Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
+/**
+ * Runs a list of async tasks with at most `cap` in flight at once — the
+ * "traffic controller" from LEAK-001. With today's 2 external sources
+ * (Calendly, Klaviyo) this never actually queues anything, but the pool
+ * shape means adding a 3rd/4th/5th source (HubSpot, ActiveCampaign, ad
+ * platforms) later doesn't turn stage 2 into either an uncapped fan-out
+ * that trips rate limits, or a sequential chain that makes the pipeline
+ * slower with every new integration.
+ */
+async function runWithConcurrencyCap<T>(
+  tasks: Array<{ label: string; fn: () => Promise<T> }>,
+  cap: number
+): Promise<Array<{ label: string; status: "fulfilled"; value: T } | { label: string; status: "rejected"; reason: any }>> {
+  const results: Array<{ label: string; status: "fulfilled"; value: T } | { label: string; status: "rejected"; reason: any }> = new Array(tasks.length);
+  let next = 0;
+
+  async function worker() {
+    while (next < tasks.length) {
+      const i = next++;
+      const task = tasks[i];
+      try {
+        const value = await task.fn();
+        results[i] = { label: task.label, status: "fulfilled", value };
+      } catch (reason) {
+        results[i] = { label: task.label, status: "rejected", reason };
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(cap, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 function computeDelta(
   name: string,
   current: number,
   prior: number,
-  thresholds: { highThreshold: number; medThreshold: number }
+  thresholds: { highThreshold: number; medThreshold: number },
+  sampleSize: { current: number; prior: number },
+  sampleSizeMinimum = 5
 ): MetricResult {
+  const insufficientData = Math.min(sampleSize.current, sampleSize.prior) < sampleSizeMinimum;
+
+  // A percentage/delta computed from a handful of observations swings
+  // wildly and produces false alarms — this is the gate itself, not just
+  // an advisory note. Below the floor, severity is hard-forced to "none"
+  // regardless of how large the raw delta looks, and the caller must
+  // exclude this metric from alertsFired / highestSeverity / the LLM's
+  // down-funnel recommendation prompt.
+  if (insufficientData) {
+    return {
+      name,
+      current,
+      prior,
+      delta: current - prior,
+      severity: "none",
+      sampleSize,
+      insufficientData: true,
+    };
+  }
+
   const delta = current - prior;
   let severity: "high" | "medium" | "low" | "none" = "none";
   if (delta <= thresholds.highThreshold) severity = "high";
   else if (delta <= thresholds.medThreshold) severity = "medium";
   else if (delta < 0) severity = "low";
-  return { name, current, prior, delta, severity };
+  return { name, current, prior, delta, severity, sampleSize, insufficientData: false };
 }
 
 async function pullBookingShowRate(
@@ -275,39 +364,45 @@ async function pullBookingShowRate(
   stack: any,
   currentStart: Date,
   priorStart: Date,
-  now: Date
+  now: Date,
+  sampleSizeMinimum: number
 ): Promise<MetricResult | null> {
   if (stack.booking_platform !== "calendly") return null;
 
   const apiKey = await resolveCredential(engagementId, "calendly");
 
-  async function getShowRate(start: Date, end: Date): Promise<number> {
+  async function getShowRate(start: Date, end: Date): Promise<{ rate: number; n: number }> {
     const res = await fetch(
       `https://api.calendly.com/scheduled_events?min_start_time=${start.toISOString()}&max_start_time=${end.toISOString()}&count=100`,
       { headers: { Authorization: `Bearer ${apiKey}` } }
     );
-    if (!res.ok) return 0;
+    if (!res.ok) return { rate: 0, n: 0 };
     const data = await res.json();
     const events: any[] = data.collection ?? [];
     const total = events.length;
-    if (total === 0) return 0;
+    if (total === 0) return { rate: 0, n: 0 };
     const active = events.filter((e) => e.status === "active").length;
-    return Math.round((active / total) * 100);
+    return { rate: Math.round((active / total) * 100), n: total };
   }
 
-  const currentShowRate = await getShowRate(currentStart, now);
+  const current = await getShowRate(currentStart, now);
   const priorEnd = currentStart;
-  const priorShowRate = await getShowRate(priorStart, priorEnd);
+  const prior = await getShowRate(priorStart, priorEnd);
 
-  return computeDelta("Booking show-rate (%)", currentShowRate, priorShowRate, {
-    highThreshold: -15,
-    medThreshold: -8,
-  });
+  return computeDelta(
+    "Booking show-rate (%)",
+    current.rate,
+    prior.rate,
+    { highThreshold: -15, medThreshold: -8 },
+    { current: current.n, prior: prior.n },
+    sampleSizeMinimum
+  );
 }
 
 async function pullKlaviyoOpenRate(
   engagementId: string,
-  stack: any
+  stack: any,
+  sampleSizeMinimum: number
 ): Promise<MetricResult | null> {
   const apiKey = await resolveCredential(engagementId, "klaviyo");
 
@@ -329,12 +424,19 @@ async function pullKlaviyoOpenRate(
     campaign.attributes?.statistics?.open_rate
       ? Math.round(campaign.attributes.statistics.open_rate * 100)
       : 0;
+  // Sample size here is recipient count, not campaign count — a 90% open
+  // rate on a campaign sent to 4 people is exactly the kind of noise the
+  // sample-size gate exists to catch, even though "2 campaigns" looks
+  // like enough data points at a glance.
+  const getRecipientCount = (campaign: any): number =>
+    campaign.attributes?.statistics?.recipients ?? 0;
 
-  const currentOpenRate = getOpenRate(campaigns[0]);
-  const priorOpenRate = getOpenRate(campaigns[1]);
-
-  return computeDelta("Email open rate (%)", currentOpenRate, priorOpenRate, {
-    highThreshold: -10,
-    medThreshold: -5,
-  });
+  return computeDelta(
+    "Email open rate (%)",
+    getOpenRate(campaigns[0]),
+    getOpenRate(campaigns[1]),
+    { highThreshold: -10, medThreshold: -5 },
+    { current: getRecipientCount(campaigns[0]), prior: getRecipientCount(campaigns[1]) },
+    sampleSizeMinimum
+  );
 }

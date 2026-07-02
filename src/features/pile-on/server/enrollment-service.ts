@@ -1,5 +1,5 @@
 import { resolveCredential } from "@/lib/credentials";
-import { enrollInPreCallSequence, enrollInWinBackSequence } from "@/lib/platforms/email";
+import { enrollInPreCallSequence, enrollInWinBackSequence, exitWinBackSequence } from "@/lib/platforms/email";
 import { callClaude, MODEL } from "@/lib/llm";
 import { logStep, finishRun, type RunSummary } from "@/lib/run-log";
 
@@ -121,6 +121,35 @@ export async function handleInboundBookingEvent(
 
     summary.whatWorked.push(`Enrolled in ${stack.email_platform} pre-call sequence.`);
     await logStep(runId, { phase: "pile_on_enrollment", status: "success", detail: `Enrolled ${prospectName} in pre-call sequence` });
+
+    // Rebooked-exit condition: this may be a prospect who previously
+    // cancelled and is now coming back through win-back's recovery
+    // cadence. We don't know for certain without a lookup we don't have a
+    // cheap path to, so we always fire the exit signal — it's a no-op for
+    // anyone who was never win-back-enrolled, and it's the one piece of
+    // "stop messaging someone who already rebooked" that's on us, since
+    // the cadence itself runs as the buyer's native automation, not ours.
+    try {
+      await exitWinBackSequence(stack.email_platform, emailApiKey, prospectEmail, {
+        location_id: stack.booking_platform_meta?.location_id,
+        recovery_workflow_id: stack.booking_platform_meta?.recovery_workflow_id,
+        recovery_automation_id: stack.booking_platform_meta?.recovery_automation_id,
+        activecampaign_base_url: stack.activecampaign_base_url,
+      });
+      await logStep(runId, {
+        phase: "win_back_exit_signal",
+        status: "success",
+        detail: `Sent rebooked exit signal for ${prospectEmail} (no-op if they were never in win-back).`,
+      });
+    } catch (e: any) {
+      // Never let this block pile-on's success — worst case the buyer's
+      // recovery flow sends one extra touch to someone who already came
+      // back, not a lost booking.
+      summary.openItems.push(
+        `Could not send win-back exit signal for ${prospectEmail}: ${e.message}`
+      );
+      await logStep(runId, { phase: "win_back_exit_signal", status: "failed", detail: e.message });
+    }
 
     // Hybrid mode: generate a personalized intro paragraph via Claude
     if (tenant.offerDetails?.hybrid_mode_enabled) {
