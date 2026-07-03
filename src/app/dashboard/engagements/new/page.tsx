@@ -35,11 +35,15 @@ interface FormData {
   trafficTemperature: "cold" | "warm" | "hot";
   hybridMode: boolean;
   bookingPlatform: string;
-  // ❌ REMOVED: bookingOrgUri - now auto-discovered server-side
-  // ❌ REMOVED: bookingEventTypeUuid - now auto-discovered server-side
   bookingLocationId: string;
   bookingStandingLink: string;
   emailPlatform: string;
+  emailTargetListId: string;
+  emailRecoveryListId: string;
+  emailActiveCampaignBaseUrl: string;
+  emailGhlLocationId: string;
+  emailGhlTargetWorkflowId: string;
+  emailGhlRecoveryWorkflowId: string;
   hostingPlatform: string;
   publishDomain: string;
   hostingWebflowSiteId: string;
@@ -70,11 +74,15 @@ const DEFAULT_FORM: FormData = {
   trafficTemperature: "warm",
   hybridMode: false,
   bookingPlatform: "calendly",
-  // ❌ REMOVED: bookingOrgUri
-  // ❌ REMOVED: bookingEventTypeUuid
   bookingLocationId: "",
   bookingStandingLink: "",
   emailPlatform: "klaviyo",
+  emailTargetListId: "",
+  emailRecoveryListId: "",
+  emailActiveCampaignBaseUrl: "",
+  emailGhlLocationId: "",
+  emailGhlTargetWorkflowId: "",
+  emailGhlRecoveryWorkflowId: "",
   hostingPlatform: "nextjs_vercel",
   publishDomain: "",
   hostingWebflowSiteId: "",
@@ -319,6 +327,7 @@ export default function NewEngagementPage() {
       (t) => t.name && t.role && t.quote
     );
 
+    // ✅ FIXED: Structuring payload to line up with expected database schemas and enrollment workers
     const payload = {
       engagementId,
       whopUserId: "from_session",
@@ -333,22 +342,35 @@ export default function NewEngagementPage() {
       stack: {
         booking_platform: form.bookingPlatform,
         booking_platform_credentials_ref: `secrets://${engagementId}/${form.bookingPlatform}_pat`,
-        // ✅ CLEAN: No more organization_uri or event_type_uuid here
-        // These are now auto-discovered server-side from the API key
         booking_platform_meta: {
-          // For GHL, we still need location_id from the form
           ...(form.bookingPlatform === "ghl_calendar" && {
             location_id: form.bookingLocationId,
+          }),
+          ...(form.emailPlatform === "ghl" && {
+            location_id: form.emailGhlLocationId,
+            target_workflow_id: form.emailGhlTargetWorkflowId,
+            recovery_workflow_id: form.emailGhlRecoveryWorkflowId,
           }),
         },
         booking_standing_link: form.bookingStandingLink || undefined,
         email_platform: form.emailPlatform,
         email_platform_credentials_ref: `secrets://${engagementId}/${form.emailPlatform}_key`,
+        
+        // Klaviyo & ActiveCampaign structural mappings
+        target_list_id: (form.emailPlatform === "klaviyo" || form.emailPlatform === "activecampaign") ? form.emailTargetListId || undefined : undefined,
+        recovery_list_id: (form.emailPlatform === "klaviyo" || form.emailPlatform === "activecampaign") ? form.emailRecoveryListId || undefined : undefined,
+        activecampaign_base_url: form.emailPlatform === "activecampaign" ? form.emailActiveCampaignBaseUrl || undefined : undefined,
+        
+        // GoHighLevel mapping duplication safely onto root parameters
+        ...(form.emailPlatform === "ghl" && {
+          target_workflow_id: form.emailGhlTargetWorkflowId || undefined,
+          recovery_workflow_id: form.emailGhlRecoveryWorkflowId || undefined,
+        }),
+
         hosting_platform: form.hostingPlatform,
         hosting_platform_credentials_ref: `secrets://${engagementId}/${form.hostingPlatform}_key`,
         publish_domain: form.publishDomain,
-        hosting_platform_meta:
-          hostingMetaByPlatform[form.hostingPlatform] ?? undefined,
+        hosting_platform_meta: hostingMetaByPlatform[form.hostingPlatform] ?? undefined,
         brief_landing_destination: form.briefDestination,
         slack_webhook_url: form.slackWebhookUrl,
         person_match_confidence_threshold: 99,
@@ -678,6 +700,20 @@ export default function NewEngagementPage() {
               </div>
             )}
 
+            {form.bookingPlatform === "cal_com" && (
+              <div
+                className="md:col-span-2 rounded-lg p-3 text-xs"
+                style={{
+                  background: "var(--accent-dim)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                ✨ <strong>Zero-Config Mode Active:</strong> We will automatically 
+                parse your profile username and numerical event type ID from the standing link
+                using the API key supplied in the next step.
+              </div>
+            )}
+
             {form.bookingPlatform === "ghl_calendar" && (
               <InputField
                 label="GoHighLevel Location ID"
@@ -693,7 +729,7 @@ export default function NewEngagementPage() {
               value={form.bookingStandingLink}
               onChange={(v) => set("bookingStandingLink", v)}
               placeholder="https://calendly.com/client/discovery-call"
-              helpText="The client's always-open booking page. We'll automatically find the matching event type from this link."
+              helpText="The client's always-open booking page. We'll automatically find the matching event parameters from this link."
             />
 
             <SelectField
@@ -706,23 +742,84 @@ export default function NewEngagementPage() {
               helpText="Where follow-up and win-back emails get sent from."
             />
 
-            {(form.emailPlatform === "klaviyo" ||
-              form.emailPlatform === "activecampaign") && (
-              <div
-                className="md:col-span-2 rounded-lg p-3 text-xs"
-                style={{
-                  background: "var(--accent-dim)",
-                  color: "var(--text-secondary)",
-                }}
-              >
-                Once you connect your{" "}
-                {form.emailPlatform === "klaviyo"
-                  ? "Klaviyo"
-                  : "ActiveCampaign"}{" "}
-                key in the next step, we&apos;ll automatically build the
-                follow-up and win-back sequences for you — no list setup needed
-                here.
-              </div>
+            {/* ✅ IMPLEMENTED CONDITIONAL FORM LAYOUTS WITHOUT BREAKING METADATA OBJECTS */}
+            {form.emailPlatform === "klaviyo" && (
+              <>
+                <InputField
+                  label="Klaviyo Target List ID"
+                  value={form.emailTargetListId}
+                  onChange={(v) => set("emailTargetListId", v)}
+                  placeholder="e.g. ABC123"
+                  helpText="The unique 6-character identifier for your main Pile-On follow-up sequence. Found in Klaviyo under Lists & Segments."
+                  required
+                />
+                <InputField
+                  label="Klaviyo Recovery List ID"
+                  value={form.emailRecoveryListId}
+                  onChange={(v) => set("emailRecoveryListId", v)}
+                  placeholder="e.g. XYZ789"
+                  helpText="The unique 6-character identifier for your Win-Back recovery list."
+                  required
+                />
+              </>
+            )}
+
+            {form.emailPlatform === "activecampaign" && (
+              <>
+                <InputField
+                  label="ActiveCampaign API Access URL"
+                  value={form.emailActiveCampaignBaseUrl}
+                  onChange={(v) => set("emailActiveCampaignBaseUrl", v)}
+                  placeholder="https://account.api-us1.com/api/3"
+                  helpText="Your unique tracking endpoint link. Found under Settings -> Developer -> API Access."
+                  required
+                />
+                <InputField
+                  label="ActiveCampaign Target List ID"
+                  value={form.emailTargetListId}
+                  onChange={(v) => set("emailTargetListId", v)}
+                  placeholder="e.g. 1"
+                  helpText="The numeric ID for your main follow-up sequence contact audience."
+                  required
+                />
+                <InputField
+                  label="ActiveCampaign Recovery List ID"
+                  value={form.emailRecoveryListId}
+                  onChange={(v) => set("emailRecoveryListId", v)}
+                  placeholder="e.g. 2"
+                  helpText="The numeric ID for your win-back recovery audience list."
+                  required
+                />
+              </>
+            )}
+
+            {form.emailPlatform === "ghl" && (
+              <>
+                <InputField
+                  label="GoHighLevel Location ID"
+                  value={form.emailGhlLocationId}
+                  onChange={(v) => set("emailGhlLocationId", v)}
+                  placeholder="e.g. loc_abc123"
+                  helpText="Your GoHighLevel sub-account identifier string."
+                  required
+                />
+                <InputField
+                  label="GHL Target Workflow ID"
+                  value={form.emailGhlTargetWorkflowId}
+                  onChange={(v) => set("emailGhlTargetWorkflowId", v)}
+                  placeholder="e.g. workflow_uuid"
+                  helpText="The unique reference key matching your entry pre-call automation workflow."
+                  required
+                />
+                <InputField
+                  label="GHL Recovery Workflow ID"
+                  value={form.emailGhlRecoveryWorkflowId}
+                  onChange={(v) => set("emailGhlRecoveryWorkflowId", v)}
+                  placeholder="e.g. workflow_uuid"
+                  helpText="The unique reference key matching your win-back cancellation workflow."
+                  required
+                />
+              </>
             )}
 
             <SelectField

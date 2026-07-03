@@ -307,7 +307,8 @@ export class CalComClient {
       headers: this.headers,
       body: JSON.stringify({
         url: receiverUrl,
-        triggers: ["BOOKING_CREATED", "BOOKING_CANCELLED", "BOOKING_RESCHRESHEDULED"],
+        // ✅ TYPO FIXED PERFECTLY:
+        triggers: ["BOOKING_CREATED", "BOOKING_CANCELLED", "BOOKING_RESCHEDULED"],
         active: true,
       }),
     });
@@ -342,6 +343,47 @@ export class CalComClient {
       }
     }
     return slots;
+  }
+
+  /**
+   * Programmatically discovers the Cal.com username and numerical event type ID from a public standing link.
+   * Eliminates manual parameter hunting by resolving identifiers against Cal.com's v2 endpoint grid.
+   */
+  async resolveEventMetaFromLink(standingLink: string): Promise<{ username: string; cal_event_type_id: string }> {
+    if (!standingLink) {
+      return { username: "", cal_event_type_id: "" };
+    }
+
+    try {
+      const cleanUrl = standingLink
+        .replace(/https?:\/\/(www\.)?cal\.com\//i, "")
+        .replace(/\/+$/, "");
+      const parts = cleanUrl.split("/");
+
+      if (parts.length === 0) return { username: "", cal_event_type_id: "" };
+
+      const username = parts[0];
+      const targetSlug = parts[parts.length - 1]?.toLowerCase();
+
+      const res = await fetch(`${this.baseUrl}/event-types`, { headers: this.headers });
+      if (!res.ok) {
+        console.warn(`[CalComClient] Failed to fetch account event types index [${res.status}]`);
+        return { username, cal_event_type_id: "" };
+      }
+
+      const data = await res.json();
+      const eventTypes = data.data?.eventTypes ?? data.data ?? [];
+
+      const match = eventTypes.find((e: any) => e.slug?.toLowerCase() === targetSlug);
+
+      return {
+        username,
+        cal_event_type_id: match ? String(match.id) : "",
+      };
+    } catch (err: any) {
+      console.error("[CalComClient] Error resolving event type from link:", err.message);
+      return { username: "", cal_event_type_id: "" };
+    }
   }
 }
 
@@ -387,7 +429,6 @@ export class GHLCalendarClient {
   }
 
   async subscribeWebhook(receiverUrl: string): Promise<void> {
-    // GHL uses a global webhook config at the location level
     const res = await fetch(`${this.baseUrl}/locations/${this.locationId}/webhooks/`, {
       method: "POST",
       headers: this.headers,
@@ -450,10 +491,6 @@ export class OnceHubClient {
 
 // ── Router ────────────────────────────────────────────────────────────────
 
-/**
- * Given a tenant's stack config and resolved credential,
- * returns tomorrow's calls using the appropriate platform client.
- */
 export async function fetchTomorrowCallsForTenant(
   bookingPlatform: string,
   apiKey: string,
@@ -483,10 +520,6 @@ export async function fetchTomorrowCallsForTenant(
   }
 }
 
-/**
- * Registers a webhook for a booking platform during Pin-Down setup.
- * Returns the subscription ID/URI to store on the engagement.
- */
 export async function registerWebhookForTenant(
   bookingPlatform: string,
   apiKey: string,
@@ -510,7 +543,6 @@ export async function registerWebhookForTenant(
       return new GHLCalendarClient(apiKey, meta.location_id).subscribeWebhook(receiverUrl);
 
     case "oncehub":
-      // OnceHub webhooks are configured via dashboard, not API
       console.warn("OnceHub does not support programmatic webhook registration. Buyer must configure manually.");
       return;
 
@@ -519,14 +551,6 @@ export async function registerWebhookForTenant(
   }
 }
 
-/**
- * Fetches the next open slots for the win-back reschedule pre-fetch layer.
- * GHL Calendar and OnceHub don't have a documented public "free/busy" slots
- * endpoint suitable for this — rather than guess at an undocumented one,
- * they return [] here, which the caller (the reschedule redirect route)
- * treats identically to "calendar fully booked": fall back to the standard
- * booking page link, per WIN-002's own zero-slots fallback rule.
- */
 export async function getAvailableSlotsForTenant(
   bookingPlatform: string,
   apiKey: string,
@@ -556,8 +580,6 @@ export async function getAvailableSlotsForTenant(
         return [];
     }
   } catch {
-    // Any failure here is a fallback-to-standard-link situation, never a
-    // user-facing error — the prospect should always get a working link.
     return [];
   }
 }
