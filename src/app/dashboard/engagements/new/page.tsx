@@ -200,6 +200,7 @@ function SelectField({
   options,
   helpText,
   required,
+  disabled,
 }: {
   label: string;
   value: string;
@@ -207,6 +208,7 @@ function SelectField({
   options: { value: string; label: string }[];
   helpText?: string;
   required?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div className="space-y-1.5 w-full">
@@ -224,7 +226,8 @@ function SelectField({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md px-3 py-1.5 text-sm focus:outline-none transition-colors"
+        disabled={disabled}
+        className="w-full rounded-md px-3 py-1.5 text-sm focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         style={{
           background: "var(--surface)",
           border: "1px solid var(--border)",
@@ -268,14 +271,29 @@ export default function NewEngagementPage() {
     pasteReadyInstructions?: string;
   } | null>(null);
 
+  // Klaviyo states
   const [klaviyoLists, setKlaviyoLists] = useState<{ id: string; name: string }[]>([]);
   const [fetchingLists, setFetchingLists] = useState(false);
   const [listsFetchError, setListsFetchError] = useState<string | null>(null);
+
+  // ActiveCampaign states
+  const [acLists, setAcLists] = useState<{ id: string; name: string }[]>([]);
+  const [fetchingAcLists, setFetchingAcLists] = useState(false);
+  const [acListsError, setAcListsError] = useState<string | null>(null);
+
+  // GHL states
+  const [ghlLocations, setGhlLocations] = useState<{ id: string; name: string }[]>([]);
+  const [fetchingGhlLocations, setFetchingGhlLocations] = useState(false);
+  const [ghlLocationsError, setGhlLocationsError] = useState<string | null>(null);
+  const [ghlWorkflows, setGhlWorkflows] = useState<{ id: string; name: string }[]>([]);
+  const [fetchingGhlWorkflows, setFetchingGhlWorkflows] = useState(false);
+  const [ghlWorkflowsError, setGhlWorkflowsError] = useState<string | null>(null);
 
   function set(field: keyof FormData, value: string | boolean) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
+  // Klaviyo: Fetch lists
   useEffect(() => {
     if (step === "stack" && form.emailPlatform === "klaviyo") {
       if (!form.emailApiKey.trim()) {
@@ -307,6 +325,105 @@ export default function NewEngagementPage() {
         });
     }
   }, [step, form.emailPlatform, form.emailApiKey]);
+
+  // ActiveCampaign: Fetch lists when base URL is provided
+  useEffect(() => {
+    if (
+      step === "stack" &&
+      form.emailPlatform === "activecampaign" &&
+      form.emailApiKey.trim() &&
+      form.emailActiveCampaignBaseUrl.trim()
+    ) {
+      setFetchingAcLists(true);
+      setAcListsError(null);
+
+      fetch(
+        `/api/integrations/activecampaign/lists?key=${encodeURIComponent(form.emailApiKey.trim())}&baseUrl=${encodeURIComponent(form.emailActiveCampaignBaseUrl.trim())}`
+      )
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch lists");
+          return res.json();
+        })
+        .then((data) => {
+          if (data.success) {
+            setAcLists(data.lists ?? []);
+          } else {
+            throw new Error(data.error ?? "Unknown error");
+          }
+        })
+        .catch((err: any) => {
+          console.error(err);
+          setAcListsError(err.message || "Could not retrieve ActiveCampaign lists.");
+        })
+        .finally(() => {
+          setFetchingAcLists(false);
+        });
+    }
+  }, [step, form.emailPlatform, form.emailApiKey, form.emailActiveCampaignBaseUrl]);
+
+  // GHL: Fetch locations
+  useEffect(() => {
+    if (step === "stack" && form.emailPlatform === "ghl" && form.emailApiKey.trim()) {
+      setFetchingGhlLocations(true);
+      setGhlLocationsError(null);
+      setGhlWorkflows([]);
+      setForm((f) => ({ ...f, emailGhlTargetWorkflowId: "", emailGhlRecoveryWorkflowId: "" }));
+
+      fetch(`/api/integrations/ghl/locations?key=${encodeURIComponent(form.emailApiKey.trim())}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch locations");
+          return res.json();
+        })
+        .then((data) => {
+          if (data.success) {
+            setGhlLocations(data.locations ?? []);
+          } else {
+            throw new Error(data.error ?? "Unknown error");
+          }
+        })
+        .catch((err: any) => {
+          console.error(err);
+          setGhlLocationsError(err.message || "Could not retrieve GHL locations.");
+        })
+        .finally(() => {
+          setFetchingGhlLocations(false);
+        });
+    }
+  }, [step, form.emailPlatform, form.emailApiKey]);
+
+  // GHL: Fetch workflows when location is selected
+  useEffect(() => {
+    if (
+      form.emailPlatform === "ghl" &&
+      form.emailGhlLocationId &&
+      form.emailApiKey.trim()
+    ) {
+      setFetchingGhlWorkflows(true);
+      setGhlWorkflowsError(null);
+
+      fetch(
+        `/api/integrations/ghl/workflows?key=${encodeURIComponent(form.emailApiKey.trim())}&locationId=${encodeURIComponent(form.emailGhlLocationId)}`
+      )
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch workflows");
+          return res.json();
+        })
+        .then((data) => {
+          if (data.success) {
+            setGhlWorkflows(data.workflows ?? []);
+          } else {
+            throw new Error(data.error ?? "Unknown error");
+          }
+        })
+        .catch((err: any) => {
+          console.error(err);
+          setGhlWorkflowsError(err.message || "Could not retrieve GHL workflows.");
+        })
+        .finally(() => {
+          setFetchingGhlWorkflows(false);
+        });
+    }
+  }, [form.emailPlatform, form.emailGhlLocationId, form.emailApiKey]);
 
   function addTestimonial() {
     setForm((f) => ({
@@ -752,54 +869,116 @@ export default function NewEngagementPage() {
                   value={form.emailActiveCampaignBaseUrl}
                   onChange={(v) => set("emailActiveCampaignBaseUrl", v)}
                   placeholder="https://account.api-us1.com/api/3"
-                  helpText="Your unique tracking endpoint link. Found under Settings -> Developer -> API Access."
+                  helpText="Your unique tracking endpoint link. Found under Settings → Developer → API Access. Lists will auto-populate below once entered."
                   required
                 />
-                <InputField
-                  label="ActiveCampaign Target List ID"
+                
+                {fetchingAcLists && (
+                  <div className="md:col-span-2 text-xs italic font-mono text-zinc-500 animate-pulse">
+                    ⚡ Contacting ActiveCampaign... Fetching audience lists...
+                  </div>
+                )}
+                {acListsError && (
+                  <div className="md:col-span-2 rounded p-3 text-xs bg-rose-950/20 text-rose-400 font-mono">
+                    ⚠ Warning: {acListsError}
+                  </div>
+                )}
+
+                <SelectField
+                  label="ActiveCampaign Target List"
                   value={form.emailTargetListId}
                   onChange={(v) => set("emailTargetListId", v)}
-                  placeholder="e.g. 1"
-                  helpText="The numeric ID for your main follow-up sequence contact audience."
                   required
+                  disabled={!form.emailActiveCampaignBaseUrl.trim() || fetchingAcLists}
+                  options={[
+                    { value: "", label: form.emailActiveCampaignBaseUrl.trim() ? "-- Choose a List --" : "-- Enter API URL above first --" },
+                    ...acLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` }))
+                  ]}
+                  helpText="The audience for your main follow-up sequence."
                 />
-                <InputField
-                  label="ActiveCampaign Recovery List ID"
+                <SelectField
+                  label="ActiveCampaign Recovery List"
                   value={form.emailRecoveryListId}
                   onChange={(v) => set("emailRecoveryListId", v)}
-                  placeholder="e.g. 2"
-                  helpText="The numeric ID for your win-back recovery audience list."
                   required
+                  disabled={!form.emailActiveCampaignBaseUrl.trim() || fetchingAcLists}
+                  options={[
+                    { value: "", label: form.emailActiveCampaignBaseUrl.trim() ? "-- Choose a List --" : "-- Enter API URL above first --" },
+                    ...acLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` }))
+                  ]}
+                  helpText="The audience for your win-back recovery sequence."
                 />
               </>
             )}
 
             {form.emailPlatform === "ghl" && (
               <>
-                <InputField
-                  label="GoHighLevel Location ID"
+                {fetchingGhlLocations && (
+                  <div className="md:col-span-2 text-xs italic font-mono text-zinc-500 animate-pulse">
+                    ⚡ Contacting GoHighLevel... Fetching locations...
+                  </div>
+                )}
+                {ghlLocationsError && (
+                  <div className="md:col-span-2 rounded p-3 text-xs bg-rose-950/20 text-rose-400 font-mono">
+                    ⚠ Warning: {ghlLocationsError}
+                  </div>
+                )}
+
+                <SelectField
+                  label="GoHighLevel Location"
                   value={form.emailGhlLocationId}
-                  onChange={(v) => set("emailGhlLocationId", v)}
-                  placeholder="e.g. loc_abc123"
-                  helpText="Your GoHighLevel sub-account identifier string."
+                  onChange={(v) => {
+                    set("emailGhlLocationId", v);
+                    set("emailGhlTargetWorkflowId", "");
+                    set("emailGhlRecoveryWorkflowId", "");
+                  }}
                   required
+                  options={[
+                    { value: "", label: "-- Choose a Location --" },
+                    ...ghlLocations.map((l) => ({ value: l.id, label: l.name }))
+                  ]}
+                  helpText="Your GoHighLevel sub-account. Workflows will load after selection."
                 />
-                <InputField
-                  label="GHL Target Workflow ID"
-                  value={form.emailGhlTargetWorkflowId}
-                  onChange={(v) => set("emailGhlTargetWorkflowId", v)}
-                  placeholder="e.g. workflow_uuid"
-                  helpText="The unique reference key matching your entry pre-call automation workflow."
-                  required
-                />
-                <InputField
-                  label="GHL Recovery Workflow ID"
-                  value={form.emailGhlRecoveryWorkflowId}
-                  onChange={(v) => set("emailGhlRecoveryWorkflowId", v)}
-                  placeholder="e.g. workflow_uuid"
-                  helpText="The unique reference key matching your win-back cancellation workflow."
-                  required
-                />
+
+                {form.emailGhlLocationId && (
+                  <>
+                    {fetchingGhlWorkflows && (
+                      <div className="md:col-span-2 text-xs italic font-mono text-zinc-500 animate-pulse">
+                        ⚡ Loading workflows for selected location...
+                      </div>
+                    )}
+                    {ghlWorkflowsError && (
+                      <div className="md:col-span-2 rounded p-3 text-xs bg-rose-950/20 text-rose-400 font-mono">
+                        ⚠ Warning: {ghlWorkflowsError}
+                      </div>
+                    )}
+
+                    <SelectField
+                      label="GHL Target Workflow"
+                      value={form.emailGhlTargetWorkflowId}
+                      onChange={(v) => set("emailGhlTargetWorkflowId", v)}
+                      required
+                      disabled={fetchingGhlWorkflows}
+                      options={[
+                        { value: "", label: fetchingGhlWorkflows ? "-- Loading..." : "-- Choose a Workflow --" },
+                        ...ghlWorkflows.map((w) => ({ value: w.id, label: w.name }))
+                      ]}
+                      helpText="The workflow for your pre-call automation."
+                    />
+                    <SelectField
+                      label="GHL Recovery Workflow"
+                      value={form.emailGhlRecoveryWorkflowId}
+                      onChange={(v) => set("emailGhlRecoveryWorkflowId", v)}
+                      required
+                      disabled={fetchingGhlWorkflows}
+                      options={[
+                        { value: "", label: fetchingGhlWorkflows ? "-- Loading..." : "-- Choose a Workflow --" },
+                        ...ghlWorkflows.map((w) => ({ value: w.id, label: w.name }))
+                      ]}
+                      helpText="The workflow for your win-back cancellation sequence."
+                    />
+                  </>
+                )}
               </>
             )}
 
@@ -1135,7 +1314,9 @@ export default function NewEngagementPage() {
               !form.buyerName ||
               !form.bookingApiKey ||
               !form.emailApiKey ||
-              (form.emailPlatform === "klaviyo" && (!form.emailTargetListId || !form.emailRecoveryListId))
+              (form.emailPlatform === "klaviyo" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
+              (form.emailPlatform === "activecampaign" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
+              (form.emailPlatform === "ghl" && (!form.emailGhlLocationId || !form.emailGhlTargetWorkflowId || !form.emailGhlRecoveryWorkflowId))
             }
             className="px-4 py-1.5 text-xs font-medium rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
             style={{ background: "var(--accent)", color: "#fff" }}
