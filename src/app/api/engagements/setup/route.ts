@@ -72,7 +72,6 @@ export async function POST(request: Request) {
   const summary = emptySummary();
 
   try {
-    // FIXED: Enforce session verification parameters to pull whopUserId safely
     const session = await getSession();
     if (!session?.whopUserId) {
       return new Response("Unauthorized", { status: 401 });
@@ -100,6 +99,64 @@ export async function POST(request: Request) {
       return new Response("Missing required stack config: booking_platform and email_platform", { status: 400 });
     }
 
+    // =============================================================================
+    // ✨ ZERO-CONFIG AUTO-DISCOVERY LAYER
+    // Resolves Calendly Organization URI and Event Type UUID server-side
+    // using the API key the user already provided. This eliminates two major
+    // UX friction points: hunting for API-only identifiers and copy-pasting UUIDs.
+    // =============================================================================
+    const finalStack = { ...stack };
+
+    if (finalStack.booking_platform === "calendly" && credentials?.booking) {
+      try {
+        const calendlyClient = new CalendlyClient(credentials.booking);
+
+        // Step A: Resolve the organization URI from the user's profile
+        const resolvedOrgUri = await calendlyClient.getCurrentOrganization();
+
+        finalStack.booking_platform_meta = {
+          ...finalStack.booking_platform_meta,
+          organization_uri: resolvedOrgUri,
+        };
+
+        console.log(
+          `[pin-down setup] Auto-discovered Calendly org URI: ${resolvedOrgUri}`
+        );
+
+        // Step B: If a standing link was provided, find the matching event type
+        if (finalStack.booking_standing_link) {
+          const resolvedUuid = await calendlyClient.getEventTypeUuidFromSlug(
+            resolvedOrgUri,
+            finalStack.booking_standing_link
+          );
+
+          if (resolvedUuid) {
+            finalStack.booking_platform_meta.event_type_uuid = resolvedUuid;
+            console.log(
+              `[pin-down setup] Auto-discovered Calendly event type UUID: ${resolvedUuid}`
+            );
+          } else {
+            console.warn(
+              `[pin-down setup] Could not auto-discover event type UUID from standing link: ${finalStack.booking_standing_link}`
+            );
+            summary.openItems.push(
+              `Could not auto-detect the Calendly event type from the standing link "${finalStack.booking_standing_link}". Webhook registration may require manual configuration.`
+            );
+          }
+        }
+      } catch (discoveryErr: any) {
+        console.error(
+          "[pin-down setup] Calendly metadata auto-discovery warning:",
+          discoveryErr.message
+        );
+        summary.openItems.push(
+          `Calendly metadata auto-discovery notice: ${discoveryErr.message}`
+        );
+        // Don't throw — continue with setup and let webhook registration fail gracefully
+      }
+    }
+    // =============================================================================
+
     await startRun({
       id: runId,
       engagementId,
@@ -114,33 +171,35 @@ export async function POST(request: Request) {
     if (credentials?.booking) {
       await storeCredential(
         engagementId,
-        stack.booking_platform,
-        `secrets://${engagementId}/${stack.booking_platform}_pat`,
+        finalStack.booking_platform,
+        `secrets://${engagementId}/${finalStack.booking_platform}_pat`,
         credentials.booking
       );
     }
     if (credentials?.email) {
       await storeCredential(
         engagementId,
-        stack.email_platform,
-        `secrets://${engagementId}/${stack.email_platform}_key`,
+        finalStack.email_platform,
+        `secrets://${engagementId}/${finalStack.email_platform}_key`,
         credentials.email
       );
     }
     if (credentials?.hosting) {
       await storeCredential(
         engagementId,
-        stack.hosting_platform,
-        `secrets://${engagementId}/${stack.hosting_platform}_key`,
+        finalStack.hosting_platform,
+        `secrets://${engagementId}/${finalStack.hosting_platform}_key`,
         credentials.hosting
       );
     }
     summary.whatWasAttempted.push(
       `Stored ${[
-        credentials?.booking && stack.booking_platform,
-        credentials?.email && stack.email_platform,
-        credentials?.hosting && stack.hosting_platform,
-      ].filter(Boolean).join(" + ") || "no"} credentials.`
+        credentials?.booking && finalStack.booking_platform,
+        credentials?.email && finalStack.email_platform,
+        credentials?.hosting && finalStack.hosting_platform,
+      ]
+        .filter(Boolean)
+        .join(" + ") || "no"} credentials.`
     );
     summary.whatWorked.push("Credentials encrypted and stored.");
     await logStep(runId, {
@@ -152,27 +211,39 @@ export async function POST(request: Request) {
     // Step 2: Extract brand voice profile
     await logStep(runId, { phase: "voice_extraction", status: "running" });
     const voiceProfile = await extractVoiceProfile(rawVoiceCorpus ?? "", runId);
-    const corpusWordCount = (rawVoiceCorpus ?? "").trim().split(/\s+/).filter(Boolean).length;
-    summary.whatWasAttempted.push(`Extracted brand voice profile from a ${corpusWordCount}-word corpus.`);
+    const corpusWordCount = (rawVoiceCorpus ?? "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean).length;
+    summary.whatWasAttempted.push(
+      `Extracted brand voice profile from a ${corpusWordCount}-word corpus.`
+    );
     if (voiceProfile?.source_path === "scrape") {
-      summary.whatWorked.push("Brand voice profile extracted from buyer-supplied corpus via Claude.");
+      summary.whatWorked.push(
+        "Brand voice profile extracted from buyer-supplied corpus via Claude."
+      );
     } else {
-      summary.whatWorked.push("Brand voice profile set to neutral default (corpus under 500 words).");
-      summary.openItems.push("Corpus was too short for a real voice extraction — using the operator-grade default tone.");
+      summary.whatWorked.push(
+        "Brand voice profile set to neutral default (corpus under 500 words)."
+      );
+      summary.openItems.push(
+        "Corpus was too short for a real voice extraction — using the operator-grade default tone."
+      );
     }
     await logStep(runId, {
       phase: "voice_extraction",
       status: "success",
-      detail: voiceProfile?.source_path === "scrape" ? "Tone profile extracted from corpus" : "Neutral default tone applied",
+      detail:
+        voiceProfile?.source_path === "scrape"
+          ? "Tone profile extracted from corpus"
+          : "Neutral default tone applied",
     });
 
-    // Step 3: Publish the confirmation page onto the buyer's own hosting
-    // stack (Webflow/WordPress/Vercel via real API, or a paste-ready
-    // fallback for ghl/lovable/plain_html and any failed deploy). Buyer
-    // assets live in the buyer's stack, never ours — see hosting.ts.
+    // Step 3: Publish confirmation page
     await logStep(runId, { phase: "confirmation_page_deploy", status: "running" });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.muddventures.com";
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ?? "https://app.muddventures.com";
     const internalFallbackUrl = `${appUrl}/confirm/${engagementId}`;
 
     const pageContent = buildConfirmationPageHtml({
@@ -185,9 +256,9 @@ export async function POST(request: Request) {
     });
 
     const deployResult = await publishConfirmationPage(
-      stack.hosting_platform,
+      finalStack.hosting_platform,
       credentials?.hosting ?? null,
-      stack.hosting_platform_meta,
+      finalStack.hosting_platform_meta,
       pageContent,
       engagementId
     );
@@ -208,18 +279,14 @@ export async function POST(request: Request) {
         lastAttemptedAt: new Date().toISOString(),
       };
       summary.whatWorked.push(
-        `Confirmation page published live on the buyer's own ${stack.hosting_platform} at ${deployResult.url}.`
+        `Confirmation page published live on the buyer's own ${finalStack.hosting_platform} at ${deployResult.url}.`
       );
       await logStep(runId, {
         phase: "confirmation_page_deploy",
         status: "success",
-        detail: `Live on buyer's ${stack.hosting_platform}: ${deployResult.url}`,
+        detail: `Live on buyer's ${finalStack.hosting_platform}: ${deployResult.url}`,
       });
     } else {
-      // Falls back to our internal preview page so the booking redirect
-      // and downstream skills always have a working URL, but this is a
-      // preview surface, not the buyer's live asset — the paste-ready
-      // HTML + instructions are what actually needs to go live.
       confirmationPageUrl = internalFallbackUrl;
       confirmationPageDeployment = {
         mode: "paste_ready",
@@ -227,10 +294,10 @@ export async function POST(request: Request) {
         lastAttemptedAt: new Date().toISOString(),
       };
       summary.whatFailed.push(
-        `Could not auto-publish to ${stack.hosting_platform}: ${deployResult.reason}`
+        `Could not auto-publish to ${finalStack.hosting_platform}: ${deployResult.reason}`
       );
       summary.openItems.push(
-        `[needs:manual-page-publish] Paste-ready HTML and instructions are ready for ${stack.hosting_platform} — the buyer needs to publish it manually. Using the internal preview page at ${internalFallbackUrl} until then.`
+        `[needs:manual-page-publish] Paste-ready HTML and instructions are ready for ${finalStack.hosting_platform} — the buyer needs to publish it manually. Using the internal preview page at ${internalFallbackUrl} until then.`
       );
       await logStep(runId, {
         phase: "confirmation_page_deploy",
@@ -239,7 +306,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // Step 4: Upsert engagement row
+    // Step 4: Upsert engagement row using finalStack (with auto-discovered metadata)
     await logStep(runId, { phase: "engagement_upsert", status: "running" });
 
     const engagementValues = {
@@ -249,8 +316,9 @@ export async function POST(request: Request) {
       buyer: buyerName,
       schemaVersion: "1.0",
       stack: {
-        ...stack,
-        slack_webhook_url: credentials?.slack_webhook_url ?? stack.slack_webhook_url,
+        ...finalStack,
+        slack_webhook_url:
+          credentials?.slack_webhook_url ?? finalStack.slack_webhook_url,
       },
       offerDetails,
       brandVoiceProfile: voiceProfile,
@@ -282,8 +350,14 @@ export async function POST(request: Request) {
           updatedAt: new Date(),
         },
       });
-    await logStep(runId, { phase: "engagement_upsert", status: "success", detail: `Engagement row created for ${buyerName}` });
-    summary.whatWasAttempted.push(`Created confirmation page at ${confirmationPageUrl}.`);
+    await logStep(runId, {
+      phase: "engagement_upsert",
+      status: "success",
+      detail: `Engagement row created for ${buyerName}`,
+    });
+    summary.whatWasAttempted.push(
+      `Created confirmation page at ${confirmationPageUrl}.`
+    );
     summary.whatWorked.push("Engagement record created/updated in Postgres.");
 
     // Step 5: Register webhook on booking platform
@@ -291,13 +365,15 @@ export async function POST(request: Request) {
 
     if (credentials?.booking) {
       const receiverUrl = `${appUrl}/api/webhooks/booking-event?engagement_id=${engagementId}`;
-      summary.whatWasAttempted.push(`Registered ${stack.booking_platform} webhook → ${receiverUrl}.`);
+      summary.whatWasAttempted.push(
+        `Registered ${finalStack.booking_platform} webhook → ${receiverUrl}.`
+      );
       try {
         const subscriptionId = await registerWebhookForTenant(
-          stack.booking_platform,
+          finalStack.booking_platform,
           credentials.booking,
           receiverUrl,
-          stack.booking_platform_meta
+          finalStack.booking_platform_meta // Now includes auto-discovered org_uri and event_type_uuid
         );
 
         if (subscriptionId) {
@@ -311,54 +387,97 @@ export async function POST(request: Request) {
               updatedAt: new Date(),
             })
             .where(eq(engagements.engagementId, engagementId));
-          summary.whatWorked.push(`${stack.booking_platform} webhook registered (subscription ${subscriptionId}).`);
-          await logStep(runId, { phase: "webhook_registration", status: "success", detail: `Subscription ${subscriptionId}` });
+          summary.whatWorked.push(
+            `${finalStack.booking_platform} webhook registered (subscription ${subscriptionId}).`
+          );
+          await logStep(runId, {
+            phase: "webhook_registration",
+            status: "success",
+            detail: `Subscription ${subscriptionId}`,
+          });
         } else {
-          summary.openItems.push(`${stack.booking_platform} webhook registration returned no subscription ID — bookings may need manual verification.`);
-          await logStep(runId, { phase: "webhook_registration", status: "skipped", detail: "No subscription ID returned" });
+          summary.openItems.push(
+            `${finalStack.booking_platform} webhook registration returned no subscription ID — bookings may need manual verification.`
+          );
+          await logStep(runId, {
+            phase: "webhook_registration",
+            status: "skipped",
+            detail: "No subscription ID returned",
+          });
         }
       } catch (e: any) {
-        // FIXED: this used to be console.error'd and discarded — now persisted
-        // to the run log so the dashboard shows exactly why bookings won't
-        // trigger Pile-On for this client.
         console.error(`[pin-down] Webhook registration failed: ${e.message}`);
-        summary.whatFailed.push(`${stack.booking_platform} webhook registration failed: ${e.message}`);
-        summary.openItems.push("Booking webhook is not connected — Pile-On and Win-Back won't fire automatically until this is fixed.");
-        await logStep(runId, { phase: "webhook_registration", status: "failed", detail: e.message });
+        summary.whatFailed.push(
+          `${finalStack.booking_platform} webhook registration failed: ${e.message}`
+        );
+        summary.openItems.push(
+          "Booking webhook is not connected — Pile-On and Win-Back won't fire automatically until this is fixed."
+        );
+        await logStep(runId, {
+          phase: "webhook_registration",
+          status: "failed",
+          detail: e.message,
+        });
       }
     } else {
-      await logStep(runId, { phase: "webhook_registration", status: "skipped", detail: "No booking credentials supplied" });
+      await logStep(runId, {
+        phase: "webhook_registration",
+        status: "skipped",
+        detail: "No booking credentials supplied",
+      });
     }
 
     // Step 6: Configure post-booking redirect (Calendly only)
     await logStep(runId, { phase: "redirect_config", status: "running" });
 
     if (
-      stack.booking_platform === "calendly" &&
+      finalStack.booking_platform === "calendly" &&
       credentials?.booking &&
-      stack.booking_platform_meta?.event_type_uuid
+      finalStack.booking_platform_meta?.event_type_uuid
     ) {
-      summary.whatWasAttempted.push(`Configured Calendly redirect for event type ${stack.booking_platform_meta.event_type_uuid}.`);
+      summary.whatWasAttempted.push(
+        `Configured Calendly redirect for event type ${finalStack.booking_platform_meta.event_type_uuid}.`
+      );
       try {
         const calendlyClient = new CalendlyClient(credentials.booking);
         await calendlyClient.configurePostBookingRedirect(
-          stack.booking_platform_meta.event_type_uuid,
+          finalStack.booking_platform_meta.event_type_uuid,
           confirmationPageUrl
         );
         summary.whatWorked.push("Calendly post-booking redirect configured.");
-        await logStep(runId, { phase: "redirect_config", status: "success" });
+        await logStep(runId, {
+          phase: "redirect_config",
+          status: "success",
+        });
       } catch (e: any) {
-        console.error(`[pin-down] Calendly redirect config failed: ${e.message}`);
-        summary.whatFailed.push(`Calendly redirect configuration failed: ${e.message}`);
-        summary.openItems.push("Calendly isn't redirecting to the confirmation page yet — set this manually or re-run setup.");
-        await logStep(runId, { phase: "redirect_config", status: "failed", detail: e.message });
+        console.error(
+          `[pin-down] Calendly redirect config failed: ${e.message}`
+        );
+        summary.whatFailed.push(
+          `Calendly redirect configuration failed: ${e.message}`
+        );
+        summary.openItems.push(
+          "Calendly isn't redirecting to the confirmation page yet — set this manually or re-run setup."
+        );
+        await logStep(runId, {
+          phase: "redirect_config",
+          status: "failed",
+          detail: e.message,
+        });
       }
     } else {
-      await logStep(runId, { phase: "redirect_config", status: "skipped", detail: "Not applicable for this booking platform" });
+      await logStep(runId, {
+        phase: "redirect_config",
+        status: "skipped",
+        detail:
+          !finalStack.booking_platform_meta?.event_type_uuid
+            ? "No event type UUID available (auto-discovery may have failed or no standing link provided)"
+            : "Not applicable for this booking platform",
+      });
     }
 
     summary.decisionsMade.push(
-      `Brief landing destination: ${stack.brief_landing_destination ?? "slack"} (${credentials?.slack_webhook_url || stack.slack_webhook_url ? "webhook configured" : "default"}).`
+      `Brief landing destination: ${finalStack.brief_landing_destination ?? "slack"} (${credentials?.slack_webhook_url || finalStack.slack_webhook_url ? "webhook configured" : "default"}).`
     );
 
     await finishRun(runId, { summary });
@@ -368,9 +487,12 @@ export async function POST(request: Request) {
       engagementId,
       confirmationPageUrl,
       confirmationPageDeployment,
-      pasteReadyHtml: deployResult.mode === "paste_ready" ? deployResult.html : undefined,
+      pasteReadyHtml:
+        deployResult.mode === "paste_ready" ? deployResult.html : undefined,
       pasteReadyInstructions:
-        deployResult.mode === "paste_ready" ? deployResult.instructions : undefined,
+        deployResult.mode === "paste_ready"
+          ? deployResult.instructions
+          : undefined,
       runId,
     });
   } catch (error: any) {

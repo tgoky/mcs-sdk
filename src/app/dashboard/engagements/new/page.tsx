@@ -35,8 +35,8 @@ interface FormData {
   trafficTemperature: "cold" | "warm" | "hot";
   hybridMode: boolean;
   bookingPlatform: string;
-  bookingOrgUri: string;
-  bookingEventTypeUuid: string;
+  // ❌ REMOVED: bookingOrgUri - now auto-discovered server-side
+  // ❌ REMOVED: bookingEventTypeUuid - now auto-discovered server-side
   bookingLocationId: string;
   bookingStandingLink: string;
   emailPlatform: string;
@@ -70,8 +70,8 @@ const DEFAULT_FORM: FormData = {
   trafficTemperature: "warm",
   hybridMode: false,
   bookingPlatform: "calendly",
-  bookingOrgUri: "",
-  bookingEventTypeUuid: "",
+  // ❌ REMOVED: bookingOrgUri
+  // ❌ REMOVED: bookingEventTypeUuid
   bookingLocationId: "",
   bookingStandingLink: "",
   emailPlatform: "klaviyo",
@@ -148,8 +148,16 @@ function InputField({
 }) {
   return (
     <div className="space-y-1.5 w-full">
-      <label className="text-xs font-medium block" style={{ color: "var(--text-primary)" }}>
-        {label} {required && <span className="ml-0.5" style={{ color: "var(--text-muted)" }}>(required)</span>}
+      <label
+        className="text-xs font-medium block"
+        style={{ color: "var(--text-primary)" }}
+      >
+        {label}{" "}
+        {required && (
+          <span className="ml-0.5" style={{ color: "var(--text-muted)" }}>
+            (required)
+          </span>
+        )}
       </label>
       <input
         type={type}
@@ -166,7 +174,12 @@ function InputField({
         onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
       />
       {helpText && (
-        <p className="text-[11px] font-normal leading-normal" style={{ color: "var(--text-muted)" }}>{helpText}</p>
+        <p
+          className="text-[11px] font-normal leading-normal"
+          style={{ color: "var(--text-muted)" }}
+        >
+          {helpText}
+        </p>
       )}
     </div>
   );
@@ -187,7 +200,10 @@ function SelectField({
 }) {
   return (
     <div className="space-y-1.5 w-full">
-      <label className="text-xs font-medium block" style={{ color: "var(--text-primary)" }}>
+      <label
+        className="text-xs font-medium block"
+        style={{ color: "var(--text-primary)" }}
+      >
         {label}
       </label>
       <select
@@ -209,7 +225,12 @@ function SelectField({
         ))}
       </select>
       {helpText && (
-        <p className="text-[11px] font-normal leading-normal" style={{ color: "var(--text-muted)" }}>{helpText}</p>
+        <p
+          className="text-[11px] font-normal leading-normal"
+          style={{ color: "var(--text-muted)" }}
+        >
+          {helpText}
+        </p>
       )}
     </div>
   );
@@ -224,7 +245,10 @@ export default function NewEngagementPage() {
   const [result, setResult] = useState<{
     engagementId: string;
     confirmationPageUrl: string;
-    confirmationPageDeployment?: { mode: "live" | "paste_ready" | "not_deployed"; reason?: string };
+    confirmationPageDeployment?: {
+      mode: "live" | "paste_ready" | "not_deployed";
+      reason?: string;
+    };
     pasteReadyHtml?: string;
     pasteReadyInstructions?: string;
   } | null>(null);
@@ -236,14 +260,23 @@ export default function NewEngagementPage() {
   function addTestimonial() {
     setForm((f) => ({
       ...f,
-      testimonials: [...f.testimonials, { name: "", role: "", company: "", quote: "" }],
+      testimonials: [
+        ...f.testimonials,
+        { name: "", role: "", company: "", quote: "" },
+      ],
     }));
   }
 
-  function updateTestimonial(index: number, field: keyof Testimonial, value: string) {
+  function updateTestimonial(
+    index: number,
+    field: keyof Testimonial,
+    value: string
+  ) {
     setForm((f) => ({
       ...f,
-      testimonials: f.testimonials.map((t, i) => (i === index ? { ...t, [field]: value } : t)),
+      testimonials: f.testimonials.map((t, i) =>
+        i === index ? { ...t, [field]: value } : t
+      ),
     }));
   }
 
@@ -282,7 +315,9 @@ export default function NewEngagementPage() {
       },
     };
 
-    const testimonials = form.testimonials.filter((t) => t.name && t.role && t.quote);
+    const testimonials = form.testimonials.filter(
+      (t) => t.name && t.role && t.quote
+    );
 
     const payload = {
       engagementId,
@@ -298,10 +333,13 @@ export default function NewEngagementPage() {
       stack: {
         booking_platform: form.bookingPlatform,
         booking_platform_credentials_ref: `secrets://${engagementId}/${form.bookingPlatform}_pat`,
+        // ✅ CLEAN: No more organization_uri or event_type_uuid here
+        // These are now auto-discovered server-side from the API key
         booking_platform_meta: {
-          organization_uri: form.bookingOrgUri,
-          event_type_uuid: form.bookingEventTypeUuid,
-          location_id: form.bookingLocationId,
+          // For GHL, we still need location_id from the form
+          ...(form.bookingPlatform === "ghl_calendar" && {
+            location_id: form.bookingLocationId,
+          }),
         },
         booking_standing_link: form.bookingStandingLink || undefined,
         email_platform: form.emailPlatform,
@@ -309,7 +347,8 @@ export default function NewEngagementPage() {
         hosting_platform: form.hostingPlatform,
         hosting_platform_credentials_ref: `secrets://${engagementId}/${form.hostingPlatform}_key`,
         publish_domain: form.publishDomain,
-        hosting_platform_meta: hostingMetaByPlatform[form.hostingPlatform] ?? undefined,
+        hosting_platform_meta:
+          hostingMetaByPlatform[form.hostingPlatform] ?? undefined,
         brief_landing_destination: form.briefDestination,
         slack_webhook_url: form.slackWebhookUrl,
         person_match_confidence_threshold: 99,
@@ -343,7 +382,9 @@ export default function NewEngagementPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? "Setup failed. Check the fields and try again.");
+        setError(
+          data.error ?? "Setup failed. Check the fields and try again."
+        );
         setSubmitting(false);
         return;
       }
@@ -363,20 +404,35 @@ export default function NewEngagementPage() {
 
   // Success screen
   if (result) {
-    const isPasteReady = result.confirmationPageDeployment?.mode === "paste_ready";
+    const isPasteReady =
+      result.confirmationPageDeployment?.mode === "paste_ready";
 
     return (
-      <div className="space-y-6 w-full max-w-none px-1" style={{ color: "var(--text-secondary)" }}>
-        <div className="rounded-lg p-5 space-y-2.5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+      <div
+        className="space-y-6 w-full max-w-none px-1"
+        style={{ color: "var(--text-secondary)" }}
+      >
+        <div
+          className="rounded-lg p-5 space-y-2.5"
+          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+        >
           <div className="flex items-center space-x-2">
             <span
               className="w-5 h-5 rounded-full flex items-center justify-center text-xs"
-              style={{ background: isPasteReady ? "var(--accent)" : "var(--success)", color: isPasteReady ? "#fff" : "#04140f" }}
+              style={{
+                background: isPasteReady ? "var(--accent)" : "var(--success)",
+                color: isPasteReady ? "#fff" : "#04140f",
+              }}
             >
               {isPasteReady ? "!" : "✓"}
             </span>
-            <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              {isPasteReady ? "Setup complete — one manual step left" : "Setup complete"}
+            <span
+              className="text-sm font-medium"
+              style={{ color: "var(--text-primary)" }}
+            >
+              {isPasteReady
+                ? "Setup complete — one manual step left"
+                : "Setup complete"}
             </span>
           </div>
           <p className="text-sm font-normal">
@@ -387,8 +443,14 @@ export default function NewEngagementPage() {
         </div>
 
         {isPasteReady && result.pasteReadyHtml && (
-          <div className="rounded-lg p-4 space-y-2" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-            <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+          <div
+            className="rounded-lg p-4 space-y-2"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <p
+              className="text-xs font-medium"
+              style={{ color: "var(--text-primary)" }}
+            >
               {result.pasteReadyInstructions}
             </p>
             {result.confirmationPageDeployment?.reason && (
@@ -397,12 +459,19 @@ export default function NewEngagementPage() {
               </p>
             )}
             <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>Page HTML</span>
+              <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                Page HTML
+              </span>
               <button
                 type="button"
-                onClick={() => navigator.clipboard.writeText(result.pasteReadyHtml ?? "")}
+                onClick={() =>
+                  navigator.clipboard.writeText(result.pasteReadyHtml ?? "")
+                }
                 className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer"
-                style={{ border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                style={{
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
               >
                 Copy HTML
               </button>
@@ -412,20 +481,39 @@ export default function NewEngagementPage() {
               value={result.pasteReadyHtml}
               rows={6}
               className="w-full rounded-md px-3 py-2 text-[11px] font-mono resize-y focus:outline-none"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                color: "var(--text-secondary)",
+              }}
             />
           </div>
         )}
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-lg p-4 space-y-1" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>Engagement ID</p>
-            <p className="font-mono text-sm" style={{ color: "var(--text-primary)" }}>{result.engagementId}</p>
+          <div
+            className="rounded-lg p-4 space-y-1"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+              Engagement ID
+            </p>
+            <p
+              className="font-mono text-sm"
+              style={{ color: "var(--text-primary)" }}
+            >
+              {result.engagementId}
+            </p>
           </div>
 
-          <div className="rounded-lg p-4 space-y-1" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div
+            className="rounded-lg p-4 space-y-1"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
             <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-              {isPasteReady ? "Preview Link (temporary)" : "Confirmation Page Link"}
+              {isPasteReady
+                ? "Preview Link (temporary)"
+                : "Confirmation Page Link"}
             </p>
             <a
               href={result.confirmationPageUrl}
@@ -440,7 +528,9 @@ export default function NewEngagementPage() {
         </div>
 
         <button
-          onClick={() => router.push(`/dashboard/engagements/${result.engagementId}`)}
+          onClick={() =>
+            router.push(`/dashboard/engagements/${result.engagementId}`)
+          }
           className="px-4 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer"
           style={{ background: "var(--accent)", color: "#fff" }}
         >
@@ -451,22 +541,31 @@ export default function NewEngagementPage() {
   }
 
   return (
-    <div className="space-y-6 w-full max-w-none px-1" style={{ color: "var(--text-secondary)" }}>
-
+    <div
+      className="space-y-6 w-full max-w-none px-1"
+      style={{ color: "var(--text-secondary)" }}
+    >
       {/* Header */}
       <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
-        <h1 className="text-lg font-medium tracking-tight" style={{ color: "var(--text-primary)" }}>
+        <h1
+          className="text-lg font-medium tracking-tight"
+          style={{ color: "var(--text-primary)" }}
+        >
           Set Up a New Client
         </h1>
-        <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-          A one-time setup. Connect their booking calendar and email tool, and teach the system their brand voice — everything below runs automatically after this.
+        <p
+          className="text-xs font-normal mt-0.5"
+          style={{ color: "var(--text-muted)" }}
+        >
+          A one-time setup. Connect their booking calendar and email tool, and
+          teach the system their brand voice — everything below runs
+          automatically after this.
         </p>
       </div>
 
       <StepIndicator steps={STEPS} current={step} />
 
       <div className="bg-transparent space-y-6 pt-2">
-
         {/* Step: Your Offer */}
         {step === "offer" && (
           <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
@@ -495,9 +594,18 @@ export default function NewEngagementPage() {
               value={form.trafficTemperature}
               onChange={(v) => set("trafficTemperature", v)}
               options={[
-                { value: "cold", label: "Cold — outbound outreach or paid ads" },
-                { value: "warm", label: "Warm — inbound content or referrals" },
-                { value: "hot", label: "Hot — people who already know you" },
+                {
+                  value: "cold",
+                  label: "Cold — outbound outreach or paid ads",
+                },
+                {
+                  value: "warm",
+                  label: "Warm — inbound content or referrals",
+                },
+                {
+                  value: "hot",
+                  label: "Hot — people who already know you",
+                },
               ]}
             />
             <div className="md:col-span-2">
@@ -524,10 +632,19 @@ export default function NewEngagementPage() {
                 checked={form.hybridMode}
                 onChange={(e) => set("hybridMode", e.target.checked)}
                 className="w-4 h-4 rounded cursor-pointer"
-                style={{ background: "var(--surface)", border: "1px solid var(--border)", accentColor: "var(--accent)" }}
+                style={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  accentColor: "var(--accent)",
+                }}
               />
-              <label htmlFor="hybrid" className="text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
-                Personalize each booking confirmation using AI, based on who booked the call.
+              <label
+                htmlFor="hybrid"
+                className="text-xs cursor-pointer"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Personalize each booking confirmation using AI, based on who
+                booked the call.
               </label>
             </div>
           </div>
@@ -540,27 +657,25 @@ export default function NewEngagementPage() {
               label="Booking Calendar"
               value={form.bookingPlatform}
               onChange={(v) => set("bookingPlatform", v)}
-              options={Object.entries(BOOKING_PLATFORM_LABELS).map(([value, label]) => ({ value, label }))}
+              options={Object.entries(BOOKING_PLATFORM_LABELS).map(
+                ([value, label]) => ({ value, label })
+              )}
               helpText="The tool your client uses to schedule calls."
             />
 
             {form.bookingPlatform === "calendly" && (
-              <>
-                <InputField
-                  label="Calendly Organization URL"
-                  value={form.bookingOrgUri}
-                  onChange={(v) => set("bookingOrgUri", v)}
-                  placeholder="https://api.calendly.com/organizations/..."
-                  helpText="Find this in Calendly under your organization settings."
-                />
-                <InputField
-                  label="Event Type ID"
-                  value={form.bookingEventTypeUuid}
-                  onChange={(v) => set("bookingEventTypeUuid", v)}
-                  placeholder="e.g. abc123xyz"
-                  helpText="Identifies the specific call type to track — found in that event's Calendly link settings."
-                />
-              </>
+              <div
+                className="md:col-span-2 rounded-lg p-3 text-xs"
+                style={{
+                  background: "var(--accent-dim)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                ✨ <strong>Zero-Config Mode Active:</strong> You don&apos;t need to
+                look up or paste any obscure organization links or event IDs. We
+                automatically detect your workspace and link settings using the
+                API key you provide in the next step.
+              </div>
             )}
 
             {form.bookingPlatform === "ghl_calendar" && (
@@ -578,23 +693,35 @@ export default function NewEngagementPage() {
               value={form.bookingStandingLink}
               onChange={(v) => set("bookingStandingLink", v)}
               placeholder="https://calendly.com/client/discovery-call"
-              helpText="The client's always-open booking page. Used as a fallback link in win-back messages when live availability can't be pulled."
+              helpText="The client's always-open booking page. We'll automatically find the matching event type from this link."
             />
 
             <SelectField
               label="Email Platform"
               value={form.emailPlatform}
               onChange={(v) => set("emailPlatform", v)}
-              options={Object.entries(EMAIL_PLATFORM_LABELS).map(([value, label]) => ({ value, label }))}
+              options={Object.entries(EMAIL_PLATFORM_LABELS).map(
+                ([value, label]) => ({ value, label })
+              )}
               helpText="Where follow-up and win-back emails get sent from."
             />
 
-            {(form.emailPlatform === "klaviyo" || form.emailPlatform === "activecampaign") && (
+            {(form.emailPlatform === "klaviyo" ||
+              form.emailPlatform === "activecampaign") && (
               <div
                 className="md:col-span-2 rounded-lg p-3 text-xs"
-                style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
+                style={{
+                  background: "var(--accent-dim)",
+                  color: "var(--text-secondary)",
+                }}
               >
-                Once you connect your {form.emailPlatform === "klaviyo" ? "Klaviyo" : "ActiveCampaign"} key in the next step, we'll automatically build the follow-up and win-back sequences for you — no list setup needed here.
+                Once you connect your{" "}
+                {form.emailPlatform === "klaviyo"
+                  ? "Klaviyo"
+                  : "ActiveCampaign"}{" "}
+                key in the next step, we&apos;ll automatically build the
+                follow-up and win-back sequences for you — no list setup needed
+                here.
               </div>
             )}
 
@@ -623,7 +750,9 @@ export default function NewEngagementPage() {
               label="Where is the confirmation page hosted?"
               value={form.hostingPlatform}
               onChange={(v) => set("hostingPlatform", v)}
-              options={Object.entries(HOSTING_PLATFORM_LABELS).map(([value, label]) => ({ value, label }))}
+              options={Object.entries(HOSTING_PLATFORM_LABELS).map(
+                ([value, label]) => ({ value, label })
+              )}
               helpText="The confirmation page publishes directly onto the client's own site — it never lives on our domain."
             />
 
@@ -685,10 +814,14 @@ export default function NewEngagementPage() {
               </>
             )}
 
-            {(form.hostingPlatform === "ghl" || form.hostingPlatform === "plain_html") && (
+            {(form.hostingPlatform === "ghl" ||
+              form.hostingPlatform === "plain_html") && (
               <div
                 className="md:col-span-2 rounded-lg p-3 text-xs"
-                style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
+                style={{
+                  background: "var(--accent-dim)",
+                  color: "var(--text-secondary)",
+                }}
               >
                 {form.hostingPlatform === "ghl"
                   ? "GoHighLevel's funnel builder doesn't support automatic publishing yet. We'll generate the page as ready-to-paste HTML with step-by-step instructions instead."
@@ -702,43 +835,69 @@ export default function NewEngagementPage() {
         {step === "credentials" && (
           <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
             <div className="md:col-span-2 text-xs">
-              <p className="font-medium" style={{ color: "var(--text-primary)" }}>How we keep this secure</p>
-              <p className="font-light mt-0.5" style={{ color: "var(--text-muted)" }}>
-                Your keys are encrypted before they're stored, and aren't shown again once saved.
+              <p
+                className="font-medium"
+                style={{ color: "var(--text-primary)" }}
+              >
+                How we keep this secure
+              </p>
+              <p
+                className="font-light mt-0.5"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Your keys are encrypted before they&apos;re stored, and
+                aren&apos;t shown again once saved.
               </p>
             </div>
             <InputField
-              label={`${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform} API Key`}
+              label={`${
+                BOOKING_PLATFORM_LABELS[form.bookingPlatform] ??
+                form.bookingPlatform
+              } API Key`}
               value={form.bookingApiKey}
               onChange={(v) => set("bookingApiKey", v)}
               type="password"
               placeholder="Paste your API key here..."
+              helpText={
+                form.bookingPlatform === "calendly"
+                  ? "From Calendly → Integrations & Apps → API & Webhooks → Personal Access Tokens. This is the only thing you need — we handle the rest."
+                  : undefined
+              }
               required
             />
             <InputField
-              label={`${EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform} API Key`}
+              label={`${
+                EMAIL_PLATFORM_LABELS[form.emailPlatform] ??
+                form.emailPlatform
+              } API Key`}
               value={form.emailApiKey}
               onChange={(v) => set("emailApiKey", v)}
               type="password"
               placeholder="Paste your API key here..."
               required
             />
-            {form.hostingPlatform !== "ghl" && form.hostingPlatform !== "plain_html" && (
-              <InputField
-                label={`${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform} ${
-                  form.hostingPlatform === "wordpress" ? "Application Password (user:password)" : "API Token"
-                }`}
-                value={form.hostingApiKey}
-                onChange={(v) => set("hostingApiKey", v)}
-                type="password"
-                placeholder="Paste your API key or token here..."
-                helpText={
-                  form.hostingPlatform === "wordpress"
-                    ? "WordPress → Users → Profile → Application Passwords. Format: username:generated_password."
-                    : "If this isn't available yet, we'll generate the page as ready-to-paste HTML instead of publishing it live."
-                }
-              />
-            )}
+            {form.hostingPlatform !== "ghl" &&
+              form.hostingPlatform !== "plain_html" && (
+                <InputField
+                  label={`${
+                    HOSTING_PLATFORM_LABELS[form.hostingPlatform] ??
+                    form.hostingPlatform
+                  } ${
+                    form.hostingPlatform === "wordpress"
+                      ? "Application Password (user:password)"
+                      : "API Token"
+                  }`}
+                  value={form.hostingApiKey}
+                  onChange={(v) => set("hostingApiKey", v)}
+                  type="password"
+                  placeholder="Paste your API key or token here..."
+                  helpText={
+                    form.hostingPlatform === "wordpress"
+                      ? "WordPress → Users → Profile → Application Passwords. Format: username:generated_password."
+                      : "If this isn't available yet, we'll generate the page as ready-to-paste HTML instead of publishing it live."
+                  }
+                />
+              )}
           </div>
         )}
 
@@ -746,8 +905,11 @@ export default function NewEngagementPage() {
         {step === "voice" && (
           <div className="space-y-6 w-full">
             <div className="space-y-2">
-              <label className="text-xs font-medium block" style={{ color: "var(--text-primary)" }}>
-                How should we learn this client's voice?
+              <label
+                className="text-xs font-medium block"
+                style={{ color: "var(--text-primary)" }}
+              >
+                How should we learn this client&apos;s voice?
               </label>
               <div className="flex gap-2">
                 <button
@@ -755,14 +917,22 @@ export default function NewEngagementPage() {
                   onClick={() => set("voiceSource", "scrape")}
                   className="flex-1 text-left px-3 py-2.5 rounded-lg text-xs transition-colors cursor-pointer"
                   style={{
-                    background: form.voiceSource === "scrape" ? "var(--accent-dim)" : "var(--surface)",
-                    border: `1px solid ${form.voiceSource === "scrape" ? "var(--accent)" : "var(--border)"}`,
+                    background:
+                      form.voiceSource === "scrape"
+                        ? "var(--accent-dim)"
+                        : "var(--surface)",
+                    border: `1px solid ${
+                      form.voiceSource === "scrape"
+                        ? "var(--accent)"
+                        : "var(--border)"
+                    }`,
                     color: "var(--text-primary)",
                   }}
                 >
                   <span className="font-medium">Scrape their website</span>
                   <p className="mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    We read their site and recent emails automatically. Rolling out — recommended to also paste a sample below for now.
+                    We read their site and recent emails automatically. Rolling
+                    out — recommended to also paste a sample below for now.
                   </p>
                 </button>
                 <button
@@ -770,14 +940,22 @@ export default function NewEngagementPage() {
                   onClick={() => set("voiceSource", "manual")}
                   className="flex-1 text-left px-3 py-2.5 rounded-lg text-xs transition-colors cursor-pointer"
                   style={{
-                    background: form.voiceSource === "manual" ? "var(--accent-dim)" : "var(--surface)",
-                    border: `1px solid ${form.voiceSource === "manual" ? "var(--accent)" : "var(--border)"}`,
+                    background:
+                      form.voiceSource === "manual"
+                        ? "var(--accent-dim)"
+                        : "var(--surface)",
+                    border: `1px solid ${
+                      form.voiceSource === "manual"
+                        ? "var(--accent)"
+                        : "var(--border)"
+                    }`,
                     color: "var(--text-primary)",
                   }}
                 >
                   <span className="font-medium">Paste a writing sample</span>
                   <p className="mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    Sales copy, call transcripts, or email examples — ready to use right now.
+                    Sales copy, call transcripts, or email examples — ready to
+                    use right now.
                   </p>
                 </button>
               </div>
@@ -794,7 +972,10 @@ export default function NewEngagementPage() {
             )}
 
             <div className="space-y-1.5 w-full">
-              <label className="text-xs font-medium block" style={{ color: "var(--text-primary)" }}>
+              <label
+                className="text-xs font-medium block"
+                style={{ color: "var(--text-primary)" }}
+              >
                 Sales copy, scripts, or call transcripts (500 words minimum)
               </label>
               <textarea
@@ -803,11 +984,22 @@ export default function NewEngagementPage() {
                 placeholder="Paste sales call transcripts, email copy, or scripts here..."
                 rows={8}
                 className="w-full rounded-md px-3 py-2 text-xs resize-y focus:outline-none transition-colors"
-                style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+                style={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-secondary)",
+                }}
               />
               <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                {form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length} words pasted.{" "}
-                {form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length < 500
+                {form.rawVoiceCorpus
+                  .trim()
+                  .split(/\s+/)
+                  .filter(Boolean).length}{" "}
+                words pasted.{" "}
+                {form.rawVoiceCorpus
+                  .trim()
+                  .split(/\s+/)
+                  .filter(Boolean).length < 500
                   ? "Add more — at least 500 words are needed to learn the brand voice accurately."
                   : "✓ That's enough to learn the brand voice."}
               </p>
@@ -815,30 +1007,48 @@ export default function NewEngagementPage() {
 
             <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
               <div className="space-y-1.5 w-full">
-                <label className="text-xs font-medium block" style={{ color: "var(--text-primary)" }}>
+                <label
+                  className="text-xs font-medium block"
+                  style={{ color: "var(--text-primary)" }}
+                >
                   Most common questions on calls (one per line)
                 </label>
                 <textarea
                   value={form.topCallQuestions}
                   onChange={(e) => set("topCallQuestions", e.target.value)}
-                  placeholder={"How long does onboarding take?\nWhat results can I expect?"}
+                  placeholder={
+                    "How long does onboarding take?\nWhat results can I expect?"
+                  }
                   rows={4}
                   className="w-full rounded-md px-3 py-2 text-xs resize-y focus:outline-none transition-colors"
-                  style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+                  style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-secondary)",
+                  }}
                 />
               </div>
 
               <div className="space-y-1.5 w-full">
-                <label className="text-xs font-medium block" style={{ color: "var(--text-primary)" }}>
+                <label
+                  className="text-xs font-medium block"
+                  style={{ color: "var(--text-primary)" }}
+                >
                   Most common objections (one per line)
                 </label>
                 <textarea
                   value={form.topObjections}
                   onChange={(e) => set("topObjections", e.target.value)}
-                  placeholder={"It's too expensive for our budget right now.\nThe timing doesn't work for us right now."}
+                  placeholder={
+                    "It's too expensive for our budget right now.\nThe timing doesn't work for us right now."
+                  }
                   rows={4}
                   className="w-full rounded-md px-3 py-2 text-xs resize-y focus:outline-none transition-colors"
-                  style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+                  style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-secondary)",
+                  }}
                 />
               </div>
             </div>
@@ -846,18 +1056,28 @@ export default function NewEngagementPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-xs font-medium block" style={{ color: "var(--text-primary)" }}>
+                  <label
+                    className="text-xs font-medium block"
+                    style={{ color: "var(--text-primary)" }}
+                  >
                     Testimonials (optional)
                   </label>
-                  <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    Shown on the confirmation page as social proof. Skip this and the page ships without that section.
+                  <p
+                    className="text-[11px] mt-0.5"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Shown on the confirmation page as social proof. Skip this
+                    and the page ships without that section.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={addTestimonial}
                   className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer shrink-0"
-                  style={{ border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                  style={{
+                    border: "1px solid var(--border)",
+                    color: "var(--text-primary)",
+                  }}
                 >
                   + Add testimonial
                 </button>
@@ -867,7 +1087,10 @@ export default function NewEngagementPage() {
                 <div
                   key={i}
                   className="grid gap-3 grid-cols-1 md:grid-cols-2 rounded-lg p-3"
-                  style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                  style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                  }}
                 >
                   <InputField
                     label="Name"
@@ -898,7 +1121,10 @@ export default function NewEngagementPage() {
                     </button>
                   </div>
                   <div className="md:col-span-2 space-y-1.5">
-                    <label className="text-xs font-medium block" style={{ color: "var(--text-primary)" }}>
+                    <label
+                      className="text-xs font-medium block"
+                      style={{ color: "var(--text-primary)" }}
+                    >
                       Quote
                     </label>
                     <textarea
@@ -907,7 +1133,11 @@ export default function NewEngagementPage() {
                       placeholder="What they said about working with this client..."
                       rows={2}
                       className="w-full rounded-md px-3 py-2 text-xs resize-y focus:outline-none transition-colors"
-                      style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+                      style={{
+                        background: "var(--surface)",
+                        border: "1px solid var(--border)",
+                        color: "var(--text-secondary)",
+                      }}
                     />
                   </div>
                 </div>
@@ -917,24 +1147,77 @@ export default function NewEngagementPage() {
         )}
         {step === "confirm" && (
           <div className="space-y-3 w-full">
-            <h2 className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Review your setup</h2>
-            <div className="text-xs font-sans space-y-2 rounded-lg p-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+            <h2
+              className="text-sm font-medium"
+              style={{ color: "var(--text-primary)" }}
+            >
+              Review your setup
+            </h2>
+            <div
+              className="text-xs font-sans space-y-2 rounded-lg p-4"
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+              }}
+            >
               {[
                 ["Client", form.buyerName],
                 ["Offer", form.offerName],
                 ["Price", form.offerPrice || "—"],
-                ["Booking Calendar", BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform],
-                ["Email Platform", EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform],
-                ["Confirmation Page Hosting", HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform],
-                ["Brief Delivery", BRIEF_DESTINATION_LABELS[form.briefDestination] ?? form.briefDestination],
-                ["Brand Voice Sample", `${form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length} words`],
-                ["Call Questions Added", `${form.topCallQuestions.split("\n").filter(Boolean).length}`],
-                ["Objections Added", `${form.topObjections.split("\n").filter(Boolean).length}`],
-                ["Testimonials Added", `${form.testimonials.filter((t) => t.name && t.role && t.quote).length}`],
+                [
+                  "Booking Calendar",
+                  BOOKING_PLATFORM_LABELS[form.bookingPlatform] ??
+                    form.bookingPlatform,
+                ],
+                [
+                  "Email Platform",
+                  EMAIL_PLATFORM_LABELS[form.emailPlatform] ??
+                    form.emailPlatform,
+                ],
+                [
+                  "Confirmation Page Hosting",
+                  HOSTING_PLATFORM_LABELS[form.hostingPlatform] ??
+                    form.hostingPlatform,
+                ],
+                [
+                  "Brief Delivery",
+                  BRIEF_DESTINATION_LABELS[form.briefDestination] ??
+                    form.briefDestination,
+                ],
+                [
+                  "Brand Voice Sample",
+                  `${
+                    form.rawVoiceCorpus
+                      .trim()
+                      .split(/\s+/)
+                      .filter(Boolean).length
+                  } words`,
+                ],
+                [
+                  "Call Questions Added",
+                  `${form.topCallQuestions.split("\n").filter(Boolean).length}`,
+                ],
+                [
+                  "Objections Added",
+                  `${form.topObjections.split("\n").filter(Boolean).length}`,
+                ],
+                [
+                  "Testimonials Added",
+                  `${form.testimonials.filter((t) => t.name && t.role && t.quote).length}`,
+                ],
               ].map(([label, value]) => (
-                <div key={label} className="flex justify-between pb-1.5 last:pb-0" style={{ borderBottom: "1px solid var(--border)" }}>
+                <div
+                  key={label}
+                  className="flex justify-between pb-1.5 last:pb-0"
+                  style={{ borderBottom: "1px solid var(--border)" }}
+                >
                   <span style={{ color: "var(--text-muted)" }}>{label}</span>
-                  <span className="text-[11px]" style={{ color: "var(--text-primary)" }}>{value}</span>
+                  <span
+                    className="text-[11px]"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    {value}
+                  </span>
                 </div>
               ))}
             </div>
@@ -949,7 +1232,10 @@ export default function NewEngagementPage() {
       </div>
 
       {/* Navigation */}
-      <div className="flex justify-between pt-4" style={{ borderTop: "1px solid var(--border)" }}>
+      <div
+        className="flex justify-between pt-4"
+        style={{ borderTop: "1px solid var(--border)" }}
+      >
         <button
           onClick={() => {
             const idx = STEPS.findIndex((s) => s.id === step);
@@ -957,7 +1243,10 @@ export default function NewEngagementPage() {
           }}
           disabled={step === "offer"}
           className="px-4 py-1.5 text-xs font-medium rounded-md disabled:opacity-20 disabled:cursor-not-allowed transition-all cursor-pointer"
-          style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
+          style={{
+            border: "1px solid var(--border)",
+            color: "var(--text-muted)",
+          }}
         >
           Back
         </button>

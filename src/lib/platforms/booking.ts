@@ -26,7 +26,7 @@ export class CalendlyClient {
   }
 
   /**
-   * Fetches tomorrow's scheduled events and expands each to its invitee record.
+   * Fleches tomorrow's scheduled events and expands each to its invitee record.
    * Calendly v2: /scheduled_events does NOT include invitee data — must call
    * /scheduled_events/{uuid}/invitees per event.
    */
@@ -148,6 +148,107 @@ export class CalendlyClient {
       .slice(0, count)
       .map((slot: any) => new Date(slot.start_time));
   }
+
+  /**
+   * Programmatically resolves the user's canonical current organization URI context.
+   * Called by the setup route to eliminate the need for manual Org URI input.
+   */
+  async getCurrentOrganization(): Promise<string> {
+    const res = await fetch(`${this.baseUrl}/users/me`, { headers: this.headers });
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "unknown");
+      throw new Error(
+        `Calendly profile check failed [${res.status}] — check the API key. Response: ${errorText}`
+      );
+    }
+    const data = await res.json();
+    
+    // Calendly returns: { resource: { current_organization: "https://api.calendly.com/organizations/xxx" } }
+    const orgUri = data.resource?.current_organization;
+    
+    if (!orgUri) {
+      throw new Error(
+        "Calendly API returned no current_organization for this user. The API key may belong to a personal account without an organization, or the user may not have access to any organization."
+      );
+    }
+    
+    return orgUri;
+  }
+
+  /**
+   * Programmatically matches the target Event Type UUID by scanning slugs against the standing booking link.
+   * This eliminates the need for users to manually find and paste UUIDs from the Calendly UI.
+   */
+  async getEventTypeUuidFromSlug(
+    organizationUri: string,
+    standingLink: string
+  ): Promise<string> {
+    if (!standingLink) {
+      return "";
+    }
+
+    // Normalize and extract the slug from URLs like:
+    // - https://calendly.com/acme-corp/discovery-call -> "discovery-call"
+    // - https://calendly.com/acme-corp/discovery-call/ -> "discovery-call"
+    // - calendly.com/acme-corp/discovery-call -> "discovery-call"
+    const normalizedLink = standingLink.replace(/\/+$/, "").toLowerCase();
+    const urlParts = normalizedLink.split("/");
+    const targetSlug = urlParts[urlParts.length - 1] ?? "";
+
+    if (!targetSlug) {
+      console.warn("[CalendlyClient] Could not extract slug from standing link:", standingLink);
+      return "";
+    }
+
+    // Fetch all active event types for the organization
+    const params = new URLSearchParams({
+      organization: organizationUri,
+      active: "true",
+    });
+
+    const res = await fetch(`${this.baseUrl}/event_types?${params.toString()}`, {
+      headers: this.headers,
+    });
+
+    if (!res.ok) {
+      console.error(
+        `[CalendlyClient] Failed to fetch event types [${res.status}]`
+      );
+      return "";
+    }
+
+    const data = await res.json();
+    const eventTypes: Array<{
+      uri: string;
+      slug: string;
+      landing_page_url: string;
+      name: string;
+    }> = data.collection ?? [];
+
+    // Try to match by slug first, then by exact landing page URL
+    const match = eventTypes.find(
+      (e) =>
+        e.slug?.toLowerCase() === targetSlug ||
+        e.landing_page_url?.toLowerCase() === normalizedLink
+    );
+
+    if (match) {
+      // Extract UUID from URI like: https://api.calendly.com/event_types/abc123def456
+      const uuid = match.uri.split("/").pop() ?? "";
+      console.log(
+        `[CalendlyClient] Matched event type "${match.name}" (${uuid}) for slug "${targetSlug}"`
+      );
+      return uuid;
+    }
+
+    // Log available event types to help with debugging if no match found
+    const availableSlugs = eventTypes.map((e) => e.slug).join(", ");
+    console.warn(
+      `[CalendlyClient] No event type matched slug "${targetSlug}". Available slugs: ${availableSlugs || "(none)"}`
+    );
+
+    return "";
+  }
 }
 
 // ── Cal.com ───────────────────────────────────────────────────────────────
@@ -206,7 +307,7 @@ export class CalComClient {
       headers: this.headers,
       body: JSON.stringify({
         url: receiverUrl,
-        triggers: ["BOOKING_CREATED", "BOOKING_CANCELLED", "BOOKING_RESCHEDULED"],
+        triggers: ["BOOKING_CREATED", "BOOKING_CANCELLED", "BOOKING_RESCHRESHEDULED"],
         active: true,
       }),
     });
