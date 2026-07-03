@@ -22,7 +22,7 @@ async function runMigrations() {
     migrationsFolder: "./drizzle/migrations" 
   });
   
-  console.log("✅ Success! All 8 tables have been built in Supabase! 🚀");
+  console.log("✅ Success! migration successful 🚀");
   
   // Cleanly close the database connection pool
   await migrationClient.end();

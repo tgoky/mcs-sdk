@@ -1,12 +1,13 @@
-// src/app/api/auth/login/route.ts
-//
-// This used to skip Whop entirely: it injected a fake session
-// (whopUserId: "dev_sandbox_user", subscriptionStatus: "active") directly
-// and redirected to /dashboard. That meant nobody ever actually went
-// through Whop OAuth — every visitor was silently treated as a paid,
-// logged-in user. This is the real PKCE authorize redirect.
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getSession } from "@/lib/session";
+import { db } from "@/lib/db";
+import { users } from "@/models/schema";
+
+// =============================================================================
+// 🔌 UNCOMMENT THIS BLOCK LATER TO WIRE REAL WHOP OAUTH BACK IN:
+// =============================================================================
+/*
+import { cookies } from "next/headers";
 import crypto from "crypto";
 import { generateAuthUrl } from "@/lib/whop";
 
@@ -28,4 +29,53 @@ export async function GET() {
   cookieStore.set("code_verifier", codeVerifier, cookieOpts);
 
   redirect(generateAuthUrl(state, codeVerifier, nonce));
+}
+*/
+// =============================================================================
+
+
+// =============================================================================
+// 🧪 MOCK BYPASS MODE (Active Sandbox Test Layer)
+// =============================================================================
+export async function GET() {
+  const mockUserId = "user_mock_sandbox_dev";
+  const mockEmail = "sandbox@muddventures.com";
+  
+  // Stamping as "admin" signals to src/middleware.ts that this session is local/exempt
+  // and completely bypasses periodic Whop API live background revalidations.
+  const mockStatus = "admin"; 
+
+  // 1. Seed or update the mock user within your Postgres database to prevent 
+  // relation inconsistencies or empty state scenarios across the workspace panels.
+  try {
+    await db
+      .insert(users)
+      .values({
+        whopUserId: mockUserId,
+        email: mockEmail,
+        subscriptionStatus: mockStatus,
+      })
+      .onConflictDoUpdate({
+        target: users.whopUserId,
+        set: {
+          email: mockEmail,
+          subscriptionStatus: mockStatus,
+          updatedAt: new Date(),
+        },
+      });
+  } catch (dbErr) {
+    console.error("[mock login] Database seeding warning:", dbErr);
+  }
+
+  // 2. Direct injection into the encrypted, httpOnly iron-session framework cookie.
+  const session = await getSession();
+  session.whopUserId = mockUserId;
+  session.email = mockEmail;
+  session.subscriptionStatus = mockStatus;
+  session.subscriptionVerifiedAt = Date.now();
+  session.refreshToken = "mock_refresh_token_sandbox";
+  await session.save();
+
+  // 3. Auto-route past the Whop external gateway and drop straight into testing flows.
+  redirect("/dashboard");
 }
