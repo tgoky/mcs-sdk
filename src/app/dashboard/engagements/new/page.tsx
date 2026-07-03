@@ -104,6 +104,63 @@ const DEFAULT_FORM: FormData = {
   testimonials: [],
 };
 
+// Draft persistence: survives page refresh / accidental navigation within
+// the same tab. Deliberately session-scoped (not localStorage) and
+// deliberately excludes API keys — secrets never touch browser storage,
+// even short-lived storage, so those three fields always come back empty
+// after a restore and the buyer re-pastes them.
+const DRAFT_KEY = "mcs:new-engagement:draft";
+const DRAFT_STEP_KEY = "mcs:new-engagement:step";
+
+function loadDraft(): Partial<FormData> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Merge onto DEFAULT_FORM shape so a draft saved before a schema change
+    // (new field added/removed) can't leave the form in a half-shaped state.
+    return { ...DEFAULT_FORM, ...parsed };
+  } catch {
+    return null;
+  }
+}
+
+function loadDraftStep(): Step | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(DRAFT_STEP_KEY);
+    return raw && STEPS.some((s) => s.id === raw) ? (raw as Step) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(form: FormData, step: Step) {
+  if (typeof window === "undefined") return;
+  try {
+    const { bookingApiKey, emailApiKey, hostingApiKey, ...safeToStore } = form;
+    void bookingApiKey;
+    void emailApiKey;
+    void hostingApiKey;
+    window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(safeToStore));
+    window.sessionStorage.setItem(DRAFT_STEP_KEY, step);
+  } catch {
+    // sessionStorage can throw in private-browsing/quota-exceeded edge
+    // cases — losing draft persistence isn't worth surfacing an error over.
+  }
+}
+
+function clearDraft() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(DRAFT_KEY);
+    window.sessionStorage.removeItem(DRAFT_STEP_KEY);
+  } catch {
+    // no-op
+  }
+}
+
 function StepIndicator({
   steps,
   current,
@@ -256,8 +313,12 @@ function SelectField({
 
 export default function NewEngagementPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("offer");
-  const [form, setForm] = useState<FormData>(DEFAULT_FORM);
+  const [step, setStep] = useState<Step>(() => loadDraftStep() ?? "offer");
+  const [form, setForm] = useState<FormData>(() => loadDraft() ?? DEFAULT_FORM);
+  const [restoredDraft] = useState(
+    () => typeof window !== "undefined" && window.sessionStorage.getItem(DRAFT_KEY) !== null
+  );
+  const [showRestoredBanner, setShowRestoredBanner] = useState(restoredDraft);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
@@ -292,6 +353,20 @@ export default function NewEngagementPage() {
   function set(field: keyof FormData, value: string | boolean) {
     setForm((f) => ({ ...f, [field]: value }));
   }
+
+  function discardDraft() {
+    clearDraft();
+    setForm(DEFAULT_FORM);
+    setStep("offer");
+    setShowRestoredBanner(false);
+  }
+
+  // Draft autosave: keeps onboarding progress across an accidental refresh
+  // or back/forward navigation. API keys are stripped before storage inside
+  // saveDraft, so nothing sensitive ends up in sessionStorage.
+  useEffect(() => {
+    saveDraft(form, step);
+  }, [form, step]);
 
   // Klaviyo: Fetch lists
   useEffect(() => {
@@ -553,6 +628,7 @@ export default function NewEngagementPage() {
         return;
       }
 
+      clearDraft();
       setResult({
         engagementId: data.engagementId,
         confirmationPageUrl: data.confirmationPageUrl,
@@ -668,6 +744,35 @@ export default function NewEngagementPage() {
       </div>
 
       <StepIndicator steps={STEPS} current={step} />
+
+      {showRestoredBanner && (
+        <div
+          className="rounded-lg p-3 flex items-center justify-between gap-3 text-xs"
+          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+        >
+          <span style={{ color: "var(--text-muted)" }}>
+            Restored your in-progress setup from before the last refresh. API keys were not saved and need to be re-entered.
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowRestoredBanner(false)}
+              className="px-2 py-1 rounded"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Dismiss
+            </button>
+            <button
+              type="button"
+              onClick={discardDraft}
+              className="px-2 py-1 rounded"
+              style={{ color: "var(--text-secondary)", border: "1px solid var(--border)" }}
+            >
+              Start over
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="bg-transparent space-y-6 pt-2">
         {/* Step: Your Offer */}

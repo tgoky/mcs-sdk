@@ -163,6 +163,78 @@ export async function POST(request: Request) {
         summary.openItems.push(`Cal.com auto-discovery notice: ${calComErr.message}`);
       }
     }
+
+    // ── Email/CRM Platform Meta Flattening ──
+    // The onboarding form nests Klaviyo/ActiveCampaign/GHL identifiers under
+    // stack.email_platform_meta for a clean conditional-fields UI. The
+    // enrollment service (pile-on / win-back, see enrollment-service.ts and
+    // email.ts) reads them from flatter, platform-specific locations on
+    // stack instead. This step bridges the two shapes before anything is
+    // persisted, so the values actually reach the code that needs them.
+    if (finalStack.email_platform_meta) {
+      const m = finalStack.email_platform_meta;
+
+      if (finalStack.email_platform === "klaviyo") {
+        if (m.target_list_id) finalStack.target_list_id = m.target_list_id;
+        if (m.recovery_list_id) finalStack.recovery_list_id = m.recovery_list_id;
+
+        if (!finalStack.target_list_id || !finalStack.recovery_list_id) {
+          summary.openItems.push(
+            "Klaviyo is missing a target and/or recovery list ID — Pile-On and Win-Back enrollment will fail until these are set."
+          );
+        }
+      }
+
+      if (finalStack.email_platform === "activecampaign") {
+        if (m.target_list_id) finalStack.target_list_id = m.target_list_id;
+        if (m.recovery_list_id) finalStack.recovery_list_id = m.recovery_list_id;
+        if (m.base_url) finalStack.activecampaign_base_url = m.base_url;
+
+        if (
+          !finalStack.target_list_id ||
+          !finalStack.recovery_list_id ||
+          !finalStack.activecampaign_base_url
+        ) {
+          summary.openItems.push(
+            "ActiveCampaign is missing a target list ID, recovery list ID, and/or base URL — Pile-On and Win-Back enrollment will fail until these are set."
+          );
+        }
+      }
+
+      if (finalStack.email_platform === "ghl") {
+        // GHL CRM identifiers live under booking_platform_meta by design —
+        // that's the shape enrollInPreCallSequence/enrollInWinBackSequence
+        // read from, even when GHL isn't the booking platform.
+        // location_id is deliberately NOT overwritten if already set —
+        // when GHL Calendar is also the booking platform, its location_id
+        // (used by GHLCalendarClient for calendar/webhook calls) takes
+        // priority over whatever was entered on the email step, since the
+        // two should refer to the same sub-account but only one of them
+        // is guaranteed correct if they ever diverge.
+        finalStack.booking_platform_meta = {
+          ...finalStack.booking_platform_meta,
+          ...(!finalStack.booking_platform_meta?.location_id &&
+            m.location_id && { location_id: m.location_id }),
+          ...(m.target_workflow_id && { target_workflow_id: m.target_workflow_id }),
+          ...(m.recovery_workflow_id && { recovery_workflow_id: m.recovery_workflow_id }),
+        };
+
+        if (
+          !finalStack.booking_platform_meta?.location_id ||
+          !finalStack.booking_platform_meta?.target_workflow_id ||
+          !finalStack.booking_platform_meta?.recovery_workflow_id
+        ) {
+          summary.openItems.push(
+            "GoHighLevel is missing a location ID and/or workflow IDs — Pile-On and Win-Back enrollment will fail until these are set."
+          );
+        }
+      }
+
+      // The raw nested object has been flattened into the fields above —
+      // drop it so the persisted row doesn't carry two conflicting sources
+      // of truth for the same values.
+      delete finalStack.email_platform_meta;
+    }
     // =============================================================================
 
     await startRun({

@@ -6,13 +6,13 @@ import { eq, sql } from "drizzle-orm"; // ✅ Added sql import
 const USE_OPENROUTER = process.env.USE_OPENROUTER === "true";
 
 const ANTHROPIC_MODELS = {
-  SYNTHESIS: "claude-sonnet-4-6",
-  FAST: "claude-haiku-4-5-20251001",
+  SYNTHESIS: "claude-sonnet-5",
+  FAST: "anthropic/claude-haiku-4.5",
 } as const;
 
 const OPENROUTER_MODELS = {
-  SYNTHESIS: "anthropic/claude-sonnet-4-6",
-  FAST: "anthropic/claude-haiku-4-5",
+  SYNTHESIS: "anthropic/claude-sonnet-5",
+  FAST: "anthropic/claude-haiku-4.5",
 } as const;
 
 export const MODEL = {
@@ -29,8 +29,8 @@ const ANTHROPIC_PRICING: Record<string, { input: number; output: number }> = {
 };
 
 const OPENROUTER_PRICING: Record<string, { input: number; output: number }> = {
-  "anthropic/claude-sonnet-4-6": { input: 300,  output: 1500 },
-  "anthropic/claude-haiku-4-5":  { input: 25,   output: 125  },
+  "anthropic/claude-sonnet-5": { input: 300,  output: 1500 },
+  "anthropic/claude-haiku-4.5":  { input: 25,   output: 125  },
   "openai/gpt-4o":               { input: 250,  output: 1000 },
   "google/gemini-2.5-pro":       { input: 125,  output: 1000 },
   "meta-llama/llama-3.3-8b-instruct:free": { input: 0, output: 0 },
