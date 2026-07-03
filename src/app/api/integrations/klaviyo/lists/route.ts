@@ -17,28 +17,40 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Missing API Key parameter" }, { status: 400 });
     }
 
-    const res = await fetch("https://a.klaviyo.com/api/lists/?page[size]=100", {
-      headers: {
-        Authorization: `Klaviyo-API-Key ${apiKey}`,
-        Revision: "2024-10-15",
-        Accept: "application/json",
-      },
-    });
+    // Klaviyo caps page[size] at 10 for the Lists endpoint (this varies by
+    // endpoint — Lists is one of the tighter ones). Paginate via links.next
+    // instead of requesting a bigger page, so accounts with more than 10
+    // lists still get the full set.
+    const lists: { id: string; name: string }[] = [];
+    let url: string | null = "https://a.klaviyo.com/api/lists/?page[size]=10";
+    let pagesFetched = 0;
+    const MAX_PAGES = 20; // safety cap: 200 lists is far beyond any real account
 
-    if (!res.ok) {
-      const errorBody = await res.text().catch(() => "Unknown");
-      return NextResponse.json(
-        { error: `Klaviyo API rejected key [${res.status}]: ${errorBody}` },
-        { status: res.status }
-      );
+    while (url && pagesFetched < MAX_PAGES) {
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Klaviyo-API-Key ${apiKey}`,
+          Revision: "2025-04-15",
+          Accept: "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        const errorBody = await res.text().catch(() => "Unknown");
+        return NextResponse.json(
+          { error: `Klaviyo API rejected key [${res.status}]: ${errorBody}` },
+          { status: res.status }
+        );
+      }
+
+      const payload = await res.json();
+      for (const item of payload.data ?? []) {
+        lists.push({ id: item.id, name: item.attributes?.name ?? "Unnamed List" });
+      }
+
+      url = payload.links?.next ?? null;
+      pagesFetched++;
     }
-
-    const payload = await res.json();
-    
-    const lists = (payload.data ?? []).map((item: any) => ({
-      id: item.id,
-      name: item.attributes?.name ?? "Unnamed List",
-    }));
 
     return NextResponse.json({ success: true, lists });
   } catch (err: any) {

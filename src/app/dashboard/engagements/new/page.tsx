@@ -380,9 +380,12 @@ export default function NewEngagementPage() {
       setListsFetchError(null);
 
       fetch(`/api/integrations/klaviyo/lists?key=${encodeURIComponent(form.emailApiKey.trim())}`)
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to authenticate key against Klaviyo platform.");
-          return res.json();
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data?.error || `Klaviyo request failed [${res.status}]`);
+          }
+          return data;
         })
         .then((data) => {
           if (data.success) {
@@ -415,9 +418,12 @@ export default function NewEngagementPage() {
       fetch(
         `/api/integrations/activecampaign/lists?key=${encodeURIComponent(form.emailApiKey.trim())}&baseUrl=${encodeURIComponent(form.emailActiveCampaignBaseUrl.trim())}`
       )
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch lists");
-          return res.json();
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data?.error || `ActiveCampaign request failed [${res.status}]`);
+          }
+          return data;
         })
         .then((data) => {
           if (data.success) {
@@ -445,9 +451,12 @@ export default function NewEngagementPage() {
       setForm((f) => ({ ...f, emailGhlTargetWorkflowId: "", emailGhlRecoveryWorkflowId: "" }));
 
       fetch(`/api/integrations/ghl/locations?key=${encodeURIComponent(form.emailApiKey.trim())}`)
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch locations");
-          return res.json();
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data?.error || `GHL request failed [${res.status}]`);
+          }
+          return data;
         })
         .then((data) => {
           if (data.success) {
@@ -479,9 +488,12 @@ export default function NewEngagementPage() {
       fetch(
         `/api/integrations/ghl/workflows?key=${encodeURIComponent(form.emailApiKey.trim())}&locationId=${encodeURIComponent(form.emailGhlLocationId)}`
       )
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch workflows");
-          return res.json();
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data?.error || `GHL request failed [${res.status}]`);
+          }
+          return data;
         })
         .then((data) => {
           if (data.success) {
