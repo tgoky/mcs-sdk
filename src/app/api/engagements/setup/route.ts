@@ -205,12 +205,6 @@ export async function POST(request: Request) {
         // GHL CRM identifiers live under booking_platform_meta by design —
         // that's the shape enrollInPreCallSequence/enrollInWinBackSequence
         // read from, even when GHL isn't the booking platform.
-        // location_id is deliberately NOT overwritten if already set —
-        // when GHL Calendar is also the booking platform, its location_id
-        // (used by GHLCalendarClient for calendar/webhook calls) takes
-        // priority over whatever was entered on the email step, since the
-        // two should refer to the same sub-account but only one of them
-        // is guaranteed correct if they ever diverge.
         finalStack.booking_platform_meta = {
           ...finalStack.booking_platform_meta,
           ...(!finalStack.booking_platform_meta?.location_id &&
@@ -236,6 +230,20 @@ export async function POST(request: Request) {
       delete finalStack.email_platform_meta;
     }
     // =============================================================================
+
+    // ✅ PRE-SEED: Satisfy FK constraint for skill_runs.engagement_id before starting the run instrumentation
+    await db
+      .insert(engagements)
+      .values({
+        id: crypto.randomUUID(),
+        engagementId,
+        whopUserId,
+        buyer: buyerName,
+        schemaVersion: "1.0",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
 
     await startRun({
       id: runId,
