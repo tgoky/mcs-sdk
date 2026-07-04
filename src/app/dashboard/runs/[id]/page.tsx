@@ -15,7 +15,8 @@ import {
   Terminal,
   Coins,
   ChevronLeft,
-  Clock
+  Clock,
+  Ban
 } from "lucide-react";
 import {
   skillName,
@@ -84,6 +85,7 @@ function formatDate(iso: string): string {
 function StepCenterIcon({ status }: { status: RunStep["status"] }) {
   if (status === "success") return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />;
   if (status === "failed") return <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />;
+  if (status === "cancelled") return <Ban className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />;
   if (status === "skipped") return <SkipForward className="w-4 h-4 text-zinc-600 shrink-0 mt-0.5" />;
   return <Loader2 className="w-4 h-4 text-zinc-400 animate-spin shrink-0 mt-0.5" />;
 }
@@ -205,6 +207,7 @@ function RunStatusBadge({ status }: { status: string }) {
   const cfg = {
     success: { icon: <CheckCircle2 className="w-4 h-4" />, cls: "text-emerald-400 border-emerald-900/50 bg-emerald-950/30" },
     failed:  { icon: <XCircle className="w-4 h-4" />,      cls: "text-rose-400 border-rose-900/50 bg-rose-950/30"         },
+    cancelled: { icon: <Ban className="w-4 h-4" />,         cls: "text-amber-400 border-amber-900/50 bg-amber-950/30"        },
     running: { icon: <Loader2 className="w-4 h-4 animate-spin" />, cls: "text-zinc-400 border-zinc-800 bg-zinc-950/30"   },
   }[s] ?? { icon: <AlertCircle className="w-4 h-4" />, cls: "text-zinc-500 border-zinc-800 bg-zinc-950/30" };
 
@@ -225,6 +228,9 @@ export default function RunDetailPage() {
   const [run, setRun] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   // Reusable background data worker: Only changes data state, never touches loading/error screens
   const fetchRun = useCallback(async (signal?: AbortSignal) => {
@@ -240,6 +246,26 @@ export default function RunDetailPage() {
       // Background polling errors are intentionally swallowed to preserve UI stability
     }
   }, [runId]);
+
+  const handleCancel = useCallback(async () => {
+    if (!runId) return;
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      const res = await fetch(`/api/skill-runs/${runId}/cancel`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCancelError(body.error ?? "Failed to cancel run.");
+        return;
+      }
+      await fetchRun(); // don't wait for the next 3s poll tick
+      setConfirmingCancel(false);
+    } catch (e: any) {
+      setCancelError(e.message ?? "Failed to cancel run.");
+    } finally {
+      setCancelling(false);
+    }
+  }, [runId, fetchRun]);
 
   // Hook 1: Initial load (Handles isolated error and component-unmount loading safety)
   useEffect(() => {
@@ -276,6 +302,7 @@ export default function RunDetailPage() {
 
   // Derived state context
   const isRunning = run?.status === "running";
+  const isCancelled = run?.status === "cancelled";
 
   // Hook 2: Safe Background Polling Subscription
   useEffect(() => {
@@ -354,13 +381,47 @@ export default function RunDetailPage() {
           <div className="flex items-center gap-2">
             <RunStatusBadge status={run.status} />
             {isRunning && (
-              <span className="text-[10px] text-zinc-600 animate-pulse">
-                Live — refreshing every 3s
-              </span>
+              <span className="text-[10px] text-zinc-600 animate-pulse">Live — refreshing every 3s</span>
+            )}
+            {isRunning && !confirmingCancel && (
+              <button
+                onClick={() => setConfirmingCancel(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-zinc-800 text-zinc-400 hover:text-rose-400 hover:border-rose-900/50 hover:bg-rose-950/20 transition-colors"
+              >
+                <Ban size={13} />
+                Cancel run
+              </button>
+            )}
+            {isRunning && confirmingCancel && (
+              <div className="inline-flex items-center gap-2 text-xs">
+                <span className="text-zinc-500">Stop this run?</span>
+                <button
+                  onClick={handleCancel}
+                  disabled={cancelling}
+                  className="inline-flex items-center gap-1.5 font-medium px-2.5 py-1 rounded-full border border-rose-900/50 text-rose-400 bg-rose-950/20 hover:bg-rose-950/40 transition-colors disabled:opacity-50"
+                >
+                  {cancelling ? <Loader2 size={13} className="animate-spin" /> : <Ban size={13} />}
+                  {cancelling ? "Cancelling…" : "Confirm"}
+                </button>
+                <button
+                  onClick={() => { setConfirmingCancel(false); setCancelError(null); }}
+                  disabled={cancelling}
+                  className="text-zinc-500 hover:text-zinc-300 px-1.5 py-1 disabled:opacity-50"
+                >
+                  Back
+                </button>
+              </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Cancel error notice */}
+      {cancelError && (
+        <div className="border border-rose-900/40 bg-rose-950/10 rounded-lg p-3">
+          <p className="text-xs text-rose-300">{cancelError}</p>
+        </div>
+      )}
 
       {/* Overview Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -377,7 +438,7 @@ export default function RunDetailPage() {
             <Clock size={13} />
             <span className="text-[11px] font-medium uppercase tracking-wider">Duration</span>
           </div>
-          <p className="text-xs text-zinc-200 font-mono">{isRunning ? "In progress…" : formatDuration(run.durationMs)}</p>
+          <p className="text-xs text-zinc-200 font-mono">{isRunning ? "In progress…" : isCancelled ? "Cancelled" : formatDuration(run.durationMs)}</p>
         </div>
 
         <div className="rounded-lg border border-zinc-900 bg-zinc-950/20 p-3.5 space-y-1">
@@ -402,6 +463,16 @@ export default function RunDetailPage() {
         <div className="border border-rose-900/40 bg-rose-950/10 rounded-lg p-4 space-y-1">
           <p className="text-xs font-semibold text-rose-400 uppercase tracking-wider">Fatal Pipeline Exception</p>
           <p className="text-xs text-rose-300 font-mono leading-relaxed">{run.errorMessage}</p>
+        </div>
+      )}
+
+      {/* Cancellation notice */}
+      {isCancelled && (
+        <div className="border border-amber-900/40 bg-amber-950/10 rounded-lg p-4 space-y-1">
+          <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Run Cancelled</p>
+          <p className="text-xs text-amber-300 font-light leading-relaxed">
+            This run was cancelled by user request. Any steps that were in progress at the time have been marked as cancelled.
+          </p>
         </div>
       )}
 

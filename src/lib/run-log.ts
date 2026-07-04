@@ -23,6 +23,8 @@
 //   await finishRun(runId, { summary: { ... } });
 //   // or, on error:
 //   await failRun(runId, err, { summary: { ... } });
+//   // or, on cancel:
+//   await cancelRun(runId);
 
 import { db } from "@/lib/db";
 import { skillRuns } from "@/models/schema";
@@ -168,20 +170,20 @@ export interface FinishRunOptions {
  * it (exactly the class of bug this replaced). Returns the corrected
  * array; does not write to the DB itself.
  */
-function closeDanglingSteps(steps: RunStep[], outcome: "success" | "failed"): RunStep[] {
+function closeDanglingSteps(
+  steps: RunStep[],
+  outcome: "success" | "failed" | "cancelled"
+): RunStep[] {
   const nowIso = new Date().toISOString();
+  const interruptedDetail =
+    outcome === "failed"
+      ? "Interrupted — the run failed before this step finished."
+      : outcome === "cancelled"
+      ? "Interrupted — the run was cancelled before this step finished."
+      : undefined;
   return steps.map((s) =>
     s.status === "running"
-      ? {
-          ...s,
-          status: outcome,
-          detail:
-            s.detail ??
-            (outcome === "failed"
-              ? "Interrupted — the run failed before this step finished."
-              : undefined),
-          completedAt: nowIso,
-        }
+      ? { ...s, status: outcome, detail: s.detail ?? interruptedDetail, completedAt: nowIso }
       : s
   );
 }
@@ -245,6 +247,27 @@ export async function failRun(
     // Swallow — if even this write fails (e.g. DB connection lost), there's
     // nowhere left to surface it. The caller's own catch still rethrows.
   }
+}
+
+/**
+ * Marks a run as cancelled by user request. Called directly from the cancel
+ * API route the moment the user clicks Cancel — doesn't wait for Inngest's
+ * cancelOn match, which can lag behind by however long the current step
+ * takes to finish. The DB row should reflect "cancelled" immediately.
+ */
+export async function cancelRun(runId: string): Promise<void> {
+  const [row] = await db
+    .select({ steps: skillRuns.steps })
+    .from(skillRuns)
+    .where(eq(skillRuns.id, runId))
+    .limit(1);
+
+  const steps = closeDanglingSteps(row?.steps ?? [], "cancelled");
+
+  await db
+    .update(skillRuns)
+    .set({ status: "cancelled", completedAt: new Date(), steps })
+    .where(eq(skillRuns.id, runId));
 }
 
 /** Small helper for building up a RunSummary incrementally across a function body. */

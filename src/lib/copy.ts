@@ -80,12 +80,14 @@ export const RUN_STATUS_LABELS: Record<string, string> = {
   success: "Done",
   failed: "Failed",
   running: "In progress",
+   cancelled: "Cancelled",
 };
 
 export const RUN_STATUS_COLORS: Record<string, string> = {
   success: "text-emerald-400 font-medium",
   failed: "text-rose-400",
   running: "text-zinc-400 italic",
+  cancelled: "text-amber-400",
 };
 
 /** Friendly run-status word for a raw status string, with a safe fallback. */
@@ -250,3 +252,4 @@ export const ACTIVITY_FEED_COPY = {
   columnStatus: "Status",
   columnTime: "Time",
 };
+

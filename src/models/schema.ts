@@ -30,7 +30,7 @@ export type RunSummary = {
 export type RunStep = {
   phase: string;            // internal phase key, e.g. "voice_extraction" — pass through phaseLabel() to render
   label?: string;           // optional human-readable detail beyond the phase name, e.g. "Sarah Jenkins (sarah@acme.com)"
-  status: "running" | "success" | "failed" | "skipped";
+   status: "running" | "success" | "failed" | "skipped" | "cancelled";
   detail?: string;          // free-text outcome for this specific step, e.g. "Identity confidence 98/100 — brief sent via Slack"
   startedAt: string;        // ISO timestamp
   completedAt?: string;     // ISO timestamp, set when the step finishes

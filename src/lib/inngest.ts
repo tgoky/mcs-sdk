@@ -19,6 +19,18 @@ export const skillRunExecute = eventType("skill/run.execute", {
   schema: staticSchema<SkillRunExecuteData>(),
 });
 
+
+// Sent from the "Cancel run" button on the run-detail page. Only carries the
+// runId — cancelOn matching only needs this one field, and there's no reason
+// to ship anything else into Inngest Cloud's event log for a cancellation.
+export type SkillRunCancelData = {
+  runId: string;
+};
+
+export const skillRunCancel = eventType("skill/run.cancel", {
+  schema: staticSchema<SkillRunCancelData>(),
+});
+
 /**
  * Global Inngest Client
  * Used by API routes to publish events, and by workers to handle jobs.
@@ -37,3 +49,4 @@ export const inngest = new Inngest({
     maxRuntime: "45s", // keep below maxDuration=60 set on the inngest route
   },
 });
+

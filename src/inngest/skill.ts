@@ -1,4 +1,4 @@
-import { inngest, skillRunExecute } from "@/lib/inngest";
+import { inngest, skillRunExecute, skillRunCancel } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
@@ -16,7 +16,17 @@ import { failRun } from "@/lib/run-log";
  * instead of falling back to implicit `any`.
  */
 export const executeSkillRun = inngest.createFunction(
-  { id: "execute-skill-run", retries: 1, triggers: [skillRunExecute] },
+  {
+    id: "execute-skill-run",
+    retries: 1,
+    triggers: [skillRunExecute],
+    // Matches on data.runId between the triggering event and any later
+    // skill/run.cancel event. This stops Inngest from scheduling this run's
+    // *next* step — it can't interrupt a step.run() callback already
+    // mid-execution. That's why the DB write happens immediately in the
+    // cancel route below, instead of waiting on this to take effect.
+    cancelOn: [{ event: skillRunCancel, match: "data.runId" }],
+  },
   async ({ event, step }) => {
     const { runId, engagementId, skillName, auditType } = event.data;
 
