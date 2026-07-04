@@ -112,7 +112,7 @@ const DEFAULT_FORM: FormData = {
 const DRAFT_KEY = "mcs:new-engagement:draft";
 const DRAFT_STEP_KEY = "mcs:new-engagement:step";
 
-function loadDraft(): Partial<FormData> | null {
+function loadDraft(): FormData | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.sessionStorage.getItem(DRAFT_KEY);

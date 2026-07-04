@@ -150,6 +150,22 @@ export class CalendlyClient {
   }
 
   /**
+   * Lightweight liveness check for the stored personal access token.
+   * Hits GET /users/me — Calendly's own docs point here for exactly this
+   * purpose ("To test the access token, make a call to the Get current
+   * user endpoint" — developer.calendly.com/how-to-authenticate-calendly-api-via-oauth,
+   * checked directly against current docs, not assumed). Throws on a
+   * revoked/invalid token; resolves silently when healthy. Used by the
+   * daily credential-health cron, not by any user-facing flow.
+   */
+  async checkCredentialHealth(): Promise<void> {
+    const res = await fetch(`${this.baseUrl}/users/me`, { headers: this.headers });
+    if (!res.ok) {
+      throw new Error(`Calendly token check failed [${res.status}]`);
+    }
+  }
+
+  /**
    * Programmatically resolves the user's canonical current organization URI context.
    * Called by the setup route to eliminate the need for manual Org URI input.
    */
@@ -299,6 +315,20 @@ export class CalComClient {
         callTime: new Date(booking.startTime),
       };
     });
+  }
+
+  /**
+   * Lightweight liveness check for the stored API key. Hits GET /v2/me —
+   * Cal.com's documented "retrieve the authenticated user's profile"
+   * endpoint (cal.com/docs/api-reference/v2/me, checked directly against
+   * current docs). Throws on a revoked/invalid key. Used by the daily
+   * credential-health cron, not by any user-facing flow.
+   */
+  async checkCredentialHealth(): Promise<void> {
+    const res = await fetch(`${this.baseUrl}/me`, { headers: this.headers });
+    if (!res.ok) {
+      throw new Error(`Cal.com token check failed [${res.status}]`);
+    }
   }
 
   async subscribeWebhook(receiverUrl: string): Promise<void> {

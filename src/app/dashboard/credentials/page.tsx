@@ -67,6 +67,13 @@ const PLATFORM_GROUPS: PlatformGroup[] = [
   },
 ];
 
+// Providers with a real, verified "test this key" endpoint wired up server-
+// side (see VALIDATORS in src/app/api/credentials/test/route.ts). Only
+// these get a "Test connection" button — showing that button for a
+// provider we can't actually validate would be a lie about what the
+// platform can confirm.
+const TESTABLE_PROVIDERS = new Set(["calendly", "cal_com"]);
+
 function PlatformSection({ group }: { group: PlatformGroup }) {
   const [expanded, setExpanded] = useState(false);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -75,6 +82,37 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; message: string }>>({});
+
+  async function testConnection(provider: string) {
+    if (!engagementId.trim()) {
+      setErrors((e) => ({ ...e, _eid: "Enter your account ID first." }));
+      return;
+    }
+    setTesting(provider);
+    setTestResult((r) => ({ ...r, [provider]: undefined as any }));
+
+    try {
+      const res = await fetch("/api/credentials/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engagementId: engagementId.trim(), provider }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTestResult((r) => ({ ...r, [provider]: { ok: false, message: data.error ?? "Test failed." } }));
+      } else if (data.status === "ok") {
+        setTestResult((r) => ({ ...r, [provider]: { ok: true, message: "Connected — key is valid." } }));
+      } else {
+        setTestResult((r) => ({ ...r, [provider]: { ok: false, message: data.error ?? "Key was rejected." } }));
+      }
+    } catch {
+      setTestResult((r) => ({ ...r, [provider]: { ok: false, message: "Network error. Try again." } }));
+    } finally {
+      setTesting(null);
+    }
+  }
 
   async function save(provider: string) {
     const value = values[provider]?.trim();
@@ -243,7 +281,33 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                   >
                     {saving === platform.provider ? "Saving…" : "Save"}
                   </button>
+                  {TESTABLE_PROVIDERS.has(platform.provider) && (
+                    <button
+                      onClick={() => testConnection(platform.provider)}
+                      disabled={testing === platform.provider}
+                      title="Confirms the saved key still works, without waiting for the daily check"
+                      className="px-3 py-2 text-sm rounded-md font-medium border border-zinc-800 text-zinc-300 hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+                    >
+                      {testing === platform.provider ? "Testing…" : "Test"}
+                    </button>
+                  )}
                 </div>
+
+                {testResult[platform.provider] && (
+                  <div className="flex items-center gap-1.5 mt-2">
+                    {testResult[platform.provider].ok ? (
+                      <CheckCircle2 size={12} style={{ color: "var(--success)" }} />
+                    ) : (
+                      <AlertCircle size={12} style={{ color: "var(--error)" }} />
+                    )}
+                    <p
+                      className="text-xs"
+                      style={{ color: testResult[platform.provider].ok ? "var(--success)" : "var(--error)" }}
+                    >
+                      {testResult[platform.provider].message}
+                    </p>
+                  </div>
+                )}
 
                 {errors[platform.provider] && (
                   <div className="flex items-center gap-1.5 mt-2">

@@ -27,11 +27,60 @@
 //   await cancelRun(runId);
 
 import { db } from "@/lib/db";
-import { skillRuns } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { skillRuns, engagements, type EngagementStack } from "@/models/schema";
+import { and, eq } from "drizzle-orm";
+import { notifyUser } from "@/lib/notify";
+import { skillName as skillDisplayName } from "@/lib/copy";
 
 export type { RunSummary, RunStep } from "@/models/schema";
 import type { RunStep, RunSummary } from "@/models/schema";
+
+/**
+ * Fires the "your run broke / timed out" notification. Called from
+ * failRun() and timeoutRun() below — deliberately NOT called from
+ * cancelRun(), since that path only ever runs when the buyer themselves
+ * clicked Cancel (see src/app/api/skill-runs/[id]/cancel/route.ts). They
+ * already know; notifying them about their own action would just be noise.
+ *
+ * Isolated in its own try/catch so a notification failure (bad Slack URL,
+ * DB hiccup) can never mask or interrupt the run-outcome write that
+ * already happened above it.
+ */
+async function notifyRunOutcome(
+  engagementId: string,
+  runId: string,
+  skillName: string,
+  type: "run_failed" | "run_timed_out",
+  detail: string
+): Promise<void> {
+  try {
+    const [tenant] = await db
+      .select({ whopUserId: engagements.whopUserId, stack: engagements.stack })
+      .from(engagements)
+      .where(eq(engagements.engagementId, engagementId))
+      .limit(1);
+    if (!tenant) return;
+
+    const label = skillDisplayName(skillName as any) ?? skillName;
+    const title =
+      type === "run_failed"
+        ? `${label} run failed`
+        : `${label} run timed out`;
+
+    await notifyUser({
+      whopUserId: tenant.whopUserId,
+      engagementId,
+      runId,
+      type,
+      severity: "critical",
+      title,
+      body: detail,
+      slackWebhookUrl: (tenant.stack as EngagementStack | null)?.slack_webhook_url,
+    });
+  } catch (e) {
+    console.error("[run-log] failed to dispatch run-outcome notification:", e);
+  }
+}
 
 export interface StartRunOptions {
   id: string;
@@ -226,7 +275,11 @@ export async function failRun(
 
   try {
     const [row] = await db
-      .select({ steps: skillRuns.steps })
+      .select({
+        steps: skillRuns.steps,
+        engagementId: skillRuns.engagementId,
+        skillName: skillRuns.skillName,
+      })
       .from(skillRuns)
       .where(eq(skillRuns.id, runId))
       .limit(1);
@@ -243,6 +296,19 @@ export async function failRun(
         ...(opts.summary ? { summary: opts.summary } : {}),
       })
       .where(eq(skillRuns.id, runId));
+
+    // Silence is the whole trust problem this fixes: before this line, a
+    // failed run was only discoverable by opening the dashboard. See
+    // notifyRunOutcome() above.
+    if (row?.engagementId) {
+      await notifyRunOutcome(
+        row.engagementId,
+        runId,
+        row.skillName,
+        "run_failed",
+        errorMessage
+      );
+    }
   } catch {
     // Swallow — if even this write fails (e.g. DB connection lost), there's
     // nowhere left to surface it. The caller's own catch still rethrows.
@@ -268,6 +334,87 @@ export async function cancelRun(runId: string): Promise<void> {
     .update(skillRuns)
     .set({ status: "cancelled", completedAt: new Date(), steps })
     .where(eq(skillRuns.id, runId));
+}
+
+/**
+ * Marks a run as timed out — closed by the stale-run reaper cron (see
+ * staleRunReaperCron in src/inngest/crons.ts) rather than by the user
+ * clicking Cancel. Distinct from cancelRun() in two ways:
+ *   1. Status is "timed_out", not "cancelled" — the run-detail UI and any
+ *      future analytics should be able to tell "the buyer stopped this"
+ *      apart from "the platform gave up on this."
+ *   2. This DOES notify the tenant (cancelRun() deliberately does not —
+ *      see notifyRunOutcome() above). A run sitting at "running" forever
+ *      with no notification is exactly the silent-failure trust gap this
+ *      whole reaper exists to close.
+ *
+ * RunStep's `status` union doesn't include "timed_out" (see schema.ts) —
+ * dangling steps are closed as "cancelled" at the step level, since
+ * "interrupted before finishing" is accurate regardless of who/what ended
+ * the run. Only the top-level skillRuns.status column (plain text, no
+ * enum constraint) gets the more specific "timed_out" value.
+ */
+export async function timeoutRun(runId: string): Promise<boolean> {
+  const [row] = await db
+    .select({
+      steps: skillRuns.steps,
+      engagementId: skillRuns.engagementId,
+      skillName: skillRuns.skillName,
+      status: skillRuns.status,
+    })
+    .from(skillRuns)
+    .where(eq(skillRuns.id, runId))
+    .limit(1);
+
+  // Already resolved (succeeded/failed/cancelled) between the reaper's scan
+  // and this call — a normal, harmless race given the two are separate
+  // round-trips. Bail out rather than overwrite a legitimate terminal
+  // status with "timed_out".
+  if (!row || row.status !== "running") {
+    return false;
+  }
+
+  const nowIso = new Date().toISOString();
+  const steps = (row.steps ?? []).map((s) =>
+    s.status === "running"
+      ? {
+          ...s,
+          status: "cancelled" as const,
+          detail:
+            s.detail ??
+            "Interrupted — this run exceeded its maximum allowed runtime and was closed automatically.",
+          completedAt: nowIso,
+        }
+      : s
+  );
+
+  // The status="running" guard here is the actual safety net — it closes
+  // the same race the read-check above only reduces the odds of. Without
+  // this WHERE clause, a run that finished normally in the gap between the
+  // select above and this update would still get stomped.
+  const updated = await db
+    .update(skillRuns)
+    .set({ status: "timed_out", completedAt: new Date(), steps })
+    .where(and(eq(skillRuns.id, runId), eq(skillRuns.status, "running")))
+    .returning({ id: skillRuns.id });
+
+  if (updated.length === 0) {
+    // Lost the race between the read and the write — don't send a
+    // "your run timed out" notification for a timeout that didn't happen.
+    return false;
+  }
+
+  if (row.engagementId) {
+    await notifyRunOutcome(
+      row.engagementId,
+      runId,
+      row.skillName,
+      "run_timed_out",
+      "This run sat in \"running\" longer than its allowed ceiling and was closed automatically. If this keeps happening for the same module, it usually means an upstream API call is hanging — check the run's step timeline for where it stalled."
+    );
+  }
+
+  return true;
 }
 
 /** Small helper for building up a RunSummary incrementally across a function body. */

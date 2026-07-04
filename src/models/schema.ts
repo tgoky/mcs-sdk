@@ -5,6 +5,7 @@ import {
   timestamp,
   uuid,
   integer,
+  boolean,
 } from "drizzle-orm/pg-core";
 
 // ── Run instrumentation types ───────────────────────────────────────────────
@@ -259,8 +260,39 @@ export const credentialsRefs = pgTable("credentials_refs", {
   refKey: text("ref_key").notNull(),       // secrets://acme/calendly_pat
   encryptedValue: text("encrypted_value").notNull(), // AES-256-GCM encrypted
   iv: text("iv").notNull(),                // initialization vector
+  // ── Credential health (see src/features/notifications/server/credential-health.ts) ──
+  // "ok" | "invalid" | "unknown". "unknown" is the default until the daily
+  // health-check cron has run at least once for this row, or if this
+  // provider has no verified validation endpoint wired up yet — it does
+  // NOT mean "broken", just "not checked."
+  healthStatus: text("health_status").notNull().default("unknown"),
+  lastCheckedAt: timestamp("last_checked_at"),
+  // Raw error from the last failed validation call, surfaced in the
+  // credentials dashboard so a buyer sees *why* it's flagged, not just that
+  // it is.
+  lastCheckError: text("last_check_error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ── Notifications (multi-channel fan-out log + in-app inbox) ─────────────
+// Written by src/lib/notify.ts. This table IS the in-app channel — the
+// dashboard bell reads directly from it. Slack/email are additional,
+// best-effort channels fired alongside the same insert; this row is the
+// one channel guaranteed to exist regardless of whether the tenant has
+// Slack or email configured.
+export const notifications = pgTable("notifications", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  whopUserId: text("whop_user_id").notNull(),
+  engagementId: text("engagement_id").references(() => engagements.engagementId),
+  runId: uuid("run_id"),
+  // "run_failed" | "run_timed_out" | "credential_invalid" | "credential_check_error"
+  type: text("type").notNull(),
+  severity: text("severity").notNull().default("info"), // "info" | "warning" | "critical"
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  read: boolean("read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 // ── Artifacts ─────────────────────────────────────────────────────────────

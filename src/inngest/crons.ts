@@ -26,11 +26,13 @@
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
 import crypto from "crypto";
-import { inngest, skillRunExecute } from "@/lib/inngest";
+import { inngest, skillRunExecute, skillRunCancel } from "@/lib/inngest";
 import { db } from "@/lib/db";
-import { engagements } from "@/models/schema";
-import { startRun } from "@/lib/run-log";
+import { engagements, skillRuns } from "@/models/schema";
+import { startRun, timeoutRun } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
+import { runCredentialHealthCheck } from "@/features/notifications/server/credential-health";
+import { and, eq, lt } from "drizzle-orm";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
 // ONE step.run(), then fans out via a SINGLE step.sendEvent() carrying the
@@ -171,5 +173,87 @@ export const alertMonitorCron = inngest.createFunction(
       evaluateActiveAlertMonitor()
     );
     return { actionsTriggered };
+  }
+);
+
+// How long a run is allowed to sit at status="running" before the reaper
+// treats it as stuck rather than legitimately long-running. Deliberately
+// generous relative to the 45s per-request checkpoint window in
+// src/lib/inngest.ts, since a single run can checkpoint-resume many times
+// over its real lifetime (e.g. pre-call-read looping a full roster).
+// Override per-deployment via env if a given skill genuinely needs more.
+const STALE_RUN_CEILING_MS =
+  Number(process.env.STALE_RUN_CEILING_MINUTES ?? 120) * 60 * 1000;
+
+/**
+ * Stale-run reaper.
+ *
+ * Closes any skillRuns row that's been stuck at status="running" past
+ * STALE_RUN_CEILING_MS — the janitor for the case where a serverless
+ * function died mid-run (or someone killed `pnpm dev` at exactly the wrong
+ * moment locally) and left a row that will never update on its own. Before
+ * this existed, the run-detail page's 3s poll would spin on that row
+ * indefinitely, and nothing ever told the buyer their automation was dead.
+ *
+ * Runs every 15 minutes — frequent enough that a stuck run doesn't sit
+ * silently for hours, cheap enough that it's a non-issue against Inngest's
+ * free-tier execution allowance.
+ */
+export const staleRunReaperCron = inngest.createFunction(
+  { id: "stale-run-reaper-cron", triggers: [{ cron: "*/15 * * * *" }] },
+  async ({ step }) => {
+    const reapedRunIds = await step.run("reap-stale-runs", async () => {
+      const cutoff = new Date(Date.now() - STALE_RUN_CEILING_MS);
+      const stuck = await db
+        .select({ id: skillRuns.id })
+        .from(skillRuns)
+        .where(and(eq(skillRuns.status, "running"), lt(skillRuns.startedAt, cutoff)));
+
+      // timeoutRun() re-checks status="running" at write time and returns
+      // false if the run resolved on its own between this scan and the
+      // update (a normal race given they're separate round-trips). Only
+      // ids it actually closed get cancelled/reported below — otherwise a
+      // run that just succeeded could get an incorrect cancel event fired
+      // at it a few hundred ms later.
+      const reaped: string[] = [];
+      for (const run of stuck) {
+        const wasReaped = await timeoutRun(run.id); // closes the row AND notifies the buyer
+        if (wasReaped) reaped.push(run.id);
+      }
+      return reaped;
+    });
+
+    // Belt-and-suspenders: also tell Inngest to cancel the underlying
+    // execution via the same cancelOn wiring the manual Cancel button uses
+    // (src/inngest/skill.ts), in case it's somehow still alive after a long
+    // checkpoint gap. The DB row is already closed regardless of whether
+    // this lands — same reasoning as the cancel route not waiting on it.
+    if (reapedRunIds.length > 0) {
+      await step.sendEvent(
+        "cancel-stale-runs",
+        reapedRunIds.map((runId) => skillRunCancel.create({ runId }))
+      );
+    }
+
+    return { reaped: reapedRunIds.length };
+  }
+);
+
+/**
+ * Daily credential health check.
+ *
+ * Proactively validates every credential we have a verified endpoint for
+ * (see VALIDATORS in credential-health.ts) and notifies the buyer the
+ * moment one goes from working to broken — instead of the first sign of
+ * trouble being a cryptic API error buried in a failed run three days
+ * later.
+ */
+export const credentialHealthCron = inngest.createFunction(
+  { id: "credential-health-cron", triggers: [{ cron: "TZ=UTC 0 13 * * *" }] }, // 13:00 UTC daily
+  async ({ step }) => {
+    const result = await step.run("check-credential-health", () =>
+      runCredentialHealthCheck()
+    );
+    return result;
   }
 );

@@ -208,6 +208,7 @@ function RunStatusBadge({ status }: { status: string }) {
     success: { icon: <CheckCircle2 className="w-4 h-4" />, cls: "text-emerald-400 border-emerald-900/50 bg-emerald-950/30" },
     failed:  { icon: <XCircle className="w-4 h-4" />,      cls: "text-rose-400 border-rose-900/50 bg-rose-950/30"         },
     cancelled: { icon: <Ban className="w-4 h-4" />,         cls: "text-amber-400 border-amber-900/50 bg-amber-950/30"        },
+    timed_out: { icon: <Clock className="w-4 h-4" />,       cls: "text-amber-400 border-amber-900/50 bg-amber-950/30"        },
     running: { icon: <Loader2 className="w-4 h-4 animate-spin" />, cls: "text-zinc-400 border-zinc-800 bg-zinc-950/30"   },
   }[s] ?? { icon: <AlertCircle className="w-4 h-4" />, cls: "text-zinc-500 border-zinc-800 bg-zinc-950/30" };
 
@@ -303,6 +304,7 @@ export default function RunDetailPage() {
   // Derived state context
   const isRunning = run?.status === "running";
   const isCancelled = run?.status === "cancelled";
+  const isTimedOut = run?.status === "timed_out";
 
   // Hook 2: Safe Background Polling Subscription
   useEffect(() => {
@@ -438,7 +440,7 @@ export default function RunDetailPage() {
             <Clock size={13} />
             <span className="text-[11px] font-medium uppercase tracking-wider">Duration</span>
           </div>
-          <p className="text-xs text-zinc-200 font-mono">{isRunning ? "In progress…" : isCancelled ? "Cancelled" : formatDuration(run.durationMs)}</p>
+          <p className="text-xs text-zinc-200 font-mono">{isRunning ? "In progress…" : isCancelled ? "Cancelled" : isTimedOut ? "Timed out" : formatDuration(run.durationMs)}</p>
         </div>
 
         <div className="rounded-lg border border-zinc-900 bg-zinc-950/20 p-3.5 space-y-1">
@@ -472,6 +474,16 @@ export default function RunDetailPage() {
           <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Run Cancelled</p>
           <p className="text-xs text-amber-300 font-light leading-relaxed">
             This run was cancelled by user request. Any steps that were in progress at the time have been marked as cancelled.
+          </p>
+        </div>
+      )}
+
+      {/* Timeout notice — closed automatically by the stale-run reaper, not by the user */}
+      {isTimedOut && (
+        <div className="border border-amber-900/40 bg-amber-950/10 rounded-lg p-4 space-y-1">
+          <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Run Timed Out</p>
+          <p className="text-xs text-amber-300 font-light leading-relaxed">
+            This run sat in progress longer than its allowed runtime and was closed automatically. If this keeps happening for the same module, check the step where it stalled — that's usually an upstream API call hanging.
           </p>
         </div>
       )}

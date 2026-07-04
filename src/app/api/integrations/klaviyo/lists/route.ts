@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     const MAX_PAGES = 20; // safety cap: 200 lists is far beyond any real account
 
     while (url && pagesFetched < MAX_PAGES) {
-      const res = await fetch(url, {
+      const res: Response = await fetch(url, {
         headers: {
           Authorization: `Klaviyo-API-Key ${apiKey}`,
           Revision: "2025-04-15",
@@ -43,7 +43,8 @@ export async function GET(request: Request) {
         );
       }
 
-      const payload = await res.json();
+      const payload: { data?: Array<{ id: string; attributes?: { name?: string } }>; links?: { next?: string | null } } =
+        await res.json();
       for (const item of payload.data ?? []) {
         lists.push({ id: item.id, name: item.attributes?.name ?? "Unnamed List" });
       }

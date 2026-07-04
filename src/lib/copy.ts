@@ -81,6 +81,7 @@ export const RUN_STATUS_LABELS: Record<string, string> = {
   failed: "Failed",
   running: "In progress",
    cancelled: "Cancelled",
+  timed_out: "Timed out",
 };
 
 export const RUN_STATUS_COLORS: Record<string, string> = {
@@ -88,6 +89,7 @@ export const RUN_STATUS_COLORS: Record<string, string> = {
   failed: "text-rose-400",
   running: "text-zinc-400 italic",
   cancelled: "text-amber-400",
+  timed_out: "text-amber-400",
 };
 
 /** Friendly run-status word for a raw status string, with a safe fallback. */

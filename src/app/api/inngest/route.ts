@@ -6,6 +6,8 @@ import {
   weeklyLeakMapCron,
   monthlyLeakMapCron,
   alertMonitorCron,
+  staleRunReaperCron,
+  credentialHealthCron,
 } from "@/inngest/crons";
 
 // Explicit duration floor for this route, paired with checkpointing's
@@ -32,5 +34,10 @@ export const { GET, POST, PUT } = serve({
     weeklyLeakMapCron,
     monthlyLeakMapCron,
     alertMonitorCron,
+    // Added for the reliability pass: closes runs stuck at "running"
+    // forever, and proactively flags dead booking-platform credentials
+    // before they cause a run to fail. See src/inngest/crons.ts.
+    staleRunReaperCron,
+    credentialHealthCron,
   ],
 });

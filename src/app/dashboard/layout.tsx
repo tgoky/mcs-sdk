@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { engagements, skillRuns } from "@/models/schema";
 import { eq, desc } from "drizzle-orm";
 import { MobileNav } from "./mobile-nav";
+import { NotificationBell } from "./notification-bell";
 import { LiveTime } from "./live-time";
 import Link from "next/link";
 import { CheckCircle2, AlertCircle, Circle, Loader2 } from "lucide-react";
@@ -87,7 +88,10 @@ export default async function DashboardLayout({
             skillStatuses[skill] = "running";
           } else if (run.status === "success") {
             skillStatuses[skill] = "live";
-          } else if (run.status === "failed") {
+          } else if (run.status === "failed" || run.status === "timed_out") {
+            // A timed-out run is exactly as much a trust problem as a
+            // failed one from the sidebar's point of view — the module
+            // didn't do what it was supposed to. Surface it the same way.
             skillStatuses[skill] = "failed";
           }
         }
@@ -287,8 +291,11 @@ export default async function DashboardLayout({
       </aside>
 
       <div className="flex flex-col flex-1 min-w-0 bg-zinc-950">
-        <header className="h-14 border-b border-zinc-900 bg-zinc-950 flex items-center px-6 shrink-0">
+        <header className="h-14 border-b border-zinc-900 bg-zinc-950 flex items-center justify-between px-6 shrink-0">
           <MobileNav links={navLinks} />
+          <div className="flex items-center ml-auto">
+            <NotificationBell />
+          </div>
         </header>
 
         <main className="flex-1 p-6 md:p-8 w-full overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
