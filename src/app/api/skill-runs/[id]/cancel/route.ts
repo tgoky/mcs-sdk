@@ -40,7 +40,9 @@ export async function POST(
     }
 
     await cancelRun(id);
-    await inngest.send({ name: skillRunCancel, data: { runId: id } });
+    
+    // Fixed type constraint violation cleanly using Inngest v4 payload creators
+    await inngest.send(skillRunCancel.create({ runId: id }));
 
     return NextResponse.json({ ok: true });
   } catch (err) {
