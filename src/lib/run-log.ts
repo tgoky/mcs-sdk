@@ -357,7 +357,6 @@ export async function cancelRun(runId: string): Promise<void> {
 export async function timeoutRun(runId: string): Promise<boolean> {
   const [row] = await db
     .select({
-      steps: skillRuns.steps,
       engagementId: skillRuns.engagementId,
       skillName: skillRuns.skillName,
       status: skillRuns.status,
@@ -374,27 +373,29 @@ export async function timeoutRun(runId: string): Promise<boolean> {
     return false;
   }
 
-  const nowIso = new Date().toISOString();
-  const steps = (row.steps ?? []).map((s) =>
-    s.status === "running"
-      ? {
-          ...s,
-          status: "cancelled" as const,
-          detail:
-            s.detail ??
-            "Interrupted — this run exceeded its maximum allowed runtime and was closed automatically.",
-          completedAt: nowIso,
-        }
-      : s
-  );
-
-  // The status="running" guard here is the actual safety net — it closes
-  // the same race the read-check above only reduces the odds of. Without
-  // this WHERE clause, a run that finished normally in the gap between the
-  // select above and this update would still get stomped.
+  // Deliberately does NOT touch the `steps` column, unlike failRun's
+  // closeDanglingSteps. logStep() (above) does its own unguarded
+  // SELECT-steps -> modify -> UPDATE-steps cycle with no compare-and-swap
+  // against concurrent writers. If a run genuinely is still alive (still
+  // legitimately processing past STALE_RUN_CEILING_MS — e.g. a huge
+  // roster) and calls logStep() at the same moment the reaper reads and
+  // rewrites `steps`, whichever write lands second would silently
+  // overwrite the other's steps entirely. The `status="running"` guard on
+  // the UPDATE below prevents the *top-level status* from being stomped,
+  // but it can't protect a separate jsonb column against a lost update
+  // from a second, independent writer.
+  //
+  // Rather than attempt a jsonb-equality compare-and-swap in the WHERE
+  // clause (workable in principle, but not something to ship unverified
+  // against a live database), the run-detail page instead treats any step
+  // still showing "running" as visually interrupted whenever the overall
+  // run status is "timed_out" — a pure render-time decision that carries
+  // zero risk of clobbering data, at the cost of the stored steps array
+  // itself not reflecting the interruption. See isTimedOut handling in
+  // src/app/dashboard/runs/[id]/page.tsx.
   const updated = await db
     .update(skillRuns)
-    .set({ status: "timed_out", completedAt: new Date(), steps })
+    .set({ status: "timed_out", completedAt: new Date() })
     .where(and(eq(skillRuns.id, runId), eq(skillRuns.status, "running")))
     .returning({ id: skillRuns.id });
 

@@ -73,9 +73,25 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!ACTIVE_STATUSES.has(session.subscriptionStatus)) {
-    return NextResponse.redirect(
+    // NextResponse.redirect() constructs a brand-new response object —
+    // any cookie session.save() wrote onto `response` above (the updated
+    // subscriptionStatus/subscriptionVerifiedAt) would otherwise be
+    // silently discarded. Without copying it across, the browser keeps
+    // sending the OLD session cookie, so `isStale` re-evaluates true on
+    // every subsequent request, re-triggering checkActiveMembership and
+    // this same redirect — an infinite loop that also hammers the Whop
+    // API on every hop. response.cookies.getAll() (rather than reading
+    // the raw "set-cookie" header) is the reliable way to carry this over:
+    // Headers.get("set-cookie") collapses multiple Set-Cookie headers into
+    // one comma-joined string in some runtimes, which would corrupt the
+    // cookie rather than preserve it.
+    const redirectResponse = NextResponse.redirect(
       new URL("/?membership=required", request.url)
     );
+    response.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie);
+    });
+    return redirectResponse;
   }
 
   return response;

@@ -6,6 +6,7 @@ import { engagements, skillRuns } from "@/models/schema";
 import { eq, desc } from "drizzle-orm";
 import { MobileNav } from "./mobile-nav";
 import { NotificationBell } from "./notification-bell";
+import { BookingToast } from "./booking-toast";
 import { LiveTime } from "./live-time";
 import Link from "next/link";
 import { CheckCircle2, AlertCircle, Circle, Loader2 } from "lucide-react";
@@ -142,6 +143,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-950 text-zinc-400 font-sans antialiased">
+      <BookingToast />
       <aside className="w-64 border-r border-zinc-900 bg-zinc-950 flex-col justify-between hidden md:flex">
         <div className="flex flex-col flex-1 pt-5 pb-16 px-5 space-y-6 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           <div className="px-1">

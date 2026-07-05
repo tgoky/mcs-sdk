@@ -82,7 +82,8 @@ function formatDate(iso: string): string {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function StepCenterIcon({ status }: { status: RunStep["status"] }) {
+function StepCenterIcon({ status, displayInterrupted }: { status: RunStep["status"]; displayInterrupted?: boolean }) {
+  if (displayInterrupted) return <Ban className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />;
   if (status === "success") return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />;
   if (status === "failed") return <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />;
   if (status === "cancelled") return <Ban className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />;
@@ -90,7 +91,15 @@ function StepCenterIcon({ status }: { status: RunStep["status"] }) {
   return <Loader2 className="w-4 h-4 text-zinc-400 animate-spin shrink-0 mt-0.5" />;
 }
 
-function StepCard({ step }: { step: RunStep }) {
+/**
+ * `displayInterrupted` is deliberately a render-time-only flag, never
+ * written back to the database. See the comment on timeoutRun() in
+ * src/lib/run-log.ts for why: a stale run's steps array is never rewritten
+ * by the reaper (to avoid a lost-update race against logStep()), so a
+ * dangling "running" step on a now-"timed_out" run needs to be shown as
+ * interrupted here instead of being persisted as such.
+ */
+function StepCard({ step, displayInterrupted }: { step: RunStep; displayInterrupted?: boolean }) {
   const stepDurationMs =
     step.completedAt && step.startedAt
       ? new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime()
@@ -100,7 +109,7 @@ function StepCard({ step }: { step: RunStep }) {
     <div className="flex gap-3 group">
       {/* Timeline spine */}
       <div className="flex flex-col items-center">
-        <StepCenterIcon status={step.status} />
+        <StepCenterIcon status={step.status} displayInterrupted={displayInterrupted} />
         <div className="w-px flex-1 mt-1 bg-zinc-900 group-last:hidden" />
       </div>
 
@@ -114,6 +123,11 @@ function StepCard({ step }: { step: RunStep }) {
             {step.label && (
               <span className="ml-2 text-xs text-zinc-500 font-mono">
                 [{step.label}]
+              </span>
+            )}
+            {displayInterrupted && (
+              <span className="ml-2 text-[10px] text-amber-500 uppercase tracking-wide">
+                Interrupted
               </span>
             )}
           </div>
@@ -506,7 +520,13 @@ export default function RunDetailPage() {
         ) : (
           <div className="border border-zinc-800 rounded-lg bg-zinc-950/20 p-4 space-y-1">
             {steps.map((step, i) => (
-              <StepCard key={`${step.phase}-${i}`} step={step} />
+              <StepCard
+                key={`${step.phase}-${i}`}
+                step={step}
+                displayInterrupted={
+                  step.status === "running" && (run.status === "timed_out" || run.status === "cancelled")
+                }
+              />
             ))}
 
             {isRunning && (

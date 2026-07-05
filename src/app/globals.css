@@ -115,6 +115,22 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* ── Added: these were referenced throughout credentials/page.tsx and
+     engagements/new/page.tsx but never defined anywhere, so every
+     background/border/text color on both pages was silently resolving
+     to nothing (transparent/inherit). Values below are Tailwind's actual
+     zinc-950/900/800/400/200/100 oklch coordinates (verified against
+     Tailwind's own palette, not guessed) so these two pages match the
+     zinc-based dark theme the rest of the dashboard already uses. */
+  --surface: oklch(0.21 0.006 285.885);      /* zinc-900 — card/panel backgrounds */
+  --surface-2: oklch(0.274 0.006 286.033);   /* zinc-800 — hover/nested surface */
+  --text-primary: oklch(0.92 0.004 286.32);  /* zinc-200 — primary readable text */
+  --text-secondary: oklch(0.705 0.015 286.067); /* zinc-400 — secondary body text */
+  --text-muted: oklch(0.552 0.016 285.938);  /* zinc-500 — least-emphasis text */
+  --error: oklch(0.712 0.194 13.428);        /* rose-400 — matches text-rose-400 used elsewhere */
+  --success: oklch(0.765 0.177 163.223);     /* emerald-400 — matches text-emerald-400 used elsewhere */
+  --accent-dim: oklch(0.585 0.233 277.117 / 12%); /* soft indigo wash for callout boxes */
 }
 
 @layer base {

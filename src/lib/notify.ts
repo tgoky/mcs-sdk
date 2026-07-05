@@ -68,8 +68,13 @@ export async function notifyUser(opts: NotifyOptions): Promise<void> {
   }
 
   // ── 2. Slack (best-effort, only if configured) ──────────────────────────
+  // Awaited deliberately: in a serverless runtime (Vercel/Lambda), the
+  // execution context can be frozen or torn down the moment the caller's
+  // handler returns. An un-awaited fetch here is a floating promise that
+  // can be killed mid-flight, silently dropping the Slack alert. The
+  // .catch still ensures a failed delivery never throws out of notifyUser.
   if (opts.slackWebhookUrl) {
-    fetch(opts.slackWebhookUrl, {
+    await fetch(opts.slackWebhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

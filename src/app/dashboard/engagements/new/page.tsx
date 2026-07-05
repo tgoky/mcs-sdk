@@ -369,13 +369,18 @@ export default function NewEngagementPage() {
   }, [form, step]);
 
   // Klaviyo: Fetch lists
+  //
+  // The missing-key case used to be handled inside this effect via
+  // `setListsFetchError(...); return;` — a synchronous setState call with
+  // no actual effect work (no fetch, no subscription) behind it. React
+  // flags that specific shape ("effect body does nothing but call
+  // setState") as a candidate for cascading renders. It's derived state,
+  // not an effect's job — see klaviyoMissingKeyMessage below, computed
+  // directly during render instead. The effect itself now only ever runs
+  // when there's real async work (the fetch) to do, matching the same
+  // shape as the ActiveCampaign/GHL effects right below it.
   useEffect(() => {
-    if (step === "stack" && form.emailPlatform === "klaviyo") {
-      if (!form.emailApiKey.trim()) {
-        setListsFetchError("Klaviyo API key was skipped on the previous screen. Go back and add it to see your live lists.");
-        return;
-      }
-
+    if (step === "stack" && form.emailPlatform === "klaviyo" && form.emailApiKey.trim()) {
       setFetchingLists(true);
       setListsFetchError(null);
 
@@ -511,6 +516,16 @@ export default function NewEngagementPage() {
         });
     }
   }, [form.emailPlatform, form.emailGhlLocationId, form.emailApiKey]);
+
+  // Derived, not state: this used to be set via a synchronous setState call
+  // inside the Klaviyo effect above with no actual async work behind it —
+  // exactly the pattern React's "you might not need an effect" guidance
+  // warns about. It's a pure function of form.emailPlatform/emailApiKey,
+  // so it's computed directly here instead.
+  const klaviyoMissingKeyMessage =
+    form.emailPlatform === "klaviyo" && !form.emailApiKey.trim()
+      ? "Klaviyo API key was skipped on the previous screen. Go back and add it to see your live lists."
+      : null;
 
   function addTestimonial() {
     setForm((f) => ({
@@ -948,9 +963,9 @@ export default function NewEngagementPage() {
                     ⚡ Contacting Klaviyo... Synchronizing list profiles indexes...
                   </div>
                 )}
-                {listsFetchError && (
+                {(klaviyoMissingKeyMessage ?? listsFetchError) && (
                   <div className="md:col-span-2 rounded p-3 text-xs bg-rose-950/20 text-rose-400 font-mono">
-                    ⚠ Warning: {listsFetchError}
+                    ⚠ Warning: {klaviyoMissingKeyMessage ?? listsFetchError}
                   </div>
                 )}
 

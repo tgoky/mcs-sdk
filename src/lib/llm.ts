@@ -7,7 +7,12 @@ const USE_OPENROUTER = process.env.USE_OPENROUTER === "true";
 
 const ANTHROPIC_MODELS = {
   SYNTHESIS: "claude-sonnet-5",
-  FAST: "anthropic/claude-haiku-4.5",
+  // Was "anthropic/claude-haiku-4.5" — that's the OpenRouter-style
+  // provider-prefixed slug (see OPENROUTER_MODELS.FAST below, where it's
+  // correct). Sent straight to Anthropic's own /v1/messages endpoint, the
+  // "anthropic/" prefix isn't valid and the request would 400. The native
+  // Anthropic API model ID for Haiku 4.5 is date-suffixed.
+  FAST: "claude-haiku-4-5-20251001",
 } as const;
 
 const OPENROUTER_MODELS = {
@@ -23,17 +28,25 @@ export const MODEL = {
 type ModelKey = keyof typeof MODEL;
 
 // ── Pricing (cents per million tokens) ───────────────────────────────────
+// Verified against platform.claude.com/docs/en/about-claude/pricing and
+// anthropic.com/claude/sonnet directly (not assumed from memory).
+//
+// Sonnet 5 is on introductory pricing ($2/$10 per MTok) through
+// 2026-08-31, after which it reverts to standard pricing ($3/$15). If
+// you're reading this after that date, update SONNET_5 below to
+// { input: 300, output: 1500 } — Anthropic's docs confirm this is a
+// scheduled change, not a hypothetical.
 const ANTHROPIC_PRICING: Record<string, { input: number; output: number }> = {
-  "claude-sonnet-4-6":         { input: 300,  output: 1500 },
-  "claude-haiku-4-5-20251001": { input: 25,   output: 125  },
+  "claude-sonnet-5":            { input: 200, output: 1000 }, // introductory, through 2026-08-31
+  "claude-haiku-4-5-20251001":  { input: 100, output: 500  },
 };
 
 const OPENROUTER_PRICING: Record<string, { input: number; output: number }> = {
-  "anthropic/claude-sonnet-5": { input: 300,  output: 1500 },
-  "anthropic/claude-haiku-4.5":  { input: 25,   output: 125  },
-  "openai/gpt-4o":               { input: 250,  output: 1000 },
-  "google/gemini-2.5-pro":       { input: 125,  output: 1000 },
-  "meta-llama/llama-3.3-8b-instruct:free": { input: 0, output: 0 },
+  "anthropic/claude-sonnet-5":              { input: 200,  output: 1000 }, // matches Anthropic's introductory list price
+  "anthropic/claude-haiku-4.5":             { input: 100,  output: 500  },
+  "openai/gpt-4o":                          { input: 250,  output: 1000 },
+  "google/gemini-2.5-pro":                  { input: 125,  output: 1000 },
+  "meta-llama/llama-3.3-8b-instruct:free":  { input: 0,    output: 0    },
 };
 
 // ── Call options ──────────────────────────────────────────────────────────

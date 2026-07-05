@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, XCircle, Loader2, AlertCircle, Hash, ArrowRight } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, AlertCircle, Hash, ArrowRight, Clock, Ban } from "lucide-react";
 import { skillName, phaseLabel, SKILL_INFO, type SkillName } from "@/lib/copy";
 
 interface SkillRun {
@@ -17,6 +17,8 @@ interface SkillRun {
   buyerName?: string | null;
   errorMessage?: string | null;
   stepCount?: number;
+  /** e.g. "Sarah Jenkins <sarah@acme.com>" — the prospect this run is about, when known. */
+  subjectLabel?: string | null;
 }
 
 interface LiveExecutionFeedProps {
@@ -32,6 +34,8 @@ function actionSummary(run: SkillRun): string {
     if (run.errorMessage && run.errorMessage.length < 80) return run.errorMessage;
     return "Failed — click to view run telemetry";
   }
+  if (s === "timed_out") return "Timed out — exceeded max runtime, click to view";
+  if (s === "cancelled") return "Cancelled by user request";
 
   const summaries: Partial<Record<SkillName, string>> = {
     "pin-down":      "Client account set up and confirmation page live",
@@ -48,6 +52,8 @@ function RunStatusIcon({ status }: { status: string }) {
   const s = status.toLowerCase();
   if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
   if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 text-rose-500" />;
+  if (s === "timed_out") return <Clock className="w-4 h-4 text-amber-500" />;
+  if (s === "cancelled") return <Ban className="w-4 h-4 text-amber-500" />;
   if (s === "running" || s === "in_progress") return <Loader2 className="w-4 h-4 text-zinc-400 animate-spin" />;
   return <AlertCircle className="w-4 h-4 text-zinc-600" />;
 }
@@ -56,6 +62,8 @@ function StatusLabel({ status }: { status: string }) {
   const s = status.toLowerCase();
   if (s === "success" || s === "completed") return <span className="text-xs font-normal text-emerald-500">Done</span>;
   if (s === "failed" || s === "error") return <span className="text-xs font-normal text-rose-400">Failed</span>;
+  if (s === "timed_out") return <span className="text-xs font-normal text-amber-400">Timed out</span>;
+  if (s === "cancelled") return <span className="text-xs font-normal text-amber-400">Cancelled</span>;
   if (s === "running" || s === "in_progress") return <span className="text-xs font-normal text-zinc-400 italic">Running</span>;
   return <span className="text-xs font-normal text-zinc-600">Pending</span>;
 }
@@ -160,7 +168,7 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
           <tbody className="divide-y divide-zinc-800/30">
             {runs.map((run) => {
               const isRunning = run.status.toLowerCase() === "running";
-              const isFailed = run.status.toLowerCase() === "failed";
+              const isFailed = run.status.toLowerCase() === "failed" || run.status.toLowerCase() === "timed_out";
 
               return (
                 <tr
@@ -196,6 +204,11 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
                     >
                       {actionSummary(run)}
                     </span>
+                    {run.subjectLabel && (
+                      <span className="text-[11px] text-zinc-600 truncate block" title={run.subjectLabel}>
+                        {run.subjectLabel}
+                      </span>
+                    )}
                   </td>
 
                   <td className="px-4 py-2.5 whitespace-nowrap">
