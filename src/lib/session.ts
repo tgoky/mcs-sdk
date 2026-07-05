@@ -24,6 +24,7 @@ const sessionOptions: SessionOptions = {
   cookieOptions: {
     secure: process.env.NODE_ENV === "production",
     httpOnly: true,
+    maxAge: 60 * 60 * 24 * 14, // ✅ Converts to a persistent cookie that lasts exactly 14 days
   },
 };
 

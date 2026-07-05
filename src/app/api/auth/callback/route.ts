@@ -7,83 +7,98 @@ import { db } from "@/lib/db";
 import { users } from "@/models/schema";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const code = searchParams.get("code");
-  const state = searchParams.get("state");
-  const error = searchParams.get("error");
-
   const cookieStore = await cookies();
-  const storedState = cookieStore.get("oauth_state")?.value;
-  const codeVerifier = cookieStore.get("code_verifier")?.value;
 
-  // Clear the short-lived PKCE cookies as soon as we've read them, on every
-  // exit path below, so a failed/duplicate callback hit can't replay them.
+  // Short-lived cookie cleanup utility
   const clearPkceCookies = () => {
     cookieStore.delete("oauth_state");
     cookieStore.delete("oauth_nonce");
     cookieStore.delete("code_verifier");
   };
 
-  if (error) {
-    clearPkceCookies();
-    return new Response(`Whop OAuth error: ${error}`, { status: 400 });
-  }
+  try {
+    const { searchParams } = new URL(request.url);
+    const code = searchParams.get("code");
+    const state = searchParams.get("state");
+    const error = searchParams.get("error");
 
-  if (!code || !state || state !== storedState || !codeVerifier) {
-    clearPkceCookies();
-    return new Response("Invalid OAuth state", { status: 400 });
-  }
+    const storedState = cookieStore.get("oauth_state")?.value;
+    const codeVerifier = cookieStore.get("code_verifier")?.value;
 
-  const tokens = await exchangeCode(code, codeVerifier);
-  const whopUser = await getWhopUser(tokens.access_token);
-  // Whop's userinfo endpoint returns the stable user id as `sub`
-  // (e.g. "user_xxxxx"), not `id`.
-  const whopUserId = whopUser.sub;
+    if (error) {
+      clearPkceCookies();
+      return new Response(`Whop OAuth error: ${error}`, { status: 400 });
+    }
 
-  // Admin/dev bypass: if this Whop account's email is on the allowlist,
-  // skip the Whop Memberships lookup and grant access without requiring a
-  // paid membership. See src/lib/whop-access.ts / ADMIN_WHOP_EMAILS env var.
-  // Real paying customers always go through checkActiveMembership below —
-  // this only ever short-circuits for explicitly allowlisted emails.
-  const admin = isAdminEmail(whopUser.email);
+    if (!code || !state || state !== storedState || !codeVerifier) {
+      clearPkceCookies();
+      return new Response(
+        `Invalid OAuth state. State matches: ${state === storedState}. Verifier found: ${!!codeVerifier}`, 
+        { status: 400 }
+      );
+    }
 
-  // Actually check whether this person holds a payable membership for this
-  // company/product — OAuth login alone only proves they have a Whop
-  // account, not that they ever bought anything. See src/lib/whop-access.ts.
-  const membership = admin
-    ? { hasAccess: true, status: "admin" as const }
-    : await checkActiveMembership(whopUserId);
+    // ── 1. Exchange OAuth code for permanent tokens ──
+    const tokens = await exchangeCode(code, codeVerifier);
+    
+    // ── 2. Fetch authenticated profile identifiers ──
+    const whopUser = await getWhopUser(tokens.access_token);
+    const whopUserId = whopUser.sub;
 
-  // upsert user into our DB with the real status, not an assumed one
-  await db
-    .insert(users)
-    .values({
-      whopUserId,
-      email: whopUser.email,
-      subscriptionStatus: membership.status,
-    })
-    .onConflictDoUpdate({
-      target: users.whopUserId,
-      set: {
+    // ── 3. Evaluate Whop paywall validation scopes ──
+    const admin = isAdminEmail(whopUser.email);
+    const membership = admin
+      ? { hasAccess: true, status: "admin" as const }
+      : await checkActiveMembership(whopUserId);
+
+    // ── 4. Persist or update user configuration row ──
+    await db
+      .insert(users)
+      .values({
+        whopUserId,
         email: whopUser.email,
         subscriptionStatus: membership.status,
-        updatedAt: new Date(),
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: users.whopUserId,
+        set: {
+          email: whopUser.email,
+          subscriptionStatus: membership.status,
+          updatedAt: new Date(),
+        },
+      });
 
-  const session = await getSession();
-  session.whopUserId = whopUserId;
-  session.email = whopUser.email ?? "";
-  session.subscriptionStatus = membership.status;
-  session.subscriptionVerifiedAt = Date.now();
-  session.refreshToken = tokens.refresh_token;
-  await session.save();
+    // ── 5. Inject encrypted iron-session parameters ──
+    const session = await getSession();
+    session.whopUserId = whopUserId;
+    session.email = whopUser.email ?? "";
+    session.subscriptionStatus = membership.status;
+    session.subscriptionVerifiedAt = Date.now();
+    session.refreshToken = tokens.refresh_token;
+    await session.save();
 
-  clearPkceCookies();
+    clearPkceCookies();
 
-  if (!membership.hasAccess) {
-    redirect("/?membership=required");
+    if (!membership.hasAccess) {
+      redirect("/?membership=required");
+    }
+
+    redirect("/dashboard");
+  } catch (err: any) {
+    clearPkceCookies();
+
+    // CRITICAL Next.js Guard: redirect() signals navigation by throwing an internal 
+    // error template. If caught and suppressed, navigation links break completely.
+    if (err instanceof Error && (err.message === "NEXT_REDIRECT" || (err as any).digest?.startsWith("NEXT_REDIRECT"))) {
+      throw err;
+    }
+
+    console.error("[Fatal Auth Callback Exception]:", err);
+    
+    // Outputs the precise system error directly to your browser window
+    return new Response(
+      `Local Server Error (500):\nReason: ${err.message || String(err)}\n\nCheck your terminal and .env.local file properties.`, 
+      { status: 500, headers: { "Content-Type": "text/plain" } }
+    );
   }
-
-  redirect("/dashboard");
 }
