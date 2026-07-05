@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/brief-service";
 import { AuditEngine } from "@/features/leak-map/server/audit-engine";
 import { generateRecoveryCadence } from "@/features/win-back/server/recovery-service";
+import { runPinDownOnboarding } from "@/features/pin-down/server/onboarding-service";
 import { failRun } from "@/lib/run-log";
 
 /**
@@ -65,6 +66,10 @@ export const executeSkillRun = inngest.createFunction(
     };
 
     try {
+      if (skillName === "pin-down") {
+        await runPinDownOnboarding(tenant, runId, step);
+      }
+
       if (skillName === "pre-call-read") {
         await executeNightlyBriefingCycle(tenant, runId, step);
       }
