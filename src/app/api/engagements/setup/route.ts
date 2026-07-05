@@ -314,7 +314,7 @@ export async function POST(request: Request) {
     // Step 3: Publish confirmation page
     await logStep(runId, { phase: "confirmation_page_deploy", status: "running" });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.muddventures.com";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://debate-shindig-hankie.ngrok-free.dev";
     const internalFallbackUrl = `${appUrl}/confirm/${engagementId}`;
 
     const pageContent = buildConfirmationPageHtml({

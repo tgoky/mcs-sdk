@@ -155,7 +155,7 @@ async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult>
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://app.muddventures.com",
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://debate-shindig-hankie.ngrok-free.dev",
       "X-Title": "Mudd Ventures Unified Interface",
       "Content-Type": "application/json",
     },
