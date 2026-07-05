@@ -145,6 +145,20 @@ export const engagements = pgTable("engagements", {
   topCallQuestions: jsonb("top_call_questions").$type<string[]>(),
   topObjections: jsonb("top_objections").$type<string[]>(),
   prospectMeets: text("prospect_meets"),
+  // The buyer-supplied corpus used for brand-voice extraction. Persisted
+  // (rather than shipped through the Inngest event payload) so the
+  // pin-down onboarding worker can read it back after the setup route
+  // hands off — see src/features/pin-down/server/onboarding-service.ts.
+  // Not a secret like the platform credentials, just not small enough to
+  // want duplicated in Inngest Cloud's event log on every setup.
+  rawVoiceCorpus: text("raw_voice_corpus"),
+  // Only populated when confirmationPageDeployment.mode === "paste_ready".
+  // Previously this HTML only ever existed in the synchronous HTTP
+  // response body from /api/engagements/setup — now that setup finishes
+  // asynchronously via Inngest, the buyer needs to be able to come back
+  // and fetch it after the fact (see GET /api/engagements/[id]).
+  pasteReadyHtml: text("paste_ready_html"),
+  pasteReadyInstructions: text("paste_ready_instructions"),
   // Ships the proof block on the confirmation page only when at least one
   // entry has name, role, and quote populated (OG SKILL.md Phase 2 rule).
   existingProof: jsonb("existing_proof").$type<{

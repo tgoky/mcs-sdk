@@ -321,16 +321,6 @@ export default function NewEngagementPage() {
   const [showRestoredBanner, setShowRestoredBanner] = useState(restoredDraft);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{
-    engagementId: string;
-    confirmationPageUrl: string;
-    confirmationPageDeployment?: {
-      mode: "live" | "paste_ready" | "not_deployed";
-      reason?: string;
-    };
-    pasteReadyHtml?: string;
-    pasteReadyInstructions?: string;
-  } | null>(null);
 
   // Klaviyo states
   const [klaviyoLists, setKlaviyoLists] = useState<{ id: string; name: string }[]>([]);
@@ -655,107 +645,23 @@ export default function NewEngagementPage() {
         return;
       }
 
+      // Setup now runs asynchronously (see the comment on
+      // /api/engagements/setup/route.ts for why) — this response only
+      // means "the run started," not "setup finished." Redirect straight
+      // to the run-detail page, which already polls live, shows the step
+      // timeline, and handles failure/timeout — the exact same view Live
+      // Executions already links to, so this is one consistent experience
+      // instead of a second, parallel "please wait" screen.
       clearDraft();
-      setResult({
-        engagementId: data.engagementId,
-        confirmationPageUrl: data.confirmationPageUrl,
-        confirmationPageDeployment: data.confirmationPageDeployment,
-        pasteReadyHtml: data.pasteReadyHtml,
-        pasteReadyInstructions: data.pasteReadyInstructions,
-      });
+      router.push(`/dashboard/runs/${data.runId}`);
     } catch (e: any) {
-      setError(e.message);
+      setError(
+        e.message === "Failed to fetch"
+          ? "Couldn't reach the server. Check your connection and try again — nothing was set up yet."
+          : e.message
+      );
       setSubmitting(false);
     }
-  }
-
-  if (result) {
-    const isPasteReady = result.confirmationPageDeployment?.mode === "paste_ready";
-
-    return (
-      <div className="space-y-6 w-full max-w-none px-1" style={{ color: "var(--text-secondary)" }}>
-        <div className="rounded-lg p-5 space-y-2.5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-          <div className="flex items-center space-x-2">
-            <span
-              className="w-5 h-5 rounded-full flex items-center justify-center text-xs"
-              style={{
-                background: isPasteReady ? "var(--accent)" : "var(--success)",
-                color: isPasteReady ? "#fff" : "#04140f",
-              }}
-            >
-              {isPasteReady ? "!" : "✓"}
-            </span>
-            <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              {isPasteReady ? "Setup complete — one manual step left" : "Setup complete"}
-            </span>
-          </div>
-          <p className="text-sm font-normal">
-            {isPasteReady
-              ? "Bookings will now flow in automatically. The confirmation page couldn't be auto-published to the client's hosting platform, so it's ready to paste in manually below."
-              : "This client's account is ready. Bookings will now flow in automatically, and their confirmation page is live on their own site, ready for prospects."}
-          </p>
-        </div>
-
-        {isPasteReady && result.pasteReadyHtml && (
-          <div className="rounded-lg p-4 space-y-2" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-            <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
-              {result.pasteReadyInstructions}
-            </p>
-            {result.confirmationPageDeployment?.reason && (
-              <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                Reason: {result.confirmationPageDeployment.reason}
-              </p>
-            )}
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>Page HTML</span>
-              <button
-                type="button"
-                onClick={() => navigator.clipboard.writeText(result.pasteReadyHtml ?? "")}
-                className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer"
-                style={{ border: "1px solid var(--border)", color: "var(--text-primary)" }}
-              >
-                Copy HTML
-              </button>
-            </div>
-            <textarea
-              readOnly
-              value={result.pasteReadyHtml}
-              rows={6}
-              className="w-full rounded-md px-3 py-2 text-[11px] font-mono resize-y focus:outline-none"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-            />
-          </div>
-        )}
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-lg p-4 space-y-1" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>Engagement ID</p>
-            <p className="font-mono text-sm" style={{ color: "var(--text-primary)" }}>{result.engagementId}</p>
-          </div>
-
-          <div className="rounded-lg p-4 space-y-1" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{isPasteReady ? "Preview Link (temporary)" : "Confirmation Page Link"}</p>
-            <a
-              href={result.confirmationPageUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="font-mono text-sm underline underline-offset-4 break-all block transition-colors"
-              style={{ color: "var(--accent)" }}
-            >
-              {result.confirmationPageUrl}
-            </a>
-          </div>
-        </div>
-
-        <button
-          onClick={() => router.push(`/dashboard/engagements/${result.engagementId}`)}
-          className="px-4 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer"
-          style={{ background: "var(--accent)", color: "#fff" }}
-        >
-          Go to Client Dashboard
-        </button>
-      </div>
-    );
   }
 
   return (

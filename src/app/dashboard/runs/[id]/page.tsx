@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { PinDownResultCard } from "../../pin-down-result-card";
 import {
   CheckCircle2,
   XCircle,
@@ -500,6 +501,15 @@ export default function RunDetailPage() {
             This run sat in progress longer than its allowed runtime and was closed automatically. If this keeps happening for the same module, check the step where it stalled — that's usually an upstream API call hanging.
           </p>
         </div>
+      )}
+
+      {/* Pin-down onboarding result — confirmation page URL / paste-ready HTML.
+          Used to only ever be shown synchronously in the setup form itself;
+          now that onboarding runs async (see /api/engagements/setup/route.ts),
+          this is how a buyer sees the result whether they stuck around on
+          the setup page or came back to it via Live Executions later. */}
+      {run.skillName === "pin-down" && run.status === "success" && (
+        <PinDownResultCard engagementId={run.engagementId} />
       )}
 
       {/* Timeline Tracking Tree */}
