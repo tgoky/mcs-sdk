@@ -294,7 +294,7 @@ export default async function DashboardLayout({
 
       <div className="flex flex-col flex-1 min-w-0 bg-zinc-950">
         <header className="h-14 border-b border-zinc-900 bg-zinc-950 flex items-center justify-between px-6 shrink-0">
-          <MobileNav links={navLinks} />
+          <MobileNav links={navLinks} displayName={displayName} />
           <div className="flex items-center ml-auto">
             <NotificationBell />
           </div>

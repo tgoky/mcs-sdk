@@ -10,6 +10,34 @@ const WHOP_OAUTH_BASE = "https://api.whop.com/oauth";
 
 const WHOP_CLIENT_ID = process.env.WHOP_CLIENT_ID!;
 const WHOP_REDIRECT_URI = process.env.WHOP_REDIRECT_URI!;
+// Whop's own public docs show a PKCE-only token exchange with no
+// client_secret at all — that's the flow for a public/browser client,
+// where PKCE's code_verifier stands in for a secret. This app authenticates
+// server-side though (every call in this file runs in a Next.js API route,
+// never in the browser), and Whop's live API confirmed via a real
+// "client_secret is required" error that this app is registered as a
+// confidential client — which Whop authenticates with PKCE *and* a secret,
+// not PKCE alone. Required for token exchange, refresh, and revoke alike:
+// same client_id, same authentication requirement across all three.
+const WHOP_CLIENT_SECRET = process.env.WHOP_CLIENT_SECRET!;
+
+function assertWhopEnv() {
+  const missing = [
+    !WHOP_CLIENT_ID && "WHOP_CLIENT_ID",
+    !WHOP_REDIRECT_URI && "WHOP_REDIRECT_URI",
+    !WHOP_CLIENT_SECRET && "WHOP_CLIENT_SECRET",
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    // The `!` assertions above are compile-time only — at runtime a missing
+    // var is just `undefined`, which JSON.stringify silently turns into the
+    // literal string "undefined" in the request body. Whop would then
+    // reject that with its own generic "invalid_client" error, which is a
+    // much more confusing thing to debug than this.
+    throw new Error(
+      `Missing required env var(s) for Whop OAuth: ${missing.join(", ")}. Check .env.local.`
+    );
+  }
+}
 
 export type WhopTokens = {
   access_token: string;
@@ -59,6 +87,7 @@ export async function exchangeCode(
   code: string,
   codeVerifier: string
 ): Promise<WhopTokens> {
+  assertWhopEnv();
   const res = await fetch(`${WHOP_OAUTH_BASE}/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -67,6 +96,7 @@ export async function exchangeCode(
       code,
       redirect_uri: WHOP_REDIRECT_URI,
       client_id: WHOP_CLIENT_ID,
+      client_secret: WHOP_CLIENT_SECRET,
       code_verifier: codeVerifier,
     }),
   });
@@ -82,6 +112,7 @@ export async function exchangeCode(
 export async function refreshTokens(
   refreshToken: string
 ): Promise<WhopTokens> {
+  assertWhopEnv();
   const res = await fetch(`${WHOP_OAUTH_BASE}/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -89,6 +120,7 @@ export async function refreshTokens(
       grant_type: "refresh_token",
       refresh_token: refreshToken,
       client_id: WHOP_CLIENT_ID,
+      client_secret: WHOP_CLIENT_SECRET,
     }),
   });
   if (!res.ok) {
@@ -114,16 +146,26 @@ export async function getWhopUser(
 // leaks. Access tokens themselves expire after 1 hour and can't be
 // server-revoked — only the refresh token can. Call this on logout.
 export async function revokeToken(refreshToken: string): Promise<void> {
-  await fetch(`${WHOP_OAUTH_BASE}/revoke`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      token: refreshToken,
-      client_id: WHOP_CLIENT_ID,
-    }),
-  }).catch((err) => {
+  // Unlike exchangeCode/refreshTokens, this must never throw — the logout
+  // route calls this without its own try/catch, relying on revoke being
+  // fully best-effort so a config or network issue here can never prevent
+  // session.destroy() from running. assertWhopEnv() throws synchronously,
+  // so it has to be inside this try, not before it.
+  try {
+    assertWhopEnv();
+    await fetch(`${WHOP_OAUTH_BASE}/revoke`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: refreshToken,
+        client_id: WHOP_CLIENT_ID,
+        client_secret: WHOP_CLIENT_SECRET,
+      }),
+    });
+  } catch (err) {
     // Don't block logout on a revoke failure (network blip, already-expired
-    // token, etc.) — the session cookie is destroyed regardless below.
+    // token, missing env var, etc.) — the session cookie is destroyed
+    // regardless below.
     console.error("[whop] token revoke failed:", err);
-  });
+  }
 }

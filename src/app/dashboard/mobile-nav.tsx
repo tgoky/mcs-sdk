@@ -7,7 +7,7 @@ interface NavLink {
   label: string;
 }
 
-export function MobileNav({ links }: { links: NavLink[] }) {
+export function MobileNav({ links, displayName }: { links: NavLink[]; displayName?: string }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -55,6 +55,17 @@ export function MobileNav({ links }: { links: NavLink[] }) {
                 {link.label}
               </a>
             ))}
+            {displayName && (
+              <div className="flex items-center justify-between pt-3 mt-2 border-t border-zinc-900 px-3">
+                <span className="text-sm text-zinc-300 font-medium">{displayName}</span>
+                <a
+                  href="/api/auth/logout"
+                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  Sign out
+                </a>
+              </div>
+            )}
           </div>
         </>
       )}
