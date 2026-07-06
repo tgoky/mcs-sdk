@@ -29,7 +29,9 @@ export type NotificationType =
   | "run_failed"
   | "run_timed_out"
   | "credential_invalid"
-  | "credential_check_error";
+  | "credential_check_error"
+  | "lost_deal_swept"
+  | "weekly_metrics";
 
 export type NotificationSeverity = "info" | "warning" | "critical";
 

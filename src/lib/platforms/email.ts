@@ -24,6 +24,25 @@ export class KlaviyoClient {
   }
 
   /**
+   * Returns a list's current profile count. Verified against Klaviyo's
+   * docs (developers.klaviyo.com/en/reference/get_list): profile_count is
+   * only included when explicitly requested via
+   * additional-fields[list]=profile_count, and that specific query
+   * carries a much lower rate limit (1/s, 15/min) than the rest of the
+   * API — worth remembering if this is ever called in a tight loop across
+   * many lists.
+   */
+  async getListProfileCount(listId: string): Promise<number | null> {
+    const res = await fetch(
+      `${this.baseUrl}/lists/${listId}/?additional-fields[list]=profile_count`,
+      { headers: this.headers }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.data?.attributes?.profile_count ?? null;
+  }
+
+  /**
    * Enrolls a prospect into a Klaviyo list (triggers any flows listening to that list).
    * Used for both pile-on (target_list_id) and win-back (recovery_list_id).
    */
@@ -215,6 +234,93 @@ export class HubSpotClient {
     });
   }
 
+  /**
+   * Sets one or more arbitrary contact properties. Generic counterpart to
+   * markRebooked's inline property update — added so any future signal
+   * (not just showtime_status) can be written without a new method per
+   * property. HubSpot properties must exist on the account (created
+   * manually or via the Properties API) before they can be set — same
+   * assumption already baked into every other property write in this
+   * class.
+   */
+  async setCustomProperty(
+    email: string,
+    properties: Record<string, string>
+  ): Promise<void> {
+    const contactId = await this.findContactId(email);
+    if (!contactId) return;
+
+    await fetch(`${this.baseUrl}/contacts/${contactId}`, {
+      method: "PATCH",
+      headers: this.headers,
+      body: JSON.stringify({ properties }),
+    });
+  }
+
+  /**
+   * Returns every deal stage across all pipelines, with each stage's
+   * isClosed/isClosedWon-equivalent metadata. Verified against HubSpot's
+   * docs (GET /crm/v3/pipelines/deals) — note this is NOT under
+   * /crm/v3/objects, unlike this.baseUrl, hence the separate full URL.
+   */
+  async getDealPipelineStages(): Promise<Map<string, { label: string; isClosed: boolean }>> {
+    const res = await fetch("https://api.hubapi.com/crm/v3/pipelines/deals", {
+      headers: this.headers,
+    });
+    const stageMap = new Map<string, { label: string; isClosed: boolean }>();
+    if (!res.ok) return stageMap;
+    const data = await res.json();
+    for (const pipeline of data.results ?? []) {
+      for (const stage of pipeline.stages ?? []) {
+        stageMap.set(stage.id, {
+          label: stage.label,
+          isClosed: stage.metadata?.isClosed === "true",
+        });
+      }
+    }
+    return stageMap;
+  }
+
+  /**
+   * Deals created on/after `since`, with the properties needed for
+   * pipeline metrics. hs_is_closed / hs_is_closed_won are real, documented
+   * HubSpot properties (confirmed via HubSpot's community docs examples)
+   * that give win/loss/open status directly — no buyer-configured stage
+   * mapping needed, unlike what the original audit assumed was required.
+   */
+  async searchDealsCreatedSince(since: Date): Promise<
+    Array<{
+      id: string;
+      dealstage: string;
+      createdate: string;
+      closedate: string | null;
+      isClosed: boolean;
+      isClosedWon: boolean;
+    }>
+  > {
+    const res = await fetch("https://api.hubapi.com/crm/v3/objects/deals/search", {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({
+        filterGroups: [
+          { filters: [{ propertyName: "createdate", operator: "GTE", value: since.getTime() }] },
+        ],
+        properties: ["dealstage", "createdate", "closedate", "hs_is_closed", "hs_is_closed_won"],
+        limit: 100,
+      }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.results ?? []).map((d: any) => ({
+      id: d.id,
+      dealstage: d.properties.dealstage,
+      createdate: d.properties.createdate,
+      closedate: d.properties.closedate ?? null,
+      isClosed: d.properties.hs_is_closed === "true",
+      isClosedWon: d.properties.hs_is_closed_won === "true",
+    }));
+  }
+
   async attachTimelineNote(email: string, briefHtml: string): Promise<void> {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
@@ -403,6 +509,86 @@ export class GHLCRMClient {
     );
   }
 
+  /**
+   * Sets one or more arbitrary custom fields, generalizing the pattern
+   * markRebooked already uses inline for showtime_status. GHL's custom
+   * fields are referenced by string key on this endpoint (not a
+   * pre-registered numeric ID like ActiveCampaign requires), so this is a
+   * direct generalization rather than a new mechanism.
+   */
+  async setCustomFields(email: string, fields: Record<string, string>): Promise<void> {
+    const contactId = await this.findContactId(email);
+    if (!contactId) return;
+
+    await fetch(`${this.baseUrl}/contacts/${contactId}`, {
+      method: "PUT",
+      headers: this.headers,
+      body: JSON.stringify({
+        customFields: Object.entries(fields).map(([key, field_value]) => ({ key, field_value })),
+      }),
+    }).catch(() => {});
+  }
+
+  /**
+   * Opportunities created on/after `since`. GHL's opportunity `status`
+   * field is a fixed, non-customizable 4-value enum — "open" | "won" |
+   * "lost" | "abandoned" (confirmed directly from GHL's own support
+   * docs) — so, like HubSpot's hs_is_closed/hs_is_closed_won, this needs
+   * no buyer-configured stage-name mapping to compute win/loss.
+   *
+   * One thing NOT independently confirmed: the exact pagination
+   * parameter names for this specific endpoint. GHL's Contacts endpoint
+   * confirmed uses startAfter/startAfterId cursor pagination; this
+   * assumes Opportunities search follows the same platform-wide
+   * convention rather than having verified it directly against a live
+   * account. Capped at 3 pages (up to ~300 opportunities) as a safety
+   * bound — if pagination silently doesn't advance for some account,
+   * this fails safe (returns a partial, smaller-than-real dataset) rather
+   * than looping.
+   */
+  async searchOpportunitiesCreatedSince(
+    since: Date
+  ): Promise<Array<{ id: string; status: string; dateAdded: string; pipelineStageId: string }>> {
+    const results: Array<{ id: string; status: string; dateAdded: string; pipelineStageId: string }> = [];
+    let startAfter: string | undefined;
+    let startAfterId: string | undefined;
+
+    for (let page = 0; page < 3; page++) {
+      const params = new URLSearchParams({ location_id: this.locationId, limit: "100" });
+      if (startAfter) params.set("startAfter", startAfter);
+      if (startAfterId) params.set("startAfterId", startAfterId);
+
+      const res = await fetch(`${this.baseUrl}/opportunities/search?${params.toString()}`, {
+        headers: this.headers,
+      });
+      if (!res.ok) break;
+      const data = await res.json();
+      const opportunities: any[] = data.opportunities ?? [];
+      if (opportunities.length === 0) break;
+
+      let reachedCutoff = false;
+      for (const opp of opportunities) {
+        if (new Date(opp.dateAdded) < since) {
+          reachedCutoff = true;
+          continue;
+        }
+        results.push({
+          id: opp.id,
+          status: opp.status,
+          dateAdded: opp.dateAdded,
+          pipelineStageId: opp.pipelineStageId,
+        });
+      }
+
+      if (reachedCutoff || opportunities.length < 100) break;
+      const last = opportunities[opportunities.length - 1];
+      startAfter = last.dateAdded;
+      startAfterId = last.id;
+    }
+
+    return results;
+  }
+
   async attachCRMNote(email: string, noteText: string): Promise<void> {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
@@ -576,6 +762,55 @@ export async function exitWinBackSequence(
     default:
       // No exit signal path for this platform — not fatal, just nothing to do.
       return;
+  }
+}
+
+/**
+ * Delivers a hybrid-mode personalized intro to the prospect's ESP profile
+ * as a custom property, so the buyer's own confirmation email template can
+ * pull it in via a merge tag (e.g. Klaviyo's {{ event.showtime_personalized_intro }}).
+ * This app never sends transactional email directly — every delivery path
+ * in this file works by tagging the buyer's own platform and letting their
+ * existing automation act on it, and this is no different.
+ *
+ * ActiveCampaign is the one platform this can't support today: unlike the
+ * other three, AC's custom-field API requires a pre-registered *numeric*
+ * field ID (fieldValues endpoint), not an arbitrary string key — and
+ * nothing in this app's onboarding flow currently collects that ID from
+ * the buyer. Documented honestly as unsupported rather than silently
+ * no-op'd, so callers can surface it as a real open item.
+ */
+export async function deliverPersonalizedIntro(
+  platform: string,
+  apiKey: string,
+  email: string,
+  text: string,
+  meta: Record<string, any> = {}
+): Promise<void> {
+  switch (platform) {
+    case "klaviyo":
+      return new KlaviyoClient(apiKey).setProfileProperty(email, {
+        showtime_personalized_intro: text,
+      });
+
+    case "hubspot":
+      return new HubSpotClient(apiKey).setCustomProperty(email, {
+        showtime_personalized_intro: text,
+      });
+
+    case "ghl":
+      if (!meta.location_id) throw new Error("GHL personalized-intro delivery requires location_id in stack");
+      return new GHLCRMClient(apiKey, meta.location_id).setCustomFields(email, {
+        showtime_personalized_intro: text,
+      });
+
+    case "activecampaign":
+      throw new Error(
+        "ActiveCampaign requires a pre-registered numeric custom field ID for this, which isn't collected during onboarding yet — not supported."
+      );
+
+    default:
+      throw new Error(`Unsupported email platform for personalized-intro delivery: ${platform}`);
   }
 }
 

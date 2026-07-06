@@ -32,6 +32,8 @@ import { engagements, skillRuns } from "@/models/schema";
 import { startRun, timeoutRun } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
 import { runCredentialHealthCheck } from "@/features/notifications/server/credential-health";
+import { runLostDealSweep } from "@/features/win-back/server/lost-deal-sweep";
+import { runWeeklyMetricsReadout } from "@/features/pile-on/server/weekly-metrics";
 import { and, eq, lt } from "drizzle-orm";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
@@ -254,6 +256,38 @@ export const credentialHealthCron = inngest.createFunction(
     const result = await step.run("check-credential-health", () =>
       runCredentialHealthCheck()
     );
+    return result;
+  }
+);
+
+/**
+ * Daily lost-deal sweep.
+ *
+ * Closes the gap winBackCounts.lost_count sat unused for: finds every
+ * win-back enrollment whose recovery window elapsed without a rebook,
+ * marks it lost, generates the long-term nurture content once per
+ * engagement, and auto-enrolls where a Klaviyo list is configured. See
+ * src/features/win-back/server/lost-deal-sweep.ts for the full mechanics.
+ */
+export const lostDealSweepCron = inngest.createFunction(
+  { id: "lost-deal-sweep-cron", triggers: [{ cron: "TZ=UTC 0 14 * * *" }] }, // 14:00 UTC daily
+  async ({ step }) => {
+    const result = await step.run("sweep-lost-deals", () => runLostDealSweep());
+    return result;
+  }
+);
+
+/**
+ * Weekly Monday metrics readout — opening metrics, list sizes, and a
+ * simple booking-volume anomaly flag, delivered per-engagement via
+ * notifyUser. Matches the original spec's "wakes up every Monday morning
+ * at 08:00" cadence exactly. See weekly-metrics.ts for what "metrics"
+ * honestly means here and why.
+ */
+export const weeklyMetricsCron = inngest.createFunction(
+  { id: "weekly-metrics-cron", triggers: [{ cron: "TZ=UTC 0 8 * * 1" }] }, // Monday 08:00 UTC
+  async ({ step }) => {
+    const result = await step.run("run-weekly-metrics", () => runWeeklyMetricsReadout());
     return result;
   }
 );

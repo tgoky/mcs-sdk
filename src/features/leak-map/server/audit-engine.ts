@@ -3,7 +3,7 @@ import { engagements, skillRuns, briefedCallsLog, auditRunsLog } from "@/models/
 import { eq, and, gte, lte } from "drizzle-orm";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { resolveCredential } from "@/lib/credentials";
-import { KlaviyoClient } from "@/lib/platforms/email";
+import { KlaviyoClient, HubSpotClient, GHLCRMClient } from "@/lib/platforms/email";
 import { CalendlyClient } from "@/lib/platforms/booking";
 import { logStep, finishRun, failRun } from "@/lib/run-log";
 import crypto from "crypto";
@@ -155,6 +155,13 @@ export class AuditEngine {
           externalPulls.push({
             label: "email open-rate from Klaviyo",
             fn: () => pullKlaviyoOpenRate(engagementId, stack, sampleSizeMinimum),
+          });
+        }
+        if (stack?.email_platform === "hubspot" || stack?.email_platform === "ghl") {
+          externalPulls.push({
+            label: `CRM pipeline metrics from ${stack.email_platform}`,
+            fn: () =>
+              pullCrmPipelineMetrics(engagementId, stack, currentStart, priorStart, now, sampleSizeMinimum, gaps),
           });
         }
 
@@ -439,4 +446,133 @@ async function pullKlaviyoOpenRate(
     { current: getRecipientCount(campaigns[0]), prior: getRecipientCount(campaigns[1]) },
     sampleSizeMinimum
   );
+}
+
+/**
+ * CRM pipeline win-rate, plus two supplementary findings pushed directly
+ * into `gaps` (aging open deals, average days-to-close) that don't fit
+ * the current-vs-prior delta shape MetricResult is built for.
+ *
+ * Deliberately does NOT require any buyer-configured stage-name mapping —
+ * the original audit assumed a `crm_lifecycle_field_mappings` config that
+ * doesn't exist anywhere in this codebase. Instead this uses each
+ * platform's own real, documented universal status fields: HubSpot's
+ * hs_is_closed/hs_is_closed_won, and GHL's fixed open/won/lost/abandoned
+ * status enum. Both were verified against current provider docs before
+ * being used here.
+ *
+ * "Stage-transition velocity" from the original audit is scoped down to
+ * "days from creation to close" — real, computable from createdate/
+ * closedate alone. HubSpot exposes closedate; GHL's opportunity object
+ * doesn't expose an equivalent close timestamp in what's verified here,
+ * so days-to-close is HubSpot-only. GHL still gets win-rate and
+ * aging-of-open-deals, just not that one metric — an honest gap rather
+ * than guessing at an unconfirmed field.
+ */
+async function pullCrmPipelineMetrics(
+  engagementId: string,
+  stack: any,
+  currentStart: Date,
+  priorStart: Date,
+  now: Date,
+  sampleSizeMinimum: number,
+  gaps: string[]
+): Promise<MetricResult | null> {
+  const AGING_THRESHOLD_DAYS = 30; // deals open longer than this get flagged
+
+  if (stack.email_platform === "hubspot") {
+    const accessToken = await resolveCredential(engagementId, "hubspot");
+    const client = new HubSpotClient(accessToken);
+
+    const [currentDeals, priorDeals] = await Promise.all([
+      client.searchDealsCreatedSince(currentStart),
+      client.searchDealsCreatedSince(priorStart),
+    ]);
+    // priorDeals covers [priorStart, now] since the search is "created
+    // since X" with no upper bound — filter down to just the prior window.
+    const priorWindowDeals = priorDeals.filter((d) => new Date(d.createdate) < currentStart);
+
+    const rate = (deals: typeof currentDeals) => {
+      const won = deals.filter((d) => d.isClosedWon).length;
+      const closed = deals.filter((d) => d.isClosed).length;
+      return { rate: closed > 0 ? Math.round((won / closed) * 100) : 0, n: closed };
+    };
+
+    const current = rate(currentDeals);
+    const prior = rate(priorWindowDeals);
+
+    // Aging open deals (current window only, for relevance)
+    const openDeals = currentDeals.filter((d) => !d.isClosed);
+    const agingDeals = openDeals.filter(
+      (d) => (now.getTime() - new Date(d.createdate).getTime()) / 86_400_000 > AGING_THRESHOLD_DAYS
+    );
+    if (agingDeals.length > 0) {
+      gaps.push(
+        `[pipeline-aging] ${agingDeals.length} open HubSpot deal(s) have been in the pipeline longer than ${AGING_THRESHOLD_DAYS} days without closing.`
+      );
+    }
+
+    // Days-to-close (HubSpot only — closedate is a real, documented field)
+    const closedWonWithDates = currentDeals.filter((d) => d.isClosedWon && d.closedate);
+    if (closedWonWithDates.length > 0) {
+      const avgDays =
+        closedWonWithDates.reduce(
+          (sum, d) => sum + (new Date(d.closedate!).getTime() - new Date(d.createdate).getTime()) / 86_400_000,
+          0
+        ) / closedWonWithDates.length;
+      gaps.push(`[pipeline-velocity] Average days from deal creation to close (won): ${avgDays.toFixed(1)} days.`);
+    }
+
+    return computeDelta(
+      "CRM pipeline win-rate (%)",
+      current.rate,
+      prior.rate,
+      { highThreshold: -15, medThreshold: -8 },
+      { current: current.n, prior: prior.n },
+      sampleSizeMinimum
+    );
+  }
+
+  if (stack.email_platform === "ghl") {
+    if (!stack.booking_platform_meta?.location_id) return null;
+    const apiKey = await resolveCredential(engagementId, "ghl");
+    const client = new GHLCRMClient(apiKey, stack.booking_platform_meta.location_id);
+
+    const [currentOpps, priorOpps] = await Promise.all([
+      client.searchOpportunitiesCreatedSince(currentStart),
+      client.searchOpportunitiesCreatedSince(priorStart),
+    ]);
+    const priorWindowOpps = priorOpps.filter((o) => new Date(o.dateAdded) < currentStart);
+
+    const rate = (opps: typeof currentOpps) => {
+      const won = opps.filter((o) => o.status === "won").length;
+      const closed = opps.filter((o) => o.status === "won" || o.status === "lost").length;
+      return { rate: closed > 0 ? Math.round((won / closed) * 100) : 0, n: closed };
+    };
+
+    const current = rate(currentOpps);
+    const prior = rate(priorWindowOpps);
+
+    const openOpps = currentOpps.filter((o) => o.status === "open");
+    const agingOpps = openOpps.filter(
+      (o) => (now.getTime() - new Date(o.dateAdded).getTime()) / 86_400_000 > AGING_THRESHOLD_DAYS
+    );
+    if (agingOpps.length > 0) {
+      gaps.push(
+        `[pipeline-aging] ${agingOpps.length} open GHL opportunit${agingOpps.length > 1 ? "ies" : "y"} have been in the pipeline longer than ${AGING_THRESHOLD_DAYS} days without closing.`
+      );
+    }
+    // No days-to-close note for GHL — see function comment on why.
+
+    return computeDelta(
+      "CRM pipeline win-rate (%)",
+      current.rate,
+      prior.rate,
+      { highThreshold: -15, medThreshold: -8 },
+      { current: current.n, prior: prior.n },
+      sampleSizeMinimum
+    );
+  }
+
+  return null;
 }

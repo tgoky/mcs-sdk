@@ -5,6 +5,7 @@ import { resolveCredential } from "@/lib/credentials";
 import { registerWebhookForTenant, CalendlyClient, CalComClient } from "@/lib/platforms/booking";
 import { publishConfirmationPage } from "@/lib/platforms/hosting";
 import { buildConfirmationPageHtml } from "./page-builder";
+import { buildAdCreativeBriefs } from "@/features/pile-on/server/ad-creative-briefs";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { GetStepTools, Inngest } from "inngest";
@@ -114,6 +115,7 @@ export async function runPinDownOnboarding(
   const buyerName = tenant.buyer;
   const offerDetails = tenant.offerDetails ?? {};
   const topCallQuestions: string[] = tenant.topCallQuestions ?? [];
+  const topObjections: string[] = tenant.topObjections ?? [];
   const prospectMeets: string = tenant.prospectMeets ?? "founder";
   const existingProof = tenant.existingProof;
   const rawVoiceCorpus: string = tenant.rawVoiceCorpus ?? "";
@@ -239,6 +241,45 @@ export async function runPinDownOnboarding(
       });
       return profile;
     });
+
+    // ── Ad creative briefs ──────────────────────────────────────────────────
+    // One structured brief per content pillar, generated once here rather
+    // than in Pile-On itself — Pile-On doesn't have its own setup phase to
+    // run this from, and the copy doesn't need per-booking variation, same
+    // reasoning as generating the recovery cadence once during Win-Back
+    // setup rather than per-prospect. Failure here is non-fatal to the rest
+    // of onboarding: a missing set of ad briefs shouldn't block bookings
+    // from working.
+    try {
+      await logStep(runId, { phase: "ad_creative_briefs", status: "running" });
+      const { briefs } = await run("ad-creative-briefs", () =>
+        buildAdCreativeBriefs(
+          {
+            buyer: buyerName,
+            brandVoiceProfile: voiceProfile,
+            offerDetails,
+            topCallQuestions,
+            topObjections,
+            existingProof,
+          },
+          runId
+        )
+      );
+      await db
+        .update(engagements)
+        .set({ adCreativeBriefs: { generatedAt: new Date().toISOString(), briefs } })
+        .where(eq(engagements.engagementId, engagementId));
+      summary.whatWorked.push(`Generated ${briefs.length} ad creative briefs across all 4 content pillars.`);
+      await logStep(runId, {
+        phase: "ad_creative_briefs",
+        status: "success",
+        detail: `${briefs.length} briefs generated`,
+      });
+    } catch (e: any) {
+      console.error("[pin-down onboarding] Ad creative brief generation failed:", e.message);
+      summary.openItems.push(`Ad creative briefs couldn't be generated: ${e.message}`);
+      await logStep(runId, { phase: "ad_creative_briefs", status: "failed", detail: e.message });
+    }
 
     // ── Confirmation page deploy ────────────────────────────────────────────
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.muddventures.com";

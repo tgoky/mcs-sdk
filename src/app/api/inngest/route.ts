@@ -8,6 +8,8 @@ import {
   alertMonitorCron,
   staleRunReaperCron,
   credentialHealthCron,
+  lostDealSweepCron,
+  weeklyMetricsCron,
 } from "@/inngest/crons";
 
 // Explicit duration floor for this route, paired with checkpointing's
@@ -39,5 +41,11 @@ export const { GET, POST, PUT } = serve({
     // before they cause a run to fail. See src/inngest/crons.ts.
     staleRunReaperCron,
     credentialHealthCron,
+    // Closes the gap on winBackCounts.lost_count sitting unused — see
+    // src/features/win-back/server/lost-deal-sweep.ts.
+    lostDealSweepCron,
+    // The Monday-morning summary email that had no task loop at all
+    // before this. See src/features/pile-on/server/weekly-metrics.ts.
+    weeklyMetricsCron,
   ],
 });

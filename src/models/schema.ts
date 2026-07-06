@@ -88,6 +88,12 @@ export type EngagementStack = {
   // 30-day window if unset.
   recovery_window_days?: 14 | 21 | 30 | 45 | 60;
   daily_send_tolerance?: number; // max touches/day; default 2 (email+SMS same day allowed)
+  // Optional: list/workflow to auto-enroll a prospect into once they're
+  // declared "lost" (recovery window elapsed with no rebook) — see
+  // src/features/win-back/server/lost-deal-sweep.ts. If unset, the sweep
+  // still generates the long-term nurture content and marks the prospect
+  // lost, it just can't auto-enroll them and says so.
+  long_term_nurture_list_id?: string;
   // Leak-Map sample-size floor (LEAK-002). Below this, a metric's delta is
   // suppressed rather than reported, regardless of how large it looks.
   sample_size_minimum?: number; // default 5
@@ -173,6 +179,23 @@ export const engagements = pgTable("engagements", {
 
   // each skill writes only its own section
   pileOnSequenceAssetMap: jsonb("pile_on_sequence_asset_map"),
+  // 3-5 structured ad creative script briefs (not finished ad copy — a
+  // brief a copywriter/editor works from), one per content pillar. See
+  // src/features/pile-on/server/ad-creative-briefs.ts. Generated once
+  // during pin-down onboarding, engagement-level like the recovery
+  // cadence and long-term nurture content.
+  adCreativeBriefs: jsonb("ad_creative_briefs").$type<{
+    generatedAt: string;
+    briefs: Array<{
+      id: string;
+      pillar: "common_questions" | "deeper_questions" | "success_proof" | "objections";
+      hook: string;
+      angle: string;
+      talkingPoints: string[];
+      suggestedFormat: string;
+      cta: string;
+    }>;
+  }>(),
   winBackSequenceAssetMap: jsonb("win_back_sequence_asset_map").$type<{
     windowDays: number;
     generatedAt: string;
@@ -182,6 +205,15 @@ export const engagements = pgTable("engagements", {
   winBackCounts: jsonb("win_back_counts").$type<{
     recovery_count: number;
     lost_count: number;
+  }>(),
+  // Generated once a prospect is swept into "lost" status (see
+  // lost-deal-sweep.ts) — same shape/philosophy as winBackSequenceAssetMap:
+  // content generation only, the buyer's own platform runs the send
+  // schedule. Engagement-level (not per-prospect) since the copy itself
+  // doesn't need to vary per lost prospect, same as the recovery cadence.
+  longTermNurtureAssetMap: jsonb("long_term_nurture_asset_map").$type<{
+    generatedAt: string;
+    emails: Array<{ id: string; offsetDays: number; subject?: string; body: string }>;
   }>(),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -231,6 +263,32 @@ export const briefedCallsLog = pgTable("briefed_calls_log", {
   briefDeliveredAt: timestamp("brief_delivered_at"),
   destinationDelivered: text("destination_delivered"),
   personMatchScore: integer("person_match_score"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Win-Back Enrollments ────────────────────────────────────────────────
+// Individual per-prospect enrollment tracking. Nothing previously recorded
+// *who* got enrolled in win-back or *when* — enrollInWinBackSequence just
+// called out to the buyer's ESP and returned. That made "has this prospect
+// gone past the recovery window without rebooking" an unanswerable
+// question, which is exactly why winBackCounts.lost_count sat unused in
+// the schema. See src/features/win-back/server/lost-deal-sweep.ts.
+export const winBackEnrollments = pgTable("win_back_enrollments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  prospectEmail: text("prospect_email").notNull(),
+  prospectName: text("prospect_name"),
+  enrolledAt: timestamp("enrolled_at").defaultNow().notNull(),
+  // Frozen at enrollment time from the engagement's recovery_window_days —
+  // if the buyer changes that setting later, prospects already in-flight
+  // should still be judged against the window they were actually enrolled
+  // under, not retroactively against a new one.
+  recoveryWindowDays: integer("recovery_window_days").notNull(),
+  // "active" | "rebooked" | "lost"
+  status: text("status").notNull().default("active"),
+  lostAt: timestamp("lost_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

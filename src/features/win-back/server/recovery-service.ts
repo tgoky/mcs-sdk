@@ -11,7 +11,7 @@ import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
-const FIRST_NAME_MERGE: Record<string, string> = {
+export const FIRST_NAME_MERGE: Record<string, string> = {
   klaviyo: "{{ first_name|default:'there' }}",
   hubspot: "{{ contact.firstname }}",
   activecampaign: "%FIRSTNAME%",

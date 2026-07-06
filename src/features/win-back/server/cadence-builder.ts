@@ -201,6 +201,111 @@ SMS: ${plan.sms.map((s) => `${s.id} (${s.purpose})`).join(", ")}`;
 }
 
 /**
+ * Fixed monthly touch plan for lost-deal long-term nurture: 9 touches
+ * across 9 months (the middle of the audit spec's "6 to 12 month" range —
+ * long enough to be genuinely low-velocity, short enough that generated
+ * copy referencing "today's" offer context doesn't go stale for a full
+ * year before anyone revisits it). Unlike the recovery cadence, there's
+ * no window-size variant here — a "lost" deal isn't scored by urgency the
+ * way an active recovery window is.
+ */
+const LONG_TERM_NURTURE_PLAN: TouchSlot[] = [
+  { id: "N1", offsetDays: 30, purpose: "No-pressure check-in" },
+  { id: "N2", offsetDays: 60, purpose: "Useful resource or insight" },
+  { id: "N3", offsetDays: 90, purpose: "Light re-open" },
+  { id: "N4", offsetDays: 120, purpose: "Social proof / case study" },
+  { id: "N5", offsetDays: 150, purpose: "Useful resource or insight" },
+  { id: "N6", offsetDays: 180, purpose: "Light re-open" },
+  { id: "N7", offsetDays: 210, purpose: "Social proof / case study" },
+  { id: "N8", offsetDays: 240, purpose: "Useful resource or insight" },
+  { id: "N9", offsetDays: 270, purpose: "Final light re-open" },
+];
+
+export interface LongTermNurtureInput {
+  buyer: string;
+  brandVoiceProfile?: any;
+  offerDetails?: { name: string; icp: string };
+  rescheduleUrlMergeField: string;
+  firstNameMergeField: string;
+  prospectMeets?: string;
+}
+
+/**
+ * Generates the long-term "lost deal" nurture sequence — same
+ * single-call, structured-JSON approach as buildRecoveryCadence, and same
+ * content-generation-only philosophy: this returns copy for the buyer to
+ * load into their own platform's automation builder, it does not send
+ * anything itself. Called by the lost-deal sweep once per engagement (not
+ * once per lost prospect — the copy doesn't need to vary by who went
+ * cold, same as the recovery cadence being engagement-level).
+ */
+export async function buildLongTermNurture(
+  input: LongTermNurtureInput,
+  runId?: string
+): Promise<{ emails: CadenceAsset[] }> {
+  const system = `You are the copywriting engine for a long-term, low-velocity nurture
+sequence for prospects who went all the way through ${input.buyer}'s active
+recovery window without rebooking a call, and are now considered a "lost"
+deal for now — not gone forever.
+
+${GHOST_DEFAULT_VOICE_GUARDRAILS}
+
+This is explicitly LOW-PRESSURE, LONG-HORIZON messaging — monthly cadence,
+not a recovery push. No urgency language, no countdown framing, no
+"last chance" energy anywhere in this sequence. Assume the reader has not
+thought about this offer in weeks; each email should stand alone without
+requiring memory of the previous one.
+
+Brand voice profile: ${JSON.stringify(input.brandVoiceProfile ?? {})}
+Offer context: ${JSON.stringify(input.offerDetails ?? {})}
+The prospect will be meeting with: ${input.prospectMeets ?? "our team"}
+
+Use exactly this merge syntax verbatim in the copy where relevant:
+- First name: ${input.firstNameMergeField}
+- Reschedule link: ${input.rescheduleUrlMergeField}
+
+Email guidance by id:
+- N1 (No-pressure check-in): brief, no ask beyond "here if useful."
+- N2/N5/N8 (Useful resource or insight): reference that a useful resource will be linked here (write "[resource link]" as a placeholder, do not invent a real URL) — teach something, no pitch.
+- N3/N6 (Light re-open): mention the reschedule link once, framed as an option, not a push.
+- N4/N7 (Social proof / case study): reference a result achieved by someone with a similar starting point (write "[case study link]" as a placeholder) — no fabricated specific numbers or names.
+- N9 (Final light re-open): closes the sequence, reschedule link included, warm and open-ended, no "this is your last email" framing.
+
+Return ONLY a JSON object with this exact shape, no prose, no markdown fences:
+{ "emails": [{"id": "N1", "subject": "...", "body": "..."}, ...] }
+Include every email id listed below, in order.`;
+
+  const userMessage = `Generate the sequence for this touch plan:
+Emails: ${LONG_TERM_NURTURE_PLAN.map((e) => `${e.id} (${e.purpose})`).join(", ")}`;
+
+  const result = await callClaudeWithRetry({
+    model: MODEL.SYNTHESIS,
+    system,
+    userMessage,
+    maxTokens: 3000,
+    runId,
+  });
+
+  let parsed: { emails: Array<{ id: string; subject: string; body: string }> };
+  try {
+    const cleaned = result.text.replace(/^```json\s*|\s*```$/g, "").trim();
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error(
+      `Long-term nurture generation returned non-JSON output: ${result.text.slice(0, 200)}`
+    );
+  }
+
+  const emails: CadenceAsset[] = LONG_TERM_NURTURE_PLAN.map((slot) => {
+    const match = parsed.emails.find((e) => e.id === slot.id);
+    if (!match) throw new Error(`Long-term nurture generation missing email ${slot.id}`);
+    return { id: slot.id, offsetDays: slot.offsetDays, subject: match.subject, body: match.body };
+  });
+
+  return { emails };
+}
+
+/**
  * Enforces daily_send_tolerance against the generated plan: if two touches
  * land on the same day and the buyer's tolerance is 1, the later touch
  * (by convention, SMS over email — matches recovery_sequence.md's example
