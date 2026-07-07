@@ -31,6 +31,40 @@ export const skillRunCancel = eventType("skill/run.cancel", {
   schema: staticSchema<SkillRunCancelData>(),
 });
 
+// ── Maintenance-cron fan-out events ─────────────────────────────────────
+// Added to fix a real architectural bug: credentialHealthCron,
+// lostDealSweepCron, and weeklyMetricsCron each originally wrapped an
+// entire multi-tenant loop (with real external API calls per tenant/
+// credential) inside ONE step.run(). Inngest's checkpointing only yields
+// back to reschedule a continuation AT a step boundary — with only one
+// step, there's no boundary to checkpoint at until the whole loop
+// finishes, so none of the "survives serverless timeouts" benefit Inngest
+// is supposed to provide was actually happening. These events let each
+// cron do its DB-only prep in one cheap step, then fan out — same
+// nightlyBriefsCron/weeklyLeakMapCron pattern already established above.
+
+export type CredentialHealthCheckSingleData = {
+  credentialId: string;
+};
+export const credentialHealthCheckSingle = eventType("credential-health/check-single", {
+  schema: staticSchema<CredentialHealthCheckSingleData>(),
+});
+
+export type LostDealSweepEngagementData = {
+  engagementId: string;
+  enrollmentIds: string[];
+};
+export const lostDealSweepEngagement = eventType("win-back/lost-deal-sweep-engagement", {
+  schema: staticSchema<LostDealSweepEngagementData>(),
+});
+
+export type WeeklyMetricsEngagementData = {
+  engagementId: string;
+};
+export const weeklyMetricsEngagement = eventType("pile-on/weekly-metrics-engagement", {
+  schema: staticSchema<WeeklyMetricsEngagementData>(),
+});
+
 /**
  * Global Inngest Client
  * Used by API routes to publish events, and by workers to handle jobs.

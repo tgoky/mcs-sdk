@@ -515,6 +515,16 @@ export class GHLCRMClient {
    * fields are referenced by string key on this endpoint (not a
    * pre-registered numeric ID like ActiveCampaign requires), so this is a
    * direct generalization rather than a new mechanism.
+   *
+   * A note on the exact shape: public GHL docs/examples are genuinely
+   * inconsistent here — some show {key, field_value} (the shape used
+   * here and already established by markRebooked elsewhere in this same
+   * class), others show {id, value} referencing a pre-looked-up internal
+   * field ID. Kept consistent with this codebase's existing, pre-existing
+   * convention rather than switching to the competing shape on the
+   * strength of an equally-unverified claim — but this is worth a real
+   * test against a live GHL account before depending on it heavily, since
+   * neither shape was confirmed with full certainty from public docs alone.
    */
   async setCustomFields(email: string, fields: Record<string, string>): Promise<void> {
     const contactId = await this.findContactId(email);
@@ -554,7 +564,14 @@ export class GHLCRMClient {
     let startAfterId: string | undefined;
 
     for (let page = 0; page < 3; page++) {
-      const params = new URLSearchParams({ location_id: this.locationId, limit: "100" });
+      // GHL's own API changelog documents a breaking change for this
+      // endpoint category: snake_case params (location_id, pipeline_id,
+      // contact_id, assigned_to) were deleted in favor of camelCase
+      // (locationId, pipelineId, contactId, assignedTo) — confirmed
+      // directly from marketplace.gohighlevel.com/docs/Changelog, not
+      // assumed. Matches the camelCase already used in findContactId
+      // above for the Contacts endpoint.
+      const params = new URLSearchParams({ locationId: this.locationId, limit: "100" });
       if (startAfter) params.set("startAfter", startAfter);
       if (startAfterId) params.set("startAfterId", startAfterId);
 

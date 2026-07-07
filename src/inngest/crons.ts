@@ -26,14 +26,14 @@
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
 import crypto from "crypto";
-import { inngest, skillRunExecute, skillRunCancel } from "@/lib/inngest";
+import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements, skillRuns } from "@/models/schema";
 import { startRun, timeoutRun } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
-import { runCredentialHealthCheck } from "@/features/notifications/server/credential-health";
-import { runLostDealSweep } from "@/features/win-back/server/lost-deal-sweep";
-import { runWeeklyMetricsReadout } from "@/features/pile-on/server/weekly-metrics";
+import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
+import { markElapsedEnrollmentsLost, processLostDealsForEngagement } from "@/features/win-back/server/lost-deal-sweep";
+import { findEngagementsForWeeklyReadout, processWeeklyMetricsForEngagement } from "@/features/pile-on/server/weekly-metrics";
 import { and, eq, lt } from "drizzle-orm";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
@@ -200,6 +200,15 @@ const STALE_RUN_CEILING_MS =
  * Runs every 15 minutes — frequent enough that a stuck run doesn't sit
  * silently for hours, cheap enough that it's a non-issue against Inngest's
  * free-tier execution allowance.
+ *
+ * NOTE — same class of issue as the three crons below, not yet fixed here:
+ * timeoutRun() calls notifyRunOutcome() per reaped run, which does a real
+ * Slack/email network call. At the volume this cron is designed for (rare
+ * stale runs, not a large recurring batch), the risk is much smaller than
+ * the three below — but if stale runs ever pile up in bulk (e.g. after an
+ * outage), this loop has the same "one giant step" shape. Deprioritized
+ * this round given its lower likelihood; worth the same fan-out treatment
+ * if it ever becomes a real problem.
  */
 export const staleRunReaperCron = inngest.createFunction(
   { id: "stale-run-reaper-cron", triggers: [{ cron: "*/15 * * * *" }] },
@@ -249,14 +258,37 @@ export const staleRunReaperCron = inngest.createFunction(
  * moment one goes from working to broken — instead of the first sign of
  * trouble being a cryptic API error buried in a failed run three days
  * later.
+ *
+ * Fixed: originally ran every credential's real network validation call
+ * inside one step.run() looping across every tenant. Inngest's
+ * checkpointing only yields back to reschedule a continuation AT a step
+ * boundary — with one giant step, there's no boundary until the whole
+ * loop finishes, so none of the "survives a serverless timeout" benefit
+ * was actually happening as the credential count grows. Now: cheap
+ * DB-only prep in one step, then one checkSingleCredentialHealthCron
+ * invocation per credential, each with its own execution window.
  */
 export const credentialHealthCron = inngest.createFunction(
   { id: "credential-health-cron", triggers: [{ cron: "TZ=UTC 0 13 * * *" }] }, // 13:00 UTC daily
   async ({ step }) => {
-    const result = await step.run("check-credential-health", () =>
-      runCredentialHealthCheck()
-    );
-    return result;
+    const ids = await step.run("find-credentials-needing-check", () => findCredentialsNeedingCheck());
+
+    if (ids.length > 0) {
+      await step.sendEvent(
+        "dispatch-credential-checks",
+        ids.map((credentialId) => credentialHealthCheckSingle.create({ credentialId }))
+      );
+    }
+
+    return { dispatched: ids.length };
+  }
+);
+
+/** Fanned-out handler: the one real network call per invocation. */
+export const checkSingleCredentialHealthCron = inngest.createFunction(
+  { id: "check-single-credential-health", triggers: [credentialHealthCheckSingle] },
+  async ({ event }) => {
+    return checkSingleCredential(event.data.credentialId);
   }
 );
 
@@ -268,12 +300,38 @@ export const credentialHealthCron = inngest.createFunction(
  * marks it lost, generates the long-term nurture content once per
  * engagement, and auto-enrolls where a Klaviyo list is configured. See
  * src/features/win-back/server/lost-deal-sweep.ts for the full mechanics.
+ *
+ * Fixed: same single-step architectural issue as credentialHealthCron
+ * above. The DB-only "find elapsed enrollments, mark lost, increment
+ * counts" work stays in one cheap step.run(); the slow parts (an LLM call
+ * for nurture generation, Klaviyo enrollment, notification) now run one
+ * per engagement in their own fanned-out invocation.
  */
 export const lostDealSweepCron = inngest.createFunction(
   { id: "lost-deal-sweep-cron", triggers: [{ cron: "TZ=UTC 0 14 * * *" }] }, // 14:00 UTC daily
   async ({ step }) => {
-    const result = await step.run("sweep-lost-deals", () => runLostDealSweep());
-    return result;
+    const { markedLost, byEngagement } = await step.run("mark-elapsed-enrollments-lost", () =>
+      markElapsedEnrollmentsLost()
+    );
+
+    if (byEngagement.length > 0) {
+      await step.sendEvent(
+        "dispatch-lost-deal-processing",
+        byEngagement.map(({ engagementId, enrollmentIds }) =>
+          lostDealSweepEngagement.create({ engagementId, enrollmentIds })
+        )
+      );
+    }
+
+    return { markedLost, engagementsDispatched: byEngagement.length };
+  }
+);
+
+/** Fanned-out handler: nurture generation (LLM call) + Klaviyo enrollment + notify, one engagement at a time. */
+export const processLostDealEngagementCron = inngest.createFunction(
+  { id: "process-lost-deal-engagement", triggers: [lostDealSweepEngagement] },
+  async ({ event }) => {
+    return processLostDealsForEngagement(event.data.engagementId, event.data.enrollmentIds);
   }
 );
 
@@ -283,11 +341,35 @@ export const lostDealSweepCron = inngest.createFunction(
  * notifyUser. Matches the original spec's "wakes up every Monday morning
  * at 08:00" cadence exactly. See weekly-metrics.ts for what "metrics"
  * honestly means here and why.
+ *
+ * Fixed: same single-step architectural issue as the two crons above.
+ * The DB-only "which engagements have anything to report" computation
+ * stays in one cheap step.run(); the slow part (Klaviyo list-size lookups
+ * + notification) now runs one per engagement in its own fanned-out
+ * invocation.
  */
 export const weeklyMetricsCron = inngest.createFunction(
   { id: "weekly-metrics-cron", triggers: [{ cron: "TZ=UTC 0 8 * * 1" }] }, // Monday 08:00 UTC
   async ({ step }) => {
-    const result = await step.run("run-weekly-metrics", () => runWeeklyMetricsReadout());
-    return result;
+    const eligible = await step.run("find-engagements-for-weekly-readout", () =>
+      findEngagementsForWeeklyReadout()
+    );
+
+    if (eligible.length > 0) {
+      await step.sendEvent(
+        "dispatch-weekly-metrics",
+        eligible.map((engagementId) => weeklyMetricsEngagement.create({ engagementId }))
+      );
+    }
+
+    return { dispatched: eligible.length };
+  }
+);
+
+/** Fanned-out handler: Klaviyo list-size lookups + notification, one engagement at a time. */
+export const processWeeklyMetricsEngagementCron = inngest.createFunction(
+  { id: "process-weekly-metrics-engagement", triggers: [weeklyMetricsEngagement] },
+  async ({ event }) => {
+    return processWeeklyMetricsForEngagement(event.data.engagementId);
   }
 );
