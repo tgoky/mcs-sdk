@@ -26,10 +26,10 @@
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
 import crypto from "crypto";
-import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement } from "@/lib/inngest";
+import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements, skillRuns } from "@/models/schema";
-import { startRun, timeoutRun } from "@/lib/run-log";
+import { startRun, closeStaleRun, notifyRunOutcome } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
 import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
 import { markElapsedEnrollmentsLost, processLostDealsForEngagement } from "@/features/win-back/server/lost-deal-sweep";
@@ -201,37 +201,35 @@ const STALE_RUN_CEILING_MS =
  * silently for hours, cheap enough that it's a non-issue against Inngest's
  * free-tier execution allowance.
  *
- * NOTE — same class of issue as the three crons below, not yet fixed here:
- * timeoutRun() calls notifyRunOutcome() per reaped run, which does a real
- * Slack/email network call. At the volume this cron is designed for (rare
- * stale runs, not a large recurring batch), the risk is much smaller than
- * the three below — but if stale runs ever pile up in bulk (e.g. after an
- * outage), this loop has the same "one giant step" shape. Deprioritized
- * this round given its lower likelihood; worth the same fan-out treatment
- * if it ever becomes a real problem.
+ * Fixed: previously called timeoutRun() (DB write + notification together)
+ * inside the loop in the main step.run(), same single-step shape as the
+ * three crons below before their fix. closeStaleRun() (DB-only, no network
+ * call) now runs in the loop instead — safe regardless of how many runs
+ * are stuck, since it's pure DB writes — and the one real network call per
+ * run (the notification) is fanned out to notifyStaleRunCron below.
  */
 export const staleRunReaperCron = inngest.createFunction(
   { id: "stale-run-reaper-cron", triggers: [{ cron: "*/15 * * * *" }] },
   async ({ step }) => {
-    const reapedRunIds = await step.run("reap-stale-runs", async () => {
+    const reaped = await step.run("reap-stale-runs", async () => {
       const cutoff = new Date(Date.now() - STALE_RUN_CEILING_MS);
       const stuck = await db
         .select({ id: skillRuns.id })
         .from(skillRuns)
         .where(and(eq(skillRuns.status, "running"), lt(skillRuns.startedAt, cutoff)));
 
-      // timeoutRun() re-checks status="running" at write time and returns
-      // false if the run resolved on its own between this scan and the
-      // update (a normal race given they're separate round-trips). Only
-      // ids it actually closed get cancelled/reported below — otherwise a
-      // run that just succeeded could get an incorrect cancel event fired
-      // at it a few hundred ms later.
-      const reaped: string[] = [];
+      // closeStaleRun() re-checks status="running" at write time and
+      // returns null if the run resolved on its own between this scan and
+      // the update (a normal race given they're separate round-trips).
+      // Only ones it actually closed get cancelled/notified below —
+      // otherwise a run that just succeeded could get an incorrect cancel
+      // event or timeout notification fired at it a few hundred ms later.
+      const out: { runId: string; engagementId: string; skillName: string }[] = [];
       for (const run of stuck) {
-        const wasReaped = await timeoutRun(run.id); // closes the row AND notifies the buyer
-        if (wasReaped) reaped.push(run.id);
+        const closed = await closeStaleRun(run.id);
+        if (closed) out.push({ runId: run.id, ...closed });
       }
-      return reaped;
+      return out;
     });
 
     // Belt-and-suspenders: also tell Inngest to cancel the underlying
@@ -239,14 +237,33 @@ export const staleRunReaperCron = inngest.createFunction(
     // (src/inngest/skill.ts), in case it's somehow still alive after a long
     // checkpoint gap. The DB row is already closed regardless of whether
     // this lands — same reasoning as the cancel route not waiting on it.
-    if (reapedRunIds.length > 0) {
+    if (reaped.length > 0) {
       await step.sendEvent(
         "cancel-stale-runs",
-        reapedRunIds.map((runId) => skillRunCancel.create({ runId }))
+        reaped.map((r) => skillRunCancel.create({ runId: r.runId }))
+      );
+      await step.sendEvent(
+        "notify-stale-runs",
+        reaped.map((r) => staleRunNotify.create({ runId: r.runId, engagementId: r.engagementId, skillName: r.skillName }))
       );
     }
 
-    return { reaped: reapedRunIds.length };
+    return { reaped: reaped.length };
+  }
+);
+
+/** Fanned-out handler: the one real network call (Slack/email) per reaped run. */
+export const notifyStaleRunCron = inngest.createFunction(
+  { id: "notify-stale-run", triggers: [staleRunNotify] },
+  async ({ event }) => {
+    await notifyRunOutcome(
+      event.data.engagementId,
+      event.data.runId,
+      event.data.skillName,
+      "run_timed_out",
+      "This run sat in \"running\" longer than its allowed ceiling and was closed automatically. If this keeps happening for the same module, it usually means an upstream API call is hanging — check the run's step timeline for where it stalled."
+    );
+    return { notified: true };
   }
 );
 

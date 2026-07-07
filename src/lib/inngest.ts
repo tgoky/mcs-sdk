@@ -65,6 +65,15 @@ export const weeklyMetricsEngagement = eventType("pile-on/weekly-metrics-engagem
   schema: staticSchema<WeeklyMetricsEngagementData>(),
 });
 
+export type StaleRunNotifyData = {
+  runId: string;
+  engagementId: string;
+  skillName: string;
+};
+export const staleRunNotify = eventType("skill/run.notify-timeout", {
+  schema: staticSchema<StaleRunNotifyData>(),
+});
+
 /**
  * Global Inngest Client
  * Used by API routes to publish events, and by workers to handle jobs.

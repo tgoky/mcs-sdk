@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { briefedCallsLog } from "@/models/schema";
 import { and, eq, gte } from "drizzle-orm";
 import { evaluatePersonMatch } from "../person-match";
+import { researchProspect } from "./prospect-research";
 import { resolveCredential } from "@/lib/credentials";
 import { fetchTomorrowCallsForTenant } from "@/lib/platforms/booking";
 import { deliverBrief } from "@/lib/platforms/email";
@@ -21,7 +22,7 @@ type StepTools = GetStepTools<Inngest.Any>;
 /**
  * Builds the 7-block brief system prompt.
  */
-function buildBriefSystemPrompt(tenant: any): string {
+function buildBriefSystemPrompt(tenant: any, researchSummary: string | null): string {
   return `You are the Pre-Call Read briefing engine for Showtime.
 Synthesize a concise closer brief in exactly 7 sections. Format each section title in bold (no # headers).
 Sections required:
@@ -31,7 +32,11 @@ Brand voice constraints: ${JSON.stringify(tenant.brandVoiceProfile ?? {})}
 Known objections to address: ${JSON.stringify(tenant.topObjections ?? [])}
 Known call questions: ${JSON.stringify(tenant.topCallQuestions ?? [])}
 
-If research was omitted due to low identity confidence, write "Research omitted — identity confidence below threshold" under Prospect Overview and leave Engagement History blank. Do not fabricate details.`;
+${
+  researchSummary
+    ? `Public research findings on this prospect (use these for Prospect Overview and Company Context — do not repeat verbatim, synthesize naturally, and never state something the research below didn't actually establish):\n${researchSummary}`
+    : `If research was omitted due to low identity confidence, write "Research omitted — identity confidence below threshold" under Prospect Overview and leave Engagement History blank. Do not fabricate details.`
+}`;
 }
 
 /**
@@ -161,6 +166,31 @@ export async function executeNightlyBriefingCycle(
             detail: `Identity confidence ${matchResult.totalScore}/100${matchResult.passed ? "" : " — research omitted"}`,
           });
 
+          // ── Prospect research ────────────────────────────────────────────
+          // Only runs for identities that already passed the gate above —
+          // never researches an unconfirmed match. See prospect-research.ts
+          // for why this uses Claude's own web search tool rather than a
+          // LinkedIn scraper (LinkedIn's ToS prohibits scraping; there's no
+          // legitimate API for arbitrary profile lookups).
+          let researchSummary: string | null = null;
+          if (matchResult.passed) {
+            await logStep(runId, { phase: "prospect_research", status: "running", label: callLabel });
+            const research = await researchProspect(call.name, call.email, call.company, runId);
+            researchSummary = research.summary;
+            summary.whatWasAttempted.push(`Researched ${callLabel} via web search (${research.searchesUsed} search(es)).`);
+            await logStep(runId, {
+              phase: "prospect_research",
+              status: research.citedUrls.length > 0 ? "success" : "skipped",
+              label: callLabel,
+              detail:
+                research.citedUrls.length > 0
+                  ? `${research.citedUrls.length} source(s) found`
+                  : "No usable public findings",
+            });
+          } else {
+            await logStep(runId, { phase: "prospect_research", status: "skipped", label: callLabel, detail: "Identity confidence below threshold" });
+          }
+
           // ── Brief synthesis ─────────────────────────────────────────────
           await logStep(runId, { phase: "brief_synthesis", status: "running", label: callLabel });
 
@@ -174,7 +204,7 @@ Research omitted: ${!matchResult.passed}`;
 
           const llmResult = await callClaudeWithRetry({
             model: MODEL.SYNTHESIS,
-            system: buildBriefSystemPrompt(tenant),
+            system: buildBriefSystemPrompt(tenant, researchSummary),
             userMessage,
             maxTokens: 1500,
             runId,

@@ -46,7 +46,7 @@ import type { RunStep, RunSummary } from "@/models/schema";
  * DB hiccup) can never mask or interrupt the run-outcome write that
  * already happened above it.
  */
-async function notifyRunOutcome(
+export async function notifyRunOutcome(
   engagementId: string,
   runId: string,
   skillName: string,
@@ -354,7 +354,24 @@ export async function cancelRun(runId: string): Promise<void> {
  * the run. Only the top-level skillRuns.status column (plain text, no
  * enum constraint) gets the more specific "timed_out" value.
  */
-export async function timeoutRun(runId: string): Promise<boolean> {
+/**
+ * DB-only half of closing a stale run: the SELECT+UPDATE with no network
+ * call. Returns what's needed to notify separately, or null if the race
+ * was lost (run resolved on its own between scan and write) or if it
+ * wasn't actually closed for any other reason.
+ *
+ * Split out from timeoutRun so staleRunReaperCron can do this for every
+ * stuck run inside one cheap step.run() (pure DB writes, no timeout risk
+ * regardless of how many runs are stuck), then fan out the one real
+ * network call — the notification — to a separate invocation per run.
+ * Same reasoning as the credential-health/lost-deal-sweep/weekly-metrics
+ * split from the previous round: a loop is fine when it's DB-only, and
+ * becomes a serverless-timeout risk specifically once real network calls
+ * enter the loop.
+ */
+export async function closeStaleRun(
+  runId: string
+): Promise<{ engagementId: string; skillName: string } | null> {
   const [row] = await db
     .select({
       engagementId: skillRuns.engagementId,
@@ -370,7 +387,7 @@ export async function timeoutRun(runId: string): Promise<boolean> {
   // round-trips. Bail out rather than overwrite a legitimate terminal
   // status with "timed_out".
   if (!row || row.status !== "running") {
-    return false;
+    return null;
   }
 
   // Deliberately does NOT touch the `steps` column, unlike failRun's
@@ -400,20 +417,33 @@ export async function timeoutRun(runId: string): Promise<boolean> {
     .returning({ id: skillRuns.id });
 
   if (updated.length === 0) {
-    // Lost the race between the read and the write — don't send a
-    // "your run timed out" notification for a timeout that didn't happen.
-    return false;
+    // Lost the race between the read and the write — nothing to notify
+    // about for a timeout that didn't actually happen.
+    return null;
   }
 
-  if (row.engagementId) {
-    await notifyRunOutcome(
-      row.engagementId,
-      runId,
-      row.skillName,
-      "run_timed_out",
-      "This run sat in \"running\" longer than its allowed ceiling and was closed automatically. If this keeps happening for the same module, it usually means an upstream API call is hanging — check the run's step timeline for where it stalled."
-    );
-  }
+  return row.engagementId ? { engagementId: row.engagementId, skillName: row.skillName } : null;
+}
+
+/**
+ * Does-everything version — kept for the manual on-demand route
+ * (/api/crons/stale-run-reaper), where a human explicitly triggered it and
+ * there's no serverless-timeout concern the way there is for a scheduled
+ * cron running unattended at scale. The scheduled cron (staleRunReaperCron)
+ * does NOT call this — it calls closeStaleRun in its fast prep step, then
+ * fans out one notification per reaped run separately.
+ */
+export async function timeoutRun(runId: string): Promise<boolean> {
+  const closed = await closeStaleRun(runId);
+  if (!closed) return false;
+
+  await notifyRunOutcome(
+    closed.engagementId,
+    runId,
+    closed.skillName,
+    "run_timed_out",
+    "This run sat in \"running\" longer than its allowed ceiling and was closed automatically. If this keeps happening for the same module, it usually means an upstream API call is hanging — check the run's step timeline for where it stalled."
+  );
 
   return true;
 }

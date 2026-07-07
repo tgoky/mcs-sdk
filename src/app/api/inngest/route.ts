@@ -7,6 +7,7 @@ import {
   monthlyLeakMapCron,
   alertMonitorCron,
   staleRunReaperCron,
+  notifyStaleRunCron,
   credentialHealthCron,
   checkSingleCredentialHealthCron,
   lostDealSweepCron,
@@ -43,6 +44,9 @@ export const { GET, POST, PUT } = serve({
     // forever, and proactively flags dead booking-platform credentials
     // before they cause a run to fail. See src/inngest/crons.ts.
     staleRunReaperCron,
+    // Fanned-out per-run notifier — see the fix note on staleRunReaperCron
+    // in crons.ts for why this exists as a separate function.
+    notifyStaleRunCron,
     credentialHealthCron,
     // Fanned-out per-credential handler — see the fix note on
     // credentialHealthCron in crons.ts for why this exists as a separate
