@@ -8,8 +8,11 @@ import {
   alertMonitorCron,
   staleRunReaperCron,
   credentialHealthCron,
+  checkSingleCredentialHealthCron,
   lostDealSweepCron,
+  processLostDealEngagementCron,
   weeklyMetricsCron,
+  processWeeklyMetricsEngagementCron,
 } from "@/inngest/crons";
 
 // Explicit duration floor for this route, paired with checkpointing's
@@ -41,11 +44,17 @@ export const { GET, POST, PUT } = serve({
     // before they cause a run to fail. See src/inngest/crons.ts.
     staleRunReaperCron,
     credentialHealthCron,
+    // Fanned-out per-credential handler — see the fix note on
+    // credentialHealthCron in crons.ts for why this exists as a separate
+    // function instead of a loop inside the cron itself.
+    checkSingleCredentialHealthCron,
     // Closes the gap on winBackCounts.lost_count sitting unused — see
     // src/features/win-back/server/lost-deal-sweep.ts.
     lostDealSweepCron,
+    processLostDealEngagementCron,
     // The Monday-morning summary email that had no task loop at all
     // before this. See src/features/pile-on/server/weekly-metrics.ts.
     weeklyMetricsCron,
+    processWeeklyMetricsEngagementCron,
   ],
 });
