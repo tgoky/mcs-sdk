@@ -43,7 +43,7 @@ export async function generateRecoveryCadence(
 
     await logStep(runId, { phase: "cadence_generation", status: "running" });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://debate-shindig-hankie.ngrok-free.dev";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
     // The reschedule route resolves slots per-engagement, not per-recipient
     // (a calendar's open times don't vary by who's asking), so this is a
     // plain literal URL, not a merge field — one big simplification over

@@ -150,7 +150,7 @@ async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult>
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://debate-shindig-hankie.ngrok-free.dev",
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app",
       "X-Title": "Mudd Ventures Unified Interface",
       "Content-Type": "application/json",
     },
@@ -334,7 +334,7 @@ async function callViaOpenRouterWithSearch(opts: ClaudeSearchCallOptions): Promi
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://debate-shindig-hankie.ngrok-free.dev",
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app",
       "X-Title": "Mudd Ventures Unified Interface",
       "Content-Type": "application/json",
     },

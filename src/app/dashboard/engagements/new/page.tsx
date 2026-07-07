@@ -826,7 +826,7 @@ export default function NewEngagementPage() {
 
             {form.bookingPlatform === "calendly" && (
               <div className="md:col-span-2 rounded-lg p-3 text-xs" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
-                ✨ <strong>Zero-Config Mode Active:</strong> You don&apos;t need to look up or paste any obscure organization links or event IDs. We automatically detect your workspace parameters on the backend.
+                <strong>Zero-Config Mode Active:</strong> You don&apos;t need to look up or paste any obscure organization links or event IDs. We automatically detect your workspace parameters
               </div>
             )}
 

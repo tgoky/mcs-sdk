@@ -94,7 +94,7 @@ export async function processLostDealsForEngagement(
   let nurtureEmails = (tenant.longTermNurtureAssetMap as any)?.emails;
   if (!nurtureEmails) {
     try {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.muddventures.com";
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
       const rescheduleUrl = `${appUrl}/reschedule/${engagementId}`;
       const emailPlatform = stack.email_platform ?? "klaviyo";
 

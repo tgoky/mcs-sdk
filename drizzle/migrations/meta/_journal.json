@@ -29,6 +29,13 @@
       "when": 1783264527783,
       "tag": "0003_dusty_pyro",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783450101408,
+      "tag": "0004_magical_lethal_legion",
+      "breakpoints": true
     }
   ]
 }

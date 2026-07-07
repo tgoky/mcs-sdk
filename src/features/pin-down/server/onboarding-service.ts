@@ -282,7 +282,7 @@ export async function runPinDownOnboarding(
     }
 
     // ── Confirmation page deploy ────────────────────────────────────────────
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.muddventures.com";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
     const internalFallbackUrl = `${appUrl}/confirm/${engagementId}`;
 
     const { confirmationPageUrl, confirmationPageDeployment, pasteReadyHtml, pasteReadyInstructions } = await run(
