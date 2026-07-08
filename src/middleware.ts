@@ -43,7 +43,14 @@ export async function middleware(request: NextRequest) {
   });
 
   if (!session.whopUserId) {
-    return NextResponse.redirect(new URL("/api/auth/login", request.url));
+    const loginUrl = new URL("/api/auth/login", request.url);
+    // Preserve where the user was actually trying to go — without this,
+    // a forced re-auth from any /dashboard/* sub-page always drops the
+    // user back on the dashboard root once login completes, regardless
+    // of whether they were headed to /dashboard/engagements or anywhere
+    // else. See redirect_to handling in login/route.ts and callback/route.ts.
+    loginUrl.searchParams.set("redirect_to", pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   // Cached status from login or the last revalidation. This is the only

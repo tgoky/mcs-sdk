@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     cookieStore.delete("oauth_state");
     cookieStore.delete("oauth_nonce");
     cookieStore.delete("code_verifier");
+    cookieStore.delete("post_login_redirect");
   };
 
   try {
@@ -77,13 +78,25 @@ export async function GET(request: Request) {
     session.refreshToken = tokens.refresh_token;
     await session.save();
 
+    // Read the originally-requested destination (set by login/route.ts,
+    // itself set from middleware.ts's redirect_to param) BEFORE clearing
+    // it below. Re-validated with the same guard as login/route.ts even
+    // though this cookie is httpOnly/server-set — it still traces back to
+    // a client-controlled query param, so the check is worth repeating
+    // rather than trusting it implicitly at the point it actually redirects.
+    const rawRedirectTo = cookieStore.get("post_login_redirect")?.value;
+    const redirectTo =
+      rawRedirectTo && rawRedirectTo.startsWith("/") && !rawRedirectTo.startsWith("//")
+        ? rawRedirectTo
+        : "/dashboard";
+
     clearPkceCookies();
 
     if (!membership.hasAccess) {
       redirect("/?membership=required");
     }
 
-    redirect("/dashboard");
+    redirect(redirectTo);
   } catch (err: any) {
     clearPkceCookies();
 
