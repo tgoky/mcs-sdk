@@ -37,9 +37,18 @@ export async function middleware(request: NextRequest) {
   }
 
   const response = NextResponse.next();
+  
+  // FIX: Explicit cookieOptions added here to prevent session truncation and path distortion
   const session = await getIronSession<SessionData>(request, response, {
     password: process.env.SESSION_SECRET!,
     cookieName: "mudd_session",
+    cookieOptions: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      path: "/", // Explicitly binds cookie visibility globally across the site
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 14, // Retains 14-day duration upon mid-session rewrites
+    },
   });
 
   if (!session.whopUserId) {
