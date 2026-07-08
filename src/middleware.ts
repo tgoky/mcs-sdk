@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getIronSession } from "iron-session";
+import { cookies } from "next/headers"; // FIX: Import the official Next.js cookie store helper
 import type { SessionData } from "@/lib/session";
 import { checkActiveMembership } from "@/lib/whop-access";
 
@@ -36,10 +37,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const response = NextResponse.next();
-  
-  // FIX: Explicit cookieOptions added here to prevent session truncation and path distortion
-  const session = await getIronSession<SessionData>(request, response, {
+  // FIX: Use the official iron-session v8 signature passing the Next.js cookie jar
+  const cookieStore = await cookies();
+  const session = await getIronSession<SessionData>(cookieStore, {
     password: process.env.SESSION_SECRET!,
     cookieName: "mudd_session",
     cookieOptions: {
@@ -78,7 +78,7 @@ export async function middleware(request: NextRequest) {
       const membership = await checkActiveMembership(session.whopUserId);
       session.subscriptionStatus = membership.status;
       session.subscriptionVerifiedAt = Date.now();
-      await session.save();
+      await session.save(); // Updates cookie state inside cookieStore safely
     } catch (err) {
       // A Whop API hiccup shouldn't instantly lock out a buyer whose last
       // confirmed status was active — fail open on transient errors and
@@ -89,30 +89,25 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!ACTIVE_STATUSES.has(session.subscriptionStatus)) {
-    // NextResponse.redirect() constructs a brand-new response object —
-    // any cookie session.save() wrote onto `response` above (the updated
-    // subscriptionStatus/subscriptionVerifiedAt) would otherwise be
-    // silently discarded. Without copying it across, the browser keeps
-    // sending the OLD session cookie, so `isStale` re-evaluates true on
-    // every subsequent request, re-triggering checkActiveMembership and
-    // this same redirect — an infinite loop that also hammers the Whop
-    // API on every hop. response.cookies.getAll() (rather than reading
-    // the raw "set-cookie" header) is the reliable way to carry this over:
-    // Headers.get("set-cookie") collapses multiple Set-Cookie headers into
-    // one comma-joined string in some runtimes, which would corrupt the
-    // cookie rather than preserve it.
     const redirectResponse = NextResponse.redirect(
       new URL("/?membership=required", request.url)
     );
-    response.cookies.getAll().forEach((cookie) => {
+    // Securely copy cookies out of the jar onto the redirect response object
+    cookieStore.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie);
     });
     return redirectResponse;
   }
 
+  // Generate standard continuation response and attach the decrypted/validated cookie jar
+  const response = NextResponse.next();
+  cookieStore.getAll().forEach((cookie) => {
+    response.cookies.set(cookie);
+  });
   return response;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/api/webhooks/:path*", "/api/crons/:path*"],
+  // FIX: Explicitly added "/dashboard" to protect the root alongside its child routes
+  matcher: ["/dashboard", "/dashboard/:path*", "/api/webhooks/:path*", "/api/crons/:path*"],
 };
