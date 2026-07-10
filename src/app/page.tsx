@@ -265,7 +265,7 @@ export default async function LandingIndexPage({
                 <div className="my-3.5 h-32 border border-zinc-800 bg-zinc-950/40 flex items-center justify-center gap-5 text-center select-none">
                   <div className="border border-zinc-800 p-2 bg-zinc-900/40"><div className="text-amber-500 font-bold uppercase tracking-wider text-[8px]">No-Show</div><span className="text-zinc-500">TRIGGER</span></div>
                   <svg className="w-8 h-2 shrink-0" fill="none" viewBox="0 0 32 16"><path d="M 0 8 H 32" stroke="#f59e0b" strokeWidth="1" strokeDasharray="3 3" style={{ animation: "dataFlowMove 0.8s linear infinite" }} /></svg>
-                  <div className="border border-zinc-800 p-2 bg-zinc-900/40"><div className="text-zinc-400 font-bold uppercase切换 text-[8px]">30D Cadence</div><span className="text-zinc-500">RECOVERY</span></div>
+                  <div className="border border-zinc-800 p-2 bg-zinc-900/40"><div className="text-zinc-400 font-bold uppercase text-[8px]">30D Cadence</div><span className="text-zinc-500">RECOVERY</span></div>
                 </div>
                 <div className="p-3 bg-zinc-950 border border-zinc-900 text-zinc-400 h-[56px] overflow-hidden relative rounded-sm leading-normal select-text">
                   <div className="space-y-1 animate-[logStreamScroll_7s_infinite_linear]">
@@ -318,7 +318,7 @@ export default async function LandingIndexPage({
                 <div className="p-3 bg-zinc-950 border border-zinc-900 text-zinc-400 h-[56px] overflow-hidden relative rounded-sm leading-normal select-text">
                   <div className="space-y-1 animate-[logStreamScroll_7s_infinite_linear]">
                     <div>&gt; CRON // INITIALIZING NIGHTLY BRIEFING CYCLE RUNTIME</div>
-                    <div>&gt; RESOLVING CALENDLY ENCRYPTED PAT FOR TOMORROWS ROSTER</div>
+                    <div>&gt; RESOLVING CALENDLY ENCRYPTED PAT FOR TOMORROW'S ROSTER</div>
                     <div>&gt; EVALUATING RULE 14 DISAMBIGUATION IDENTITY MATCH RATINGS</div>
                     <div>&gt; VERIFYING CORPORATE DOMAINS vs CONSUMER REGISTRY BLOCKS</div>
                     <div>&gt; CLAUDE WEB_SEARCH_20250305 PARSING LEGITIMATE PUBLIC HEADLINES</div>
@@ -357,6 +357,18 @@ export default async function LandingIndexPage({
                       </p>
                     </div>
                   )}
+                </div>
+
+                {/* BACKGROUND DIAGNOSTIC TELEMETRY LOGGER: Active during static standby periods */}
+                <div className="my-2 p-2.5 bg-zinc-950 border border-zinc-900/60 text-[9px] font-mono text-zinc-600 h-[40px] overflow-hidden relative rounded-sm leading-normal select-none">
+                  <div className="space-y-1 animate-[logStreamScroll_9s_infinite_linear]">
+                    <div>&gt; SHOWTIME_DAEMON // PLATFORM ENGINE IN STANDBY</div>
+                    <div>&gt; LISTENING FOR INBOUND WEBHOOK TRIGGERS... NOMINAL</div>
+                    <div>&gt; DATABASE ROUT ROUTING LINK // CONNECTED [SUPABASE_POOL]</div>
+                    <div>&gt; AWAITING LIVE OPERATOR NAVIGATION SCAN HOVER...</div>
+                    <div>&gt; SHOWTIME_DAEMON // PLATFORM ENGINE IN STANDBY</div>
+                    <div>&gt; LISTENING FOR INBOUND WEBHOOK TRIGGERS... NOMINAL</div>
+                  </div>
                 </div>
 
                 <div className="pt-2">
