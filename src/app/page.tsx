@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
+import { Link2, Lock, Globe } from "lucide-react"; // Import high-fidelity vector tokens
 
 const ACTIVE_STATUSES = new Set(["active", "trialing", "canceling", "admin"]);
 
@@ -202,26 +203,50 @@ export default async function LandingIndexPage({
               {/* View 1: [ pin down ] */}
               <div className="viz-pindown flex-1 flex flex-col justify-between h-full font-mono text-[9px]">
                 <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5 text-zinc-400 select-none">
-                  <span className="flex items-center gap-1.5 uppercase font-semibold"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>LIVE_TELEMETRY // PIN_DOWN</span>
+                  <span className="flex items-center gap-1.5 uppercase font-bold">LIVE_TELEMETRY // PIN_DOWN</span>
                   <span>[ACTIVE]</span>
                 </div>
-                <div className="my-3.5 h-32 border border-zinc-800 bg-zinc-950/40 flex items-center justify-around px-4 text-zinc-500 text-center select-none">
-                  <div><div className="p-2 border border-zinc-800 bg-zinc-900 text-indigo-400 mb-1"><svg className="w-3.5 h-3.5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg></div>PAT REF</div>
-                  <svg className="w-8 h-2 shrink-0" fill="none" viewBox="0 0 32 16"><path d="M 0 8 H 32" stroke="#4b5563" strokeWidth="1" strokeDasharray="3 3" style={{ animation: "dataFlowMove 1s linear infinite" }} /></svg>
-                  <div><div className="p-2 border border-zinc-700 bg-zinc-900 text-emerald-400 mb-1 shadow-[0_0_10px_rgba(16,185,129,0.15)]"><svg className="w-3.5 h-3.5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg></div>AES_GCM</div>
-                  <svg className="w-8 h-2 shrink-0" fill="none" viewBox="0 0 32 16"><path d="M 0 8 H 32" stroke="#4b5563" strokeWidth="1" strokeDasharray="3 3" style={{ animation: "dataFlowMove 1s linear infinite" }} /></svg>
-                  <div><div className="p-2 border border-zinc-800 bg-zinc-900 text-indigo-400 mb-1"><svg className="w-3.5 h-3.5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg></div>DEPLOYS</div>
+                {/* Clean, monochrome schematic architecture with high-fidelity Lucide elements */}
+                <div className="my-3.5 h-32 border border-zinc-800 bg-zinc-950/40 flex items-center justify-around px-4 text-zinc-400 text-center select-none">
+                  <div className="flex flex-col items-center">
+                    <div className="p-2.5 border border-zinc-800 bg-zinc-900/60 text-zinc-400 mb-1 rounded-sm">
+                      <Link2 size={14} />
+                    </div>
+                    <span className="text-[8px] tracking-wider text-zinc-500">SCHEDULER LINK</span>
+                  </div>
+                  
+                  <svg className="w-10 h-4 shrink-0 opacity-40" fill="none" viewBox="0 0 40 16">
+                    <path d="M 0 8 H 40" stroke="#3f3f46" strokeWidth="1" strokeDasharray="3 3" style={{ animation: "dataFlowMove 1s linear infinite" }} />
+                  </svg>
+                  
+                  <div className="flex flex-col items-center">
+                    <div className="p-2.5 border border-zinc-800 bg-zinc-900/60 text-zinc-400 mb-1 rounded-sm shadow-sm">
+                      <Lock size={14} />
+                    </div>
+                    <span className="text-[8px] tracking-wider text-zinc-500">ENCRYPTION CORE</span>
+                  </div>
+                  
+                  <svg className="w-10 h-4 shrink-0 opacity-40" fill="none" viewBox="0 0 40 16">
+                    <path d="M 0 8 H 40" stroke="#3f3f46" strokeWidth="1" strokeDasharray="3 3" style={{ animation: "dataFlowMove 1s linear infinite" }} />
+                  </svg>
+                  
+                  <div className="flex flex-col items-center">
+                    <div className="p-2.5 border border-zinc-800 bg-zinc-900/60 text-zinc-400 mb-1 rounded-sm">
+                      <Globe size={14} />
+                    </div>
+                    <span className="text-[8px] tracking-wider text-zinc-500">CONFIRMATION PAGE</span>
+                  </div>
                 </div>
                 <div className="p-3 bg-zinc-950 border border-zinc-900 text-zinc-400 h-[56px] overflow-hidden relative rounded-sm leading-normal select-text">
                   <div className="space-y-1 animate-[logStreamScroll_7s_infinite_linear]">
-                    <div>&gt; CRON // INITIALIZING PIN_DOWN ONBOARDING RUN</div>
-                    <div>&gt; RESOLVING CANONICAL CURRENT ORG URI VIA GET /USERS/ME</div>
-                    <div>&gt; CREATING ENCRYPTED DATA ROW IN CREDENTIALS_REFS</div>
-                    <div>&gt; AES-256-GCM KEY EXECUTED // IV SEED RECORD COMMITTED</div>
-                    <div>&gt; BUILDING INLINE STATIC PAYLOAD FOR VERCEL PRODUCTION DEPLOY</div>
-                    <div>&gt; CONNECTING INBOUND WEBHOOK SUBSCRIPTION ID FOR CALENDAR EVENT MESH</div>
-                    <div>&gt; CRON // INITIALIZING PIN_DOWN ONBOARDING RUN</div>
-                    <div>&gt; RESOLVING CANONICAL CURRENT ORG URI VIA GET /USERS/ME</div>
+                    <div>&gt; SYSTEM // INITIALIZING PIN_DOWN ONBOARDING RUN</div>
+                    <div>&gt; RESOLVING CANONICAL RESOURCE PROVIDER CONTEXT ENDPOINT</div>
+                    <div>&gt; CREATING ENCRYPTED CONFIGURATION DATA RECORD LOCKS</div>
+                    <div>&gt; CRYPTO // ADVANCED SYMMETRIC SEED COMPILATION FINALIZED</div>
+                    <div>&gt; ASSEMBLY // INLINE STATIC SCHEMATIC PREPARED FOR ROUTER DEPLOY</div>
+                    <div>&gt; WEBHOOK // HOOKING INBOUND DISPATCH ID FOR TARGET EVENT MESH</div>
+                    <div>&gt; SYSTEM // INITIALIZING PIN_DOWN ONBOARDING RUN</div>
+                    <div>&gt; RESOLVING CANONICAL RESOURCE PROVIDER CONTEXT ENDPOINT</div>
                   </div>
                 </div>
               </div>
@@ -229,29 +254,29 @@ export default async function LandingIndexPage({
               {/* View 2: [ pile on ] */}
               <div className="viz-pileon flex-1 flex flex-col justify-between h-full font-mono text-[9px]">
                 <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5 text-zinc-400 select-none">
-                  <span className="flex items-center gap-1.5 uppercase font-semibold"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>LIVE_TELEMETRY // PILE_ON</span>
+                  <span className="flex items-center gap-1.5 uppercase font-bold">LIVE_TELEMETRY // PILE_ON</span>
                   <span>[ACTIVE]</span>
                 </div>
                 <div className="my-3.5 h-32 border border-zinc-800 bg-zinc-950/40 flex flex-col justify-center px-6 space-y-2.5 text-zinc-500 select-none">
                   <div className="space-y-1">
-                    <div className="flex justify-between text-[8px]"><span>WEBHOOK_CAPTURED_EVENT</span><span className="text-emerald-400">100%</span></div>
+                    <div className="flex justify-between text-[8px]"><span>INBOUND_BOOKING_ALERT</span><span className="text-emerald-400">100%</span></div>
                     <div className="h-1 w-full bg-zinc-900 border border-zinc-900/60"><div className="h-full bg-emerald-500" style={{ width: "100%" }} /></div>
                   </div>
                   <div className="space-y-1">
-                    <div className="flex justify-between text-[8px]"><span>CLAUDE_PROFILE_PERSONALIZATION</span><span className="text-indigo-400 animate-pulse">75%</span></div>
+                    <div className="flex justify-between text-[8px]"><span>MESSAGE_PERSONALIZATION</span><span className="text-indigo-400 animate-pulse">75%</span></div>
                     <div className="h-1 w-full bg-zinc-900 border border-zinc-900/60"><div className="h-full bg-indigo-500 animate-pulse" style={{ width: "75%" }} /></div>
                   </div>
                 </div>
                 <div className="p-3 bg-zinc-950 border border-zinc-900 text-zinc-400 h-[56px] overflow-hidden relative rounded-sm leading-normal select-text">
                   <div className="space-y-1 animate-[logStreamScroll_7s_infinite_linear]">
-                    <div>&gt; TRIGGER // CAPTURING INBOUND WEBHOOK INGEST EVENT</div>
-                    <div>&gt; NORMALIZING PROSPECT META PROFILE DATA FROM PAYLOAD ARCS</div>
-                    <div>&gt; DISPATCHING BULK PROFILE SUBSCRIPTION JOB TO KLAVIYO GRID</div>
-                    <div>&gt; EXECUTING CLAUDE SONNET INTERACTIVE EMAIL PERSONALIZATION</div>
-                    <div>&gt; HYBRID_SYNTHESIS INTRO GENERATED UNDER 70-WORD CONSTRAINT</div>
-                    <div>&gt; ROUTING SECURE VERBATIM REBOOKED EXIT SIGNAL UNCONDITIONALLY</div>
-                    <div>&gt; TRIGGER // CAPTURING INBOUND WEBHOOK INGEST EVENT</div>
-                    <div>&gt; NORMALIZING PROSPECT META PROFILE DATA FROM PAYLOAD ARCS</div>
+                    <div>&gt; TRIGGER // NEW BOOKING DETECTED IN WORKSPACE</div>
+                    <div>&gt; DATA // PROCESSING LEAD CONTEXT PROFILE FIELDS</div>
+                    <div>&gt; MARKETING // QUEUING FOLLOW-UP CONTACT PROFILE</div>
+                    <div>&gt; TEXT_ENGINE // PERSONALIZING SEQUENCE MESSAGE COPY</div>
+                    <div>&gt; AUTOMATION // SHORT CUSTOM BRIEF COMPILATION COMPLETED</div>
+                    <div>&gt; ROUTING // DISPATCHING SMS AND EMAIL OUTBOUND MESSAGES</div>
+                    <div>&gt; TRIGGER // NEW BOOKING DETECTED IN WORKSPACE</div>
+                    <div>&gt; DATA // PROCESSING LEAD CONTEXT PROFILE FIELDS</div>
                   </div>
                 </div>
               </div>
@@ -259,23 +284,23 @@ export default async function LandingIndexPage({
               {/* View 3: [ win back ] */}
               <div className="viz-winback flex-1 flex flex-col justify-between h-full font-mono text-[9px]">
                 <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5 text-zinc-400 select-none">
-                  <span className="flex items-center gap-1.5 uppercase font-semibold"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>LIVE_TELEMETRY // WIN_BACK</span>
+                  <span className="flex items-center gap-1.5 uppercase font-bold">LIVE_TELEMETRY // WIN_BACK</span>
                   <span>[ACTIVE]</span>
                 </div>
                 <div className="my-3.5 h-32 border border-zinc-800 bg-zinc-950/40 flex items-center justify-center gap-5 text-center select-none">
                   <div className="border border-zinc-800 p-2 bg-zinc-900/40"><div className="text-amber-500 font-bold uppercase tracking-wider text-[8px]">No-Show</div><span className="text-zinc-500">TRIGGER</span></div>
                   <svg className="w-8 h-2 shrink-0" fill="none" viewBox="0 0 32 16"><path d="M 0 8 H 32" stroke="#f59e0b" strokeWidth="1" strokeDasharray="3 3" style={{ animation: "dataFlowMove 0.8s linear infinite" }} /></svg>
-                  <div className="border border-zinc-800 p-2 bg-zinc-900/40"><div className="text-zinc-400 font-bold uppercase text-[8px]">30D Cadence</div><span className="text-zinc-500">RECOVERY</span></div>
+                  <div className="border border-zinc-800 p-2 bg-zinc-900/40"><div className="text-zinc-400 font-bold uppercase text-[8px]">30-DAY SEQUENCE</div><span className="text-zinc-500">RECOVERY</span></div>
                 </div>
                 <div className="p-3 bg-zinc-950 border border-zinc-900 text-zinc-400 h-[56px] overflow-hidden relative rounded-sm leading-normal select-text">
                   <div className="space-y-1 animate-[logStreamScroll_7s_infinite_linear]">
-                    <div>&gt; TRIGGER // DETECTING BOOKING_CANCELLED OPERATOR TRIGGERS</div>
-                    <div>&gt; ENROLLING ACTIVE RECOVERY TIMELINE WINDOW DESIGNATION</div>
-                    <div>&gt; EXTRACTING 30-DAY DEFAULT SEQUENCE COPY CADENCE PLANS</div>
-                    <div>&gt; ENFORCING DAILY_SEND_TOLERANCE VECTOR CHECKS (CUTOFF &lt;= 2)</div>
-                    <div>&gt; PERSISTING WIN_BACK RECOVERY COUNTS RECORD TO POSTGRES</div>
-                    <div>&gt; TRIGGER // DETECTING BOOKING_CANCELLED OPERATOR TRIGGERS</div>
-                    <div>&gt; ENROLLING ACTIVE RECOVERY TIMELINE WINDOW DESIGNATION</div>
+                    <div>&gt; TRIGGER // NO-SHOW OR CANCELLATION DETECTED</div>
+                    <div>&gt; SCHEDULER // PREPARING ACTIVE RECOVERY TIMELINE</div>
+                    <div>&gt; CAMPAIGN // COMPILING AUTOMATED OUTREACH TOUCHPOINTS</div>
+                    <div>&gt; POLICIES // RUNNING COMPLIANCE SEND FREQUENCY SAFETY CHECKS</div>
+                    <div>&gt; DATABASE // PERSISTING RECOVERY ENROLLMENT RECORD</div>
+                    <div>&gt; TRIGGER // NO-SHOW OR CANCELLATION DETECTED</div>
+                    <div>&gt; SCHEDULER // PREPARING ACTIVE RECOVERY TIMELINE</div>
                   </div>
                 </div>
               </div>
@@ -283,23 +308,23 @@ export default async function LandingIndexPage({
               {/* View 4: [ leak map ] */}
               <div className="viz-leakmap flex-1 flex flex-col justify-between h-full font-mono text-[9px]">
                 <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5 text-zinc-400 select-none">
-                  <span className="flex items-center gap-1.5 uppercase font-semibold"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>LIVE_TELEMETRY // LEAK_MAP</span>
+                  <span className="flex items-center gap-1.5 uppercase font-bold">LIVE_TELEMETRY // LEAK_MAP</span>
                   <span>[ACTIVE]</span>
                 </div>
                 <div className="my-3.5 h-32 border border-zinc-800 bg-zinc-950/40 grid grid-cols-3 gap-2 p-3 text-center items-center select-none">
-                  <div className="border border-zinc-900/60 py-2"><span className="text-zinc-600 block text-[8px]">DATA_PULL</span><span className="text-zinc-300">n=38</span></div>
-                  <div className="border border-zinc-900/60 py-2 border-dashed border-rose-900 bg-rose-950/10 animate-pulse"><span className="text-rose-400 block text-[8px]">CRUNCH_DELTA</span><span className="text-rose-400 font-bold">-34%</span></div>
+                  <div className="border border-zinc-900/60 py-2"><span className="text-zinc-600 block text-[8px]">FUNNEL_DATA_PULL</span><span className="text-zinc-300">n=38</span></div>
+                  <div className="border border-zinc-900/60 py-2 border-dashed border-rose-900 bg-rose-950/10 animate-pulse"><span className="text-rose-400 block text-[8px]">LEAK_CHECK_DELTA</span><span className="text-rose-400 font-bold">-34%</span></div>
                   <div className="border border-zinc-900/60 py-2"><span className="text-zinc-600 block text-[8px]">SEVERITY</span><span className="text-zinc-300">HIGH</span></div>
                 </div>
                 <div className="p-3 bg-zinc-950 border border-zinc-900 text-zinc-400 h-[56px] overflow-hidden relative rounded-sm leading-normal select-text">
                   <div className="space-y-1 animate-[logStreamScroll_7s_infinite_linear]">
-                    <div>&gt; CRON // INITIALIZING 6-HOUR EVALUATE ACTIVE ALERTS PIPELINE</div>
-                    <div>&gt; EXECUTING INNER JOIN ACROSS ENGAGEMENTS TO RETRIEVE SECRET KEYS</div>
-                    <div>&gt; AGGREGATING ALL 24H METRIC LOG SCORES DIRECTLY IN-MEMORY</div>
-                    <div>&gt; COMPUTING SHOW-RATE & OPEN-RATE DELTA PERFORMANCE ARCS</div>
-                    <div>&gt; SAMPLE SIZE FLOOR VERIFIED (n &gt;= SAMPLE_SIZE_MINIMUM)</div>
-                    <div>&gt; CLAUDE HAIKU SYNTHESIZING OPERATIONAL COOLDOWN SECURITY MATRIX</div>
-                    <div>&gt; CRON // INITIALIZING 6-HOUR EVALUATE ACTIVE ALERTS PIPELINE</div>
+                    <div>&gt; CRON // INITIALIZING FUNNEL INTEGRITY ANALYSIS</div>
+                    <div>&gt; DATABASE // QUERYING RECENT pipeline RUN_LOGS</div>
+                    <div>&gt; COMPUTE // AGGREGATING ENGAGEMENT METRICS IN MEMORY</div>
+                    <div>&gt; METRICS // CALCULATING SHOW-RATES AND MESSAGE OPEN-RATES</div>
+                    <div>&gt; VALIDATION // CHECKING METRIC STATISTICAL DATA FLOOR</div>
+                    <div>&gt; REPORT // GENERATING FUNNEL ANOMALY RECOMMENDATION</div>
+                    <div>&gt; CRON // INITIALIZING FUNNEL INTEGRITY ANALYSIS</div>
                   </div>
                 </div>
               </div>
@@ -307,23 +332,23 @@ export default async function LandingIndexPage({
               {/* View 5: [ pre-call reads ] */}
               <div className="viz-precall flex-1 flex flex-col justify-between h-full font-mono text-[9px]">
                 <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5 text-zinc-400 select-none">
-                  <span className="flex items-center gap-1.5 uppercase font-semibold"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>LIVE_TELEMETRY // PRE_CALL_READS</span>
+                  <span className="flex items-center gap-1.5 uppercase font-bold">LIVE_TELEMETRY // PRE_CALL_READS</span>
                   <span>[ACTIVE]</span>
                 </div>
                 <div className="my-3.5 h-32 border border-zinc-800 bg-zinc-950/40 flex flex-col justify-between p-3 leading-relaxed text-zinc-500 select-none">
-                  <div className="flex justify-between text-zinc-400"><span>DISAMBIGUATION ENGINE SCORES:</span><span className="text-sky-400 font-bold">99 / 100 ACCURACY</span></div>
-                  <div className="flex gap-2"><span className="border border-zinc-800 px-1.5 py-0.5 bg-zinc-900 text-zinc-300">✓ CORP DOMAIN MATCH</span><span className="border border-zinc-800 px-1.5 py-0.5 bg-zinc-900 text-zinc-300">✓ LINKEDIN REF</span></div>
-                  <div className="text-[8px] text-zinc-600 truncate animate-pulse">&gt; QUERYING SEARCH_20250305... PARSING PUBLIC PROFILE DATA</div>
+                  <div className="flex justify-between text-zinc-400"><span>IDENTITY_MATCH_ACCURACY:</span><span className="text-sky-400 font-bold">99 / 100 ACCURACY</span></div>
+                  <div className="flex gap-2"><span className="border border-zinc-800 px-1.5 py-0.5 bg-zinc-900 text-zinc-300">✓ COMPANY DOMAIN VERIFIED</span><span className="border border-zinc-800 px-1.5 py-0.5 bg-zinc-900 text-zinc-300">✓ VERIFIED PROFILE REFERENCED</span></div>
+                  <div className="text-[8px] text-zinc-600 truncate animate-pulse">&gt; SEARCHING SECURE CHANNELS... PRIVATELY DATA INSIGHTS COMPILING</div>
                 </div>
                 <div className="p-3 bg-zinc-950 border border-zinc-900 text-zinc-400 h-[56px] overflow-hidden relative rounded-sm leading-normal select-text">
                   <div className="space-y-1 animate-[logStreamScroll_7s_infinite_linear]">
-                    <div>&gt; CRON // INITIALIZING NIGHTLY BRIEFING CYCLE RUNTIME</div>
-                    <div>&gt; RESOLVING CALENDLY ENCRYPTED PAT FOR TOMORROW'S ROSTER</div>
-                    <div>&gt; EVALUATING RULE 14 DISAMBIGUATION IDENTITY MATCH RATINGS</div>
-                    <div>&gt; VERIFYING CORPORATE DOMAINS vs CONSUMER REGISTRY BLOCKS</div>
-                    <div>&gt; CLAUDE WEB_SEARCH_20250305 PARSING LEGITIMATE PUBLIC HEADLINES</div>
-                    <div>&gt; COMPILING CONCISE CLOSER BRIEF LOG SECURELY INTO 7 SECTIONS</div>
-                    <div>&gt; CRON // INITIALIZING NIGHTLY BRIEFING CYCLE RUNTIME</div>
+                    <div>&gt; CRON // RUNNING AUTOMATED BRIEFING COMPILATION</div>
+                    <div>&gt; SECURITY // DECRYPTING ACCESS KEY FOR UPCOMING APPOINTMENTS</div>
+                    <div>&gt; CROSS_CHECK // RUNNING CONTEXT RATING FOR PROSPECT IDENTITIES</div>
+                    <div>&gt; DATA // SEPARATING BUSINESS DOMAINS FROM PUBLIC CONSUMER MAILS</div>
+                    <div>&gt; INTEL // PARSING ACCURATE PROFESSIONAL BACKGROUND INSIGHTS</div>
+                    <div>&gt; OUTPUT // COMPILING 7-SECTION SALES TEAM BRIEF</div>
+                    <div>&gt; CRON // RUNNING AUTOMATED BRIEFING COMPILATION</div>
                   </div>
                 </div>
               </div>
@@ -362,12 +387,12 @@ export default async function LandingIndexPage({
                 {/* BACKGROUND DIAGNOSTIC TELEMETRY LOGGER: Active during static standby periods */}
                 <div className="my-2 p-2.5 bg-zinc-950 border border-zinc-900/60 text-[9px] font-mono text-zinc-600 h-[40px] overflow-hidden relative rounded-sm leading-normal select-none">
                   <div className="space-y-1 animate-[logStreamScroll_9s_infinite_linear]">
-                    <div>&gt; SHOWTIME_DAEMON // PLATFORM ENGINE IN STANDBY</div>
-                    <div>&gt; LISTENING FOR INBOUND WEBHOOK TRIGGERS... NOMINAL</div>
-                    <div>&gt; DATABASE ROUT ROUTING LINK // CONNECTED [SUPABASE_POOL]</div>
-                    <div>&gt; AWAITING LIVE OPERATOR NAVIGATION SCAN HOVER...</div>
-                    <div>&gt; SHOWTIME_DAEMON // PLATFORM ENGINE IN STANDBY</div>
-                    <div>&gt; LISTENING FOR INBOUND WEBHOOK TRIGGERS... NOMINAL</div>
+                    <div>&gt; SYSTEM_DAEMON // CENTRAL AUTOMATION NODE ACTIVE</div>
+                    <div>&gt; SYNC // LISTENING FOR APPOINTMENT TRIGGERS... NOMINAL</div>
+                    <div>&gt; DATABASE // POOLED LINK ESTABLISHED AND SECURED</div>
+                    <div>&gt; TELEMETRY // AWAITING OPERATOR DISPATCH SCAN HOVER...</div>
+                    <div>&gt; SYSTEM_DAEMON // CENTRAL AUTOMATION NODE ACTIVE</div>
+                    <div>&gt; SYNC // LISTENING FOR APPOINTMENT TRIGGERS... NOMINAL</div>
                   </div>
                 </div>
 
