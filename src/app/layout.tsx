@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Manrope, Geist_Mono } from "next/font/google";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
-// Instantiate the tight, modern technical typography framework
 const manrope = Manrope({
   variable: "--font-sans",
   subsets: ["latin"],
@@ -25,11 +25,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    // suppressHydrationWarning prevents Next.js attribute mismatch warnings when next-themes injects the active class
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${manrope.variable} ${geistMono.variable} antialiased bg-zinc-950 text-zinc-50 selection:bg-zinc-800`}
+        className={`${manrope.variable} ${geistMono.variable} antialiased bg-background text-foreground selection:bg-zinc-800 dark:selection:bg-zinc-200 transition-colors duration-200`}
       >
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

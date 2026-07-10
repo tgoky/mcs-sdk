@@ -48,8 +48,11 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ────────────────────────────────────────────────────────────────────── */
+/* LIGHT MODE DESIGN SYSTEM TOKENS */
+/* ────────────────────────────────────────────────────────────────────── */
 :root {
-  --background: oklch(1 0 0);
+  --background: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -81,8 +84,21 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Unified Light Mode Structural Surface Elements */
+  --surface: oklch(0.95 0.005 285);             /* Light structural card base */
+  --surface-2: oklch(0.89 0.005 285);           /* Nested/Hover element layers */
+  --text-primary: oklch(0.145 0 0);              /* High contrast body headings */
+  --text-secondary: oklch(0.35 0.005 285);       /* Secondary layout text labels */
+  --text-muted: oklch(0.55 0.005 285);           /* Least emphasis placeholders */
+  --error: oklch(0.6 0.18 15);                   /* Polished semantic error colors */
+  --success: oklch(0.45 0.15 155);               /* Polished semantic success indicators */
+  --accent-dim: oklch(0.5 0.2 260 / 6%);         /* Muted visual telemetry backgrounds */
 }
 
+/* ────────────────────────────────────────────────────────────────────── */
+/* DARK MODE DESIGN SYSTEM OVERRIDES */
+/* ────────────────────────────────────────────────────────────────────── */
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -116,21 +132,15 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* ── Added: these were referenced throughout credentials/page.tsx and
-     engagements/new/page.tsx but never defined anywhere, so every
-     background/border/text color on both pages was silently resolving
-     to nothing (transparent/inherit). Values below are Tailwind's actual
-     zinc-950/900/800/400/200/100 oklch coordinates (verified against
-     Tailwind's own palette, not guessed) so these two pages match the
-     zinc-based dark theme the rest of the dashboard already uses. */
-  --surface: oklch(0.21 0.006 285.885);      /* zinc-900 — card/panel backgrounds */
-  --surface-2: oklch(0.274 0.006 286.033);   /* zinc-800 — hover/nested surface */
-  --text-primary: oklch(0.92 0.004 286.32);  /* zinc-200 — primary readable text */
-  --text-secondary: oklch(0.705 0.015 286.067); /* zinc-400 — secondary body text */
-  --text-muted: oklch(0.552 0.016 285.938);  /* zinc-500 — least-emphasis text */
-  --error: oklch(0.712 0.194 13.428);        /* rose-400 — matches text-rose-400 used elsewhere */
-  --success: oklch(0.765 0.177 163.223);     /* emerald-400 — matches text-emerald-400 used elsewhere */
-  --accent-dim: oklch(0.585 0.233 277.117 / 12%); /* soft indigo wash for callout boxes */
+  /* Unified Dark Mode Structural Surface Elements */
+  --surface: oklch(0.21 0.006 285.885);         /* zinc-900 card backgrounds */
+  --surface-2: oklch(0.274 0.006 286.033);      /* zinc-800 nested wrappers */
+  --text-primary: oklch(0.92 0.004 286.32);     /* zinc-200 clear readable headers */
+  --text-secondary: oklch(0.705 0.015 286.067); /* zinc-400 copy layouts */
+  --text-muted: oklch(0.552 0.016 285.938);     /* zinc-500 timeline parameters */
+  --error: oklch(0.712 0.194 13.428);           /* rose-400 failure highlights */
+  --success: oklch(0.765 0.177 163.223);        /* emerald-400 completed tasks */
+  --accent-dim: oklch(0.585 0.233 277.117 / 12%);
 }
 
 @layer base {

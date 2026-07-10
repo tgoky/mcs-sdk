@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { LayoutGrid, ShieldAlert, Layers, ExternalLink } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 // Easily scale your ecosystem up to 15+ items by adding objects here
 const PRODUCTS = [
@@ -40,17 +41,21 @@ export default async function MultiProductHubPage() {
       <div className="relative z-10 max-w-6xl mx-auto px-6 py-12 min-h-screen flex flex-col justify-between">
         
         {/* Hub Header */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between border-b border-zinc-900 pb-6 gap-4 font-mono">
+        <header className="flex flex-col md:flex-row md:items-center justify-between border-b border-zinc-200 dark:border-zinc-900 pb-6 gap-4 font-mono">
           <div className="space-y-1">
             <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-bold">
               CENTRAL_APPLICATION_CORE // RUNTIME_V1.34
             </div>
-            <div className="text-sm text-zinc-300">
-              Welcome back, <span className="text-zinc-100 underline underline-offset-4 font-bold">{session.email}</span>
+            <div className="text-sm text-muted-foreground dark:text-zinc-300">
+              Welcome back, <span className="text-foreground underline underline-offset-4 font-bold">{session.email}</span>
             </div>
           </div>
-          <div className="text-[11px] uppercase tracking-widest text-zinc-600 bg-zinc-900/30 border border-zinc-900 px-3 py-1.5 self-start md:self-auto">
-            SYSTEM // AUTHENTICATED
+          
+          <div className="flex items-center gap-4 self-start md:self-auto">
+            <div className="text-[11px] uppercase tracking-widest text-zinc-600 bg-muted/30 border border-border px-3 py-1.5">
+              SYSTEM // AUTHENTICATED
+            </div>
+            <ThemeToggle />
           </div>
         </header>
 
