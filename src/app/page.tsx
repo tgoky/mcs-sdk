@@ -37,6 +37,37 @@ export default async function LandingIndexPage({
       `}} />
 
       {/* ---------------------------------------------------------------------- */}
+      {/* RECTANGLES-STYLE FLAT HORIZONTAL STRIP: Distributed Spacing Layout */}
+      {/* ---------------------------------------------------------------------- */}
+      <header className="relative z-30 w-full border-b border-zinc-900/80 px-8 py-5 hidden md:flex items-center justify-between bg-zinc-950/40 backdrop-blur-md font-mono text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+        {/* Item 1: Branding Anchor */}
+        <div className="font-bold text-zinc-400 tracking-[0.25em]">
+          SHOWTIME // 1.34
+        </div>
+        
+        {/* Items 2-6: Individual Flat direct-sibling links with massive spacing between each */}
+        <a href="/dashboard?skill=pin-down" className="hover:text-zinc-200 transition-colors">[ pin down ]</a>
+        <a href="/dashboard?skill=pile-on" className="hover:text-zinc-200 transition-colors">[ pile on ]</a>
+        <a href="/dashboard?skill=win-back" className="hover:text-zinc-200 transition-colors">[ win back ]</a>
+        <a href="/dashboard?skill=leak-map" className="hover:text-zinc-200 transition-colors">[ leak map ]</a>
+        <a href="/dashboard?skill=pre-call-reads" className="hover:text-zinc-200 transition-colors">[ pre-call reads ]</a>
+        
+        {/* Item 7: System Status Balance Anchor */}
+        <div className="text-zinc-600 tracking-widest">
+          STATUS // OK
+        </div>
+      </header>
+
+      {/* Mobile-only fallback wrap to maintain layout structural sanity on small viewports */}
+      <nav className="md:hidden relative z-30 w-full flex flex-wrap justify-center gap-x-4 gap-y-2 border-b border-zinc-900/40 px-6 py-4 text-[10px] font-mono uppercase tracking-widest text-zinc-500 bg-zinc-950/20">
+        <a href="/dashboard?skill=pin-down">[ pin down ]</a>
+        <a href="/dashboard?skill=pile-on">[ pile on ]</a>
+        <a href="/dashboard?skill=win-back">[ win back ]</a>
+        <a href="/dashboard?skill=leak-map">[ leak map ]</a>
+        <a href="/dashboard?skill=pre-call-reads">[ pre-call reads ]</a>
+      </nav>
+
+      {/* ---------------------------------------------------------------------- */}
       {/* LAYER 1: BASE STRUCTURAL GRID MESH (Ultramarkets Style) */}
       {/* ---------------------------------------------------------------------- */}
       <div className="absolute inset-0 grid grid-cols-6 md:grid-cols-12 grid-rows-6 pointer-events-none opacity-20 z-0">
@@ -46,11 +77,11 @@ export default async function LandingIndexPage({
       </div>
 
       {/* ---------------------------------------------------------------------- */}
-      {/* LAYER 2: HIGH-RES BACKDROP ASSETS (Rectangles.fm Style Collage) */}
+      {/* LAYER 2: HIGH-RES BACKDROP ASSETS */}
       {/* ---------------------------------------------------------------------- */}
       
       {/* Asset 1: Large Manila Folder Backdrop Texture */}
-      <div className="absolute top-[10%] right-[-10%] md:right-[5%] w-[800px] h-[600px] pointer-events-none opacity-30 mix-blend-lighten z-0 hidden lg:block">
+      <div className="absolute top-[15%] right-[-10%] md:right-[5%] w-[800px] h-[600px] pointer-events-none opacity-30 mix-blend-lighten z-0 hidden lg:block">
         <img 
           src="/images/manila-folder-texture.webp" 
           alt="" 
@@ -59,7 +90,7 @@ export default async function LandingIndexPage({
       </div>
 
       {/* Asset 2: Grid-Clipped Portrait 1 */}
-      <div className="absolute top-24 left-12 w-20 h-20 border border-zinc-800 hidden xl:block z-10 grayscale hover:grayscale-0 transition-all">
+      <div className="absolute top-36 left-12 w-20 h-20 border border-zinc-800 hidden xl:block z-10 grayscale hover:grayscale-0 transition-all">
         <img 
           src="/images/operator-portrait-1w.webp" 
           alt="System Operator" 
@@ -77,27 +108,19 @@ export default async function LandingIndexPage({
       </div>
 
       {/* ---------------------------------------------------------------------- */}
-      {/* LAYER 3: THE FOREGROUND INTERFACE */}
+      {/* LAYER 3: CORE CONTENT BODY VIEWPORT */}
       {/* ---------------------------------------------------------------------- */}
-      <div className="relative z-20 max-w-6xl mx-auto px-6 pt-24 pb-16 min-h-screen flex flex-col justify-between">
+      <div className="relative z-20 max-w-6xl mx-auto px-6 flex flex-col justify-between min-h-[calc(100vh-62px)]">
         
-        {/* Top Header */}
-        <header className="flex items-center justify-between w-full border-b border-zinc-900/80 pb-6">
-          <div className="font-mono text-xs uppercase tracking-[0.25em] text-zinc-400">
-            SHOWTIME // PANEL 1.34
-          </div>
-          {/* <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> */}
-        </header>
-
-        {/* Central Component Grid */}
-        <main className="grid grid-cols-1 lg:grid-cols-12 gap-12 my-auto items-center pt-12 pb-12">
+        {/* Central Layout Column Block Assembly */}
+        <main className="grid grid-cols-1 lg:grid-cols-12 gap-12 my-auto items-center pt-16 pb-12 w-full">
           
-          {/* Left Text Column: Cleaned Narrative Copy + Advanced System Target Element */}
+          {/* Left Text Column */}
           <div className="lg:col-span-7 space-y-6 text-left select-text">
             <h1 className="text-4xl sm:text-6xl font-extrabold uppercase tracking-tight leading-[0.95] text-zinc-100 max-w-xl">
               Where Your <br />
               
-              {/* THE SYSTEM VARIABLE: Hard-engineered alternative to typewriter effects */}
+              {/* THE SYSTEM VARIABLE */}
               <span className="relative inline-flex items-center px-4 py-1.5 font-mono lowercase tracking-normal bg-zinc-900/40 border border-zinc-800/80 text-zinc-400 text-3xl sm:text-5xl my-2 overflow-hidden group select-none">
                 {/* Tech Bracket Corners */}
                 <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-zinc-600" />
@@ -119,7 +142,7 @@ export default async function LandingIndexPage({
             
             <div className="space-y-4 max-w-xl text-zinc-400 text-sm md:text-base leading-relaxed font-normal tracking-normal">
               <p>
-                Stop losing high-ticket revenue to dropped calendar handoffs, fragmented lead tracking, and unverified client data. Showtime links directly into your existing pipelines to streamline backend logic from a single screen[cite: 2].
+                Stop losing high-ticket revenue to dropped calendar handoffs, fragmented lead tracking, and unverified client data[cite: 2]. Showtime links directly into your existing pipelines to streamline backend logic from a single screen[cite: 2].
               </p>
               <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest pt-2">
                 System Capabilities: Core Onboarding Mesh[cite: 2] • Automated Follow-Ups[cite: 2] • Pre-Call AI Reads[cite: 2] • Funnel Leak Maps[cite: 2].
@@ -151,7 +174,7 @@ export default async function LandingIndexPage({
                   Dashboard Access
                 </label>
                 <p className="text-xs text-zinc-500 leading-normal">
-                  Initialize pile-on, pin-downs, pre-call reads, win backs && leak-maps [cite: 2].
+                  Initialize pile-on, pin-downs, pre-call reads, win backs && leak-maps[cite: 2].
                 </p>
               </div>
 
@@ -194,7 +217,7 @@ export default async function LandingIndexPage({
               </div>
             </div>
 
-            {/* Asset 5: Vintage Retro Monitor or Tech component clip */}
+            {/* Asset 5: Stacked Paper Collage Backdrop Component Overlay */}
             <div className="absolute -top-20 -right-16 w-32 h-32 pointer-events-none opacity-20 z-0 hidden lg:block">
               <img 
                 src="/images/torn-paper-note.png" 
@@ -207,8 +230,8 @@ export default async function LandingIndexPage({
         </main>
         
         {/* Footer */}
-        <footer className="w-full pt-12 flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-zinc-600 border-t border-zinc-900/60">
-          <div>MUDD INFRASTRUCTURE v1.34</div>
+        <footer className="w-full pb-8 flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-zinc-600 border-t border-zinc-900/60 pt-6">
+          <div>MUDD VENTURES v1.34</div>
           <div>STATUS // NOMINAL</div>
         </footer>
       </div>
