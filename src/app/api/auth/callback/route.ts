@@ -88,7 +88,7 @@ export async function GET(request: Request) {
     const redirectTo =
       rawRedirectTo && rawRedirectTo.startsWith("/") && !rawRedirectTo.startsWith("//")
         ? rawRedirectTo
-        : "/dashboard";
+      : "/home";
 
     clearPkceCookies();
 

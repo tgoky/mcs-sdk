@@ -396,30 +396,32 @@ export default async function LandingIndexPage({
                   </div>
                 </div>
 
-                <div className="pt-2">
-                  {session.whopUserId && hasAccess ? (
-                    <a href="/dashboard" className="block w-full">
-                      <Button className="w-full h-11 text-xs font-mono uppercase tracking-widest bg-zinc-100 text-zinc-950 rounded-none hover:bg-zinc-200 transition-all cursor-pointer">
-                        [ Enter Workspace ]
-                      </Button>
-                    </a>
-                  ) : session.whopUserId ? (
-                    <a
-                      href={process.env.WHOP_COMPANY_CHECKOUT_URL ?? "https://whop.com"}
-                      className="block w-full"
-                    >
-                      <Button className="w-full h-11 text-xs font-mono uppercase tracking-widest border border-zinc-800 bg-transparent text-zinc-200 rounded-none hover:bg-zinc-900 transition-colors cursor-pointer">
-                        Acquire Access Key
-                      </Button>
-                    </a>
-                  ) : (
-                    <a href="/api/auth/login" className="block w-full">
-                      <Button className="w-full h-11 text-xs font-mono uppercase tracking-wider bg-zinc-100 text-zinc-950 rounded-none hover:bg-zinc-200 transition-colors cursor-pointer">
-                        Authenticate with Whop
-                      </Button>
-                    </a>
-                  )}
-                </div>
+             {/* CHANGE THIS BLOCK AT THE BOTTOM OF APP/PAGE.TSX */}
+<div className="pt-2">
+  {session.whopUserId && hasAccess ? (
+    // Change href from "/dashboard" to "/home"
+    <a href="/home" className="block w-full"> 
+      <Button className="w-full h-11 text-xs font-mono uppercase tracking-widest bg-zinc-100 text-zinc-950 rounded-none hover:bg-zinc-200 transition-all cursor-pointer">
+        [ Enter Workspace ]
+      </Button>
+    </a>
+  ) : session.whopUserId ? (
+    <a
+      href={process.env.WHOP_COMPANY_CHECKOUT_URL ?? "https://whop.com"}
+      className="block w-full"
+    >
+      <Button className="w-full h-11 text-xs font-mono uppercase tracking-widest border border-zinc-800 bg-transparent text-zinc-200 rounded-none hover:bg-zinc-900 transition-colors cursor-pointer">
+        Acquire Access Key
+      </Button>
+    </a>
+  ) : (
+    <a href="/api/auth/login" className="block w-full">
+      <Button className="w-full h-11 text-xs font-mono uppercase tracking-wider bg-zinc-100 text-zinc-950 rounded-none hover:bg-zinc-200 transition-colors cursor-pointer">
+        Authenticate with Whop
+      </Button>
+    </a>
+  )}
+</div>
               </div>
 
             </div>

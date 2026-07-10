@@ -109,5 +109,12 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   // FIX: Explicitly added "/dashboard" to protect the root alongside its child routes
-  matcher: ["/dashboard", "/dashboard/:path*", "/api/webhooks/:path*", "/api/crons/:path*"],
+matcher: [
+    "/home",
+    "/home/:path*",
+    "/dashboard", 
+    "/dashboard/:path*", 
+    "/api/webhooks/:path*", 
+    "/api/crons/:path*"
+  ],
 };
