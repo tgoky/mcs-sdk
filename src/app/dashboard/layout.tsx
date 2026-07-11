@@ -90,9 +90,6 @@ export default async function DashboardLayout({
           } else if (run.status === "success") {
             skillStatuses[skill] = "live";
           } else if (run.status === "failed" || run.status === "timed_out") {
-            // A timed-out run is exactly as much a trust problem as a
-            // failed one from the sidebar's point of view — the module
-            // didn't do what it was supposed to. Surface it the same way.
             skillStatuses[skill] = "failed";
           }
         }
@@ -142,12 +139,14 @@ export default async function DashboardLayout({
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-zinc-950 text-zinc-400 font-sans antialiased">
+    <div className="flex h-screen overflow-hidden bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 font-sans antialiased transition-colors duration-200">
       <BookingToast />
-      <aside className="w-64 border-r border-zinc-900 bg-zinc-950 flex-col justify-between hidden md:flex">
+      
+      {/* Sidebar aside menu */}
+      <aside className="w-64 border-r border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between hidden md:flex transition-colors duration-200">
         <div className="flex flex-col flex-1 pt-5 pb-16 px-5 space-y-6 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           <div className="px-1">
-            <span className="font-mono text-sm font-semibold tracking-wider text-zinc-100">
+            <span className="font-mono text-sm font-semibold tracking-wider text-zinc-900 dark:text-zinc-100">
               SHOWTIME
             </span>
           </div>
@@ -157,9 +156,9 @@ export default async function DashboardLayout({
               <Link
                 key={link.href}
                 href={link.href}
-                className="flex items-center space-x-2.5 px-1 py-2 text-sm text-zinc-400 hover:text-zinc-100 transition-colors rounded group"
+                className="flex items-center space-x-2.5 px-2 py-2 text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/30 transition-all rounded group font-medium"
               >
-                <span className="text-zinc-500 group-hover:text-zinc-300 transition-colors">
+                <span className="text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors">
                   {link.icon}
                 </span>
                 <span>{link.label}</span>
@@ -167,21 +166,21 @@ export default async function DashboardLayout({
             ))}
           </nav>
 
-          <div className="pt-4 border-t border-zinc-900">
+          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-900">
             <div className="px-1 mb-3 space-y-1">
-              <p className="text-xs font-mono text-zinc-500 uppercase tracking-wider">
+              <p className="text-xs font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                 EXECUTIONS
               </p>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-mono text-zinc-500">
-                  <span className="text-zinc-400">{activeCount} active</span>
-                  {failedCount > 0 && <span className="text-zinc-600 mx-1">·</span>}
-                  {failedCount > 0 && <span className="text-zinc-500">{failedCount} issue{failedCount !== 1 ? 's' : ''}</span>}
+                  <span className="text-zinc-700 dark:text-zinc-400">{activeCount} active</span>
+                  {failedCount > 0 && <span className="text-zinc-300 dark:text-zinc-600 mx-1">·</span>}
+                  {failedCount > 0 && <span className="text-rose-600 dark:text-rose-400 font-medium">{failedCount} issue{failedCount !== 1 ? 's' : ''}</span>}
                 </span>
               </div>
             </div>
             
-            <div className="bg-zinc-900/50 border border-zinc-900 rounded-lg overflow-hidden">
+            <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-900 rounded-lg overflow-hidden transition-colors duration-200">
               {SKILLS.map((skill, index) => {
                 const status = skillStatuses[skill];
                 const info = SKILL_INFO[skill];
@@ -194,18 +193,18 @@ export default async function DashboardLayout({
                     href={`/dashboard/modules/${skill}`}
                     className={`
                       block px-3 py-2.5 transition-colors
-                      hover:bg-zinc-800/80 cursor-pointer
+                      hover:bg-zinc-100 dark:hover:bg-zinc-800/80 cursor-pointer
                       group relative
-                      ${index !== SKILLS.length - 1 ? 'border-b border-zinc-900' : ''}
+                      ${index !== SKILLS.length - 1 ? 'border-b border-zinc-200 dark:border-zinc-900' : ''}
                     `}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs font-medium text-zinc-200 group-hover:text-zinc-100 transition-colors truncate">
+                        <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 group-hover:text-zinc-950 group-hover:dark:text-zinc-100 transition-colors truncate">
                           {info.name}
                         </span>
                         <svg 
-                          className="w-3 h-3 opacity-0 group-hover:opacity-100 text-zinc-500 shrink-0 transition-all duration-200" 
+                          className="w-3 h-3 opacity-0 group-hover:opacity-100 text-zinc-400 dark:text-zinc-500 shrink-0 transition-all duration-200" 
                           fill="none" 
                           viewBox="0 0 24 24" 
                           stroke="currentColor"
@@ -217,32 +216,32 @@ export default async function DashboardLayout({
                       <div className="flex items-center shrink-0 relative group/icon">
                         {status === "live" && (
                           <>
-                            <CheckCircle2 size={16} className="text-emerald-500" />
-                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl z-10">
+                            <CheckCircle2 size={15} className="text-emerald-500" />
+                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
                               {getStatusTooltip(status)}
                             </span>
                           </>
                         )}
                         {status === "running" && (
                           <>
-                            <Loader2 size={16} className="text-zinc-400 animate-spin" />
-                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl z-10">
+                            <Loader2 size={15} className="text-zinc-500 dark:text-zinc-400 animate-spin" />
+                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
                               {getStatusTooltip(status)}
                             </span>
                           </>
                         )}
                         {status === "failed" && (
                           <>
-                            <AlertCircle size={16} className="text-rose-400" />
-                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl z-10">
+                            <AlertCircle size={15} className="text-rose-500 dark:text-rose-400" />
+                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
                               {getStatusTooltip(status)}
                             </span>
                           </>
                         )}
                         {status === "not_run" && (
                           <>
-                            <Circle size={16} className="text-zinc-700" />
-                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-300 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl z-10">
+                            <Circle size={15} className="text-zinc-300 dark:text-zinc-700" />
+                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
                               {getStatusTooltip(status)}
                             </span>
                           </>
@@ -250,24 +249,24 @@ export default async function DashboardLayout({
                       </div>
                     </div>
 
-                    <p className="text-[11px] text-zinc-500 leading-snug mt-0.5">
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-snug mt-0.5">
                       {info.description}
                     </p>
 
-                    <div className="flex items-center gap-3 mt-1">
+                    <div className="flex items-center gap-3 mt-1 font-mono">
                       {status === "running" ? (
-                        <span className="text-[10px] text-zinc-400 tabular-nums animate-pulse">
+                        <span className="text-[10px] text-zinc-500 dark:text-zinc-400 tabular-nums animate-pulse">
                           Running...
                         </span>
                       ) : lastRun ? (
                         <LiveTime isoString={lastRun.toISOString()} />
                       ) : (
-                        <span className="text-[10px] text-zinc-700">
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-700">
                           Never run
                         </span>
                       )}
                       {runCount > 0 && (
-                        <span className="text-[10px] text-zinc-700 tabular-nums">
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-700 tabular-nums">
                           {runCount} run{runCount !== 1 ? 's' : ''}
                         </span>
                       )}
@@ -279,21 +278,23 @@ export default async function DashboardLayout({
           </div>
         </div>
 
-        <div className="p-5 border-t border-zinc-900 flex items-center justify-between shrink-0">
-          <span className="text-sm text-zinc-300 font-medium">
+        {/* User context footer */}
+        <div className="p-5 border-t border-zinc-200 dark:border-zinc-900 flex items-center justify-between shrink-0 bg-zinc-100/50 dark:bg-transparent">
+          <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300 truncate max-w-[120px]">
             {displayName}
           </span>
           <Link
             href="/api/auth/logout"
-            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="text-xs font-mono text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors"
           >
             Sign out
           </Link>
         </div>
       </aside>
 
-      <div className="flex flex-col flex-1 min-w-0 bg-zinc-950">
-        <header className="h-14 border-b border-zinc-900 bg-zinc-950 flex items-center justify-between px-6 shrink-0">
+      {/* Main viewport area panel */}
+      <div className="flex flex-col flex-1 min-w-0 bg-white dark:bg-zinc-950 transition-colors duration-200">
+        <header className="h-14 border-b border-zinc-200 dark:border-zinc-900 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-between px-6 shrink-0 z-10">
           <MobileNav links={navLinks} displayName={displayName} />
           <div className="flex items-center ml-auto">
             <NotificationBell />

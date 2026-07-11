@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Bell, AlertTriangle, XCircle, Clock, KeyRound, RotateCcw, BarChart3 } from "lucide-react";
+import { skillName, phaseLabel, SKILL_INFO, type SkillName } from "@/lib/copy";
 
 interface NotificationRow {
   id: string;
@@ -19,13 +20,13 @@ interface NotificationRow {
 const POLL_MS = 30_000;
 
 function iconFor(type: string) {
-  if (type === "run_failed") return <XCircle size={14} className="text-rose-400 shrink-0 mt-0.5" />;
-  if (type === "run_timed_out") return <Clock size={14} className="text-amber-400 shrink-0 mt-0.5" />;
+  if (type === "run_failed") return <XCircle size={14} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />;
+  if (type === "run_timed_out") return <Clock size={14} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />;
   if (type === "credential_invalid" || type === "credential_check_error")
-    return <KeyRound size={14} className="text-amber-400 shrink-0 mt-0.5" />;
-  if (type === "lost_deal_swept") return <RotateCcw size={14} className="text-sky-400 shrink-0 mt-0.5" />;
-  if (type === "weekly_metrics") return <BarChart3 size={14} className="text-sky-400 shrink-0 mt-0.5" />;
-  return <AlertTriangle size={14} className="text-zinc-400 shrink-0 mt-0.5" />;
+    return <KeyRound size={14} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />;
+  if (type === "lost_deal_swept") return <RotateCcw size={14} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />;
+  if (type === "weekly_metrics") return <BarChart3 size={14} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />;
+  return <AlertTriangle size={14} className="text-zinc-500 dark:text-zinc-400 shrink-0 mt-0.5" />;
 }
 
 function relativeTime(iso: string): string {
@@ -97,54 +98,54 @@ export function NotificationBell() {
     <div className="relative" ref={containerRef}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative flex items-center justify-center w-8 h-8 text-zinc-400 hover:text-zinc-200 transition-colors"
+        className="relative flex items-center justify-center w-8 h-8 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
         aria-label="Notifications"
       >
         <Bell size={17} />
         {unreadCount > 0 && (
-          <span className="absolute top-0.5 right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-[10px] font-medium text-white leading-none">
+          <span className="absolute top-0.5 right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-[10px] font-bold text-white leading-none">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-lg shadow-2xl z-50">
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-900 sticky top-0 bg-zinc-950">
-            <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider">
+        <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-2xl z-50 transition-all">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-200 dark:border-zinc-900 sticky top-0 bg-white dark:bg-zinc-950 z-10">
+            <span className="text-xs font-bold font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
               Notifications
             </span>
             {unreadCount > 0 && (
               <button
                 onClick={markAllRead}
-                className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                className="text-[11px] font-mono font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               >
-                Mark all read
+                [ Mark all read ]
               </button>
             )}
           </div>
 
           {notifs.length === 0 ? (
-            <div className="px-3 py-8 text-center text-xs text-zinc-600">
+            <div className="px-3 py-8 text-center text-xs font-mono font-medium text-zinc-400 dark:text-zinc-600">
               Nothing yet — you'll see run failures and connection issues here.
             </div>
           ) : (
             notifs.map((n) => {
               const content = (
                 <div
-                  className={`flex gap-2.5 px-3 py-2.5 border-b border-zinc-900 last:border-b-0 hover:bg-zinc-900/50 transition-colors ${
-                    n.read ? "opacity-60" : ""
+                  className={`flex gap-2.5 px-3 py-2.5 border-b border-zinc-100 dark:border-zinc-900/60 last:border-b-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors text-left w-full ${
+                    n.read ? "opacity-50" : ""
                   }`}
                 >
                   {iconFor(n.type)}
                   <div className="min-w-0 flex-1">
-                    <p className="text-[13px] text-zinc-200 font-medium leading-snug">
+                    <p className="text-[13px] text-zinc-800 dark:text-zinc-200 font-semibold leading-snug">
                       {n.title}
                     </p>
-                    <p className="text-[11px] text-zinc-500 leading-snug mt-0.5 line-clamp-2">
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug mt-0.5 line-clamp-2">
                       {n.body}
                     </p>
-                    <p className="text-[10px] text-zinc-700 mt-1">{relativeTime(n.createdAt)}</p>
+                    <p className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono mt-1">{relativeTime(n.createdAt)}</p>
                   </div>
                   {!n.read && (
                     <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0 mt-1.5" />
@@ -157,6 +158,7 @@ export function NotificationBell() {
                   key={n.id}
                   href={`/dashboard/runs/${n.runId}`}
                   onClick={() => !n.read && markRead(n.id)}
+                  className="block"
                 >
                   {content}
                 </Link>
@@ -164,7 +166,7 @@ export function NotificationBell() {
                 <button
                   key={n.id}
                   onClick={() => !n.read && markRead(n.id)}
-                  className="w-full text-left"
+                  className="w-full text-left cursor-pointer block"
                 >
                   {content}
                 </button>

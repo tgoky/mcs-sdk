@@ -146,23 +146,25 @@ export function BookingToast() {
         <button
           key={t.runId}
           onClick={() => openRun(t.runId)}
-          className="pointer-events-auto text-left bg-zinc-950 border border-zinc-800 rounded-lg shadow-2xl overflow-hidden animate-[slideIn_0.25s_ease-out] hover:border-zinc-700 transition-colors group"
+          className="pointer-events-auto text-left bg-white/95 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-2xl overflow-hidden animate-[slideIn_0.25s_ease-out] hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors group cursor-pointer"
         >
           <div className="flex items-start gap-3 p-3.5">
             <div
               className={`flex items-center justify-center w-8 h-8 rounded-full shrink-0 ${
-                t.kind === "booking" ? "bg-emerald-950/60 text-emerald-400" : "bg-sky-950/60 text-sky-400"
+                t.kind === "booking" 
+                  ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400" 
+                  : "bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400"
               }`}
             >
               {t.kind === "booking" ? <CalendarCheck2 size={15} /> : <RotateCcw size={15} />}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-medium text-zinc-100 leading-snug">
+              <p className="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 leading-snug">
                 {t.kind === "booking" ? "New booking just landed" : "Prospect rebooked"}
               </p>
-              <p className="text-xs text-zinc-400 leading-snug mt-0.5 truncate">{t.subject}</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-snug mt-0.5 truncate font-medium">{t.subject}</p>
               {t.buyerName && (
-                <p className="text-[10px] text-zinc-600 mt-1 uppercase tracking-wide">{t.buyerName}</p>
+                <p className="text-[10px] text-zinc-400 dark:text-zinc-600 mt-1 uppercase tracking-wide font-mono font-bold">{t.buyerName}</p>
               )}
             </div>
             <span
@@ -170,13 +172,13 @@ export function BookingToast() {
                 e.stopPropagation();
                 dismiss(t.runId);
               }}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-zinc-300 shrink-0"
+              className="md:opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 shrink-0 p-0.5 cursor-pointer"
             >
               <X size={13} />
             </span>
           </div>
           {/* Decaying progress bar showing time left before auto-dismiss */}
-          <div className="h-0.5 bg-zinc-900">
+          <div className="h-0.5 bg-zinc-100 dark:bg-zinc-900">
             <div
               className={`h-full ${t.kind === "booking" ? "bg-emerald-500/70" : "bg-sky-500/70"}`}
               style={{

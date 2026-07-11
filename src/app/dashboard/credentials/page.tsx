@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { KeyRound, Eye, EyeOff, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface CredentialField {
   provider: string;
@@ -155,7 +156,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
 
   return (
     <div
-      className="rounded-xl overflow-hidden"
+      className="rounded-xl overflow-hidden transition-colors duration-200"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       {/* Group header */}
@@ -202,7 +203,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
               Which account is this for?
             </label>
             <input
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+              className="w-full bg-white/40 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors"
               value={engagementId}
               onChange={(e) => setEngagementId(e.target.value)}
               placeholder="e.g. eng_acme_corp_001"
@@ -248,7 +249,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <input
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 pr-8 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+                      className="w-full bg-white/40 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-md px-3 py-2 pr-8 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors"
                       type={visible[platform.provider] ? "text" : "password"}
                       value={values[platform.provider] ?? ""}
                       onChange={(e) =>
@@ -257,7 +258,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                       placeholder={platform.placeholder}
                     />
                     <button
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer"
                       onClick={() =>
                         setVisible((v) => ({
                           ...v,
@@ -277,7 +278,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                   <button
                     onClick={() => save(platform.provider)}
                     disabled={saving === platform.provider}
-                    className="px-4 py-2 text-sm rounded-md font-medium bg-zinc-100 text-zinc-950 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+                    className="px-4 py-2 text-sm rounded-md font-medium bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
                   >
                     {saving === platform.provider ? "Saving…" : "Save"}
                   </button>
@@ -286,7 +287,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                       onClick={() => testConnection(platform.provider)}
                       disabled={testing === platform.provider}
                       title="Confirms the saved key still works, without waiting for the daily check"
-                      className="px-3 py-2 text-sm rounded-md font-medium border border-zinc-800 text-zinc-300 hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+                      className="px-3 py-2 text-sm rounded-md font-medium border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
                     >
                       {testing === platform.provider ? "Testing…" : "Test"}
                     </button>
@@ -318,7 +319,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                   </div>
                 )}
 
-                <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+                <p className="text-xs mt-2 font-mono opacity-80" style={{ color: "var(--text-muted)" }}>
                   {platform.howTo}
                 </p>
               </div>
@@ -332,10 +333,10 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
 
 export default function CredentialsPage() {
   return (
-    <div className="w-full space-y-6 px-6 py-6">
+    <div className="w-full space-y-6 px-6 py-6 transition-colors duration-200">
       <div>
         <h1
-          className="text-xl"
+          className="text-xl tracking-tight"
           style={{ color: "var(--text-primary)", fontWeight: 700 }}
         >
           Connections
@@ -362,7 +363,7 @@ export default function CredentialsPage() {
           }}
           className="shrink-0"
         />
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+        <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
           Each key is encrypted with AES-256-GCM the moment you hit Save. We
           never store or log them in plain text.
         </p>
@@ -376,7 +377,7 @@ export default function CredentialsPage() {
 
       {/* Slack — different character, not a secret */}
       <div
-        className="rounded-xl p-5 space-y-2"
+        className="rounded-xl p-5 space-y-2 transition-colors duration-200"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
       >
         <p
@@ -385,12 +386,12 @@ export default function CredentialsPage() {
         >
           Slack webhook
         </p>
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+        <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
           Your call briefs and alerts are delivered to a Slack channel of your
           choice. Set this up during your account setup — it lives on your
           engagement config, not here.
         </p>
-        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        <p className="text-xs font-mono opacity-80" style={{ color: "var(--text-muted)" }}>
           To add it: api.slack.com → Your Apps → Incoming Webhooks → Add New
           Webhook to Workspace
         </p>
