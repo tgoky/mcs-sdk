@@ -128,10 +128,6 @@ export async function runPinDownOnboarding(
     let finalStack = { ...(tenant.stack ?? {}) };
 
     // ── Email/CRM config completeness check ─────────────────────────────
-    // Moved here from the setup route: the route no longer owns a summary
-    // object (see the fast-handoff comment on that route), and this check
-    // is pure inspection of already-persisted config, not something that
-    // needs to block or slow down the initial response.
     if (finalStack.email_platform === "klaviyo" && (!finalStack.target_list_id || !finalStack.recovery_list_id)) {
       summary.openItems.push(
         "Klaviyo is missing a target and/or recovery list ID — Pile-On and Win-Back enrollment will fail until these are set."
@@ -227,17 +223,6 @@ export async function runPinDownOnboarding(
     }
 
     // ── Auto-doc-research for unlisted platforms (Pin-Down recovery gap 6) ──
-    // "discover_from_docs" tells the router functions in hosting.ts/
-    // booking.ts nothing they recognize, so hosting falls through to its
-    // paste-ready fallback (still a working, if manual, confirmation page)
-    // and booking events simply won't be picked up until a reviewed
-    // adapter exists. Kicking off the research itself doesn't need to
-    // wait for a human — the operator already made the explicit choice to
-    // select "discover_from_docs" and supply a platform name; what needs
-    // human review is turning the resulting draft into a live,
-    // credential-touching adapter, which happens separately via
-    // POST /api/pin-down/doc-research/[draftId]/review. Non-fatal to
-    // onboarding either way.
     for (const [kind, platformValue, discoveredName, discoveredUrl] of [
       ["hosting", finalStack.hosting_platform, finalStack.discovered_platform_name, finalStack.discovered_platform_website],
       ["booking", finalStack.booking_platform, finalStack.discovered_platform_name, finalStack.discovered_platform_website],
@@ -261,11 +246,6 @@ export async function runPinDownOnboarding(
     }
 
     // ── Voice scrape (Pin-Down recovery gap 2) ──────────────────────────────
-    // Additive to whatever the operator pasted into rawVoiceCorpus — see
-    // voice-scraper.ts's module comment for why this augments rather than
-    // replaces the operator-pasted path. Non-fatal: a failed/empty crawl
-    // just means extraction runs on the operator-pasted corpus alone,
-    // same as before this recovery existed.
     let combinedVoiceCorpus = rawVoiceCorpus;
     if (finalStack.buyer_domain) {
       await run("voice-scrape", async () => {
@@ -338,13 +318,6 @@ export async function runPinDownOnboarding(
     });
 
     // ── Ad creative briefs ──────────────────────────────────────────────────
-    // One structured brief per content pillar, generated once here rather
-    // than in Pile-On itself — Pile-On doesn't have its own setup phase to
-    // run this from, and the copy doesn't need per-booking variation, same
-    // reasoning as generating the recovery cadence once during Win-Back
-    // setup rather than per-prospect. Failure here is non-fatal to the rest
-    // of onboarding: a missing set of ad briefs shouldn't block bookings
-    // from working.
     try {
       await logStep(runId, { phase: "ad_creative_briefs", status: "running" });
       const { briefs } = await run("ad-creative-briefs", () =>
@@ -377,11 +350,6 @@ export async function runPinDownOnboarding(
     }
 
     // ── Hero + breakout video scripts (Pin-Down recovery gap 3) ─────────────
-    // Restores the OG SKILL.md's actual video deliverable — page-builder.ts
-    // only ever rendered a placeholder card for the video slot; this is
-    // the word-for-word script pack the buyer/recorder works from. Same
-    // non-fatal-failure posture as the ad creative briefs above: a
-    // missing script pack shouldn't block the rest of onboarding.
     try {
       await logStep(runId, { phase: "script_pack", status: "running" });
       const scriptPack = await run("script-pack", () =>
@@ -422,11 +390,6 @@ export async function runPinDownOnboarding(
     }
 
     // ── Existing-page audit (Pin-Down recovery gap 7) ────────────────────────
-    // Only runs when Discovery (via the smart pre-fill pass) or the
-    // operator flagged an existing confirmation page on
-    // stack.existing_confirmation_page_url. Produces the delta doc; never
-    // modifies or skips generating the new page — same "audit runs in
-    // parallel, buyer decides" principle as the OG SKILL.md.
     if (finalStack.existing_confirmation_page_url) {
       try {
         await logStep(runId, { phase: "existing_page_audit", status: "running" });
@@ -558,26 +521,37 @@ export async function runPinDownOnboarding(
         const receiverUrl = `${appUrl}/api/webhooks/booking-event?engagement_id=${engagementId}`;
         summary.whatWasAttempted.push(`Registered ${finalStack.booking_platform} webhook → ${receiverUrl}.`);
         try {
-          const subscriptionId = await registerWebhookForTenant(
+          const subscriptionResult = await registerWebhookForTenant(
             finalStack.booking_platform,
             bookingCredential,
             receiverUrl,
             finalStack.booking_platform_meta
           );
 
-          if (subscriptionId) {
+          // FIXED: Safely decompose the payload result signature whether it arrives as an
+          // analytical object configuration mapping (Calendly) or a truthy tracking string (Cal/GHL).
+          const isObjectResult = typeof subscriptionResult === 'object' && subscriptionResult !== null;
+          const subId = isObjectResult ? (subscriptionResult as any).uri : subscriptionResult;
+          const signingKey = isObjectResult ? (subscriptionResult as any).signingKey : null;
+
+          if (subId) {
             await db
               .update(engagements)
               .set({
-                stack: { ...finalStack, webhook_subscription_id: subscriptionId as string, webhook_receiver_mode: "webhook" },
+                stack: { 
+                  ...finalStack, 
+                  webhook_subscription_id: subId as string, 
+                  ...(signingKey ? { webhook_signing_secret: signingKey as string } : {}), // Persists critical protection keys
+                  webhook_receiver_mode: "webhook" 
+                },
                 updatedAt: new Date(),
               })
               .where(eq(engagements.engagementId, engagementId));
-            summary.whatWorked.push(`${finalStack.booking_platform} webhook registered (subscription ${subscriptionId}).`);
+            summary.whatWorked.push(`${finalStack.booking_platform} webhook registered (subscription ${subId}).`);
             await logStep(runId, {
               phase: "webhook_registration",
               status: "success",
-              detail: `Subscription ${subscriptionId}`,
+              detail: `Subscription ${subId}`,
             });
           } else {
             // No subscription ID back — either the platform (OnceHub
