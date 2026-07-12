@@ -114,6 +114,50 @@ export type EngagementStack = {
   existing_confirmation_page_url?: string;
   email_platform?: "klaviyo" | "hubspot" | "activecampaign" | "convertkit" | "mailchimp";
   email_platform_credentials_ref?: string;
+  // ── SMS as a native channel (Pile-On recovery gap 1) ────────────────────
+  // "twilio" and "ghl_sms" are direct-send platforms — this app calls their
+  // messaging API itself and owns the send schedule via
+  // src/inngest/pile-on-sms.ts (durable step.sleep between messages,
+  // since neither is a workflow/automation platform the way the ESPs
+  // are). "hubspot_sms" follows the same tag-and-let-the-buyer's-own-
+  // automation-send pattern as deliverPersonalizedIntro elsewhere in this
+  // codebase, since HubSpot has no native SMS send API. See
+  // src/lib/platforms/sms.ts.
+  sms_platform?: "twilio" | "ghl_sms" | "hubspot_sms" | "none";
+  sms_platform_credentials_ref?: string;
+  sms_platform_meta?: {
+    twilio_account_sid?: string;
+    twilio_messaging_service_sid?: string;
+    twilio_from_number?: string;
+    ghl_location_id?: string;
+    hubspot_sms_status_property?: string;
+  };
+  // Twilio requires a registered A2P 10DLC brand + campaign before it will
+  // send marketing SMS to US numbers without heavy carrier filtering/
+  // blocking. sendSmsForTenant (sms.ts) refuses to send for Twilio unless
+  // this is "campaign_approved" — see the compliance gate there.
+  sms_a2p_10dlc_status?: "not_started" | "brand_registered" | "campaign_approved";
+  sms_compliance_footer_variant?: "standard" | "custom";
+  sms_compliance_footer_custom?: string; // used when variant === "custom"
+  // ── Ad-data cohort sync (Pile-On recovery gap 2) ────────────────────────
+  // "native_crm" means "no separate ad-data platform — tag the prospect on
+  // the email/CRM platform already connected" (the same buyer's-platform-
+  // owns-the-data principle used throughout this app), so it has no
+  // separate credentials_ref of its own. See src/lib/platforms/ad-data.ts.
+  ad_data_platform?: "hyros" | "native_crm" | "google_sheets" | "none";
+  ad_data_platform_credentials_ref?: string;
+  ad_data_cohort_id?: string;
+  ad_data_platform_meta?: {
+    hyros_account_id?: string;
+    google_sheets_spreadsheet_id?: string;
+    google_sheets_cohort_sheet_name?: string;
+  };
+  // ── Existing-sequence audit (Pile-On recovery gap 4) ────────────────────
+  // Operator-flagged during onboarding, same pattern as Pin-Down's
+  // existing_confirmation_page_url. Only Klaviyo and HubSpot expose a
+  // flows/workflows read API usable for this — see
+  // src/features/pile-on/server/existing-sequence-audit.ts.
+  existing_pile_on_sequence_flagged?: boolean;
   // Klaviyo list IDs for pile-on and win-back
   target_list_id?: string;
   recovery_list_id?: string;
@@ -312,6 +356,37 @@ export const engagements = pgTable("engagements", {
     existingConfirmationPageUrl?: string;
     detectedBookingPlatform?: string;
     notes: string[];
+  }>(),
+
+  // ── Pile-On recovery gap 1: SMS sequence content ───────────────────────
+  // Generated once during Pin-Down onboarding, same lifecycle as
+  // adCreativeBriefs and pinDownScriptPack. See
+  // src/features/pile-on/server/sms-sequence-builder.ts.
+  pileOnSmsAssetMap: jsonb("pile_on_sms_asset_map").$type<{
+    generatedAt: string;
+    messages: Array<{ id: string; offsetMinutes: number; body: string }>;
+  }>(),
+
+  // ── Pile-On recovery gap 4: existing-sequence audit ────────────────────
+  // Populated when stack.existing_pile_on_sequence_flagged is true and the
+  // buyer's email_platform supports reading flows/workflows (Klaviyo,
+  // HubSpot today). See
+  // src/features/pile-on/server/existing-sequence-audit.ts.
+  pileOnExistingSequenceAudit: jsonb("pile_on_existing_sequence_audit").$type<{
+    auditedAt: string;
+    platform: string;
+    supported: boolean;
+    unsupportedReason?: string;
+    emails: Array<{
+      subject: string;
+      sendDelayDays: number | null;
+      openRate: number | null;
+      clickRate: number | null;
+      pillarScores: Record<string, number>;
+      recommendation: "keep" | "replace" | "merge" | "drop" | "investigate_before_changing";
+      reasoning: string;
+    }>;
+    recommendedWorkflowLabel: string; // e.g. "showtime_pile_on_v1" — the parallel workflow name to build in the ESP UI
   }>(),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -544,7 +619,30 @@ export const platformAdapterDrafts = pgTable("platform_adapter_drafts", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// ── Platform Docs Links (HEAD-validated, global) ──────────────────────────
+// ── Pile-On Send Log (hybrid personalization outcomes) ───────────────────
+// Pile-On recovery gap 3. The OG SKILL.md called for "per-booking outcome
+// logs (hybrid sent vs. fallback fired) to a pile_on_send_log Sheet or CRM
+// custom object the buyer can review." Implemented as a real table rather
+// than a jsonb column on engagements — this is an append-only, per-booking
+// event log (one row per booking, growing indefinitely), which is exactly
+// the shape webhookEvents and winBackEnrollments already use elsewhere in
+// this schema; mutating a jsonb array on every send would mean a
+// read-modify-write race under concurrent bookings for the same
+// engagement, which a table with one INSERT per row avoids entirely.
+export const pileOnSendLog = pgTable("pile_on_send_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  bookingId: text("booking_id").notNull(),
+  prospectEmail: text("prospect_email").notNull(),
+  // "hybrid" | "fallback" — which path actually produced the Email 1 the
+  // prospect received. See hybrid-personalizer.ts.
+  sentVia: text("sent_via").notNull(),
+  latencyMs: integer("latency_ms"),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 // Pin-Down recovery gap 9. A single global table (not per-engagement — the
 // canonical docs URL for "webflow" is the same regardless of which buyer
 // is asking) that a nightly cron HEAD-checks so stale/broken doc links

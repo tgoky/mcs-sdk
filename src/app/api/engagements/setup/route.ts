@@ -141,6 +141,18 @@ export async function POST(request: Request) {
     if (credentials?.hosting) {
       await storeCredential(engagementId, finalStack.hosting_platform, `secrets://${engagementId}/${finalStack.hosting_platform}_key`, credentials.hosting);
     }
+    // Pile-On recovery gap 1 — stored under sms_platform's own key so it's
+    // independent of whatever's stored under email_platform (a buyer's
+    // hubspot_sms integration credential, for instance, is often a
+    // different scoped token than their marketing-email HubSpot key).
+    if (credentials?.sms && finalStack.sms_platform && finalStack.sms_platform !== "none") {
+      await storeCredential(engagementId, finalStack.sms_platform, `secrets://${engagementId}/${finalStack.sms_platform}_key`, credentials.sms);
+    }
+    // Pile-On recovery gap 2 — not stored for "native_crm", which reuses
+    // the already-stored email_platform credential (see cohort-sync.ts).
+    if (credentials?.adData && finalStack.ad_data_platform && finalStack.ad_data_platform !== "none" && finalStack.ad_data_platform !== "native_crm") {
+      await storeCredential(engagementId, finalStack.ad_data_platform, `secrets://${engagementId}/${finalStack.ad_data_platform}_key`, credentials.adData);
+    }
     await logStep(runId, {
       phase: "credential_storage",
       status: "success",

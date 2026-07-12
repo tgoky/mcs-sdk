@@ -51,6 +51,16 @@ export interface ClaudeCallOptions {
   userMessage: string;
   maxTokens?: number;
   runId?: string;
+  // Real cancellation, not just "stop waiting" — passed straight through
+  // to the underlying fetch. The AI Architect Review flagged
+  // AbortSignal.timeout as missing across this codebase for anything with
+  // a hard latency budget (hybrid-personalizer.ts's 60-second generation
+  // budget is the first caller). Without this, a caller giving up on a
+  // slow response still leaves the outbound request running server-side
+  // and still gets billed/counted against skillRuns' token usage once it
+  // eventually completes — passing an AbortSignal actually tears down the
+  // connection.
+  signal?: AbortSignal;
 }
 
 export interface ClaudeResult {
@@ -91,6 +101,7 @@ async function callViaAnthropic(opts: ClaudeCallOptions): Promise<ClaudeResult> 
       system: opts.system,
       messages: [{ role: "user", content: opts.userMessage }],
     }),
+    signal: opts.signal,
   });
 
   if (!res.ok) {
@@ -162,6 +173,7 @@ async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult>
         { role: "user", content: opts.userMessage },
       ],
     }),
+    signal: opts.signal,
   });
 
   if (!res.ok) {

@@ -3,22 +3,18 @@ import { winBackEnrollments, engagements } from "@/models/schema";
 import { and, eq, sql } from "drizzle-orm";
 import crypto from "crypto";
 import { resolveCredential } from "@/lib/credentials";
-import { enrollInPreCallSequence, enrollInWinBackSequence, exitWinBackSequence, deliverPersonalizedIntro } from "@/lib/platforms/email";
-import { callClaude, MODEL } from "@/lib/llm";
+import { enrollInPreCallSequence, enrollInWinBackSequence, exitWinBackSequence } from "@/lib/platforms/email";
 import { logStep, finishRun, type RunSummary } from "@/lib/run-log";
+import { runHybridPersonalization } from "./hybrid-personalizer";
+import { enrollSmsSequenceForTenant } from "@/lib/platforms/sms";
+import { inngest, pileOnSmsSequenceStart } from "@/lib/inngest";
+import { addProspectToAdDataCohort, removeProspectFromAdDataCohort } from "./cohort-sync";
 
 /**
  * Single source of truth for classifying a booking-platform webhook payload
  * as a new booking (pile-on) or a cancellation/no-show (win-back).
  *
- * Previously the webhook route hardcoded skillName: "pile-on" at startRun
- * time, before it had even looked at the payload — then handleInboundBookingEvent
- * "corrected" it mid-run via a rename side-channel on logStep whenever the
- * event actually turned out to be a cancellation. That meant two independent
- * lists of event-type strings (one in the route's label extraction, one
- * here) could silently drift apart, and for a few milliseconds every
- * win-back run was mislabeled as pile-on in the dashboard. Exporting this
- * classifier lets the route call it BEFORE startRun so the correct
+ * Exporting this classifier lets the route call it BEFORE startRun so the correct
  * skillName is set from the very first row, with one definition of "what
  * counts as a cancellation" shared by both call sites.
  */
@@ -83,6 +79,27 @@ export async function handleInboundBookingEvent(
     payload.prospect_name ??
     payload.payload?.name ??
     "Prospect";
+
+  const prospectPhone: string | undefined =
+    payload.phone ??
+    payload.prospect_phone ??
+    payload.data?.attributes?.phone ??
+    payload.payload?.text_reminder_number ??
+    payload.responses?.attendeePhoneNumber ??
+    payload.contact?.phone ??
+    payload.customer?.phone ??
+    undefined;
+
+  // Best-effort booking identifier for send-log/SMS-sequence correlation.
+  // Falls back to a fresh UUID rather than throwing — losing the ability
+  // to correlate one booking's SMS sends in the log is much less bad than
+  // failing the whole enrollment over a missing ID field.
+  const bookingId: string =
+    payload._bookingId ??
+    payload.payload?.uri?.split("/").pop() ??
+    payload.uid ??
+    payload.id ??
+    crypto.randomUUID();
 
   if (!prospectEmail) {
     throw new Error(
@@ -187,48 +204,86 @@ export async function handleInboundBookingEvent(
       await logStep(runId, { phase: "win_back_exit_signal", status: "failed", detail: e.message });
     }
 
-    // Hybrid mode: generate a personalized intro paragraph via Claude
+    // ── SMS enrollment (Pile-On recovery gap 1) ──────────────────────────
+    if (stack.sms_platform && stack.sms_platform !== "none") {
+      await logStep(runId, { phase: "sms_enrollment", status: "running" });
+      try {
+        if (stack.sms_platform === "hubspot_sms") {
+          const smsApiKey = await resolveCredential(tenant.engagementId, stack.sms_platform);
+          await enrollSmsSequenceForTenant(stack.sms_platform, smsApiKey, stack.sms_platform_meta, prospectEmail);
+          summary.whatWorked.push(`Tagged ${prospectEmail} for HubSpot's SMS automation to pick up.`);
+          await logStep(runId, { phase: "sms_enrollment", status: "success", detail: "HubSpot SMS tag set" });
+        } else if (stack.sms_platform === "twilio" || stack.sms_platform === "ghl_sms") {
+          if (!prospectPhone) {
+            summary.openItems.push(`SMS sequence configured (${stack.sms_platform}) but no phone number was captured for ${prospectEmail} — SMS skipped for this booking.`);
+            await logStep(runId, { phase: "sms_enrollment", status: "skipped", detail: "No phone number on payload" });
+          } else {
+            // FIXED: Dynamically extract and normalize absolute platform milestones to prevent background engine overlap bugs
+            const bookingCreatedAt = payload.payload?.created_at ?? payload.createdAt ?? new Date().toISOString();
+            const callTime = payload.call_time ?? payload.payload?.start_time ?? payload.payload?.scheduled_time ?? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+            await inngest.send(
+              pileOnSmsSequenceStart.create({
+                engagementId: tenant.engagementId,
+                bookingId,
+                prospectEmail,
+                prospectPhone,
+                prospectName,
+                bookingCreatedAt,
+                callTime,
+              })
+            );
+            summary.whatWorked.push(`Started ${stack.sms_platform} SMS sequence for ${prospectPhone}.`);
+            await logStep(runId, { phase: "sms_enrollment", status: "success", detail: `Durable SMS sequence dispatched for ${prospectPhone}` });
+          }
+        }
+      } catch (e: any) {
+        summary.openItems.push(`SMS enrollment failed: ${e.message}`);
+        await logStep(runId, { phase: "sms_enrollment", status: "failed", detail: e.message });
+      }
+    }
+
+    // ── Ad-data cohort add (Pile-On recovery gap 2) ──────────────────────
+    if (stack.ad_data_platform && stack.ad_data_platform !== "none") {
+      try {
+        await addProspectToAdDataCohort(tenant.engagementId, stack, prospectEmail);
+        summary.whatWorked.push(`Added ${prospectEmail} to the ${stack.ad_data_platform} ad-data cohort.`);
+        await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: `Added to cohort on ${stack.ad_data_platform}` });
+      } catch (e: any) {
+        summary.openItems.push(`Ad-data cohort add failed: ${e.message}`);
+        await logStep(runId, { phase: "ad_data_cohort", status: "failed", detail: e.message });
+      }
+    }
+
+    // Hybrid mode: generate a personalized intro paragraph via Claude,
+    // with real budget enforcement and a pile_on_send_log outcome row
+    // (Pile-On recovery gap 3). The templated Email 1 already fired above
+    // via enrollInPreCallSequence — this only ever adds on top, so a
+    // "fallback" outcome here means no personalized intro, never a missed
+    // email.
     if (tenant.offerDetails?.hybrid_mode_enabled) {
       await logStep(runId, { phase: "hybrid_synthesis", status: "running" });
-
-      const result = await callClaude({
-        model: MODEL.SYNTHESIS,
-        system: `You are the email rewriting engine for Pile-On.
-Voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})}
-Offer context: ${JSON.stringify(tenant.offerDetails ?? {})}
-Write a personalized booking confirmation intro paragraph. Under 70 words. No generic greetings. Reference the specific value this call will deliver.`,
-        userMessage: `Prospect: ${prospectName} (${prospectEmail})`,
-        maxTokens: 200,
-        runId,
-      });
-
       summary.whatWasAttempted.push("Generate a hybrid-mode personalized intro paragraph.");
 
-      try {
-        await deliverPersonalizedIntro(
-          stack.email_platform,
-          emailApiKey,
-          prospectEmail,
-          result.text,
-          { location_id: stack.booking_platform_meta?.location_id }
-        );
-        summary.whatWorked.push(`Delivered personalized intro to ${prospectEmail}'s ${stack.email_platform} profile.`);
-        await logStep(runId, {
-          phase: "hybrid_synthesis",
-          status: "success",
-          detail: `Delivered: "${result.text.slice(0, 100)}${result.text.length > 100 ? "…" : ""}"`,
-        });
-      } catch (deliveryErr: any) {
-        // Still generated successfully — only the delivery leg failed, so
-        // this is an open item, not a hard failure for the whole enrollment.
-        summary.openItems.push(
-          `Personalized intro was generated but couldn't be delivered: ${deliveryErr.message}`
-        );
-        await logStep(runId, {
-          phase: "hybrid_synthesis",
-          status: "failed",
-          detail: `Generated but not delivered: ${deliveryErr.message}`,
-        });
+      const result = await runHybridPersonalization(
+        tenant.engagementId,
+        bookingId,
+        prospectEmail,
+        prospectName,
+        stack.email_platform,
+        emailApiKey,
+        { location_id: stack.booking_platform_meta?.location_id },
+        tenant.brandVoiceProfile,
+        tenant.offerDetails,
+        runId
+      );
+
+      if (result.sentVia === "hybrid") {
+        summary.whatWorked.push(`Delivered personalized intro to ${prospectEmail}'s ${stack.email_platform} profile (${result.latencyMs}ms).`);
+        await logStep(runId, { phase: "hybrid_synthesis", status: "success", detail: `Delivered in ${result.latencyMs}ms` });
+      } else {
+        summary.openItems.push(`Hybrid personalization fell back to the templated intro: ${result.error} (${result.latencyMs}ms)`);
+        await logStep(runId, { phase: "hybrid_synthesis", status: "failed", detail: `Fallback after ${result.latencyMs}ms: ${result.error}` });
       }
     }
   }
@@ -267,6 +322,18 @@ Write a personalized booking confirmation intro paragraph. Under 70 words. No ge
       recoveryWindowDays: stack.recovery_window_days ?? 30,
       status: "active",
     });
+
+    // ── Ad-data cohort remove (Pile-On recovery gap 2) ────────────────────
+    if (stack.ad_data_platform && stack.ad_data_platform !== "none") {
+      try {
+        await removeProspectFromAdDataCohort(tenant.engagementId, stack, prospectEmail);
+        summary.whatWorked.push(`Removed ${prospectEmail} from the ${stack.ad_data_platform} ad-data cohort.`);
+        await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: `Removed from cohort on ${stack.ad_data_platform}` });
+      } catch (e: any) {
+        summary.openItems.push(`Ad-data cohort removal failed: ${e.message}`);
+        await logStep(runId, { phase: "ad_data_cohort", status: "failed", detail: e.message });
+      }
+    }
   } else {
     summary.openItems.push(`Unrecognized webhook event — no sequence enrollment performed.`);
   }

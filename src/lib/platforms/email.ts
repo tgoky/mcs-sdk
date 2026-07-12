@@ -43,6 +43,68 @@ export class KlaviyoClient {
   }
 
   /**
+   * Pile-On recovery gap 4 (existing-sequence audit). Lists the buyer's
+   * live email flows so the audit can find a candidate "existing pre-call
+   * sequence" to score, without the operator having to hunt down a flow
+   * ID by hand. Filtered client-side by name substring match since
+   * Klaviyo's Flows API doesn't support a name-contains server-side
+   * filter.
+   */
+  async findFlowsByNameContains(substrings: string[]): Promise<Array<{ id: string; name: string; status: string }>> {
+    const res = await fetch(`${this.baseUrl}/flows/?filter=equals(status,'live')&page[size]=50`, {
+      headers: this.headers,
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const flows: Array<{ id: string; attributes: { name: string; status: string } }> = data.data ?? [];
+    const lowered = substrings.map((s) => s.toLowerCase());
+    return flows
+      .filter((f) => lowered.some((s) => f.attributes.name.toLowerCase().includes(s)))
+      .map((f) => ({ id: f.id, name: f.attributes.name, status: f.attributes.status }));
+  }
+
+  /**
+   * Pulls every email action in a flow, with subject, body preview, and
+   * (when available) send-delay-from-flow-start. Klaviyo's Flow API
+   * exposes send-time triggers as separate "time-delay" flow actions
+   * rather than a field on the email action itself, so sendDelayDays is
+   * best-effort (summed across any time-delay actions preceding this
+   * email in the flow graph) rather than guaranteed exact — good enough
+   * for the audit's "roughly how spaced out is this" purpose, not
+   * precise enough to rebuild the flow from.
+   */
+  async getFlowEmailActions(flowId: string): Promise<
+    Array<{ subject: string; bodyPreview: string; sendDelayDays: number | null }>
+  > {
+    const res = await fetch(
+      `${this.baseUrl}/flows/${flowId}/flow-actions/?include=flow-messages`,
+      { headers: this.headers }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+
+    let cumulativeDelayDays = 0;
+    const results: Array<{ subject: string; bodyPreview: string; sendDelayDays: number | null }> = [];
+
+    for (const action of data.data ?? []) {
+      const actionType: string = action.attributes?.action_type ?? "";
+      if (actionType === "TIME_DELAY") {
+        const seconds: number = action.attributes?.settings?.delay_seconds ?? 0;
+        cumulativeDelayDays += seconds / 86400;
+        continue;
+      }
+      if (actionType === "SEND_EMAIL") {
+        const messageId = action.relationships?.["flow-messages"]?.data?.[0]?.id;
+        const included = (data.included ?? []).find((inc: any) => inc.id === messageId);
+        const subject = included?.attributes?.content?.subject ?? "(no subject found)";
+        const bodyPreview = (included?.attributes?.content?.body ?? "").replace(/<[^>]+>/g, " ").slice(0, 500);
+        results.push({ subject, bodyPreview, sendDelayDays: cumulativeDelayDays || null });
+      }
+    }
+    return results;
+  }
+
+  /**
    * Enrolls a prospect into a Klaviyo list (triggers any flows listening to that list).
    * Used for both pile-on (target_list_id) and win-back (recovery_list_id).
    */
@@ -204,6 +266,69 @@ export class HubSpotClient {
     if (!res.ok) return null;
     const data = await res.json();
     return data.results?.[0]?.id ?? null;
+  }
+
+  /**
+   * Pile-On recovery gap 4 (existing-sequence audit). Uses HubSpot's
+   * legacy Workflows v3 API (api.hubapi.com/automation/v3/workflows) to
+   * find candidate existing pre-call workflows by name. Not independently
+   * verified against a live HubSpot account (same caveat GHLCRMClient
+   * already documents for its own opportunities-search pagination) — HubSpot
+   * has been migrating workflow management toward newer endpoints, so
+   * this is a best-effort read that fails safe (returns []) rather than
+   * throwing if the endpoint shape has moved.
+   */
+  async findWorkflowsByNameContains(substrings: string[]): Promise<Array<{ id: string; name: string }>> {
+    try {
+      const res = await fetch("https://api.hubapi.com/automation/v3/workflows", { headers: this.headers });
+      if (!res.ok) return [];
+      const data = await res.json();
+      const lowered = substrings.map((s) => s.toLowerCase());
+      return (data.workflows ?? [])
+        .filter((w: any) => lowered.some((s) => (w.name ?? "").toLowerCase().includes(s)))
+        .map((w: any) => ({ id: String(w.id), name: w.name }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Best-effort pull of a workflow's email actions. HubSpot's workflow
+   * action schema varies significantly by workflow type and API version;
+   * this reads what it can (action type "SINGLE_CONNECTION"/"DELAY" plus
+   * any inline email content it finds) and returns an empty array rather
+   * than throwing when the shape doesn't match what's expected — the
+   * audit treats an empty read as "couldn't read this platform's
+   * sequence content" and says so, rather than fabricating placeholder
+   * email content.
+   */
+  async getWorkflowEmailActions(workflowId: string): Promise<
+    Array<{ subject: string; bodyPreview: string; sendDelayDays: number | null }>
+  > {
+    try {
+      const res = await fetch(`https://api.hubapi.com/automation/v3/workflows/${workflowId}`, { headers: this.headers });
+      if (!res.ok) return [];
+      const data = await res.json();
+      let cumulativeDelayDays = 0;
+      const results: Array<{ subject: string; bodyPreview: string; sendDelayDays: number | null }> = [];
+
+      for (const action of data.actions ?? []) {
+        if (action.type === "DELAY" && action.delayMillis) {
+          cumulativeDelayDays += action.delayMillis / 86_400_000;
+          continue;
+        }
+        if (action.type === "SINGLE_CONNECTION" && action.body?.subject) {
+          results.push({
+            subject: action.body.subject,
+            bodyPreview: (action.body.body ?? "").replace(/<[^>]+>/g, " ").slice(0, 500),
+            sendDelayDays: cumulativeDelayDays || null,
+          });
+        }
+      }
+      return results;
+    } catch {
+      return [];
+    }
   }
 
   async enrollInWorkflow(email: string, firstName: string): Promise<void> {

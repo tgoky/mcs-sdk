@@ -19,7 +19,6 @@ export const skillRunExecute = eventType("skill/run.execute", {
   schema: staticSchema<SkillRunExecuteData>(),
 });
 
-
 // Sent from the "Cancel run" button on the run-detail page. Only carries the
 // runId — cancelOn matching only needs this one field, and there's no reason
 // to ship anything else into Inngest Cloud's event log for a cancellation.
@@ -78,6 +77,29 @@ export const bookingPollEngagement = eventType("pin-down/booking-poll-engagement
   schema: staticSchema<BookingPollEngagementData>(),
 });
 
+// Pile-On recovery gap 1 — durable multi-message SMS sequence for the
+// direct-send platforms (Twilio, GHL SMS). Only prospect identifiers ship
+// here, not credentials — same secret-hygiene principle as
+// skillRunExecute's re-fetch-in-worker pattern above. The worker
+// (src/inngest/pile-on-sms.ts) re-resolves the tenant's SMS credential via
+// resolveCredential() itself.
+//
+// FIXED: Added absolute lifecycle anchors to allow the consumer loop to rebuild
+// a chronological timeline instead of breaking on backward relative minute deltas.
+export type PileOnSmsSequenceStartData = {
+  engagementId: string;
+  bookingId: string;
+  prospectEmail: string;
+  prospectPhone: string;
+  prospectName: string;
+  bookingCreatedAt: string; // ISO String anchor
+  callTime: string;         // ISO String anchor
+};
+
+export const pileOnSmsSequenceStart = eventType("pile-on/sms-sequence-start", {
+  schema: staticSchema<PileOnSmsSequenceStartData>(),
+});
+
 export type StaleRunNotifyData = {
   runId: string;
   engagementId: string;
@@ -105,4 +127,3 @@ export const inngest = new Inngest({
     maxRuntime: "45s", // keep below maxDuration=60 set on the inngest route
   },
 });
-

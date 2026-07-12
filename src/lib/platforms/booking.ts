@@ -10,6 +10,13 @@ export interface NormalizedCall {
   email: string;
   company: string;
   callTime: Date;
+  // Best-effort — not every booking platform/form captures phone, and
+  // where it does, the field name varies wildly (Calendly buries it in a
+  // free-text SMS-reminder field, not a structured phone field). SMS
+  // enrollment (sms.ts) treats a missing phone as "can't send SMS to this
+  // prospect" rather than a hard failure — email enrollment never depends
+  // on this field.
+  phone?: string;
   // Only populated by listBookingsSinceForTenant (polling fallback) —
   // getTomorrowCalls callers only ever look at active bookings, so this is
   // undefined there. "created" | "cancelled", mirrors classifyBookingEvent's
@@ -123,6 +130,11 @@ export class CalendlyClient {
             invitee.questions_and_answers?.find((q: any) =>
               q.question.toLowerCase().includes("company")
             )?.answer ?? "Not Stated",
+          // Calendly's SMS-reminder number is the closest thing to a
+          // structured phone field on an invitee — it's opt-in (only
+          // present if the invitee enabled a text reminder), so this is
+          // frequently empty even when the invitee has a phone number.
+          phone: invitee.text_reminder_number ?? undefined,
           callTime: new Date(event.start_time),
           eventKind: status === "canceled" ? "cancelled" : "created",
         });
@@ -399,6 +411,7 @@ export class CalComClient {
           booking.responses?.company ??
           booking.responses?.organization ??
           "Not Stated",
+        phone: attendee.phoneNumber ?? booking.responses?.attendeePhoneNumber ?? booking.responses?.phone ?? undefined,
         callTime: new Date(booking.startTime),
         eventKind: (booking.status === "cancelled" ? "cancelled" : "created") as "created" | "cancelled",
       };
@@ -571,6 +584,7 @@ export class GHLCalendarClient {
       name: appt.contact?.name ?? "Unknown",
       email: appt.contact?.email ?? "",
       company: appt.contact?.companyName ?? "Not Stated",
+      phone: appt.contact?.phone ?? undefined,
       callTime: new Date(appt.startTime),
       eventKind: (appt.status === "cancelled" || appt.status === "no-show" ? "cancelled" : "created") as "created" | "cancelled",
     }));
@@ -666,6 +680,7 @@ export class OnceHubClient {
           name: booking.customer?.name ?? "Unknown",
           email: booking.customer?.email ?? "",
           company: booking.form_submission?.company ?? "Not Stated",
+          phone: booking.customer?.phone ?? undefined,
           callTime: new Date(booking.starting_time),
           eventKind: status === "canceled" ? "cancelled" : "created",
         });

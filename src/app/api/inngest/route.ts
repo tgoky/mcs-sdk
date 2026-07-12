@@ -1,6 +1,7 @@
 import { serve } from "inngest/next"; 
 import { inngest } from "@/lib/inngest";
 import { executeSkillRun } from "@/inngest/skill";
+import { processPileOnSmsSequence } from "@/inngest/pile-on-sms";
 import {
   nightlyBriefsCron,
   weeklyLeakMapCron,
@@ -70,5 +71,8 @@ export const { GET, POST, PUT } = serve({
     // HEAD-validates canonical platform docs URLs nightly — see
     // src/features/pin-down/server/docs-link-validator.ts (Pin-Down recovery gap 9).
     docsLinksValidatorCron,
+    // Durable multi-message SMS sequence for direct-send SMS platforms —
+    // see src/inngest/pile-on-sms.ts (Pile-On recovery gap 1).
+    processPileOnSmsSequence,
   ],
 });

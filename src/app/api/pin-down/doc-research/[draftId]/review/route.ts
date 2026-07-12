@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { isAdminEmail } from "@/lib/whop-access";
-import { reviewPlatformAdapterDraft } from "@/features/pin-down/server/doc-research";
+import { reviewPlatformAdapterDraft } from "@/features/pin-down/server/doc-researcher";
 
 /**
  * Pin-Down recovery gap 6 — the human-review gate the transfer analysis
