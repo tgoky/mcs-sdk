@@ -162,6 +162,11 @@ export async function POST(request: Request) {
         prospectMeets: prospectMeets ?? "founder",
         existingProof: body.existingProof,
         rawVoiceCorpus: rawVoiceCorpus ?? "",
+        // If the operator ran the smart pre-fill pass (Pin-Down recovery
+        // gap 1) and it's included in this submission, keep a record of
+        // what was suggested vs. what the operator actually kept — same
+        // transparency principle as pinDownPageAudit.
+        ...(body.discoveryPrefill ? { discoveryPrefill: body.discoveryPrefill } : {}),
         updatedAt: new Date(),
       })
       .where(eq(engagements.engagementId, engagementId));

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { engagements, type EngagementStack } from "@/models/schema";
+import { engagements, webhookEvents, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { handleInboundBookingEvent, classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
+import { deriveWebhookIdempotencyKey } from "@/lib/platforms/booking";
 import { startRun, failRun } from "@/lib/run-log";
 import crypto from "crypto";
 
@@ -188,6 +189,46 @@ export async function POST(request: Request) {
 
     const eventKind = classifyBookingEvent(payload);
     const skillName = eventKind === "cancelled" ? "win-back" : "pile-on";
+
+    // ── 6. Idempotency check — AI Architect Review's #1 webhook fix ──
+    // Calendly (and every other booking platform here) retries on a slow
+    // or failed response. Without this, a retry re-runs
+    // handleInboundBookingEvent end-to-end and double-enrolls the same
+    // prospect (and, in hybrid mode, double-fires the personalized intro
+    // send). The key is derived from the payload itself (invitee URI for
+    // Calendly, booking UID for Cal.com, etc.) — see
+    // deriveWebhookIdempotencyKey in booking.ts — so a genuine retry of
+    // the exact same event always collides on the same key regardless of
+    // how many times it's redelivered.
+    const idempotencyKey = deriveWebhookIdempotencyKey(platform, payload);
+    if (idempotencyKey) {
+      try {
+        await db.insert(webhookEvents).values({
+          engagementId: tenant.engagementId,
+          eventSource: platform,
+          idempotencyKey,
+          eventKind,
+        });
+      } catch (dedupErr: any) {
+        // Unique constraint violation on (event_source, idempotency_key)
+        // means we've already accepted this exact event — this is a
+        // retry, not a new booking. Acknowledge with 200 so the platform
+        // stops retrying, but do NOT run enrollment again.
+        if (dedupErr?.code === "23505" || /duplicate key|unique/i.test(String(dedupErr?.message))) {
+          console.log(
+            `[webhook] Duplicate delivery ignored (idempotency key: ${idempotencyKey}) for engagement ${engagementId}`
+          );
+          return NextResponse.json({ success: true, deduplicated: true });
+        }
+        // Any other DB error dedup-checking shouldn't block a legitimate
+        // booking from being processed — log and fall through.
+        console.error("[webhook] Idempotency check failed (non-fatal):", dedupErr?.message);
+      }
+    } else {
+      console.warn(
+        `[webhook] Could not derive an idempotency key for platform "${platform}" — proceeding without dedup for this event.`
+      );
+    }
 
     await startRun({
       id: runId,

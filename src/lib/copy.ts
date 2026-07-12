@@ -166,6 +166,7 @@ export const BOOKING_PLATFORM_LABELS: Record<string, string> = {
   cal_com: "Cal.com",
   ghl_calendar: "GoHighLevel Calendar",
   oncehub: "OnceHub",
+  discover_from_docs: "Something else (research + review)",
 };
 
 export const EMAIL_PLATFORM_LABELS: Record<string, string> = {
@@ -181,6 +182,7 @@ export const HOSTING_PLATFORM_LABELS: Record<string, string> = {
   ghl: "GoHighLevel",
   wordpress: "WordPress",
   plain_html: "Plain HTML site",
+  discover_from_docs: "Something else (research + review)",
 };
 
 export const BRIEF_DESTINATION_LABELS: Record<string, string> = {

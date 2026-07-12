@@ -6,6 +6,7 @@ import {
   uuid,
   integer,
   boolean,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ── Run instrumentation types ───────────────────────────────────────────────
@@ -39,7 +40,13 @@ export type RunStep = {
 
 // ── Typed stack shape — applied to the jsonb column so TS catches misuse ──
 export type EngagementStack = {
-  booking_platform: "calendly" | "cal_com" | "ghl_calendar" | "oncehub" | "unsupported";
+  // "discover_from_docs" recovers the OG SKILL.md's "unlisted platform ->
+  // search the web for developer docs and integrate anyway" behavior (Pin-
+  // Down recovery gap 6). Selecting it routes onboarding through
+  // src/features/pin-down/server/doc-research.ts instead of a fixed
+  // adapter — see discovered_platform_name/discovered_platform_website
+  // below for the inputs that drive that research pass.
+  booking_platform: "calendly" | "cal_com" | "ghl_calendar" | "oncehub" | "discover_from_docs" | "unsupported";
   booking_platform_credentials_ref: string;
   // The buyer's standard, always-open booking page URL — used as the
   // reschedule fallback when live slot pre-fetch returns zero results.
@@ -57,7 +64,19 @@ export type EngagementStack = {
     // OnceHub
     account_id?: string;
   };
-  hosting_platform: "webflow" | "lovable" | "ghl" | "wordpress" | "nextjs_vercel" | "plain_html";
+  // "webhook" (default when the platform supports it), "polling" (Pin-Down
+  // recovery gap 5 — periodic "list bookings since timestamp" instead of a
+  // push subscription, for platforms with no reliable webhook support), or
+  // "none" (booking events must be entered manually / not tracked). See
+  // src/lib/platforms/booking.ts#listBookingsSinceForTenant and
+  // src/inngest/crons.ts#bookingPollCron.
+  webhook_receiver_mode?: "webhook" | "polling" | "none";
+  webhook_poll_interval_minutes?: number; // default 5
+  // ISO timestamp of the last successful poll — the watermark the next
+  // poll cycle reads forward from. Only meaningful when
+  // webhook_receiver_mode === "polling".
+  webhook_receiver_last_polled_at?: string;
+  hosting_platform: "webflow" | "lovable" | "ghl" | "wordpress" | "nextjs_vercel" | "plain_html" | "discover_from_docs";
   hosting_platform_credentials_ref: string;
   hosting_site_id?: string;
   publish_domain?: string;
@@ -73,6 +92,26 @@ export type EngagementStack = {
     vercel_project_name?: string;
     vercel_team_id?: string;
   };
+  // ── "discover_from_docs" inputs (Pin-Down recovery gap 6) ─────────────
+  // Populated when either booking_platform or hosting_platform is
+  // "discover_from_docs". An admin-triggered research pass
+  // (doc-research.ts) turns these into a platform_adapter_drafts row for
+  // review before anything runs against the tenant's account.
+  discovered_platform_name?: string;
+  discovered_platform_website?: string;
+  // ── Smart pre-fill (Pin-Down recovery gap 1) ───────────────────────────
+  // When true, the onboarding form calls
+  // POST /api/pin-down/discovery-prefill with the buyer's domain before
+  // the operator fills the rest of the form by hand — see
+  // src/features/pin-down/server/discovery-prefill.ts.
+  discovery_prefill_enabled?: boolean;
+  // Buyer's domain, used both by the voice scraper (gap 2) and the
+  // discovery pre-fill / existing-page audit (gaps 1 and 7).
+  buyer_domain?: string;
+  // Set when Discovery (or the operator, manually) finds a confirmation
+  // page already live at this URL — triggers the existing-page audit
+  // (Pin-Down recovery gap 7) during the confirmation-deploy phase.
+  existing_confirmation_page_url?: string;
   email_platform?: "klaviyo" | "hubspot" | "activecampaign" | "convertkit" | "mailchimp";
   email_platform_credentials_ref?: string;
   // Klaviyo list IDs for pile-on and win-back
@@ -214,6 +253,65 @@ export const engagements = pgTable("engagements", {
   longTermNurtureAssetMap: jsonb("long_term_nurture_asset_map").$type<{
     generatedAt: string;
     emails: Array<{ id: string; offsetDays: number; subject?: string; body: string }>;
+  }>(),
+
+  // ── Pin-Down recovery gap 3: hero + breakout video scripts ────────────
+  // Restores the OG SKILL.md deliverable set that page-builder.ts's
+  // placeholder video slots never actually produced — see
+  // src/features/pin-down/server/script-builder.ts.
+  pinDownScriptPack: jsonb("pin_down_script_pack").$type<{
+    generatedAt: string;
+    heroScript: {
+      title: string;
+      targetLengthSeconds: number;
+      chapters: Array<{ timestampLabel: string; beat: string; script: string }>;
+      recordingPrompt: string;
+    };
+    breakoutScripts: Array<{
+      id: string;
+      title: string;
+      targetLengthSeconds: number;
+      script: string;
+      recordingPrompt: string;
+      sourceQuestion?: string;
+    }>;
+  }>(),
+
+  // ── Pin-Down recovery gap 7: existing-confirmation-page audit ─────────
+  // Populated when discovery (or the operator) finds a confirmation page
+  // already live at stack.existing_confirmation_page_url. See
+  // src/features/pin-down/server/discovery-prefill.ts.
+  pinDownPageAudit: jsonb("pin_down_page_audit").$type<{
+    auditedUrl: string;
+    auditedAt: string;
+    existingPageStrengths: string[];
+    existingPageWeaknesses: string[];
+    v1Improvements: string[];
+  }>(),
+
+  // ── Pin-Down recovery gap 2: site + brand-resource crawl for voice ────
+  // Auditable record of what the crawler actually pulled in, alongside
+  // (not instead of) rawVoiceCorpus — see
+  // src/features/pin-down/server/voice-scraper.ts.
+  voiceScrapeArtifacts: jsonb("voice_scrape_artifacts").$type<{
+    scrapedAt: string;
+    sources: Array<{ kind: "marketing_site" | "sales_page" | "pricing_page" | "esp_broadcast"; url?: string; wordCount: number }>;
+    totalWordCount: number;
+  }>(),
+
+  // ── Pin-Down recovery gap 1: smart pre-fill result ─────────────────────
+  // What the domain crawl found before the operator filled in the rest of
+  // the onboarding form by hand — surfaced in the UI so the operator can
+  // see/accept/override each field. See discovery-prefill.ts.
+  discoveryPrefill: jsonb("discovery_prefill").$type<{
+    domain: string;
+    crawledAt: string;
+    suggestedBuyerName?: string;
+    suggestedOfferName?: string;
+    suggestedIcp?: string;
+    existingConfirmationPageUrl?: string;
+    detectedBookingPlatform?: string;
+    notes: string[];
   }>(),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -377,4 +475,89 @@ export const artifacts = pgTable("artifacts", {
   artifactType: text("artifact_type").notNull(),
   storagePath: text("storage_path").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Webhook Events (idempotency) ──────────────────────────────────────────
+// Pin-Down recovery gap 8 / AI Architect Review's #1 webhook fix. Every
+// inbound booking-platform webhook derives an idempotency key from the
+// payload (Calendly's invitee URI, Cal.com's booking UID, etc.) and inserts
+// here BEFORE any enrollment side effect runs. The unique constraint on
+// (event_source, idempotency_key) is what actually prevents a retried
+// delivery from double-enrolling a prospect — see
+// src/app/api/webhooks/booking-event/route.ts.
+export const webhookEvents = pgTable(
+  "webhook_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    eventSource: text("event_source").notNull(), // e.g. "calendly", "cal_com", "ghl_calendar", "oncehub", "poll:<platform>"
+    idempotencyKey: text("idempotency_key").notNull(),
+    eventKind: text("event_kind"), // "created" | "cancelled" | "unknown" — informational, not part of the uniqueness key
+    receivedAt: timestamp("received_at").defaultNow().notNull(),
+    processedAt: timestamp("processed_at"),
+  },
+  (table) => [
+    // The actual dedup mechanism: a retried delivery (or, for polling
+    // mode, a booking seen again because the watermark didn't advance)
+    // hits this constraint and the insert fails — the route/poller
+    // treats that as "already processed" and returns early instead of
+    // re-enrolling the prospect. See booking-event/route.ts.
+    uniqueIndex("webhook_events_source_key_uidx").on(table.eventSource, table.idempotencyKey),
+  ]
+);
+
+// ── Platform Adapter Drafts (auto-doc-research) ───────────────────────────
+// Pin-Down recovery gap 6 — the highest-leverage recovery in the Pin-Down
+// bucket. When a buyer's hosting or booking platform isn't in the
+// supported enum, the operator selects "discover_from_docs" and supplies a
+// platform name + website. An admin-triggered research pass
+// (src/features/pin-down/server/doc-research.ts) searches the web for
+// developer docs, summarizes the integration surface, and writes a draft
+// here for a human to review before it's ever registered as a live
+// adapter for that one engagement.
+export const platformAdapterDrafts = pgTable("platform_adapter_drafts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  platformKind: text("platform_kind").notNull(), // "hosting" | "booking"
+  platformName: text("platform_name").notNull(),
+  websiteUrl: text("website_url"),
+  docsUrl: text("docs_url"),
+  // Claude's structured research summary: what the docs said about auth,
+  // the relevant endpoints, and a starter adapter sketch. Reviewed by a
+  // human before status flips to "approved".
+  researchSummary: jsonb("research_summary").$type<{
+    authMethod?: string;
+    relevantEndpoints?: Array<{ method: string; path: string; purpose: string }>;
+    integrationNotes?: string;
+    confidence?: "high" | "medium" | "low";
+    caveats?: string[];
+  }>(),
+  // "pending_review" | "approved" | "rejected"
+  status: text("status").notNull().default("pending_review"),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Platform Docs Links (HEAD-validated, global) ──────────────────────────
+// Pin-Down recovery gap 9. A single global table (not per-engagement — the
+// canonical docs URL for "webflow" is the same regardless of which buyer
+// is asking) that a nightly cron HEAD-checks so stale/broken doc links
+// surface in the dashboard instead of silently 404ing whenever an operator
+// clicks through from a troubleshooting screen.
+export const platformDocsLinks = pgTable("platform_docs_links", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  platform: text("platform").notNull().unique(),
+  docsUrl: text("docs_url").notNull(),
+  // "ok" | "broken" | "unknown"
+  status: text("status").notNull().default("unknown"),
+  lastCheckedAt: timestamp("last_checked_at"),
+  lastCheckStatusCode: integer("last_check_status_code"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

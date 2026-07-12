@@ -13,6 +13,30 @@ interface EngagementResult {
   } | null;
   pasteReadyHtml?: string | null;
   pasteReadyInstructions?: string | null;
+  // Pin-Down recovery gap 3 — hero + breakout video scripts
+  pinDownScriptPack?: {
+    generatedAt: string;
+    heroScript: {
+      title: string;
+      targetLengthSeconds: number;
+      chapters: Array<{ timestampLabel: string; beat: string; script: string }>;
+      recordingPrompt: string;
+    };
+    breakoutScripts: Array<{
+      id: string;
+      title: string;
+      script: string;
+      recordingPrompt: string;
+      sourceQuestion?: string;
+    }>;
+  } | null;
+  // Pin-Down recovery gap 7 — existing-confirmation-page audit
+  pinDownPageAudit?: {
+    auditedUrl: string;
+    existingPageStrengths: string[];
+    existingPageWeaknesses: string[];
+    v1Improvements: string[];
+  } | null;
 }
 
 /**
@@ -148,6 +172,65 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
           )}
         </div>
       </div>
+
+      {/* Existing-page audit (Pin-Down recovery gap 7) */}
+      {data.pinDownPageAudit && (
+        <div className="rounded-lg p-4 space-y-3 shadow-sm" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <p className="text-[11px] font-mono uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            Existing Page Audit — {data.pinDownPageAudit.auditedUrl}
+          </p>
+          {data.pinDownPageAudit.existingPageStrengths.length > 0 && (
+            <div>
+              <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>What's already working</p>
+              <ul className="text-xs list-disc list-inside space-y-0.5 mt-1">
+                {data.pinDownPageAudit.existingPageStrengths.map((s, i) => <li key={i}>{s}</li>)}
+              </ul>
+            </div>
+          )}
+          {data.pinDownPageAudit.existingPageWeaknesses.length > 0 && (
+            <div>
+              <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>Gaps the new page closes</p>
+              <ul className="text-xs list-disc list-inside space-y-0.5 mt-1">
+                {data.pinDownPageAudit.existingPageWeaknesses.map((s, i) => <li key={i}>{s}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Hero + breakout video scripts (Pin-Down recovery gap 3) */}
+      {data.pinDownScriptPack && (
+        <div className="rounded-lg p-4 space-y-3 shadow-sm" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <p className="text-[11px] font-mono uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            Video Script Pack
+          </p>
+          <div>
+            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{data.pinDownScriptPack.heroScript.title}</p>
+            <p className="text-xs italic mt-0.5">{data.pinDownScriptPack.heroScript.recordingPrompt}</p>
+            <div className="mt-2 space-y-2">
+              {data.pinDownScriptPack.heroScript.chapters.map((c, i) => (
+                <div key={i} className="text-xs">
+                  <span className="font-mono font-bold">{c.timestampLabel} · {c.beat}</span>
+                  <p className="mt-0.5 leading-relaxed">{c.script}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+            <p className="text-xs font-bold mb-2" style={{ color: "var(--text-primary)" }}>
+              Breakout scripts ({data.pinDownScriptPack.breakoutScripts.length})
+            </p>
+            <div className="space-y-3">
+              {data.pinDownScriptPack.breakoutScripts.map((b) => (
+                <div key={b.id} className="text-xs">
+                  <span className="font-mono font-bold">{b.title}</span>
+                  <p className="mt-0.5 leading-relaxed">{b.script}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Call to action panel trigger button */}
       <button

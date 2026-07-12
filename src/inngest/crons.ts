@@ -26,7 +26,7 @@
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
 import crypto from "crypto";
-import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify } from "@/lib/inngest";
+import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify, bookingPollEngagement } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements, skillRuns } from "@/models/schema";
 import { startRun, closeStaleRun, notifyRunOutcome } from "@/lib/run-log";
@@ -34,6 +34,8 @@ import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-mon
 import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
 import { markElapsedEnrollmentsLost, processLostDealsForEngagement } from "@/features/win-back/server/lost-deal-sweep";
 import { findEngagementsForWeeklyReadout, processWeeklyMetricsForEngagement } from "@/features/pile-on/server/weekly-metrics";
+import { findEngagementsDueForPoll, pollBookingsForEngagement } from "@/features/pin-down/server/booking-poller";
+import { validateAllPlatformDocsLinks } from "@/features/pin-down/server/docs-link-validator";
 import { and, eq, lt } from "drizzle-orm";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
@@ -388,5 +390,63 @@ export const processWeeklyMetricsEngagementCron = inngest.createFunction(
   { id: "process-weekly-metrics-engagement", triggers: [weeklyMetricsEngagement] },
   async ({ event }) => {
     return processWeeklyMetricsForEngagement(event.data.engagementId);
+  }
+);
+
+/**
+ * Booking-webhook polling fallback (Pin-Down recovery gap 5).
+ *
+ * Every 5 minutes: cheap DB-only scan for engagements whose
+ * stack.webhook_receiver_mode is "polling" and are due for their next
+ * cycle per stack.webhook_poll_interval_minutes, then fan out one
+ * bookingPollEngagement event per due engagement. The actual "list
+ * bookings since timestamp" API call happens in the fanned-out handler
+ * below — same split rationale as every other cron in this file: a single
+ * tenant's slow/failing booking API call shouldn't block or retry-storm
+ * everyone else's poll cycle.
+ *
+ * 5-minute cadence matches the OG SKILL.md's stated default
+ * (webhook_receiver.poll interval) exactly.
+ */
+export const bookingPollCron = inngest.createFunction(
+  { id: "booking-poll-cron", triggers: [{ cron: "*/5 * * * *" }] },
+  async ({ step }) => {
+    const due = await step.run("find-engagements-due-for-poll", () => findEngagementsDueForPoll());
+
+    if (due.length > 0) {
+      await step.sendEvent(
+        "dispatch-booking-polls",
+        due.map((engagementId) => bookingPollEngagement.create({ engagementId }))
+      );
+    }
+
+    return { dispatched: due.length };
+  }
+);
+
+/** Fanned-out handler: one platform API poll + enrollment pass, one engagement at a time. */
+export const processBookingPollEngagementCron = inngest.createFunction(
+  { id: "process-booking-poll-engagement", triggers: [bookingPollEngagement] },
+  async ({ event }) => {
+    return pollBookingsForEngagement(event.data.engagementId);
+  }
+);
+
+/**
+ * HEAD-validated platform docs links (Pin-Down recovery gap 9).
+ *
+ * The OG SKILL.md fetched canonical public docs URLs for every platform it
+ * touched and HEAD-validated them at install time. UTP's adapters
+ * (hosting.ts, booking.ts, email.ts) reference fixed platforms with no
+ * runtime docs-link check at all, so a platform vendor moving their docs
+ * URL silently breaks any troubleshooting screen that links to it. This
+ * nightly cron re-validates the canonical set and writes status/last-
+ * checked into platform_docs_links so the dashboard can flag staleness
+ * inline instead of 404ing when an operator clicks through.
+ */
+export const docsLinksValidatorCron = inngest.createFunction(
+  { id: "docs-links-validator-cron", triggers: [{ cron: "TZ=UTC 0 6 * * *" }] }, // 06:00 UTC daily
+  async ({ step }) => {
+    return step.run("validate-platform-docs-links", () => validateAllPlatformDocsLinks());
   }
 );

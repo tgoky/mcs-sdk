@@ -6,6 +6,10 @@ import { registerWebhookForTenant, CalendlyClient, CalComClient } from "@/lib/pl
 import { publishConfirmationPage } from "@/lib/platforms/hosting";
 import { buildConfirmationPageHtml } from "./page-builder";
 import { buildAdCreativeBriefs } from "@/features/pile-on/server/ad-creative-briefs";
+import { buildScriptPack } from "./script-builder";
+import { auditExistingConfirmationPage } from "./discovery-prefill";
+import { createPlatformAdapterDraft } from "./doc-research";
+import { scrapeVoiceCorpus, scrapeEspBroadcasts } from "./voice-scraper";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { GetStepTools, Inngest } from "inngest";
@@ -222,11 +226,102 @@ export async function runPinDownOnboarding(
       });
     }
 
+    // ── Auto-doc-research for unlisted platforms (Pin-Down recovery gap 6) ──
+    // "discover_from_docs" tells the router functions in hosting.ts/
+    // booking.ts nothing they recognize, so hosting falls through to its
+    // paste-ready fallback (still a working, if manual, confirmation page)
+    // and booking events simply won't be picked up until a reviewed
+    // adapter exists. Kicking off the research itself doesn't need to
+    // wait for a human — the operator already made the explicit choice to
+    // select "discover_from_docs" and supply a platform name; what needs
+    // human review is turning the resulting draft into a live,
+    // credential-touching adapter, which happens separately via
+    // POST /api/pin-down/doc-research/[draftId]/review. Non-fatal to
+    // onboarding either way.
+    for (const [kind, platformValue, discoveredName, discoveredUrl] of [
+      ["hosting", finalStack.hosting_platform, finalStack.discovered_platform_name, finalStack.discovered_platform_website],
+      ["booking", finalStack.booking_platform, finalStack.discovered_platform_name, finalStack.discovered_platform_website],
+    ] as const) {
+      if (platformValue !== "discover_from_docs") continue;
+      const platformName = discoveredName ?? "Unnamed platform";
+      try {
+        await logStep(runId, { phase: `doc_research_${kind}`, status: "running", label: platformName });
+        const draftId = await run(`doc-research-${kind}`, () =>
+          createPlatformAdapterDraft(engagementId, kind, platformName, discoveredUrl)
+        );
+        summary.openItems.push(
+          `${kind === "hosting" ? "Hosting" : "Booking"} platform "${platformName}" isn't in the built-in set — researched its docs and drafted an adapter proposal (id: ${draftId}) pending admin review before it can run against this buyer's account. Confirmation page ${kind === "hosting" ? "will ship as paste-ready" : "bookings won't auto-enroll"} until then.`
+        );
+        await logStep(runId, { phase: `doc_research_${kind}`, status: "success", detail: `Draft ${draftId} created, pending_review` });
+      } catch (e: any) {
+        console.error(`[pin-down onboarding] Doc research for ${platformName} (${kind}) failed:`, e.message);
+        summary.openItems.push(`Doc research for "${platformName}" (${kind}) failed: ${e.message}`);
+        await logStep(runId, { phase: `doc_research_${kind}`, status: "failed", detail: e.message });
+      }
+    }
+
+    // ── Voice scrape (Pin-Down recovery gap 2) ──────────────────────────────
+    // Additive to whatever the operator pasted into rawVoiceCorpus — see
+    // voice-scraper.ts's module comment for why this augments rather than
+    // replaces the operator-pasted path. Non-fatal: a failed/empty crawl
+    // just means extraction runs on the operator-pasted corpus alone,
+    // same as before this recovery existed.
+    let combinedVoiceCorpus = rawVoiceCorpus;
+    if (finalStack.buyer_domain) {
+      await run("voice-scrape", async () => {
+        await logStep(runId, { phase: "voice_scrape", status: "running" });
+        try {
+          const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(finalStack.buyer_domain!);
+          let espSources: Array<{ text: string; wordCount: number }> = [];
+          if (finalStack.email_platform) {
+            const emailCred = await resolveCredential(engagementId, finalStack.email_platform).catch(() => null);
+            espSources = await scrapeEspBroadcasts(finalStack.email_platform, emailCred ?? undefined);
+          }
+          const allText = [scrapedCorpus, ...espSources.map((s) => s.text)].filter(Boolean).join("\n\n---\n\n");
+          if (allText) {
+            combinedVoiceCorpus = [rawVoiceCorpus, allText].filter(Boolean).join("\n\n---\n\n");
+          }
+          const artifactSources = [
+            ...sources.map((s) => ({ kind: s.kind, url: s.url, wordCount: s.wordCount })),
+            ...espSources.map((s) => ({ kind: "esp_broadcast" as const, wordCount: s.wordCount })),
+          ];
+          await db
+            .update(engagements)
+            .set({
+              voiceScrapeArtifacts: {
+                scrapedAt: new Date().toISOString(),
+                sources: artifactSources,
+                totalWordCount: artifactSources.reduce((sum, s) => sum + s.wordCount, 0),
+              },
+            })
+            .where(eq(engagements.engagementId, engagementId));
+          if (artifactSources.length > 0) {
+            summary.whatWorked.push(
+              `Crawled ${artifactSources.length} source(s) (${artifactSources.map((s) => s.kind).join(", ")}) from ${finalStack.buyer_domain} for voice extraction.`
+            );
+          } else {
+            summary.openItems.push(`Voice crawl of ${finalStack.buyer_domain} found nothing usable — voice extraction will rely on the operator-pasted corpus alone.`);
+          }
+          await logStep(runId, {
+            phase: "voice_scrape",
+            status: artifactSources.length > 0 ? "success" : "skipped",
+            detail: `${artifactSources.length} source(s) pulled`,
+          });
+        } catch (e: any) {
+          console.error("[pin-down onboarding] Voice scrape failed (non-fatal):", e.message);
+          summary.openItems.push(`Voice crawl of ${finalStack.buyer_domain} failed: ${e.message} — continuing with the operator-pasted corpus.`);
+          await logStep(runId, { phase: "voice_scrape", status: "failed", detail: e.message });
+        }
+      });
+    } else {
+      await logStep(runId, { phase: "voice_scrape", status: "skipped", detail: "No buyer_domain on file" });
+    }
+
     // ── Voice extraction ───────────────────────────────────────────────────
     const voiceProfile = await run("voice-extraction", async () => {
       await logStep(runId, { phase: "voice_extraction", status: "running" });
-      const profile = await extractVoiceProfile(rawVoiceCorpus, runId);
-      const corpusWordCount = rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length;
+      const profile = await extractVoiceProfile(combinedVoiceCorpus, runId);
+      const corpusWordCount = combinedVoiceCorpus.trim().split(/\s+/).filter(Boolean).length;
       summary.whatWasAttempted.push(`Extracted brand voice profile from a ${corpusWordCount}-word corpus.`);
       if (profile?.source_path === "scrape") {
         summary.whatWorked.push("Brand voice profile extracted from buyer-supplied corpus via Claude.");
@@ -279,6 +374,86 @@ export async function runPinDownOnboarding(
       console.error("[pin-down onboarding] Ad creative brief generation failed:", e.message);
       summary.openItems.push(`Ad creative briefs couldn't be generated: ${e.message}`);
       await logStep(runId, { phase: "ad_creative_briefs", status: "failed", detail: e.message });
+    }
+
+    // ── Hero + breakout video scripts (Pin-Down recovery gap 3) ─────────────
+    // Restores the OG SKILL.md's actual video deliverable — page-builder.ts
+    // only ever rendered a placeholder card for the video slot; this is
+    // the word-for-word script pack the buyer/recorder works from. Same
+    // non-fatal-failure posture as the ad creative briefs above: a
+    // missing script pack shouldn't block the rest of onboarding.
+    try {
+      await logStep(runId, { phase: "script_pack", status: "running" });
+      const scriptPack = await run("script-pack", () =>
+        buildScriptPack(
+          {
+            buyer: buyerName,
+            brandVoiceProfile: voiceProfile,
+            offerDetails,
+            topCallQuestions,
+            prospectMeets,
+            existingProof,
+          },
+          runId
+        )
+      );
+      await db
+        .update(engagements)
+        .set({
+          pinDownScriptPack: {
+            generatedAt: new Date().toISOString(),
+            heroScript: scriptPack.heroScript,
+            breakoutScripts: scriptPack.breakoutScripts,
+          },
+        })
+        .where(eq(engagements.engagementId, engagementId));
+      summary.whatWorked.push(
+        `Generated a hero video script (${scriptPack.heroScript.chapters.length} chapters) and ${scriptPack.breakoutScripts.length} breakout scripts.`
+      );
+      await logStep(runId, {
+        phase: "script_pack",
+        status: "success",
+        detail: `Hero + ${scriptPack.breakoutScripts.length} breakout scripts generated`,
+      });
+    } catch (e: any) {
+      console.error("[pin-down onboarding] Script pack generation failed:", e.message);
+      summary.openItems.push(`Hero/breakout video scripts couldn't be generated: ${e.message}`);
+      await logStep(runId, { phase: "script_pack", status: "failed", detail: e.message });
+    }
+
+    // ── Existing-page audit (Pin-Down recovery gap 7) ────────────────────────
+    // Only runs when Discovery (via the smart pre-fill pass) or the
+    // operator flagged an existing confirmation page on
+    // stack.existing_confirmation_page_url. Produces the delta doc; never
+    // modifies or skips generating the new page — same "audit runs in
+    // parallel, buyer decides" principle as the OG SKILL.md.
+    if (finalStack.existing_confirmation_page_url) {
+      try {
+        await logStep(runId, { phase: "existing_page_audit", status: "running" });
+        const audit = await run("existing-page-audit", () =>
+          auditExistingConfirmationPage(finalStack.existing_confirmation_page_url!, {
+            buyer: buyerName,
+            offerDetails,
+            brandVoiceProfile: voiceProfile,
+          })
+        );
+        await db
+          .update(engagements)
+          .set({ pinDownPageAudit: audit })
+          .where(eq(engagements.engagementId, engagementId));
+        summary.whatWorked.push(
+          `Audited the existing confirmation page at ${finalStack.existing_confirmation_page_url} — ${audit.existingPageWeaknesses.length} gap(s) identified for the new page to close.`
+        );
+        await logStep(runId, {
+          phase: "existing_page_audit",
+          status: "success",
+          detail: `${audit.existingPageStrengths.length} strengths, ${audit.existingPageWeaknesses.length} weaknesses noted`,
+        });
+      } catch (e: any) {
+        console.error("[pin-down onboarding] Existing-page audit failed:", e.message);
+        summary.openItems.push(`Existing-page audit failed: ${e.message}`);
+        await logStep(runId, { phase: "existing_page_audit", status: "failed", detail: e.message });
+      }
     }
 
     // ── Confirmation page deploy ────────────────────────────────────────────
@@ -394,7 +569,7 @@ export async function runPinDownOnboarding(
             await db
               .update(engagements)
               .set({
-                stack: { ...finalStack, webhook_subscription_id: subscriptionId as string },
+                stack: { ...finalStack, webhook_subscription_id: subscriptionId as string, webhook_receiver_mode: "webhook" },
                 updatedAt: new Date(),
               })
               .where(eq(engagements.engagementId, engagementId));
@@ -405,16 +580,51 @@ export async function runPinDownOnboarding(
               detail: `Subscription ${subscriptionId}`,
             });
           } else {
+            // No subscription ID back — either the platform (OnceHub
+            // today) has no programmatic webhook API at all, or
+            // registration silently no-op'd. Rather than leaving bookings
+            // unmonitored (the exact OG-SKILL.md-vs-UTP gap the transfer
+            // analysis flags), fall back to the polling path automatically
+            // so Pile-On/Win-Back still fire — just on a 5-minute delay
+            // instead of instantly. See booking-poller.ts.
+            await db
+              .update(engagements)
+              .set({
+                stack: {
+                  ...finalStack,
+                  webhook_receiver_mode: "polling",
+                  webhook_poll_interval_minutes: finalStack.webhook_poll_interval_minutes ?? 5,
+                  webhook_receiver_last_polled_at: new Date().toISOString(),
+                },
+                updatedAt: new Date(),
+              })
+              .where(eq(engagements.engagementId, engagementId));
             summary.openItems.push(
-              `${finalStack.booking_platform} webhook registration returned no subscription ID — bookings may need manual verification.`
+              `${finalStack.booking_platform} doesn't support live webhook registration — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 5} minute(s) instead. Bookings will process on a short delay rather than instantly.`
             );
-            await logStep(runId, { phase: "webhook_registration", status: "skipped", detail: "No subscription ID returned" });
+            await logStep(runId, { phase: "webhook_registration", status: "skipped", detail: "No subscription ID returned — fell back to polling mode" });
           }
         } catch (e: any) {
           console.error(`[pin-down onboarding] Webhook registration failed: ${e.message}`);
+          // Same polling fallback on an outright failure (auth error,
+          // rate limit, transient platform outage) — a booking pipeline
+          // that's degraded-but-working beats one that's silently dead
+          // until someone notices and re-runs setup.
+          await db
+            .update(engagements)
+            .set({
+              stack: {
+                ...finalStack,
+                webhook_receiver_mode: "polling",
+                webhook_poll_interval_minutes: finalStack.webhook_poll_interval_minutes ?? 5,
+                webhook_receiver_last_polled_at: new Date().toISOString(),
+              },
+              updatedAt: new Date(),
+            })
+            .where(eq(engagements.engagementId, engagementId));
           summary.whatFailed.push(`${finalStack.booking_platform} webhook registration failed: ${e.message}`);
-          summary.openItems.push("Booking webhook is not connected — Pile-On and Win-Back won't fire automatically until this is fixed.");
-          await logStep(runId, { phase: "webhook_registration", status: "failed", detail: e.message });
+          summary.openItems.push(`Booking webhook registration failed — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 5} minute(s) as a fallback so bookings still process.`);
+          await logStep(runId, { phase: "webhook_registration", status: "failed", detail: `${e.message} — fell back to polling mode` });
         }
       });
     } else {

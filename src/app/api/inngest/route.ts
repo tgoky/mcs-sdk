@@ -14,6 +14,9 @@ import {
   processLostDealEngagementCron,
   weeklyMetricsCron,
   processWeeklyMetricsEngagementCron,
+  bookingPollCron,
+  processBookingPollEngagementCron,
+  docsLinksValidatorCron,
 } from "@/inngest/crons";
 
 // Explicit duration floor for this route, paired with checkpointing's
@@ -60,5 +63,12 @@ export const { GET, POST, PUT } = serve({
     // before this. See src/features/pile-on/server/weekly-metrics.ts.
     weeklyMetricsCron,
     processWeeklyMetricsEngagementCron,
+    // Polling fallback for booking platforms without live webhooks — see
+    // src/features/pin-down/server/booking-poller.ts (Pin-Down recovery gap 5).
+    bookingPollCron,
+    processBookingPollEngagementCron,
+    // HEAD-validates canonical platform docs URLs nightly — see
+    // src/features/pin-down/server/docs-link-validator.ts (Pin-Down recovery gap 9).
+    docsLinksValidatorCron,
   ],
 });

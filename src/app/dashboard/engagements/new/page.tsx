@@ -63,6 +63,14 @@ interface FormData {
   bookingApiKey: string;
   emailApiKey: string;
   testimonials: Testimonial[];
+  // Pin-Down recovery gap 6 — populated when bookingPlatform or
+  // hostingPlatform is "discover_from_docs".
+  discoveredPlatformName: string;
+  discoveredPlatformWebsite: string;
+  // Pin-Down recovery gap 7 — set when the operator already knows the
+  // buyer has a confirmation page live (or after running smart pre-fill,
+  // gap 1, which can detect this automatically).
+  existingConfirmationPageUrl: string;
 }
 
 const DEFAULT_FORM: FormData = {
@@ -102,6 +110,9 @@ const DEFAULT_FORM: FormData = {
   bookingApiKey: "",
   emailApiKey: "",
   testimonials: [],
+  discoveredPlatformName: "",
+  discoveredPlatformWebsite: "",
+  existingConfirmationPageUrl: "",
 };
 
 // Draft persistence: survives page refresh / accidental navigation within
@@ -339,6 +350,50 @@ export default function NewEngagementPage() {
   const [ghlWorkflows, setGhlWorkflows] = useState<{ id: string; name: string }[]>([]);
   const [fetchingGhlWorkflows, setFetchingGhlWorkflows] = useState(false);
   const [ghlWorkflowsError, setGhlWorkflowsError] = useState<string | null>(null);
+
+  // Pin-Down recovery gap 1 — smart pre-fill
+  const [prefillDomain, setPrefillDomain] = useState("");
+  const [prefillLoading, setPrefillLoading] = useState(false);
+  const [prefillError, setPrefillError] = useState<string | null>(null);
+  const [prefillNotes, setPrefillNotes] = useState<string[]>([]);
+
+  async function runSmartPrefill() {
+    if (!prefillDomain.trim()) return;
+    setPrefillLoading(true);
+    setPrefillError(null);
+    setPrefillNotes([]);
+    try {
+      const res = await fetch("/api/pin-down/discovery-prefill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: prefillDomain }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Pre-fill failed.");
+      const p = data.prefill as {
+        suggestedBuyerName?: string;
+        suggestedOfferName?: string;
+        suggestedIcp?: string;
+        existingConfirmationPageUrl?: string;
+        detectedBookingPlatform?: string;
+        notes: string[];
+      };
+      setForm((f) => ({
+        ...f,
+        buyerName: p.suggestedBuyerName || f.buyerName,
+        offerName: p.suggestedOfferName || f.offerName,
+        offerIcp: p.suggestedIcp || f.offerIcp,
+        marketingDomain: prefillDomain,
+        existingConfirmationPageUrl: p.existingConfirmationPageUrl || f.existingConfirmationPageUrl,
+        bookingPlatform: p.detectedBookingPlatform || f.bookingPlatform,
+      }));
+      setPrefillNotes(p.notes ?? []);
+    } catch (e: any) {
+      setPrefillError(e.message);
+    } finally {
+      setPrefillLoading(false);
+    }
+  }
 
   function set(field: keyof FormData, value: string | boolean) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -602,6 +657,19 @@ export default function NewEngagementPage() {
         brief_landing_destination: form.briefDestination,
         slack_webhook_url: form.slackWebhookUrl,
         person_match_confidence_threshold: 99,
+        // Pin-Down recovery gap 2 — feeds the voice scraper. Reuses the
+        // domain already collected for the "scrape" voice source instead
+        // of asking for it twice.
+        buyer_domain: form.marketingDomain || undefined,
+        // Pin-Down recovery gap 7 — triggers the existing-page audit
+        // during setup when set.
+        existing_confirmation_page_url: form.existingConfirmationPageUrl || undefined,
+        // Pin-Down recovery gap 6 — only meaningful when either platform
+        // above is "discover_from_docs".
+        ...((form.bookingPlatform === "discover_from_docs" || form.hostingPlatform === "discover_from_docs") && {
+          discovered_platform_name: form.discoveredPlatformName || undefined,
+          discovered_platform_website: form.discoveredPlatformWebsite || undefined,
+        }),
       },
       topCallQuestions: form.topCallQuestions.split("\n").map((q) => q.trim()).filter(Boolean),
       topObjections: form.topObjections.split("\n").map((o) => o.trim()).filter(Boolean),
@@ -690,6 +758,40 @@ export default function NewEngagementPage() {
         {/* Step: Your Offer */}
         {step === "offer" && (
           <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+            <div className="md:col-span-2 rounded-lg p-3 space-y-2 shadow-xs" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+              <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
+                Smart pre-fill (optional)
+              </label>
+              <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                Have the client's domain? We'll crawl it and suggest values below — review and edit anything before submitting.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={prefillDomain}
+                  onChange={(e) => setPrefillDomain(e.target.value)}
+                  placeholder="clientsite.com"
+                  className="flex-1 rounded-md px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600"
+                  style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                />
+                <button
+                  type="button"
+                  onClick={runSmartPrefill}
+                  disabled={prefillLoading || !prefillDomain.trim()}
+                  className="px-3 py-2 text-xs font-bold font-mono uppercase tracking-wider rounded-md transition-all cursor-pointer hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm shrink-0"
+                  style={{ background: "var(--accent)" }}
+                >
+                  {prefillLoading ? "Crawling…" : "Pre-fill"}
+                </button>
+              </div>
+              {prefillError && (
+                <p className="text-[11px] font-mono" style={{ color: "var(--error)" }}>{prefillError}</p>
+              )}
+              {prefillNotes.length > 0 && (
+                <ul className="text-[11px] list-disc list-inside space-y-0.5" style={{ color: "var(--text-muted)" }}>
+                  {prefillNotes.map((n, i) => <li key={i}>{n}</li>)}
+                </ul>
+              )}
+            </div>
             <InputField
               label="Client / Company Name"
               value={form.buyerName}
@@ -823,6 +925,27 @@ export default function NewEngagementPage() {
                 placeholder="e.g. loc_abc123"
                 helpText="Found in GoHighLevel under your sub-account settings."
               />
+            )}
+
+            {form.bookingPlatform === "discover_from_docs" && (
+              <>
+                <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
+                  We'll research this platform's public developer docs and draft an integration proposal for review — it won't touch your client's account until an admin approves it. Bookings on this platform won't auto-enroll until then.
+                </div>
+                <InputField
+                  label="Platform name"
+                  value={form.discoveredPlatformName}
+                  onChange={(v) => set("discoveredPlatformName", v)}
+                  placeholder="e.g. Acuity Scheduling"
+                  helpText="Whatever your client actually uses."
+                />
+                <InputField
+                  label="Platform website"
+                  value={form.discoveredPlatformWebsite}
+                  onChange={(v) => set("discoveredPlatformWebsite", v)}
+                  placeholder="https://theirplatform.com"
+                />
+              </>
             )}
 
             <InputField
@@ -1093,6 +1216,27 @@ export default function NewEngagementPage() {
                   : "Plain HTML sites are published manually. We'll generate a self-contained HTML file the client uploads to their own host."}
               </div>
             )}
+
+            {form.hostingPlatform === "discover_from_docs" && (
+              <>
+                <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
+                  We'll research this platform's publishing API and draft an integration proposal for review. Until it's approved, the confirmation page ships as ready-to-paste HTML — nothing is blocked in the meantime.
+                </div>
+                <InputField
+                  label="Platform name"
+                  value={form.discoveredPlatformName}
+                  onChange={(v) => set("discoveredPlatformName", v)}
+                  placeholder="e.g. Squarespace"
+                  helpText="Whatever your client actually uses."
+                />
+                <InputField
+                  label="Platform website"
+                  value={form.discoveredPlatformWebsite}
+                  onChange={(v) => set("discoveredPlatformWebsite", v)}
+                  placeholder="https://theirplatform.com"
+                />
+              </>
+            )}
           </div>
         )}
 
@@ -1116,7 +1260,7 @@ export default function NewEngagementPage() {
                 >
                   <span className="font-bold uppercase tracking-wider font-mono">Scrape their website</span>
                   <p className="mt-1 leading-relaxed font-normal" style={{ color: "var(--text-muted)" }}>
-                    We read their site and recent emails automatically. Rolling out — recommended to also paste a sample below for now.
+                    We crawl their site (and recent broadcast emails, if Klaviyo is connected) automatically. Pasting a sample below too still helps if the crawl comes up short.
                   </p>
                 </button>
                 <button
@@ -1143,9 +1287,17 @@ export default function NewEngagementPage() {
                 value={form.marketingDomain}
                 onChange={(v) => set("marketingDomain", v)}
                 placeholder="yoursite.com"
-                helpText="We'll crawl this site once automatic scraping is live for your account."
+                helpText="We'll crawl this site (and pricing/sales pages if we find them) during setup to build the voice profile."
               />
             )}
+
+            <InputField
+              label="Existing confirmation page (if any)"
+              value={form.existingConfirmationPageUrl}
+              onChange={(v) => set("existingConfirmationPageUrl", v)}
+              placeholder="https://yoursite.com/thank-you"
+              helpText="If your client already has a post-booking confirmation page live, paste its URL — we'll audit it against the new one and show you what's worth carrying over."
+            />
 
             <div className="space-y-1.5 w-full">
               <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>

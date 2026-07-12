@@ -10,6 +10,11 @@ export interface NormalizedCall {
   email: string;
   company: string;
   callTime: Date;
+  // Only populated by listBookingsSinceForTenant (polling fallback) —
+  // getTomorrowCalls callers only ever look at active bookings, so this is
+  // undefined there. "created" | "cancelled", mirrors classifyBookingEvent's
+  // vocabulary in enrollment-service.ts.
+  eventKind?: "created" | "cancelled";
 }
 
 // ── Calendly ──────────────────────────────────────────────────────────────
@@ -70,6 +75,58 @@ export class CalendlyClient {
           )?.answer ?? "Not Stated",
         callTime: new Date(event.start_time),
       });
+    }
+    return results;
+  }
+
+  /**
+   * Polling-fallback fetch for the webhook_receiver_mode === "polling" path
+   * (Pin-Down recovery gap 5). Calendly's /scheduled_events list doesn't
+   * expose a "created after" filter directly, so this pulls everything
+   * with a start_time in [sinceISO, sinceISO + lookaheadDays] across both
+   * active and canceled status, and lets the caller (booking.ts's
+   * listBookingsSinceForTenant) de-dupe against webhook_events by event
+   * UUID — the same idempotency key the live webhook path uses, so a
+   * booking seen once by polling and later confirmed by a recovered
+   * webhook subscription can never double-enroll.
+   */
+  async listBookingsSince(sinceISO: string, lookaheadDays = 14): Promise<NormalizedCall[]> {
+    const windowEnd = new Date(sinceISO);
+    windowEnd.setDate(windowEnd.getDate() + lookaheadDays);
+
+    const results: NormalizedCall[] = [];
+
+    for (const status of ["active", "canceled"] as const) {
+      const eventsRes = await fetch(
+        `${this.baseUrl}/scheduled_events?min_start_time=${sinceISO}&max_start_time=${windowEnd.toISOString()}&status=${status}`,
+        { headers: this.headers }
+      );
+      if (!eventsRes.ok) continue;
+      const eventsData = await eventsRes.json();
+
+      for (const event of eventsData.collection ?? []) {
+        const eventUuid = event.uri.split("/").pop();
+        const inviteesRes = await fetch(
+          `${this.baseUrl}/scheduled_events/${eventUuid}/invitees`,
+          { headers: this.headers }
+        );
+        if (!inviteesRes.ok) continue;
+        const invData = await inviteesRes.json();
+        const invitee = invData.collection?.[0];
+        if (!invitee) continue;
+
+        results.push({
+          id: eventUuid,
+          name: invitee.name ?? "Unknown",
+          email: invitee.email ?? "",
+          company:
+            invitee.questions_and_answers?.find((q: any) =>
+              q.question.toLowerCase().includes("company")
+            )?.answer ?? "Not Stated",
+          callTime: new Date(event.start_time),
+          eventKind: status === "canceled" ? "cancelled" : "created",
+        });
+      }
     }
     return results;
   }
@@ -318,6 +375,37 @@ export class CalComClient {
   }
 
   /**
+   * Polling-fallback fetch (Pin-Down recovery gap 5). Cal.com v2's
+   * /bookings endpoint supports afterCreatedAt directly, which is exactly
+   * the "list bookings since timestamp" semantics the OG SKILL.md polling
+   * fallback specifies — no client-side windowing approximation needed
+   * here unlike Calendly.
+   */
+  async listBookingsSince(sinceISO: string): Promise<NormalizedCall[]> {
+    const res = await fetch(
+      `${this.baseUrl}/bookings?afterCreatedAt=${encodeURIComponent(sinceISO)}`,
+      { headers: this.headers }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+
+    return (data.data?.bookings ?? []).map((booking: any) => {
+      const attendee = booking.attendees?.[0] ?? {};
+      return {
+        id: String(booking.id),
+        name: attendee.name ?? "Unknown",
+        email: attendee.email ?? "",
+        company:
+          booking.responses?.company ??
+          booking.responses?.organization ??
+          "Not Stated",
+        callTime: new Date(booking.startTime),
+        eventKind: (booking.status === "cancelled" ? "cancelled" : "created") as "created" | "cancelled",
+      };
+    });
+  }
+
+  /**
    * Lightweight liveness check for the stored API key. Hits GET /v2/me —
    * Cal.com's documented "retrieve the authenticated user's profile"
    * endpoint (cal.com/docs/api-reference/v2/me, checked directly against
@@ -331,21 +419,22 @@ export class CalComClient {
     }
   }
 
-  async subscribeWebhook(receiverUrl: string): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/webhooks`, {
-      method: "POST",
-      headers: this.headers,
-      body: JSON.stringify({
-        url: receiverUrl,
-        // ✅ TYPO FIXED PERFECTLY:
-        triggers: ["BOOKING_CREATED", "BOOKING_CANCELLED", "BOOKING_RESCHEDULED"],
-        active: true,
-      }),
-    });
-    if (!res.ok) {
-      throw new Error(`Cal.com webhook subscription failed [${res.status}]: ${await res.text()}`);
-    }
+async subscribeWebhook(receiverUrl: string): Promise<string> {
+  const res = await fetch(`${this.baseUrl}/webhooks`, {
+    method: "POST",
+    headers: this.headers,
+    body: JSON.stringify({
+      url: receiverUrl,
+      triggers: ["BOOKING_CREATED", "BOOKING_CANCELLED", "BOOKING_RESCHEDULED"],
+      active: true,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Cal.com webhook subscription failed [${res.status}]: ${await res.text()}`);
   }
+  // FIXED: Returns a truthy string to satisfy onboarding-service's live activation gate
+  return "active"; 
+}
 
   /** Fetches the next open slots for the reschedule pre-fetch layer. */
   async getAvailableSlots(
@@ -458,20 +547,52 @@ export class GHLCalendarClient {
     }));
   }
 
-  async subscribeWebhook(receiverUrl: string): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/locations/${this.locationId}/webhooks/`, {
-      method: "POST",
-      headers: this.headers,
-      body: JSON.stringify({
-        name: "Showtime Pre-Call Read",
-        url: receiverUrl,
-        events: ["AppointmentCreate", "AppointmentDelete"],
-      }),
-    });
-    if (!res.ok) {
-      throw new Error(`GHL webhook subscription failed [${res.status}]: ${await res.text()}`);
-    }
+  /**
+   * Polling-fallback fetch (Pin-Down recovery gap 5). GHL's calendar
+   * events endpoint filters by start/end time, not creation time, so —
+   * same approximation as Calendly — this pulls a forward-looking window
+   * from sinceISO and relies on webhook_events idempotency to prevent
+   * double-processing across poll cycles.
+   */
+  async listBookingsSince(sinceISO: string, lookaheadDays = 14): Promise<NormalizedCall[]> {
+    const start = new Date(sinceISO);
+    const end = new Date(sinceISO);
+    end.setDate(end.getDate() + lookaheadDays);
+
+    const res = await fetch(
+      `${this.baseUrl}/calendars/events?locationId=${this.locationId}&startTime=${start.getTime()}&endTime=${end.getTime()}`,
+      { headers: this.headers }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+
+    return (data.appointments ?? []).map((appt: any) => ({
+      id: appt.id,
+      name: appt.contact?.name ?? "Unknown",
+      email: appt.contact?.email ?? "",
+      company: appt.contact?.companyName ?? "Not Stated",
+      callTime: new Date(appt.startTime),
+      eventKind: (appt.status === "cancelled" || appt.status === "no-show" ? "cancelled" : "created") as "created" | "cancelled",
+    }));
   }
+
+async subscribeWebhook(receiverUrl: string): Promise<string> {
+  const res = await fetch(`${this.baseUrl}/locations/${this.locationId}/webhooks/`, {
+    method: "POST",
+    headers: this.headers,
+    body: JSON.stringify({
+      name: "Showtime Pre-Call Read",
+      url: receiverUrl,
+      events: ["AppointmentCreate", "AppointmentDelete"],
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`GHL webhook subscription failed [${res.status}]: ${await res.text()}`);
+  }
+  // FIXED: Returns a truthy string to satisfy onboarding-service's live activation gate
+  return "active"; 
+}
+
 }
 
 // ── OnceHub ───────────────────────────────────────────────────────────────
@@ -517,6 +638,41 @@ export class OnceHubClient {
       callTime: new Date(booking.starting_time),
     }));
   }
+
+  /**
+   * Polling-fallback fetch (Pin-Down recovery gap 5). This is the primary
+   * way OnceHub bookings ever reach Pile-On/Win-Back in practice —
+   * registerWebhookForTenant already documents that OnceHub has no
+   * programmatic webhook subscription API, so webhook_receiver_mode should
+   * default to "polling" for any engagement on this platform rather than
+   * silently doing nothing.
+   */
+  async listBookingsSince(sinceISO: string, lookaheadDays = 14): Promise<NormalizedCall[]> {
+    const start = new Date(sinceISO);
+    const end = new Date(sinceISO);
+    end.setDate(end.getDate() + lookaheadDays);
+
+    const results: NormalizedCall[] = [];
+    for (const status of ["scheduled", "canceled"] as const) {
+      const res = await fetch(
+        `${this.baseUrl}/bookings?starting_after=${start.toISOString()}&starting_before=${end.toISOString()}&status=${status}`,
+        { headers: this.headers }
+      );
+      if (!res.ok) continue;
+      const data = await res.json();
+      for (const booking of data.data ?? []) {
+        results.push({
+          id: booking.id,
+          name: booking.customer?.name ?? "Unknown",
+          email: booking.customer?.email ?? "",
+          company: booking.form_submission?.company ?? "Not Stated",
+          callTime: new Date(booking.starting_time),
+          eventKind: status === "canceled" ? "cancelled" : "created",
+        });
+      }
+    }
+    return results;
+  }
 }
 
 // ── Router ────────────────────────────────────────────────────────────────
@@ -545,7 +701,7 @@ export async function fetchTomorrowCallsForTenant(
     default:
       throw new Error(
         `Unsupported booking platform: ${bookingPlatform}. ` +
-        "Supported: calendly, cal_com, ghl_calendar, oncehub"
+          "Supported: calendly, cal_com, ghl_calendar, oncehub"
       );
   }
 }
@@ -564,13 +720,15 @@ export async function registerWebhookForTenant(
       return new CalendlyClient(apiKey).subscribeWebhook(meta.organization_uri, receiverUrl);
 
     case "cal_com":
-      return new CalComClient(apiKey).subscribeWebhook(receiverUrl);
+      // Now cleanly forwards Promise<string>
+      return new CalComClient(apiKey).subscribeWebhook(receiverUrl); 
 
     case "ghl_calendar":
       if (!meta?.location_id) {
         throw new Error("GHL webhook registration requires location_id in meta");
       }
-      return new GHLCalendarClient(apiKey, meta.location_id).subscribeWebhook(receiverUrl);
+      // Now cleanly forwards Promise<string>
+      return new GHLCalendarClient(apiKey, meta.location_id).subscribeWebhook(receiverUrl); 
 
     case "oncehub":
       console.warn("OnceHub does not support programmatic webhook registration. Buyer must configure manually.");
@@ -580,6 +738,7 @@ export async function registerWebhookForTenant(
       return;
   }
 }
+
 
 export async function getAvailableSlotsForTenant(
   bookingPlatform: string,
@@ -611,5 +770,83 @@ export async function getAvailableSlotsForTenant(
     }
   } catch {
     return [];
+  }
+}
+
+// ── Polling fallback (Pin-Down recovery gap 5) ──────────────────────────────
+//
+// Restores the OG SKILL.md behavior for platforms that don't support (or
+// the buyer hasn't configured) webhook subscriptions: install a
+// scheduled 5-minute poll of "list bookings since timestamp" instead of
+// silently doing nothing. See src/inngest/crons.ts#bookingPollCron for the
+// scheduler that calls this, and stack.webhook_receiver_mode in
+// src/models/schema.ts for the tenant-level switch.
+
+export async function listBookingsSinceForTenant(
+  bookingPlatform: string,
+  apiKey: string,
+  meta: Record<string, any> | undefined,
+  sinceISO: string
+): Promise<NormalizedCall[]> {
+  switch (bookingPlatform) {
+    case "calendly":
+      return new CalendlyClient(apiKey).listBookingsSince(sinceISO);
+
+    case "cal_com":
+      return new CalComClient(apiKey).listBookingsSince(sinceISO);
+
+    case "ghl_calendar":
+      if (!meta?.location_id) {
+        throw new Error("GHL Calendar requires location_id in booking_platform_meta");
+      }
+      return new GHLCalendarClient(apiKey, meta.location_id).listBookingsSince(sinceISO);
+
+    case "oncehub":
+      return new OnceHubClient(apiKey).listBookingsSince(sinceISO);
+
+    default:
+      // discover_from_docs / unsupported: nothing to poll until a
+      // reviewed adapter exists — see doc-research.ts.
+      return [];
+  }
+}
+
+// ── Webhook idempotency (Pin-Down recovery gap 8) ───────────────────────────
+//
+// Derives a stable, payload-specific key per platform so a retried
+// delivery of the exact same event collides on the same
+// (event_source, idempotency_key) pair every time. Returns null when the
+// payload shape doesn't contain anything stable enough to key on — the
+// caller (booking-event/route.ts) logs a warning and proceeds without
+// dedup in that case rather than dropping a legitimate booking.
+export function deriveWebhookIdempotencyKey(bookingPlatform: string, payload: any): string | null {
+  switch (bookingPlatform) {
+    case "calendly": {
+      // Calendly's invitee.created/invitee.canceled payloads carry a
+      // stable resource URI at payload.payload.uri (the invitee resource
+      // itself) — unique per invitee per event, and identical across
+      // retries of the same delivery.
+      const uri: string | undefined = payload?.payload?.uri ?? payload?.payload?.invitee?.uri;
+      
+      // FIXED: Append the trigger so invitee.created and invitee.canceled don't collide in live webhooks
+      const trigger = payload?.event ?? "unknown"; 
+      return uri ? `${uri}:${trigger}` : null;
+    }
+    case "cal_com": {
+      // Cal.com webhook payloads carry the booking's uid at payload.payload.uid
+      // (or payload.uid on some trigger types).
+      const uid: string | undefined = payload?.payload?.uid ?? payload?.uid;
+      return uid ? `booking:${uid}:${payload?.triggerEvent ?? payload?.trigger ?? "event"}` : null;
+    }
+    case "ghl_calendar": {
+      const id: string | undefined = payload?.id ?? payload?.appointment?.id ?? payload?.calendar?.id;
+      return id ? `appt:${id}:${payload?.type ?? payload?.trigger ?? "event"}` : null;
+    }
+    case "oncehub": {
+      const id: string | undefined = payload?.data?.id ?? payload?.booking?.id ?? payload?.id;
+      return id ? `booking:${id}:${payload?.event ?? payload?.trigger ?? "event"}` : null;
+    }
+    default:
+      return null;
   }
 }

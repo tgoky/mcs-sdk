@@ -65,6 +65,19 @@ export const weeklyMetricsEngagement = eventType("pile-on/weekly-metrics-engagem
   schema: staticSchema<WeeklyMetricsEngagementData>(),
 });
 
+// Pin-Down recovery gap 5 — polling fallback for booking platforms without
+// (or not configured for) webhooks. Same fan-out shape as the crons
+// above: bookingPollCron does a cheap DB-only scan for engagements due for
+// their next poll cycle, then dispatches one of these per engagement so a
+// single slow/failing booking API call can't block the rest. See
+// src/features/pin-down/server/booking-poller.ts.
+export type BookingPollEngagementData = {
+  engagementId: string;
+};
+export const bookingPollEngagement = eventType("pin-down/booking-poll-engagement", {
+  schema: staticSchema<BookingPollEngagementData>(),
+});
+
 export type StaleRunNotifyData = {
   runId: string;
   engagementId: string;
