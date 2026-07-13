@@ -61,6 +61,34 @@ export class HyrosClient {
     const res = await fetch(`${this.baseUrl}/leads?limit=1`, { headers: this.headers });
     if (!res.ok) throw new Error(`Hyros credential check failed [${res.status}]`);
   }
+
+  /**
+   * Pre-Call Read recovery gap 4 — read-side of the cohort/ad-data
+   * integration, used by brief-service.ts's Engagement History block.
+   * Pulls whatever ad-touch history Hyros has attributed to this lead
+   * (which ad/campaign brought them in, and any tracked prior touches)
+   * so the brief can open with real context ("came in from the [X]
+   * retargeting campaign") instead of nothing. Best-effort — a lead with
+   * no ad attribution on file (e.g. organic/referral) is a completely
+   * normal, non-error outcome, not a failure.
+   */
+  async getLeadAdContext(email: string): Promise<{ found: boolean; sourceAd?: string; firstTouchAt?: string; touchCount?: number }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/leads?email=${encodeURIComponent(email)}`, { headers: this.headers });
+      if (!res.ok) return { found: false };
+      const data = await res.json();
+      const lead = data.result?.[0] ?? data.data?.[0];
+      if (!lead) return { found: false };
+      return {
+        found: true,
+        sourceAd: lead.firstSource?.adName ?? lead.first_source?.ad_name ?? undefined,
+        firstTouchAt: lead.firstConversionDate ?? lead.first_conversion_date ?? undefined,
+        touchCount: Array.isArray(lead.conversions) ? lead.conversions.length : undefined,
+      };
+    } catch {
+      return { found: false };
+    }
+  }
 }
 
 // ── Google Sheets ────────────────────────────────────────────────────────
@@ -175,5 +203,26 @@ export async function removeFromAdDataCohort(
       return new GoogleSheetsCohortClient(apiKey, meta.google_sheets_spreadsheet_id, meta.google_sheets_cohort_sheet_name).removeFromCohort(email, cohortId);
     default:
       throw new Error(`removeFromAdDataCohort does not support platform "${adDataPlatform}" — use the native_crm path via email.ts for that case instead.`);
+  }
+}
+
+/**
+ * Pre-Call Read recovery gap 4 — read-side lookup for the brief's
+ * Engagement History block. Only Hyros exposes anything readable here;
+ * Google Sheets is a write-only append log by design (see
+ * GoogleSheetsCohortClient's module comment) and native_crm's ad context
+ * is just whatever tag was set, which brief-service.ts can read directly
+ * off the buyer's CRM profile without this adapter.
+ */
+export async function getAdDataContextForTenant(
+  adDataPlatform: string,
+  apiKey: string,
+  email: string
+): Promise<{ found: boolean; sourceAd?: string; firstTouchAt?: string; touchCount?: number }> {
+  switch (adDataPlatform) {
+    case "hyros":
+      return new HyrosClient(apiKey).getLeadAdContext(email);
+    default:
+      return { found: false };
   }
 }

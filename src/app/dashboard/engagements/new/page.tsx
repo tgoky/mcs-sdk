@@ -54,6 +54,36 @@ interface FormData {
   hostingApiKey: string;
   briefDestination: string;
   slackWebhookUrl: string;
+  // Pile-On recovery gap 1 — SMS
+  smsPlatform: string;
+  smsApiKey: string;
+  smsTwilioAccountSid: string;
+  smsTwilioMessagingServiceSid: string;
+  smsTwilioFromNumber: string;
+  smsA2p10dlcStatus: string;
+  smsComplianceFooterVariant: "standard" | "custom";
+  smsComplianceFooterCustom: string;
+  // Pile-On recovery gap 2 — ad-data cohort sync
+  adDataPlatform: string;
+  adDataApiKey: string;
+  adDataHyrosAccountId: string;
+  adDataGoogleSheetsSpreadsheetId: string;
+  adDataGoogleSheetsSheetName: string;
+  adDataCohortId: string;
+  // Pile-On recovery gap 4 — existing-sequence audit
+  existingPileOnSequenceFlagged: boolean;
+  // Pre-Call Read recovery gap 1 — dynamic trigger
+  briefTriggerType: "nightly" | "dynamic_webhook";
+  // Pre-Call Read recovery gap 3 — video engagement
+  videoEngagementPlatform: string;
+  videoEngagementApiKey: string;
+  heroVideoId: string;
+  videoEngagementWistiaVideoId: string;
+  videoEngagementYoutubeChannelId: string;
+  // Pre-Call Read recovery gap 5 — Apollo/PDL BYOK
+  prospectResearchSourcesUsed: string[];
+  apolloApiKey: string;
+  pdlApiKey: string;
   topCallQuestions: string;
   topObjections: string;
   prospectMeets: string;
@@ -101,6 +131,30 @@ const DEFAULT_FORM: FormData = {
   hostingApiKey: "",
   briefDestination: "slack",
   slackWebhookUrl: "",
+  smsPlatform: "none",
+  smsApiKey: "",
+  smsTwilioAccountSid: "",
+  smsTwilioMessagingServiceSid: "",
+  smsTwilioFromNumber: "",
+  smsA2p10dlcStatus: "not_started",
+  smsComplianceFooterVariant: "standard",
+  smsComplianceFooterCustom: "",
+  adDataPlatform: "none",
+  adDataApiKey: "",
+  adDataHyrosAccountId: "",
+  adDataGoogleSheetsSpreadsheetId: "",
+  adDataGoogleSheetsSheetName: "",
+  adDataCohortId: "",
+  existingPileOnSequenceFlagged: false,
+  briefTriggerType: "nightly",
+  videoEngagementPlatform: "none",
+  videoEngagementApiKey: "",
+  heroVideoId: "",
+  videoEngagementWistiaVideoId: "",
+  videoEngagementYoutubeChannelId: "",
+  prospectResearchSourcesUsed: [],
+  apolloApiKey: "",
+  pdlApiKey: "",
   topCallQuestions: "",
   topObjections: "",
   prospectMeets: "founder",
@@ -150,10 +204,15 @@ function loadDraftStep(): Step | null {
 function saveDraft(form: FormData, step: Step) {
   if (typeof window === "undefined") return;
   try {
-    const { bookingApiKey, emailApiKey, hostingApiKey, ...safeToStore } = form;
+    const { bookingApiKey, emailApiKey, hostingApiKey, smsApiKey, adDataApiKey, videoEngagementApiKey, apolloApiKey, pdlApiKey, ...safeToStore } = form;
     void bookingApiKey;
     void emailApiKey;
     void hostingApiKey;
+    void smsApiKey;
+    void adDataApiKey;
+    void videoEngagementApiKey;
+    void apolloApiKey;
+    void pdlApiKey;
     window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(safeToStore));
     window.sessionStorage.setItem(DRAFT_STEP_KEY, step);
   } catch {
@@ -670,6 +729,57 @@ export default function NewEngagementPage() {
           discovered_platform_name: form.discoveredPlatformName || undefined,
           discovered_platform_website: form.discoveredPlatformWebsite || undefined,
         }),
+        // ── Pile-On recovery gap 1 — SMS ──────────────────────────────────
+        sms_platform: form.smsPlatform,
+        sms_platform_credentials_ref: form.smsPlatform !== "none" ? `secrets://${engagementId}/${form.smsPlatform}_key` : undefined,
+        sms_platform_meta:
+          form.smsPlatform === "twilio"
+            ? {
+                twilio_account_sid: form.smsTwilioAccountSid || undefined,
+                twilio_messaging_service_sid: form.smsTwilioMessagingServiceSid || undefined,
+                twilio_from_number: form.smsTwilioFromNumber || undefined,
+              }
+            : form.smsPlatform === "ghl_sms"
+              ? { ghl_location_id: form.bookingLocationId || undefined }
+              : undefined,
+        sms_a2p_10dlc_status: form.smsPlatform === "twilio" ? form.smsA2p10dlcStatus : undefined,
+        sms_compliance_footer_variant: form.smsComplianceFooterVariant,
+        sms_compliance_footer_custom: form.smsComplianceFooterVariant === "custom" ? form.smsComplianceFooterCustom || undefined : undefined,
+        // ── Pile-On recovery gap 2 — ad-data cohort sync ──────────────────
+        ad_data_platform: form.adDataPlatform,
+        ad_data_platform_credentials_ref:
+          form.adDataPlatform !== "none" && form.adDataPlatform !== "native_crm" ? `secrets://${engagementId}/${form.adDataPlatform}_key` : undefined,
+        ad_data_cohort_id: form.adDataCohortId || undefined,
+        ad_data_platform_meta:
+          form.adDataPlatform === "hyros"
+            ? { hyros_account_id: form.adDataHyrosAccountId || undefined }
+            : form.adDataPlatform === "google_sheets"
+              ? {
+                  google_sheets_spreadsheet_id: form.adDataGoogleSheetsSpreadsheetId || undefined,
+                  google_sheets_cohort_sheet_name: form.adDataGoogleSheetsSheetName || undefined,
+                }
+              : undefined,
+        // ── Pile-On recovery gap 4 — existing-sequence audit ──────────────
+        existing_pile_on_sequence_flagged: form.existingPileOnSequenceFlagged || undefined,
+        // ── Pre-Call Read recovery gap 1 — dynamic trigger ────────────────
+        brief_trigger_type: form.briefTriggerType,
+        brief_lead_time_hours: 12,
+        // ── Pre-Call Read recovery gap 3 — video engagement ───────────────
+        video_engagement_platform: form.videoEngagementPlatform,
+        video_engagement_credentials_ref:
+          form.videoEngagementPlatform !== "none" ? `secrets://${engagementId}/${form.videoEngagementPlatform}_key` : undefined,
+        hero_video_id: form.heroVideoId || undefined,
+        video_engagement_meta:
+          form.videoEngagementPlatform !== "none"
+            ? {
+                wistia_video_id: form.videoEngagementWistiaVideoId || undefined,
+                youtube_channel_id: form.videoEngagementYoutubeChannelId || undefined,
+              }
+            : undefined,
+        // ── Pre-Call Read recovery gap 5 — Apollo/PDL BYOK ────────────────
+        prospect_research_sources_used: form.prospectResearchSourcesUsed.length > 0 ? form.prospectResearchSourcesUsed : undefined,
+        apollo_credentials_ref: form.prospectResearchSourcesUsed.includes("apollo") ? `secrets://${engagementId}/apollo_key` : undefined,
+        pdl_credentials_ref: form.prospectResearchSourcesUsed.includes("pdl") ? `secrets://${engagementId}/pdl_key` : undefined,
       },
       topCallQuestions: form.topCallQuestions.split("\n").map((q) => q.trim()).filter(Boolean),
       topObjections: form.topObjections.split("\n").map((o) => o.trim()).filter(Boolean),
@@ -680,6 +790,11 @@ export default function NewEngagementPage() {
         booking: form.bookingApiKey,
         email: form.emailApiKey,
         hosting: form.hostingApiKey || undefined,
+        sms: form.smsPlatform !== "none" ? form.smsApiKey || undefined : undefined,
+        adData: form.adDataPlatform !== "none" && form.adDataPlatform !== "native_crm" ? form.adDataApiKey || undefined : undefined,
+        videoEngagement: form.videoEngagementPlatform !== "none" ? form.videoEngagementApiKey || undefined : undefined,
+        apollo: form.prospectResearchSourcesUsed.includes("apollo") ? form.apolloApiKey || undefined : undefined,
+        pdl: form.prospectResearchSourcesUsed.includes("pdl") ? form.pdlApiKey || undefined : undefined,
         slack_webhook_url: form.slackWebhookUrl,
       },
     };
@@ -1142,6 +1257,23 @@ export default function NewEngagementPage() {
                 helpText="From Slack → your workspace → Incoming Webhooks."
               />
             )}
+
+            <SelectField
+  label="Pre-Call Brief Schedule"
+  value={form.briefTriggerType}
+  onChange={(v) => set("briefTriggerType", v as any)}
+  options={[
+    { 
+      value: "nightly", 
+      label: "Nightly Batch — Group and brief tomorrow's roster at 20:00 UTC" 
+    },
+    { 
+      value: "dynamic_webhook", 
+      label: "Dynamic Poll — Brief individually within 15 minutes of entering the lead window" 
+    },
+  ]}
+  helpText="Choose 'Dynamic' if your sales reps require briefs to be generated on-demand as soon as an upcoming call crosses into its imminent lead-time window."
+/>
 
             <SelectField
               label="Where is the confirmation page hosted?"

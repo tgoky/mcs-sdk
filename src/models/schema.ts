@@ -156,7 +156,7 @@ export type EngagementStack = {
   // Operator-flagged during onboarding, same pattern as Pin-Down's
   // existing_confirmation_page_url. Only Klaviyo and HubSpot expose a
   // flows/workflows read API usable for this — see
-  // src/features/pile-on/server/existing-sequence-audit.ts.
+  // src/features/pile-on/server/existing-sequence-builder.ts.
   existing_pile_on_sequence_flagged?: boolean;
   // Klaviyo list IDs for pile-on and win-back
   target_list_id?: string;
@@ -185,6 +185,40 @@ export type EngagementStack = {
   slack_webhook_url?: string;       // per-engagement, never global
   brief_lead_time_hours?: number;   // default 12, range 1-48
   person_match_confidence_threshold?: number; // default 99
+  // ── Pre-Call Read recovery gap 1: dynamic trigger ──────────────────────
+  // "nightly" (default): one batch run against tomorrow's roster, same as
+  // today. "dynamic_webhook": briefs go out as soon as a call falls inside
+  // brief_lead_time_hours of "now", checked on a tight rolling cadence
+  // (see src/inngest/crons.ts#dynamicBriefCron) rather than waiting for
+  // the nightly batch — see that cron's module comment for why this is a
+  // tight-poll implementation rather than a literal webhook subscription
+  // (most booking platforms don't expose a distinct "N hours before call"
+  // event to subscribe to).
+  brief_trigger_type?: "nightly" | "dynamic_webhook";
+  // ── Pre-Call Read recovery gap 3: video engagement ─────────────────────
+  video_engagement_platform?: "vidalytics" | "wistia" | "youtube_analytics" | "loom" | "none";
+  video_engagement_credentials_ref?: string;
+  // The confirmation-page hero video's ID/slug on whichever platform hosts
+  // it. This app doesn't automate video upload/hosting (Pin-Down generates
+  // the SCRIPT, not the video itself — a human records and uploads it) —
+  // the operator supplies this once the video is live, same manual
+  // hand-off point as the recording itself. video_engagement_meta's
+  // per-platform IDs (wistia_video_id etc.) take precedence over this
+  // generic field when both are set.
+  hero_video_id?: string;
+  video_engagement_meta?: {
+    wistia_video_id?: string;
+    youtube_channel_id?: string;
+    loom_folder_id?: string;
+  };
+  // ── Pre-Call Read recovery gap 5: Apollo/paid-data-provider BYOK ───────
+  // Layers on top of, never replaces, whatever platform-level enrichment
+  // this app may add later (see the AI Architect Review's recommendation
+  // in the transfer analysis) — this is specifically for an operator whose
+  // buyer already has their own Apollo/PDL account and wants it used.
+  prospect_research_sources_used?: Array<"apollo" | "pdl">;
+  apollo_credentials_ref?: string;
+  pdl_credentials_ref?: string;
   // Webhook tracking
   webhook_subscription_id?: string; // Calendly/Cal.com subscription URI
   webhook_signing_secret?: string;
@@ -371,7 +405,7 @@ export const engagements = pgTable("engagements", {
   // Populated when stack.existing_pile_on_sequence_flagged is true and the
   // buyer's email_platform supports reading flows/workflows (Klaviyo,
   // HubSpot today). See
-  // src/features/pile-on/server/existing-sequence-audit.ts.
+  // src/features/pile-on/server/existing-sequence-builder.ts.
   pileOnExistingSequenceAudit: jsonb("pile_on_existing_sequence_audit").$type<{
     auditedAt: string;
     platform: string;
@@ -436,6 +470,14 @@ export const briefedCallsLog = pgTable("briefed_calls_log", {
   briefDeliveredAt: timestamp("brief_delivered_at"),
   destinationDelivered: text("destination_delivered"),
   personMatchScore: integer("person_match_score"),
+  // Pre-Call Read recovery gap 6 — the two fields the transfer analysis
+  // flagged as missing from this log's schema, cross-consumed by Win-Back
+  // (was the brief delivered before the call was missed, i.e. did the rep
+  // actually have context going in?) and Leak Map (delivery-rate audit
+  // across the roster). "skipped" for researchStatus means the Rule 14
+  // gate didn't pass, not that research was attempted and failed.
+  researchStatus: text("research_status"), // "completed" | "skipped_low_confidence" | "failed"
+  aiSynthesisStatus: text("ai_synthesis_status"), // "completed" | "failed"
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

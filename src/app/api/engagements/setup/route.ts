@@ -153,6 +153,31 @@ export async function POST(request: Request) {
     if (credentials?.adData && finalStack.ad_data_platform && finalStack.ad_data_platform !== "none" && finalStack.ad_data_platform !== "native_crm") {
       await storeCredential(engagementId, finalStack.ad_data_platform, `secrets://${engagementId}/${finalStack.ad_data_platform}_key`, credentials.adData);
     }
+    // Pre-Call Read recovery gap 3 — video engagement. Not stored for
+    // "loom", which has no public analytics API to authenticate against
+    // (see video-engagement.ts) — nothing for a credential to unlock.
+    if (
+      credentials?.videoEngagement &&
+      finalStack.video_engagement_platform &&
+      finalStack.video_engagement_platform !== "none" &&
+      finalStack.video_engagement_platform !== "loom"
+    ) {
+      await storeCredential(
+        engagementId,
+        finalStack.video_engagement_platform,
+        `secrets://${engagementId}/${finalStack.video_engagement_platform}_key`,
+        credentials.videoEngagement
+      );
+    }
+    // Pre-Call Read recovery gap 5 — Apollo/PDL BYOK enrichment, stored
+    // independently of each other since an operator may configure only
+    // one of the two sources.
+    if (credentials?.apollo && finalStack.prospect_research_sources_used?.includes("apollo")) {
+      await storeCredential(engagementId, "apollo", `secrets://${engagementId}/apollo_key`, credentials.apollo);
+    }
+    if (credentials?.pdl && finalStack.prospect_research_sources_used?.includes("pdl")) {
+      await storeCredential(engagementId, "pdl", `secrets://${engagementId}/pdl_key`, credentials.pdl);
+    }
     await logStep(runId, {
       phase: "credential_storage",
       status: "success",

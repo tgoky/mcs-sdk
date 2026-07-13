@@ -100,6 +100,19 @@ export const pileOnSmsSequenceStart = eventType("pile-on/sms-sequence-start", {
   schema: staticSchema<PileOnSmsSequenceStartData>(),
 });
 
+// Pre-Call Read recovery gap 1 — dynamic brief trigger. Same fan-out shape
+// as bookingPollEngagement above: dynamicBriefCron does a cheap DB-only
+// scan for engagements with stack.brief_trigger_type === "dynamic_webhook",
+// then dispatches one of these per engagement so a single tenant's
+// booking-platform API call can't block the others. See
+// src/features/pre-call-read/server/brief-service.ts's triggerMode param.
+export type DynamicBriefEngagementData = {
+  engagementId: string;
+};
+export const dynamicBriefEngagement = eventType("pre-call-read/dynamic-brief-engagement", {
+  schema: staticSchema<DynamicBriefEngagementData>(),
+});
+
 export type StaleRunNotifyData = {
   runId: string;
   engagementId: string;

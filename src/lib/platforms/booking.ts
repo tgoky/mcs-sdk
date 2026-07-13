@@ -17,6 +17,12 @@ export interface NormalizedCall {
   // prospect" rather than a hard failure — email enrollment never depends
   // on this field.
   phone?: string;
+  // Best-effort, same rationale as `phone` — only populated when the
+  // booking form actually asked for a LinkedIn URL and the prospect
+  // supplied one. Feeds person-match.ts's LinkedIn corroboration tier
+  // (Pre-Call Read recovery gap 2); without this field that tier was
+  // structurally unreachable regardless of what the prospect submitted.
+  linkedInUrl?: string;
   // Only populated by listBookingsSinceForTenant (polling fallback) —
   // getTomorrowCalls callers only ever look at active bookings, so this is
   // undefined there. "created" | "cancelled", mirrors classifyBookingEvent's
@@ -80,6 +86,10 @@ export class CalendlyClient {
           invitee.questions_and_answers?.find((q: any) =>
             q.question.toLowerCase().includes("company")
           )?.answer ?? "Not Stated",
+        linkedInUrl:
+          invitee.questions_and_answers?.find((q: any) =>
+            q.question.toLowerCase().includes("linkedin") || (q.answer ?? "").includes("linkedin.com/in/")
+          )?.answer ?? undefined,
         callTime: new Date(event.start_time),
       });
     }
@@ -139,6 +149,51 @@ export class CalendlyClient {
           eventKind: status === "canceled" ? "cancelled" : "created",
         });
       }
+    }
+    return results;
+  }
+
+  /**
+   * Pre-Call Read recovery gap 1 — dynamic trigger. Same query shape as
+   * getTomorrowCalls but with a caller-supplied window instead of a fixed
+   * "tomorrow" — used by dynamicBriefCron to find calls that have just
+   * entered the buyer's configured lead-time window, so briefs go out
+   * shortly after that rather than waiting for the nightly batch.
+   */
+  async getUpcomingCallsWithinWindow(startHoursFromNow: number, endHoursFromNow: number): Promise<NormalizedCall[]> {
+    const windowStart = new Date(Date.now() + startHoursFromNow * 3_600_000);
+    const windowEnd = new Date(Date.now() + endHoursFromNow * 3_600_000);
+
+    const eventsRes = await fetch(
+      `${this.baseUrl}/scheduled_events?min_start_time=${windowStart.toISOString()}&max_start_time=${windowEnd.toISOString()}&status=active`,
+      { headers: this.headers }
+    );
+    if (!eventsRes.ok) {
+      throw new Error(`Calendly events fetch failed [${eventsRes.status}]`);
+    }
+    const eventsData = await eventsRes.json();
+    const results: NormalizedCall[] = [];
+
+    for (const event of eventsData.collection ?? []) {
+      const eventUuid = event.uri.split("/").pop();
+      const inviteesRes = await fetch(`${this.baseUrl}/scheduled_events/${eventUuid}/invitees`, { headers: this.headers });
+      if (!inviteesRes.ok) continue;
+      const invData = await inviteesRes.json();
+      const invitee = invData.collection?.[0];
+      if (!invitee) continue;
+
+      results.push({
+        id: eventUuid,
+        name: invitee.name ?? "Unknown",
+        email: invitee.email ?? "",
+        company:
+          invitee.questions_and_answers?.find((q: any) => q.question.toLowerCase().includes("company"))?.answer ?? "Not Stated",
+        linkedInUrl:
+          invitee.questions_and_answers?.find(
+            (q: any) => q.question.toLowerCase().includes("linkedin") || (q.answer ?? "").includes("linkedin.com/in/")
+          )?.answer ?? undefined,
+        callTime: new Date(event.start_time),
+      });
     }
     return results;
   }
@@ -381,6 +436,7 @@ export class CalComClient {
           booking.responses?.company ??
           booking.responses?.organization ??
           "Not Stated",
+        linkedInUrl: booking.responses?.linkedin ?? booking.responses?.linkedInUrl ?? undefined,
         callTime: new Date(booking.startTime),
       };
     });
@@ -414,6 +470,36 @@ export class CalComClient {
         phone: attendee.phoneNumber ?? booking.responses?.attendeePhoneNumber ?? booking.responses?.phone ?? undefined,
         callTime: new Date(booking.startTime),
         eventKind: (booking.status === "cancelled" ? "cancelled" : "created") as "created" | "cancelled",
+      };
+    });
+  }
+
+  /**
+   * Pre-Call Read recovery gap 1 — dynamic trigger. See CalendlyClient's
+   * sibling method for the rationale.
+   */
+  async getUpcomingCallsWithinWindow(startHoursFromNow: number, endHoursFromNow: number): Promise<NormalizedCall[]> {
+    const windowStart = new Date(Date.now() + startHoursFromNow * 3_600_000);
+    const windowEnd = new Date(Date.now() + endHoursFromNow * 3_600_000);
+
+    const res = await fetch(
+      `${this.baseUrl}/bookings?startTime=${windowStart.toISOString()}&endTime=${windowEnd.toISOString()}&status=accepted`,
+      { headers: this.headers }
+    );
+    if (!res.ok) {
+      throw new Error(`Cal.com bookings fetch failed [${res.status}]`);
+    }
+    const data = await res.json();
+
+    return (data.data?.bookings ?? []).map((booking: any) => {
+      const attendee = booking.attendees?.[0] ?? {};
+      return {
+        id: String(booking.id),
+        name: attendee.name ?? "Unknown",
+        email: attendee.email ?? "",
+        company: booking.responses?.company ?? booking.responses?.organization ?? "Not Stated",
+        linkedInUrl: booking.responses?.linkedin ?? booking.responses?.linkedInUrl ?? undefined,
+        callTime: new Date(booking.startTime),
       };
     });
   }
@@ -543,9 +629,41 @@ export class GHLCalendarClient {
     tomorrowEnd.setHours(23, 59, 59, 999);
 
     const res = await fetch(
-      `${this.baseUrl}/calendars/events?locationId=${this.locationId}&startTime=${tomorrowStart.getTime()}&endTime=${tomorrowEnd.getTime()}`,
-      { headers: this.headers }
-    );
+  `${this.baseUrl}/calendars/events?locationId=${this.locationId}&startTime=${tomorrowStart.toISOString()}&endTime=${tomorrowEnd.toISOString()}`,
+  { headers: this.headers }
+);
+    if (!res.ok) {
+      throw new Error(`GHL appointments fetch failed [${res.status}]`);
+    }
+    const data = await res.json();
+
+    return (data.appointments ?? []).map((appt: any) => ({
+      id: appt.id,
+      name: appt.contact?.name ?? "Unknown",
+      email: appt.contact?.email ?? "",
+      company: appt.contact?.companyName ?? "Not Stated",
+      // No linkedInUrl extraction here — GHL contacts don't have a
+      // standard LinkedIn field; it would only live in a buyer-specific
+      // custom field this app has no stable way to identify by name
+      // across accounts. person-match.ts's LinkedIn tier simply scores 0
+      // for GHL-sourced calls unless a future pass adds custom-field-name
+      // configuration.
+      callTime: new Date(appt.startTime),
+    }));
+  }
+
+  /**
+   * Pre-Call Read recovery gap 1 — dynamic trigger. See CalendlyClient's
+   * sibling method for the rationale.
+   */
+  async getUpcomingCallsWithinWindow(startHoursFromNow: number, endHoursFromNow: number): Promise<NormalizedCall[]> {
+    const windowStart = new Date(Date.now() + startHoursFromNow * 3_600_000);
+    const windowEnd = new Date(Date.now() + endHoursFromNow * 3_600_000);
+
+   const res = await fetch(
+  `${this.baseUrl}/calendars/events?locationId=${this.locationId}&startTime=${windowStart.toISOString()}&endTime=${windowEnd.toISOString()}`,
+  { headers: this.headers }
+);
     if (!res.ok) {
       throw new Error(`GHL appointments fetch failed [${res.status}]`);
     }
@@ -572,10 +690,10 @@ export class GHLCalendarClient {
     const end = new Date(sinceISO);
     end.setDate(end.getDate() + lookaheadDays);
 
-    const res = await fetch(
-      `${this.baseUrl}/calendars/events?locationId=${this.locationId}&startTime=${start.getTime()}&endTime=${end.getTime()}`,
-      { headers: this.headers }
-    );
+   const res = await fetch(
+  `${this.baseUrl}/calendars/events?locationId=${this.locationId}&startTime=${start.toISOString()}&endTime=${end.toISOString()}`,
+  { headers: this.headers }
+);
     if (!res.ok) return [];
     const data = await res.json();
 
@@ -649,6 +767,34 @@ export class OnceHubClient {
       name: booking.customer?.name ?? "Unknown",
       email: booking.customer?.email ?? "",
       company: booking.form_submission?.company ?? "Not Stated",
+      linkedInUrl: booking.form_submission?.linkedin ?? booking.form_submission?.linkedin_url ?? undefined,
+      callTime: new Date(booking.starting_time),
+    }));
+  }
+
+  /**
+   * Pre-Call Read recovery gap 1 — dynamic trigger. See CalendlyClient's
+   * sibling method for the rationale.
+   */
+  async getUpcomingCallsWithinWindow(startHoursFromNow: number, endHoursFromNow: number): Promise<NormalizedCall[]> {
+    const windowStart = new Date(Date.now() + startHoursFromNow * 3_600_000);
+    const windowEnd = new Date(Date.now() + endHoursFromNow * 3_600_000);
+
+    const res = await fetch(
+      `${this.baseUrl}/bookings?starting_after=${windowStart.toISOString()}&starting_before=${windowEnd.toISOString()}&status=scheduled`,
+      { headers: this.headers }
+    );
+    if (!res.ok) {
+      throw new Error(`OnceHub bookings fetch failed [${res.status}]`);
+    }
+    const data = await res.json();
+
+    return (data.data ?? []).map((booking: any) => ({
+      id: booking.id,
+      name: booking.customer?.name ?? "Unknown",
+      email: booking.customer?.email ?? "",
+      company: booking.form_submission?.company ?? "Not Stated",
+      linkedInUrl: booking.form_submission?.linkedin ?? booking.form_submission?.linkedin_url ?? undefined,
       callTime: new Date(booking.starting_time),
     }));
   }
@@ -712,6 +858,42 @@ export async function fetchTomorrowCallsForTenant(
 
     case "oncehub":
       return new OnceHubClient(apiKey).getTomorrowCalls();
+
+    default:
+      throw new Error(
+        `Unsupported booking platform: ${bookingPlatform}. ` +
+          "Supported: calendly, cal_com, ghl_calendar, oncehub"
+      );
+  }
+}
+
+// Pre-Call Read recovery gap 1 — dynamic trigger. Used by
+// dynamicBriefCron (src/inngest/crons.ts) instead of
+// fetchTomorrowCallsForTenant when stack.brief_trigger_type ===
+// "dynamic_webhook", so calls get briefed as soon as they enter the
+// buyer's lead-time window rather than waiting for the nightly batch.
+export async function fetchUpcomingCallsForTenant(
+  bookingPlatform: string,
+  apiKey: string,
+  meta: Record<string, any> | undefined,
+  startHoursFromNow: number,
+  endHoursFromNow: number
+): Promise<NormalizedCall[]> {
+  switch (bookingPlatform) {
+    case "calendly":
+      return new CalendlyClient(apiKey).getUpcomingCallsWithinWindow(startHoursFromNow, endHoursFromNow);
+
+    case "cal_com":
+      return new CalComClient(apiKey).getUpcomingCallsWithinWindow(startHoursFromNow, endHoursFromNow);
+
+    case "ghl_calendar":
+      if (!meta?.location_id) {
+        throw new Error("GHL Calendar requires location_id in booking_platform_meta");
+      }
+      return new GHLCalendarClient(apiKey, meta.location_id).getUpcomingCallsWithinWindow(startHoursFromNow, endHoursFromNow);
+
+    case "oncehub":
+      return new OnceHubClient(apiKey).getUpcomingCallsWithinWindow(startHoursFromNow, endHoursFromNow);
 
     default:
       throw new Error(

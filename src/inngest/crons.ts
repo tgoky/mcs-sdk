@@ -26,16 +26,17 @@
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
 import crypto from "crypto";
-import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify, bookingPollEngagement } from "@/lib/inngest";
+import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements, skillRuns } from "@/models/schema";
-import { startRun, closeStaleRun, notifyRunOutcome } from "@/lib/run-log";
+import { startRun, closeStaleRun, notifyRunOutcome, failRun } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
 import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
 import { markElapsedEnrollmentsLost, processLostDealsForEngagement } from "@/features/win-back/server/lost-deal-sweep";
 import { findEngagementsForWeeklyReadout, processWeeklyMetricsForEngagement } from "@/features/pile-on/server/weekly-metrics";
 import { findEngagementsDueForPoll, pollBookingsForEngagement } from "@/features/pin-down/server/booking-poller";
 import { validateAllPlatformDocsLinks } from "@/features/pin-down/server/docs-link-validator";
+import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/brief-service";
 import { and, eq, lt } from "drizzle-orm";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
@@ -55,10 +56,15 @@ export const nightlyBriefsCron = inngest.createFunction(
       const all = await db.select().from(engagements);
       // Only engagements that finished Pin-Down (booking platform wired
       // up) have anything to brief tonight.
-      const eligible = all.filter((t) => {
-        const stack = t.stack as any;
-        return stack?.booking_platform && stack?.booking_platform_credentials_ref;
-      });
+    const eligible = all.filter((t) => {
+  const stack = t.stack as any;
+  return (
+    stack?.booking_platform &&
+    stack?.booking_platform_credentials_ref &&
+    // ✅ Exclude dynamic polling clients so they don't get double-processed at night
+    stack?.brief_trigger_type !== "dynamic_webhook"
+  );
+});
 
       const out: { runId: string; engagementId: string }[] = [];
       for (const tenant of eligible) {
@@ -448,5 +454,86 @@ export const docsLinksValidatorCron = inngest.createFunction(
   { id: "docs-links-validator-cron", triggers: [{ cron: "TZ=UTC 0 6 * * *" }] }, // 06:00 UTC daily
   async ({ step }) => {
     return step.run("validate-platform-docs-links", () => validateAllPlatformDocsLinks());
+  }
+);
+
+/**
+ * Dynamic brief trigger (Pre-Call Read recovery gap 1).
+ *
+ * The OG SKILL.md offered the buyer a choice at Plan: nightly batch, or a
+ * "dynamic" trigger firing on booking.upcoming so the rep gets briefed
+ * shortly after a call enters the lead-time window rather than waiting
+ * for the nightly run. None of the four booking platforms this app
+ * integrates with expose a distinct, subscribable "N hours before this
+ * specific call" webhook event — what they expose is booking.created and
+ * (for some) booking.cancelled. So "dynamic" here is implemented as a
+ * tight rolling poll (every 15 minutes) that asks each dynamic-mode
+ * engagement "what calls just entered my lead-time window since the last
+ * check", rather than a literal webhook subscription — same honest
+ * reframing Pin-Down's own polling fallback already applies for booking
+ * events lacking a real webhook. In practice this still gets a rep their
+ * brief within 15 minutes of entering the window instead of up to 24
+ * hours late on the old nightly-only path, which is the actual value the
+ * OG SKILL.md's dynamic mode was for.
+ *
+ * briefedCallsLog's existing callId + 24h dedup window (see
+ * brief-service.ts) already makes this idempotent against being polled
+ * many times before a call's briefing window closes — no separate
+ * watermark bookkeeping needed here, unlike bookingPollCron.
+ */
+export const dynamicBriefCron = inngest.createFunction(
+  { id: "dynamic-brief-cron", triggers: [{ cron: "*/15 * * * *" }] },
+  async ({ step }) => {
+    const engagementIds = await step.run("find-dynamic-brief-engagements", async () => {
+      const all = await db.select().from(engagements);
+      return all
+        .filter((t) => {
+          const stack = t.stack as any;
+          return stack?.brief_trigger_type === "dynamic_webhook" && stack?.booking_platform && stack?.booking_platform_credentials_ref;
+        })
+        .map((t) => t.engagementId);
+    });
+
+    if (engagementIds.length > 0) {
+      await step.sendEvent(
+        "dispatch-dynamic-briefs",
+        engagementIds.map((engagementId) => dynamicBriefEngagement.create({ engagementId }))
+      );
+    }
+
+    return { dispatched: engagementIds.length };
+  }
+);
+
+/** Fanned-out handler: one engagement's dynamic-window brief pass. */
+export const processDynamicBriefEngagementCron = inngest.createFunction(
+  { id: "process-dynamic-brief-engagement", triggers: [dynamicBriefEngagement] },
+  async ({ event, step }) => {
+    const { engagementId } = event.data;
+
+    const tenantRaw = await step.run("load-tenant", async () => {
+      const [row] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+      return row ?? null;
+    });
+    if (!tenantRaw) return { briefed: 0, reason: "engagement not found" };
+
+    const tenant = { ...tenantRaw, createdAt: new Date(tenantRaw.createdAt), updatedAt: new Date(tenantRaw.updatedAt) };
+
+    const runId = crypto.randomUUID();
+    await startRun({
+      id: runId,
+      engagementId,
+      skillName: "pre-call-read",
+      phase: "roster_fetch",
+      label: "Dynamic brief trigger (Inngest)",
+    });
+
+    try {
+      const briefed = await executeNightlyBriefingCycle(tenant, runId, step, "dynamic_webhook");
+      return { briefed };
+    } catch (err: any) {
+      await failRun(runId, err).catch(() => {});
+      throw err;
+    }
   }
 );

@@ -18,6 +18,8 @@ import {
   bookingPollCron,
   processBookingPollEngagementCron,
   docsLinksValidatorCron,
+  dynamicBriefCron,
+  processDynamicBriefEngagementCron,
 } from "@/inngest/crons";
 
 // Explicit duration floor for this route, paired with checkpointing's
@@ -74,5 +76,9 @@ export const { GET, POST, PUT } = serve({
     // Durable multi-message SMS sequence for direct-send SMS platforms —
     // see src/inngest/pile-on-sms.ts (Pile-On recovery gap 1).
     processPileOnSmsSequence,
+    // Dynamic (tight-poll) brief trigger, an alternative to the nightly
+    // batch — see brief-service.ts's triggerMode (Pre-Call Read recovery gap 1).
+    dynamicBriefCron,
+    processDynamicBriefEngagementCron,
   ],
 });

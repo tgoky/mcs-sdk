@@ -3,9 +3,12 @@ import { briefedCallsLog } from "@/models/schema";
 import { and, eq, gte } from "drizzle-orm";
 import { evaluatePersonMatch } from "../person-match";
 import { researchProspect } from "./prospect-research";
+import { runConfiguredEnrichment } from "./apollo-adapter";
 import { resolveCredential } from "@/lib/credentials";
-import { fetchTomorrowCallsForTenant } from "@/lib/platforms/booking";
-import { deliverBrief } from "@/lib/platforms/email";
+import { fetchTomorrowCallsForTenant, fetchUpcomingCallsForTenant } from "@/lib/platforms/booking";
+import { deliverBrief, KlaviyoClient } from "@/lib/platforms/email";
+import { getVideoEngagementForProspect } from "@/lib/platforms/video-engagement";
+import { getAdDataContextForTenant } from "@/lib/platforms/ad-data";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import crypto from "crypto";
@@ -21,8 +24,15 @@ type StepTools = GetStepTools<Inngest.Any>;
 
 /**
  * Builds the 7-block brief system prompt.
+ *
+ * `engagementContext` bundles everything the transfer analysis's gaps 3
+ * (video engagement), 4 (ad-data engagement), and 7 (Klaviyo profile
+ * engagement) feed into the Engagement History section — pre-formatted
+ * as prose fragments by the caller (see gatherEngagementContext below)
+ * rather than raw objects, since this prompt is the single place all
+ * three sources actually converge into the brief.
  */
-function buildBriefSystemPrompt(tenant: any, researchSummary: string | null): string {
+function buildBriefSystemPrompt(tenant: any, researchSummary: string | null, engagementContext: string | null): string {
   return `You are the Pre-Call Read briefing engine for Showtime.
 Synthesize a concise closer brief in exactly 7 sections. Format each section title in bold (no # headers).
 Sections required:
@@ -36,16 +46,113 @@ ${
   researchSummary
     ? `Public research findings on this prospect (use these for Prospect Overview and Company Context — do not repeat verbatim, synthesize naturally, and never state something the research below didn't actually establish):\n${researchSummary}`
     : `If research was omitted due to low identity confidence, write "Research omitted — identity confidence below threshold" under Prospect Overview and leave Engagement History blank. Do not fabricate details.`
+}
+
+${
+  engagementContext
+    ? `Engagement history data for the "Engagement History" section (use exactly what's here — do not embellish, and note explicitly if a source found nothing rather than omitting it silently):\n${engagementContext}`
+    : ""
 }`;
 }
 
 /**
+ * Pre-Call Read recovery gaps 3, 4, 7 — pulls whatever engagement signal
+ * sources this engagement has configured and formats them as prose for
+ * buildBriefSystemPrompt. Every source here is independently best-effort:
+ * one source failing or finding nothing never blocks the others or the
+ * brief itself, matching this file's existing soft-fail philosophy for
+ * prospect research.
+ */
+async function gatherEngagementContext(
+  tenant: any,
+  stack: any,
+  engagementId: string,
+  prospectEmail: string
+): Promise<string | null> {
+  const fragments: string[] = [];
+
+  // Gap 7 — getProfileEngagement existed in email.ts but was never called
+  // from the brief path (the AI Architect Review's "criminally underused
+  // asset" flag). Klaviyo-only today, matching where the function lives.
+  if (stack.email_platform === "klaviyo") {
+    try {
+const emailApiKey = await resolveCredential(engagementId, "klaviyo");
+// Passed the stack's target list ID as the secondary constraint to align method signatures
+const events = await new KlaviyoClient(emailApiKey).getProfileEngagement(prospectEmail, stack.target_list_id);
+      if (events.length > 0) {
+        fragments.push(
+          `Pile-On email sequence engagement (Klaviyo): ${events.length} tracked open/click event(s) on file for this prospect's sequence.`
+        );
+      } else {
+        fragments.push("Pile-On email sequence engagement (Klaviyo): no opens or clicks tracked yet.");
+      }
+    } catch (e: any) {
+      fragments.push(`Pile-On email sequence engagement (Klaviyo): couldn't be retrieved (${e.message}).`);
+    }
+  }
+
+  // Gap 3 — video engagement on the confirmation page video.
+  if (stack.video_engagement_platform && stack.video_engagement_platform !== "none") {
+    try {
+      // Cleaned up the redundant conditional check
+const videoApiKey = await resolveCredential(engagementId, stack.video_engagement_platform);
+      const summary = await getVideoEngagementForProspect(
+        stack.video_engagement_platform,
+        videoApiKey,
+        stack.video_engagement_meta,
+        stack.video_engagement_meta?.wistia_video_id ?? stack.hero_video_id,
+        prospectEmail
+      );
+      if (summary.note) {
+        fragments.push(`Confirmation-page video engagement (${stack.video_engagement_platform}): ${summary.note}`);
+      } else if (summary.watched) {
+        fragments.push(
+          `Confirmation-page video engagement (${stack.video_engagement_platform}): watched ${summary.percentWatched ?? "an unknown"}%${summary.lastWatchedAt ? `, last watched ${summary.lastWatchedAt}` : ""}.`
+        );
+      } else {
+        fragments.push(`Confirmation-page video engagement (${stack.video_engagement_platform}): not watched yet.`);
+      }
+    } catch (e: any) {
+      fragments.push(`Confirmation-page video engagement (${stack.video_engagement_platform}): couldn't be retrieved (${e.message}).`);
+    }
+  }
+
+  // Gap 4 — ad-data cohort/prior-touch context.
+  if (stack.ad_data_platform && stack.ad_data_platform !== "none" && stack.ad_data_platform !== "native_crm") {
+    try {
+      const adDataApiKey = await resolveCredential(engagementId, stack.ad_data_platform);
+      const context = await getAdDataContextForTenant(stack.ad_data_platform, adDataApiKey, prospectEmail);
+      if (context.found) {
+        fragments.push(
+          `Ad-data attribution (${stack.ad_data_platform}): ${context.sourceAd ? `came in from "${context.sourceAd}"` : "attributed lead"}${
+            context.touchCount ? `, ${context.touchCount} tracked touch(es)` : ""
+          }${context.firstTouchAt ? `, first touch ${context.firstTouchAt}` : ""}.`
+        );
+      } else {
+        fragments.push(`Ad-data attribution (${stack.ad_data_platform}): no attribution on file for this lead (likely organic/referral).`);
+      }
+    } catch (e: any) {
+      fragments.push(`Ad-data attribution (${stack.ad_data_platform}): couldn't be retrieved (${e.message}).`);
+    }
+  }
+
+  return fragments.length > 0 ? fragments.join("\n") : null;
+}
+
+/**
  * Core briefing cycle execution runtime block.
+ *
+ * `triggerMode` — Pre-Call Read recovery gap 1. "nightly" (default) fetches
+ * tomorrow's full roster, same as always. "dynamic_webhook" instead fetches
+ * whatever's newly inside the buyer's brief_lead_time_hours window — see
+ * dynamicBriefCron in src/inngest/crons.ts, which calls this in that mode
+ * on a tight rolling cadence instead of once nightly.
  */
 export async function executeNightlyBriefingCycle(
   tenant: any,
   runId: string,
-  step?: StepTools
+  step?: StepTools,
+  triggerMode: "nightly" | "dynamic_webhook" = "nightly"
 ): Promise<number> {
   let deliveredCount = 0;
   const summary = emptySummary();
@@ -77,14 +184,22 @@ export async function executeNightlyBriefingCycle(
         stack.booking_platform
       );
 
-      const calls = await fetchTomorrowCallsForTenant(
+   const calls =
+  triggerMode === "dynamic_webhook"
+    ? await fetchUpcomingCallsForTenant(
         stack.booking_platform,
         bookingApiKey,
-        stack.booking_platform_meta
-      );
+        stack.booking_platform_meta,
+        0,
+        // Clamped defensively between 1-48 hours to prevent lookahead array overflow or 0h empty results
+        Math.max(1, Math.min(48, stack.brief_lead_time_hours ?? 12))
+      )
+    : await fetchTomorrowCallsForTenant(stack.booking_platform, bookingApiKey, stack.booking_platform_meta);
 
-      summary.whatWasAttempted.push(`Fetched tomorrow's roster from ${stack.booking_platform}: ${calls.length} call(s) found.`);
-      await logStep(runId, { phase: "roster_fetch", status: "success", detail: `${calls.length} call(s) on tomorrow's roster` });
+      summary.whatWasAttempted.push(
+        `Fetched ${triggerMode === "dynamic_webhook" ? "upcoming (dynamic window)" : "tomorrow's"} roster from ${stack.booking_platform}: ${calls.length} call(s) found.`
+      );
+      await logStep(runId, { phase: "roster_fetch", status: "success", detail: `${calls.length} call(s) found (${triggerMode})` });
 
       return calls;
     });
@@ -155,7 +270,7 @@ export async function executeNightlyBriefingCycle(
           await logStep(runId, { phase: "rule_14_gate", status: "running", label: callLabel });
 
           const matchResult = await evaluatePersonMatch(
-            { email: call.email, name: call.name, companySupplied: call.company },
+            { email: call.email, name: call.name, companySupplied: call.company, linkedInUrlFromApp: call.linkedInUrl },
             stack.person_match_confidence_threshold ?? 99
           );
 
@@ -173,23 +288,63 @@ export async function executeNightlyBriefingCycle(
           // LinkedIn scraper (LinkedIn's ToS prohibits scraping; there's no
           // legitimate API for arbitrary profile lookups).
           let researchSummary: string | null = null;
+          // Pre-Call Read recovery gap 6 — tracked explicitly for the
+          // briefed_calls_log write below, cross-consumed by Win-Back
+          // (was research done before this call was missed?) and Leak Map
+          // (research completion rate across the roster).
+          let researchStatus: "completed" | "skipped_low_confidence" | "failed" = "skipped_low_confidence";
+          let aiSynthesisStatus: "completed" | "failed" = "failed";
+
           if (matchResult.passed) {
             await logStep(runId, { phase: "prospect_research", status: "running", label: callLabel });
-            const research = await researchProspect(call.name, call.email, call.company, runId);
-            researchSummary = research.summary;
-            summary.whatWasAttempted.push(`Researched ${callLabel} via web search (${research.searchesUsed} search(es)).`);
-            await logStep(runId, {
-              phase: "prospect_research",
-              status: research.citedUrls.length > 0 ? "success" : "skipped",
-              label: callLabel,
-              detail:
-                research.citedUrls.length > 0
-                  ? `${research.citedUrls.length} source(s) found`
-                  : "No usable public findings",
-            });
+            try {
+              const research = await researchProspect(call.name, call.email, call.company, runId);
+              researchSummary = research.summary;
+
+              // Pre-Call Read recovery gap 5 — BYOK Apollo/PDL enrichment,
+              // additive to the free web-search research above.
+              if (stack.prospect_research_sources_used?.length) {
+                const [apolloKey, pdlKey] = await Promise.all([
+                  stack.prospect_research_sources_used.includes("apollo") && stack.apollo_credentials_ref
+                    ? resolveCredential(tenant.engagementId, "apollo").catch(() => undefined)
+                    : Promise.resolve(undefined),
+                  stack.prospect_research_sources_used.includes("pdl") && stack.pdl_credentials_ref
+                    ? resolveCredential(tenant.engagementId, "pdl").catch(() => undefined)
+                    : Promise.resolve(undefined),
+                ]);
+                const enrichments = await runConfiguredEnrichment(
+                  stack.prospect_research_sources_used,
+                  { apollo: apolloKey, pdl: pdlKey },
+                  call.email
+                );
+                if (enrichments.length > 0) {
+                  researchSummary = [researchSummary, ...enrichments.map((e) => `[${e.source}] ${e.summary}`)]
+                    .filter(Boolean)
+                    .join("\n");
+                }
+              }
+
+              researchStatus = "completed";
+              summary.whatWasAttempted.push(`Researched ${callLabel} via web search (${research.searchesUsed} search(es)).`);
+              await logStep(runId, {
+                phase: "prospect_research",
+                status: research.citedUrls.length > 0 ? "success" : "skipped",
+                label: callLabel,
+                detail:
+                  research.citedUrls.length > 0
+                    ? `${research.citedUrls.length} source(s) found`
+                    : "No usable public findings",
+              });
+            } catch (researchErr: any) {
+              researchStatus = "failed";
+              await logStep(runId, { phase: "prospect_research", status: "failed", label: callLabel, detail: researchErr.message });
+            }
           } else {
             await logStep(runId, { phase: "prospect_research", status: "skipped", label: callLabel, detail: "Identity confidence below threshold" });
           }
+
+          // ── Engagement context (gaps 3, 4, 7) ────────────────────────────
+          const engagementContext = await gatherEngagementContext(tenant, stack, tenant.engagementId, call.email);
 
           // ── Brief synthesis ─────────────────────────────────────────────
           await logStep(runId, { phase: "brief_synthesis", status: "running", label: callLabel });
@@ -202,13 +357,20 @@ Call time: ${call.callTime.toISOString()}
 Identity confidence score: ${matchResult.totalScore}/100
 Research omitted: ${!matchResult.passed}`;
 
-          const llmResult = await callClaudeWithRetry({
-            model: MODEL.SYNTHESIS,
-            system: buildBriefSystemPrompt(tenant, researchSummary),
-            userMessage,
-            maxTokens: 1500,
-            runId,
-          });
+          let llmResult;
+          try {
+            llmResult = await callClaudeWithRetry({
+              model: MODEL.SYNTHESIS,
+              system: buildBriefSystemPrompt(tenant, researchSummary, engagementContext),
+              userMessage,
+              maxTokens: 1500,
+              runId,
+            });
+            aiSynthesisStatus = "completed";
+          } catch (synthesisErr: any) {
+            aiSynthesisStatus = "failed";
+            throw synthesisErr; // still a hard failure for this call — caught by the outer catch below
+          }
 
           await logStep(runId, { phase: "brief_synthesis", status: "success", label: callLabel, detail: "7-section brief generated" });
 
@@ -241,6 +403,8 @@ Research omitted: ${!matchResult.passed}`;
             briefDeliveredAt: new Date(),
             destinationDelivered: stack.brief_landing_destination ?? "slack",
             personMatchScore: matchResult.totalScore,
+            researchStatus,
+            aiSynthesisStatus,
             createdAt: new Date(),
           });
 

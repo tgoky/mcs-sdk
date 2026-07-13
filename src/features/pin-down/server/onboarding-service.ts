@@ -8,8 +8,10 @@ import { buildConfirmationPageHtml } from "./page-builder";
 import { buildAdCreativeBriefs } from "@/features/pile-on/server/ad-creative-briefs";
 import { buildScriptPack } from "./script-builder";
 import { auditExistingConfirmationPage } from "./discovery-prefill";
-import { createPlatformAdapterDraft } from "./doc-research";
+import { createPlatformAdapterDraft } from "./doc-researcher";
 import { scrapeVoiceCorpus, scrapeEspBroadcasts } from "./voice-scraper";
+import { buildSmsSequence } from "@/features/pile-on/server/sms-sequence-builder";
+import { auditExistingPileOnSequence } from "@/features/pile-on/server/existing-sequence-builder";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { GetStepTools, Inngest } from "inngest";
@@ -387,6 +389,72 @@ export async function runPinDownOnboarding(
       console.error("[pin-down onboarding] Script pack generation failed:", e.message);
       summary.openItems.push(`Hero/breakout video scripts couldn't be generated: ${e.message}`);
       await logStep(runId, { phase: "script_pack", status: "failed", detail: e.message });
+    }
+
+    // ── SMS sequence content (Pile-On recovery gap 1) ────────────────────────
+    // Generated regardless of which sms_platform is configured — content
+    // generation is platform-agnostic; sending/enrolling on it happens
+    // later, per-booking, in pile-on's enrollment-service.ts.
+    if (finalStack.sms_platform && finalStack.sms_platform !== "none") {
+      try {
+        await logStep(runId, { phase: "sms_sequence", status: "running" });
+        const smsMessages = await run("sms-sequence", () =>
+          buildSmsSequence(
+            {
+              buyer: buyerName,
+              brandVoiceProfile: voiceProfile,
+              offerDetails,
+              topObjections,
+              complianceFooterVariant: finalStack.sms_compliance_footer_variant,
+              complianceFooterCustom: finalStack.sms_compliance_footer_custom,
+            },
+            runId
+          )
+        );
+        await db
+          .update(engagements)
+          .set({ pileOnSmsAssetMap: { generatedAt: new Date().toISOString(), messages: smsMessages } })
+          .where(eq(engagements.engagementId, engagementId));
+        summary.whatWorked.push(`Generated a ${smsMessages.length}-message SMS sequence for ${finalStack.sms_platform}.`);
+        await logStep(runId, { phase: "sms_sequence", status: "success", detail: `${smsMessages.length} messages generated` });
+      } catch (e: any) {
+        console.error("[pin-down onboarding] SMS sequence generation failed:", e.message);
+        summary.openItems.push(`SMS sequence couldn't be generated: ${e.message}`);
+        await logStep(runId, { phase: "sms_sequence", status: "failed", detail: e.message });
+      }
+    }
+
+    // ── Existing Pile-On sequence audit (Pile-On recovery gap 4) ─────────────
+    if (finalStack.existing_pile_on_sequence_flagged && finalStack.email_platform) {
+      try {
+        await logStep(runId, { phase: "pile_on_sequence_audit", status: "running" });
+        const emailApiKey = await resolveCredential(engagementId, finalStack.email_platform).catch(() => null);
+        if (!emailApiKey) {
+          summary.openItems.push("Existing Pile-On sequence audit skipped — no email platform credential resolved yet.");
+          await logStep(runId, { phase: "pile_on_sequence_audit", status: "skipped", detail: "No credential" });
+        } else {
+          const audit = await run("pile-on-sequence-audit", () =>
+            auditExistingPileOnSequence(finalStack.email_platform!, emailApiKey, { offerDetails, brandVoiceProfile: voiceProfile })
+          );
+          await db
+            .update(engagements)
+            .set({ pileOnExistingSequenceAudit: audit })
+            .where(eq(engagements.engagementId, engagementId));
+          if (audit.supported) {
+            summary.whatWorked.push(
+              `Audited the existing Pile-On sequence on ${finalStack.email_platform} — ${audit.emails.length} email(s) scored. Build the new sequence under "${audit.recommendedWorkflowLabel}" in ${finalStack.email_platform} with mutually exclusive enrollment so the two can't double-fire.`
+            );
+            await logStep(runId, { phase: "pile_on_sequence_audit", status: "success", detail: `${audit.emails.length} emails scored` });
+          } else {
+            summary.openItems.push(`Existing Pile-On sequence audit: ${audit.unsupportedReason}`);
+            await logStep(runId, { phase: "pile_on_sequence_audit", status: "skipped", detail: audit.unsupportedReason });
+          }
+        }
+      } catch (e: any) {
+        console.error("[pin-down onboarding] Pile-On sequence audit failed:", e.message);
+        summary.openItems.push(`Existing Pile-On sequence audit failed: ${e.message}`);
+        await logStep(runId, { phase: "pile_on_sequence_audit", status: "failed", detail: e.message });
+      }
     }
 
     // ── Existing-page audit (Pin-Down recovery gap 7) ────────────────────────
