@@ -100,6 +100,22 @@ export const pileOnSmsSequenceStart = eventType("pile-on/sms-sequence-start", {
   schema: staticSchema<PileOnSmsSequenceStartData>(),
 });
 
+// Win-Back recovery gap 2 — durable multi-message SMS sequence for the
+// recovery cadence's direct-send platforms (Twilio, GHL SMS). Separate
+// from pileOnSmsSequenceStart because Win-Back's SMS content lives in a
+// different asset map with day-scale offsets — see
+// src/inngest/win-back-sms.ts.
+export type WinBackSmsSequenceStartData = {
+  engagementId: string;
+  enrollmentId: string;
+  prospectEmail: string;
+  prospectPhone: string;
+  prospectName: string;
+};
+export const winBackSmsSequenceStart = eventType("win-back/sms-sequence-start", {
+  schema: staticSchema<WinBackSmsSequenceStartData>(),
+});
+
 // Pre-Call Read recovery gap 1 — dynamic brief trigger. Same fan-out shape
 // as bookingPollEngagement above: dynamicBriefCron does a cheap DB-only
 // scan for engagements with stack.brief_trigger_type === "dynamic_webhook",
@@ -120,6 +136,23 @@ export type StaleRunNotifyData = {
 };
 export const staleRunNotify = eventType("skill/run.notify-timeout", {
   schema: staticSchema<StaleRunNotifyData>(),
+});
+
+// Win-Back recovery gap 6 — reply detection as a recovery exit signal.
+// Fired by both the native (HubSpot Conversations) and forwarding
+// (Postmark/SendGrid inbound-parse) paths in
+// src/app/api/webhooks/inbound-reply/route.ts, handled by
+// processInboundReply in crons.ts, which halts the matching active
+// win-back enrollment.
+export type InboundReplyReceivedData = {
+  engagementId: string;
+  fromEmail: string;
+  subject: string | null;
+  textBody: string | null;
+  source: "native" | "forwarding";
+};
+export const inboundReplyReceived = eventType("win-back/inbound-reply-received", {
+  schema: staticSchema<InboundReplyReceivedData>(),
 });
 
 /**

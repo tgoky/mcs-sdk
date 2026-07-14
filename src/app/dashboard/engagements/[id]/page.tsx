@@ -1,12 +1,12 @@
 import { db } from "@/lib/db";
-import { engagements, skillRuns } from "@/models/schema";
+import { engagements, skillRuns, artifacts } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { eq, and, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { TriggerSkillButton } from "./trigger-skill-button";
-import { CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRight } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRight, Server } from "lucide-react";
 import {
   SKILL_INFO,
   SKILLS,
@@ -85,6 +85,28 @@ export default async function EngagementDetailPage({
   const runsBySkill = Object.fromEntries(
     SKILLS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
   ) as Record<SkillName, typeof runs>;
+
+  // Win-Back recovery gap 7 — artifact ownership. Every row here is
+  // "mudd_ventures" today (see artifacts.owner's default and the
+  // recovery-service.ts/lost-deal-sweep.ts call sites that write it) —
+  // this surfaces that plainly rather than leaving it implicit, and gives
+  // a real place for "owner: buyer" to show up the moment an export
+  // capability exists (see the gap 1 discussion in recovery-service.ts).
+  const artifactRows = await db
+    .select()
+    .from(artifacts)
+    .where(eq(artifacts.engagementId, id))
+    .orderBy(desc(artifacts.createdAt));
+
+  const ARTIFACT_TYPE_LABELS: Record<string, string> = {
+    recovery_cadence: "Win-Back recovery cadence",
+    long_term_nurture: "Win-Back long-term nurture",
+  };
+
+  const OWNER_LABELS: Record<string, string> = {
+    mudd_ventures: "Runs on our infra",
+    buyer: "Exported to buyer's infra",
+  };
 
   return (
     <div className="space-y-6 w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
@@ -205,6 +227,38 @@ export default async function EngagementDetailPage({
           })}
         </div>
       </div>
+
+      {/* Artifact ownership (Win-Back recovery gap 7) */}
+      {artifactRows.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
+            <Server className="w-3.5 h-3.5" /> Runtime Ownership
+          </h2>
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-2 shadow-sm">
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-500 leading-relaxed font-mono">
+              What runs on our infrastructure vs. what would move to {engagement.buyer}'s own systems under an export.
+            </p>
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-900/50">
+              {artifactRows.map((a) => (
+                <div key={a.id} className="flex items-center justify-between py-2 text-xs">
+                  <span className="text-zinc-700 dark:text-zinc-300 font-medium">
+                    {ARTIFACT_TYPE_LABELS[a.artifactType] ?? a.artifactType}
+                  </span>
+                  <span
+                    className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded border ${
+                      a.owner === "buyer"
+                        ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40"
+                        : "text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800/40"
+                    }`}
+                  >
+                    {OWNER_LABELS[a.owner] ?? a.owner}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Historic executions grid table */}
       {runs.length > 0 && (

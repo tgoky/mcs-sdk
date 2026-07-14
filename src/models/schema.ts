@@ -177,6 +177,54 @@ export type EngagementStack = {
   // still generates the long-term nurture content and marks the prospect
   // lost, it just can't auto-enroll them and says so.
   long_term_nurture_list_id?: string;
+  // ── Win-Back recovery gap 3: reschedule mode split ─────────────────────
+  // "fresh_link": use the per-prospect single-use reschedule link/UID
+  // captured off the original cancellation webhook payload (Calendly's
+  // reschedule_url, Cal.com's rescheduleUid) when the platform provides
+  // one — see src/lib/platforms/reschedule.ts and
+  // winBackEnrollments.freshRescheduleLink. "time_slots" (default): the
+  // existing /reschedule/[engagementId] page that live-fetches open
+  // slots. Falls back to time_slots automatically when fresh_link is
+  // selected but the platform/payload didn't provide a link for this
+  // specific prospect.
+  reschedule_mode?: "fresh_link" | "time_slots";
+  // ── Win-Back recovery gap 4: recovered-from-no-show tagger ─────────────
+  // When true, a rebook-during-active-recovery-window event pushes a tag/
+  // custom-field update to the buyer's CRM — see
+  // src/lib/platforms/crm-tagger.ts. Defaults to true; the buyer's CRM
+  // should know this story even though the runtime lives on this app's
+  // infra (see the artifact-ownership fields below).
+  recovered_from_no_show_tagging_enabled?: boolean;
+  // ── Win-Back recovery gap 6: reply detection as exit signal ────────────
+  // "native": subscribe to the platform's own inbound-reply webhook where
+  // one genuinely exists (HubSpot Conversations today — see
+  // inbound-reply.ts's module comment for why Klaviyo/ActiveCampaign fall
+  // back to forwarding instead of a fabricated "native" path).
+  // "forwarding": the buyer forwards replies (via their inbox's own rule,
+  // through an inbound-email-to-webhook bridge like Postmark Inbound or
+  // SendGrid Inbound Parse) to inbound_reply_catcher_address.
+  // "none" (default): no reply-based exit — the cadence only stops on
+  // rebook or window elapse, same as before this recovery existed.
+  inbound_reply_mode?: "native" | "forwarding" | "none";
+  inbound_reply_catcher_address?: string;
+  inbound_reply_webhook_subscription_id?: string;
+  // HubSpot's Conversations webhook target URL is configured once per
+  // developer app, not per subscription — so a single receiving endpoint
+  // gets inbound events for every buyer portal using that app, and needs
+  // this field to know which engagement a given payload's `portalId`
+  // belongs to. Only relevant when inbound_reply_mode === "native" and
+  // email_platform === "hubspot". The operator finds this in their
+  // HubSpot account under Settings > Account Setup > Account Defaults.
+  hubspot_portal_id?: string;
+  // ── Win-Back recovery gap 7: artifact ownership ─────────────────────────
+  // Surfaced in the dashboard so operators can see what runs on this
+  // app's infra (owner: "mudd_ventures" — the default for every
+  // server-side-generated artifact today) vs. what would run on the
+  // buyer's own infra under a future "provisioned handoff" export (owner:
+  // "buyer"). See the artifacts table and gap 1's two-options note in
+  // recovery-service.ts — no export capability exists yet, this field
+  // just makes the eventual choice visible rather than deciding it.
+  runtime_ownership_model?: "mudd_ventures" | "buyer_exported";
   // Leak-Map sample-size floor (LEAK-002). Below this, a metric's delta is
   // suppressed rather than reported, regardless of how large it looks.
   sample_size_minimum?: number; // default 5
@@ -501,9 +549,22 @@ export const winBackEnrollments = pgTable("win_back_enrollments", {
   // should still be judged against the window they were actually enrolled
   // under, not retroactively against a new one.
   recoveryWindowDays: integer("recovery_window_days").notNull(),
-  // "active" | "rebooked" | "lost"
+  // "active" | "rebooked" | "lost" | "reply_exited"
   status: text("status").notNull().default("active"),
   lostAt: timestamp("lost_at"),
+  // Win-Back recovery gap 3 — the per-prospect single-use reschedule
+  // link/UID captured off the cancellation webhook payload, when the
+  // booking platform provides one. Null whenever the platform doesn't
+  // expose this (GHL, OnceHub) or the payload didn't carry it — see
+  // src/lib/platforms/reschedule.ts.
+  freshRescheduleLink: text("fresh_reschedule_link"),
+  // Win-Back recovery gap 6 — why this enrollment stopped, distinct from
+  // `status` because "rebooked" is itself a kind of exit but the two
+  // questions (what state is this row in vs. why did it leave "active")
+  // are useful to query separately once reply-detection is live.
+  // "rebooked" | "reply_detected" | "window_elapsed" | null (still active)
+  exitReason: text("exit_reason"),
+  exitedAt: timestamp("exited_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -591,6 +652,35 @@ export const artifacts = pgTable("artifacts", {
   skillName: text("skill_name").notNull(),
   artifactType: text("artifact_type").notNull(),
   storagePath: text("storage_path").notNull(),
+  // Win-Back recovery gap 7 — "mudd_ventures" (default, and the only value
+  // in practice today) for anything generated/executed on this app's own
+  // infra. "buyer" is reserved for a future exported artifact (see gap 1's
+  // "provisioned handoff" option) — nothing writes that value yet, but the
+  // column exists so the dashboard has something to surface the moment it
+  // does, without a schema change blocking that later feature.
+  owner: text("owner").notNull().default("mudd_ventures"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Win-Back Send Log (hybrid personalization outcomes) ───────────────────
+// Win-Back recovery gap 5 — "same recipe as Pile-On gap 3, applied to
+// Win-Back's message-1 slot" per the transfer analysis. Kept as its own
+// table rather than reusing pileOnSendLog, matching this schema's existing
+// convention of one log table per skill (briefedCallsLog vs
+// auditRunsLog) rather than a single polymorphic log — a shared table
+// would need a skill-discriminator column and would mix two skills' rows
+// under queries that only ever want one or the other.
+export const winBackSendLog = pgTable("win_back_send_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  enrollmentId: text("enrollment_id").notNull(), // winBackEnrollments.id
+  prospectEmail: text("prospect_email").notNull(),
+  // "hybrid" | "fallback"
+  sentVia: text("sent_via").notNull(),
+  latencyMs: integer("latency_ms"),
+  error: text("error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

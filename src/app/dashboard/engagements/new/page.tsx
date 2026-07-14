@@ -37,6 +37,9 @@ interface FormData {
   bookingPlatform: string;
   bookingLocationId: string;
   bookingStandingLink: string;
+
+  recoveryAutomationId: string; 
+  longTermNurtureListId: string;
   emailPlatform: string;
   emailTargetListId: string;
   emailRecoveryListId: string;
@@ -101,6 +104,11 @@ interface FormData {
   // buyer has a confirmation page live (or after running smart pre-fill,
   // gap 1, which can detect this automatically).
   existingConfirmationPageUrl: string;
+  // Win-Back recovery gaps 3, 4, 6
+  rescheduleMode: "fresh_link" | "time_slots";
+  recoveredFromNoShowTaggingEnabled: boolean;
+  inboundReplyMode: "native" | "forwarding" | "none";
+  hubspotPortalId: string;
 }
 
 const DEFAULT_FORM: FormData = {
@@ -115,6 +123,8 @@ const DEFAULT_FORM: FormData = {
   bookingLocationId: "",
   bookingStandingLink: "",
   emailPlatform: "klaviyo",
+  recoveryAutomationId: "",
+  longTermNurtureListId: "",
   emailTargetListId: "",
   emailRecoveryListId: "",
   emailActiveCampaignBaseUrl: "",
@@ -167,6 +177,10 @@ const DEFAULT_FORM: FormData = {
   discoveredPlatformName: "",
   discoveredPlatformWebsite: "",
   existingConfirmationPageUrl: "",
+  rescheduleMode: "time_slots",
+  recoveredFromNoShowTaggingEnabled: true,
+  inboundReplyMode: "none",
+  hubspotPortalId: "",
 };
 
 // Draft persistence: survives page refresh / accidental navigation within
@@ -686,7 +700,7 @@ export default function NewEngagementPage() {
 
     const testimonials = form.testimonials.filter((t) => t.name && t.role && t.quote);
 
-    const payload = {
+ const payload = {
       engagementId,
       whopUserId: "from_session",
       buyerName: form.buyerName,
@@ -698,17 +712,12 @@ export default function NewEngagementPage() {
         hybrid_mode_enabled: form.hybridMode,
       },
       stack: {
+        // 1. Core Platform Selection
         booking_platform: form.bookingPlatform,
         booking_platform_credentials_ref: `secrets://${engagementId}/${form.bookingPlatform}_pat`,
-        booking_platform_meta: {
-          ...(form.bookingPlatform === "ghl_calendar" && {
-            location_id: form.bookingLocationId,
-          }),
-        },
         booking_standing_link: form.bookingStandingLink || undefined,
         email_platform: form.emailPlatform,
         email_platform_credentials_ref: `secrets://${engagementId}/${form.emailPlatform}_key`,
-        email_platform_meta: Object.keys(emailPlatformMeta).length > 0 ? emailPlatformMeta : undefined,
         hosting_platform: form.hostingPlatform,
         hosting_platform_credentials_ref: `secrets://${engagementId}/${form.hostingPlatform}_key`,
         publish_domain: form.publishDomain,
@@ -716,20 +725,45 @@ export default function NewEngagementPage() {
         brief_landing_destination: form.briefDestination,
         slack_webhook_url: form.slackWebhookUrl,
         person_match_confidence_threshold: 99,
-        // Pin-Down recovery gap 2 — feeds the voice scraper. Reuses the
-        // domain already collected for the "scrape" voice source instead
-        // of asking for it twice.
         buyer_domain: form.marketingDomain || undefined,
-        // Pin-Down recovery gap 7 — triggers the existing-page audit
-        // during setup when set.
         existing_confirmation_page_url: form.existingConfirmationPageUrl || undefined,
-        // Pin-Down recovery gap 6 — only meaningful when either platform
-        // above is "discover_from_docs".
+
+        // 2. Flat DB Properties (Matches database schema.ts exactly)
+        target_list_id: form.emailTargetListId || undefined,
+        recovery_list_id: form.emailRecoveryListId || undefined,
+        activecampaign_base_url: form.emailActiveCampaignBaseUrl || undefined,
+        recovery_workflow_id: form.emailPlatform === "ghl" ? form.emailGhlRecoveryWorkflowId : undefined,
+        target_workflow_id: form.emailPlatform === "ghl" ? form.emailGhlTargetWorkflowId : undefined,
+        recovery_automation_id: form.emailPlatform === "activecampaign" ? form.recoveryAutomationId || undefined : undefined,
+        long_term_nurture_list_id: form.longTermNurtureListId || undefined,
+
+        // 3. Email Platform Nested Metadata Block (Downstream Backward Compatibility)
+        email_platform_meta: {
+          target_list_id: form.emailTargetListId || undefined,
+          recovery_list_id: form.emailRecoveryListId || undefined,
+          base_url: form.emailActiveCampaignBaseUrl || undefined,
+          location_id: form.emailGhlLocationId || undefined,
+          target_workflow_id: form.emailGhlTargetWorkflowId || undefined,
+          recovery_workflow_id: form.emailGhlRecoveryWorkflowId || undefined,
+          recovery_automation_id: form.recoveryAutomationId || undefined,
+          long_term_nurture_list_id: form.longTermNurtureListId || undefined,
+        },
+
+        // 4. Booking Platform Meta (Fixes Calendly Booking + GHL Email location_id bug)
+       // ✅ Safe, non-destructive assignment matrix
+booking_platform_meta: {
+  location_id: form.bookingPlatform === "ghl_calendar"
+    ? (form.bookingLocationId || undefined)
+    : (form.emailPlatform === "ghl" ? form.emailGhlLocationId || undefined : undefined),
+},
+
+        // 5. Unlisted platform auto-docs discovery triggers
         ...((form.bookingPlatform === "discover_from_docs" || form.hostingPlatform === "discover_from_docs") && {
           discovered_platform_name: form.discoveredPlatformName || undefined,
           discovered_platform_website: form.discoveredPlatformWebsite || undefined,
         }),
-        // ── Pile-On recovery gap 1 — SMS ──────────────────────────────────
+
+        // 6. Pile-On SMS Sequence Metadata
         sms_platform: form.smsPlatform,
         sms_platform_credentials_ref: form.smsPlatform !== "none" ? `secrets://${engagementId}/${form.smsPlatform}_key` : undefined,
         sms_platform_meta:
@@ -740,12 +774,13 @@ export default function NewEngagementPage() {
                 twilio_from_number: form.smsTwilioFromNumber || undefined,
               }
             : form.smsPlatform === "ghl_sms"
-              ? { ghl_location_id: form.bookingLocationId || undefined }
+              ? { ghl_location_id: form.bookingLocationId || form.emailGhlLocationId || undefined }
               : undefined,
         sms_a2p_10dlc_status: form.smsPlatform === "twilio" ? form.smsA2p10dlcStatus : undefined,
         sms_compliance_footer_variant: form.smsComplianceFooterVariant,
         sms_compliance_footer_custom: form.smsComplianceFooterVariant === "custom" ? form.smsComplianceFooterCustom || undefined : undefined,
-        // ── Pile-On recovery gap 2 — ad-data cohort sync ──────────────────
+
+        // 7. Cohort Attribution Syncer
         ad_data_platform: form.adDataPlatform,
         ad_data_platform_credentials_ref:
           form.adDataPlatform !== "none" && form.adDataPlatform !== "native_crm" ? `secrets://${engagementId}/${form.adDataPlatform}_key` : undefined,
@@ -759,12 +794,13 @@ export default function NewEngagementPage() {
                   google_sheets_cohort_sheet_name: form.adDataGoogleSheetsSheetName || undefined,
                 }
               : undefined,
-        // ── Pile-On recovery gap 4 — existing-sequence audit ──────────────
+
+        // 8. Legacy auditing flags & triggers
         existing_pile_on_sequence_flagged: form.existingPileOnSequenceFlagged || undefined,
-        // ── Pre-Call Read recovery gap 1 — dynamic trigger ────────────────
         brief_trigger_type: form.briefTriggerType,
         brief_lead_time_hours: 12,
-        // ── Pre-Call Read recovery gap 3 — video engagement ───────────────
+
+        // 9. Video Dropoff Analytics
         video_engagement_platform: form.videoEngagementPlatform,
         video_engagement_credentials_ref:
           form.videoEngagementPlatform !== "none" ? `secrets://${engagementId}/${form.videoEngagementPlatform}_key` : undefined,
@@ -776,10 +812,17 @@ export default function NewEngagementPage() {
                 youtube_channel_id: form.videoEngagementYoutubeChannelId || undefined,
               }
             : undefined,
-        // ── Pre-Call Read recovery gap 5 — Apollo/PDL BYOK ────────────────
+
+        // 10. Third-Party Data Integrations (BYOK)
         prospect_research_sources_used: form.prospectResearchSourcesUsed.length > 0 ? form.prospectResearchSourcesUsed : undefined,
         apollo_credentials_ref: form.prospectResearchSourcesUsed.includes("apollo") ? `secrets://${engagementId}/apollo_key` : undefined,
         pdl_credentials_ref: form.prospectResearchSourcesUsed.includes("pdl") ? `secrets://${engagementId}/pdl_key` : undefined,
+
+        // 11. Win-Back Workflow Settings
+        reschedule_mode: form.rescheduleMode,
+        recovered_from_no_show_tagging_enabled: form.recoveredFromNoShowTaggingEnabled,
+        inbound_reply_mode: form.inboundReplyMode,
+        hubspot_portal_id: form.inboundReplyMode === "native" && form.emailPlatform === "hubspot" ? form.hubspotPortalId || undefined : undefined,
       },
       topCallQuestions: form.topCallQuestions.split("\n").map((q) => q.trim()).filter(Boolean),
       topObjections: form.topObjections.split("\n").map((o) => o.trim()).filter(Boolean),
@@ -1114,6 +1157,16 @@ export default function NewEngagementPage() {
                   ]}
                   helpText="Select the audience list configured to lock in canceled no-show recoveries."
                 />
+                <SelectField
+      label="Klaviyo Long-Term Nurture List"
+      value={form.longTermNurtureListId}
+      onChange={(v) => set("longTermNurtureListId", v)}
+      options={[
+        { value: "", label: "-- Choose a Long-Term Nurture List (Optional) --" },
+        ...klaviyoLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` }))
+      ]}
+      helpText="Select the list where prospects should be auto-enrolled when their 30-day win-back window expires."
+    />
               </>
             )}
 
@@ -1163,6 +1216,13 @@ export default function NewEngagementPage() {
                   ]}
                   helpText="The audience for your win-back recovery sequence."
                 />
+                <InputField
+      label="ActiveCampaign Recovery Automation ID"
+      value={form.recoveryAutomationId}
+      onChange={(v) => set("recoveryAutomationId", v)}
+      placeholder="e.g. 12"
+      helpText="The numeric ID of your win-back automation flow inside ActiveCampaign, used for direct API exits."
+    />
               </>
             )}
 
@@ -1368,6 +1428,319 @@ export default function NewEngagementPage() {
                   placeholder="https://theirplatform.com"
                 />
               </>
+            )}
+
+            {/* Pile-On recovery gap 1 — SMS */}
+            <div className="md:col-span-2 pt-4 mt-2 border-t" style={{ borderColor: "var(--border)" }}>
+              <label className="text-xs font-bold uppercase tracking-wider block mb-3" style={{ color: "var(--text-muted)" }}>
+                SMS Sequence (optional)
+              </label>
+            </div>
+            <SelectField
+              label="SMS Platform"
+              value={form.smsPlatform}
+              onChange={(v) => set("smsPlatform", v)}
+              options={[
+                { value: "none", label: "No SMS sequence" },
+                { value: "twilio", label: "Twilio" },
+                { value: "ghl_sms", label: "GoHighLevel SMS" },
+                { value: "hubspot_sms", label: "HubSpot SMS" },
+              ]}
+            />
+            {form.smsPlatform !== "none" && (
+              <InputField
+                label={form.smsPlatform === "twilio" ? "Twilio Auth Token" : form.smsPlatform === "ghl_sms" ? "GoHighLevel API Key" : "HubSpot API Key"}
+                value={form.smsApiKey}
+                onChange={(v) => set("smsApiKey", v)}
+                type="password"
+              />
+            )}
+            {form.smsPlatform === "twilio" && (
+              <>
+                <InputField
+                  label="Twilio Account SID"
+                  value={form.smsTwilioAccountSid}
+                  onChange={(v) => set("smsTwilioAccountSid", v)}
+                  placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                />
+                <InputField
+                  label="Twilio Messaging Service SID"
+                  value={form.smsTwilioMessagingServiceSid}
+                  onChange={(v) => set("smsTwilioMessagingServiceSid", v)}
+                  placeholder="MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  helpText="Preferred over a single From number — Twilio handles number pooling/failover."
+                />
+                <InputField
+                  label="Twilio From Number (if no Messaging Service)"
+                  value={form.smsTwilioFromNumber}
+                  onChange={(v) => set("smsTwilioFromNumber", v)}
+                  placeholder="+15551234567"
+                />
+                <SelectField
+                  label="A2P 10DLC Status"
+                  value={form.smsA2p10dlcStatus}
+                  onChange={(v) => set("smsA2p10dlcStatus", v)}
+                  options={[
+                    { value: "not_started", label: "Not started" },
+                    { value: "brand_registered", label: "Brand registered" },
+                    { value: "campaign_approved", label: "Campaign approved" },
+                  ]}
+                  helpText="Must be 'Campaign approved' or we'll refuse to send — unregistered marketing SMS gets carrier-filtered."
+                />
+              </>
+            )}
+            {form.smsPlatform !== "none" && (
+              <SelectField
+                label="Compliance footer"
+                value={form.smsComplianceFooterVariant}
+                onChange={(v) => set("smsComplianceFooterVariant", v as "standard" | "custom")}
+                options={[
+                  { value: "standard", label: "Standard (Reply STOP to unsubscribe, HELP for help)" },
+                  { value: "custom", label: "Custom" },
+                ]}
+              />
+            )}
+            {form.smsPlatform !== "none" && form.smsComplianceFooterVariant === "custom" && (
+              <InputField
+                label="Custom compliance footer"
+                value={form.smsComplianceFooterCustom}
+                onChange={(v) => set("smsComplianceFooterCustom", v)}
+                placeholder="Text STOP to opt out."
+              />
+            )}
+
+            {/* Pile-On recovery gap 2 — ad-data cohort sync */}
+            <div className="md:col-span-2 pt-4 mt-2 border-t" style={{ borderColor: "var(--border)" }}>
+              <label className="text-xs font-bold uppercase tracking-wider block mb-3" style={{ color: "var(--text-muted)" }}>
+                Ad-Data Cohort Sync (optional)
+              </label>
+            </div>
+            <SelectField
+              label="Ad-Data Platform"
+              value={form.adDataPlatform}
+              onChange={(v) => set("adDataPlatform", v)}
+              options={[
+                { value: "none", label: "No ad-data sync" },
+                { value: "hyros", label: "Hyros" },
+                { value: "google_sheets", label: "Google Sheets" },
+                { value: "native_crm", label: `Tag on ${form.emailPlatform || "email/CRM platform"} (no separate credential)` },
+              ]}
+            />
+            {form.adDataPlatform !== "none" && form.adDataPlatform !== "native_crm" && (
+              <InputField
+                label={form.adDataPlatform === "hyros" ? "Hyros API Key" : "Google Sheets Access Token"}
+                value={form.adDataApiKey}
+                onChange={(v) => set("adDataApiKey", v)}
+                type="password"
+              />
+            )}
+            {form.adDataPlatform === "hyros" && (
+              <InputField
+                label="Hyros Account ID (optional)"
+                value={form.adDataHyrosAccountId}
+                onChange={(v) => set("adDataHyrosAccountId", v)}
+              />
+            )}
+            {form.adDataPlatform === "google_sheets" && (
+              <>
+                <InputField
+                  label="Spreadsheet ID"
+                  value={form.adDataGoogleSheetsSpreadsheetId}
+                  onChange={(v) => set("adDataGoogleSheetsSpreadsheetId", v)}
+                  helpText="The long ID in the sheet's URL between /d/ and /edit."
+                />
+                <InputField
+                  label="Sheet/tab name"
+                  value={form.adDataGoogleSheetsSheetName}
+                  onChange={(v) => set("adDataGoogleSheetsSheetName", v)}
+                  placeholder="Cohort"
+                />
+              </>
+            )}
+            {form.adDataPlatform !== "none" && (
+              <InputField
+                label="Cohort name/tag (optional)"
+                value={form.adDataCohortId}
+                onChange={(v) => set("adDataCohortId", v)}
+                placeholder="showtime_pile_on_cohort"
+                helpText="Defaults to showtime_pile_on_cohort if left blank."
+              />
+            )}
+
+            {/* Pile-On recovery gap 4 — existing-sequence audit */}
+            <div className="md:col-span-2">
+              <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+                <input
+                  type="checkbox"
+                  checked={form.existingPileOnSequenceFlagged}
+                  onChange={(e) => set("existingPileOnSequenceFlagged", e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  This client already has a pre-call email sequence running on {form.emailPlatform || "their ESP"}.
+                  {" "}We'll audit it (Klaviyo/HubSpot only) and show you a keep/replace/merge/drop recommendation per email before anything new goes live.
+                </span>
+              </label>
+            </div>
+
+            {/* Pre-Call Read recovery gap 3 — video engagement */}
+            <div className="md:col-span-2 pt-4 mt-2 border-t" style={{ borderColor: "var(--border)" }}>
+              <label className="text-xs font-bold uppercase tracking-wider block mb-3" style={{ color: "var(--text-muted)" }}>
+                Video Engagement (optional)
+              </label>
+            </div>
+            <SelectField
+              label="Confirmation-page video platform"
+              value={form.videoEngagementPlatform}
+              onChange={(v) => set("videoEngagementPlatform", v)}
+              options={[
+                { value: "none", label: "No video engagement tracking" },
+                { value: "vidalytics", label: "Vidalytics" },
+                { value: "wistia", label: "Wistia" },
+                { value: "youtube_analytics", label: "YouTube (aggregate stats only)" },
+                { value: "loom", label: "Loom (no analytics API available)" },
+              ]}
+              helpText="Vidalytics/Wistia give per-prospect watch data if your video embed passes their email. YouTube can only report aggregate stats, and Loom has no analytics API at all — both are still trackable here for completeness, just with that caveat."
+            />
+            {(form.videoEngagementPlatform === "vidalytics" || form.videoEngagementPlatform === "wistia" || form.videoEngagementPlatform === "youtube_analytics") && (
+              <InputField
+                label={`${form.videoEngagementPlatform === "youtube_analytics" ? "Google" : form.videoEngagementPlatform === "vidalytics" ? "Vidalytics" : "Wistia"} API Key`}
+                value={form.videoEngagementApiKey}
+                onChange={(v) => set("videoEngagementApiKey", v)}
+                type="password"
+              />
+            )}
+            {form.videoEngagementPlatform === "vidalytics" && (
+              <InputField
+                label="Confirmation-page video ID"
+                value={form.heroVideoId}
+                onChange={(v) => set("heroVideoId", v)}
+              />
+            )}
+            {form.videoEngagementPlatform === "wistia" && (
+              <InputField
+                label="Wistia video ID"
+                value={form.videoEngagementWistiaVideoId}
+                onChange={(v) => set("videoEngagementWistiaVideoId", v)}
+              />
+            )}
+            {form.videoEngagementPlatform === "youtube_analytics" && (
+              <>
+                <InputField
+                  label="YouTube channel ID"
+                  value={form.videoEngagementYoutubeChannelId}
+                  onChange={(v) => set("videoEngagementYoutubeChannelId", v)}
+                />
+                <InputField
+                  label="Confirmation-page video ID"
+                  value={form.heroVideoId}
+                  onChange={(v) => set("heroVideoId", v)}
+                />
+              </>
+            )}
+
+            {/* Pre-Call Read recovery gap 5 — Apollo/PDL BYOK */}
+            <div className="md:col-span-2 pt-4 mt-2 border-t" style={{ borderColor: "var(--border)" }}>
+              <label className="text-xs font-bold uppercase tracking-wider block mb-3" style={{ color: "var(--text-muted)" }}>
+                Prospect Research BYOK (optional)
+              </label>
+              <p className="text-[11px] font-mono mb-3" style={{ color: "var(--text-muted)" }}>
+                If your client already has their own Apollo or PDL subscription, we'll layer it on top of standard web research — never a required cost.
+              </p>
+            </div>
+            <div className="md:col-span-2 flex gap-4">
+              <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+                <input
+                  type="checkbox"
+                  checked={form.prospectResearchSourcesUsed.includes("apollo")}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      prospectResearchSourcesUsed: e.target.checked
+                        ? [...f.prospectResearchSourcesUsed, "apollo"]
+                        : f.prospectResearchSourcesUsed.filter((s) => s !== "apollo"),
+                    }))
+                  }
+                />
+                Apollo
+              </label>
+              <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+                <input
+                  type="checkbox"
+                  checked={form.prospectResearchSourcesUsed.includes("pdl")}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      prospectResearchSourcesUsed: e.target.checked
+                        ? [...f.prospectResearchSourcesUsed, "pdl"]
+                        : f.prospectResearchSourcesUsed.filter((s) => s !== "pdl"),
+                    }))
+                  }
+                />
+                People Data Labs
+              </label>
+            </div>
+            {form.prospectResearchSourcesUsed.includes("apollo") && (
+              <InputField label="Apollo API Key" value={form.apolloApiKey} onChange={(v) => set("apolloApiKey", v)} type="password" />
+            )}
+            {form.prospectResearchSourcesUsed.includes("pdl") && (
+              <InputField label="PDL API Key" value={form.pdlApiKey} onChange={(v) => set("pdlApiKey", v)} type="password" />
+            )}
+
+            {/* Win-Back recovery gaps 3, 4, 6 */}
+            <div className="md:col-span-2 pt-4 mt-2 border-t" style={{ borderColor: "var(--border)" }}>
+              <label className="text-xs font-bold uppercase tracking-wider block mb-3" style={{ color: "var(--text-muted)" }}>
+                Win-Back Recovery (optional)
+              </label>
+            </div>
+            <SelectField
+              label="Reschedule link mode"
+              value={form.rescheduleMode}
+              onChange={(v) => set("rescheduleMode", v as "fresh_link" | "time_slots")}
+              options={[
+                { value: "time_slots", label: "Live available slots (default)" },
+                { value: "fresh_link", label: "Per-prospect single-use link (Calendly/Cal.com only)" },
+              ]}
+              helpText="fresh_link uses the platform's own per-booking reschedule link when available (Calendly, Cal.com), falling back to live slots per prospect when it isn't (GHL, OnceHub)."
+            />
+            <div className="md:col-span-2">
+              <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+                <input
+                  type="checkbox"
+                  checked={form.recoveredFromNoShowTaggingEnabled}
+                  onChange={(e) => set("recoveredFromNoShowTaggingEnabled", e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>Tag prospects as "recovered from no-show" on {form.emailPlatform || "the ESP"} when they rebook during an active recovery window.</span>
+              </label>
+            </div>
+            <SelectField
+              label="Reply detection (exits the recovery cadence)"
+              value={form.inboundReplyMode}
+              onChange={(v) => set("inboundReplyMode", v as "native" | "forwarding" | "none")}
+              options={[
+                { value: "none", label: "Off — cadence only stops on rebook or window elapse" },
+                { value: "forwarding", label: "Forwarding — client forwards replies through an inbound-parse bridge" },
+                { value: "native", label: "Native — HubSpot Conversations only" },
+              ]}
+              helpText={
+                form.inboundReplyMode === "native" && form.emailPlatform !== "hubspot"
+                  ? "Native mode only works with HubSpot — Klaviyo and ActiveCampaign don't expose a stable reply webhook, use forwarding instead."
+                  : "A reply of any kind halts the win-back cadence for that prospect — table stakes for anything calling itself win-back."
+              }
+            />
+            {form.inboundReplyMode === "native" && form.emailPlatform === "hubspot" && (
+              <InputField
+                label="HubSpot Portal ID"
+                value={form.hubspotPortalId}
+                onChange={(v) => set("hubspotPortalId", v)}
+                helpText="Settings → Account Setup → Account Defaults in your client's HubSpot account."
+              />
+            )}
+            {form.inboundReplyMode === "forwarding" && (
+              <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
+                We'll generate a unique catcher URL once Win-Back is set up — point your client's Postmark/SendGrid inbound-parse bridge (or a forwarding rule through one) at it.
+              </div>
             )}
           </div>
         )}

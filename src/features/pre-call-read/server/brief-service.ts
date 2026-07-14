@@ -76,9 +76,9 @@ async function gatherEngagementContext(
   // asset" flag). Klaviyo-only today, matching where the function lives.
   if (stack.email_platform === "klaviyo") {
     try {
-const emailApiKey = await resolveCredential(engagementId, "klaviyo");
-// Passed the stack's target list ID as the secondary constraint to align method signatures
-const events = await new KlaviyoClient(emailApiKey).getProfileEngagement(prospectEmail, stack.target_list_id);
+      const emailApiKey = await resolveCredential(engagementId, "klaviyo");
+      // Pre-Call Read recovery gap 7 — scope to the buyer's Pile-On list/flow when known.
+      const events = await new KlaviyoClient(emailApiKey).getProfileEngagement(prospectEmail, stack.target_list_id);
       if (events.length > 0) {
         fragments.push(
           `Pile-On email sequence engagement (Klaviyo): ${events.length} tracked open/click event(s) on file for this prospect's sequence.`

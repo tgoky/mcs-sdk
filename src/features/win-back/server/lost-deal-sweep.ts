@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { winBackEnrollments, engagements, type EngagementStack } from "@/models/schema";
+import { winBackEnrollments, engagements, artifacts, type EngagementStack } from "@/models/schema";
 import { and, eq, lt, sql, inArray } from "drizzle-orm";
 import { buildLongTermNurture } from "./cadence-builder";
 import { FIRST_NAME_MERGE } from "./recovery-service";
@@ -114,6 +114,25 @@ export async function processLostDealsForEngagement(
           updatedAt: new Date(),
         })
         .where(eq(engagements.engagementId, engagementId));
+
+      // ✅ FIX: Wipe out any duplicate long_term_nurture artifact mappings before inserting a new entry
+      await db.delete(artifacts).where(
+        and(
+          eq(artifacts.engagementId, engagementId),
+          eq(artifacts.artifactType, "long_term_nurture")
+        )
+      );
+
+      // Win-Back recovery gap 7 — same artifact-ownership record as the
+      // recovery cadence in recovery-service.ts, for the long-term
+      // nurture content generated here.
+      await db.insert(artifacts).values({
+        engagementId,
+        skillName: "win-back",
+        artifactType: "long_term_nurture",
+        storagePath: `engagements/${engagementId}/long_term_nurture_asset_map`,
+        owner: "mudd_ventures",
+      });
 
       nurtureEmails = emails;
       nurtureGenerated = true;

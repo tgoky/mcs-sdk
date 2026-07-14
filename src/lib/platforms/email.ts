@@ -151,7 +151,22 @@ export class KlaviyoClient {
   /**
    * Fetches profile engagement events for pre-call-read research context.
    */
-  async getProfileEngagement(email: string): Promise<any[]> {
+  /**
+   * Pre-Call Read recovery gap 7's exact documented signature is
+   * `getProfileEngagement(prospectEmail, offerPileOnSequenceId)`. The
+   * second parameter scopes results to a specific Pile-On flow/campaign
+   * rather than every open/click event ever recorded on the profile.
+   * Klaviyo's Events API filter DSL doesn't have a reliably-documented
+   * server-side filter for "events belonging to flow X" across API
+   * versions, so this over-fetches (same query as before) and then
+   * filters client-side on whatever flow/campaign identifier the event's
+   * properties actually carry. If `sequenceId` is omitted, or none of the
+   * returned events carry an identifiable flow/campaign field, this falls
+   * back to the full unscoped list rather than silently returning
+   * nothing — a broader-than-requested engagement summary is more useful
+   * to a closer than an empty one caused by a filter that didn't match.
+   */
+  async getProfileEngagement(email: string, sequenceId?: string): Promise<any[]> {
     // First resolve profile ID
     const profileRes = await fetch(`${this.baseUrl}/profiles/match/`, {
       method: "POST",
@@ -169,12 +184,23 @@ export class KlaviyoClient {
     const eventsRes = await fetch(
       `${this.baseUrl}/events/?filter=${encodeURIComponent(
         `equals(profile_id,"${profileId}"),contains-any(metric_id,["opened-email","clicked-email"])`
-      )}`,
+      )}&include=metric`,
       { headers: this.headers }
     );
     if (!eventsRes.ok) return [];
     const eventsData = await eventsRes.json();
-    return eventsData.data ?? [];
+    const allEvents: any[] = eventsData.data ?? [];
+
+    if (!sequenceId) return allEvents;
+
+    const scoped = allEvents.filter((event) => {
+      const props = event.attributes?.event_properties ?? {};
+      return props.$flow === sequenceId || props.$campaign_id === sequenceId || props.campaign_id === sequenceId;
+    });
+
+    // Fall back to the unscoped set if the scoping filter matched nothing
+    // — see the doc comment above for why.
+    return scoped.length > 0 ? scoped : allEvents;
   }
 
   /**
@@ -346,6 +372,49 @@ export class HubSpotClient {
     }
   }
 
+  /**
+   * Win-Back recovery gap 6 — native reply-detection path. HubSpot's
+   * webhook subscriptions are configured at the developer APP level, not
+   * per-portal — this requires HUBSPOT_APP_ID (the app this account's
+   * OAuth connection belongs to) to be set, which is a genuine
+   * prerequisite, not an oversight to route around. If it's not
+   * configured, this throws with a clear message rather than silently
+   * pretending a subscription was created.
+   */
+  async subscribeToInboundConversations(receiverUrl: string): Promise<string> {
+    const appId = process.env.HUBSPOT_APP_ID;
+    if (!appId) {
+      throw new Error(
+        "HUBSPOT_APP_ID is not configured — HubSpot webhook subscriptions are registered at the developer app level, not per-portal, so this env var is required before a native Conversations subscription can be created."
+      );
+    }
+
+    const res = await fetch(`https://api.hubapi.com/webhooks/v3/${appId}/subscriptions`, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({
+        eventType: "conversation.newMessage",
+        propertyName: "",
+        active: true,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`HubSpot webhook subscription creation failed [${res.status}]: ${body.slice(0, 300)}`);
+    }
+
+    // The subscription itself doesn't carry a target URL — that's set
+    // once per app via the app's webhook settings (targetUrl), not per
+    // subscription. This call registers the event type subscription;
+    // receiverUrl is accepted for API-shape consistency with the other
+    // subscribeWebhook methods in this codebase and logged for the
+    // operator's own reference, not sent to HubSpot.
+    const data = await res.json();
+    console.log(`[hubspot] Conversations subscription ${data.id} created — ensure the app's webhook target URL is set to ${receiverUrl}.`);
+    return String(data.id);
+  }
+
   async enrollInRecoveryWorkflow(email: string): Promise<void> {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
@@ -482,7 +551,7 @@ export class HubSpotClient {
    * is wrapped so a failure here never blocks the property update from
    * having already landed.
    */
-  async markRebooked(email: string, workflowId?: string): Promise<void> {
+  async markRebooked(email: string, workflowId?: string, statusValue: string = "rebooked"): Promise<void> {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
@@ -490,7 +559,7 @@ export class HubSpotClient {
       method: "PATCH",
       headers: this.headers,
       body: JSON.stringify({
-        properties: { showtime_status: "rebooked" },
+        properties: { showtime_status: statusValue },
       }),
     });
 
@@ -563,14 +632,21 @@ export class ActiveCampaignClient {
    * the specific recovery automation if we can resolve the contactAutomation
    * association ID.
    */
-  async markRebooked(email: string, automationId?: string): Promise<void> {
+  /**
+   * Signals "this contact rebooked, stop the win-back cadence" by tagging
+   * the contact (reliable — the buyer's automation's "stop on tag" exit
+   * condition should key off this) and, best-effort, removing them from
+   * the specific recovery automation if we can resolve the contactAutomation
+   * association ID.
+   */
+  async markRebooked(email: string, automationId?: string, statusTag: string = "showtime_rebooked"): Promise<void> {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
     await fetch(`${this.baseUrl}/contactTags`, {
       method: "POST",
       headers: this.headers,
-      body: JSON.stringify({ contactTag: { contact: contactId, tag: "showtime_rebooked" } }),
+      body: JSON.stringify({ contactTag: { contact: contactId, tag: statusTag } }),
     }).catch(() => {});
 
     if (automationId) {
@@ -589,8 +665,9 @@ export class ActiveCampaignClient {
             });
           }
         }
-      } catch {
-        // best-effort — the tag above is the reliable signal
+      } catch (apiErr: any) {
+        // ✅ Enhanced defensive error logging to keep external API drift visible
+        console.warn(`[activecampaign-exit] Direct unenrollment skipped, falling back to tag-exits: ${apiErr.message}`);
       }
     }
   }
@@ -748,14 +825,14 @@ export class GHLCRMClient {
    * this is a direct removal rather than a property-based signal — the
    * cleanest of the four platforms for this specific exit condition.
    */
-  async markRebooked(email: string, workflowId?: string): Promise<void> {
+  async markRebooked(email: string, workflowId?: string, statusValue: string = "rebooked"): Promise<void> {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
     await fetch(`${this.baseUrl}/contacts/${contactId}`, {
       method: "PUT",
       headers: this.headers,
-      body: JSON.stringify({ customFields: [{ key: "showtime_status", field_value: "rebooked" }] }),
+      body: JSON.stringify({ customFields: [{ key: "showtime_status", field_value: statusValue }] }),
     }).catch(() => {});
 
     if (workflowId) {
@@ -871,34 +948,47 @@ export async function enrollInWinBackSequence(
  * actually our responsibility, since the cadence itself runs as a native
  * automation in the buyer's platform, not in our worker.
  */
+/**
+ * Removes a prospect from the active win-back cadence. `reason` controls
+ * what actually gets written as the buyer-facing status — "rebooked"
+ * (default, backward-compatible with the original rebook-exit call site
+ * in enrollment-service.ts) or "reply_exited" (Win-Back recovery gap 6 —
+ * a prospect who replied didn't necessarily rebook, and telling the
+ * buyer's CRM they did would be actively misleading). The mechanical
+ * side of exiting — removing from the workflow/automation — is identical
+ * either way; only the label differs.
+ */
 export async function exitWinBackSequence(
   platform: string,
   apiKey: string,
   email: string,
-  meta: Record<string, any>
+  meta: Record<string, any>,
+  reason: "rebooked" | "reply_exited" = "rebooked"
 ): Promise<void> {
   switch (platform) {
     case "klaviyo":
       return new KlaviyoClient(apiKey).setProfileProperty(email, {
-        showtime_status: "rebooked",
+        showtime_status: reason,
         rebooked_at: new Date().toISOString(),
       });
 
     case "hubspot":
-      return new HubSpotClient(apiKey).markRebooked(email, meta.recovery_workflow_id);
+      return new HubSpotClient(apiKey).markRebooked(email, meta.recovery_workflow_id, reason);
 
     case "activecampaign":
       if (!meta.activecampaign_base_url) return;
       return new ActiveCampaignClient(meta.activecampaign_base_url, apiKey).markRebooked(
         email,
-        meta.recovery_automation_id
+        meta.recovery_automation_id,
+        reason === "reply_exited" ? "showtime_reply_exited" : "showtime_rebooked"
       );
 
     case "ghl":
       if (!meta.location_id) return;
       return new GHLCRMClient(apiKey, meta.location_id).markRebooked(
         email,
-        meta.recovery_workflow_id
+        meta.recovery_workflow_id,
+        reason
       );
 
     default:
@@ -953,6 +1043,51 @@ export async function deliverPersonalizedIntro(
 
     default:
       throw new Error(`Unsupported email platform for personalized-intro delivery: ${platform}`);
+  }
+}
+
+/**
+ * Win-Back recovery gap 3 — sets the per-prospect fresh reschedule link
+ * (or the time_slots fallback URL) as a contact property, so the
+ * recovery cadence's generated copy — which references
+ * `{{ showtime_reschedule_link }}` in fresh_link mode instead of a
+ * literal URL, see RESCHEDULE_LINK_MERGE in recovery-service.ts — merges
+ * in the right link per prospect. Same buyer's-platform-renders-our-
+ * merge-field pattern as deliverPersonalizedIntro above, and the same
+ * ActiveCampaign limitation applies for the same reason (no arbitrary
+ * custom-field API without a pre-registered numeric field ID).
+ */
+export async function deliverRescheduleLink(
+  platform: string,
+  apiKey: string,
+  email: string,
+  url: string,
+  meta: Record<string, any> = {}
+): Promise<void> {
+  switch (platform) {
+    case "klaviyo":
+      return new KlaviyoClient(apiKey).setProfileProperty(email, {
+        showtime_reschedule_link: url,
+      });
+
+    case "hubspot":
+      return new HubSpotClient(apiKey).setCustomProperty(email, {
+        showtime_reschedule_link: url,
+      });
+
+    case "ghl":
+      if (!meta.location_id) throw new Error("GHL reschedule-link delivery requires location_id in stack");
+      return new GHLCRMClient(apiKey, meta.location_id).setCustomFields(email, {
+        showtime_reschedule_link: url,
+      });
+
+    case "activecampaign":
+      throw new Error(
+        "ActiveCampaign requires a pre-registered numeric custom field ID for this, which isn't collected during onboarding yet — not supported."
+      );
+
+    default:
+      throw new Error(`Unsupported email platform for reschedule-link delivery: ${platform}`);
   }
 }
 

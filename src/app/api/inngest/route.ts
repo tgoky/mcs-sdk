@@ -2,6 +2,8 @@ import { serve } from "inngest/next";
 import { inngest } from "@/lib/inngest";
 import { executeSkillRun } from "@/inngest/skill";
 import { processPileOnSmsSequence } from "@/inngest/pile-on-sms";
+import { processInboundReply } from "@/inngest/win-back-reply";
+import { processWinBackSmsSequence } from "@/inngest/win-back-sms";
 import {
   nightlyBriefsCron,
   weeklyLeakMapCron,
@@ -80,5 +82,11 @@ export const { GET, POST, PUT } = serve({
     // batch — see brief-service.ts's triggerMode (Pre-Call Read recovery gap 1).
     dynamicBriefCron,
     processDynamicBriefEngagementCron,
+    // Halts a win-back cadence when a prospect replies — see
+    // src/inngest/win-back-reply.ts (Win-Back recovery gap 6).
+    processInboundReply,
+    // Durable multi-message SMS sequence for the win-back recovery
+    // cadence — see src/inngest/win-back-sms.ts (Win-Back recovery gap 2).
+    processWinBackSmsSequence,
   ],
 });

@@ -3,12 +3,15 @@ import { winBackEnrollments, engagements } from "@/models/schema";
 import { and, eq, sql } from "drizzle-orm";
 import crypto from "crypto";
 import { resolveCredential } from "@/lib/credentials";
-import { enrollInPreCallSequence, enrollInWinBackSequence, exitWinBackSequence } from "@/lib/platforms/email";
+import { enrollInPreCallSequence, enrollInWinBackSequence, exitWinBackSequence, deliverRescheduleLink } from "@/lib/platforms/email";
 import { logStep, finishRun, type RunSummary } from "@/lib/run-log";
 import { runHybridPersonalization } from "./hybrid-personalizer";
 import { enrollSmsSequenceForTenant } from "@/lib/platforms/sms";
-import { inngest, pileOnSmsSequenceStart } from "@/lib/inngest";
+import { inngest, pileOnSmsSequenceStart, winBackSmsSequenceStart } from "@/lib/inngest";
 import { addProspectToAdDataCohort, removeProspectFromAdDataCohort } from "./cohort-sync";
+import { tagRecoveredFromNoShow } from "@/lib/platforms/crm-tagger";
+import { extractFreshRescheduleLink } from "@/lib/platforms/reschedule";
+import { runWinBackHybridPersonalization } from "@/features/win-back/server/hybrid-personalizer";
 
 /**
  * Single source of truth for classifying a booking-platform webhook payload
@@ -169,7 +172,7 @@ export async function handleInboundBookingEvent(
 
       const rebookedRows = await db
         .update(winBackEnrollments)
-        .set({ status: "rebooked" })
+        .set({ status: "rebooked", exitReason: "rebooked", exitedAt: new Date() })
         .where(
           and(
             eq(winBackEnrollments.engagementId, tenant.engagementId),
@@ -193,6 +196,25 @@ export async function handleInboundBookingEvent(
             )`,
           })
           .where(eq(engagements.engagementId, tenant.engagementId));
+
+        // ── Recovered-from-no-show tagger (Win-Back recovery gap 4) ──────
+        // Only fires on a genuine rebook-during-active-recovery event
+        // (rebookedRows.length > 0 means at least one active enrollment
+        // actually matched) — not on every booking, which would tag
+        // first-time bookers as "recovered" too.
+        if (stack.recovered_from_no_show_tagging_enabled !== false && stack.email_platform) {
+          try {
+            const emailApiKey = await resolveCredential(tenant.engagementId, stack.email_platform);
+            await tagRecoveredFromNoShow(stack.email_platform, emailApiKey, prospectEmail, {
+              location_id: stack.booking_platform_meta?.location_id,
+            });
+            summary.whatWorked.push(`Tagged ${prospectEmail} as recovered-from-no-show on ${stack.email_platform}.`);
+            await logStep(runId, { phase: "recovered_tagger", status: "success", detail: `Tagged on ${stack.email_platform}` });
+          } catch (e: any) {
+            summary.openItems.push(`Recovered-from-no-show tagging failed: ${e.message}`);
+            await logStep(runId, { phase: "recovered_tagger", status: "failed", detail: e.message });
+          }
+        }
       }
     } catch (e: any) {
       // Never let this block pile-on's success — worst case the buyer's
@@ -314,14 +336,109 @@ export async function handleInboundBookingEvent(
     summary.whatWorked.push(`Enrolled in ${stack.email_platform} win-back sequence.`);
     await logStep(runId, { phase: "recovery_enrollment", status: "success", detail: `Enrolled ${prospectName} in win-back sequence` });
 
-    await db.insert(winBackEnrollments).values({
-      id: crypto.randomUUID(),
-      engagementId: tenant.engagementId,
-      prospectEmail,
-      prospectName,
-      recoveryWindowDays: stack.recovery_window_days ?? 30,
-      status: "active",
-    });
+    // ── Fresh reschedule link capture (Win-Back recovery gap 3) ───────────
+    // Only meaningful in "fresh_link" mode; extracted here (once, at
+    // cancellation time) rather than on-demand later, since the
+    // cancellation webhook payload is the only place this per-booking
+    // identifier ever appears — the booking platform doesn't expose it
+    // via any subsequent lookup.
+    const freshRescheduleLink =
+      stack.reschedule_mode === "fresh_link" ? extractFreshRescheduleLink(stack.booking_platform, payload) : null;
+
+    const [enrollmentRow] = await db
+      .insert(winBackEnrollments)
+      .values({
+        id: crypto.randomUUID(),
+        engagementId: tenant.engagementId,
+        prospectEmail,
+        prospectName,
+        recoveryWindowDays: stack.recovery_window_days ?? 30,
+        status: "active",
+        freshRescheduleLink,
+      })
+      .returning({ id: winBackEnrollments.id });
+
+    if (stack.reschedule_mode === "fresh_link") {
+      // Whatever we resolved — the platform's real fresh link, or (when
+      // the platform doesn't support one, or this specific payload
+      // didn't carry it) the generic time_slots page — gets set as the
+      // merge-field value the generated copy references. This is what
+      // makes the fallback-to-time_slots-per-prospect promise in
+      // reschedule.ts's module comment actually true: the prospect never
+      // sees a broken/empty merge field either way.
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+      const linkToDeliver = freshRescheduleLink ?? `${appUrl}/reschedule/${tenant.engagementId}`;
+      try {
+        await deliverRescheduleLink(stack.email_platform, emailApiKey, prospectEmail, linkToDeliver, {
+          location_id: stack.booking_platform_meta?.location_id,
+        });
+        await logStep(runId, {
+          phase: "reschedule_link",
+          status: "success",
+          detail: freshRescheduleLink ? "Fresh per-prospect link delivered" : "No fresh link available — delivered the time_slots fallback URL as the merge value",
+        });
+      } catch (e: any) {
+        summary.openItems.push(`Reschedule link delivery failed: ${e.message}`);
+        await logStep(runId, { phase: "reschedule_link", status: "failed", detail: e.message });
+      }
+    }
+
+    // ── SMS win-back enrollment (Win-Back recovery gap 2) ─────────────────
+    // Unblocked by the Pile-On SMS gap — reuses the same adapters
+    // (sms.ts) but its own durable Inngest sequence
+    // (src/inngest/win-back-sms.ts), since Win-Back's SMS content lives in
+    // a different asset map (winBackSequenceAssetMap.sms, day-scale
+    // offsets for a multi-week cadence) than Pile-On's (minute-scale,
+    // pre-call window).
+    if (stack.sms_platform && stack.sms_platform !== "none") {
+      try {
+        if (stack.sms_platform === "hubspot_sms") {
+          const smsApiKey = await resolveCredential(tenant.engagementId, stack.sms_platform);
+          await enrollSmsSequenceForTenant(stack.sms_platform, smsApiKey, stack.sms_platform_meta, prospectEmail);
+          summary.whatWorked.push(`Tagged ${prospectEmail} for HubSpot's SMS automation to pick up the win-back cadence.`);
+        } else if ((stack.sms_platform === "twilio" || stack.sms_platform === "ghl_sms") && prospectPhone) {
+          await inngest.send(
+            winBackSmsSequenceStart.create({
+              engagementId: tenant.engagementId,
+              enrollmentId: enrollmentRow.id,
+              prospectEmail,
+              prospectPhone,
+              prospectName,
+            })
+          );
+          summary.whatWorked.push(`Started ${stack.sms_platform} win-back SMS sequence for ${prospectPhone}.`);
+        } else if (stack.sms_platform === "twilio" || stack.sms_platform === "ghl_sms") {
+          summary.openItems.push(`Win-back SMS configured (${stack.sms_platform}) but no phone number was captured for ${prospectEmail}.`);
+        }
+        await logStep(runId, { phase: "win_back_sms", status: "success" });
+      } catch (e: any) {
+        summary.openItems.push(`Win-back SMS enrollment failed: ${e.message}`);
+        await logStep(runId, { phase: "win_back_sms", status: "failed", detail: e.message });
+      }
+    }
+
+    // ── Hybrid first recovery message (Win-Back recovery gap 5) ───────────
+    if (tenant.offerDetails?.hybrid_mode_enabled) {
+      const result = await runWinBackHybridPersonalization(
+        tenant.engagementId,
+        enrollmentRow.id,
+        prospectEmail,
+        prospectName,
+        stack.email_platform,
+        emailApiKey,
+        { location_id: stack.booking_platform_meta?.location_id },
+        tenant.brandVoiceProfile,
+        tenant.offerDetails,
+        runId
+      );
+      if (result.sentVia === "hybrid") {
+        summary.whatWorked.push(`Delivered a personalized win-back opening to ${prospectEmail} (${result.latencyMs}ms).`);
+        await logStep(runId, { phase: "win_back_hybrid", status: "success", detail: `Delivered in ${result.latencyMs}ms` });
+      } else {
+        summary.openItems.push(`Win-back hybrid personalization fell back to the templated opening: ${result.error} (${result.latencyMs}ms)`);
+        await logStep(runId, { phase: "win_back_hybrid", status: "failed", detail: `Fallback after ${result.latencyMs}ms: ${result.error}` });
+      }
+    }
 
     // ── Ad-data cohort remove (Pile-On recovery gap 2) ────────────────────
     if (stack.ad_data_platform && stack.ad_data_platform !== "none") {
