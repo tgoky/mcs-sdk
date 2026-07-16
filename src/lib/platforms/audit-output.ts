@@ -19,6 +19,8 @@
  * push it anywhere" choice, not a fallback for a missing config.
  */
 
+
+import { fetchWithTimeout } from "@/lib/http";
 export interface AuditOutputResult {
   delivered: boolean;
   channel: "email" | "slack" | "dashboard_only";
@@ -63,7 +65,7 @@ export async function deliverAuditReport(
       return { delivered: false, channel: "slack", error: "No slack_webhook_url configured on this engagement." };
     }
     try {
-      const res = await fetch(opts.slackWebhookUrl, {
+      const res = await fetchWithTimeout(opts.slackWebhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -93,7 +95,7 @@ export async function deliverAuditReport(
     return { delivered: false, channel: "email", error: "No leak_map_report_email configured on this engagement." };
   }
   try {
-    const res = await fetch("https://api.resend.com/emails", {
+    const res = await fetchWithTimeout("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,

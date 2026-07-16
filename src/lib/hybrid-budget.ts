@@ -41,7 +41,27 @@ export interface RunHybridWithBudgetOptions {
   deliver: (text: string) => Promise<void>;
 }
 
-const DEFAULT_RECEIVER_BUDGET_MS = 10_000;
+// Calendly requires a 2xx response within 10 seconds of delivering the
+// webhook or it counts as a failed delivery and retries (with exponential
+// backoff, for up to 24 hours) — see Calendly's webhook docs. The previous
+// default here (10_000ms) was Calendly's ENTIRE budget, with zero margin
+// left for the work that already runs earlier in the same request before
+// this function is ever called: signature verification, the webhookEvents
+// idempotency insert, startRun, and (for the pile-on caller specifically)
+// a real ESP enrollment API call — all synchronous, all inside the same
+// webhook handler, all eating into the same 10-second clock. 6 seconds
+// here leaves roughly 4 seconds of headroom for that earlier work, which
+// is generous for a few DB round trips plus one ESP call but not
+// bulletproof under a slow day. Idempotency (see webhookEvents in
+// booking-event/route.ts) means a Calendly retry triggered by exceeding
+// this can't double-enroll anyone — worst case is a delayed ack and an
+// extra retry, not incorrect data — but a hanging ESP call upstream of
+// this function can still blow the total budget regardless of what this
+// constant is set to. Moving the whole webhook body off the request
+// thread via inngest.send() (as booking-event/route.ts's own comments
+// already flag as the further step) is the real fix for that; this
+// constant only controls the part actually inside this module's control.
+const DEFAULT_RECEIVER_BUDGET_MS = 6_000;
 const DEFAULT_GENERATION_BUDGET_MS = 60_000;
 
 export async function runHybridWithBudget(opts: RunHybridWithBudgetOptions): Promise<HybridBudgetResult> {

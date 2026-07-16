@@ -24,6 +24,8 @@
  * the supported set. This is not a shortcut; it's the documented design.
  */
 
+
+import { fetchWithTimeout } from "@/lib/http";
 export interface ConfirmationPageContent {
   /** Full self-contained HTML document — used as-is for plain_html, and as
    * the source Webflow/WordPress adapters extract a body/content payload from. */
@@ -69,7 +71,7 @@ export class WebflowClient {
     slug: string,
     content: ConfirmationPageContent
   ): Promise<{ itemId: string }> {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/collections/${collectionId}/items`,
       {
         method: "POST",
@@ -100,7 +102,7 @@ export class WebflowClient {
 
   /** Publishes the site so the new/updated item goes live at its public URL. */
   async publishSite(siteId: string): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/sites/${siteId}/publish`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/sites/${siteId}/publish`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({ publishToWebflowSubdomain: false }),
@@ -121,7 +123,7 @@ export class WebflowClient {
     pageId: string,
     script: { location: "header" | "footer"; source: string }
   ): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/pages/${pageId}/custom_code`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/pages/${pageId}/custom_code`, {
       method: "PUT",
       headers: this.headers,
       body: JSON.stringify({
@@ -175,7 +177,7 @@ export class WordPressClient {
       content: blockContent,
     };
 
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       pageId ? `${this.baseUrl}/pages/${pageId}` : `${this.baseUrl}/pages`,
       {
         method: "POST", // WP REST API uses POST for both create and update-by-id
@@ -216,7 +218,7 @@ export class VercelClient {
     content: ConfirmationPageContent
   ): Promise<{ url: string; deploymentId: string }> {
     const qs = this.teamId ? `?teamId=${this.teamId}` : "";
-    const res = await fetch(`${this.baseUrl}/v13/deployments${qs}`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/v13/deployments${qs}`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({

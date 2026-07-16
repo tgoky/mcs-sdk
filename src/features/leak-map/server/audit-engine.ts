@@ -10,6 +10,7 @@ import { getBenchmarkLines } from "./leak-map-benchmarks";
 import { logStep, finishRun, failRun } from "@/lib/run-log";
 import crypto from "crypto";
 import type { GetStepTools, Inngest } from "inngest";
+import { fetchWithTimeout } from "@/lib/http";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -426,7 +427,7 @@ async function pullBookingShowRate(
   const apiKey = await resolveCredential(engagementId, "calendly");
 
   async function getShowRate(start: Date, end: Date): Promise<{ rate: number; n: number }> {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `https://api.calendly.com/scheduled_events?min_start_time=${start.toISOString()}&max_start_time=${end.toISOString()}&count=100`,
       { headers: { Authorization: `Bearer ${apiKey}` } }
     );
@@ -460,7 +461,7 @@ async function pullKlaviyoOpenRate(
 ): Promise<MetricResult | null> {
   const apiKey = await resolveCredential(engagementId, "klaviyo");
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     "https://a.klaviyo.com/api/campaigns/?filter=equals(status,'sent')&sort=-send_time&page[size]=4&fields[campaign]=statistics",
     {
       headers: {

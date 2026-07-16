@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { activeAlerts, briefedCallsLog, auditRunsLog, engagements, type EngagementStack } from "@/models/schema";
 import { eq, gte, inArray, desc } from "drizzle-orm";
 import { callClaude, MODEL } from "@/lib/llm";
+import { fetchWithTimeout } from "@/lib/http";
 
 /**
  * 6-Hour Active Alert Monitor.
@@ -178,7 +179,7 @@ Write a one-paragraph alert for the sales operator.`,
           // is the same rich-message format the OG SKILL.md specified for
           // the audit report itself (see audit-output.ts).
           const severityEmoji = { high: "🔴", medium: "🟠", low: "🟡" }[alert.severity] ?? "⚪";
-          await fetch(slackWebhookUrl, {
+          await fetchWithTimeout(slackWebhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

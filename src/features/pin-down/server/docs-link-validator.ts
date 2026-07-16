@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { platformDocsLinks } from "@/models/schema";
 import { eq } from "drizzle-orm";
+import { fetchWithTimeout } from "@/lib/http";
 
 /**
  * Pin-Down recovery gap 9 — HEAD-validated platform docs links.
@@ -55,9 +56,9 @@ export async function validateAllPlatformDocsLinks(): Promise<{
       // ones like GHL's) reject HEAD with a 405 despite the page being
       // perfectly reachable — fall back to a lightweight GET in that case
       // rather than mis-flagging a live page as broken.
-      let res = await fetch(docsUrl, { method: "HEAD", redirect: "follow" });
+      let res = await fetchWithTimeout(docsUrl, { method: "HEAD", redirect: "follow" });
       if (res.status === 405 || res.status === 501) {
-        res = await fetch(docsUrl, { method: "GET", redirect: "follow" });
+        res = await fetchWithTimeout(docsUrl, { method: "GET", redirect: "follow" });
       }
       statusCode = res.status;
       status = res.ok ? "ok" : "broken";

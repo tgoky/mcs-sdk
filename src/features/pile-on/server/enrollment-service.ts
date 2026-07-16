@@ -170,32 +170,45 @@ export async function handleInboundBookingEvent(
         detail: `Sent rebooked exit signal for ${prospectEmail} (no-op if they were never in win-back).`,
       });
 
-      const rebookedRows = await db
-        .update(winBackEnrollments)
-        .set({ status: "rebooked", exitReason: "rebooked", exitedAt: new Date() })
-        .where(
-          and(
-            eq(winBackEnrollments.engagementId, tenant.engagementId),
-            eq(winBackEnrollments.prospectEmail, prospectEmail),
-            eq(winBackEnrollments.status, "active")
+      // The enrollment status flip and the recovery_count increment must
+      // land together — previously these were two independent statements,
+      // so a crash between them could mark a prospect "rebooked" without
+      // the engagement's recovery_count ever incrementing. Both DB-only,
+      // so the transaction stays short; the CRM tagging call below (a real
+      // network request) deliberately stays outside it.
+      const rebookedRows = await db.transaction(async (tx) => {
+        const rows = await tx
+          .update(winBackEnrollments)
+          .set({ status: "rebooked", exitReason: "rebooked", exitedAt: new Date() })
+          .where(
+            and(
+              eq(winBackEnrollments.engagementId, tenant.engagementId),
+              eq(winBackEnrollments.prospectEmail, prospectEmail),
+              eq(winBackEnrollments.status, "active")
+            )
           )
-        )
-        .returning({ id: winBackEnrollments.id });
+          .returning({ id: winBackEnrollments.id });
+
+        if (rows.length > 0) {
+          // Atomic jsonb increment rather than read-modify-write — two
+          // prospects rebooking for the same engagement at the same moment
+          // must not lose one of the two increments to a race.
+          await tx
+            .update(engagements)
+            .set({
+              winBackCounts: sql`jsonb_set(
+                coalesce(${engagements.winBackCounts}, '{"recovery_count":0,"lost_count":0}'::jsonb),
+                '{recovery_count}',
+                (coalesce((${engagements.winBackCounts}->>'recovery_count')::int, 0) + 1)::text::jsonb
+              )`,
+            })
+            .where(eq(engagements.engagementId, tenant.engagementId));
+        }
+
+        return rows;
+      });
 
       if (rebookedRows.length > 0) {
-        // Atomic jsonb increment rather than read-modify-write — two
-        // prospects rebooking for the same engagement at the same moment
-        // must not lose one of the two increments to a race.
-        await db
-          .update(engagements)
-          .set({
-            winBackCounts: sql`jsonb_set(
-              coalesce(${engagements.winBackCounts}, '{"recovery_count":0,"lost_count":0}'::jsonb),
-              '{recovery_count}',
-              (coalesce((${engagements.winBackCounts}->>'recovery_count')::int, 0) + 1)::text::jsonb
-            )`,
-          })
-          .where(eq(engagements.engagementId, tenant.engagementId));
 
         // ── Recovered-from-no-show tagger (Win-Back recovery gap 4) ──────
         // Only fires on a genuine rebook-during-active-recovery event

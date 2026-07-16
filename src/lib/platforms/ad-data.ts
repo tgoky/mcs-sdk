@@ -17,6 +17,8 @@
  * has to manage. See cohort-sync.ts for how that path is wired.
  */
 
+
+import { fetchWithTimeout } from "@/lib/http";
 // ── Hyros ─────────────────────────────────────────────────────────────────
 
 export class HyrosClient {
@@ -34,7 +36,7 @@ export class HyrosClient {
    * on. `cohortId` here is used as that tag name.
    */
   async addToCohort(email: string, cohortId: string): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/leads/update-lead-tags`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/leads/update-lead-tags`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({ email, tags: [cohortId], action: "add" }),
@@ -46,7 +48,7 @@ export class HyrosClient {
   }
 
   async removeFromCohort(email: string, cohortId: string): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/leads/update-lead-tags`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/leads/update-lead-tags`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({ email, tags: [cohortId], action: "remove" }),
@@ -58,7 +60,7 @@ export class HyrosClient {
   }
 
   async checkCredentialHealth(): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/leads?limit=1`, { headers: this.headers });
+    const res = await fetchWithTimeout(`${this.baseUrl}/leads?limit=1`, { headers: this.headers });
     if (!res.ok) throw new Error(`Hyros credential check failed [${res.status}]`);
   }
 
@@ -74,7 +76,7 @@ export class HyrosClient {
    */
   async getLeadAdContext(email: string): Promise<{ found: boolean; sourceAd?: string; firstTouchAt?: string; touchCount?: number }> {
     try {
-      const res = await fetch(`${this.baseUrl}/leads?email=${encodeURIComponent(email)}`, { headers: this.headers });
+      const res = await fetchWithTimeout(`${this.baseUrl}/leads?email=${encodeURIComponent(email)}`, { headers: this.headers });
       if (!res.ok) return { found: false };
       const data = await res.json();
       const lead = data.result?.[0] ?? data.data?.[0];
@@ -114,7 +116,7 @@ export class GoogleSheetsCohortClient {
   }
 
   async addToCohort(email: string, cohortId: string): Promise<void> {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/${this.spreadsheetId}/values/${encodeURIComponent(this.sheetName)}:append?valueInputOption=USER_ENTERED`,
       {
         method: "POST",
@@ -141,7 +143,7 @@ export class GoogleSheetsCohortClient {
    * fragile.
    */
   async removeFromCohort(email: string, cohortId: string): Promise<void> {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/${this.spreadsheetId}/values/${encodeURIComponent(this.sheetName)}:append?valueInputOption=USER_ENTERED`,
       {
         method: "POST",

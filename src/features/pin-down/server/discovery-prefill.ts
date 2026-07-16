@@ -1,5 +1,6 @@
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { scrapeVoiceCorpus } from "./voice-scraper";
+import { fetchWithTimeout } from "@/lib/http";
 
 /**
  * Pin-Down recovery gap 1 — smart pre-fill.
@@ -57,7 +58,7 @@ async function fetchRaw(url: string, timeoutMs = 6000): Promise<string | null> {
   try {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: { "User-Agent": "ShowtimePinDownDiscovery/1.0 (+https://mcs-abra.vercel.app)" },
       signal: controller.signal,
       redirect: "follow",

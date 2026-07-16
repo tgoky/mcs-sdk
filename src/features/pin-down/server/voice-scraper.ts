@@ -19,6 +19,8 @@
  * principle as pinDownPageAudit).
  */
 
+
+import { fetchWithTimeout } from "@/lib/http";
 interface ScrapedSource {
   kind: "marketing_site" | "sales_page" | "pricing_page";
   url: string;
@@ -56,7 +58,7 @@ async function fetchPageText(url: string): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), CRAWL_TIMEOUT_MS);
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
       signal: controller.signal,
       redirect: "follow",
@@ -145,7 +147,7 @@ export async function scrapeEspBroadcasts(
   if (emailPlatform !== "klaviyo" || !apiKey) return [];
 
   try {
-    const listRes = await fetch(
+    const listRes = await fetchWithTimeout(
       "https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,'email')&sort=-created_at&page[size]=3",
       {
         headers: {
@@ -161,7 +163,7 @@ export async function scrapeEspBroadcasts(
 
     const results: { text: string; wordCount: number }[] = [];
     for (const id of campaignIds) {
-      const msgRes = await fetch(`https://a.klaviyo.com/api/campaigns/${id}/campaign-messages/`, {
+      const msgRes = await fetchWithTimeout(`https://a.klaviyo.com/api/campaigns/${id}/campaign-messages/`, {
         headers: {
           Authorization: `Klaviyo-API-Key ${apiKey}`,
           revision: "2024-10-15",

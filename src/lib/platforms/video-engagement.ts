@@ -12,6 +12,8 @@
  * prospect.
  */
 
+
+import { fetchWithTimeout } from "@/lib/http";
 export interface VideoEngagementSummary {
   watched: boolean;
   percentWatched: number | null;
@@ -39,7 +41,7 @@ const EMPTY: VideoEngagementSummary = { watched: false, percentWatched: null, la
  */
 async function getVidalyticsEngagement(apiKey: string, videoId: string, prospectEmail: string): Promise<VideoEngagementSummary> {
   try {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `https://api.vidalytics.com/v1/videos/${encodeURIComponent(videoId)}/viewers/${encodeURIComponent(prospectEmail)}`,
       { headers: { Authorization: `Bearer ${apiKey}` } }
     );
@@ -67,7 +69,7 @@ async function getVidalyticsEngagement(apiKey: string, videoId: string, prospect
  */
 async function getWistiaEngagement(apiKey: string, videoId: string, prospectEmail: string): Promise<VideoEngagementSummary> {
   try {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `https://api.wistia.com/v1/stats/medias/${encodeURIComponent(videoId)}/visitors.json?email=${encodeURIComponent(prospectEmail)}`,
       { headers: { Authorization: `Bearer ${apiKey}` } }
     );
@@ -100,7 +102,7 @@ async function getWistiaEngagement(apiKey: string, videoId: string, prospectEmai
  */
 async function getYouTubeAggregateContext(accessToken: string, channelId: string, videoId: string): Promise<VideoEngagementSummary> {
   try {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `https://youtubeanalytics.googleapis.com/v2/reports?ids=channel%3D%3D${encodeURIComponent(channelId)}&metrics=averageViewPercentage,views&filters=video%3D%3D${encodeURIComponent(videoId)}&startDate=2020-01-01&endDate=${new Date().toISOString().slice(0, 10)}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );

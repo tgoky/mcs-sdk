@@ -3,6 +3,13 @@ import { db } from "@/lib/db";
 import { credentialsRefs } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 
+// Either the module-level pooled db, or the `tx` handle inside a
+// db.transaction() callback — both expose the same select/insert/update
+// surface storeCredential uses. Lets callers fold credential writes into a
+// wider transaction (see engagements/setup route) instead of forcing every
+// call site onto its own implicit auto-commit statement.
+type DbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 const ENCRYPTION_KEY = process.env.CREDENTIAL_ENCRYPTION_KEY!;
 // Must be exactly 32 bytes (256-bit) hex string set in env
 
@@ -57,11 +64,12 @@ export async function storeCredential(
   engagementId: string,
   provider: string,
   refKey: string,
-  plainValue: string
+  plainValue: string,
+  dbClient: DbClient = db
 ): Promise<void> {
   const { encryptedValue, iv } = encrypt(plainValue);
 
-  const existing = await db
+  const existing = await dbClient
     .select()
     .from(credentialsRefs)
     .where(
@@ -73,12 +81,12 @@ export async function storeCredential(
     .limit(1);
 
   if (existing.length > 0) {
-    await db
+    await dbClient
       .update(credentialsRefs)
       .set({ encryptedValue, iv, refKey, updatedAt: new Date() })
       .where(eq(credentialsRefs.id, existing[0].id));
   } else {
-    await db.insert(credentialsRefs).values({
+    await dbClient.insert(credentialsRefs).values({
       id: crypto.randomUUID(),
       engagementId,
       provider,

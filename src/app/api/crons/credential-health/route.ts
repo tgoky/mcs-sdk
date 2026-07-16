@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runCredentialHealthCheck } from "@/features/notifications/server/credential-health";
-import { getSession } from "@/lib/session";
+import { requireCronOrAdmin } from "@/lib/cron-auth";
 
 /**
  * Manually-triggerable credential health check.
@@ -9,22 +9,13 @@ import { getSession } from "@/lib/session";
  * credentialHealthCron in src/inngest/crons.ts is what actually runs this
  * daily via Inngest's scheduler. This endpoint is for manual re-checks
  * (e.g. right after a buyer says they reconnected a platform) and external
- * monitoring, same role the other /api/crons/* routes serve.
+ * monitoring, same role the other /api/crons/* routes serve. Runs across
+ * every tenant's credentials, so it's gated to CRON_SECRET or an admin
+ * session only (see src/lib/cron-auth.ts) — not any logged-in customer.
  */
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("Authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  const session = await getSession();
-  const isUserAuthenticated = !!session.whopUserId;
-
-  if (
-    process.env.NODE_ENV === "production" &&
-    !isUserAuthenticated &&
-    authHeader !== `Bearer ${cronSecret}`
-  ) {
-    return new Response("Unauthorized Access Denied", { status: 401 });
-  }
+  const auth = await requireCronOrAdmin(request);
+  if (!auth.ok) return auth.response;
 
   try {
     const result = await runCredentialHealthCheck();

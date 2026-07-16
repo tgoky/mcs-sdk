@@ -108,20 +108,10 @@ export async function POST(request: Request) {
 
     finalStack.slack_webhook_url = credentials?.slack_webhook_url ?? finalStack.slack_webhook_url;
 
-    // ── Pre-seed engagement row (satisfies skill_runs FK) ────────────────
-    await db
-      .insert(engagements)
-      .values({
-        id: crypto.randomUUID(),
-        engagementId,
-        whopUserId,
-        buyer: buyerName,
-        schemaVersion: "1.0",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .onConflictDoNothing();
-
+    // startRun/logStep write to skillRuns, a separate concern from the
+    // engagement transaction below — the client polls this run row for
+    // progress, so it needs to exist and flip to "running" immediately,
+    // independent of whether the transaction below ultimately commits.
     await startRun({
       id: runId,
       engagementId,
@@ -129,84 +119,109 @@ export async function POST(request: Request) {
       phase: "onboarding_start",
       label: buyerName,
     });
-
-    // ── Store credentials (fast: AES encryption + DB insert, no network) ─
     await logStep(runId, { phase: "credential_storage", status: "running" });
-    if (credentials?.booking) {
-      await storeCredential(engagementId, finalStack.booking_platform, `secrets://${engagementId}/${finalStack.booking_platform}_pat`, credentials.booking);
-    }
-    if (credentials?.email) {
-      await storeCredential(engagementId, finalStack.email_platform, `secrets://${engagementId}/${finalStack.email_platform}_key`, credentials.email);
-    }
-    if (credentials?.hosting) {
-      await storeCredential(engagementId, finalStack.hosting_platform, `secrets://${engagementId}/${finalStack.hosting_platform}_key`, credentials.hosting);
-    }
-    // Pile-On recovery gap 1 — stored under sms_platform's own key so it's
-    // independent of whatever's stored under email_platform (a buyer's
-    // hubspot_sms integration credential, for instance, is often a
-    // different scoped token than their marketing-email HubSpot key).
-    if (credentials?.sms && finalStack.sms_platform && finalStack.sms_platform !== "none") {
-      await storeCredential(engagementId, finalStack.sms_platform, `secrets://${engagementId}/${finalStack.sms_platform}_key`, credentials.sms);
-    }
-    // Pile-On recovery gap 2 — not stored for "native_crm", which reuses
-    // the already-stored email_platform credential (see cohort-sync.ts).
-    if (credentials?.adData && finalStack.ad_data_platform && finalStack.ad_data_platform !== "none" && finalStack.ad_data_platform !== "native_crm") {
-      await storeCredential(engagementId, finalStack.ad_data_platform, `secrets://${engagementId}/${finalStack.ad_data_platform}_key`, credentials.adData);
-    }
-    // Pre-Call Read recovery gap 3 — video engagement. Not stored for
-    // "loom", which has no public analytics API to authenticate against
-    // (see video-engagement.ts) — nothing for a credential to unlock.
-    if (
-      credentials?.videoEngagement &&
-      finalStack.video_engagement_platform &&
-      finalStack.video_engagement_platform !== "none" &&
-      finalStack.video_engagement_platform !== "loom"
-    ) {
-      await storeCredential(
-        engagementId,
-        finalStack.video_engagement_platform,
-        `secrets://${engagementId}/${finalStack.video_engagement_platform}_key`,
-        credentials.videoEngagement
-      );
-    }
-    // Pre-Call Read recovery gap 5 — Apollo/PDL BYOK enrichment, stored
-    // independently of each other since an operator may configure only
-    // one of the two sources.
-    if (credentials?.apollo && finalStack.prospect_research_sources_used?.includes("apollo")) {
-      await storeCredential(engagementId, "apollo", `secrets://${engagementId}/apollo_key`, credentials.apollo);
-    }
-    if (credentials?.pdl && finalStack.prospect_research_sources_used?.includes("pdl")) {
-      await storeCredential(engagementId, "pdl", `secrets://${engagementId}/pdl_key`, credentials.pdl);
-    }
+
+    // ── Pre-seed engagement row, store credentials, persist the stack ────
+    // All DB-only (AES encryption is CPU-bound, not a network call), no
+    // Claude/Calendly/ESP calls in here — so wrapping the whole sequence in
+    // one transaction costs nothing latency-wise and closes the gap where
+    // a mid-sequence failure could previously leave, say, three of five
+    // credentials stored and the engagement's stack never updated to
+    // reference them, with no way to tell from the row alone that setup
+    // was left half-done.
+    await db.transaction(async (tx) => {
+      // Pre-seed engagement row (satisfies skill_runs FK)
+      await tx
+        .insert(engagements)
+        .values({
+          id: crypto.randomUUID(),
+          engagementId,
+          whopUserId,
+          buyer: buyerName,
+          schemaVersion: "1.0",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .onConflictDoNothing();
+
+      if (credentials?.booking) {
+        await storeCredential(engagementId, finalStack.booking_platform, `secrets://${engagementId}/${finalStack.booking_platform}_pat`, credentials.booking, tx);
+      }
+      if (credentials?.email) {
+        await storeCredential(engagementId, finalStack.email_platform, `secrets://${engagementId}/${finalStack.email_platform}_key`, credentials.email, tx);
+      }
+      if (credentials?.hosting) {
+        await storeCredential(engagementId, finalStack.hosting_platform, `secrets://${engagementId}/${finalStack.hosting_platform}_key`, credentials.hosting, tx);
+      }
+      // Pile-On recovery gap 1 — stored under sms_platform's own key so it's
+      // independent of whatever's stored under email_platform (a buyer's
+      // hubspot_sms integration credential, for instance, is often a
+      // different scoped token than their marketing-email HubSpot key).
+      if (credentials?.sms && finalStack.sms_platform && finalStack.sms_platform !== "none") {
+        await storeCredential(engagementId, finalStack.sms_platform, `secrets://${engagementId}/${finalStack.sms_platform}_key`, credentials.sms, tx);
+      }
+      // Pile-On recovery gap 2 — not stored for "native_crm", which reuses
+      // the already-stored email_platform credential (see cohort-sync.ts).
+      if (credentials?.adData && finalStack.ad_data_platform && finalStack.ad_data_platform !== "none" && finalStack.ad_data_platform !== "native_crm") {
+        await storeCredential(engagementId, finalStack.ad_data_platform, `secrets://${engagementId}/${finalStack.ad_data_platform}_key`, credentials.adData, tx);
+      }
+      // Pre-Call Read recovery gap 3 — video engagement. Not stored for
+      // "loom", which has no public analytics API to authenticate against
+      // (see video-engagement.ts) — nothing for a credential to unlock.
+      if (
+        credentials?.videoEngagement &&
+        finalStack.video_engagement_platform &&
+        finalStack.video_engagement_platform !== "none" &&
+        finalStack.video_engagement_platform !== "loom"
+      ) {
+        await storeCredential(
+          engagementId,
+          finalStack.video_engagement_platform,
+          `secrets://${engagementId}/${finalStack.video_engagement_platform}_key`,
+          credentials.videoEngagement,
+          tx
+        );
+      }
+      // Pre-Call Read recovery gap 5 — Apollo/PDL BYOK enrichment, stored
+      // independently of each other since an operator may configure only
+      // one of the two sources.
+      if (credentials?.apollo && finalStack.prospect_research_sources_used?.includes("apollo")) {
+        await storeCredential(engagementId, "apollo", `secrets://${engagementId}/apollo_key`, credentials.apollo, tx);
+      }
+      if (credentials?.pdl && finalStack.prospect_research_sources_used?.includes("pdl")) {
+        await storeCredential(engagementId, "pdl", `secrets://${engagementId}/pdl_key`, credentials.pdl, tx);
+      }
+
+      // Persist the buyer's raw form submission. Everything the worker
+      // needs to pick this up from here: the stack (pre-discovery — the
+      // worker enriches it further), offer details, call questions, and
+      // the voice corpus (not shipped through the Inngest event payload;
+      // see onboarding-service.ts for why).
+      await tx
+        .update(engagements)
+        .set({
+          stack: finalStack,
+          offerDetails,
+          topCallQuestions: topCallQuestions ?? [],
+          topObjections: topObjections ?? [],
+          prospectMeets: prospectMeets ?? "founder",
+          existingProof: body.existingProof,
+          rawVoiceCorpus: rawVoiceCorpus ?? "",
+          // If the operator ran the smart pre-fill pass (Pin-Down recovery
+          // gap 1) and it's included in this submission, keep a record of
+          // what was suggested vs. what the operator actually kept — same
+          // transparency principle as pinDownPageAudit.
+          ...(body.discoveryPrefill ? { discoveryPrefill: body.discoveryPrefill } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(engagements.engagementId, engagementId));
+    });
+
     await logStep(runId, {
       phase: "credential_storage",
       status: "success",
       detail: credentials?.booking || credentials?.email ? "Credentials stored" : "No credentials supplied",
     });
-
-    // ── Persist the buyer's raw form submission ──────────────────────────
-    // Everything the worker needs to pick this up from here: the stack
-    // (pre-discovery — the worker enriches it further), offer details,
-    // call questions, and the voice corpus (not shipped through the
-    // Inngest event payload; see onboarding-service.ts for why).
-    await db
-      .update(engagements)
-      .set({
-        stack: finalStack,
-        offerDetails,
-        topCallQuestions: topCallQuestions ?? [],
-        topObjections: topObjections ?? [],
-        prospectMeets: prospectMeets ?? "founder",
-        existingProof: body.existingProof,
-        rawVoiceCorpus: rawVoiceCorpus ?? "",
-        // If the operator ran the smart pre-fill pass (Pin-Down recovery
-        // gap 1) and it's included in this submission, keep a record of
-        // what was suggested vs. what the operator actually kept — same
-        // transparency principle as pinDownPageAudit.
-        ...(body.discoveryPrefill ? { discoveryPrefill: body.discoveryPrefill } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(engagements.engagementId, engagementId));
 
     // ── Hand off to the async worker ──────────────────────────────────────
     await inngest.send(skillRunExecute.create({ runId, engagementId, skillName: "pin-down" }));

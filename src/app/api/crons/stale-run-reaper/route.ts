@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { skillRuns } from "@/models/schema";
 import { and, eq, lt } from "drizzle-orm";
 import { timeoutRun } from "@/lib/run-log";
-import { getSession } from "@/lib/session";
+import { requireCronOrAdmin } from "@/lib/cron-auth";
 
 /**
  * Manually-triggerable stale-run reaper.
@@ -14,25 +14,16 @@ import { getSession } from "@/lib/session";
  * Inngest's own scheduler (see the note at the top of crons.ts on why
  * Vercel Cron Jobs aren't used for any of this app's scheduled work).
  * This endpoint exists for manual backfills / external monitoring only,
- * same role the other /api/crons/* routes already serve.
+ * same role the other /api/crons/* routes already serve. Acts on every
+ * tenant's stuck runs, so it's gated to CRON_SECRET or an admin session
+ * only (see src/lib/cron-auth.ts) — not any logged-in customer.
  */
 const STALE_RUN_CEILING_MS =
   Number(process.env.STALE_RUN_CEILING_MINUTES ?? 120) * 60 * 1000;
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("Authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  const session = await getSession();
-  const isUserAuthenticated = !!session.whopUserId;
-
-  if (
-    process.env.NODE_ENV === "production" &&
-    !isUserAuthenticated &&
-    authHeader !== `Bearer ${cronSecret}`
-  ) {
-    return new Response("Unauthorized Access Denied", { status: 401 });
-  }
+  const auth = await requireCronOrAdmin(request);
+  if (!auth.ok) return auth.response;
 
   try {
     const cutoff = new Date(Date.now() - STALE_RUN_CEILING_MS);

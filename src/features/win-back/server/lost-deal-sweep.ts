@@ -45,21 +45,29 @@ export async function markElapsedEnrollmentsLost(): Promise<
   const byEngagementMap = new Map<string, string[]>();
 
   for (const row of elapsed) {
-    await db
-      .update(winBackEnrollments)
-      .set({ status: "lost", lostAt: now })
-      .where(eq(winBackEnrollments.id, row.id));
+    // The enrollment status flip and the engagement-level lost_count
+    // increment must land together — previously these were two independent
+    // statements, so a crash or connection drop between them could mark an
+    // enrollment "lost" without the count ever incrementing (or vice
+    // versa on a retry). Both DB-only, no network calls, so the
+    // transaction stays short.
+    await db.transaction(async (tx) => {
+      await tx
+        .update(winBackEnrollments)
+        .set({ status: "lost", lostAt: now })
+        .where(eq(winBackEnrollments.id, row.id));
 
-    await db
-      .update(engagements)
-      .set({
-        winBackCounts: sql`jsonb_set(
-          coalesce(${engagements.winBackCounts}, '{"recovery_count":0,"lost_count":0}'::jsonb),
-          '{lost_count}',
-          (coalesce((${engagements.winBackCounts}->>'lost_count')::int, 0) + 1)::text::jsonb
-        )`,
-      })
-      .where(eq(engagements.engagementId, row.engagementId));
+      await tx
+        .update(engagements)
+        .set({
+          winBackCounts: sql`jsonb_set(
+            coalesce(${engagements.winBackCounts}, '{"recovery_count":0,"lost_count":0}'::jsonb),
+            '{lost_count}',
+            (coalesce((${engagements.winBackCounts}->>'lost_count')::int, 0) + 1)::text::jsonb
+          )`,
+        })
+        .where(eq(engagements.engagementId, row.engagementId));
+    });
 
     const list = byEngagementMap.get(row.engagementId) ?? [];
     list.push(row.id);

@@ -2,16 +2,22 @@
 //
 // Single source of truth for instrumenting a skillRuns row.
 //
-// IMPORTANT — concurrency assumption: logStep() does a read-modify-write
-// (SELECT steps, mutate in JS, UPDATE) rather than a pure atomic SQL append.
-// This is safe ONLY because every call site in this codebase awaits each
-// logStep() call sequentially within a single async function — there is
-// never a `Promise.all` (or otherwise concurrent) set of logStep calls
-// against the SAME runId anywhere in the app. If that ever changes, this
-// file needs to go back to an atomic jsonb `||` concat (and step-pairing/
-// auto-close below would need to move to a SQL-side CASE expression
-// instead of JS). Don't add concurrent logStep calls for one runId without
-// revisiting this.
+// Concurrency: logStep()/finishRun()/failRun()/cancelRun() all do a
+// read-modify-write on the same `steps` jsonb column (SELECT steps, mutate
+// in JS, UPDATE). Previously this was a plain SELECT + UPDATE with a
+// comment asserting it was safe only because every call site in this
+// codebase happens to await each call sequentially for a given runId — a
+// real constraint, but an unenforced one: nothing stops a future retry
+// path, a webhook re-delivery racing a normal step write, or the stale-run
+// reaper firing at the same moment as a genuinely-still-running step from
+// violating it, and the failure mode is silent (whichever write lands
+// second clobbers the other's steps entirely, no error).
+//
+// This now wraps the SELECT+UPDATE pair in a transaction with
+// `SELECT ... FOR UPDATE`, so a second writer for the same runId blocks on
+// Postgres's row lock until the first transaction commits, then reads the
+// first writer's result rather than a stale copy — a real compare-and-swap
+// instead of a documented convention. See withStepsLock() below.
 //
 // Usage pattern:
 //   const runId = crypto.randomUUID();
@@ -126,6 +132,54 @@ export async function startRun(opts: StartRunOptions): Promise<void> {
   });
 }
 
+/**
+ * Runs `mutate` against the current row for `runId` inside a transaction
+ * that holds a row lock (`SELECT ... FOR UPDATE`) for the duration. A
+ * second concurrent call for the same runId blocks at the SELECT until the
+ * first transaction commits, then sees the first call's write — not a
+ * stale pre-write copy — closing the lost-update race the previous plain
+ * SELECT+UPDATE had.
+ *
+ * `mutate` receives the locked row (or null if the runId doesn't exist)
+ * and returns the full column set to write, or null to skip writing
+ * entirely (e.g. a "someone else already resolved this" bail-out).
+ * engagementId/skillName are included alongside steps because failRun
+ * needs them after the transaction commits to fire a notification (a real
+ * network call, deliberately kept outside the transaction/lock).
+ */
+async function withStepsLock<
+  Cols extends Partial<typeof skillRuns.$inferInsert>
+>(
+  runId: string,
+  mutate: (
+    row: { steps: RunStep[]; engagementId: string; skillName: string } | null
+  ) => Cols | null
+): Promise<{ steps: RunStep[]; engagementId: string; skillName: string } | null> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        steps: skillRuns.steps,
+        engagementId: skillRuns.engagementId,
+        skillName: skillRuns.skillName,
+      })
+      .from(skillRuns)
+      .where(eq(skillRuns.id, runId))
+      .for("update")
+      .limit(1);
+
+    const normalizedRow = row
+      ? { steps: row.steps ?? [], engagementId: row.engagementId, skillName: row.skillName }
+      : null;
+
+    const nextCols = mutate(normalizedRow);
+    if (nextCols) {
+      await tx.update(skillRuns).set(nextCols).where(eq(skillRuns.id, runId));
+    }
+
+    return normalizedRow;
+  });
+}
+
 export interface LogStepOptions {
   phase: string;
   /** Optional human detail for this specific unit of work, e.g. a prospect name. */
@@ -160,52 +214,45 @@ export async function logStep(runId: string, opts: LogStepOptions): Promise<void
   const status = opts.status ?? "running";
   const nowIso = new Date().toISOString();
 
-  const [row] = await db
-    .select({ steps: skillRuns.steps })
-    .from(skillRuns)
-    .where(eq(skillRuns.id, runId))
-    .limit(1);
+  await withStepsLock(runId, (row) => {
+    const steps = (row?.steps ?? []).slice();
 
-  const steps = (row?.steps ?? []).slice();
-
-  let pairedIndex = -1;
-  if (status !== "running") {
-    for (let i = steps.length - 1; i >= 0; i--) {
-      if (steps[i].phase === opts.phase && steps[i].status === "running") {
-        pairedIndex = i;
-        break;
+    let pairedIndex = -1;
+    if (status !== "running") {
+      for (let i = steps.length - 1; i >= 0; i--) {
+        if (steps[i].phase === opts.phase && steps[i].status === "running") {
+          pairedIndex = i;
+          break;
+        }
       }
     }
-  }
 
-  if (pairedIndex >= 0) {
-    steps[pairedIndex] = {
-      ...steps[pairedIndex],
-      status,
-      label: opts.label ?? steps[pairedIndex].label,
-      detail: opts.detail ?? steps[pairedIndex].detail,
-      completedAt: nowIso,
-    };
-  } else {
-    const entry: RunStep = {
-      phase: opts.phase,
-      label: opts.label,
-      status,
-      detail: opts.detail,
-      startedAt: nowIso,
-      // A one-shot entry (no preceding "running" call) describes work
-      // that's already finished by the time we log it — close immediately
-      // rather than leaving completedAt unset, which would otherwise read
-      // as "still in progress" on the run-detail timeline.
-      ...(status !== "running" ? { completedAt: nowIso } : {}),
-    };
-    steps.push(entry);
-  }
+    if (pairedIndex >= 0) {
+      steps[pairedIndex] = {
+        ...steps[pairedIndex],
+        status,
+        label: opts.label ?? steps[pairedIndex].label,
+        detail: opts.detail ?? steps[pairedIndex].detail,
+        completedAt: nowIso,
+      };
+    } else {
+      const entry: RunStep = {
+        phase: opts.phase,
+        label: opts.label,
+        status,
+        detail: opts.detail,
+        startedAt: nowIso,
+        // A one-shot entry (no preceding "running" call) describes work
+        // that's already finished by the time we log it — close immediately
+        // rather than leaving completedAt unset, which would otherwise read
+        // as "still in progress" on the run-detail timeline.
+        ...(status !== "running" ? { completedAt: nowIso } : {}),
+      };
+      steps.push(entry);
+    }
 
-  await db
-    .update(skillRuns)
-    .set({ phase: opts.phase, steps })
-    .where(eq(skillRuns.id, runId));
+    return { phase: opts.phase, steps };
+  });
 }
 
 export interface FinishRunOptions {
@@ -239,23 +286,15 @@ function closeDanglingSteps(
 
 /** Marks a run as successfully completed and writes the final five-field summary, if provided. */
 export async function finishRun(runId: string, opts: FinishRunOptions = {}): Promise<void> {
-  const [row] = await db
-    .select({ steps: skillRuns.steps })
-    .from(skillRuns)
-    .where(eq(skillRuns.id, runId))
-    .limit(1);
-
-  const steps = closeDanglingSteps(row?.steps ?? [], "success");
-
-  await db
-    .update(skillRuns)
-    .set({
+  await withStepsLock(runId, (row) => {
+    const steps = closeDanglingSteps(row?.steps ?? [], "success");
+    return {
       status: "success",
       completedAt: new Date(),
       steps,
       ...(opts.summary ? { summary: opts.summary } : {}),
-    })
-    .where(eq(skillRuns.id, runId));
+    };
+  });
 }
 
 /**
@@ -274,28 +313,16 @@ export async function failRun(
   const errorMessage = err instanceof Error ? err.message : String(err);
 
   try {
-    const [row] = await db
-      .select({
-        steps: skillRuns.steps,
-        engagementId: skillRuns.engagementId,
-        skillName: skillRuns.skillName,
-      })
-      .from(skillRuns)
-      .where(eq(skillRuns.id, runId))
-      .limit(1);
-
-    const steps = closeDanglingSteps(row?.steps ?? [], "failed");
-
-    await db
-      .update(skillRuns)
-      .set({
+    const row = await withStepsLock(runId, (row) => {
+      const steps = closeDanglingSteps(row?.steps ?? [], "failed");
+      return {
         status: "failed",
         completedAt: new Date(),
         errorMessage,
         steps,
         ...(opts.summary ? { summary: opts.summary } : {}),
-      })
-      .where(eq(skillRuns.id, runId));
+      };
+    });
 
     // Silence is the whole trust problem this fixes: before this line, a
     // failed run was only discoverable by opening the dashboard. See
@@ -322,18 +349,10 @@ export async function failRun(
  * takes to finish. The DB row should reflect "cancelled" immediately.
  */
 export async function cancelRun(runId: string): Promise<void> {
-  const [row] = await db
-    .select({ steps: skillRuns.steps })
-    .from(skillRuns)
-    .where(eq(skillRuns.id, runId))
-    .limit(1);
-
-  const steps = closeDanglingSteps(row?.steps ?? [], "cancelled");
-
-  await db
-    .update(skillRuns)
-    .set({ status: "cancelled", completedAt: new Date(), steps })
-    .where(eq(skillRuns.id, runId));
+  await withStepsLock(runId, (row) => {
+    const steps = closeDanglingSteps(row?.steps ?? [], "cancelled");
+    return { status: "cancelled", completedAt: new Date(), steps };
+  });
 }
 
 /**
@@ -391,25 +410,17 @@ export async function closeStaleRun(
   }
 
   // Deliberately does NOT touch the `steps` column, unlike failRun's
-  // closeDanglingSteps. logStep() (above) does its own unguarded
-  // SELECT-steps -> modify -> UPDATE-steps cycle with no compare-and-swap
-  // against concurrent writers. If a run genuinely is still alive (still
-  // legitimately processing past STALE_RUN_CEILING_MS — e.g. a huge
-  // roster) and calls logStep() at the same moment the reaper reads and
-  // rewrites `steps`, whichever write lands second would silently
-  // overwrite the other's steps entirely. The `status="running"` guard on
-  // the UPDATE below prevents the *top-level status* from being stomped,
-  // but it can't protect a separate jsonb column against a lost update
-  // from a second, independent writer.
-  //
-  // Rather than attempt a jsonb-equality compare-and-swap in the WHERE
-  // clause (workable in principle, but not something to ship unverified
-  // against a live database), the run-detail page instead treats any step
-  // still showing "running" as visually interrupted whenever the overall
-  // run status is "timed_out" — a pure render-time decision that carries
-  // zero risk of clobbering data, at the cost of the stored steps array
-  // itself not reflecting the interruption. See isTimedOut handling in
-  // src/app/dashboard/runs/[id]/page.tsx.
+  // closeDanglingSteps. logStep()/finishRun()/failRun()/cancelRun() (above)
+  // now take a `SELECT ... FOR UPDATE` row lock via withStepsLock() before
+  // reading/writing `steps`, so a genuinely-still-running run calling
+  // logStep() at the same moment the reaper tries to close it will simply
+  // have this transaction wait for that lock rather than racing it — but
+  // extending that same lock to closeStaleRun would mean this function
+  // blocks on a run that might legitimately be mid-step for a long time,
+  // which defeats the point of the reaper being fast and cheap. Instead
+  // this stays a simple, lock-free, status-guarded UPDATE (see below) and
+  // only ever touches the top-level `status` column, never `steps` —
+  // avoiding the conflict entirely rather than serializing against it.
   const updated = await db
     .update(skillRuns)
     .set({ status: "timed_out", completedAt: new Date() })

@@ -513,7 +513,11 @@ export default function NewEngagementPage() {
       setFetchingLists(true);
       setListsFetchError(null);
 
-      fetch(`/api/integrations/klaviyo/lists?key=${encodeURIComponent(form.emailApiKey.trim())}`)
+      fetch(`/api/integrations/klaviyo/lists`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: form.emailApiKey.trim() }),
+      })
         .then(async (res) => {
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
@@ -549,9 +553,14 @@ export default function NewEngagementPage() {
       setFetchingAcLists(true);
       setAcListsError(null);
 
-      fetch(
-        `/api/integrations/activecampaign/lists?key=${encodeURIComponent(form.emailApiKey.trim())}&baseUrl=${encodeURIComponent(form.emailActiveCampaignBaseUrl.trim())}`
-      )
+      fetch(`/api/integrations/activecampaign/lists`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: form.emailApiKey.trim(),
+          baseUrl: form.emailActiveCampaignBaseUrl.trim(),
+        }),
+      })
         .then(async (res) => {
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
@@ -584,7 +593,11 @@ export default function NewEngagementPage() {
       setGhlWorkflows([]);
       setForm((f) => ({ ...f, emailGhlTargetWorkflowId: "", emailGhlRecoveryWorkflowId: "" }));
 
-      fetch(`/api/integrations/ghl/locations?key=${encodeURIComponent(form.emailApiKey.trim())}`)
+      fetch(`/api/integrations/ghl/locations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: form.emailApiKey.trim() }),
+      })
         .then(async (res) => {
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
@@ -619,9 +632,14 @@ export default function NewEngagementPage() {
       setFetchingGhlWorkflows(true);
       setGhlWorkflowsError(null);
 
-      fetch(
-        `/api/integrations/ghl/workflows?key=${encodeURIComponent(form.emailApiKey.trim())}&locationId=${encodeURIComponent(form.emailGhlLocationId)}`
-      )
+      fetch(`/api/integrations/ghl/workflows`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: form.emailApiKey.trim(),
+          locationId: form.emailGhlLocationId,
+        }),
+      })
         .then(async (res) => {
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {

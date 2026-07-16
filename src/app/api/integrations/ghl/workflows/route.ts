@@ -3,16 +3,19 @@ import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+// POST, not GET — see the comment in the Klaviyo sibling route
+// (src/app/api/integrations/klaviyo/lists/route.ts) for why the key moved
+// out of the URL query string.
+export async function POST(request: Request) {
   try {
     const session = await getSession();
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const apiKey = searchParams.get("key");
-    const locationId = searchParams.get("locationId");
+    const body = await request.json().catch(() => ({}));
+    const apiKey = typeof body?.key === "string" ? body.key : null;
+    const locationId = typeof body?.locationId === "string" ? body.locationId : null;
 
     if (!apiKey || !locationId) {
       return NextResponse.json({ error: "Missing API Key or Location ID" }, { status: 400 });

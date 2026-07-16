@@ -8,6 +8,8 @@
  * pre-built flow/list, we don't run the cadence ourselves.
  */
 
+
+import { fetchWithTimeout } from "@/lib/http";
 // ── Klaviyo ───────────────────────────────────────────────────────────────
 
 export class KlaviyoClient {
@@ -33,7 +35,7 @@ export class KlaviyoClient {
    * many lists.
    */
   async getListProfileCount(listId: string): Promise<number | null> {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/lists/${listId}/?additional-fields[list]=profile_count`,
       { headers: this.headers }
     );
@@ -51,7 +53,7 @@ export class KlaviyoClient {
    * filter.
    */
   async findFlowsByNameContains(substrings: string[]): Promise<Array<{ id: string; name: string; status: string }>> {
-    const res = await fetch(`${this.baseUrl}/flows/?filter=equals(status,'live')&page[size]=50`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/flows/?filter=equals(status,'live')&page[size]=50`, {
       headers: this.headers,
     });
     if (!res.ok) return [];
@@ -76,7 +78,7 @@ export class KlaviyoClient {
   async getFlowEmailActions(flowId: string): Promise<
     Array<{ subject: string; bodyPreview: string; sendDelayDays: number | null }>
   > {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/flows/${flowId}/flow-actions/?include=flow-messages`,
       { headers: this.headers }
     );
@@ -114,7 +116,7 @@ export class KlaviyoClient {
     listId: string,
     customProperties: Record<string, string> = {}
   ): Promise<void> {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/profile-subscription-bulk-create-jobs/`,
       {
         method: "POST",
@@ -168,7 +170,7 @@ export class KlaviyoClient {
    */
   async getProfileEngagement(email: string, sequenceId?: string): Promise<any[]> {
     // First resolve profile ID
-    const profileRes = await fetch(`${this.baseUrl}/profiles/match/`, {
+    const profileRes = await fetchWithTimeout(`${this.baseUrl}/profiles/match/`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -181,7 +183,7 @@ export class KlaviyoClient {
     if (!profileId) return [];
 
     // Fetch open/click events
-    const eventsRes = await fetch(
+    const eventsRes = await fetchWithTimeout(
       `${this.baseUrl}/events/?filter=${encodeURIComponent(
         `equals(profile_id,"${profileId}"),contains-any(metric_id,["opened-email","clicked-email"])`
       )}&include=metric`,
@@ -208,7 +210,7 @@ export class KlaviyoClient {
    * so we write to a custom property visible in the profile view).
    */
   async attachBriefAsProfileNote(email: string, briefText: string): Promise<void> {
-    const profileRes = await fetch(`${this.baseUrl}/profiles/match/`, {
+    const profileRes = await fetchWithTimeout(`${this.baseUrl}/profiles/match/`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -220,7 +222,7 @@ export class KlaviyoClient {
     const profileId = profileData.data?.id;
     if (!profileId) return;
 
-    await fetch(`${this.baseUrl}/profiles/${profileId}/`, {
+    await fetchWithTimeout(`${this.baseUrl}/profiles/${profileId}/`, {
       method: "PATCH",
       headers: this.headers,
       body: JSON.stringify({
@@ -246,7 +248,7 @@ export class KlaviyoClient {
     email: string,
     properties: Record<string, string | boolean>
   ): Promise<void> {
-    const profileRes = await fetch(`${this.baseUrl}/profiles/match/`, {
+    const profileRes = await fetchWithTimeout(`${this.baseUrl}/profiles/match/`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -258,7 +260,7 @@ export class KlaviyoClient {
     const profileId = profileData.data?.id;
     if (!profileId) return;
 
-    await fetch(`${this.baseUrl}/profiles/${profileId}/`, {
+    await fetchWithTimeout(`${this.baseUrl}/profiles/${profileId}/`, {
       method: "PATCH",
       headers: this.headers,
       body: JSON.stringify({
@@ -280,7 +282,7 @@ export class HubSpotClient {
   }
 
   private async findContactId(email: string): Promise<string | null> {
-    const res = await fetch(`${this.baseUrl}/contacts/search`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/contacts/search`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -306,7 +308,7 @@ export class HubSpotClient {
    */
   async findWorkflowsByNameContains(substrings: string[]): Promise<Array<{ id: string; name: string }>> {
     try {
-      const res = await fetch("https://api.hubapi.com/automation/v3/workflows", { headers: this.headers });
+      const res = await fetchWithTimeout("https://api.hubapi.com/automation/v3/workflows", { headers: this.headers });
       if (!res.ok) return [];
       const data = await res.json();
       const lowered = substrings.map((s) => s.toLowerCase());
@@ -332,7 +334,7 @@ export class HubSpotClient {
     Array<{ subject: string; bodyPreview: string; sendDelayDays: number | null }>
   > {
     try {
-      const res = await fetch(`https://api.hubapi.com/automation/v3/workflows/${workflowId}`, { headers: this.headers });
+      const res = await fetchWithTimeout(`https://api.hubapi.com/automation/v3/workflows/${workflowId}`, { headers: this.headers });
       if (!res.ok) return [];
       const data = await res.json();
       let cumulativeDelayDays = 0;
@@ -359,7 +361,7 @@ export class HubSpotClient {
 
   async enrollInWorkflow(email: string, firstName: string): Promise<void> {
     // Upsert contact first
-    const upsertRes = await fetch(`${this.baseUrl}/contacts`, {
+    const upsertRes = await fetchWithTimeout(`${this.baseUrl}/contacts`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -389,7 +391,7 @@ export class HubSpotClient {
       );
     }
 
-    const res = await fetch(`https://api.hubapi.com/webhooks/v3/${appId}/subscriptions`, {
+    const res = await fetchWithTimeout(`https://api.hubapi.com/webhooks/v3/${appId}/subscriptions`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -419,7 +421,7 @@ export class HubSpotClient {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
     // Update lifecycle stage to trigger win-back workflows
-    await fetch(`${this.baseUrl}/contacts/${contactId}`, {
+    await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}`, {
       method: "PATCH",
       headers: this.headers,
       body: JSON.stringify({
@@ -444,7 +446,7 @@ export class HubSpotClient {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
-    await fetch(`${this.baseUrl}/contacts/${contactId}`, {
+    await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}`, {
       method: "PATCH",
       headers: this.headers,
       body: JSON.stringify({ properties }),
@@ -458,7 +460,7 @@ export class HubSpotClient {
    * /crm/v3/objects, unlike this.baseUrl, hence the separate full URL.
    */
   async getDealPipelineStages(): Promise<Map<string, { label: string; isClosed: boolean }>> {
-    const res = await fetch("https://api.hubapi.com/crm/v3/pipelines/deals", {
+    const res = await fetchWithTimeout("https://api.hubapi.com/crm/v3/pipelines/deals", {
       headers: this.headers,
     });
     const stageMap = new Map<string, { label: string; isClosed: boolean }>();
@@ -492,7 +494,7 @@ export class HubSpotClient {
       isClosedWon: boolean;
     }>
   > {
-    const res = await fetch("https://api.hubapi.com/crm/v3/objects/deals/search", {
+    const res = await fetchWithTimeout("https://api.hubapi.com/crm/v3/objects/deals/search", {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -519,7 +521,7 @@ export class HubSpotClient {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
-    await fetch(`${this.baseUrl}/notes`, {
+    await fetchWithTimeout(`${this.baseUrl}/notes`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -555,7 +557,7 @@ export class HubSpotClient {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
-    await fetch(`${this.baseUrl}/contacts/${contactId}`, {
+    await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}`, {
       method: "PATCH",
       headers: this.headers,
       body: JSON.stringify({
@@ -565,7 +567,7 @@ export class HubSpotClient {
 
     if (workflowId) {
       try {
-        await fetch(
+        await fetchWithTimeout(
           `https://api.hubapi.com/automation/v4/workflows/${workflowId}/enrollments/${contactId}`,
           { method: "DELETE", headers: this.headers }
         );
@@ -591,7 +593,7 @@ export class ActiveCampaignClient {
 
   async enrollInList(email: string, firstName: string, listId: string): Promise<void> {
     // Upsert contact
-    const contactRes = await fetch(`${this.baseUrl}/contacts/sync`, {
+    const contactRes = await fetchWithTimeout(`${this.baseUrl}/contacts/sync`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -606,7 +608,7 @@ export class ActiveCampaignClient {
     if (!contactId) return;
 
     // Add to list
-    await fetch(`${this.baseUrl}/contactLists`, {
+    await fetchWithTimeout(`${this.baseUrl}/contactLists`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -616,7 +618,7 @@ export class ActiveCampaignClient {
   }
 
   private async findContactId(email: string): Promise<string | null> {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/contacts?email=${encodeURIComponent(email)}`,
       { headers: this.headers }
     );
@@ -643,7 +645,7 @@ export class ActiveCampaignClient {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
-    await fetch(`${this.baseUrl}/contactTags`, {
+    await fetchWithTimeout(`${this.baseUrl}/contactTags`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({ contactTag: { contact: contactId, tag: statusTag } }),
@@ -651,7 +653,7 @@ export class ActiveCampaignClient {
 
     if (automationId) {
       try {
-        const assocRes = await fetch(
+        const assocRes = await fetchWithTimeout(
           `${this.baseUrl}/contactAutomations?filters[contact]=${contactId}&filters[automation]=${automationId}`,
           { headers: this.headers }
         );
@@ -659,7 +661,7 @@ export class ActiveCampaignClient {
           const assocData = await assocRes.json();
           const contactAutomationId = assocData.contactAutomations?.[0]?.id;
           if (contactAutomationId) {
-            await fetch(`${this.baseUrl}/contactAutomations/${contactAutomationId}`, {
+            await fetchWithTimeout(`${this.baseUrl}/contactAutomations/${contactAutomationId}`, {
               method: "DELETE",
               headers: this.headers,
             });
@@ -688,7 +690,7 @@ export class GHLCRMClient {
   }
 
   private async findContactId(email: string): Promise<string | null> {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/contacts/?email=${encodeURIComponent(email)}&locationId=${this.locationId}`,
       { headers: this.headers }
     );
@@ -705,7 +707,7 @@ export class GHLCRMClient {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
-    await fetch(
+    await fetchWithTimeout(
       `${this.baseUrl}/contacts/${contactId}/workflow/${workflowId}`,
       { method: "POST", headers: this.headers }
     );
@@ -732,7 +734,7 @@ export class GHLCRMClient {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
-    await fetch(`${this.baseUrl}/contacts/${contactId}`, {
+    await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}`, {
       method: "PUT",
       headers: this.headers,
       body: JSON.stringify({
@@ -777,7 +779,7 @@ export class GHLCRMClient {
       if (startAfter) params.set("startAfter", startAfter);
       if (startAfterId) params.set("startAfterId", startAfterId);
 
-      const res = await fetch(`${this.baseUrl}/opportunities/search?${params.toString()}`, {
+      const res = await fetchWithTimeout(`${this.baseUrl}/opportunities/search?${params.toString()}`, {
         headers: this.headers,
       });
       if (!res.ok) break;
@@ -812,7 +814,7 @@ export class GHLCRMClient {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
-    await fetch(`${this.baseUrl}/contacts/${contactId}/notes`, {
+    await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}/notes`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({ body: noteText }),
@@ -829,7 +831,7 @@ export class GHLCRMClient {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
-    await fetch(`${this.baseUrl}/contacts/${contactId}`, {
+    await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}`, {
       method: "PUT",
       headers: this.headers,
       body: JSON.stringify({ customFields: [{ key: "showtime_status", field_value: statusValue }] }),
@@ -837,7 +839,7 @@ export class GHLCRMClient {
 
     if (workflowId) {
       try {
-        await fetch(
+        await fetchWithTimeout(
           `${this.baseUrl}/contacts/${contactId}/workflow/${workflowId}`,
           { method: "DELETE", headers: this.headers }
         );
@@ -1108,7 +1110,7 @@ export async function deliverBrief(
       if (!slackWebhookUrl) {
         throw new Error("Slack delivery requires slack_webhook_url on engagement stack");
       }
-      await fetch(slackWebhookUrl, {
+      await fetchWithTimeout(slackWebhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1145,7 +1147,7 @@ export async function deliverBrief(
     default:
       // calendar_event delivery not universally supported — fall back to Slack if configured
       if (slackWebhookUrl) {
-        await fetch(slackWebhookUrl, {
+        await fetchWithTimeout(slackWebhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: briefText }),

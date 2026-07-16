@@ -24,6 +24,8 @@
  * is about the free web-search path.
  */
 
+
+import { fetchWithTimeout } from "@/lib/http";
 export interface EnrichmentResult {
   source: "apollo" | "pdl";
   found: boolean;
@@ -37,7 +39,7 @@ export interface EnrichmentResult {
 
 export async function enrichViaApollo(apiKey: string, email: string): Promise<EnrichmentResult> {
   try {
-    const res = await fetch("https://api.apollo.io/v1/people/match", {
+    const res = await fetchWithTimeout("https://api.apollo.io/v1/people/match", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Api-Key": apiKey },
       body: JSON.stringify({ email }),
@@ -74,7 +76,7 @@ export async function enrichViaApollo(apiKey: string, email: string): Promise<En
 
 export async function enrichViaPdl(apiKey: string, email: string): Promise<EnrichmentResult> {
   try {
-    const res = await fetch(`https://api.peopledatalabs.com/v5/person/enrich?email=${encodeURIComponent(email)}`, {
+    const res = await fetchWithTimeout(`https://api.peopledatalabs.com/v5/person/enrich?email=${encodeURIComponent(email)}`, {
       headers: { "X-Api-Key": apiKey },
     });
     if (!res.ok) {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
-import { getSession } from "@/lib/session";
+import { requireCronOrAdmin } from "@/lib/cron-auth";
 
 /**
  * Automated Active Alert Monitor Cron Router
@@ -8,20 +8,11 @@ import { getSession } from "@/lib/session";
  * Executed every 6 hours per the root vercel.json configurations
  */
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("Authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  // Allows session-authenticated dashboard bypass for manual testing hooks
-  const session = await getSession();
-  const isUserAuthenticated = !!session.whopUserId;
-
-  if (
-    process.env.NODE_ENV === "production" &&
-    !isUserAuthenticated &&
-    authHeader !== `Bearer ${cronSecret}`
-  ) {
-    return new Response("Unauthorized Access Denied", { status: 401 });
-  }
+  // evaluateActiveAlertMonitor() runs globally across every tenant's
+  // active alerts — gated to CRON_SECRET or an admin session only, not
+  // "anyone with a session" (see src/lib/cron-auth.ts for why).
+  const auth = await requireCronOrAdmin(request);
+  if (!auth.ok) return auth.response;
 
   try {
     const actionCount = await evaluateActiveAlertMonitor();

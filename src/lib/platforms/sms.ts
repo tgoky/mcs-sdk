@@ -15,6 +15,8 @@
  * hand this off to either.
  */
 
+
+import { fetchWithTimeout } from "@/lib/http";
 // ── Twilio ────────────────────────────────────────────────────────────────
 
 export class TwilioClient {
@@ -50,7 +52,7 @@ export class TwilioClient {
       params.set("From", this.fromNumber!);
     }
 
-    const res = await fetch(`${this.baseUrl}/Messages.json`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/Messages.json`, {
       method: "POST",
       headers: {
         Authorization: this.authHeader,
@@ -70,7 +72,7 @@ export class TwilioClient {
 
   /** Lightweight liveness check — GET the account resource. */
   async checkCredentialHealth(): Promise<void> {
-    const res = await fetch(`${this.baseUrl}.json`, { headers: { Authorization: this.authHeader } });
+    const res = await fetchWithTimeout(`${this.baseUrl}.json`, { headers: { Authorization: this.authHeader } });
     if (!res.ok) throw new Error(`Twilio credential check failed [${res.status}]`);
   }
 }
@@ -90,7 +92,7 @@ export class GHLSmsClient {
   }
 
   private async findContactId(email: string): Promise<string | null> {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/contacts/?email=${encodeURIComponent(email)}&locationId=${this.locationId}`,
       { headers: this.headers }
     );
@@ -111,7 +113,7 @@ export class GHLSmsClient {
       throw new Error(`No GHL contact found for ${email} — can't send SMS to a contact that doesn't exist yet.`);
     }
 
-    const res = await fetch(`${this.baseUrl}/conversations/messages`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/conversations/messages`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -147,7 +149,7 @@ export class HubSpotSmsClient {
    * ActiveCampaign caveat in email.ts.
    */
   async enrollSmsSequence(email: string, statusPropertyName: string): Promise<void> {
-    await fetch(`${this.baseUrl}/crm/v3/objects/contacts/${encodeURIComponent(email)}?idProperty=email`, {
+    await fetchWithTimeout(`${this.baseUrl}/crm/v3/objects/contacts/${encodeURIComponent(email)}?idProperty=email`, {
       method: "PATCH",
       headers: this.headers,
       body: JSON.stringify({ properties: { [statusPropertyName]: "sms_sequence_enrolled" } }),

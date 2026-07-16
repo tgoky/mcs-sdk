@@ -4,6 +4,8 @@
  * Called by pre-call-read's roster fetch and pin-down's webhook registration.
  */
 
+
+import { fetchWithTimeout } from "@/lib/http";
 export interface NormalizedCall {
   id: string;
   name: string;
@@ -57,7 +59,7 @@ export class CalendlyClient {
     tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
     tomorrowEnd.setHours(23, 59, 59, 999);
 
-    const eventsRes = await fetch(
+    const eventsRes = await fetchWithTimeout(
       `${this.baseUrl}/scheduled_events?min_start_time=${tomorrowStart.toISOString()}&max_start_time=${tomorrowEnd.toISOString()}&status=active`,
       { headers: this.headers }
     );
@@ -69,7 +71,7 @@ export class CalendlyClient {
 
     for (const event of eventsData.collection ?? []) {
       const eventUuid = event.uri.split("/").pop();
-      const inviteesRes = await fetch(
+      const inviteesRes = await fetchWithTimeout(
         `${this.baseUrl}/scheduled_events/${eventUuid}/invitees`,
         { headers: this.headers }
       );
@@ -114,7 +116,7 @@ export class CalendlyClient {
     const results: NormalizedCall[] = [];
 
     for (const status of ["active", "canceled"] as const) {
-      const eventsRes = await fetch(
+      const eventsRes = await fetchWithTimeout(
         `${this.baseUrl}/scheduled_events?min_start_time=${sinceISO}&max_start_time=${windowEnd.toISOString()}&status=${status}`,
         { headers: this.headers }
       );
@@ -123,7 +125,7 @@ export class CalendlyClient {
 
       for (const event of eventsData.collection ?? []) {
         const eventUuid = event.uri.split("/").pop();
-        const inviteesRes = await fetch(
+        const inviteesRes = await fetchWithTimeout(
           `${this.baseUrl}/scheduled_events/${eventUuid}/invitees`,
           { headers: this.headers }
         );
@@ -164,7 +166,7 @@ export class CalendlyClient {
     const windowStart = new Date(Date.now() + startHoursFromNow * 3_600_000);
     const windowEnd = new Date(Date.now() + endHoursFromNow * 3_600_000);
 
-    const eventsRes = await fetch(
+    const eventsRes = await fetchWithTimeout(
       `${this.baseUrl}/scheduled_events?min_start_time=${windowStart.toISOString()}&max_start_time=${windowEnd.toISOString()}&status=active`,
       { headers: this.headers }
     );
@@ -176,7 +178,7 @@ export class CalendlyClient {
 
     for (const event of eventsData.collection ?? []) {
       const eventUuid = event.uri.split("/").pop();
-      const inviteesRes = await fetch(`${this.baseUrl}/scheduled_events/${eventUuid}/invitees`, { headers: this.headers });
+      const inviteesRes = await fetchWithTimeout(`${this.baseUrl}/scheduled_events/${eventUuid}/invitees`, { headers: this.headers });
       if (!inviteesRes.ok) continue;
       const invData = await inviteesRes.json();
       const invitee = invData.collection?.[0];
@@ -203,7 +205,7 @@ export class CalendlyClient {
     organizationUri: string,
     receiverUrl: string
   ): Promise<string> {
-    const res = await fetch(`${this.baseUrl}/webhook_subscriptions`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/webhook_subscriptions`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -225,7 +227,7 @@ export class CalendlyClient {
     eventTypeUuid: string,
     confirmationPageUrl: string
   ): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/event_types/${eventTypeUuid}`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/event_types/${eventTypeUuid}`, {
       method: "PATCH",
       headers: this.headers,
       body: JSON.stringify({
@@ -254,7 +256,7 @@ export class CalendlyClient {
     const end = new Date();
     end.setDate(end.getDate() + Math.min(lookaheadDays, 7));
 
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/event_type_available_times?` +
         `event_type=${encodeURIComponent(`${this.baseUrl}/event_types/${eventTypeUuid}`)}` +
         `&start_time=${start.toISOString()}&end_time=${end.toISOString()}`,
@@ -283,7 +285,7 @@ export class CalendlyClient {
    * daily credential-health cron, not by any user-facing flow.
    */
   async checkCredentialHealth(): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/users/me`, { headers: this.headers });
+    const res = await fetchWithTimeout(`${this.baseUrl}/users/me`, { headers: this.headers });
     if (!res.ok) {
       throw new Error(`Calendly token check failed [${res.status}]`);
     }
@@ -294,7 +296,7 @@ export class CalendlyClient {
    * Called by the setup route to eliminate the need for manual Org URI input.
    */
   async getCurrentOrganization(): Promise<string> {
-    const res = await fetch(`${this.baseUrl}/users/me`, { headers: this.headers });
+    const res = await fetchWithTimeout(`${this.baseUrl}/users/me`, { headers: this.headers });
     if (!res.ok) {
       const errorText = await res.text().catch(() => "unknown");
       throw new Error(
@@ -346,7 +348,7 @@ export class CalendlyClient {
       active: "true",
     });
 
-    const res = await fetch(`${this.baseUrl}/event_types?${params.toString()}`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/event_types?${params.toString()}`, {
       headers: this.headers,
     });
 
@@ -417,7 +419,7 @@ export class CalComClient {
     tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
     tomorrowEnd.setHours(23, 59, 59, 999);
 
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/bookings?startTime=${tomorrowStart.toISOString()}&endTime=${tomorrowEnd.toISOString()}&status=accepted`,
       { headers: this.headers }
     );
@@ -450,7 +452,7 @@ export class CalComClient {
    * here unlike Calendly.
    */
   async listBookingsSince(sinceISO: string): Promise<NormalizedCall[]> {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/bookings?afterCreatedAt=${encodeURIComponent(sinceISO)}`,
       { headers: this.headers }
     );
@@ -482,7 +484,7 @@ export class CalComClient {
     const windowStart = new Date(Date.now() + startHoursFromNow * 3_600_000);
     const windowEnd = new Date(Date.now() + endHoursFromNow * 3_600_000);
 
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/bookings?startTime=${windowStart.toISOString()}&endTime=${windowEnd.toISOString()}&status=accepted`,
       { headers: this.headers }
     );
@@ -512,14 +514,14 @@ export class CalComClient {
    * credential-health cron, not by any user-facing flow.
    */
   async checkCredentialHealth(): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/me`, { headers: this.headers });
+    const res = await fetchWithTimeout(`${this.baseUrl}/me`, { headers: this.headers });
     if (!res.ok) {
       throw new Error(`Cal.com token check failed [${res.status}]`);
     }
   }
 
 async subscribeWebhook(receiverUrl: string): Promise<string> {
-  const res = await fetch(`${this.baseUrl}/webhooks`, {
+  const res = await fetchWithTimeout(`${this.baseUrl}/webhooks`, {
     method: "POST",
     headers: this.headers,
     body: JSON.stringify({
@@ -545,7 +547,7 @@ async subscribeWebhook(receiverUrl: string): Promise<string> {
     const end = new Date();
     end.setDate(end.getDate() + lookaheadDays);
 
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/slots?eventTypeId=${eventTypeId}` +
         `&start=${start.toISOString()}&end=${end.toISOString()}`,
       { headers: this.headers }
@@ -583,7 +585,7 @@ async subscribeWebhook(receiverUrl: string): Promise<string> {
       const username = parts[0];
       const targetSlug = parts[parts.length - 1]?.toLowerCase();
 
-      const res = await fetch(`${this.baseUrl}/event-types`, { headers: this.headers });
+      const res = await fetchWithTimeout(`${this.baseUrl}/event-types`, { headers: this.headers });
       if (!res.ok) {
         console.warn(`[CalComClient] Failed to fetch account event types index [${res.status}]`);
         return { username, cal_event_type_id: "" };
@@ -628,7 +630,7 @@ export class GHLCalendarClient {
     tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
     tomorrowEnd.setHours(23, 59, 59, 999);
 
-    const res = await fetch(
+    const res = await fetchWithTimeout(
   `${this.baseUrl}/calendars/events?locationId=${this.locationId}&startTime=${tomorrowStart.toISOString()}&endTime=${tomorrowEnd.toISOString()}`,
   { headers: this.headers }
 );
@@ -660,7 +662,7 @@ export class GHLCalendarClient {
     const windowStart = new Date(Date.now() + startHoursFromNow * 3_600_000);
     const windowEnd = new Date(Date.now() + endHoursFromNow * 3_600_000);
 
-   const res = await fetch(
+   const res = await fetchWithTimeout(
   `${this.baseUrl}/calendars/events?locationId=${this.locationId}&startTime=${windowStart.toISOString()}&endTime=${windowEnd.toISOString()}`,
   { headers: this.headers }
 );
@@ -690,7 +692,7 @@ export class GHLCalendarClient {
     const end = new Date(sinceISO);
     end.setDate(end.getDate() + lookaheadDays);
 
-   const res = await fetch(
+   const res = await fetchWithTimeout(
   `${this.baseUrl}/calendars/events?locationId=${this.locationId}&startTime=${start.toISOString()}&endTime=${end.toISOString()}`,
   { headers: this.headers }
 );
@@ -709,7 +711,7 @@ export class GHLCalendarClient {
   }
 
 async subscribeWebhook(receiverUrl: string): Promise<string> {
-  const res = await fetch(`${this.baseUrl}/locations/${this.locationId}/webhooks/`, {
+  const res = await fetchWithTimeout(`${this.baseUrl}/locations/${this.locationId}/webhooks/`, {
     method: "POST",
     headers: this.headers,
     body: JSON.stringify({
@@ -753,7 +755,7 @@ export class OnceHubClient {
     tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
     tomorrowEnd.setHours(23, 59, 59, 999);
 
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/bookings?starting_after=${tomorrowStart.toISOString()}&starting_before=${tomorrowEnd.toISOString()}&status=scheduled`,
       { headers: this.headers }
     );
@@ -780,7 +782,7 @@ export class OnceHubClient {
     const windowStart = new Date(Date.now() + startHoursFromNow * 3_600_000);
     const windowEnd = new Date(Date.now() + endHoursFromNow * 3_600_000);
 
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/bookings?starting_after=${windowStart.toISOString()}&starting_before=${windowEnd.toISOString()}&status=scheduled`,
       { headers: this.headers }
     );
@@ -814,7 +816,7 @@ export class OnceHubClient {
 
     const results: NormalizedCall[] = [];
     for (const status of ["scheduled", "canceled"] as const) {
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         `${this.baseUrl}/bookings?starting_after=${start.toISOString()}&starting_before=${end.toISOString()}&status=${status}`,
         { headers: this.headers }
       );

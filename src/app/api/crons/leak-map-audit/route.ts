@@ -1,33 +1,26 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
-import { getSession } from "@/lib/session";
 import { eq } from "drizzle-orm";
 import { startRun } from "@/lib/run-log";
 import { inngest, skillRunExecute } from "@/lib/inngest";
+import { requireCronOrAdmin } from "@/lib/cron-auth";
 import crypto from "crypto";
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("Authorization");
-  const cronSecret = process.env.CRON_SECRET;
+  const auth = await requireCronOrAdmin(request);
+  if (!auth.ok) return auth.response;
 
   const { searchParams } = new URL(request.url);
   const type = (searchParams.get("type") ?? "weekly") as "weekly" | "monthly";
   const urlEngagementId = searchParams.get("engagement_id");
 
-  const session = await getSession();
-  const isUserAuthenticated = !!session.whopUserId;
-
-  if (
-    process.env.NODE_ENV === "production" &&
-    !isUserAuthenticated &&
-    authHeader !== `Bearer ${cronSecret}`
-  ) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  // FIXED: Restrict metric evaluation boundaries to individual client spaces
-  let targets = [];
+  // Only CRON_SECRET or an admin session reaches this point (see
+  // requireCronOrAdmin above), so an unscoped sweep of every tenant is the
+  // intended behavior here, not a leak — this endpoint's whole job is the
+  // scheduler's full-fleet weekly/monthly run. `engagement_id` is only an
+  // optional narrowing for admin ad-hoc re-runs of a single tenant.
+  let targets: (typeof engagements.$inferSelect)[] = [];
   if (urlEngagementId) {
     targets = await db
       .select()
