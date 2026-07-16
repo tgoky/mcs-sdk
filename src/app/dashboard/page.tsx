@@ -15,10 +15,17 @@ export default async function DashboardPage() {
     .from(engagements)
     .where(eq(engagements.whopUserId, session.whopUserId!));
 
-  const criticalAlerts = await db
-    .select()
-    .from(activeAlerts)
-    .where(eq(activeAlerts.severity, "critical"));
+// AFTER (Securely locked to the tenant boundary)
+const criticalAlerts = await db
+  .select()
+  .from(activeAlerts)
+  .innerJoin(engagements, eq(activeAlerts.engagementId, engagements.engagementId))
+  .where(
+    and(
+      eq(activeAlerts.severity, "critical"),
+      eq(engagements.whopUserId, session.whopUserId!)
+    )
+  );
 
   // Calculate total successful background tasks executed
   const totalRunsResult = await db

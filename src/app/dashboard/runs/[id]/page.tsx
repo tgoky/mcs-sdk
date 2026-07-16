@@ -406,7 +406,7 @@ export default function RunDetailPage() {
                 onClick={() => setConfirmingCancel(true)}
                 className="inline-flex items-center gap-1.5 text-xs font-bold font-mono px-2.5 py-1 rounded-full border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors cursor-pointer"
               >
-                <Bane size={13} />
+                <Ban size={13} />
                 Cancel run
               </button>
             )}

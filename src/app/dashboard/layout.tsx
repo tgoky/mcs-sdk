@@ -67,15 +67,17 @@ export default async function DashboardLayout({
   };
 
   if (userEngagements.length > 0) {
-    const recentRuns = await db
-      .select({
-        skillName: skillRuns.skillName,
-        status: skillRuns.status,
-        startedAt: skillRuns.startedAt,
-      })
-      .from(skillRuns)
-      .orderBy(desc(skillRuns.startedAt))
-      .limit(100);
+   const recentRuns = await db
+  .select({
+    skillName: skillRuns.skillName,
+    status: skillRuns.status,
+    startedAt: skillRuns.startedAt,
+  })
+  .from(skillRuns)
+  .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+  .where(eq(engagements.whopUserId, session.whopUserId)) // Strict tenant boundary
+  .orderBy(desc(skillRuns.startedAt))
+  .limit(100);
 
     for (const run of recentRuns) {
       const skill = run.skillName as SkillName;
