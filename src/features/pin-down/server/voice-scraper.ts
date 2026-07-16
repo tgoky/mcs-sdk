@@ -29,8 +29,104 @@ interface ScrapedSource {
 }
 
 const CRAWL_TIMEOUT_MS = 8000;
+const FIRECRAWL_TIMEOUT_MS = 15000; // JS-rendered scrapes are slower than a raw fetch
 const MAX_CHARS_PER_PAGE = 12000; // keep the LLM prompt bounded
 const USER_AGENT = "ShowtimePinDownVoiceCrawler/1.0 (+https://mcs-abra.vercel.app)";
+const THIN_PAGE_WORD_THRESHOLD = 20; // below this, treat a raw fetch as "effectively empty" and fall back
+
+/**
+ * Hard wall-clock ceiling for the ENTIRE scrapeVoiceCorpus() call, not
+ * just each individual fetch. This exists because the two callers of
+ * scrapeVoiceCorpus have very different tolerances:
+ *   - onboarding-service.ts runs inside the Inngest worker (via
+ *     inngest.send in setup/route.ts, which returns immediately) — no
+ *     request-lifetime ceiling to worry about there.
+ *   - discovery-prefill.ts runs synchronously inside
+ *     /api/pin-down/discovery-prefill/route.ts, which has
+ *     `maxDuration = 30` AND still has to run a Claude inference call
+ *     *after* this returns. Without a shared budget, worst case is up to
+ *     8 attempted paths (1 homepage + 4 sales + 3 pricing) each eating up
+ *     to CRAWL_TIMEOUT_MS + FIRECRAWL_TIMEOUT_MS (23s) sequentially if a
+ *     site is fully Cloudflare-protected — a ~180s theoretical ceiling
+ *     against a 30s route limit. This budget makes that structurally
+ *     impossible regardless of how many pages need the Firecrawl
+ *     fallback: once the budget is spent, remaining path attempts are
+ *     skipped outright (treated as "not found," same as any other soft
+ *     failure) rather than still being attempted and cut off mid-fetch.
+ */
+const CRAWL_BUDGET_MS = 20000;
+
+/**
+ * Tier 2 of the crawl: Firecrawl's /v2/scrape endpoint. Only reached when
+ * the raw fetch in fetchPageText() came back null (network error, non-200,
+ * non-HTML content-type) or came back "thin" (a JS-rendered SPA shell with
+ * no server-side content, which raw fetch cannot execute — there's no
+ * headless browser behind htmlToText's regex parser). This is a
+ * deliberate two-tier design, not a wholesale replacement of the raw
+ * fetch: most marketing/sales/pricing pages are still plain server-rendered
+ * HTML, and paying a Firecrawl credit for those would be pure waste when a
+ * free fetch already gets the full page. Firecrawl is billed per call, so
+ * it's reserved for the specific case a static fetch structurally cannot
+ * solve.
+ *
+ * Returns null (never throws) on missing key, non-2xx, or empty body —
+ * same soft-fail contract as fetchPageText, so a Firecrawl outage or an
+ * unset FIRECRAWL_API_KEY degrades this source to "unavailable," not a
+ * broken onboarding run.
+ */
+async function fetchPageTextViaFirecrawl(url: string): Promise<string | null> {
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetchWithTimeout(
+      "https://api.firecrawl.dev/v2/scrape",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          url,
+          formats: ["markdown"],
+          onlyMainContent: true,
+        }),
+      },
+      FIRECRAWL_TIMEOUT_MS
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const markdown: string | undefined = data?.data?.markdown;
+    if (!markdown) return null;
+    return markdown.slice(0, MAX_CHARS_PER_PAGE);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Runs the free raw-fetch tier first, and only spends a Firecrawl credit
+ * if that tier came back empty or too thin to be useful. `deadline` is a
+ * shared Date.now()-comparable timestamp threaded through every call in a
+ * single scrapeVoiceCorpus() run — once it's passed, this skips BOTH tiers
+ * and returns null immediately rather than starting a fetch it can't let
+ * finish. This is checked at the top, not raced against the remaining
+ * budget, so a page is either fully attempted within budget or not
+ * attempted at all — never started-then-abandoned, which would waste the
+ * time spent without producing anything usable.
+ */
+async function fetchPageTextWithFallback(url: string, deadline: number): Promise<string | null> {
+  if (Date.now() >= deadline) return null;
+
+  const direct = await fetchPageText(url);
+  if (direct && direct.split(/\s+/).length >= THIN_PAGE_WORD_THRESHOLD) {
+    return direct;
+  }
+
+  if (Date.now() >= deadline) return null;
+  return fetchPageTextViaFirecrawl(url);
+}
 
 /**
  * Strips tags/scripts/styles down to visible text. Deliberately simple
@@ -101,15 +197,16 @@ export async function scrapeVoiceCorpus(domain: string): Promise<{
 }> {
   const base = normalizeDomain(domain);
   const sources: ScrapedSource[] = [];
+  const deadline = Date.now() + CRAWL_BUDGET_MS;
 
-  const homepageText = await fetchPageText(base);
+  const homepageText = await fetchPageTextWithFallback(base, deadline);
   if (homepageText && homepageText.split(/\s+/).length > 20) {
     sources.push({ kind: "marketing_site", url: base, wordCount: homepageText.split(/\s+/).length, text: homepageText });
   }
 
   const salesPaths = ["/offer", "/work-with-us", "/apply", "/get-started"];
   for (const path of salesPaths) {
-    const text = await fetchPageText(`${base}${path}`);
+    const text = await fetchPageTextWithFallback(`${base}${path}`, deadline);
     if (text && text.split(/\s+/).length > 40) {
       sources.push({ kind: "sales_page", url: `${base}${path}`, wordCount: text.split(/\s+/).length, text });
       break; // one sales page is enough — first real hit wins
@@ -118,7 +215,7 @@ export async function scrapeVoiceCorpus(domain: string): Promise<{
 
   const pricingPaths = ["/pricing", "/plans", "/packages"];
   for (const path of pricingPaths) {
-    const text = await fetchPageText(`${base}${path}`);
+    const text = await fetchPageTextWithFallback(`${base}${path}`, deadline);
     if (text && text.split(/\s+/).length > 20) {
       sources.push({ kind: "pricing_page", url: `${base}${path}`, wordCount: text.split(/\s+/).length, text });
       break;

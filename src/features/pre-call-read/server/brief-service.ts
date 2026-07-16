@@ -225,30 +225,37 @@ export async function executeNightlyBriefingCycle(
       summary.whatWorked.push("No calls scheduled tomorrow — nothing to brief.");
     }
 
-    // Each prospect is processed inside its own step.run(). This is the
-    // checkpoint boundary that actually solves the 504 problem: Inngest's
-    // checkpointing (see src/lib/inngest.ts) executes these immediately
-    // for low latency, but once maxRuntime is hit it yields back and
-    // schedules a fresh HTTP call to /api/inngest to continue with the
-    // next un-memoized call — so a 50-prospect roster is no longer one
-    // monolithic multi-minute request. It also means a call that's
-    // already been fully processed (brief sent + briefedCallsLog written)
-    // is memoized and will NEVER be re-run, even on a function-level retry
-    // — stronger idempotency than the DB dedup check alone provided.
+    // Recovery gap — retry-with-memoization refactor. Each prospect used to
+    // be processed inside ONE step.run() wrapping duplicate-check through
+    // delivery. That solved the 504/checkpointing problem (a 50-prospect
+    // roster isn't one monolithic request) but had a real cost: if
+    // brief_synthesis failed transiently (an Anthropic rate limit, a
+    // network blip) partway through that single step, the *entire*
+    // step.run callback had to be retried from the top — including the
+    // paid Apollo/PDL enrichment call inside prospect_research, which
+    // would fire again and get billed again for a lookup already
+    // successfully completed moments earlier.
     //
-    // All logStep() calls for a given prospect (duplicate_check,
-    // rule_14_gate, brief_synthesis, delivery) live inside `runCall`
-    // below, which is itself the function passed to step.run() — so they
-    // share the same memoization boundary as the work they describe. A
-    // retry either replays a call's entire step.run (all its logStep
-    // calls re-fire together with the actual work) or hits the memoized
-    // result and re-runs none of it. No naked logStep calls remain
-    // outside a step boundary in this file.
+    // Below, each phase (dup-check, rule14-gate, research+enrichment,
+    // engagement-context, synthesis, delivery) is its own named
+    // step.run(), scoped per call.id so IDs stay unique across the whole
+    // roster loop. Inngest memoizes each step's result independently: if
+    // brief_synthesis throws, Inngest's automatic step-level retry (which
+    // happens inline, before ever failing the whole function) re-runs
+    // ONLY that step. research-${call.id} and context-${call.id} already
+    // have memoized results by then and return instantly — Apollo, PDL,
+    // Klaviyo, and the video/ad-data platforms are never called again for
+    // this prospect within this run, no matter how many times synthesis
+    // is retried. The per-call try/catch below still exists so one
+    // prospect exhausting its retries can never take down the rest of the
+    // roster — same batch-isolation guarantee as before, just no longer
+    // at the cost of re-billing on every transient synthesis failure.
     for (const call of normalizedCalls) {
       const callLabel = `${call.name} (${call.email})`;
-      const runCall = async () => {
-        try {
-          // ── Idempotency gate ────────────────────────────────────────────
+
+      try {
+        // ── Idempotency gate ──────────────────────────────────────────────
+        const dup = await run(`dup-check-${call.id}`, async () => {
           const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
           const existing = await db
             .select({ id: briefedCallsLog.id })
@@ -260,46 +267,55 @@ export async function executeNightlyBriefingCycle(
               )
             )
             .limit(1);
+          return { alreadyBriefed: existing.length > 0 };
+        });
 
-          if (existing.length > 0) {
-            await logStep(runId, { phase: "duplicate_check", status: "skipped", label: callLabel, detail: "Already briefed in the last 24h — skipped" });
-            return;
-          }
+        if (dup.alreadyBriefed) {
+          await logStep(runId, { phase: "duplicate_check", status: "skipped", label: callLabel, detail: "Already briefed in the last 24h — skipped" });
+          continue;
+        }
 
-          // ── Rule 14 identity gate ───────────────────────────────────────
-          await logStep(runId, { phase: "rule_14_gate", status: "running", label: callLabel });
+        // ── Rule 14 identity gate ────────────────────────────────────────
+        await logStep(runId, { phase: "rule_14_gate", status: "running", label: callLabel });
 
-          const matchResult = await evaluatePersonMatch(
+        const matchResult = await run(`rule14-gate-${call.id}`, () =>
+          evaluatePersonMatch(
             { email: call.email, name: call.name, companySupplied: call.company, linkedInUrlFromApp: call.linkedInUrl },
             stack.person_match_confidence_threshold ?? 99
-          );
+          )
+        );
 
-          await logStep(runId, {
-            phase: "rule_14_gate",
-            status: matchResult.passed ? "success" : "skipped",
-            label: callLabel,
-            detail: `Identity confidence ${matchResult.totalScore}/100${matchResult.passed ? "" : " — research omitted"}`,
-          });
+        await logStep(runId, {
+          phase: "rule_14_gate",
+          status: matchResult.passed ? "success" : "skipped",
+          label: callLabel,
+          detail: `Identity confidence ${matchResult.totalScore}/100${matchResult.passed ? "" : " — research omitted"}`,
+        });
 
-          // ── Prospect research ────────────────────────────────────────────
-          // Only runs for identities that already passed the gate above —
-          // never researches an unconfirmed match. See prospect-research.ts
-          // for why this uses Claude's own web search tool rather than a
-          // LinkedIn scraper (LinkedIn's ToS prohibits scraping; there's no
-          // legitimate API for arbitrary profile lookups).
-          let researchSummary: string | null = null;
-          // Pre-Call Read recovery gap 6 — tracked explicitly for the
-          // briefed_calls_log write below, cross-consumed by Win-Back
-          // (was research done before this call was missed?) and Leak Map
-          // (research completion rate across the roster).
-          let researchStatus: "completed" | "skipped_low_confidence" | "failed" = "skipped_low_confidence";
-          let aiSynthesisStatus: "completed" | "failed" = "failed";
+        // ── Prospect research + BYOK enrichment (memoized as ONE step) ────
+        // Only runs for identities that already passed the gate above —
+        // never researches an unconfirmed match. See prospect-research.ts
+        // for why this uses Claude's own web search tool rather than a
+        // LinkedIn scraper (LinkedIn's ToS prohibits scraping; there's no
+        // legitimate API for arbitrary profile lookups). The free
+        // web-search research and the paid Apollo/PDL enrichment are
+        // bundled into a single step.run deliberately — they're
+        // conceptually "the research phase," and bundling them means a
+        // later retry can never re-trigger just one of the two paid/free
+        // sources in isolation.
+        let researchSummary: string | null = null;
+        // Pre-Call Read recovery gap 6 — tracked explicitly for the
+        // briefed_calls_log write below, cross-consumed by Win-Back
+        // (was research done before this call was missed?) and Leak Map
+        // (research completion rate across the roster).
+        let researchStatus: "completed" | "skipped_low_confidence" | "failed" = "skipped_low_confidence";
 
-          if (matchResult.passed) {
-            await logStep(runId, { phase: "prospect_research", status: "running", label: callLabel });
-            try {
+        if (matchResult.passed) {
+          await logStep(runId, { phase: "prospect_research", status: "running", label: callLabel });
+          try {
+            const researchResult = await run(`research-${call.id}`, async () => {
               const research = await researchProspect(call.name, call.email, call.company, runId);
-              researchSummary = research.summary;
+              let combinedSummary = research.summary;
 
               // Pre-Call Read recovery gap 5 — BYOK Apollo/PDL enrichment,
               // additive to the free web-search research above.
@@ -318,38 +334,58 @@ export async function executeNightlyBriefingCycle(
                   call.email
                 );
                 if (enrichments.length > 0) {
-                  researchSummary = [researchSummary, ...enrichments.map((e) => `[${e.source}] ${e.summary}`)]
+                  combinedSummary = [combinedSummary, ...enrichments.map((e) => `[${e.source}] ${e.summary}`)]
                     .filter(Boolean)
                     .join("\n");
                 }
               }
 
-              researchStatus = "completed";
-              summary.whatWasAttempted.push(`Researched ${callLabel} via web search (${research.searchesUsed} search(es)).`);
-              await logStep(runId, {
-                phase: "prospect_research",
-                status: research.citedUrls.length > 0 ? "success" : "skipped",
-                label: callLabel,
-                detail:
-                  research.citedUrls.length > 0
-                    ? `${research.citedUrls.length} source(s) found`
-                    : "No usable public findings",
-              });
-            } catch (researchErr: any) {
-              researchStatus = "failed";
-              await logStep(runId, { phase: "prospect_research", status: "failed", label: callLabel, detail: researchErr.message });
-            }
-          } else {
-            await logStep(runId, { phase: "prospect_research", status: "skipped", label: callLabel, detail: "Identity confidence below threshold" });
+              return {
+                summary: combinedSummary,
+                searchesUsed: research.searchesUsed,
+                citedUrlCount: research.citedUrls.length,
+              };
+            });
+
+            researchSummary = researchResult.summary;
+            researchStatus = "completed";
+            summary.whatWasAttempted.push(`Researched ${callLabel} via web search (${researchResult.searchesUsed} search(es)).`);
+            await logStep(runId, {
+              phase: "prospect_research",
+              status: researchResult.citedUrlCount > 0 ? "success" : "skipped",
+              label: callLabel,
+              detail:
+                researchResult.citedUrlCount > 0
+                  ? `${researchResult.citedUrlCount} source(s) found`
+                  : "No usable public findings",
+            });
+          } catch (researchErr: any) {
+            researchStatus = "failed";
+            await logStep(runId, { phase: "prospect_research", status: "failed", label: callLabel, detail: researchErr.message });
           }
+        } else {
+          await logStep(runId, { phase: "prospect_research", status: "skipped", label: callLabel, detail: "Identity confidence below threshold" });
+        }
 
-          // ── Engagement context (gaps 3, 4, 7) ────────────────────────────
-          const engagementContext = await gatherEngagementContext(tenant, stack, tenant.engagementId, call.email);
+        // ── Engagement context (gaps 3, 4, 7) ────────────────────────────
+        // Also its own memoized step — Klaviyo/video/ad-data engagement
+        // pulls are free-tier API calls, not billed per-lookup like
+        // Apollo/PDL, but memoizing them too means a synthesis retry
+        // doesn't needlessly re-hit three more external platforms.
+        const engagementContext = await run(`context-${call.id}`, () =>
+          gatherEngagementContext(tenant, stack, tenant.engagementId, call.email)
+        );
 
-          // ── Brief synthesis ─────────────────────────────────────────────
-          await logStep(runId, { phase: "brief_synthesis", status: "running", label: callLabel });
+        // ── Brief synthesis ─────────────────────────────────────────────
+        // This is now the step most likely to actually get retried
+        // in practice (transient Anthropic rate limits, brief network
+        // blips) — and it's the ONLY step Inngest's automatic step-level
+        // retry re-runs on such a hiccup. Every step above this point is
+        // already memoized by the time this runs, so a retry here costs
+        // nothing beyond the synthesis call itself.
+        await logStep(runId, { phase: "brief_synthesis", status: "running", label: callLabel });
 
-          const userMessage = `Compile brief for prospect:
+        const userMessage = `Compile brief for prospect:
 Name: ${call.name}
 Email: ${call.email}
 Company: ${call.company}
@@ -357,26 +393,27 @@ Call time: ${call.callTime.toISOString()}
 Identity confidence score: ${matchResult.totalScore}/100
 Research omitted: ${!matchResult.passed}`;
 
-          let llmResult;
-          try {
-            llmResult = await callClaudeWithRetry({
-              model: MODEL.SYNTHESIS,
-              system: buildBriefSystemPrompt(tenant, researchSummary, engagementContext),
-              userMessage,
-              maxTokens: 1500,
-              runId,
-            });
-            aiSynthesisStatus = "completed";
-          } catch (synthesisErr: any) {
-            aiSynthesisStatus = "failed";
-            throw synthesisErr; // still a hard failure for this call — caught by the outer catch below
-          }
+        const llmResult = await run(`synthesize-${call.id}`, () =>
+          callClaudeWithRetry({
+            model: MODEL.SYNTHESIS,
+            system: buildBriefSystemPrompt(tenant, researchSummary, engagementContext),
+            userMessage,
+            maxTokens: 1500,
+            runId,
+          })
+        );
 
-          await logStep(runId, { phase: "brief_synthesis", status: "success", label: callLabel, detail: "7-section brief generated" });
+        await logStep(runId, { phase: "brief_synthesis", status: "success", label: callLabel, detail: "7-section brief generated" });
 
-          // ── Delivery ─────────────────────────────────────────────────────
-          await logStep(runId, { phase: "delivery", status: "running", label: callLabel });
+        // ── Delivery + log write (memoized as one unit) ───────────────────
+        // Delivery and the briefed_calls_log insert stay bundled in one
+        // step: if delivery succeeds but the DB insert somehow failed, we
+        // don't want a retry to double-send the brief to Slack/email — a
+        // memoized "already delivered" step prevents that regardless of
+        // which half actually threw.
+        await logStep(runId, { phase: "delivery", status: "running", label: callLabel });
 
+        await run(`deliver-${call.id}`, async () => {
           const emailProvider = stack.email_platform;
           const emailApiKey = emailProvider
             ? await resolveCredential(tenant.engagementId, emailProvider).catch(() => undefined)
@@ -393,7 +430,6 @@ Research omitted: ${!matchResult.passed}`;
               : undefined
           );
 
-          // ── Log ─────────────────────────────────────────────────────────
           await db.insert(briefedCallsLog).values({
             id: crypto.randomUUID(),
             engagementId: tenant.engagementId,
@@ -404,43 +440,35 @@ Research omitted: ${!matchResult.passed}`;
             destinationDelivered: stack.brief_landing_destination ?? "slack",
             personMatchScore: matchResult.totalScore,
             researchStatus,
-            aiSynthesisStatus,
+            // Reaching this step at all means synthesis (above) already
+            // succeeded — synthesize-${call.id} throwing skips straight to
+            // the outer catch below, same as the pre-refactor behavior
+            // where a synthesis failure never reached the log-write line.
+            aiSynthesisStatus: "completed",
             createdAt: new Date(),
           });
+        });
 
-          await logStep(runId, {
-            phase: "delivery",
-            status: "success",
-            label: callLabel,
-            detail: `Brief sent via ${stack.brief_landing_destination ?? "slack"}`,
-          });
+        await logStep(runId, {
+          phase: "delivery",
+          status: "success",
+          label: callLabel,
+          detail: `Brief sent via ${stack.brief_landing_destination ?? "slack"}`,
+        });
 
-          summary.whatWasAttempted.push(`Brief ${callLabel} for call at ${call.callTime.toISOString()}.`);
-          summary.whatWorked.push(`Delivered brief for ${callLabel} via ${stack.brief_landing_destination ?? "slack"} (confidence ${matchResult.totalScore}/100).`);
+        summary.whatWasAttempted.push(`Brief ${callLabel} for call at ${call.callTime.toISOString()}.`);
+        summary.whatWorked.push(`Delivered brief for ${callLabel} via ${stack.brief_landing_destination ?? "slack"} (confidence ${matchResult.totalScore}/100).`);
 
-          deliveredCount++;
-        } catch (callErr: any) {
-          console.error(`[pre-call-read] Failed to brief ${callLabel}:`, callErr.message);
-          await logStep(runId, {
-            phase: "delivery",
-            status: "failed",
-            label: callLabel,
-            detail: callErr.message,
-          });
-          summary.whatFailed.push(`Failed to brief ${callLabel}: ${callErr.message}`);
-        }
-      };
-
-      // step is only present when invoked from the Inngest worker
-      // (src/inngest/skill.ts). The stale cron routes that still call this
-      // function directly (no Inngest context) fall back to running inline
-      // — no checkpointing, but at least it compiles and behaves like the
-      // pre-refactor synchronous version instead of crashing on a missing
-      // step argument.
-      if (step) {
-        await step.run(`brief-${call.id}`, runCall);
-      } else {
-        await runCall();
+        deliveredCount++;
+      } catch (callErr: any) {
+        console.error(`[pre-call-read] Failed to brief ${callLabel}:`, callErr.message);
+        await logStep(runId, {
+          phase: "delivery",
+          status: "failed",
+          label: callLabel,
+          detail: callErr.message,
+        });
+        summary.whatFailed.push(`Failed to brief ${callLabel}: ${callErr.message}`);
       }
     }
 
