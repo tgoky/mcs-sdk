@@ -12,6 +12,8 @@ import { createPlatformAdapterDraft } from "./doc-researcher";
 import { scrapeVoiceCorpus, scrapeEspBroadcasts } from "./voice-scraper";
 import { buildSmsSequence } from "@/features/pile-on/server/sms-sequence-builder";
 import { auditExistingPileOnSequence } from "@/features/pile-on/server/existing-sequence-builder";
+import { auditExistingReport } from "@/features/leak-map/server/existing-audit-audit";
+import { activateNotificationPackAlert } from "@/features/leak-map/server/notification-pack";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { GetStepTools, Inngest } from "inngest";
@@ -146,8 +148,8 @@ export async function runPinDownOnboarding(
     if (
       finalStack.email_platform === "ghl" &&
       (!finalStack.booking_platform_meta?.location_id ||
-        !finalStack.booking_platform_meta?.target_workflow_id ||
-        !finalStack.booking_platform_meta?.recovery_workflow_id)
+        !finalStack.target_workflow_id ||
+        !finalStack.recovery_workflow_id)
     ) {
       summary.openItems.push(
         "GoHighLevel is missing a location ID and/or workflow IDs — Pile-On and Win-Back enrollment will fail until these are set."
@@ -454,6 +456,45 @@ export async function runPinDownOnboarding(
         console.error("[pin-down onboarding] Pile-On sequence audit failed:", e.message);
         summary.openItems.push(`Existing Pile-On sequence audit failed: ${e.message}`);
         await logStep(runId, { phase: "pile_on_sequence_audit", status: "failed", detail: e.message });
+      }
+    }
+
+    // ── Existing report/dashboard audit (Leak Map recovery gap 4) ────────────
+    if (finalStack.existing_audit_flagged && finalStack.existing_audit_description) {
+      try {
+        await logStep(runId, { phase: "leak_map_existing_audit", status: "running" });
+        const audit = await run("leak-map-existing-audit", () =>
+          auditExistingReport(finalStack.existing_audit_description!)
+        );
+        await db
+          .update(engagements)
+          .set({ existingAuditAuditResult: audit })
+          .where(eq(engagements.engagementId, engagementId));
+        summary.whatWorked.push(
+          `Compared your existing report against Leak Map's coverage — ${audit.overlapping.length} overlapping area(s), ${audit.gapsLeakMapCloses.length} gap(s) Leak Map closes.`
+        );
+        await logStep(runId, { phase: "leak_map_existing_audit", status: "success" });
+      } catch (e: any) {
+        console.error("[pin-down onboarding] Leak Map existing-audit audit failed:", e.message);
+        summary.openItems.push(`Existing report audit failed: ${e.message}`);
+        await logStep(runId, { phase: "leak_map_existing_audit", status: "failed", detail: e.message });
+      }
+    }
+
+    // ── Notification pack activation (Leak Map recovery gap 3) ───────────────
+    if (finalStack.notification_pack_selections && finalStack.notification_pack_selections.length > 0) {
+      let activated = 0;
+      for (const packAlertId of finalStack.notification_pack_selections) {
+        try {
+          await activateNotificationPackAlert(engagementId, packAlertId);
+          activated++;
+        } catch (e: any) {
+          summary.openItems.push(`Couldn't activate notification pack alert "${packAlertId}": ${e.message}`);
+        }
+      }
+      if (activated > 0) {
+        summary.whatWorked.push(`Activated ${activated} notification pack alert(s) for Leak Map.`);
+        await logStep(runId, { phase: "notification_pack_activation", status: "success", detail: `${activated} activated` });
       }
     }
 

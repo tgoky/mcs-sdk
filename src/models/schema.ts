@@ -228,6 +228,41 @@ export type EngagementStack = {
   // Leak-Map sample-size floor (LEAK-002). Below this, a metric's delta is
   // suppressed rather than reported, regardless of how large it looks.
   sample_size_minimum?: number; // default 5
+  // ── Leak Map recovery gap 1: buyer-configurable, timezone-aware cadence ──
+  // Both default to Monday/1st-of-month, 09:00, UTC (matching the OG
+  // SKILL.md's stated defaults) when unset. Checked hourly by
+  // leakMapScheduleCron rather than driving a static per-tenant Inngest
+  // cron expression — Inngest cron triggers are fixed at deploy time, not
+  // dynamic per-row, so "buyer-configurable local time" has to be a tight
+  // poll against each engagement's stored schedule instead of a literal
+  // per-tenant subscription. Same pattern as the dynamic brief trigger and
+  // Pin-Down's polling fallback.
+  weekly_summary_schedule?: { dayOfWeek: number; hourLocal: number; timezone: string }; // dayOfWeek: 0=Sun..6=Sat
+  monthly_deep_dive_schedule?: { dayOfMonth: number; hourLocal: number; timezone: string };
+  // ── Leak Map recovery gap 2: report delivery format ─────────────────────
+  // "dashboard_only" (default) — report lands in auditRunsLog, viewable in
+  // the dashboard, nothing pushed anywhere. "slack" — Block Kit message to
+  // slack_webhook_url. "email" — sent via this app's own outbound email
+  // (Resend), not the buyer's ESP — a one-off operational report isn't
+  // something the buyer has (or should need) a pre-built flow for, unlike
+  // Pile-On/Win-Back's sequences.
+  audit_output_format?: "email" | "slack" | "dashboard_only";
+  leak_map_report_email?: string;
+  // ── Leak Map recovery gap 4: existing-audit audit ───────────────────────
+  // Operator-flagged during onboarding, same pattern as Pile-On's
+  // existing_pile_on_sequence_flagged. Free-text description since (unlike
+  // an ESP flow) there's no API to read an arbitrary external dashboard
+  // from — the audit is scored against what the operator describes, not
+  // something this app can independently verify.
+  existing_audit_flagged?: boolean;
+  existing_audit_description?: string;
+  // Leak Map recovery gap 3 — which notification-pack alert IDs (see
+  // NOTIFICATION_PACK in notification-pack.ts) the operator opted into
+  // during onboarding. Activation itself (writing to activeAlerts)
+  // happens once, in onboarding-service.ts — this field is the record of
+  // the operator's selection, not the live activation state (that's
+  // activeAlerts.source === "pack").
+  notification_pack_selections?: string[];
   // Brief delivery
   brief_landing_destination?: "slack" | "crm_note" | "calendar_event";
   slack_webhook_url?: string;       // per-engagement, never global
@@ -298,6 +333,14 @@ export const engagements = pgTable("engagements", {
     icp: string;
     traffic_temperature: "cold" | "warm" | "hot";
     hybrid_mode_enabled: boolean;
+    // Leak Map recovery gap 7 — cross-client benchmarks bucket on
+    // traffic_temperature + price_bucket + vertical. Free-text,
+    // operator-supplied (not a fixed taxonomy) — bucketing is exact-string
+    // match on whatever's entered here, so "Coaching" and "coaching"
+    // would bucket separately today. Good enough for the first version;
+    // normalizing casing/synonyms is a reasonable follow-up once there's
+    // enough real data to see whether it matters.
+    vertical?: string;
   }>(),
   brandVoiceProfile: jsonb("brand_voice_profile"),
   // Live URL on the buyer's own domain when the hosting adapter deploy
@@ -469,6 +512,20 @@ export const engagements = pgTable("engagements", {
       reasoning: string;
     }>;
     recommendedWorkflowLabel: string; // e.g. "showtime_pile_on_v1" — the parallel workflow name to build in the ESP UI
+  }>(),
+
+  // ── Leak Map recovery gap 4: existing-audit audit ───────────────────────
+  // Populated when stack.existing_audit_flagged is true. Same
+  // "audit runs in parallel, never modifies what's there" principle as
+  // Pin-Down's page audit and Pile-On's sequence audit.
+  existingAuditAuditResult: jsonb("existing_audit_audit_result").$type<{
+    auditedAt: string;
+    describedCoverage: string[]; // what the operator said the existing report/dashboard covers
+    leakMapCoverage: string[]; // what Leak Map's own audit covers
+    overlapping: string[];
+    gapsLeakMapCloses: string[]; // Leak Map covers, existing report doesn't
+    gapsExistingCovers: string[]; // existing report covers, Leak Map doesn't (yet)
+    recommendation: string;
   }>(),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -790,4 +847,34 @@ export const platformDocsLinks = pgTable("platform_docs_links", {
   lastCheckStatusCode: integer("last_check_status_code"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ── Metrics Benchmark (cross-client anonymized) ───────────────────────────
+// Leak Map recovery gap 7 — "not a recovery, but the highest-leverage new
+// capability... the single feature category where being multi-tenant is
+// itself the moat." One row per (metric_name, bucket) pair, recomputed
+// nightly from every completed audit run across every tenant.
+//
+// `bucket` is the compound key traffic_temperature + price_bucket +
+// vertical, pre-joined into one string (e.g. "warm|2k_5k|coaching") rather
+// than three separate columns — every consumer of this table (the lookup
+// in audit-engine.ts's report synthesis, the nightly aggregation job)
+// wants the whole bucket as a unit, never a partial match on just one
+// dimension, so a single indexed string column is both simpler and faster
+// than a three-column composite key here.
+//
+// sampleSize enforces k-anonymity: the aggregation job only ever writes a
+// row when sample_size >= 20, specifically so a benchmark can never be
+// reverse-engineered to reveal one specific tenant's numbers in a
+// small bucket. See leak-map-benchmarks.ts.
+export const metricsBenchmark = pgTable("metrics_benchmark", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  metricName: text("metric_name").notNull(),
+  bucket: text("bucket").notNull(),
+  sampleSize: integer("sample_size").notNull(),
+  p25: text("p25").notNull(), // stored as text — these are display values (e.g. "62"), not used in further arithmetic
+  p50: text("p50").notNull(),
+  p75: text("p75").notNull(),
+  p90: text("p90").notNull(),
+  lastComputedAt: timestamp("last_computed_at").defaultNow().notNull(),
 });

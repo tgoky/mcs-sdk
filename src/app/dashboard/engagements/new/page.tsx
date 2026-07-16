@@ -109,6 +109,17 @@ interface FormData {
   recoveredFromNoShowTaggingEnabled: boolean;
   inboundReplyMode: "native" | "forwarding" | "none";
   hubspotPortalId: string;
+  // Leak Map recovery gaps 1, 2, 3, 4, 7
+  weeklyScheduleDayOfWeek: number;
+  weeklyScheduleHour: number;
+  monthlyScheduleDayOfMonth: number;
+  leakMapTimezone: string;
+  auditOutputFormat: "email" | "slack" | "dashboard_only";
+  leakMapReportEmail: string;
+  existingAuditFlagged: boolean;
+  existingAuditDescription: string;
+  notificationPackSelections: string[];
+  offerVertical: string;
 }
 
 const DEFAULT_FORM: FormData = {
@@ -181,6 +192,16 @@ const DEFAULT_FORM: FormData = {
   recoveredFromNoShowTaggingEnabled: true,
   inboundReplyMode: "none",
   hubspotPortalId: "",
+  weeklyScheduleDayOfWeek: 1,
+  weeklyScheduleHour: 9,
+  monthlyScheduleDayOfMonth: 1,
+  leakMapTimezone: "UTC",
+  auditOutputFormat: "dashboard_only",
+  leakMapReportEmail: "",
+  existingAuditFlagged: false,
+  existingAuditDescription: "",
+  notificationPackSelections: [],
+  offerVertical: "",
 };
 
 // Draft persistence: survives page refresh / accidental navigation within
@@ -710,6 +731,7 @@ export default function NewEngagementPage() {
         icp: form.offerIcp,
         traffic_temperature: form.trafficTemperature,
         hybrid_mode_enabled: form.hybridMode,
+        vertical: form.offerVertical || undefined,
       },
       stack: {
         // 1. Core Platform Selection
@@ -823,6 +845,17 @@ booking_platform_meta: {
         recovered_from_no_show_tagging_enabled: form.recoveredFromNoShowTaggingEnabled,
         inbound_reply_mode: form.inboundReplyMode,
         hubspot_portal_id: form.inboundReplyMode === "native" && form.emailPlatform === "hubspot" ? form.hubspotPortalId || undefined : undefined,
+        // ── Leak Map recovery gap 1 — buyer-configurable, timezone-aware cadence
+        weekly_summary_schedule: { dayOfWeek: form.weeklyScheduleDayOfWeek, hourLocal: form.weeklyScheduleHour, timezone: form.leakMapTimezone },
+        monthly_deep_dive_schedule: { dayOfMonth: form.monthlyScheduleDayOfMonth, hourLocal: form.weeklyScheduleHour, timezone: form.leakMapTimezone },
+        // ── Leak Map recovery gap 2 — report delivery format ────────────────
+        audit_output_format: form.auditOutputFormat,
+        leak_map_report_email: form.auditOutputFormat === "email" ? form.leakMapReportEmail || undefined : undefined,
+        // ── Leak Map recovery gap 4 — existing-audit audit ──────────────────
+        existing_audit_flagged: form.existingAuditFlagged || undefined,
+        existing_audit_description: form.existingAuditFlagged ? form.existingAuditDescription || undefined : undefined,
+        // ── Leak Map recovery gap 3 — notification pack ─────────────────────
+        notification_pack_selections: form.notificationPackSelections.length > 0 ? form.notificationPackSelections : undefined,
       },
       topCallQuestions: form.topCallQuestions.split("\n").map((q) => q.trim()).filter(Boolean),
       topObjections: form.topObjections.split("\n").map((o) => o.trim()).filter(Boolean),
@@ -969,6 +1002,13 @@ booking_platform_meta: {
               value={form.offerPrice}
               onChange={(v) => set("offerPrice", v)}
               placeholder="e.g. $10,000"
+            />
+            <InputField
+              label="Industry / vertical"
+              value={form.offerVertical}
+              onChange={(v) => set("offerVertical", v)}
+              placeholder="e.g. coaching, agency, SaaS, consulting"
+              helpText="Powers Leak Map's cross-client benchmarks — how this offer's metrics compare to similar offers, once enough engagements report the same bucket."
             />
             <SelectField
               label="Where are leads coming from?"
@@ -1742,6 +1782,123 @@ booking_platform_meta: {
                 We'll generate a unique catcher URL once Win-Back is set up — point your client's Postmark/SendGrid inbound-parse bridge (or a forwarding rule through one) at it.
               </div>
             )}
+
+            {/* Leak Map recovery gaps 1, 2, 3, 4 */}
+            <div className="md:col-span-2 pt-4 mt-2 border-t" style={{ borderColor: "var(--border)" }}>
+              <label className="text-xs font-bold uppercase tracking-wider block mb-3" style={{ color: "var(--text-muted)" }}>
+                Leak Map Reporting
+              </label>
+            </div>
+            <SelectField
+              label="Weekly summary — day"
+              value={String(form.weeklyScheduleDayOfWeek)}
+              onChange={(v) => set("weeklyScheduleDayOfWeek", Number(v) as any)}
+              options={[
+                { value: "0", label: "Sunday" }, { value: "1", label: "Monday" }, { value: "2", label: "Tuesday" },
+                { value: "3", label: "Wednesday" }, { value: "4", label: "Thursday" }, { value: "5", label: "Friday" }, { value: "6", label: "Saturday" },
+              ]}
+            />
+            <SelectField
+              label="Report hour (local)"
+              value={String(form.weeklyScheduleHour)}
+              onChange={(v) => set("weeklyScheduleHour", Number(v) as any)}
+              options={Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${h.toString().padStart(2, "0")}:00` }))}
+              helpText="Used for both the weekly summary and monthly deep-dive."
+            />
+            <SelectField
+              label="Monthly deep-dive — day of month"
+              value={String(form.monthlyScheduleDayOfMonth)}
+              onChange={(v) => set("monthlyScheduleDayOfMonth", Number(v) as any)}
+              options={Array.from({ length: 28 }, (_, d) => ({ value: String(d + 1), label: String(d + 1) }))}
+              helpText="Capped at 28 so it fires reliably every month, including February."
+            />
+            <InputField
+              label="Timezone"
+              value={form.leakMapTimezone}
+              onChange={(v) => set("leakMapTimezone", v)}
+              placeholder="America/New_York"
+              helpText="IANA timezone name. Defaults to UTC."
+            />
+            <SelectField
+              label="Report delivery"
+              value={form.auditOutputFormat}
+              onChange={(v) => set("auditOutputFormat", v as any)}
+              options={[
+                { value: "dashboard_only", label: "Dashboard only" },
+                { value: "slack", label: "Slack" },
+                { value: "email", label: "Email" },
+              ]}
+            />
+            {form.auditOutputFormat === "email" && (
+              <InputField
+                label="Report recipient email"
+                value={form.leakMapReportEmail}
+                onChange={(v) => set("leakMapReportEmail", v)}
+                placeholder="ops@client.com"
+              />
+            )}
+            {form.auditOutputFormat === "slack" && !form.slackWebhookUrl && (
+              <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
+                Slack delivery uses the Slack webhook URL from the Pre-Call Read brief settings above — add one there if you haven't yet.
+              </div>
+            )}
+
+            <div className="md:col-span-2">
+              <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+                <input
+                  type="checkbox"
+                  checked={form.existingAuditFlagged}
+                  onChange={(e) => set("existingAuditFlagged", e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>This client already has a dashboard, KPI report, or audit process we should know about.</span>
+              </label>
+            </div>
+            {form.existingAuditFlagged && (
+              <div className="md:col-span-2">
+                <InputField
+                  label="Describe their existing report"
+                  value={form.existingAuditDescription}
+                  onChange={(v) => set("existingAuditDescription", v)}
+                  placeholder="e.g. A weekly Google Sheet tracking show-rate and close-rate, reviewed manually every Monday."
+                  helpText="We'll compare it against what Leak Map covers and show you the overlap — never replaces or modifies what's already there."
+                />
+              </div>
+            )}
+
+            <div className="md:col-span-2">
+              <label className="text-xs font-semibold block mb-2" style={{ color: "var(--text-primary)" }}>
+                Notification pack (optional)
+              </label>
+              <p className="text-[11px] font-mono mb-2" style={{ color: "var(--text-muted)" }}>
+                Curated alerts you can activate now — nothing fires unless checked. Thresholds can be adjusted later.
+              </p>
+              <div className="space-y-2">
+                {[
+                  { id: "low_identity_confidence", label: "Identity match confidence dropping below 70" },
+                  { id: "show_rate_drop", label: "Booking show-rate falling below 50%" },
+                  { id: "email_open_rate_drop", label: "Email open-rate falling below 25%" },
+                  { id: "pipeline_win_rate_drop", label: "CRM pipeline win-rate falling below 20%" },
+                  { id: "brief_volume_drop", label: "Brief delivery volume dropping 10%+ week over week" },
+                ].map((pack) => (
+                  <label key={pack.id} className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+                    <input
+                      type="checkbox"
+                      checked={form.notificationPackSelections.includes(pack.id)}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          notificationPackSelections: e.target.checked
+                            ? [...f.notificationPackSelections, pack.id]
+                            : f.notificationPackSelections.filter((id) => id !== pack.id),
+                        }))
+                      }
+                    />
+                    {pack.label}
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

@@ -138,7 +138,7 @@ export async function handleInboundBookingEvent(
       {
         target_list_id: stack.target_list_id,
         location_id: stack.booking_platform_meta?.location_id,
-        target_workflow_id: stack.booking_platform_meta?.target_workflow_id,
+        target_workflow_id: stack.target_workflow_id,
         activecampaign_base_url: stack.activecampaign_base_url,
       }
     );
@@ -160,8 +160,8 @@ export async function handleInboundBookingEvent(
     try {
       await exitWinBackSequence(stack.email_platform, emailApiKey, prospectEmail, {
         location_id: stack.booking_platform_meta?.location_id,
-        recovery_workflow_id: stack.booking_platform_meta?.recovery_workflow_id,
-        recovery_automation_id: stack.booking_platform_meta?.recovery_automation_id,
+        recovery_workflow_id: stack.recovery_workflow_id,
+        recovery_automation_id: stack.recovery_automation_id,
         activecampaign_base_url: stack.activecampaign_base_url,
       });
       await logStep(runId, {
@@ -328,7 +328,7 @@ export async function handleInboundBookingEvent(
       {
         recovery_list_id: stack.recovery_list_id,
         location_id: stack.booking_platform_meta?.location_id,
-        recovery_workflow_id: stack.booking_platform_meta?.recovery_workflow_id,
+        recovery_workflow_id: stack.recovery_workflow_id,
         activecampaign_base_url: stack.activecampaign_base_url,
       }
     );

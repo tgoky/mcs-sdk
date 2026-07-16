@@ -1,10 +1,12 @@
 import { db } from "@/lib/db";
 import { engagements, skillRuns, briefedCallsLog, auditRunsLog } from "@/models/schema";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { resolveCredential } from "@/lib/credentials";
 import { KlaviyoClient, HubSpotClient, GHLCRMClient } from "@/lib/platforms/email";
 import { CalendlyClient } from "@/lib/platforms/booking";
+import { deliverAuditReport } from "@/lib/platforms/audit-output";
+import { getBenchmarkLines } from "./leak-map-benchmarks";
 import { logStep, finishRun, failRun } from "@/lib/run-log";
 import crypto from "crypto";
 import type { GetStepTools, Inngest } from "inngest";
@@ -217,12 +219,39 @@ export class AuditEngine {
 
         let result = "All tracked metrics nominal. No funnel leaks detected.";
 
-        if (highestSeverity !== "none") {
-          const userMessage = `Generate a 6-field Leak Map recommendation report for these funnel metrics:
+        // Leak Map recovery gap 1 — depth differs by cadence, not just
+        // schedule. Weekly: concise, top-3-only, matching the OG
+        // SKILL.md's "key metrics, week-over-week deltas, top three
+        // ranked issues, top three ranked recommended actions." Monthly:
+        // exhaustive — every metric (not just the ones with issues),
+        // trend framing, effort/impact on every action, not just the top
+        // three.
+        const depthInstruction =
+          type === "weekly"
+            ? `This is the WEEKLY SUMMARY — be concise. Report only the top 3 ranked issues by severity and the top 3 ranked recommended actions. Skip metrics with no issue.`
+            : `This is the MONTHLY DEEP-DIVE — be exhaustive. Report EVERY metric provided, not just ones with issues (state "nominal" for metrics with no issue rather than omitting them), with trend framing (is this metric's current trajectory improving, flat, or declining based on current vs. prior), and give effort/impact estimates for every recommended action, not just the top few.`;
+
+        // Leak Map recovery gap 7 — cross-client benchmark lines, one per
+        // metric with a same-bucket benchmark available. Computed from
+        // metricsBenchmark (k-anonymity floor already enforced at
+        // aggregation time — see leak-map-benchmarks.ts), so every line
+        // handed to the prompt here is already safe to state verbatim.
+        const benchmarkLines = await getBenchmarkLines(tenant.offerDetails as any, metrics);
+
+        if (highestSeverity !== "none" || type === "monthly") {
+          const userMessage = `Generate a Leak Map ${type === "weekly" ? "weekly summary" : "monthly deep-dive"} report for these funnel metrics:
 ${JSON.stringify(metrics, null, 2)}
+
+${depthInstruction}
 
 Gaps noted: ${gaps.join("; ") || "none"}
 Overall severity: ${highestSeverity}
+
+${
+  benchmarkLines.length > 0
+    ? `Cross-client benchmark context (state these as informational color, not as the basis for severity — severity is already determined by this engagement's own current-vs-prior delta):\n${benchmarkLines.join("\n")}`
+    : ""
+}
 
 IMPORTANT: Any metric with insufficientData: true must NOT get a
 recommendation card. Its sample size is below the statistical floor, so a
@@ -243,7 +272,7 @@ Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})
               "You identify and explain funnel performance drops for high-ticket sales operators. " +
               "Be direct, specific, and actionable. Never blame the buyer.",
             userMessage,
-            maxTokens: 1500,
+            maxTokens: type === "monthly" ? 2500 : 1500,
             runId,
           });
           result = llmResult.text;
@@ -273,6 +302,24 @@ Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})
           gaps: gaps.length > 0 ? gaps : ["No data gaps detected."],
           createdAt: new Date(),
         });
+      });
+
+      // ── Report delivery (Leak Map recovery gap 2) ───────────────────────
+      // Deliberately outside any step.run — delivery failures shouldn't
+      // fail the retry-replay of the whole pipeline (the audit itself
+      // already succeeded and is safely persisted above); a delivery
+      // failure is logged and surfaced, not thrown.
+      await run("deliver-report", async () => {
+        await logStep(runId, { phase: "report_delivery", status: "running" });
+        const deliveryResult = await deliverAuditReport(stack?.audit_output_format, type, tenant.buyer, report, {
+          slackWebhookUrl: stack?.slack_webhook_url,
+          reportEmail: stack?.leak_map_report_email,
+        });
+        if (deliveryResult.delivered) {
+          await logStep(runId, { phase: "report_delivery", status: "success", detail: `Delivered via ${deliveryResult.channel}` });
+        } else {
+          await logStep(runId, { phase: "report_delivery", status: "failed", detail: `${deliveryResult.channel}: ${deliveryResult.error}` });
+        }
       });
 
       // Clean terminal execution closeout
@@ -414,7 +461,7 @@ async function pullKlaviyoOpenRate(
   const apiKey = await resolveCredential(engagementId, "klaviyo");
 
   const res = await fetch(
-    "https://a.klaviyo.com/api/campaigns/?filter=equals(status,'sent')&sort=-send_time&page[size]=4",
+    "https://a.klaviyo.com/api/campaigns/?filter=equals(status,'sent')&sort=-send_time&page[size]=4&fields[campaign]=statistics",
     {
       headers: {
         Authorization: `Klaviyo-API-Key ${apiKey}`,
@@ -431,10 +478,6 @@ async function pullKlaviyoOpenRate(
     campaign.attributes?.statistics?.open_rate
       ? Math.round(campaign.attributes.statistics.open_rate * 100)
       : 0;
-  // Sample size here is recipient count, not campaign count — a 90% open
-  // rate on a campaign sent to 4 people is exactly the kind of noise the
-  // sample-size gate exists to catch, even though "2 campaigns" looks
-  // like enough data points at a glance.
   const getRecipientCount = (campaign: any): number =>
     campaign.attributes?.statistics?.recipients ?? 0;
 

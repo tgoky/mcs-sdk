@@ -6,8 +6,8 @@ import { processInboundReply } from "@/inngest/win-back-reply";
 import { processWinBackSmsSequence } from "@/inngest/win-back-sms";
 import {
   nightlyBriefsCron,
-  weeklyLeakMapCron,
-  monthlyLeakMapCron,
+  leakMapScheduleCron,
+  leakMapBenchmarksCron,
   alertMonitorCron,
   staleRunReaperCron,
   notifyStaleRunCron,
@@ -45,8 +45,8 @@ export const { GET, POST, PUT } = serve({
     // the 6-hourly alert monitor which would fail to deploy as a real
     // vercel.json cron on Hobby.
     nightlyBriefsCron,
-    weeklyLeakMapCron,
-    monthlyLeakMapCron,
+    leakMapScheduleCron,
+    leakMapBenchmarksCron,
     alertMonitorCron,
     // Added for the reliability pass: closes runs stuck at "running"
     // forever, and proactively flags dead booking-platform credentials

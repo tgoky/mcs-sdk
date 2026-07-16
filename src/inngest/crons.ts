@@ -37,7 +37,10 @@ import { findEngagementsForWeeklyReadout, processWeeklyMetricsForEngagement } fr
 import { findEngagementsDueForPoll, pollBookingsForEngagement } from "@/features/pin-down/server/booking-poller";
 import { validateAllPlatformDocsLinks } from "@/features/pin-down/server/docs-link-validator";
 import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/brief-service";
+import { matchesWeeklySchedule, matchesMonthlySchedule } from "@/features/leak-map/server/schedule-matcher";
+import { computeAndPersistBenchmarks } from "@/features/leak-map/server/leak-map-benchmarks";
 import { and, eq, lt } from "drizzle-orm";
+import type { EngagementStack } from "@/models/schema";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
 // ONE step.run(), then fans out via a SINGLE step.sendEvent() carrying the
@@ -98,73 +101,62 @@ export const nightlyBriefsCron = inngest.createFunction(
   }
 );
 
-export const weeklyLeakMapCron = inngest.createFunction(
-  { id: "weekly-leak-map-cron", triggers: [{ cron: "TZ=UTC 0 9 * * 1" }] }, // Monday 09:00 UTC
+// Leak Map recovery gap 1 — buyer-configurable, timezone-aware cadence.
+// Runs hourly and checks each engagement's stack.weekly_summary_schedule /
+// stack.monthly_deep_dive_schedule (defaulting to Monday/1st-of-month,
+// 09:00 UTC — the OG SKILL.md's stated defaults) against the current hour
+// in that engagement's own configured timezone. See schedule-matcher.ts
+// for why this is a tight hourly poll rather than a literal per-tenant
+// Inngest cron expression — Inngest cron triggers are fixed at deploy
+// time, so "buyer-configurable local time" has to be checked, not
+// subscribed to.
+export const leakMapScheduleCron = inngest.createFunction(
+  { id: "leak-map-schedule-cron", triggers: [{ cron: "0 * * * *" }] }, // every hour, on the hour
   async ({ step }) => {
-    const prepared = await step.run("prepare-weekly-audits", async () => {
+    const now = new Date();
+
+    const prepared = await step.run("prepare-scheduled-audits", async () => {
       const targets = await db.select().from(engagements);
-      const out: { runId: string; engagementId: string }[] = [];
+      const out: { runId: string; engagementId: string; auditType: "weekly" | "monthly" }[] = [];
+
       for (const tenant of targets) {
-        const runId = crypto.randomUUID();
-        await startRun({
-          id: runId,
-          engagementId: tenant.engagementId,
-          skillName: "leak-map",
-          phase: "stage_1_data_pull",
-          label: "Weekly cron (Inngest)",
-        });
-        out.push({ runId, engagementId: tenant.engagementId });
+        const stack = tenant.stack as EngagementStack | null;
+
+        // A tenant whose weekly and monthly schedule happen to collide on
+        // the same hour (e.g. both configured for Monday-the-1st at 9am)
+        // gets both — matchesWeeklySchedule and matchesMonthlySchedule
+        // are independent checks, not mutually exclusive, same as the OG
+        // SKILL.md running two genuinely separate scheduled tasks.
+        const isWeeklyDue = matchesWeeklySchedule(stack?.weekly_summary_schedule, now);
+        const isMonthlyDue = matchesMonthlySchedule(stack?.monthly_deep_dive_schedule, now);
+
+        for (const auditType of [
+          ...(isWeeklyDue ? (["weekly"] as const) : []),
+          ...(isMonthlyDue ? (["monthly"] as const) : []),
+        ]) {
+          const runId = crypto.randomUUID();
+          await startRun({
+            id: runId,
+            engagementId: tenant.engagementId,
+            skillName: "leak-map",
+            phase: "stage_1_data_pull",
+            label: `${auditType === "weekly" ? "Weekly" : "Monthly"} cron (Inngest, ${stack?.[auditType === "weekly" ? "weekly_summary_schedule" : "monthly_deep_dive_schedule"]?.timezone ?? "UTC"})`,
+          });
+          out.push({ runId, engagementId: tenant.engagementId, auditType });
+        }
       }
       return out;
     });
 
     if (prepared.length > 0) {
       await step.sendEvent(
-        "dispatch-weekly-audits",
+        "dispatch-scheduled-audits",
         prepared.map((r) =>
           skillRunExecute.create({
             runId: r.runId,
             engagementId: r.engagementId,
             skillName: "leak-map",
-            auditType: "weekly",
-          })
-        )
-      );
-    }
-
-    return { dispatched: prepared.length };
-  }
-);
-
-export const monthlyLeakMapCron = inngest.createFunction(
-  { id: "monthly-leak-map-cron", triggers: [{ cron: "TZ=UTC 0 9 1 * *" }] }, // 1st of month, 09:00 UTC
-  async ({ step }) => {
-    const prepared = await step.run("prepare-monthly-audits", async () => {
-      const targets = await db.select().from(engagements);
-      const out: { runId: string; engagementId: string }[] = [];
-      for (const tenant of targets) {
-        const runId = crypto.randomUUID();
-        await startRun({
-          id: runId,
-          engagementId: tenant.engagementId,
-          skillName: "leak-map",
-          phase: "stage_1_data_pull",
-          label: "Monthly cron (Inngest)",
-        });
-        out.push({ runId, engagementId: tenant.engagementId });
-      }
-      return out;
-    });
-
-    if (prepared.length > 0) {
-      await step.sendEvent(
-        "dispatch-monthly-audits",
-        prepared.map((r) =>
-          skillRunExecute.create({
-            runId: r.runId,
-            engagementId: r.engagementId,
-            skillName: "leak-map",
-            auditType: "monthly",
+            auditType: r.auditType,
           })
         )
       );
@@ -535,5 +527,17 @@ export const processDynamicBriefEngagementCron = inngest.createFunction(
       await failRun(runId, err).catch(() => {});
       throw err;
     }
+  }
+);
+
+// Leak Map recovery gap 7 — cross-client anonymized benchmarks. Nightly
+// so every metric a same-day audit run references has yesterday's (at
+// worst) bucketed percentiles available, without recomputing on every
+// single audit run — see leak-map-benchmarks.ts for the k-anonymity floor
+// this enforces before publishing any bucket.
+export const leakMapBenchmarksCron = inngest.createFunction(
+  { id: "leak-map-benchmarks-cron", triggers: [{ cron: "TZ=UTC 0 4 * * *" }] }, // 04:00 UTC daily, ahead of the 09:00 audit crons
+  async ({ step }) => {
+    return step.run("compute-benchmarks", () => computeAndPersistBenchmarks());
   }
 );
