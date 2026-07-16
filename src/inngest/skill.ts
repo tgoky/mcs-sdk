@@ -27,6 +27,11 @@ export const executeSkillRun = inngest.createFunction(
     // mid-execution. That's why the DB write happens immediately in the
     // cancel route below, instead of waiting on this to take effect.
     cancelOn: [{ event: skillRunCancel, match: "data.runId" }],
+    // 🛡️ THE FIX: Limits execution to exactly 1 active automation thread per tenant
+    concurrency: {
+      key: "event.data.engagementId", // Reads the client identifier dynamically from the event data
+      limit: 1,                       // Guarantees dual runs will queue or back off instead of racing
+    },
   },
   async ({ event, step }) => {
     const { runId, engagementId, skillName, auditType } = event.data;
