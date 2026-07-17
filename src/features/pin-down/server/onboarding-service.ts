@@ -572,7 +572,7 @@ export async function runPinDownOnboarding(
             },
             pasteReadyHtml: null as string | null,
             pasteReadyInstructions: null as string | null,
-            remoteResourceId: deployResult.resourceId, // 🌟 THE FIX: Cache variable inside step execution block
+            remoteResourceId: deployResult.resourceId ?? (null as string | number | null), // 🌟 THE FIX: Cache variable inside step execution block
           };
         }
 
@@ -594,7 +594,7 @@ export async function runPinDownOnboarding(
           },
           pasteReadyHtml: deployResult.html,
           pasteReadyInstructions: deployResult.instructions,
-          remoteResourceId: undefined // 🌟 THE FIX: Keep returned types perfectly synchronized
+          remoteResourceId: null as string | number | null, // 🌟 THE FIX: null (not undefined) survives Inngest's JSON step-result round-trip
         };
       }
     );

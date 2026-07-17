@@ -1038,14 +1038,13 @@ export async function deliverPersonalizedIntro(
         showtime_personalized_intro: text,
       });
 
-   case "activecampaign":
-      console.warn(
-        `[activecampaign-intro] Personalization skipped: Numeric field ID collection is unmapped. Skipping to safeguard the worker thread.`
+ case "activecampaign":
+      // 🌟 THE FIX: Throwing flags the upstream hybrid budget wrapper to accurately log a "fallback" outcome
+      throw new Error(
+        "ActiveCampaign requires a pre-registered numeric custom field ID for this, which isn't collected during onboarding yet — not supported."
       );
-      return; // 🌟 Releases the execution block cleanly back to the Inngest runner
 
 
-      
     default:
       throw new Error(`Unsupported email platform for personalized-intro delivery: ${platform}`);
   }
@@ -1087,12 +1086,12 @@ export async function deliverRescheduleLink(
       });
 
    
-      case "activecampaign":
-      console.warn(
-        `[activecampaign-reschedule] Link sync skipped: Numeric field ID collection is unmapped. Skipping to safeguard the worker thread.`
+    case "activecampaign":
+      // 🌟 THE FIX: Throwing flags the upstream hybrid budget wrapper to accurately log a "fallback" outcome
+      throw new Error(
+        "ActiveCampaign requires a pre-registered numeric custom field ID for this, which isn't collected during onboarding yet — not supported."
       );
-      return; // 🌟 Safely returns void so the step records a success and moves on
-
+      
 
     default:
       throw new Error(`Unsupported email platform for reschedule-link delivery: ${platform}`);

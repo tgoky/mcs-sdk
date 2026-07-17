@@ -396,7 +396,13 @@ export const processSingleProspectBrief = inngest.createFunction(
     const call = { ...callData, callTime: new Date(callData.callTime) };
 
     const run = <T,>(id: string, fn: () => Promise<T>) => step.run(id, fn);
-    return processSingleBriefCall(tenant, stack, runId, call, run);
+    return processSingleBriefCall(
+      tenant,
+      stack,
+      runId,
+      call,
+      run as <T,>(id: string, fn: () => Promise<T>) => Promise<T>
+    );
   }
 );
 
@@ -418,6 +424,7 @@ export async function executeNightlyBriefingCycle(
   const run = step
     ? <T,>(id: string, fn: () => Promise<T>) => step.run(id, fn)
     : <T,>(_id: string, fn: () => Promise<T>) => fn();
+  const runForBriefCall = run as <T,>(id: string, fn: () => Promise<T>) => Promise<T>;
 
   try {
     const stack = tenant.stack as any;
@@ -491,7 +498,7 @@ export async function executeNightlyBriefingCycle(
       // Fallback channel: Enforce a strict sequential line-by-line evaluation path 
       // to guard our transaction pooler from immediate exhaustion
       for (const call of normalizedCalls) {
-        const outcome = await processSingleBriefCall(tenant, stack, runId, call, run);
+        const outcome = await processSingleBriefCall(tenant, stack, runId, call, runForBriefCall);
         outcomes.push(outcome);
       }
     }
