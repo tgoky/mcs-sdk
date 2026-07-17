@@ -532,6 +532,31 @@ export const engagements = pgTable("engagements", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ── Engagement Drafts ───────────────────────────────────────────────────────
+// Server-side backup of the "new engagement" wizard's in-progress state.
+// The wizard's primary draft copy lives in the browser's sessionStorage
+// (fast, no round trip, survives a same-tab refresh). sessionStorage is
+// tied to that one browsing context though — closing the tab, closing the
+// app, or the host environment tearing down and recreating the embedded
+// frame all wipe it instantly with no warning. This table is the fallback
+// that survives all of that: one row per whopUserId, upserted on a debounce
+// while the operator fills the form, deleted on successful submit or an
+// explicit "discard draft".
+//
+// formData never contains the wizard's API key fields (bookingApiKey,
+// emailApiKey, hostingApiKey, smsApiKey, adDataApiKey,
+// videoEngagementApiKey, apolloApiKey, pdlApiKey — see
+// src/lib/draft-fields.ts) — same rule as the sessionStorage copy, and
+// re-enforced server-side in src/app/api/engagements/draft/route.ts rather
+// than trusted from the client.
+export const engagementDrafts = pgTable("engagement_drafts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  whopUserId: text("whop_user_id").notNull().unique(),
+  step: text("step").notNull().default("offer"),
+  formData: jsonb("form_data").notNull().default({}),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // ── Skill Runs ────────────────────────────────────────────────────────────
 export const skillRuns = pgTable("skill_runs", {
   id: uuid("id").defaultRandom().primaryKey(),

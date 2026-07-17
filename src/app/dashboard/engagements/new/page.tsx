@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   BOOKING_PLATFORM_LABELS,
@@ -8,6 +8,7 @@ import {
   HOSTING_PLATFORM_LABELS,
   BRIEF_DESTINATION_LABELS,
 } from "@/lib/copy";
+import { stripDraftSecrets } from "@/lib/draft-fields";
 
 type Step = "offer" | "credentials" | "stack" | "voice" | "confirm";
 
@@ -266,6 +267,50 @@ function clearDraft() {
   }
 }
 
+// ── Server-side draft backup ────────────────────────────────────────────
+// sessionStorage above only survives a same-tab refresh — it's wiped the
+// instant the tab/app/embedded frame closes, with no warning. These three
+// calls back that up with a real database row (see
+// src/app/api/engagements/draft/route.ts) so closing out mid-wizard and
+// coming back later still has something to restore. Fire-and-forget by
+// design: a failed background sync shouldn't interrupt someone filling out
+// a form, and sessionStorage still covers the common same-tab case even if
+// these calls never landed.
+
+async function fetchServerDraft(): Promise<{ step: Step; formData: Partial<FormData> } | null> {
+  try {
+    const res = await fetch("/api/engagements/draft");
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.draft) return null;
+    const step: Step = STEPS.some((s) => s.id === data.draft.step)
+      ? data.draft.step
+      : "offer";
+    return { step, formData: data.draft.formData ?? {} };
+  } catch {
+    return null;
+  }
+}
+
+function pushServerDraft(form: FormData, step: Step) {
+  const safeToStore = stripDraftSecrets(form);
+  fetch("/api/engagements/draft", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ step, formData: safeToStore }),
+  }).catch(() => {
+    // Best-effort — sessionStorage already has this tab's copy.
+  });
+}
+
+function deleteServerDraft() {
+  fetch("/api/engagements/draft", { method: "DELETE" }).catch(() => {
+    // Best-effort cleanup — an orphaned draft row just gets overwritten
+    // by the next wizard session for this user, so a failure here is
+    // harmless, not a stuck state.
+  });
+}
+
 function StepIndicator({
   steps,
   current,
@@ -427,6 +472,14 @@ export default function NewEngagementPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Server-draft hydration guard: don't start pushing autosaves to the
+  // server until we've first checked whether a draft from a previous,
+  // now-closed session is sitting there — otherwise the very first render
+  // (form still at DEFAULT_FORM) would race ahead and overwrite it with
+  // blanks before we ever got a chance to read it back.
+  const [hasHydratedServerDraft, setHasHydratedServerDraft] = useState(false);
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Klaviyo states
   const [klaviyoLists, setKlaviyoLists] = useState<{ id: string; name: string }[]>([]);
   const [fetchingLists, setFetchingLists] = useState(false);
@@ -495,17 +548,73 @@ export default function NewEngagementPage() {
 
   function discardDraft() {
     clearDraft();
+    deleteServerDraft();
     setForm(DEFAULT_FORM);
     setStep("offer");
     setShowRestoredBanner(false);
   }
 
+  // Server-draft hydration: this tab's sessionStorage was empty, which
+  // means either this is a genuinely fresh wizard, or the operator started
+  // one in a tab/app/frame that's since closed. Check the server-side
+  // backup before anything else touches `form`. Skipped entirely when
+  // sessionStorage already had something, since that's always the
+  // freshest copy for this tab.
+  useEffect(() => {
+    let cancelled = false;
+    if (restoredDraft) {
+      setHasHydratedServerDraft(true);
+      return;
+    }
+    (async () => {
+      const serverDraft = await fetchServerDraft();
+      if (!cancelled && serverDraft) {
+        setForm((f) => ({ ...f, ...serverDraft.formData }));
+        setStep(serverDraft.step);
+        setShowRestoredBanner(true);
+      }
+      if (!cancelled) setHasHydratedServerDraft(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Draft autosave: keeps onboarding progress across an accidental refresh
   // or back/forward navigation. API keys are stripped before storage inside
-  // saveDraft, so nothing sensitive ends up in sessionStorage.
+  // saveDraft, so nothing sensitive ends up in sessionStorage. The
+  // sessionStorage write is synchronous and instant; the server push is
+  // debounced 1.5s behind it — sessionStorage is the fast path for a
+  // same-tab reload, the server row is the fallback for when the tab/app
+  // itself closes and sessionStorage is gone before it can help.
   useEffect(() => {
     saveDraft(form, step);
-  }, [form, step]);
+    if (!hasHydratedServerDraft) return;
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    pushTimerRef.current = setTimeout(() => {
+      pushTimerRef.current = null;
+      pushServerDraft(form, step);
+    }, 1500);
+    return () => {
+      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    };
+  }, [form, step, hasHydratedServerDraft]);
+
+  // Narrow safety net for the ~1.5s window between an edit and the
+  // debounced server push actually firing — sessionStorage already has
+  // this tab's copy instantly, so this only matters if the tab/app closes
+  // in that specific gap.
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (pushTimerRef.current) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   // Klaviyo: Fetch lists
   useEffect(() => {
@@ -909,6 +1018,7 @@ booking_platform_meta: {
       }
 
       clearDraft();
+      deleteServerDraft();
       router.push(`/dashboard/runs/${data.runId}`);
     } catch (e: any) {
       setError(

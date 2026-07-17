@@ -461,7 +461,6 @@ export default function RunDetailPage() {
 
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-950/20 p-3.5 space-y-1 shadow-sm">
           <div className="flex items-center gap-1.5 text-zinc-400 dark:text-zinc-600">
-            <Paperclip size={13} style={{ display: "none" }} /> {/* fallback match node spacer placeholder */}
             <Terminal size={13} />
             <span className="text-[11px] font-mono uppercase tracking-wider font-bold">Context Volume</span>
           </div>
