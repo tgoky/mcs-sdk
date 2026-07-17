@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getIronSession } from "iron-session";
-import { cookies } from "next/headers";
 import type { SessionData } from "@/lib/session";
 import { checkActiveMembership } from "@/lib/whop-access";
 
@@ -32,8 +31,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const cookieStore = await cookies();
-  const session = await getIronSession<SessionData>(cookieStore, {
+  // 🌟 THE FIX: Initialize the mutable response upfront so iron-session can bind headers directly
+  const response = NextResponse.next();
+
+  const session = await getIronSession<SessionData>(request, response, {
     password: process.env.SESSION_SECRET!,
     cookieName: "mudd_session",
     cookieOptions: COOKIE_OPTIONS,
@@ -49,15 +50,14 @@ export async function middleware(request: NextRequest) {
   // 2. Handle membership revalidation updates if cached state is stale
   const verifiedAt = session.subscriptionVerifiedAt ?? 0;
   const isStale = Date.now() - verifiedAt > MEMBERSHIP_REVALIDATE_MS;
-  let sessionWasUpdated = false;
 
   if (isStale && session.subscriptionStatus !== "admin") {
     try {
       const membership = await checkActiveMembership(session.whopUserId);
       session.subscriptionStatus = membership.status;
       session.subscriptionVerifiedAt = Date.now();
+      // 🌟 THE FIX: Natively encrypts and appends the fresh cookie directly into our response object
       await session.save(); 
-      sessionWasUpdated = true; // Flag that we need to send the updated header to the browser
     } catch (err) {
       console.error("[middleware] membership revalidation failed:", err);
     }
@@ -69,33 +69,15 @@ export async function middleware(request: NextRequest) {
       new URL("/?membership=required", request.url)
     );
     
-    // Explicitly pass the session cookie to the redirect response with full security parameters
-    const currentSessionCookie = cookieStore.get("mudd_session");
-    if (currentSessionCookie) {
-      redirectResponse.cookies.set({
-        name: "mudd_session",
-        value: currentSessionCookie.value,
-        ...COOKIE_OPTIONS,
-      });
+    // 🌟 THE FIX: Safely copy the newly minted encryption header over to the redirect response frame
+    const setCookieHeader = response.headers.get("Set-Cookie");
+    if (setCookieHeader) {
+      redirectResponse.headers.set("Set-Cookie", setCookieHeader);
     }
     return redirectResponse;
   }
 
-  // 4. Standard completion continuation path
-  const response = NextResponse.next();
-
-  // Only append a Set-Cookie header if iron-session actually modified the internal data tokens
-  if (sessionWasUpdated) {
-    const updatedSessionCookie = cookieStore.get("mudd_session");
-    if (updatedSessionCookie) {
-      response.cookies.set({
-        name: "mudd_session",
-        value: updatedSessionCookie.value,
-        ...COOKIE_OPTIONS,
-      });
-    }
-  }
-
+  // 4. Standard completion continuation path (contains automatically stamped cookies from session.save)
   return response;
 }
 

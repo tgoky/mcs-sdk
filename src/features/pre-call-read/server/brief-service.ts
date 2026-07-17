@@ -96,7 +96,7 @@ async function gatherEngagementContext(
   if (stack.video_engagement_platform && stack.video_engagement_platform !== "none") {
     try {
       // Cleaned up the redundant conditional check
-const videoApiKey = await resolveCredential(engagementId, stack.video_engagement_platform);
+      const videoApiKey = await resolveCredential(engagementId, stack.video_engagement_platform);
       const summary = await getVideoEngagementForProspect(
         stack.video_engagement_platform,
         videoApiKey,
@@ -164,11 +164,6 @@ type CallOutcome =
  *   2. As the body of processSingleProspectBrief, one call per Inngest
  *      function invocation, fanned out via step.invoke() in parallel —
  *      see executeNightlyBriefingCycle's roster-processing block.
- * Either way, `run` is the same step-or-inline helper; this function has
- * no idea which one it's in, which is the point — the memoization
- * boundaries described in each phase's comments below hold in both
- * cases, just at different granularities (checkpoints within one big
- * function vs. this whole pipeline being one Inngest function run).
  */
 async function processSingleBriefCall(
   tenant: any,
@@ -219,21 +214,7 @@ async function processSingleBriefCall(
     });
 
     // ── Prospect research + BYOK enrichment (memoized as ONE step) ────
-    // Only runs for identities that already passed the gate above —
-    // never researches an unconfirmed match. See prospect-research.ts
-    // for why this uses Claude's own web search tool rather than a
-    // LinkedIn scraper (LinkedIn's ToS prohibits scraping; there's no
-    // legitimate API for arbitrary profile lookups). The free
-    // web-search research and the paid Apollo/PDL enrichment are
-    // bundled into a single step.run deliberately — they're
-    // conceptually "the research phase," and bundling them means a
-    // later retry can never re-trigger just one of the two paid/free
-    // sources in isolation.
     let researchSummary: string | null = null;
-    // Pre-Call Read recovery gap 6 — tracked explicitly for the
-    // briefed_calls_log write below, cross-consumed by Win-Back
-    // (was research done before this call was missed?) and Leak Map
-    // (research completion rate across the roster).
     let researchStatus: "completed" | "skipped_low_confidence" | "failed" = "skipped_low_confidence";
     let researchAttempted = false;
     let searchesUsed: number | undefined;
@@ -245,8 +226,6 @@ async function processSingleBriefCall(
           const research = await researchProspect(call.name, call.email, call.company, runId);
           let combinedSummary = research.summary;
 
-          // Pre-Call Read recovery gap 5 — BYOK Apollo/PDL enrichment,
-          // additive to the free web-search research above.
           if (stack.prospect_research_sources_used?.length) {
             const [apolloKey, pdlKey] = await Promise.all([
               stack.prospect_research_sources_used.includes("apollo") && stack.apollo_credentials_ref
@@ -297,21 +276,11 @@ async function processSingleBriefCall(
     }
 
     // ── Engagement context (gaps 3, 4, 7) ────────────────────────────
-    // Also its own memoized step — Klaviyo/video/ad-data engagement
-    // pulls are free-tier API calls, not billed per-lookup like
-    // Apollo/PDL, but memoizing them too means a synthesis retry
-    // doesn't needlessly re-hit three more external platforms.
     const engagementContext = await run(`context-${call.id}`, () =>
       gatherEngagementContext(tenant, stack, tenant.engagementId, call.email)
     );
 
     // ── Brief synthesis ─────────────────────────────────────────────
-    // This is the step most likely to actually get retried in practice
-    // (transient Anthropic rate limits, brief network blips) — and it's
-    // the ONLY step Inngest's automatic step-level retry re-runs on
-    // such a hiccup. Every step above this point is already memoized by
-    // the time this runs, so a retry here costs nothing beyond the
-    // synthesis call itself.
     await logStep(runId, { phase: "brief_synthesis", status: "running", label: callLabel });
 
     const userMessage = `Compile brief for prospect:
@@ -335,11 +304,6 @@ Research omitted: ${!matchResult.passed}`;
     await logStep(runId, { phase: "brief_synthesis", status: "success", label: callLabel, detail: "7-section brief generated" });
 
     // ── Delivery + log write (memoized as one unit) ───────────────────
-    // Delivery and the briefed_calls_log insert stay bundled in one
-    // step: if delivery succeeds but the DB insert somehow failed, we
-    // don't want a retry to double-send the brief to Slack/email — a
-    // memoized "already delivered" step prevents that regardless of
-    // which half actually threw.
     await logStep(runId, { phase: "delivery", status: "running", label: callLabel });
 
     await run(`deliver-${call.id}`, async () => {
@@ -369,10 +333,6 @@ Research omitted: ${!matchResult.passed}`;
         destinationDelivered: stack.brief_landing_destination ?? "slack",
         personMatchScore: matchResult.totalScore,
         researchStatus,
-        // Reaching this step at all means synthesis (above) already
-        // succeeded — synthesize-${call.id} throwing skips straight to
-        // the outer catch below, same as the pre-refactor behavior
-        // where a synthesis failure never reached the log-write line.
         aiSynthesisStatus: "completed",
         createdAt: new Date(),
       });
@@ -407,29 +367,15 @@ Research omitted: ${!matchResult.passed}`;
 
 /**
  * Fan-out worker: processes exactly ONE prospect. Invoked via
- * step.invoke() (not step.sendEvent — we need the CallOutcome back to
- * update the parent run's summary/deliveredCount, which a fire-and-forget
- * event can't give us) from executeNightlyBriefingCycle, one invocation
- * per call in the roster, run concurrently via Promise.all.
- *
- * Re-fetches the tenant row instead of trusting event.data — same reason
- * executeSkillRun does: stack jsonb carries plaintext credentials
- * (slack_webhook_url, webhook_signing_secret) that shouldn't cross the
- * wire into Inngest Cloud's stored event/step payloads twice.
+ * step.invoke() from executeNightlyBriefingCycle.
  *
  * concurrency here is function-scoped (not keyed to engagementId) and
- * deliberately caps the WHOLE app's concurrent brief pipelines at once,
- * not just one tenant's — nightlyBriefsCron dispatches every eligible
- * tenant's roster at the same 20:00 UTC tick, so without this a dozen
- * mid-size tenants firing simultaneously could still collectively exceed
- * the Supabase pooler's slot count even though no single tenant's roster
- * looks dangerous on its own. 15 is a starting point, not a measured
- * ceiling — tune against your actual pooler's configured pool_size.
+ * deliberately caps the WHOLE app's concurrent brief pipelines at once.
  */
 export const processSingleProspectBrief = inngest.createFunction(
   {
     id: "process-single-prospect-brief",
-    triggers: [prospectBriefDispatch], // Core trigger moved here inside the 1st argument
+    triggers: [prospectBriefDispatch],
     concurrency: { limit: 15 },
   },
   async ({ event, step }) => {
@@ -458,10 +404,7 @@ export const processSingleProspectBrief = inngest.createFunction(
  * Core briefing cycle execution runtime block.
  *
  * `triggerMode` — Pre-Call Read recovery gap 1. "nightly" (default) fetches
- * tomorrow's full roster, same as always. "dynamic_webhook" instead fetches
- * whatever's newly inside the buyer's brief_lead_time_hours window — see
- * dynamicBriefCron in src/inngest/crons.ts, which calls this in that mode
- * on a tight rolling cadence instead of once nightly.
+ * tomorrow's full roster. "dynamic_webhook" fetches window records.
  */
 export async function executeNightlyBriefingCycle(
   tenant: any,
@@ -479,14 +422,6 @@ export async function executeNightlyBriefingCycle(
   try {
     const stack = tenant.stack as any;
 
-    // Roster fetch's running/success logStep pair now lives inside the
-    // same step.run boundary as the fetch itself — same fix as
-    // audit-engine.ts. Previously these two calls sat outside step.run,
-    // so on a checkpoint-resumed replay both would fire again even though
-    // fetchTomorrowCallsForTenant's own result would've been re-executed
-    // too (it wasn't memoized either). Folding them together makes the
-    // whole roster-fetch phase atomic: either the pair + the fetch all
-    // happened once, or none of it did.
     const tomorrowCalls = await run("roster-fetch", async () => {
       await logStep(runId, { phase: "roster_fetch", status: "running" });
 
@@ -499,17 +434,16 @@ export async function executeNightlyBriefingCycle(
         stack.booking_platform
       );
 
-   const calls =
-  triggerMode === "dynamic_webhook"
-    ? await fetchUpcomingCallsForTenant(
-        stack.booking_platform,
-        bookingApiKey,
-        stack.booking_platform_meta,
-        0,
-        // Clamped defensively between 1-48 hours to prevent lookahead array overflow or 0h empty results
-        Math.max(1, Math.min(48, stack.brief_lead_time_hours ?? 12))
-      )
-    : await fetchTomorrowCallsForTenant(stack.booking_platform, bookingApiKey, stack.booking_platform_meta);
+      const calls =
+        triggerMode === "dynamic_webhook"
+          ? await fetchUpcomingCallsForTenant(
+              stack.booking_platform,
+              bookingApiKey,
+              stack.booking_platform_meta,
+              0,
+              Math.max(1, Math.min(48, stack.brief_lead_time_hours ?? 12))
+            )
+          : await fetchTomorrowCallsForTenant(stack.booking_platform, bookingApiKey, stack.booking_platform_meta);
 
       summary.whatWasAttempted.push(
         `Fetched ${triggerMode === "dynamic_webhook" ? "upcoming (dynamic window)" : "tomorrow's"} roster from ${stack.booking_platform}: ${calls.length} call(s) found.`
@@ -519,18 +453,6 @@ export async function executeNightlyBriefingCycle(
       return calls;
     });
 
-    // Inngest serializes step.run() output as JSON by default (no custom
-    // date-preserving middleware is registered on this client). On a
-    // fresh execution `tomorrowCalls` above is already NormalizedCall[]
-    // with real Date objects — but on any checkpoint-resumed replay, the
-    // memoized result is deserialized from JSON and callTime comes back
-    // as a plain ISO string, not a Date. Downstream code calls
-    // `call.callTime.toISOString()` and inserts callTime into a Drizzle
-    // column typed `Date`, both of which would throw at runtime on a
-    // replayed step (this is exactly what TypeScript's own generated
-    // types were flagging — not a false positive). `new Date(x)` is a
-    // no-op for an existing Date and correctly parses the ISO string
-    // case, so this line covers both paths.
     const normalizedCalls = tomorrowCalls.map((c) => ({
       ...c,
       callTime: new Date(c.callTime),
@@ -540,52 +462,39 @@ export async function executeNightlyBriefingCycle(
       summary.whatWorked.push("No calls scheduled tomorrow — nothing to brief.");
     }
 
-    // Fan-out refactor. Previously every call in normalizedCalls ran
-    // through processSingleBriefCall sequentially, one after another —
-    // fine for a small roster (a 4-call tenant finishes in about a
-    // minute), but a genuinely busy tenant's roster (20-30+ bookings in
-    // one day) would take several minutes to fully deliver, since
-    // Claude's web-search research + synthesis alone is ~10-15s per
-    // prospect and nothing ran concurrently.
-    //
-    // When `step` is present (the real Inngest worker path), each call
-    // now runs as its own processSingleProspectBrief invocation via
-    // step.invoke(), and all of them are dispatched together via
-    // Promise.all — genuine parallel execution, not just checkpointed
-    // sequential steps. step.invoke() (not step.sendEvent) specifically
-    // because we need each call's CallOutcome back to update this
-    // function's summary/deliveredCount and eventually call finishRun()
-    // below — a fire-and-forget sendEvent can't give us that.
-    // processSingleProspectBrief's own `concurrency: { limit: 15 }`
-    // keeps this from overwhelming the Supabase pooler regardless of how
-    // large a single roster or how many tenants' rosters land at once.
-    //
-    // When `step` is absent (the stale direct-call fallback path, no
-    // Inngest context), there's no invoke() available, so this falls
-    // back to the original sequential in-process loop — slower, but
-    // correct, and unchanged from before this refactor.
-    const outcomes: CallOutcome[] = step
-      ? await Promise.all(
-          normalizedCalls.map((call) =>
-            step.invoke(`brief-${call.id}`, {
-              function: processSingleProspectBrief,
-              data: {
-                runId,
-                engagementId: tenant.engagementId,
-                call: {
-                  id: call.id,
-                  name: call.name,
-                  email: call.email,
-                  company: call.company,
-                  callTime: call.callTime.toISOString(),
-                  phone: call.phone,
-                  linkedInUrl: call.linkedInUrl,
-                },
+    // 🌟 THE FIX: Isolate parallel fanning from non-Inngest script invocations
+    let outcomes: CallOutcome[] = [];
+
+    if (step) {
+      // Inngest worker channel: Safe parallel execution handled durably via external function fanning
+      outcomes = await Promise.all(
+        normalizedCalls.map((call) =>
+          step.invoke(`brief-${call.id}`, {
+            function: processSingleProspectBrief,
+            data: {
+              runId,
+              engagementId: tenant.engagementId,
+              call: {
+                id: call.id,
+                name: call.name,
+                email: call.email,
+                company: call.company,
+                callTime: call.callTime.toISOString(),
+                phone: call.phone,
+                linkedInUrl: call.linkedInUrl,
               },
-            })
-          )
+            },
+          })
         )
-      : await Promise.all(normalizedCalls.map((call) => processSingleBriefCall(tenant, stack, runId, call, run)));
+      );
+    } else {
+      // Fallback channel: Enforce a strict sequential line-by-line evaluation path 
+      // to guard our transaction pooler from immediate exhaustion
+      for (const call of normalizedCalls) {
+        const outcome = await processSingleBriefCall(tenant, stack, runId, call, run);
+        outcomes.push(outcome);
+      }
+    }
 
     for (const outcome of outcomes) {
       if (outcome.status === "duplicate_skipped") {

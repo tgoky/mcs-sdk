@@ -72,9 +72,15 @@ export async function runHybridWithBudget(opts: RunHybridWithBudgetOptions): Pro
   const receiverController = new AbortController();
   const receiverTimeout = setTimeout(() => receiverController.abort(), receiverBudgetMs);
 
+  // 🌟 THE FIX: Instantiate the generation controller globally within the execution context
+  const generationController = new AbortController();
+  const onReceiverAbort = () => generationController.abort();
+  
+  // Directly pipeline parent truncation signals down to the child thread
+  receiverController.signal.addEventListener("abort", onReceiverAbort);
+
   try {
     const attempt = (async (): Promise<void> => {
-      const generationController = new AbortController();
       const generationTimeout = setTimeout(() => generationController.abort(), generationBudgetMs);
 
       let text: string;
@@ -95,11 +101,6 @@ export async function runHybridWithBudget(opts: RunHybridWithBudgetOptions): Pro
       await opts.deliver(text);
     })();
 
-    // The receiver-level abort doesn't stop `attempt`'s own internal work
-    // once it's past the generation call — it only stops us from waiting
-    // on it past the receiver budget. See pile-on/server/hybrid-
-    // personalizer.ts's module comment for why a late-arriving delivery
-    // after a reported "fallback" is harmless, not a bug.
     await Promise.race([
       attempt,
       new Promise<never>((_, reject) => {
@@ -111,8 +112,11 @@ export async function runHybridWithBudget(opts: RunHybridWithBudgetOptions): Pro
 
     return { outcome: "hybrid", latencyMs: Date.now() - startedAt };
   } catch (e: any) {
+    // 🌟 THE FIX: Force immediate background fetch tear down if the execution block errors out
+    generationController.abort();
     return { outcome: "fallback", latencyMs: Date.now() - startedAt, error: e.message };
   } finally {
     clearTimeout(receiverTimeout);
+    receiverController.signal.removeEventListener("abort", onReceiverAbort);
   }
 }
