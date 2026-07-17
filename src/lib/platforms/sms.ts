@@ -15,8 +15,8 @@
  * hand this off to either.
  */
 
-
 import { fetchWithTimeout } from "@/lib/http";
+
 // ── Twilio ────────────────────────────────────────────────────────────────
 
 export class TwilioClient {
@@ -179,6 +179,8 @@ export interface SmsTenantMeta {
   twilio_from_number?: string;
   ghl_location_id?: string;
   hubspot_sms_status_property?: string;
+  sms_compliance_footer_variant?: "standard" | "custom";
+  sms_compliance_footer_custom?: string;
 }
 
 /**
@@ -204,6 +206,13 @@ export async function sendSmsForTenant(
   body: string,
   a2p10dlcStatus?: "not_started" | "brand_registered" | "campaign_approved"
 ): Promise<void> {
+  // Centralized compliance parsing runs before hitting provider network switch boundaries
+  const complianceBody = appendComplianceFooter(
+    body,
+    meta?.sms_compliance_footer_variant,
+    meta?.sms_compliance_footer_custom
+  );
+
   switch (smsPlatform) {
     case "twilio": {
       if (a2p10dlcStatus !== "campaign_approved") {
@@ -216,14 +225,14 @@ export async function sendSmsForTenant(
       if (!meta?.twilio_account_sid) throw new Error("Missing twilio_account_sid in sms_platform_meta");
       await new TwilioClient(meta.twilio_account_sid, apiKey, meta.twilio_messaging_service_sid, meta.twilio_from_number).sendSms(
         to.phone,
-        body
+        complianceBody
       );
       return;
     }
 
     case "ghl_sms": {
       if (!meta?.ghl_location_id) throw new Error("Missing ghl_location_id in sms_platform_meta");
-      await new GHLSmsClient(apiKey, meta.ghl_location_id).sendSms(to.email, body);
+      await new GHLSmsClient(apiKey, meta.ghl_location_id).sendSms(to.email, complianceBody);
       return;
     }
 

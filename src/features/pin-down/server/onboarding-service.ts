@@ -532,7 +532,7 @@ export async function runPinDownOnboarding(
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
     const internalFallbackUrl = `${appUrl}/confirm/${engagementId}`;
 
-    const { confirmationPageUrl, confirmationPageDeployment, pasteReadyHtml, pasteReadyInstructions } = await run(
+    const { confirmationPageUrl, confirmationPageDeployment, pasteReadyHtml, pasteReadyInstructions, remoteResourceId } = await run(
       "confirmation-deploy",
       async () => {
         await logStep(runId, { phase: "confirmation_page_deploy", status: "running" });
@@ -572,6 +572,7 @@ export async function runPinDownOnboarding(
             },
             pasteReadyHtml: null as string | null,
             pasteReadyInstructions: null as string | null,
+            remoteResourceId: deployResult.resourceId, // 🌟 THE FIX: Cache variable inside step execution block
           };
         }
 
@@ -593,9 +594,23 @@ export async function runPinDownOnboarding(
           },
           pasteReadyHtml: deployResult.html,
           pasteReadyInstructions: deployResult.instructions,
+          remoteResourceId: undefined // 🌟 THE FIX: Keep returned types perfectly synchronized
         };
       }
     );
+
+    // 🌟 THE FIX: REPLAY-SAFE PLACEMENT outside the step container block.
+    // If Inngest replays this workflow after a downstream crash, this block re-evaluates 
+    // flawlessly using the cached step parameters, fully preventing state leaks.
+    if (finalStack.hosting_platform === "wordpress" && confirmationPageDeployment.mode === "live" && remoteResourceId) {
+      finalStack = {
+        ...finalStack,
+        hosting_platform_meta: {
+          ...finalStack.hosting_platform_meta,
+          wordpress_page_id: remoteResourceId as number,
+        },
+      };
+    }
 
     // ── Final engagement upsert ─────────────────────────────────────────────
     await run("engagement-upsert", async () => {

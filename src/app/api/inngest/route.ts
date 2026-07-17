@@ -1,6 +1,7 @@
 import { serve } from "inngest/next"; 
 import { inngest } from "@/lib/inngest";
 import { executeSkillRun } from "@/inngest/skill";
+import { processSingleProspectBrief } from "@/features/pre-call-read/server/brief-service";
 import { processPileOnSmsSequence } from "@/inngest/pile-on-sms";
 import { processInboundReply } from "@/inngest/win-back-reply";
 import { processWinBackSmsSequence } from "@/inngest/win-back-sms";
@@ -39,6 +40,12 @@ export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
     executeSkillRun, // ✅ Registers your worker function into the serverless endpoint mesh
+    // Fanned-out per-prospect worker for pre-call-read — see the fan-out
+    // note in brief-service.ts's executeNightlyBriefingCycle. Invoked via
+    // step.invoke() (not step.sendEvent), so it needs to be registered
+    // here like any other function even though nothing calls it via a
+    // published event in normal operation.
+    processSingleProspectBrief,
     // All four run on Inngest's own scheduler (see src/inngest/crons.ts) —
     // none of these are Vercel Cron Jobs, so Vercel's Hobby-plan
     // once-per-day cadence cap doesn't apply to any of them, including

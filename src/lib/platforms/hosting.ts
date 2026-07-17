@@ -34,7 +34,7 @@ export interface ConfirmationPageContent {
 }
 
 export type HostingDeployResult =
-  | { mode: "live"; url: string; deployedVia: string }
+  | { mode: "live"; url: string; deployedVia: string; resourceId?: string | number } // 🌟 THE FIX: Clean typed data passing
   | {
       mode: "paste_ready";
       reason: string;
@@ -294,7 +294,7 @@ export async function publishConfirmationPage(
         };
       }
 
-      case "wordpress": {
+     case "wordpress": {
         if (!apiKey || !meta?.wordpress_site_url) {
           return pasteReady(
             "wordpress",
@@ -303,9 +303,16 @@ export async function publishConfirmationPage(
           );
         }
         const client = new WordPressClient(meta.wordpress_site_url, apiKey);
-        const { link } = await client.publishPage(content, slug, meta.wordpress_page_id);
-        return { mode: "live", url: link, deployedVia: "wordpress" };
+        // 🌟 THE FIX: Destructure both the unique pageId AND link URL from WordPress response
+        const { pageId, link } = await client.publishPage(content, slug, meta.wordpress_page_id);
+        return { 
+          mode: "live", 
+          url: link, 
+          deployedVia: "wordpress", 
+          resourceId: pageId // 🌟 THE FIX: Bubble the ID up cleanly out of the client adapter
+        };
       }
+      
 
       case "nextjs_vercel": {
         if (!apiKey) {

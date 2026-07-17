@@ -57,6 +57,32 @@ export const lostDealSweepEngagement = eventType("win-back/lost-deal-sweep-engag
   schema: staticSchema<LostDealSweepEngagementData>(),
 });
 
+// Pre-Call Read recovery gap — per-prospect fan-out for a single tenant's
+// nightly/dynamic roster. Only engagementId + the one call are shipped
+// over the wire, same reasoning as skillRunExecute above: the worker
+// re-fetches the tenant row (and its stack jsonb, which carries
+// slack_webhook_url / webhook_signing_secret in plaintext) itself rather
+// than trusting a payload Inngest Cloud stores. callTime crosses this
+// boundary as an ISO string (Inngest JSON-serializes step.invoke data),
+// not a Date — the worker re-normalizes it, same pattern
+// executeSkillRun already uses for tenant.createdAt/updatedAt.
+export type ProspectBriefDispatchData = {
+  runId: string;
+  engagementId: string;
+  call: {
+    id: string;
+    name: string;
+    email: string;
+    company: string;
+    callTime: string;
+    phone?: string;
+    linkedInUrl?: string;
+  };
+};
+export const prospectBriefDispatch = eventType("pre-call-read/prospect-brief.dispatch", {
+  schema: staticSchema<ProspectBriefDispatchData>(),
+});
+
 export type WeeklyMetricsEngagementData = {
   engagementId: string;
 };

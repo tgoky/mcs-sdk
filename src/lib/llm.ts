@@ -241,6 +241,7 @@ export interface ClaudeSearchCallOptions {
   maxTokens?: number;
   maxSearches?: number; // default 3
   runId?: string;
+  signal?: AbortSignal; // ✅ Structured cancellation token support added
 }
 
 export interface ClaudeSearchResult extends ClaudeResult {
@@ -278,6 +279,7 @@ async function callViaAnthropicWithSearch(opts: ClaudeSearchCallOptions): Promis
       messages: [{ role: "user", content: opts.userMessage }],
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxSearches }],
     }),
+    signal: opts.signal, // ✅ Signal mapped cleanly to downstream fetch options
   });
 
   if (!res.ok) {
@@ -368,6 +370,7 @@ async function callViaOpenRouterWithSearch(opts: ClaudeSearchCallOptions): Promi
         }
       ],
     }),
+    signal: opts.signal, // ✅ Signal mapped cleanly to downstream fetch options
   });
 
   if (!res.ok) {

@@ -103,7 +103,11 @@ export const processPileOnSmsSequence = inngest.createFunction(
         await sendSmsForTenant(
           stack.sms_platform!,
           apiKey,
-          stack.sms_platform_meta,
+          {
+            ...stack.sms_platform_meta,
+            sms_compliance_footer_variant: stack?.sms_compliance_footer_variant,
+            sms_compliance_footer_custom: stack?.sms_compliance_footer_custom,
+          },
           { email: prospectEmail, phone: prospectPhone },
           msg.body,
           stack.sms_a2p_10dlc_status
