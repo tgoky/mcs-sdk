@@ -125,6 +125,11 @@ export async function runPinDownOnboarding(
   const topCallQuestions: string[] = tenant.topCallQuestions ?? [];
   const topObjections: string[] = tenant.topObjections ?? [];
   const prospectMeets: string = tenant.prospectMeets ?? "founder";
+  const castingChoice = (tenant.castingChoice ?? "founder_on_camera") as
+    | "founder_on_camera"
+    | "coach_on_camera"
+    | "animation"
+    | "other";
   const existingProof = tenant.existingProof;
   const rawVoiceCorpus: string = tenant.rawVoiceCorpus ?? "";
 
@@ -365,6 +370,7 @@ export async function runPinDownOnboarding(
             topCallQuestions,
             prospectMeets,
             existingProof,
+            castingChoice,
           },
           runId
         )
@@ -376,6 +382,7 @@ export async function runPinDownOnboarding(
             generatedAt: new Date().toISOString(),
             heroScript: scriptPack.heroScript,
             breakoutScripts: scriptPack.breakoutScripts,
+            recordingChecklist: scriptPack.recordingChecklist,
           },
         })
         .where(eq(engagements.engagementId, engagementId));

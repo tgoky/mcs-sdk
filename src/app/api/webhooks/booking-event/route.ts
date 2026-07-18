@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { handleInboundBookingEvent, classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
 import { deriveWebhookIdempotencyKey } from "@/lib/platforms/booking";
 import { startRun, failRun } from "@/lib/run-log";
+import { gateOrExecute } from "@/lib/approval-gate";
 import crypto from "crypto";
 
 // ── Signature verification helpers ─────────────────────────────────────────
@@ -230,15 +231,34 @@ export async function POST(request: Request) {
       );
     }
 
-    await startRun({
-      id: runId,
-      engagementId: tenant.engagementId,
-      skillName,
-      phase: "webhook_received",
-      label: payload.event ?? payload.trigger ?? "booking event",
-    });
+    // ── Cross-cutting recovery gap 22: explicit human-approval gates ─────
+    // See src/lib/approval-gate.ts. Gate is off by default (today's
+    // behavior, unchanged); an operator opts a specific engagement into
+    // review-before-enroll via require_approval_for_side_effects. Reuses
+    // `stack`, already derived from `tenant.stack` above.
+    const gateResult = await gateOrExecute(
+      stack,
+      tenant.engagementId,
+      "webhook_enrollment",
+      { bookingPayload: payload, eventKind },
+      async () => {
+        await startRun({
+          id: runId,
+          engagementId: tenant.engagementId,
+          skillName,
+          phase: "webhook_received",
+          label: payload.event ?? payload.trigger ?? "booking event",
+        });
+        await handleInboundBookingEvent(payload, tenant, runId, eventKind);
+      }
+    );
 
-    await handleInboundBookingEvent(payload, tenant, runId, eventKind);
+    if (!gateResult.executed) {
+      // Webhook is still ack'd with 200 — the platform's delivery
+      // contract is satisfied; the pending action, not the webhook retry
+      // mechanism, is now what's tracking this booking.
+      return NextResponse.json({ success: true, pendingApproval: true, pendingActionId: gateResult.pendingActionId });
+    }
 
     return NextResponse.json({ success: true, runId });
   } catch (error: any) {

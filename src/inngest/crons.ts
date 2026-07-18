@@ -26,9 +26,9 @@
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
 import crypto from "crypto";
-import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement } from "@/lib/inngest";
+import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle } from "@/lib/inngest";
 import { db } from "@/lib/db";
-import { engagements, skillRuns } from "@/models/schema";
+import { engagements, skillRuns, canaryRuns } from "@/models/schema";
 import { startRun, closeStaleRun, notifyRunOutcome, failRun } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
 import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
@@ -39,6 +39,7 @@ import { validateAllPlatformDocsLinks } from "@/features/pin-down/server/docs-li
 import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/brief-service";
 import { matchesWeeklySchedule, matchesMonthlySchedule } from "@/features/leak-map/server/schedule-matcher";
 import { computeAndPersistBenchmarks } from "@/features/leak-map/server/leak-map-benchmarks";
+import { CANARY_CHECKS, runCanaryCheck, getCanaryEngagementId } from "@/lib/platforms/canary";
 import { and, eq, lt } from "drizzle-orm";
 import type { EngagementStack } from "@/models/schema";
 
@@ -539,5 +540,79 @@ export const leakMapBenchmarksCron = inngest.createFunction(
   { id: "leak-map-benchmarks-cron", triggers: [{ cron: "TZ=UTC 0 4 * * *" }] }, // 04:00 UTC daily, ahead of the 09:00 audit crons
   async ({ step }) => {
     return step.run("compute-benchmarks", () => computeAndPersistBenchmarks());
+  }
+);
+
+/**
+ * Tier 4 #28 — synthetic canary tenant, weekly integration-drift
+ * detection. Same fan-out shape as credentialHealthCron above: a cheap
+ * prep step (no network calls — CANARY_CHECKS is a static list) fans out
+ * one checkSingleCanary invocation per check, each isolated so one dead
+ * platform's check can't block or slow the others. No-ops cleanly (0
+ * dispatched) when CANARY_ENGAGEMENT_ID isn't configured — see
+ * src/lib/platforms/canary.ts.
+ */
+export const canaryWeeklySweep = inngest.createFunction(
+  { id: "canary-weekly-sweep", triggers: [{ cron: "TZ=UTC 0 9 * * 1" }] }, // Monday 09:00 UTC
+  async ({ step }) => {
+    if (!getCanaryEngagementId()) {
+      return { dispatched: 0, reason: "CANARY_ENGAGEMENT_ID not set" };
+    }
+    await step.sendEvent(
+      "dispatch-canary-checks",
+      CANARY_CHECKS.map((c) => canaryCheckSingle.create({ platform: c.platform, adapterMethod: c.adapterMethod }))
+    );
+    return { dispatched: CANARY_CHECKS.length };
+  }
+);
+
+/** Fanned-out handler: the one real network call per invocation, mirroring checkSingleCredentialHealthCron. */
+export const checkSingleCanary = inngest.createFunction(
+  { id: "check-single-canary", triggers: [canaryCheckSingle] },
+  async ({ event }) => {
+    const check = CANARY_CHECKS.find(
+      (c) => c.platform === event.data.platform && c.adapterMethod === event.data.adapterMethod
+    );
+    if (!check) {
+      throw new Error(`No registered CANARY_CHECKS entry for ${event.data.platform} / ${event.data.adapterMethod}`);
+    }
+
+    const result = await runCanaryCheck(check);
+
+    await db.insert(canaryRuns).values({
+      platform: check.platform,
+      adapterMethod: check.adapterMethod,
+      status: result.status,
+      detail: result.detail,
+      latencyMs: result.latencyMs,
+    });
+
+    // Alerting is intentionally channel-agnostic rather than routed
+    // through notifyUser — a canary tenant isn't a buyer's engagement, so
+    // there's no whopUserId this naturally belongs to. Set
+    // CANARY_ALERT_SLACK_WEBHOOK_URL (a plain Slack incoming-webhook URL,
+    // same format as EngagementStack.slack_webhook_url) to get pinged on
+    // drift; unset means the canaryRuns row is still recorded and
+    // queryable, just silently.
+    if (result.status !== "ok") {
+      const webhookUrl = process.env.CANARY_ALERT_SLACK_WEBHOOK_URL;
+      if (webhookUrl) {
+        try {
+          await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: `:rotating_light: Canary check *${result.status}* — ${check.platform} / ${check.adapterMethod}\n${result.detail ?? "(no detail)"}`,
+            }),
+          });
+        } catch {
+          // Never let a Slack delivery failure turn a real drift alert
+          // into a thrown error that hides the canaryRuns row already
+          // written above.
+        }
+      }
+    }
+
+    return result;
   }
 );

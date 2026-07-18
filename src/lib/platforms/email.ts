@@ -1102,13 +1102,31 @@ export async function deliverRescheduleLink(
  * Delivers a pre-call brief to the configured destination.
  * Called by pre-call-read after brief synthesis.
  */
+// Tier 4 #27 — Slack interactive brief buttons. Shared between the button
+// labels here and the interaction handler's outcome parsing
+// (src/app/api/webhooks/slack/interactions/route.ts) — kept as one
+// source rather than duplicating the three outcome strings in both files.
+export const OUTCOME_BUTTON_LABEL: Record<"showed" | "no_show" | "rescheduled", string> = {
+  showed: "✅ Showed",
+  no_show: "❌ No-show",
+  rescheduled: "🔁 Rescheduled",
+};
+
 export async function deliverBrief(
   destination: string,
   briefText: string,
   email: string,
   slackWebhookUrl?: string,
   crmApiKey?: string,
-  crmMeta?: Record<string, any>
+  crmMeta?: Record<string, any>,
+  // Tier 4 #27 — Slack interactive brief buttons. Optional and additive:
+  // omitting it (every existing call site keeps working unchanged)
+  // delivers the exact same plain Block Kit message as before. Passing it
+  // adds a row of Show/No-show/Rescheduled buttons whose `value` encodes
+  // just enough for the interaction handler
+  // (src/app/api/webhooks/slack/interactions/route.ts) to log the
+  // outcome without a round trip back to this function.
+  slackButtonContext?: { engagementId: string; bookingId: string; prospectEmail: string }
 ): Promise<void> {
   switch (destination) {
     case "slack":
@@ -1124,6 +1142,21 @@ export async function deliverBrief(
               type: "section",
               text: { type: "mrkdwn", text: briefText },
             },
+            ...(slackButtonContext
+              ? [
+                  {
+                    type: "actions",
+                    block_id: "brief_outcome",
+                    elements: (["showed", "no_show", "rescheduled"] as const).map((outcome) => ({
+                      type: "button",
+                      text: { type: "plain_text", text: OUTCOME_BUTTON_LABEL[outcome] },
+                      style: outcome === "showed" ? "primary" : outcome === "no_show" ? "danger" : undefined,
+                      action_id: `brief_outcome_${outcome}`,
+                      value: JSON.stringify({ ...slackButtonContext, outcome }),
+                    })),
+                  },
+                ]
+              : []),
           ],
         }),
       });

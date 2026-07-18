@@ -30,6 +30,15 @@ export interface NormalizedCall {
   // undefined there. "created" | "cancelled", mirrors classifyBookingEvent's
   // vocabulary in enrollment-service.ts.
   eventKind?: "created" | "cancelled";
+  // Tier 4 #24 — conversation intelligence hooks. Populated for Calendly
+  // only in this pass (event.location.join_url, confirmed against a real
+  // Calendly API response — present for conferencing-type locations like
+  // Zoom/Meet/Teams, absent for phone or in-person locations). Cal.com,
+  // GHL Calendar, and OnceHub don't populate this yet — see
+  // conversation-intelligence.ts's module comment for why extending
+  // coverage to those needs the same doc-verification this field got,
+  // not a copy-paste guess.
+  meetingUrl?: string;
 }
 
 // ── Calendly ──────────────────────────────────────────────────────────────
@@ -93,6 +102,7 @@ export class CalendlyClient {
             q.question.toLowerCase().includes("linkedin") || (q.answer ?? "").includes("linkedin.com/in/")
           )?.answer ?? undefined,
         callTime: new Date(event.start_time),
+        meetingUrl: event.location?.join_url ?? undefined,
       });
     }
     return results;
@@ -148,6 +158,7 @@ export class CalendlyClient {
           // frequently empty even when the invitee has a phone number.
           phone: invitee.text_reminder_number ?? undefined,
           callTime: new Date(event.start_time),
+          meetingUrl: event.location?.join_url ?? undefined,
           eventKind: status === "canceled" ? "cancelled" : "created",
         });
       }
@@ -195,6 +206,7 @@ export class CalendlyClient {
             (q: any) => q.question.toLowerCase().includes("linkedin") || (q.answer ?? "").includes("linkedin.com/in/")
           )?.answer ?? undefined,
         callTime: new Date(event.start_time),
+        meetingUrl: event.location?.join_url ?? undefined,
       });
     }
     return results;

@@ -34,6 +34,16 @@ export const processWinBackSmsSequence = inngest.createFunction(
     }
 
     const stack = tenant.stack as EngagementStack | null;
+
+    // ── Win-Back recovery gap 1 option 2 / Tier 4 #29: export path ─────
+    // Once an operator has exported this engagement (see
+    // export-to-skill-pack.ts), the buyer's own automation owns sending —
+    // this app's SMS dispatch infra must stop running against it, or the
+    // buyer would get double-sent from two systems.
+    if (stack?.runtime_ownership_model === "buyer_exported") {
+      return { sent: 0, reason: "engagement was exported to buyer_exported ownership — this app no longer sends for it" };
+    }
+
     const smsAssetMap = tenant.winBackSequenceAssetMap as { sms?: Array<{ id: string; offsetDays: number; body: string }> } | null;
 
     if (!stack?.sms_platform || (stack.sms_platform !== "twilio" && stack.sms_platform !== "ghl_sms")) {

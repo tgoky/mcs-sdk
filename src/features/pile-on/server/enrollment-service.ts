@@ -12,6 +12,7 @@ import { addProspectToAdDataCohort, removeProspectFromAdDataCohort } from "./coh
 import { tagRecoveredFromNoShow } from "@/lib/platforms/crm-tagger";
 import { extractFreshRescheduleLink } from "@/lib/platforms/reschedule";
 import { runWinBackHybridPersonalization } from "@/features/win-back/server/hybrid-personalizer";
+import { gateOrExecute } from "@/lib/approval-gate";
 
 /**
  * Single source of truth for classifying a booking-platform webhook payload
@@ -279,11 +280,27 @@ export async function handleInboundBookingEvent(
     }
 
     // ── Ad-data cohort add (Pile-On recovery gap 2) ──────────────────────
+    // Independently gateable from the enrollment this function is already
+    // running inside of (see src/lib/approval-gate.ts) — an operator can
+    // let email/CRM enrollment fire automatically while still wanting a
+    // human to confirm cohort membership changes, since those affect ad
+    // spend attribution on the buyer's ad platform.
     if (stack.ad_data_platform && stack.ad_data_platform !== "none") {
       try {
-        await addProspectToAdDataCohort(tenant.engagementId, stack, prospectEmail);
-        summary.whatWorked.push(`Added ${prospectEmail} to the ${stack.ad_data_platform} ad-data cohort.`);
-        await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: `Added to cohort on ${stack.ad_data_platform}` });
+        const gated = await gateOrExecute(
+          stack,
+          tenant.engagementId,
+          "cohort_membership_add",
+          { prospectEmail },
+          () => addProspectToAdDataCohort(tenant.engagementId, stack, prospectEmail)
+        );
+        if (gated.executed) {
+          summary.whatWorked.push(`Added ${prospectEmail} to the ${stack.ad_data_platform} ad-data cohort.`);
+          await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: `Added to cohort on ${stack.ad_data_platform}` });
+        } else {
+          summary.openItems.push(`Ad-data cohort add for ${prospectEmail} queued for approval (pending action ${gated.pendingActionId}).`);
+          await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: "Deferred — awaiting approval" });
+        }
       } catch (e: any) {
         summary.openItems.push(`Ad-data cohort add failed: ${e.message}`);
         await logStep(runId, { phase: "ad_data_cohort", status: "failed", detail: e.message });
@@ -431,7 +448,12 @@ export async function handleInboundBookingEvent(
     }
 
     // ── Hybrid first recovery message (Win-Back recovery gap 5) ───────────
-    if (tenant.offerDetails?.hybrid_mode_enabled) {
+    // Gated on export ownership (Tier 4 #29) — unlike the ESP enrollment
+    // tagging above (which the buyer's own recreated flow now triggers
+    // off of, so it correctly keeps running post-export), this is
+    // server-side compute this app performs itself and must stop once the
+    // buyer owns the runtime.
+    if (tenant.offerDetails?.hybrid_mode_enabled && stack.runtime_ownership_model !== "buyer_exported") {
       const result = await runWinBackHybridPersonalization(
         tenant.engagementId,
         enrollmentRow.id,
@@ -456,9 +478,20 @@ export async function handleInboundBookingEvent(
     // ── Ad-data cohort remove (Pile-On recovery gap 2) ────────────────────
     if (stack.ad_data_platform && stack.ad_data_platform !== "none") {
       try {
-        await removeProspectFromAdDataCohort(tenant.engagementId, stack, prospectEmail);
-        summary.whatWorked.push(`Removed ${prospectEmail} from the ${stack.ad_data_platform} ad-data cohort.`);
-        await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: `Removed from cohort on ${stack.ad_data_platform}` });
+        const gated = await gateOrExecute(
+          stack,
+          tenant.engagementId,
+          "cohort_membership_remove",
+          { prospectEmail },
+          () => removeProspectFromAdDataCohort(tenant.engagementId, stack, prospectEmail)
+        );
+        if (gated.executed) {
+          summary.whatWorked.push(`Removed ${prospectEmail} from the ${stack.ad_data_platform} ad-data cohort.`);
+          await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: `Removed from cohort on ${stack.ad_data_platform}` });
+        } else {
+          summary.openItems.push(`Ad-data cohort remove for ${prospectEmail} queued for approval (pending action ${gated.pendingActionId}).`);
+          await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: "Deferred — awaiting approval" });
+        }
       } catch (e: any) {
         summary.openItems.push(`Ad-data cohort removal failed: ${e.message}`);
         await logStep(runId, { phase: "ad_data_cohort", status: "failed", detail: e.message });

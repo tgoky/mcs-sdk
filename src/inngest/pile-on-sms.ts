@@ -47,6 +47,48 @@ export const processPileOnSmsSequence = inngest.createFunction(
       return { sent: 0, reason: "no SMS sequence content generated for this engagement" };
     }
 
+    // ── Cross-cutting recovery gap 17: human-only-blocker resume ─────────
+    // Twilio requires an approved A2P 10DLC campaign before it will carry
+    // application-to-person traffic reliably — sending through an
+    // unapproved campaign risks the messages being filtered by carriers
+    // or the account being suspended. This is a genuine human-only step
+    // (carrier review, not something any adapter call can skip past), so
+    // rather than sending anyway or silently dropping the sequence, the
+    // run durably pauses here until an admin resolves the blocker (see
+    // src/lib/human-blockers.ts) — normally by marking
+    // sms_a2p_10dlc_status "campaign_approved" once Twilio confirms it,
+    // then calling POST /api/blockers/[id]/resolve.
+    if (stack.sms_platform === "twilio" && stack.sms_a2p_10dlc_status !== "campaign_approved") {
+      const blockerId = await step.run("create-a2p-10dlc-blocker", async () => {
+        const { createBlocker } = await import("@/lib/human-blockers");
+        return createBlocker({
+          engagementId,
+          skillName: "pile-on",
+          blockerType: "a2p_10dlc_approval",
+          description:
+            "Twilio SMS sequence for this booking is paused: A2P 10DLC campaign isn't approved yet " +
+            `(current status: ${stack.sms_a2p_10dlc_status ?? "not_started"}). Resolve once Twilio confirms approval.`,
+        });
+      });
+
+      const { waitForBlockerResolution } = await import("@/lib/human-blockers");
+      const resolution = await waitForBlockerResolution(step, blockerId, "30d");
+      if (!resolution) {
+        return { sent: 0, reason: "A2P 10DLC blocker unresolved after 30 days — sequence abandoned for this booking" };
+      }
+      // Resolution just wakes the run; the actual status flip on the
+      // engagement (sms_a2p_10dlc_status -> "campaign_approved") is what
+      // the admin does alongside resolving, via the normal onboarding
+      // update path — re-read it fresh rather than trusting the
+      // blocker's resumePayload, same re-fetch-don't-trust-the-event
+      // principle the rest of this file already follows for `stack`.
+      const [refreshed] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+      const refreshedStack = refreshed?.stack as EngagementStack | null;
+      if (refreshedStack?.sms_a2p_10dlc_status !== "campaign_approved") {
+        return { sent: 0, reason: "Blocker resolved but sms_a2p_10dlc_status still isn't campaign_approved — check the engagement config" };
+      }
+    }
+
     const parsedBookingCreated = new Date(bookingCreatedAt).getTime();
     const parsedCallTime = new Date(callTime).getTime();
 

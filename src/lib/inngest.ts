@@ -193,6 +193,42 @@ export const inboundReplyReceived = eventType("win-back/inbound-reply-received",
  * step. Set this comfortably below whatever maxDuration you configure on
  * the /api/inngest route (see src/app/api/inngest/route.ts).
  */
+// ── Cross-cutting recovery gap 17: human-only-blocker resume ───────────────
+// One shared event for every blocker resolution, filtered by blockerId at
+// the step.waitForEvent() call site rather than one event type per
+// blockerType — see human-blockers.ts's waitForBlockerResolution.
+export type HumanBlockerResolvedData = {
+  blockerId: string;
+  resumePayload?: Record<string, unknown>;
+};
+export const humanBlockerResolved = eventType("human-blocker/resolved", {
+  schema: staticSchema<HumanBlockerResolvedData>(),
+});
+
+// ── Tier 4 #28: synthetic canary tenant ─────────────────────────────────────
+// Same cheap-prep-step-then-fan-out shape as credentialHealthCheckSingle
+// above — one real network call per invocation, isolated so one dead
+// platform's check can't block or slow the others.
+export type CanaryCheckSingleData = {
+  platform: string;
+  adapterMethod: string;
+};
+export const canaryCheckSingle = eventType("canary/check-single", {
+  schema: staticSchema<CanaryCheckSingleData>(),
+});
+
+// ── Tier 4 #24: conversation intelligence (Recall.ai) ───────────────────────
+// Dispatched from the Recall.ai bot-status webhook handler when a bot's
+// transcript is ready (transcript.done), never from a cron — transcript
+// processing is inherently event-driven, not scheduled.
+export type ConversationIntelligenceProcessData = {
+  engagementId: string;
+  sessionId: string; // conversationIntelligenceSessions.id
+};
+export const conversationIntelligenceProcess = eventType("conversation-intelligence/process-transcript", {
+  schema: staticSchema<ConversationIntelligenceProcessData>(),
+});
+
 export const inngest = new Inngest({
   id: "showtime-revenue-infrastructure", // App name identifier inside the dashboard
   checkpointing: {

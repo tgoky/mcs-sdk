@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { briefedCallsLog, engagements } from "@/models/schema";
+import { briefedCallsLog, engagements, conversationIntelligenceSessions } from "@/models/schema";
 import { and, eq, gte } from "drizzle-orm";
 import { evaluatePersonMatch } from "../person-match";
 import { researchProspect } from "./prospect-research";
@@ -12,6 +12,8 @@ import { getAdDataContextForTenant } from "@/lib/platforms/ad-data";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import { inngest, prospectBriefDispatch } from "@/lib/inngest";
+import { deriveShowRateFeatures, scoreShowRate, logShowRateFeatures } from "./show-rate-scorer";
+import { createRecallBot, type RecallRegion } from "@/lib/platforms/conversation-intelligence";
 import crypto from "crypto";
 import type { GetStepTools, Inngest } from "inngest";
 
@@ -280,6 +282,68 @@ async function processSingleBriefCall(
       gatherEngagementContext(tenant, stack, tenant.engagementId, call.email)
     );
 
+    // ── Predictive show-rate score (Tier 4 #25) ───────────────────────
+    // Opt-in — see show-rate-scorer.ts's module header for why this is a
+    // documented heuristic, not a validated model, before this gets
+    // surfaced to a buyer as more authoritative than it is.
+    let showRateLine: string | null = null;
+    if (stack.show_rate_scoring_enabled) {
+      await run(`show-rate-score-${call.id}`, async () => {
+        const features = await deriveShowRateFeatures({
+          engagementId: tenant.engagementId,
+          prospectEmail: call.email,
+          prospectName: call.name,
+          callTime: call.callTime,
+          personMatchScore: matchResult.totalScore,
+        });
+        const probability = scoreShowRate(features);
+        showRateLine = `Predicted show probability: ${probability}% (heuristic model, not yet validated against actual outcomes for this engagement)`;
+        await logShowRateFeatures({
+          engagementId: tenant.engagementId,
+          bookingId: call.id,
+          prospectEmail: call.email,
+          features,
+          predictedShowProbability: probability,
+        });
+      });
+    }
+
+    // ── Conversation intelligence bot dispatch (Tier 4 #24) ───────────
+    // Opt-in, Calendly-only (see NormalizedCall.meetingUrl's comment), and
+    // skipped gracefully — never failing the brief — whenever any
+    // precondition isn't met. Recall requires join_at at least 10 minutes
+    // in the future; briefs can run close to call time (the dynamic
+    // webhook trigger path especially), so this is a real, expected skip
+    // case, not just defensive padding.
+    if (stack.conversation_intelligence_provider === "recall_ai" && call.meetingUrl) {
+      const minutesUntilCall = (call.callTime.getTime() - Date.now()) / 60_000;
+      if (minutesUntilCall >= 10) {
+        await run(`dispatch-recall-bot-${call.id}`, async () => {
+          try {
+            const apiKey = await resolveCredential(tenant.engagementId, "recall_ai");
+            const region = (stack.conversation_intelligence_meta?.recall_region ?? "us-east-1") as RecallRegion;
+            const { botId } = await createRecallBot(
+              { apiKey, region },
+              call.meetingUrl!,
+              call.callTime,
+              stack.conversation_intelligence_meta?.recall_bot_name ?? "Notetaker"
+            );
+            await db.insert(conversationIntelligenceSessions).values({
+              engagementId: tenant.engagementId,
+              bookingId: call.id,
+              recallBotId: botId,
+              meetingUrl: call.meetingUrl!,
+            });
+          } catch (e: any) {
+            // Never let a Recall dispatch failure block the brief itself
+            // — same soft-fail philosophy this file already applies to
+            // prospect research and engagement-context gathering.
+            await logStep(runId, { phase: "conversation_intelligence", status: "failed", detail: e.message });
+          }
+        });
+      }
+    }
+
     // ── Brief synthesis ─────────────────────────────────────────────
     await logStep(runId, { phase: "brief_synthesis", status: "running", label: callLabel });
 
@@ -289,7 +353,7 @@ Email: ${call.email}
 Company: ${call.company}
 Call time: ${call.callTime.toISOString()}
 Identity confidence score: ${matchResult.totalScore}/100
-Research omitted: ${!matchResult.passed}`;
+Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : ""}`;
 
     const llmResult = await run(`synthesize-${call.id}`, () =>
       callClaudeWithRetry({
@@ -320,6 +384,14 @@ Research omitted: ${!matchResult.passed}`;
         emailApiKey,
         stack.email_platform
           ? { platform: stack.email_platform, location_id: stack.booking_platform_meta?.location_id }
+          : undefined,
+        // Tier 4 #27 — only offer tappable outcome buttons when the
+        // operator has actually set up the signing secret needed to
+        // verify a click came from Slack (see the interactions route) —
+        // buttons with no way to verify their own callbacks would be
+        // worse than no buttons at all.
+        stack.brief_landing_destination === "slack" && stack.slack_signing_secret
+          ? { engagementId: tenant.engagementId, bookingId: call.id, prospectEmail: call.email }
           : undefined
       );
 

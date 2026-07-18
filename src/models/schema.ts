@@ -305,6 +305,94 @@ export type EngagementStack = {
   // Webhook tracking
   webhook_subscription_id?: string; // Calendly/Cal.com subscription URI
   webhook_signing_secret?: string;
+
+  // ── Cross-cutting recovery gap 22: explicit human-approval gates ───────
+  // Per the transfer analysis section 8.2: "Every hard change or actual
+  // execution requires explicit human confirmation" was a Skill Pack
+  // principle UTP's webhook-driven auto-fire model dropped. This is an
+  // opt-in per-engagement gate (default off, preserving today's behavior)
+  // — see src/lib/approval-gate.ts. When on, the actions listed in
+  // require_approval_action_types (or every gateable action type, if that
+  // array is omitted) are queued to pendingActions instead of executing
+  // immediately, and only run once an admin approves them via
+  // POST /api/actions/[id]/review.
+  require_approval_for_side_effects?: boolean;
+  // Scoped to two action types with real, wired executors in this pass —
+  // see approval-gate.ts's module comment for why SMS dispatch isn't a
+  // third gateable type yet (its timing math is booking-relative and
+  // re-deriving it correctly from a deferred payload is real work, not
+  // a mechanical extension of this gate).
+  require_approval_action_types?: Array<"webhook_enrollment" | "cohort_membership_add" | "cohort_membership_remove">;
+
+  // ── Cross-cutting recovery gap 17: human-only-blocker resume ───────────
+  // See src/lib/human-blockers.ts. Doesn't gate anything by itself — this
+  // is just the per-engagement notification target for open blockers
+  // (falls back to slack_webhook_url / in-app notifications when unset).
+  human_blocker_notify_email?: string;
+
+  // ── Leak Map / Pre-Call Read recovery gap 24: conversation intelligence ─
+  // Recall.ai meeting-bot integration (see
+  // src/lib/platforms/conversation-intelligence.ts). "none" (default)
+  // preserves today's behavior — no bot is scheduled and topObjections
+  // stays whatever pre_call_read or the operator populated it with
+  // manually. Scoped to Recall.ai specifically (not a generic multi-
+  // provider adapter) because that's the one integration this pass
+  // actually verified against live docs; see that file's header comment.
+  conversation_intelligence_provider?: "recall_ai" | "none";
+  conversation_intelligence_credentials_ref?: string;
+  // Recall.ai bot config knobs an operator might reasonably want to
+  // override per engagement — everything else uses safe defaults inside
+  // the adapter.
+  conversation_intelligence_meta?: {
+    recall_bot_name?: string;
+    recall_webhook_signing_secret?: string; // Svix signing secret, see the adapter
+    // Recall.ai's API is region-hosted (https://{region}.recall.ai/...) —
+    // one of "us-east-1" | "us-west-2" | "eu-central-1" | "ap-northeast-1",
+    // matching whichever region the operator's Recall workspace was
+    // created in (shown in their Recall dashboard). Defaults to
+    // "us-east-1" in the adapter when unset, since that's the region
+    // every Recall quickstart example uses — but this MUST match the
+    // operator's actual workspace region or every call will 404.
+    recall_region?: "us-east-1" | "us-west-2" | "eu-central-1" | "ap-northeast-1";
+  };
+
+  // ── Pre-Call Read recovery gap 25: predictive show-rate scoring ────────
+  // Opt-in (default off) — the scorer is a documented, inspectable
+  // weighted-heuristic model (NOT a trained classifier; see
+  // src/features/pre-call-read/server/show-rate-scorer.ts for exactly why
+  // and what a real trained model would need). Turning this on also
+  // starts logging show_rate_features rows for every scored call, which
+  // is the data a future trained model would train against.
+  show_rate_scoring_enabled?: boolean;
+
+  // ── Slack interactive brief buttons (Leak Map / Pre-Call Read Tier 4) ──
+  // Needed only when brief_landing_destination is "slack" AND the operator
+  // wants tappable Show/No-show/Rescheduled buttons on the brief message
+  // (see src/lib/platforms/slack-interactions.ts). Distinct from
+  // slack_webhook_url: the webhook URL is where messages get POSTed *to*;
+  // this secret is how this app verifies that a button click POSTed *back*
+  // from Slack is genuinely from Slack and not a forged request. Get it
+  // from the Slack app's "Basic Information" > "Signing Secret", and the
+  // app's "Interactivity & Shortcuts" Request URL must point at
+  // POST /api/webhooks/slack/interactions.
+  slack_signing_secret?: string;
+
+  // ── Win-Back recovery gap 1 option 2 / Tier 4 #29: export path ─────────
+  // runtime_ownership_model already exists above (Win-Back gap 1's owner
+  // field). This is the export-specific companion: set by
+  // src/features/win-back/server/export-to-skill-pack.ts alongside
+  // flipping that field to "buyer_exported", so the dashboard can show
+  // *when* an engagement was detached, not just its current owner.
+  runtime_ownership_exported_at?: string; // ISO timestamp
+  // Which platform(s) the export actually materialized a live flow on
+  // (via a real flow-creation API) vs. only produced a paste-ready bundle
+  // for. See export-to-skill-pack.ts's module comment for why this is a
+  // per-platform capability, not a blanket "export always works" story.
+  runtime_export_result?: {
+    method: "live_api" | "paste_ready_bundle";
+    platform: string;
+    exportedFlowId?: string; // set only when method === "live_api"
+  };
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────
@@ -359,6 +447,11 @@ export const engagements = pgTable("engagements", {
   topCallQuestions: jsonb("top_call_questions").$type<string[]>(),
   topObjections: jsonb("top_objections").$type<string[]>(),
   prospectMeets: text("prospect_meets"),
+  // Pin-Down recovery gap 4 — drives buildRecordingChecklist in
+  // script-builder.ts. "founder_on_camera" | "coach_on_camera" |
+  // "animation" | "other". Nullable — script-builder.ts falls back to
+  // "founder_on_camera" when unset, same default prospectMeets uses.
+  castingChoice: text("casting_choice"),
   // The buyer-supplied corpus used for brand-voice extraction. Persisted
   // (rather than shipped through the Inngest event payload) so the
   // pin-down onboarding worker can read it back after the setup route
@@ -444,6 +537,17 @@ export const engagements = pgTable("engagements", {
       recordingPrompt: string;
       sourceQuestion?: string;
     }>;
+    // Pin-Down recovery gap 4 — recording checklist tuned to the casting
+    // choice. See buildRecordingChecklist in script-builder.ts for why
+    // this is deterministic logistics guidance (equipment/environment/
+    // wardrobe), not LLM-generated creative content.
+    recordingChecklist?: {
+      castingChoice: "founder_on_camera" | "coach_on_camera" | "animation" | "other";
+      equipment: string[];
+      environment: string[];
+      wardrobeAndFraming: string[];
+      perScriptReminders: Array<{ scriptId: string; scriptTitle: string; reminder: string }>;
+    };
   }>(),
 
   // ── Pin-Down recovery gap 7: existing-confirmation-page audit ─────────
@@ -902,4 +1006,171 @@ export const metricsBenchmark = pgTable("metrics_benchmark", {
   p75: text("p75").notNull(),
   p90: text("p90").notNull(),
   lastComputedAt: timestamp("last_computed_at").defaultNow().notNull(),
+});
+
+// ── Human Blockers (cross-cutting recovery gap 17) ────────────────────────
+// The OG SKILL.md's principle: certain steps genuinely can't proceed
+// without a human doing something outside this app entirely — recording a
+// video, getting an A2P 10DLC campaign approved by a carrier, hiring an
+// editor, granting a credential. Rather than a run failing outright or
+// silently stalling, it creates a row here and pauses (see
+// src/lib/human-blockers.ts's waitForBlockerResolution, built on
+// Inngest's step.waitForEvent) until a human resolves it — at which point
+// the exact same run resumes from where it left off, with whatever data
+// the human provided.
+export const humanBlockers = pgTable("human_blockers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  skillName: text("skill_name").notNull(),
+  runId: uuid("run_id"), // best-effort link back to skillRuns.id; not a FK since a blocker can outlive the run that raised it
+  // "video_recording" | "a2p_10dlc_approval" | "editor_hire" |
+  // "credential_grant" | "buyer_content_approval" | "other"
+  blockerType: text("blocker_type").notNull(),
+  description: text("description").notNull(),
+  // "open" | "resolved" | "abandoned" — abandoned is set by a human, same
+  // as resolved; there's no automatic timeout-to-abandoned sweep in this
+  // pass (see the module comment in human-blockers.ts for why that's a
+  // deliberate scope cut, not an oversight).
+  status: text("status").notNull().default("open"),
+  // The Inngest event name a paused step.waitForEvent() call is listening
+  // for. Always "human_blocker.resolved" today (one shared event, filtered
+  // by blockerId in the `if` expression) — stored per-row rather than
+  // hardcoded so a future blocker type can use a different event without
+  // a schema change.
+  resumeEventName: text("resume_event_name").notNull().default("human_blocker.resolved"),
+  // Whatever the human supplies on resolution (e.g. { videoUrl: "..." } or
+  // { campaignApprovedAt: "..." }) — passed straight back into the
+  // resumed step as the waitForEvent() return value.
+  resumePayload: jsonb("resume_payload"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: text("resolved_by"),
+});
+
+// ── Pending Actions (cross-cutting recovery gap 22) ────────────────────────
+// The generic approval-gate queue. See src/lib/approval-gate.ts. A row
+// here means "this side-effectful action was requested but not yet
+// executed because the engagement has require_approval_for_side_effects
+// on." Approving via POST /api/actions/[id]/review re-derives fresh state
+// from `payload` and actually runs the action; rejecting is a pure no-op.
+export const pendingActions = pgTable("pending_actions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  // "webhook_enrollment" | "cohort_membership_add" |
+  // "cohort_membership_remove" — see approval-gate.ts's PendingActionType
+  // for the authoritative list and its executor map.
+  actionType: text("action_type").notNull(),
+  // Everything the deferred executor needs to re-run the action later,
+  // e.g. { prospectEmail, bookingPayload } for webhook_enrollment. Never
+  // includes decrypted credentials — the executor re-resolves those via
+  // resolveCredential(engagementId, ...) at execution time, same
+  // re-fetch-don't-ship pattern the rest of this codebase uses for
+  // Inngest event payloads.
+  payload: jsonb("payload").notNull(),
+  // "pending" | "approved" | "rejected" | "execution_failed"
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  decidedAt: timestamp("decided_at"),
+  decidedBy: text("decided_by"),
+  executionError: text("execution_error"), // set only if status is execution_failed
+});
+
+// ── Show-Rate Features (recovery gap 25: predictive show-rate scoring) ────
+// One row per scored call. Two jobs at once: (1) the features actually
+// used to compute the score that shipped on that call's brief, kept for
+// audit/debugging, and (2) — once `actualOutcome` is backfilled after the
+// call happens — exactly the (features, label) pairs a real trained model
+// would need. See show-rate-scorer.ts's module comment for why this pass
+// ships the interpretable heuristic and this logging table, not a trained
+// classifier.
+export const showRateFeatures = pgTable("show_rate_features", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  bookingId: text("booking_id").notNull(),
+  prospectEmail: text("prospect_email").notNull(),
+  features: jsonb("features").$type<{
+    personMatchScore?: number;
+    leadTimeHours?: number;
+    bookingHourLocal?: number;
+    bookingDayOfWeek?: number;
+    isConsumerEmailDomain?: boolean;
+    priorNoShowCount?: number;
+    priorShowCount?: number;
+    emailEngagementScore?: number; // 0-1, from getProfileEngagement when available
+    applicationCompletenessRatio?: number; // answered / total questions
+  }>().notNull(),
+  predictedShowProbability: integer("predicted_show_probability").notNull(), // 0-100, integer percentage
+  modelVersion: text("model_version").notNull().default("heuristic-v1"),
+  // Backfilled later by whatever marks a call's outcome — "showed" |
+  // "no_show" | "rescheduled" | "cancelled" | null while still unknown.
+  actualOutcome: text("actual_outcome"),
+  outcomeRecordedAt: timestamp("outcome_recorded_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Brief Outcome Log (Slack interactive brief buttons, Tier 4 #27) ───────
+// One row per rep tap on a brief's Show/No-show/Rescheduled buttons. Feeds
+// showRateFeatures.actualOutcome (see slack-interactions.ts) and gives
+// Leak Map a real, human-confirmed outcome signal instead of only
+// inferring from booking-platform disposition tags.
+export const briefOutcomeLog = pgTable("brief_outcome_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  bookingId: text("booking_id").notNull(),
+  prospectEmail: text("prospect_email"),
+  outcome: text("outcome").notNull(), // "showed" | "no_show" | "rescheduled"
+  loggedBySlackUserId: text("logged_by_slack_user_id"),
+  loggedAt: timestamp("logged_at").defaultNow().notNull(),
+});
+
+// ── Conversation Intelligence Sessions (recovery gap 24) ───────────────────
+// One row per Recall.ai bot dispatched to a call. See
+// src/lib/platforms/conversation-intelligence.ts. Deliberately scoped to
+// Recall.ai only — see that file's header for why a generic multi-provider
+// abstraction isn't what this pass builds.
+export const conversationIntelligenceSessions = pgTable("conversation_intelligence_sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  bookingId: text("booking_id").notNull(),
+  recallBotId: text("recall_bot_id").notNull(),
+  meetingUrl: text("meeting_url").notNull(),
+  // "scheduled" | "joining" | "in_call" | "done" | "failed" — mirrors
+  // Recall's own bot.status_change vocabulary loosely; see the adapter for
+  // the exact mapping.
+  status: text("status").notNull().default("scheduled"),
+  transcriptId: text("transcript_id"),
+  // Claude's structured extraction from the finished transcript — this is
+  // what feeds back into topObjections, not the raw transcript itself
+  // (which this app never stores; see the adapter's data-retention note).
+  extractedObjections: jsonb("extracted_objections").$type<string[]>(),
+  extractionSummary: text("extraction_summary"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+// ── Canary Runs (Tier 4 #28: synthetic canary tenant) ──────────────────────
+// A dedicated, non-buyer-facing synthetic engagement (see
+// src/lib/platforms/canary.ts) that a weekly cron runs a set of read-only
+// checks against for every platform adapter this app ships, so an
+// upstream platform API change surfaces as a dashboard alert within a
+// week instead of as a buyer-reported incident. One row per weekly run
+// per platform checked.
+export const canaryRuns = pgTable("canary_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  platform: text("platform").notNull(),
+  adapterMethod: text("adapter_method").notNull(), // e.g. "CalendlyClient.checkCredentialHealth"
+  status: text("status").notNull(), // "ok" | "drift_detected" | "error"
+  detail: text("detail"),
+  latencyMs: integer("latency_ms"),
+  runAt: timestamp("run_at").defaultNow().notNull(),
 });

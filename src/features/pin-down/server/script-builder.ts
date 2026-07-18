@@ -1,5 +1,7 @@
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 
+export type CastingChoice = "founder_on_camera" | "coach_on_camera" | "animation" | "other";
+
 export interface ScriptBuilderInput {
   buyer: string;
   brandVoiceProfile?: any;
@@ -14,6 +16,8 @@ export interface ScriptBuilderInput {
   existingProof?: {
     testimonials: Array<{ name: string; role: string; company?: string; quote: string }>;
   };
+  /** Pin-Down recovery gap 4 — drives buildRecordingChecklist below. Defaults to "founder_on_camera" when omitted, since that's the OG SKILL.md's most common case. */
+  castingChoice?: CastingChoice;
 }
 
 export interface HeroScript {
@@ -32,9 +36,18 @@ export interface BreakoutScript {
   sourceQuestion?: string;
 }
 
+export interface RecordingChecklist {
+  castingChoice: CastingChoice;
+  equipment: string[];
+  environment: string[];
+  wardrobeAndFraming: string[];
+  perScriptReminders: Array<{ scriptId: string; scriptTitle: string; reminder: string }>;
+}
+
 export interface ScriptPack {
   heroScript: HeroScript;
   breakoutScripts: BreakoutScript[];
+  recordingChecklist: RecordingChecklist;
 }
 
 /**
@@ -98,6 +111,72 @@ function selectBreakoutTopics(topCallQuestions: string[]): string[] {
     "What to bring or prepare before the call",
   ];
   return [...cleaned, ...fallbacks].slice(0, Math.max(3, cleaned.length));
+}
+
+/**
+ * Pin-Down recovery gap 4 — recording checklist tuned to the casting
+ * choice. Deliberately deterministic, not LLM-generated: this is
+ * equipment/environment/wardrobe logistics guidance, not creative writing
+ * — the same reasoning selectHeroApproach above already applies to
+ * approach selection. Cheaper, faster, and produces identical guidance
+ * for identical inputs, which matters for something a buyer might re-read
+ * days apart while actually setting up to record.
+ */
+function buildRecordingChecklist(
+  castingChoice: CastingChoice,
+  scripts: Array<{ id: string; title: string; recordingPrompt: string }>
+): RecordingChecklist {
+  const perScriptReminders = scripts.map((s) => ({
+    scriptId: s.id,
+    scriptTitle: s.title,
+    reminder: s.recordingPrompt || "No specific framing guidance generated for this script — use the general checklist below.",
+  }));
+
+  if (castingChoice === "animation") {
+    // No on-camera talent — the checklist covers voiceover recording and
+    // the visual-asset handoff an animator/editor needs instead.
+    return {
+      castingChoice,
+      equipment: [
+        "USB condenser mic (or better) for the voiceover track — avoid built-in laptop/phone mics",
+        "Pop filter or foam windscreen",
+        "Headphones for monitoring while recording",
+      ],
+      environment: [
+        "Small, soft-furnished room (closet, bedroom with a rug/curtains) to cut echo — avoid bare rooms or kitchens/bathrooms",
+        "Record each script in one continuous take where possible; multiple short takes make it harder for an editor to match pacing",
+      ],
+      wardrobeAndFraming: [
+        "Not applicable — no on-camera talent. Instead: confirm brand colors, fonts, and any existing motion-graphics style guide with the animator before recording starts.",
+        "Note approximate pacing (words per chapter/beat) alongside the voiceover file so the animator can time visuals to it.",
+      ],
+      perScriptReminders,
+    };
+  }
+
+  const onCameraLabel = castingChoice === "coach_on_camera" ? "coach" : castingChoice === "other" ? "presenter" : "founder";
+
+  return {
+    castingChoice,
+    equipment: [
+      "Phone on a tripod (or webcam) at eye level — avoid handheld or upward angles",
+      "Clip-on lav mic or a dedicated USB mic — built-in camera/phone audio is usually the weakest link, not the video quality",
+      "One key light in front (ring light or a window facing the presenter) plus, if possible, a second fill light to avoid harsh shadows",
+    ],
+    environment: [
+      "Quiet room with minimal echo (soft furnishings help) and no foot traffic during recording",
+      "Background: clean, uncluttered, and either branded or neutral — nothing that competes visually with the presenter",
+      castingChoice === "coach_on_camera"
+        ? "Since this is objection-handling/empathy-heavy content, keep the presenter close enough to camera that facial expressions read clearly"
+        : "Keep the framing consistent across hero and breakout scripts so they feel like one recording session, not disconnected clips",
+    ],
+    wardrobeAndFraming: [
+      `${onCameraLabel} in solid colors — avoid fine patterns/stripes, which can strobe on camera`,
+      "Frame from mid-chest up, eyes roughly one-third from the top of frame",
+      "Look directly into the camera lens, not at the screen/preview — this is what makes it feel like eye contact to the viewer",
+    ],
+    perScriptReminders,
+  };
 }
 
 export async function buildScriptPack(input: ScriptBuilderInput, runId?: string): Promise<ScriptPack> {
@@ -174,20 +253,26 @@ Include exactly ${breakoutTopics.length} breakoutScripts, one per topic listed a
     throw new Error("Script pack generation returned an incomplete shape (missing heroScript or breakoutScripts).");
   }
 
-  return {
-    heroScript: {
-      title: parsed.heroScript.title,
-      targetLengthSeconds,
-      chapters: parsed.heroScript.chapters ?? [],
-      recordingPrompt: parsed.heroScript.recordingPrompt ?? "",
-    },
-    breakoutScripts: parsed.breakoutScripts.map((b, i) => ({
-      id: `breakout_${i + 1}`,
-      title: b.title,
-      targetLengthSeconds: 45,
-      script: b.script,
-      recordingPrompt: b.recordingPrompt ?? "",
-      sourceQuestion: b.sourceQuestion ?? breakoutTopics[i],
-    })),
+  const heroScript: HeroScript = {
+    title: parsed.heroScript.title,
+    targetLengthSeconds,
+    chapters: parsed.heroScript.chapters ?? [],
+    recordingPrompt: parsed.heroScript.recordingPrompt ?? "",
   };
+  const breakoutScripts: BreakoutScript[] = parsed.breakoutScripts.map((b, i) => ({
+    id: `breakout_${i + 1}`,
+    title: b.title,
+    targetLengthSeconds: 45,
+    script: b.script,
+    recordingPrompt: b.recordingPrompt ?? "",
+    sourceQuestion: b.sourceQuestion ?? breakoutTopics[i],
+  }));
+
+  const castingChoice = input.castingChoice ?? "founder_on_camera";
+  const recordingChecklist = buildRecordingChecklist(castingChoice, [
+    { id: "hero", title: heroScript.title, recordingPrompt: heroScript.recordingPrompt },
+    ...breakoutScripts.map((b) => ({ id: b.id, title: b.title, recordingPrompt: b.recordingPrompt })),
+  ]);
+
+  return { heroScript, breakoutScripts, recordingChecklist };
 }

@@ -5,10 +5,13 @@ import { processSingleProspectBrief } from "@/features/pre-call-read/server/brie
 import { processPileOnSmsSequence } from "@/inngest/pile-on-sms";
 import { processInboundReply } from "@/inngest/win-back-reply";
 import { processWinBackSmsSequence } from "@/inngest/win-back-sms";
+import { processConversationIntelligenceTranscript } from "@/inngest/conversation-intelligence";
 import {
   nightlyBriefsCron,
   leakMapScheduleCron,
   leakMapBenchmarksCron,
+  canaryWeeklySweep,
+  checkSingleCanary,
   alertMonitorCron,
   staleRunReaperCron,
   notifyStaleRunCron,
@@ -54,6 +57,8 @@ export const { GET, POST, PUT } = serve({
     nightlyBriefsCron,
     leakMapScheduleCron,
     leakMapBenchmarksCron,
+    canaryWeeklySweep,
+    checkSingleCanary,
     alertMonitorCron,
     // Added for the reliability pass: closes runs stuck at "running"
     // forever, and proactively flags dead booking-platform credentials
@@ -95,5 +100,6 @@ export const { GET, POST, PUT } = serve({
     // Durable multi-message SMS sequence for the win-back recovery
     // cadence — see src/inngest/win-back-sms.ts (Win-Back recovery gap 2).
     processWinBackSmsSequence,
+    processConversationIntelligenceTranscript,
   ],
 });

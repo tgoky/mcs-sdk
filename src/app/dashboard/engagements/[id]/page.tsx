@@ -6,7 +6,8 @@ import { sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { TriggerSkillButton } from "./trigger-skill-button";
-import { CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRight, Server } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRight, Server, DollarSign } from "lucide-react";
+import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import {
   SKILL_INFO,
   SKILLS,
@@ -107,6 +108,13 @@ export default async function EngagementDetailPage({
     mudd_ventures: "Runs on our infra",
     buyer: "Exported to buyer's infra",
   };
+
+  // Tier 4 #26 — revenue-attribution dashboard. Cheap to always compute
+  // (one indexed query + arithmetic, no external calls) — showing
+  // recoveredCount: 0 for an engagement that hasn't run Win-Back yet is a
+  // more honest empty state than hiding the section, since "$0 recovered
+  // this quarter" is itself a real, useful signal for a brand-new client.
+  const revenueAttribution = await computeWinBackRevenueAttribution(id);
 
   return (
     <div className="space-y-6 w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
@@ -225,6 +233,51 @@ export default async function EngagementDetailPage({
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Win-Back revenue attribution (Tier 4 #26) */}
+      <div className="space-y-2">
+        <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
+          <DollarSign className="w-3.5 h-3.5" /> Win-Back Revenue Recovered — {revenueAttribution.periodLabel}
+        </h2>
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 shadow-sm">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono uppercase tracking-wider">Recovered</p>
+              <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
+                {revenueAttribution.recoveredCount}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono uppercase tracking-wider">Revenue</p>
+              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                ${revenueAttribution.totalRevenue.toLocaleString()}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono uppercase tracking-wider">Avg / recovery</p>
+              <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
+                ${Math.round(revenueAttribution.averageRecoveryValue).toLocaleString()}
+              </p>
+            </div>
+          </div>
+          {revenueAttribution.recoveredEnrollments.length > 0 ? (
+            <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-900/40 divide-y divide-zinc-100 dark:divide-zinc-900/50">
+              {revenueAttribution.recoveredEnrollments.slice(0, 10).map((r) => (
+                <div key={r.prospectEmail} className="flex items-center justify-between py-1.5 text-xs">
+                  <span className="text-zinc-700 dark:text-zinc-300 font-medium">{r.prospectName ?? r.prospectEmail}</span>
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono">
+                    {new Date(r.rebookedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-900/40 text-[11px] text-zinc-400 dark:text-zinc-600 font-mono">
+              No recoveries attributed yet this period — this fills in automatically as Win-Back rebooks prospects.
+            </p>
+          )}
         </div>
       </div>
 
