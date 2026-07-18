@@ -7,7 +7,7 @@ import { enrollInPreCallSequence, enrollInWinBackSequence, exitWinBackSequence, 
 import { logStep, finishRun, type RunSummary } from "@/lib/run-log";
 import { runHybridPersonalization } from "./hybrid-personalizer";
 import { enrollSmsSequenceForTenant } from "@/lib/platforms/sms";
-import { inngest, pileOnSmsSequenceStart, winBackSmsSequenceStart } from "@/lib/inngest";
+import { inngest, pileOnSmsSequenceStart, winBackSmsSequenceStart, winBackEmailSmtpSequenceStart } from "@/lib/inngest";
 import { addProspectToAdDataCohort, removeProspectFromAdDataCohort } from "./cohort-sync";
 import { tagRecoveredFromNoShow } from "@/lib/platforms/crm-tagger";
 import { extractFreshRescheduleLink } from "@/lib/platforms/reschedule";
@@ -363,7 +363,15 @@ export async function handleInboundBookingEvent(
       }
     );
 
-    summary.whatWorked.push(`Enrolled in ${stack.email_platform} win-back sequence.`);
+    if (stack.email_platform === "smtp") {
+      // Direct-send platform — enrollInWinBackSequence is a documented
+      // no-op above (no ESP list to enroll into). The actual send is a
+      // durable Inngest sequence started further below, once
+      // enrollmentRow exists — see the SMTP block alongside win-back SMS.
+      summary.whatWasAttempted.push(`Queue the direct-send SMTP win-back email sequence for ${prospectEmail}.`);
+    } else {
+      summary.whatWorked.push(`Enrolled in ${stack.email_platform} win-back sequence.`);
+    }
     await logStep(runId, { phase: "recovery_enrollment", status: "success", detail: `Enrolled ${prospectName} in win-back sequence` });
 
     // ── Fresh reschedule link capture (Win-Back recovery gap 3) ───────────
@@ -444,6 +452,30 @@ export async function handleInboundBookingEvent(
       } catch (e: any) {
         summary.openItems.push(`Win-back SMS enrollment failed: ${e.message}`);
         await logStep(runId, { phase: "win_back_sms", status: "failed", detail: e.message });
+      }
+    }
+
+    // ── SMTP direct-send win-back email sequence ──────────────────────────
+    // Mirrors the SMS direct-send block above: SMTP has no ESP-side list
+    // or automation to enroll into, so this app owns the send schedule
+    // itself, using the same emails already generated in
+    // winBackSequenceAssetMap for every email_platform — see
+    // src/inngest/win-back-email-smtp.ts.
+    if (stack.email_platform === "smtp") {
+      try {
+        await inngest.send(
+          winBackEmailSmtpSequenceStart.create({
+            engagementId: tenant.engagementId,
+            enrollmentId: enrollmentRow.id,
+            prospectEmail,
+            prospectName,
+          })
+        );
+        summary.whatWorked.push(`Started the direct-send SMTP win-back email sequence for ${prospectEmail}.`);
+        await logStep(runId, { phase: "win_back_email_smtp", status: "success" });
+      } catch (e: any) {
+        summary.openItems.push(`Win-back SMTP email sequence failed to start: ${e.message}`);
+        await logStep(runId, { phase: "win_back_email_smtp", status: "failed", detail: e.message });
       }
     }
 

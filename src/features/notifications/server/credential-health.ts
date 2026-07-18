@@ -3,14 +3,16 @@ import { credentialsRefs, engagements, type EngagementStack } from "@/models/sch
 import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { CalendlyClient, CalComClient } from "@/lib/platforms/booking";
+import { MailchimpClient, ConvertKitClient, SMTPClient, parseSmtpCredential } from "@/lib/platforms/email";
 import { notifyUser } from "@/lib/notify";
 
 /**
  * Providers with a verified "am I still authenticated" endpoint wired up.
  * Every entry here was checked against the provider's current, live docs
  * (see the comments on CalendlyClient.checkCredentialHealth /
- * CalComClient.checkCredentialHealth in src/lib/platforms/booking.ts) —
- * not assumed from memory.
+ * CalComClient.checkCredentialHealth in src/lib/platforms/booking.ts, and
+ * on MailchimpClient/ConvertKitClient/SMTPClient's checkCredentialHealth
+ * in src/lib/platforms/email.ts) — not assumed from memory.
  *
  * Deliberately NOT including klaviyo, hubspot, activecampaign, or ghl yet:
  * adding a provider here without first confirming its real validation
@@ -22,6 +24,9 @@ import { notifyUser } from "@/lib/notify";
 const VALIDATORS: Record<string, (secret: string) => Promise<void>> = {
   calendly: (token) => new CalendlyClient(token).checkCredentialHealth(),
   cal_com: (token) => new CalComClient(token).checkCredentialHealth(),
+  mailchimp: (key) => new MailchimpClient(key).checkCredentialHealth(),
+  convertkit: (secret) => new ConvertKitClient(secret).checkCredentialHealth(),
+  smtp: (raw) => new SMTPClient(parseSmtpCredential(raw)).checkCredentialHealth(),
 };
 
 export interface CredentialHealthResult {

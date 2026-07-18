@@ -12,7 +12,7 @@ import { getAdDataContextForTenant } from "@/lib/platforms/ad-data";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import { inngest, prospectBriefDispatch } from "@/lib/inngest";
-import { deriveShowRateFeatures, scoreShowRate, logShowRateFeatures } from "./show-rate-scorer";
+import { deriveShowRateFeatures, scoreShowRate, logShowRateFeatures } from "../show-rate-scorer";
 import { createRecallBot, type RecallRegion } from "@/lib/platforms/conversation-intelligence";
 import crypto from "crypto";
 import type { GetStepTools, Inngest } from "inngest";

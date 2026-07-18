@@ -5,6 +5,7 @@ import { processSingleProspectBrief } from "@/features/pre-call-read/server/brie
 import { processPileOnSmsSequence } from "@/inngest/pile-on-sms";
 import { processInboundReply } from "@/inngest/win-back-reply";
 import { processWinBackSmsSequence } from "@/inngest/win-back-sms";
+import { processWinBackEmailSmtpSequence } from "@/inngest/win-back-email-smtp";
 import { processConversationIntelligenceTranscript } from "@/inngest/conversation-intelligence";
 import {
   nightlyBriefsCron,
@@ -100,6 +101,11 @@ export const { GET, POST, PUT } = serve({
     // Durable multi-message SMS sequence for the win-back recovery
     // cadence — see src/inngest/win-back-sms.ts (Win-Back recovery gap 2).
     processWinBackSmsSequence,
+    // Durable multi-message email sequence for the SMTP direct-send
+    // connector — see src/inngest/win-back-email-smtp.ts. Mailchimp,
+    // ConvertKit, and the four pre-existing ESPs don't run through here;
+    // they enroll into the buyer's own automation instead (email.ts).
+    processWinBackEmailSmtpSequence,
     processConversationIntelligenceTranscript,
   ],
 });

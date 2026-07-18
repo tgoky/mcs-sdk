@@ -160,6 +160,21 @@ export async function runPinDownOnboarding(
         "GoHighLevel is missing a location ID and/or workflow IDs — Pile-On and Win-Back enrollment will fail until these are set."
       );
     }
+    if (finalStack.email_platform === "mailchimp" && (!finalStack.target_list_id || !finalStack.recovery_list_id)) {
+      summary.openItems.push(
+        "Mailchimp is missing a target and/or recovery audience ID — Pile-On and Win-Back enrollment will fail until these are set."
+      );
+    }
+    if (finalStack.email_platform === "convertkit" && (!finalStack.target_list_id || !finalStack.recovery_list_id)) {
+      summary.openItems.push(
+        "ConvertKit is missing a target form ID and/or recovery tag ID — Pile-On and Win-Back enrollment will fail until these are set."
+      );
+    }
+    if (finalStack.email_platform === "smtp") {
+      summary.openItems.push(
+        "SMTP is a direct-send channel with no app-generated Pile-On pre-call content yet — it will only run the Win-Back recovery email cadence, not Pile-On."
+      );
+    }
 
     const bookingCredential = finalStack.booking_platform
       ? await resolveCredential(engagementId, finalStack.booking_platform).catch(() => null)

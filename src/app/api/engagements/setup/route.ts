@@ -94,6 +94,11 @@ export async function POST(request: Request) {
         if (m.base_url) finalStack.activecampaign_base_url = m.base_url;
       }
 
+      if (finalStack.email_platform === "mailchimp" || finalStack.email_platform === "convertkit") {
+        if (m.target_list_id) finalStack.target_list_id = m.target_list_id;
+        if (m.recovery_list_id) finalStack.recovery_list_id = m.recovery_list_id;
+      }
+
       if (finalStack.email_platform === "ghl") {
         finalStack.booking_platform_meta = {
           ...finalStack.booking_platform_meta,

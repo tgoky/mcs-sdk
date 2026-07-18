@@ -48,6 +48,16 @@ interface FormData {
   emailGhlLocationId: string;
   emailGhlTargetWorkflowId: string;
   emailGhlRecoveryWorkflowId: string;
+  // Custom SMTP — direct-send win-back email channel. Bundled into a
+  // single JSON string (emailApiKey) at submit time rather than adding
+  // new stack schema columns — see the useEffect that composes it below.
+  smtpHost: string;
+  smtpPort: string;
+  smtpSecure: boolean;
+  smtpUsername: string;
+  smtpPassword: string;
+  smtpFromAddress: string;
+  smtpFromName: string;
   hostingPlatform: string;
   publishDomain: string;
   hostingWebflowSiteId: string;
@@ -143,6 +153,13 @@ const DEFAULT_FORM: FormData = {
   emailGhlLocationId: "",
   emailGhlTargetWorkflowId: "",
   emailGhlRecoveryWorkflowId: "",
+  smtpHost: "",
+  smtpPort: "587",
+  smtpSecure: false,
+  smtpUsername: "",
+  smtpPassword: "",
+  smtpFromAddress: "",
+  smtpFromName: "",
   hostingPlatform: "nextjs_vercel",
   publishDomain: "",
   hostingWebflowSiteId: "",
@@ -694,6 +711,41 @@ export default function NewEngagementPage() {
     }
   }, [step, form.emailPlatform, form.emailApiKey, form.emailActiveCampaignBaseUrl]);
 
+  // Custom SMTP: compose the JSON credential blob into emailApiKey (the
+  // field that gets sent as credentials.email) whenever any SMTP field
+  // changes. There's no separate "API key" for a raw mail transport —
+  // this is what makes the existing single-string credential pipeline
+  // (storeCredential/resolveCredential, the !form.emailApiKey required
+  // check below) work for SMTP without changing that pipeline at all.
+  useEffect(() => {
+    if (form.emailPlatform !== "smtp") return;
+    const required = [form.smtpHost, form.smtpPort, form.smtpUsername, form.smtpPassword, form.smtpFromAddress];
+    if (required.some((v) => !v.trim())) {
+      if (form.emailApiKey) setForm((f) => ({ ...f, emailApiKey: "" }));
+      return;
+    }
+    const blob = JSON.stringify({
+      host: form.smtpHost.trim(),
+      port: Number(form.smtpPort),
+      secure: form.smtpSecure,
+      username: form.smtpUsername.trim(),
+      password: form.smtpPassword,
+      fromAddress: form.smtpFromAddress.trim(),
+      fromName: form.smtpFromName.trim() || undefined,
+    });
+    if (blob !== form.emailApiKey) setForm((f) => ({ ...f, emailApiKey: blob }));
+  }, [
+    form.emailPlatform,
+    form.smtpHost,
+    form.smtpPort,
+    form.smtpSecure,
+    form.smtpUsername,
+    form.smtpPassword,
+    form.smtpFromAddress,
+    form.smtpFromName,
+    form.emailApiKey,
+  ]);
+
   // GHL: Fetch locations
   useEffect(() => {
     if (step === "stack" && form.emailPlatform === "ghl" && form.emailApiKey.trim()) {
@@ -844,6 +896,9 @@ export default function NewEngagementPage() {
       if (form.emailGhlLocationId) emailPlatformMeta.location_id = form.emailGhlLocationId;
       if (form.emailGhlTargetWorkflowId) emailPlatformMeta.target_workflow_id = form.emailGhlTargetWorkflowId;
       if (form.emailGhlRecoveryWorkflowId) emailPlatformMeta.recovery_workflow_id = form.emailGhlRecoveryWorkflowId;
+    } else if (form.emailPlatform === "mailchimp" || form.emailPlatform === "convertkit") {
+      if (form.emailTargetListId) emailPlatformMeta.target_list_id = form.emailTargetListId;
+      if (form.emailRecoveryListId) emailPlatformMeta.recovery_list_id = form.emailRecoveryListId;
     }
 
     const testimonials = form.testimonials.filter((t) => t.name && t.role && t.quote);
@@ -1199,14 +1254,77 @@ booking_platform_meta: {
               helpText={form.bookingPlatform === "calendly" ? "From Calendly → Integrations & Apps → API & Webhooks → Personal Access Tokens." : undefined}
               required
             />
-            <InputField
-              label={`${EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform} API Key`}
-              value={form.emailApiKey}
-              onChange={(v) => set("emailApiKey", v)}
-              type="password"
-              placeholder="Paste your API key here..."
-              required
-            />
+            {form.emailPlatform === "smtp" ? (
+              <>
+                <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
+                  Custom SMTP has no single API key — enter your mail server's connection details below. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
+                </div>
+                <InputField
+                  label="SMTP Host"
+                  value={form.smtpHost}
+                  onChange={(v) => set("smtpHost", v)}
+                  placeholder="smtp.yourprovider.com"
+                  required
+                />
+                <InputField
+                  label="SMTP Port"
+                  value={form.smtpPort}
+                  onChange={(v) => set("smtpPort", v)}
+                  placeholder="587"
+                  required
+                />
+                <InputField
+                  label="SMTP Username"
+                  value={form.smtpUsername}
+                  onChange={(v) => set("smtpUsername", v)}
+                  placeholder="mailer@yourdomain.com"
+                  required
+                />
+                <InputField
+                  label="SMTP Password"
+                  value={form.smtpPassword}
+                  onChange={(v) => set("smtpPassword", v)}
+                  type="password"
+                  placeholder="••••••••"
+                  required
+                />
+                <InputField
+                  label="From address"
+                  value={form.smtpFromAddress}
+                  onChange={(v) => set("smtpFromAddress", v)}
+                  placeholder="hello@yourdomain.com"
+                  required
+                />
+                <InputField
+                  label="From name (optional)"
+                  value={form.smtpFromName}
+                  onChange={(v) => set("smtpFromName", v)}
+                  placeholder="Your Company"
+                />
+                <div className="flex items-start space-x-3 md:col-span-2 select-none">
+                  <input
+                    type="checkbox"
+                    id="smtpSecure"
+                    checked={form.smtpSecure}
+                    onChange={(e) => set("smtpSecure", e.target.checked)}
+                    className="w-4 h-4 rounded cursor-pointer mt-0.5 border border-zinc-300 dark:border-zinc-800"
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                  <label htmlFor="smtpSecure" className="text-xs cursor-pointer leading-normal" style={{ color: "var(--text-secondary)" }}>
+                    Use implicit TLS (typically port 465). Leave unchecked for STARTTLS on 587.
+                  </label>
+                </div>
+              </>
+            ) : (
+              <InputField
+                label={`${EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform} API Key`}
+                value={form.emailApiKey}
+                onChange={(v) => set("emailApiKey", v)}
+                type="password"
+                placeholder="Paste your API key here..."
+                required
+              />
+            )}
             {form.hostingPlatform !== "ghl" && form.hostingPlatform !== "plain_html" && (
               <InputField
                 label={`${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform} ${form.hostingPlatform === "wordpress" ? "Application Password (user:password)" : "API Token"}`}
@@ -1392,6 +1510,54 @@ booking_platform_meta: {
       helpText="The numeric ID of your win-back automation flow inside ActiveCampaign, used for direct API exits."
     />
               </>
+            )}
+
+            {form.emailPlatform === "mailchimp" && (
+              <>
+                <InputField
+                  label="Mailchimp Target Audience ID (Pile-On)"
+                  value={form.emailTargetListId}
+                  onChange={(v) => set("emailTargetListId", v)}
+                  placeholder="e.g. a1b2c3d4e5"
+                  helpText="Audience ID housing your pre-call nurture flow. Found under Audience → Settings → Audience name and defaults."
+                  required
+                />
+                <InputField
+                  label="Mailchimp Recovery Audience ID (Win-Back)"
+                  value={form.emailRecoveryListId}
+                  onChange={(v) => set("emailRecoveryListId", v)}
+                  placeholder="e.g. f6g7h8i9j0"
+                  helpText="Audience configured to run your no-show recovery journey."
+                  required
+                />
+              </>
+            )}
+
+            {form.emailPlatform === "convertkit" && (
+              <>
+                <InputField
+                  label="ConvertKit Target Form ID (Pile-On)"
+                  value={form.emailTargetListId}
+                  onChange={(v) => set("emailTargetListId", v)}
+                  placeholder="e.g. 1234567"
+                  helpText="The form that triggers your pre-call nurture sequence. Found under Grow → Landing Pages & Forms."
+                  required
+                />
+                <InputField
+                  label="ConvertKit Recovery Tag ID (Win-Back)"
+                  value={form.emailRecoveryListId}
+                  onChange={(v) => set("emailRecoveryListId", v)}
+                  placeholder="e.g. 7654321"
+                  helpText="The tag that triggers your win-back recovery automation. Found under Subscribers → Tags."
+                  required
+                />
+              </>
+            )}
+
+            {form.emailPlatform === "smtp" && (
+              <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
+                Custom SMTP doesn't need list/workflow IDs — it's a direct-send channel, this app owns the schedule. Enter your mail server details on the Account Keys step.
+              </div>
             )}
 
             {form.emailPlatform === "ghl" && (
@@ -2275,6 +2441,8 @@ booking_platform_meta: {
               !form.emailApiKey ||
               (form.emailPlatform === "klaviyo" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
               (form.emailPlatform === "activecampaign" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
+              (form.emailPlatform === "mailchimp" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
+              (form.emailPlatform === "convertkit" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
               (form.emailPlatform === "ghl" && (!form.emailGhlLocationId || !form.emailGhlTargetWorkflowId || !form.emailGhlRecoveryWorkflowId))
             }
             className="px-4 py-1.5 text-xs font-bold rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:translate-y-px text-white shadow-xs cursor-pointer"

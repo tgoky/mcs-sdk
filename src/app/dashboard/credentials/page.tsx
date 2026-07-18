@@ -64,6 +64,18 @@ const PLATFORM_GROUPS: PlatformGroup[] = [
         placeholder: "abc123...",
         howTo: "ActiveCampaign → Settings → Developer → API Access → Copy key",
       },
+      {
+        provider: "mailchimp",
+        label: "Mailchimp",
+        placeholder: "abc123...-us21",
+        howTo: "Mailchimp → Account & billing → Extras → API keys → Create A Key",
+      },
+      {
+        provider: "convertkit",
+        label: "ConvertKit",
+        placeholder: "ck_...",
+        howTo: "ConvertKit → Settings → Advanced → API → Copy API Secret",
+      },
     ],
   },
 ];
@@ -73,7 +85,7 @@ const PLATFORM_GROUPS: PlatformGroup[] = [
 // these get a "Test connection" button — showing that button for a
 // provider we can't actually validate would be a lie about what the
 // platform can confirm.
-const TESTABLE_PROVIDERS = new Set(["calendly", "cal_com"]);
+const TESTABLE_PROVIDERS = new Set(["calendly", "cal_com", "mailchimp", "convertkit", "smtp"]);
 
 function PlatformSection({ group }: { group: PlatformGroup }) {
   const [expanded, setExpanded] = useState(false);
@@ -331,6 +343,253 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
   );
 }
 
+/**
+ * SMTP is the one connector whose credential isn't a single string — it's
+ * host/port/secure/username/password/fromAddress bundled together. Rather
+ * than adding schema columns for it, the whole config is JSON-encoded and
+ * stored through the exact same generic credential blob every other
+ * provider uses (see storeCredential/resolveCredential) — this card just
+ * builds that JSON string before posting to the same /api/credentials
+ * and /api/credentials/test endpoints as everything above.
+ */
+function SmtpCredentialCard() {
+  const [expanded, setExpanded] = useState(false);
+  const [engagementId, setEngagementId] = useState("");
+  const [config, setConfig] = useState({
+    host: "",
+    port: "587",
+    secure: false,
+    username: "",
+    password: "",
+    fromAddress: "",
+    fromName: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  function set<K extends keyof typeof config>(key: K, value: (typeof config)[K]) {
+    setConfig((c) => ({ ...c, [key]: value }));
+    setSaved(false);
+  }
+
+  const required: (keyof typeof config)[] = ["host", "port", "username", "password", "fromAddress"];
+  const isComplete = required.every((k) => String(config[k]).trim().length > 0);
+
+  async function save() {
+    if (!isComplete) {
+      setError("Fill in host, port, username, password, and from address before saving.");
+      return;
+    }
+    if (!engagementId.trim()) {
+      setError("Enter your account ID first.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const value = JSON.stringify({ ...config, port: Number(config.port) });
+      const res = await fetch("/api/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engagementId: engagementId.trim(), provider: "smtp", value }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error ?? "Something went wrong.");
+      } else {
+        setSaved(true);
+      }
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function test() {
+    if (!engagementId.trim()) {
+      setError("Enter your account ID first.");
+      return;
+    }
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/credentials/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engagementId: engagementId.trim(), provider: "smtp" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTestResult({ ok: false, message: data.error ?? "Test failed." });
+      } else if (data.status === "ok") {
+        setTestResult({ ok: true, message: "Connected — SMTP credentials work." });
+      } else {
+        setTestResult({ ok: false, message: data.error ?? "Credentials were rejected." });
+      }
+    } catch {
+      setTestResult({ ok: false, message: "Network error. Try again." });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  const inputClass =
+    "w-full bg-white/40 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors";
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden transition-colors duration-200"
+      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+    >
+      <button
+        className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors"
+        onClick={() => setExpanded((e) => !e)}
+        style={{ background: "transparent" }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.background = "var(--surface-2)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = "transparent";
+        }}
+      >
+        <div>
+          <p className="text-sm" style={{ color: "var(--text-primary)", fontWeight: 600 }}>
+            Custom SMTP
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+            Direct-send win-back email for buyers on a bespoke email setup, no ESP required.
+          </p>
+        </div>
+        {expanded ? (
+          <ChevronUp size={16} style={{ color: "var(--text-muted)" }} />
+        ) : (
+          <ChevronDown size={16} style={{ color: "var(--text-muted)" }} />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="px-5 py-4 space-y-3" style={{ borderTop: "1px solid var(--border)" }}>
+          <div>
+            <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+              Which account is this for?
+            </label>
+            <input
+              className={inputClass}
+              value={engagementId}
+              onChange={(e) => setEngagementId(e.target.value)}
+              placeholder="e.g. eng_acme_corp_001"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+                Host
+              </label>
+              <input className={inputClass} value={config.host} onChange={(e) => set("host", e.target.value)} placeholder="smtp.yourprovider.com" />
+            </div>
+            <div>
+              <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+                Port
+              </label>
+              <input className={inputClass} value={config.port} onChange={(e) => set("port", e.target.value)} placeholder="587" />
+            </div>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-xs" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+              <input type="checkbox" checked={config.secure} onChange={(e) => set("secure", e.target.checked)} />
+              Use implicit TLS (usually port 465). Leave unchecked for STARTTLS on 587.
+            </label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+                Username
+              </label>
+              <input className={inputClass} value={config.username} onChange={(e) => set("username", e.target.value)} placeholder="mailer@yourdomain.com" />
+            </div>
+            <div>
+              <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+                Password
+              </label>
+              <input className={inputClass} type="password" value={config.password} onChange={(e) => set("password", e.target.value)} placeholder="••••••••" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+                From address
+              </label>
+              <input className={inputClass} value={config.fromAddress} onChange={(e) => set("fromAddress", e.target.value)} placeholder="hello@yourdomain.com" />
+            </div>
+            <div>
+              <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+                From name (optional)
+              </label>
+              <input className={inputClass} value={config.fromName} onChange={(e) => set("fromName", e.target.value)} placeholder="Your Company" />
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="px-4 py-2 text-sm rounded-md font-medium bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button
+              onClick={test}
+              disabled={testing}
+              title="Confirms the saved SMTP credentials actually connect, without waiting for the daily check"
+              className="px-3 py-2 text-sm rounded-md font-medium border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
+            >
+              {testing ? "Testing…" : "Test"}
+            </button>
+            {saved && (
+              <div className="flex items-center gap-1 self-center ml-1">
+                <CheckCircle2 size={12} style={{ color: "var(--success)" }} />
+                <span className="text-xs" style={{ color: "var(--success)" }}>Saved</span>
+              </div>
+            )}
+          </div>
+
+          {testResult && (
+            <div className="flex items-center gap-1.5">
+              {testResult.ok ? (
+                <CheckCircle2 size={12} style={{ color: "var(--success)" }} />
+              ) : (
+                <AlertCircle size={12} style={{ color: "var(--error)" }} />
+              )}
+              <p className="text-xs" style={{ color: testResult.ok ? "var(--success)" : "var(--error)" }}>
+                {testResult.message}
+              </p>
+            </div>
+          )}
+
+          {error && (
+            <div className="flex items-center gap-1.5">
+              <AlertCircle size={12} style={{ color: "var(--error)" }} />
+              <p className="text-xs" style={{ color: "var(--error)" }}>{error}</p>
+            </div>
+          )}
+
+          <p className="text-xs mt-2 font-mono opacity-80" style={{ color: "var(--text-muted)" }}>
+            Only runs the Win-Back recovery email cadence today — SMTP has no Pile-On pre-call content yet.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CredentialsPage() {
   return (
     <div className="w-full space-y-6 px-6 py-6 transition-colors duration-200">
@@ -373,6 +632,7 @@ export default function CredentialsPage() {
         {PLATFORM_GROUPS.map((group) => (
           <PlatformSection key={group.group} group={group} />
         ))}
+        <SmtpCredentialCard />
       </div>
 
       {/* Slack — different character, not a secret */}

@@ -142,6 +142,21 @@ export const winBackSmsSequenceStart = eventType("win-back/sms-sequence-start", 
   schema: staticSchema<WinBackSmsSequenceStartData>(),
 });
 
+// SMTP connector — direct-send win-back email channel. Unlike the four ESP
+// email_platform options (Klaviyo/HubSpot/ActiveCampaign/GHL — and now
+// Mailchimp/ConvertKit), SMTP has no list/flow to enroll a prospect into,
+// so this app owns the send schedule itself, the same way it already does
+// for Twilio/GHL SMS above. See src/inngest/win-back-email-smtp.ts.
+export type WinBackEmailSmtpSequenceStartData = {
+  engagementId: string;
+  enrollmentId: string;
+  prospectEmail: string;
+  prospectName: string;
+};
+export const winBackEmailSmtpSequenceStart = eventType("win-back/email-smtp-sequence-start", {
+  schema: staticSchema<WinBackEmailSmtpSequenceStartData>(),
+});
+
 // Pre-Call Read recovery gap 1 — dynamic brief trigger. Same fan-out shape
 // as bookingPollEngagement above: dynamicBriefCron does a cheap DB-only
 // scan for engagements with stack.brief_trigger_type === "dynamic_webhook",

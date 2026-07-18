@@ -1,4 +1,4 @@
-import { KlaviyoClient, HubSpotClient, GHLCRMClient } from "@/lib/platforms/email";
+import { KlaviyoClient, HubSpotClient, GHLCRMClient, MailchimpClient, ConvertKitClient } from "@/lib/platforms/email";
 
 /**
  * Win-Back recovery gap 4 — recovered-from-no-show tagger.
@@ -40,9 +40,24 @@ export async function tagRecoveredFromNoShow(
       if (!meta.location_id) throw new Error("GHL recovered-from-no-show tagging requires location_id in stack");
       return new GHLCRMClient(apiKey, meta.location_id).setCustomFields(email, properties);
 
+    case "mailchimp":
+      if (!meta.target_list_id && !meta.recovery_list_id) {
+        throw new Error("Mailchimp recovered-from-no-show tagging requires target_list_id or recovery_list_id in stack");
+      }
+      return new MailchimpClient(apiKey).setMergeField(
+        meta.target_list_id ?? meta.recovery_list_id,
+        email,
+        "SHOWRECOV",
+        "true"
+      );
+
+    case "convertkit":
+      return new ConvertKitClient(apiKey).setCustomFields(email, properties);
+
     default:
       // ActiveCampaign: same custom-field-ID limitation documented on
       // deliverPersonalizedIntro/deliverRescheduleLink in email.ts.
+      // SMTP: no CRM/profile layer at all to tag.
       // Best-effort tagging, not a required side effect of a rebook — the
       // caller logs this as an open item, not a hard failure.
       throw new Error(`Recovered-from-no-show tagging isn't supported for ${emailPlatform} yet.`);

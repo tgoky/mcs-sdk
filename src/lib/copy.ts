@@ -174,6 +174,9 @@ export const EMAIL_PLATFORM_LABELS: Record<string, string> = {
   hubspot: "HubSpot",
   activecampaign: "ActiveCampaign",
   ghl: "GoHighLevel",
+  mailchimp: "Mailchimp",
+  convertkit: "ConvertKit",
+  smtp: "Custom SMTP",
 };
 
 export const HOSTING_PLATFORM_LABELS: Record<string, string> = {

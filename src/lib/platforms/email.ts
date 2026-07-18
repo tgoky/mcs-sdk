@@ -10,6 +10,8 @@
 
 
 import { fetchWithTimeout } from "@/lib/http";
+import crypto from "crypto";
+import nodemailer from "nodemailer";
 // ── Klaviyo ───────────────────────────────────────────────────────────────
 
 export class KlaviyoClient {
@@ -850,6 +852,323 @@ export class GHLCRMClient {
   }
 }
 
+// ── Mailchimp ────────────────────────────────────────────────────────────
+
+export class MailchimpClient {
+  private baseUrl: string;
+  private headers: HeadersInit;
+
+  /**
+   * Mailchimp API keys embed their datacenter as a suffix after the last
+   * hyphen (e.g. "abc123...-us21"), which IS the account's API root —
+   * confirmed against Mailchimp's own Quick Start docs — so there's no
+   * separate "base URL" the buyer has to look up, unlike ActiveCampaign.
+   */
+  constructor(apiKey: string) {
+    const dc = apiKey.includes("-") ? apiKey.slice(apiKey.lastIndexOf("-") + 1) : "";
+    if (!dc) {
+      throw new Error(
+        `Mailchimp API key doesn't carry a datacenter suffix (expected e.g. "...-us21") — this doesn't look like a valid Mailchimp key.`
+      );
+    }
+    this.baseUrl = `https://${dc}.api.mailchimp.com/3.0`;
+    this.headers = {
+      // Mailchimp's documented Basic Auth pattern: any non-empty username,
+      // the API key as the password.
+      Authorization: `Basic ${Buffer.from(`anystring:${apiKey}`).toString("base64")}`,
+      "Content-Type": "application/json",
+    };
+  }
+
+  private subscriberHash(email: string): string {
+    return crypto.createHash("md5").update(email.toLowerCase()).digest("hex");
+  }
+
+  /**
+   * Upserts a member onto an audience (list) — creates if new, updates if
+   * they already exist — so this is safe to call on every booking without
+   * a separate existence check first, same shape as the other ESP clients'
+   * enrollInList.
+   */
+  async enrollInList(email: string, firstName: string, listId: string, tags: string[] = []): Promise<void> {
+    const hash = this.subscriberHash(email);
+    const res = await fetchWithTimeout(`${this.baseUrl}/lists/${listId}/members/${hash}`, {
+      method: "PUT",
+      headers: this.headers,
+      body: JSON.stringify({
+        email_address: email,
+        status_if_new: "subscribed",
+        merge_fields: { FNAME: firstName },
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`Mailchimp list enrollment failed [${res.status}]: ${await res.text()}`);
+    }
+    if (tags.length) {
+      await fetchWithTimeout(`${this.baseUrl}/lists/${listId}/members/${hash}/tags`, {
+        method: "POST",
+        headers: this.headers,
+        body: JSON.stringify({ tags: tags.map((name) => ({ name, status: "active" })) }),
+      }).catch(() => {});
+    }
+  }
+
+  /**
+   * Sets a merge field on a member, creating the merge field on the
+   * audience first if it doesn't exist yet. Mailchimp merge fields — unlike
+   * ActiveCampaign's pre-registered numeric custom fields (see the caveat
+   * on deliverPersonalizedIntro/deliverRescheduleLink below) — can be
+   * created dynamically via this same API, so Mailchimp genuinely supports
+   * both delivery methods rather than needing the ActiveCampaign-style
+   * "not supported" fallback.
+   */
+  async setMergeField(listId: string, email: string, tag: string, value: string): Promise<void> {
+    const hash = this.subscriberHash(email);
+    const upperTag = tag.toUpperCase().replace(/[^A-Z0-9_]/g, "").slice(0, 10); // Mailchimp merge tags: max 10 chars
+
+    const patchRes = await fetchWithTimeout(`${this.baseUrl}/lists/${listId}/members/${hash}`, {
+      method: "PATCH",
+      headers: this.headers,
+      body: JSON.stringify({ merge_fields: { [upperTag]: value } }),
+    });
+    if (patchRes.ok) return;
+
+    // Most likely cause of a non-2xx here: the merge field doesn't exist
+    // on this audience yet. Create it, then retry once.
+    const createRes = await fetchWithTimeout(`${this.baseUrl}/lists/${listId}/merge-fields`, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({ name: tag, tag: upperTag, type: "text" }),
+    });
+    if (!createRes.ok && createRes.status !== 400) {
+      // A 400 here is most often "already exists" (race with a concurrent
+      // request) — anything else is a real failure worth surfacing.
+      throw new Error(`Mailchimp merge field creation failed [${createRes.status}]: ${await createRes.text()}`);
+    }
+
+    const retryRes = await fetchWithTimeout(`${this.baseUrl}/lists/${listId}/members/${hash}`, {
+      method: "PATCH",
+      headers: this.headers,
+      body: JSON.stringify({ merge_fields: { [upperTag]: value } }),
+    });
+    if (!retryRes.ok) {
+      throw new Error(`Mailchimp merge field set failed [${retryRes.status}]: ${await retryRes.text()}`);
+    }
+  }
+
+  /**
+   * Signals "stop the win-back cadence" via tags, the same mechanism
+   * ActiveCampaign's markRebooked uses — Mailchimp Customer Journeys (the
+   * automation product that would run a recovery cadence) exits contacts
+   * off tag add/remove, not a numeric field.
+   */
+  async markRebooked(listId: string, email: string, reason: "rebooked" | "reply_exited" = "rebooked"): Promise<void> {
+    const hash = this.subscriberHash(email);
+    await fetchWithTimeout(`${this.baseUrl}/lists/${listId}/members/${hash}/tags`, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({
+        tags: [{ name: reason === "reply_exited" ? "showtime_reply_exited" : "showtime_rebooked", status: "active" }],
+      }),
+    }).catch(() => {});
+  }
+
+  /** Root account ping — confirms the key (and the datacenter parsed from it) is valid. */
+  async checkCredentialHealth(): Promise<void> {
+    const res = await fetchWithTimeout(`${this.baseUrl}/`, { headers: this.headers });
+    if (!res.ok) throw new Error(`Mailchimp credential check failed [${res.status}]`);
+  }
+}
+
+// ── ConvertKit ───────────────────────────────────────────────────────────
+
+export class ConvertKitClient {
+  private baseUrl = "https://api.convertkit.com/v3";
+
+  constructor(private apiSecret: string) {}
+
+  /** Subscribes to a form — ConvertKit's forms trigger any automations attached to them. */
+  async enrollInForm(email: string, firstName: string, formId: string, fields: Record<string, string> = {}): Promise<void> {
+    const res = await fetchWithTimeout(`${this.baseUrl}/forms/${formId}/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_secret: this.apiSecret, email, first_name: firstName, fields }),
+    });
+    if (!res.ok) {
+      throw new Error(`ConvertKit form subscribe failed [${res.status}]: ${await res.text()}`);
+    }
+  }
+
+  /** Tags a subscriber — ConvertKit's tag-based automations trigger off this. */
+  async tagSubscriber(email: string, tagId: string, firstName?: string, fields: Record<string, string> = {}): Promise<void> {
+    const res = await fetchWithTimeout(`${this.baseUrl}/tags/${tagId}/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_secret: this.apiSecret, email, first_name: firstName, fields }),
+    });
+    if (!res.ok) {
+      throw new Error(`ConvertKit tag subscribe failed [${res.status}]: ${await res.text()}`);
+    }
+  }
+
+  /**
+   * Removes a tag — ConvertKit's v3 tag-unsubscribe endpoint is keyed by
+   * email, same as tag-subscribe, no separate subscriber-ID lookup needed.
+   */
+  async untagSubscriber(email: string, tagId: string): Promise<void> {
+    await fetchWithTimeout(`${this.baseUrl}/tags/${tagId}/unsubscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_secret: this.apiSecret, email }),
+    }).catch(() => {});
+  }
+
+  private async findSubscriberId(email: string): Promise<number | null> {
+    const res = await fetchWithTimeout(
+      `${this.baseUrl}/subscribers?api_secret=${encodeURIComponent(this.apiSecret)}&email_address=${encodeURIComponent(email)}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.subscribers?.[0]?.id ?? null;
+  }
+
+  /**
+   * Sets one or more custom fields on an existing subscriber. Unlike
+   * ActiveCampaign's pre-registered-numeric-ID requirement documented on
+   * deliverPersonalizedIntro/deliverRescheduleLink below, ConvertKit custom
+   * fields are referenced by string key and auto-created on first use —
+   * no pre-registration needed, same as Mailchimp's merge fields above.
+   */
+  async setCustomFields(email: string, fields: Record<string, string>): Promise<void> {
+    const id = await this.findSubscriberId(email);
+    if (!id) return; // no-op for a subscriber that doesn't exist yet
+    await fetchWithTimeout(`${this.baseUrl}/subscribers/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_secret: this.apiSecret, fields }),
+    }).catch(() => {});
+  }
+
+  /**
+   * Signals "stop the win-back cadence." Removes the recovery tag (if
+   * given) AND writes a status field — belt-and-suspenders, since some
+   * buyers build their ConvertKit automation's exit condition off the tag
+   * itself, others off a field, and this app has no way to know which
+   * without asking during onboarding.
+   */
+  async markRebooked(tagId: string | undefined, email: string, reason: "rebooked" | "reply_exited" = "rebooked"): Promise<void> {
+    if (tagId) {
+      await this.untagSubscriber(email, tagId);
+    }
+    await this.setCustomFields(email, {
+      showtime_status: reason,
+      showtime_rebooked_at: new Date().toISOString(),
+    });
+  }
+
+  /** Confirms the api_secret is valid. */
+  async checkCredentialHealth(): Promise<void> {
+    const res = await fetchWithTimeout(`${this.baseUrl}/account?api_secret=${encodeURIComponent(this.apiSecret)}`);
+    if (!res.ok) throw new Error(`ConvertKit credential check failed [${res.status}]`);
+  }
+}
+
+// ── SMTP (direct-send) ───────────────────────────────────────────────────
+//
+// Unlike every ESP client above, raw SMTP has no list/flow/automation
+// concept — there's no buyer-side platform to tag and let its own
+// automation send. Selecting "smtp" makes this app the sender of record:
+// it owns the win-back cadence's schedule itself via a durable Inngest
+// sequence (src/inngest/win-back-email-smtp.ts), the same direct-send
+// split sms.ts documents between Twilio/GHL SMS (direct-send) and
+// hubspot_sms (tag-based, buyer's automation sends). Pile-On's pre-call
+// sequence has no app-generated email content today — pileOnSequenceAssetMap
+// is declared in schema.ts but never populated anywhere in this codebase —
+// so SMTP can't support Pile-On yet; enrollInPreCallSequence's "smtp" case
+// below says so explicitly rather than silently sending nothing.
+//
+// Credentials are stored as one JSON string through the existing generic
+// credential blob (storeCredential/resolveCredential already treat every
+// provider's secret as an opaque string), rather than adding new schema
+// columns for host/port/etc — see parseSmtpCredential.
+
+export interface SmtpConfig {
+  host: string;
+  port: number;
+  secure: boolean; // true for implicit TLS (typically port 465), false for STARTTLS (587) or plain (25)
+  username: string;
+  password: string;
+  fromAddress: string;
+  fromName?: string;
+}
+
+/**
+ * Parses the JSON blob stored as the "smtp" credential value. Errors name
+ * the specific missing field — a buyer pasting a malformed config should
+ * get an actionable message, not a generic parse failure.
+ */
+export function parseSmtpCredential(raw: string): SmtpConfig {
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      'SMTP credential is not valid JSON — expected {"host","port","secure","username","password","fromAddress"}.'
+    );
+  }
+  for (const key of ["host", "port", "username", "password", "fromAddress"] as const) {
+    if (parsed?.[key] === undefined || parsed[key] === null || parsed[key] === "") {
+      throw new Error(`SMTP credential is missing "${key}".`);
+    }
+  }
+  return {
+    host: String(parsed.host),
+    port: Number(parsed.port),
+    secure: Boolean(parsed.secure),
+    username: String(parsed.username),
+    password: String(parsed.password),
+    fromAddress: String(parsed.fromAddress),
+    fromName: parsed.fromName ? String(parsed.fromName) : undefined,
+  };
+}
+
+export class SMTPClient {
+  private transporter: ReturnType<typeof nodemailer.createTransport>;
+  private fromHeader: string;
+
+  constructor(config: SmtpConfig) {
+    this.transporter = nodemailer.createTransport({
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      auth: { user: config.username, pass: config.password },
+    });
+    this.fromHeader = config.fromName ? `"${config.fromName}" <${config.fromAddress}>` : config.fromAddress;
+  }
+
+  /**
+   * Sends one email. Content (subject/body) is expected to already be
+   * fully authored — win-back's generated copy — since SMTP has no
+   * separate CRM/merge-field layer to inject personalization into after
+   * the fact the way the ESP clients above do; personalization has to be
+   * baked in at content-generation time for this platform.
+   */
+  async sendEmail(to: string, subject: string, body: string): Promise<void> {
+    const isHtml = /<[a-z][\s\S]*>/i.test(body);
+    await this.transporter.sendMail({
+      from: this.fromHeader,
+      to,
+      subject,
+      ...(isHtml ? { html: body } : { text: body }),
+    });
+  }
+
+  /** Confirms the SMTP credentials and connection actually work. */
+  async checkCredentialHealth(): Promise<void> {
+    await this.transporter.verify();
+  }
+}
+
 // ── Router ────────────────────────────────────────────────────────────────
 
 /**
@@ -889,10 +1208,32 @@ export async function enrollInPreCallSequence(
         email, firstName, meta.target_workflow_id
       );
 
+    case "mailchimp":
+      if (!meta.target_list_id) throw new Error("Mailchimp pile-on requires target_list_id (audience ID) in stack");
+      return new MailchimpClient(apiKey).enrollInList(email, firstName, meta.target_list_id, ["showtime_booked"]);
+
+    case "convertkit":
+      if (!meta.target_list_id) throw new Error("ConvertKit pile-on requires target_list_id (form ID) in stack");
+      return new ConvertKitClient(apiKey).enrollInForm(email, firstName, meta.target_list_id);
+
+    case "smtp":
+      // Direct-send platforms have no ESP-side flow to enroll into — this
+      // app would need to own the send schedule itself, the same way it
+      // does for win-back below. That schedule needs generated content to
+      // send, and Pile-On's pre-call sequence has none today
+      // (pileOnSequenceAssetMap is declared in schema.ts but never
+      // populated). Rather than silently enrolling nobody, this is a hard,
+      // actionable failure: connect an ESP for email_platform to run
+      // Pile-On, or keep SMTP reserved for Win-Back's recovery cadence
+      // (see win-back's dispatch below, which does have generated content).
+      throw new Error(
+        "SMTP has no Pile-On pre-call content to send yet — this direct-send platform is currently only wired for the Win-Back recovery cadence. Use klaviyo, hubspot, activecampaign, ghl, mailchimp, or convertkit for Pile-On."
+      );
+
     default:
       throw new Error(
         `Unsupported email platform for sequence enrollment: ${platform}. ` +
-        "Supported: klaviyo, hubspot, activecampaign, ghl"
+        "Supported: klaviyo, hubspot, activecampaign, ghl, mailchimp, convertkit"
       );
   }
 }
@@ -933,6 +1274,24 @@ export async function enrollInWinBackSequence(
       return new GHLCRMClient(apiKey, meta.location_id).enrollInWorkflow(
         email, firstName, meta.recovery_workflow_id
       );
+
+    case "mailchimp":
+      if (!meta.recovery_list_id) throw new Error("Mailchimp win-back requires recovery_list_id (audience ID) in stack");
+      return new MailchimpClient(apiKey).enrollInList(email, firstName, meta.recovery_list_id, ["showtime_win_back"]);
+
+    case "convertkit":
+      if (!meta.recovery_list_id) throw new Error("ConvertKit win-back requires recovery_list_id (tag ID) in stack");
+      return new ConvertKitClient(apiKey).tagSubscriber(email, meta.recovery_list_id, firstName);
+
+    case "smtp":
+      // No-op by design. SMTP has no ESP-side list/tag to enroll into —
+      // this app owns the send schedule itself via a durable Inngest
+      // sequence started separately once the win-back enrollment row
+      // exists (see enrollment-service.ts and
+      // src/inngest/win-back-email-smtp.ts), using the same emails
+      // already generated in winBackSequenceAssetMap for every platform.
+      // Nothing to do here.
+      return;
 
     default:
       throw new Error(`Unsupported email platform for win-back: ${platform}`);
@@ -993,6 +1352,21 @@ export async function exitWinBackSequence(
         reason
       );
 
+    case "mailchimp":
+      if (!meta.recovery_list_id) return;
+      return new MailchimpClient(apiKey).markRebooked(meta.recovery_list_id, email, reason);
+
+    case "convertkit":
+      return new ConvertKitClient(apiKey).markRebooked(meta.recovery_list_id, email, reason);
+
+    case "smtp":
+      // No external system to signal — the caller flips the win-back
+      // enrollment row's status to inactive separately, and that status
+      // flip is exactly what the running processWinBackEmailSmtpSequence
+      // durable function checks before each send (see
+      // src/inngest/win-back-email-smtp.ts). Nothing to do here.
+      return;
+
     default:
       // No exit signal path for this platform — not fatal, just nothing to do.
       return;
@@ -1038,12 +1412,35 @@ export async function deliverPersonalizedIntro(
         showtime_personalized_intro: text,
       });
 
+    case "mailchimp":
+      if (!meta.target_list_id && !meta.recovery_list_id) {
+        throw new Error("Mailchimp personalized-intro delivery requires target_list_id or recovery_list_id in stack");
+      }
+      return new MailchimpClient(apiKey).setMergeField(
+        meta.target_list_id ?? meta.recovery_list_id,
+        email,
+        "SHOWINTRO",
+        text
+      );
+
+    case "convertkit":
+      return new ConvertKitClient(apiKey).setCustomFields(email, {
+        showtime_personalized_intro: text,
+      });
+
  case "activecampaign":
       // 🌟 THE FIX: Throwing flags the upstream hybrid budget wrapper to accurately log a "fallback" outcome
       throw new Error(
         "ActiveCampaign requires a pre-registered numeric custom field ID for this, which isn't collected during onboarding yet — not supported."
       );
 
+    case "smtp":
+      // Not applicable — SMTP content is fully authored at generation
+      // time (see recovery-service.ts), there's no separate CRM profile
+      // to tag after the fact the way the ESP clients above work.
+      throw new Error(
+        "SMTP renders fully-authored content directly, so there's no separate personalized-intro delivery step for it — not supported."
+      );
 
     default:
       throw new Error(`Unsupported email platform for personalized-intro delivery: ${platform}`);
@@ -1085,13 +1482,33 @@ export async function deliverRescheduleLink(
         showtime_reschedule_link: url,
       });
 
-   
+    case "mailchimp":
+      if (!meta.target_list_id && !meta.recovery_list_id) {
+        throw new Error("Mailchimp reschedule-link delivery requires target_list_id or recovery_list_id in stack");
+      }
+      return new MailchimpClient(apiKey).setMergeField(
+        meta.target_list_id ?? meta.recovery_list_id,
+        email,
+        "SHOWRESKED",
+        url
+      );
+
+    case "convertkit":
+      return new ConvertKitClient(apiKey).setCustomFields(email, {
+        showtime_reschedule_link: url,
+      });
+
     case "activecampaign":
       // 🌟 THE FIX: Throwing flags the upstream hybrid budget wrapper to accurately log a "fallback" outcome
       throw new Error(
         "ActiveCampaign requires a pre-registered numeric custom field ID for this, which isn't collected during onboarding yet — not supported."
       );
-      
+
+    case "smtp":
+      // Not applicable — same reasoning as deliverPersonalizedIntro above.
+      throw new Error(
+        "SMTP renders fully-authored content directly, so there's no separate reschedule-link delivery step for it — not supported."
+      );
 
     default:
       throw new Error(`Unsupported email platform for reschedule-link delivery: ${platform}`);

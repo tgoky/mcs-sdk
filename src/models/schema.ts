@@ -112,7 +112,13 @@ export type EngagementStack = {
   // page already live at this URL — triggers the existing-page audit
   // (Pin-Down recovery gap 7) during the confirmation-deploy phase.
   existing_confirmation_page_url?: string;
-  email_platform?: "klaviyo" | "hubspot" | "activecampaign" | "convertkit" | "mailchimp";
+  // "smtp" is not a workflow/automation platform like the other five — it's
+  // a raw mail transport with no list/flow concept to enroll into. It's
+  // wired as a direct-send channel (this app owns the schedule), mirroring
+  // how sms_platform's twilio/ghl_sms differ from hubspot_sms below. See
+  // the module comment at the top of src/lib/platforms/email.ts's SMTPClient
+  // section and src/inngest/win-back-email-smtp.ts.
+  email_platform?: "klaviyo" | "hubspot" | "activecampaign" | "convertkit" | "mailchimp" | "smtp";
   email_platform_credentials_ref?: string;
   // ── SMS as a native channel (Pile-On recovery gap 1) ────────────────────
   // "twilio" and "ghl_sms" are direct-send platforms — this app calls their

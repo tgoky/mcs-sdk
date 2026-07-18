@@ -71,6 +71,24 @@ export async function subscribeNativeReplyWebhook(
         reason:
           "ActiveCampaign's reply tracking is plan-tier-gated and isn't consistently exposed as a subscribable webhook across accounts. Use forwarding mode instead.",
       };
+    case "mailchimp":
+      return {
+        supported: false,
+        reason:
+          "Mailchimp campaign emails typically reply-to the buyer's own inbox, not back through Mailchimp — there's no stable native \"reply received\" webhook to subscribe to. Use forwarding mode instead.",
+      };
+    case "convertkit":
+      return {
+        supported: false,
+        reason:
+          "ConvertKit broadcasts/sequences reply-to the buyer's own inbox by default and don't expose a subscribable \"reply received\" webhook. Use forwarding mode instead.",
+      };
+    case "smtp":
+      return {
+        supported: false,
+        reason:
+          "Raw SMTP has no inbox of its own to watch — replies land wherever the buyer's fromAddress actually receives mail. Use forwarding mode instead.",
+      };
     default:
       return { supported: false, reason: `No native reply-detection path for ${emailPlatform}.` };
   }

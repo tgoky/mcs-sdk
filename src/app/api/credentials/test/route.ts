@@ -4,6 +4,7 @@ import { credentialsRefs, engagements } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { CalendlyClient, CalComClient } from "@/lib/platforms/booking";
+import { MailchimpClient, ConvertKitClient, SMTPClient, parseSmtpCredential } from "@/lib/platforms/email";
 import { getSession } from "@/lib/session";
 
 /**
@@ -14,6 +15,9 @@ import { getSession } from "@/lib/session";
 const VALIDATORS: Record<string, (secret: string) => Promise<void>> = {
   calendly: (token) => new CalendlyClient(token).checkCredentialHealth(),
   cal_com: (token) => new CalComClient(token).checkCredentialHealth(),
+  mailchimp: (key) => new MailchimpClient(key).checkCredentialHealth(),
+  convertkit: (secret) => new ConvertKitClient(secret).checkCredentialHealth(),
+  smtp: (raw) => new SMTPClient(parseSmtpCredential(raw)).checkCredentialHealth(),
 };
 
 /**
