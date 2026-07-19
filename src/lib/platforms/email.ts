@@ -12,6 +12,99 @@
 import { fetchWithTimeout } from "@/lib/http";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+
+// ── Platform response shapes ────────────────────────────────────────────
+// Same rationale as the equivalent block in booking.ts: these cover only
+// the fields this file actually reads, not each platform's full API
+// surface. Every field is optional because that's the honest contract
+// with an external API response.
+
+interface KlaviyoFlowAction {
+  id?: string;
+  attributes?: {
+    action_type?: string;
+    settings?: { delay_seconds?: number };
+  };
+  relationships?: {
+    "flow-messages"?: { data?: Array<{ id?: string }> };
+  };
+}
+interface KlaviyoIncludedResource {
+  id?: string;
+  attributes?: {
+    content?: { subject?: string; body?: string };
+  };
+}
+interface KlaviyoFlowActionsResponse {
+  data?: KlaviyoFlowAction[];
+  included?: KlaviyoIncludedResource[];
+}
+interface KlaviyoEngagementEvent {
+  id?: string;
+  attributes?: {
+    event_properties?: {
+      $flow?: string;
+      $campaign_id?: string;
+      campaign_id?: string;
+      [key: string]: unknown;
+    };
+  };
+}
+interface KlaviyoEventsResponse {
+  data?: KlaviyoEngagementEvent[];
+}
+
+interface HubSpotWorkflow {
+  id: string | number;
+  name?: string;
+}
+interface HubSpotWorkflowsResponse {
+  workflows?: HubSpotWorkflow[];
+}
+interface HubSpotDealProperties {
+  dealstage?: string;
+  createdate?: string;
+  closedate?: string | null;
+  hs_is_closed?: string;
+  hs_is_closed_won?: string;
+}
+interface HubSpotDeal {
+  id: string;
+  properties: HubSpotDealProperties;
+}
+interface HubSpotDealsSearchResponse {
+  results?: HubSpotDeal[];
+}
+
+interface GHLOpportunityRaw {
+  id: string;
+  status: string;
+  dateAdded: string;
+  pipelineStageId: string;
+}
+interface GHLOpportunitiesSearchResponse {
+  opportunities?: GHLOpportunityRaw[];
+}
+
+// The fields these router functions read off an EngagementStack-derived
+// object assembled ad hoc per call site (enrollment-service.ts,
+// recovery-service.ts, brief-service.ts, etc.) — not the same shape as
+// booking.ts's BookingPlatformMeta, which is a different EngagementStack
+// sub-object entirely, so this gets its own local type.
+export interface EmailRoutingMeta {
+  target_list_id?: string;
+  recovery_list_id?: string;
+  location_id?: string;
+  target_workflow_id?: string;
+  recovery_workflow_id?: string;
+  recovery_automation_id?: string;
+  activecampaign_base_url?: string;
+}
+interface CrmNoteMeta {
+  platform?: string;
+  location_id?: string;
+}
+
 // ── Klaviyo ───────────────────────────────────────────────────────────────
 
 export class KlaviyoClient {
@@ -85,7 +178,7 @@ export class KlaviyoClient {
       { headers: this.headers }
     );
     if (!res.ok) return [];
-    const data = await res.json();
+    const data = (await res.json()) as KlaviyoFlowActionsResponse;
 
     let cumulativeDelayDays = 0;
     const results: Array<{ subject: string; bodyPreview: string; sendDelayDays: number | null }> = [];
@@ -99,7 +192,7 @@ export class KlaviyoClient {
       }
       if (actionType === "SEND_EMAIL") {
         const messageId = action.relationships?.["flow-messages"]?.data?.[0]?.id;
-        const included = (data.included ?? []).find((inc: any) => inc.id === messageId);
+        const included = (data.included ?? []).find((inc) => inc.id === messageId);
         const subject = included?.attributes?.content?.subject ?? "(no subject found)";
         const bodyPreview = (included?.attributes?.content?.body ?? "").replace(/<[^>]+>/g, " ").slice(0, 500);
         results.push({ subject, bodyPreview, sendDelayDays: cumulativeDelayDays || null });
@@ -170,7 +263,7 @@ export class KlaviyoClient {
    * nothing — a broader-than-requested engagement summary is more useful
    * to a closer than an empty one caused by a filter that didn't match.
    */
-  async getProfileEngagement(email: string, sequenceId?: string): Promise<any[]> {
+  async getProfileEngagement(email: string, sequenceId?: string): Promise<KlaviyoEngagementEvent[]> {
     // First resolve profile ID
     const profileRes = await fetchWithTimeout(`${this.baseUrl}/profiles/match/`, {
       method: "POST",
@@ -192,8 +285,8 @@ export class KlaviyoClient {
       { headers: this.headers }
     );
     if (!eventsRes.ok) return [];
-    const eventsData = await eventsRes.json();
-    const allEvents: any[] = eventsData.data ?? [];
+    const eventsData = (await eventsRes.json()) as KlaviyoEventsResponse;
+    const allEvents: KlaviyoEngagementEvent[] = eventsData.data ?? [];
 
     if (!sequenceId) return allEvents;
 
@@ -312,11 +405,11 @@ export class HubSpotClient {
     try {
       const res = await fetchWithTimeout("https://api.hubapi.com/automation/v3/workflows", { headers: this.headers });
       if (!res.ok) return [];
-      const data = await res.json();
+      const data = (await res.json()) as HubSpotWorkflowsResponse;
       const lowered = substrings.map((s) => s.toLowerCase());
       return (data.workflows ?? [])
-        .filter((w: any) => lowered.some((s) => (w.name ?? "").toLowerCase().includes(s)))
-        .map((w: any) => ({ id: String(w.id), name: w.name }));
+        .filter((w) => lowered.some((s) => (w.name ?? "").toLowerCase().includes(s)))
+        .map((w) => ({ id: String(w.id), name: w.name ?? "" }));
     } catch {
       return [];
     }
@@ -508,11 +601,11 @@ export class HubSpotClient {
       }),
     });
     if (!res.ok) return [];
-    const data = await res.json();
-    return (data.results ?? []).map((d: any) => ({
+    const data = (await res.json()) as HubSpotDealsSearchResponse;
+    return (data.results ?? []).map((d) => ({
       id: d.id,
-      dealstage: d.properties.dealstage,
-      createdate: d.properties.createdate,
+      dealstage: d.properties.dealstage ?? "",
+      createdate: d.properties.createdate ?? "",
       closedate: d.properties.closedate ?? null,
       isClosed: d.properties.hs_is_closed === "true",
       isClosedWon: d.properties.hs_is_closed_won === "true",
@@ -669,9 +762,10 @@ export class ActiveCampaignClient {
             });
           }
         }
-      } catch (apiErr: any) {
+      } catch (apiErr: unknown) {
         // ✅ Enhanced defensive error logging to keep external API drift visible
-        console.warn(`[activecampaign-exit] Direct unenrollment skipped, falling back to tag-exits: ${apiErr.message}`);
+        const message = apiErr instanceof Error ? apiErr.message : String(apiErr);
+        console.warn(`[activecampaign-exit] Direct unenrollment skipped, falling back to tag-exits: ${message}`);
       }
     }
   }
@@ -785,8 +879,8 @@ export class GHLCRMClient {
         headers: this.headers,
       });
       if (!res.ok) break;
-      const data = await res.json();
-      const opportunities: any[] = data.opportunities ?? [];
+      const data = (await res.json()) as GHLOpportunitiesSearchResponse;
+      const opportunities: GHLOpportunityRaw[] = data.opportunities ?? [];
       if (opportunities.length === 0) break;
 
       let reachedCutoff = false;
@@ -1108,7 +1202,7 @@ export interface SmtpConfig {
  * get an actionable message, not a generic parse failure.
  */
 export function parseSmtpCredential(raw: string): SmtpConfig {
-  let parsed: any;
+  let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(raw);
   } catch {
@@ -1180,7 +1274,7 @@ export async function enrollInPreCallSequence(
   apiKey: string,
   email: string,
   firstName: string,
-  meta: Record<string, any>
+  meta: EmailRoutingMeta
 ): Promise<void> {
   switch (platform) {
     case "klaviyo":
@@ -1247,7 +1341,7 @@ export async function enrollInWinBackSequence(
   apiKey: string,
   email: string,
   firstName: string,
-  meta: Record<string, any>
+  meta: EmailRoutingMeta
 ): Promise<void> {
   switch (platform) {
     case "klaviyo":
@@ -1323,7 +1417,7 @@ export async function exitWinBackSequence(
   platform: string,
   apiKey: string,
   email: string,
-  meta: Record<string, any>,
+  meta: EmailRoutingMeta,
   reason: "rebooked" | "reply_exited" = "rebooked"
 ): Promise<void> {
   switch (platform) {
@@ -1393,7 +1487,7 @@ export async function deliverPersonalizedIntro(
   apiKey: string,
   email: string,
   text: string,
-  meta: Record<string, any> = {}
+  meta: EmailRoutingMeta = {}
 ): Promise<void> {
   switch (platform) {
     case "klaviyo":
@@ -1412,16 +1506,13 @@ export async function deliverPersonalizedIntro(
         showtime_personalized_intro: text,
       });
 
-    case "mailchimp":
-      if (!meta.target_list_id && !meta.recovery_list_id) {
+    case "mailchimp": {
+      const mailchimpListId = meta.target_list_id ?? meta.recovery_list_id;
+      if (!mailchimpListId) {
         throw new Error("Mailchimp personalized-intro delivery requires target_list_id or recovery_list_id in stack");
       }
-      return new MailchimpClient(apiKey).setMergeField(
-        meta.target_list_id ?? meta.recovery_list_id,
-        email,
-        "SHOWINTRO",
-        text
-      );
+      return new MailchimpClient(apiKey).setMergeField(mailchimpListId, email, "SHOWINTRO", text);
+    }
 
     case "convertkit":
       return new ConvertKitClient(apiKey).setCustomFields(email, {
@@ -1463,7 +1554,7 @@ export async function deliverRescheduleLink(
   apiKey: string,
   email: string,
   url: string,
-  meta: Record<string, any> = {}
+  meta: EmailRoutingMeta = {}
 ): Promise<void> {
   switch (platform) {
     case "klaviyo":
@@ -1482,16 +1573,13 @@ export async function deliverRescheduleLink(
         showtime_reschedule_link: url,
       });
 
-    case "mailchimp":
-      if (!meta.target_list_id && !meta.recovery_list_id) {
+    case "mailchimp": {
+      const mailchimpListId = meta.target_list_id ?? meta.recovery_list_id;
+      if (!mailchimpListId) {
         throw new Error("Mailchimp reschedule-link delivery requires target_list_id or recovery_list_id in stack");
       }
-      return new MailchimpClient(apiKey).setMergeField(
-        meta.target_list_id ?? meta.recovery_list_id,
-        email,
-        "SHOWRESKED",
-        url
-      );
+      return new MailchimpClient(apiKey).setMergeField(mailchimpListId, email, "SHOWRESKED", url);
+    }
 
     case "convertkit":
       return new ConvertKitClient(apiKey).setCustomFields(email, {
@@ -1535,7 +1623,7 @@ export async function deliverBrief(
   email: string,
   slackWebhookUrl?: string,
   crmApiKey?: string,
-  crmMeta?: Record<string, any>,
+  crmMeta?: CrmNoteMeta,
   // Tier 4 #27 — Slack interactive brief buttons. Optional and additive:
   // omitting it (every existing call site keeps working unchanged)
   // delivers the exact same plain Block Kit message as before. Passing it

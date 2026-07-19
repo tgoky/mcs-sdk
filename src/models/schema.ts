@@ -800,6 +800,15 @@ export const credentialsRefs = pgTable("credentials_refs", {
   refKey: text("ref_key").notNull(),       // secrets://acme/calendly_pat
   encryptedValue: text("encrypted_value").notNull(), // AES-256-GCM encrypted
   iv: text("iv").notNull(),                // initialization vector
+  // Which CREDENTIAL_ENCRYPTION_KEY (or CREDENTIAL_ENCRYPTION_KEY_V<n> for
+  // an older, rotated-out key) this row was encrypted with. Defaults to 1
+  // for every row written before this column existed, which is correct —
+  // CREDENTIAL_ENCRYPTION_KEY was implicitly "version 1" the whole time.
+  // Lets the encryption key be rotated (new writes move to a new version,
+  // old rows keep decrypting against the old key referenced by this column)
+  // instead of a leaked/rotated key requiring every customer to re-enter
+  // every credential. See src/lib/credentials.ts.
+  keyVersion: integer("key_version").notNull().default(1),
   // ── Credential health (see src/features/notifications/server/credential-health.ts) ──
   // "ok" | "invalid" | "unknown". "unknown" is the default until the daily
   // health-check cron has run at least once for this row, or if this

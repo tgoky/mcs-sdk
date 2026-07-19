@@ -6,6 +6,146 @@
 
 
 import { fetchWithTimeout } from "@/lib/http";
+import type { EngagementStack } from "@/models/schema";
+
+// booking_platform_meta already has a real, per-platform-field shape
+// defined once in schema.ts (EngagementStack) — reusing it here instead of
+// Record<string, any> means this file can't drift from that definition,
+// and callers get real autocomplete/typo-checking on meta.location_id etc.
+type BookingPlatformMeta = EngagementStack["booking_platform_meta"];
+
+// ── Platform response shapes ────────────────────────────────────────────
+// These deliberately cover only the fields this file actually reads, not
+// each platform's full API surface — every field is optional because
+// that's the honest contract with an external API response, not because
+// the shape is unknown. Previously these call sites used inline `: any`
+// annotations on `.map()`/`.find()` callbacks; typing the response once
+// here and casting each `res.json()` call lets TypeScript infer every
+// callback parameter instead.
+
+interface CalendlyQuestionAnswer {
+  question: string;
+  answer?: string;
+}
+interface CalendlyInvitee {
+  name?: string;
+  email?: string;
+  text_reminder_number?: string;
+  questions_and_answers?: CalendlyQuestionAnswer[];
+}
+interface CalendlyEvent {
+  uri: string;
+  start_time: string;
+  location?: { join_url?: string };
+}
+interface CalendlyEventsResponse {
+  collection?: CalendlyEvent[];
+}
+interface CalendlyInviteesResponse {
+  collection?: CalendlyInvitee[];
+}
+interface CalendlySlot {
+  start_time: string;
+}
+interface CalendlySlotsResponse {
+  collection?: CalendlySlot[];
+}
+
+interface CalComAttendee {
+  name?: string;
+  email?: string;
+  phoneNumber?: string;
+}
+interface CalComBookingResponses {
+  company?: string;
+  organization?: string;
+  linkedin?: string;
+  linkedInUrl?: string;
+  phone?: string;
+  attendeePhoneNumber?: string;
+}
+interface CalComBooking {
+  id: string | number;
+  attendees?: CalComAttendee[];
+  responses?: CalComBookingResponses;
+  startTime: string;
+  status?: string;
+}
+interface CalComBookingsResponse {
+  data?: { bookings?: CalComBooking[] };
+}
+interface CalComSlot {
+  start: string;
+}
+interface CalComSlotsResponse {
+  data?: Record<string, CalComSlot[]>;
+}
+interface CalComEventType {
+  id: string | number;
+  slug?: string;
+}
+interface CalComEventTypesResponse {
+  data?: { eventTypes?: CalComEventType[] } | CalComEventType[];
+}
+
+interface GHLContact {
+  name?: string;
+  email?: string;
+  companyName?: string;
+  phone?: string;
+}
+interface GHLAppointment {
+  id: string;
+  contact?: GHLContact;
+  startTime: string;
+  status?: string;
+}
+interface GHLAppointmentsResponse {
+  appointments?: GHLAppointment[];
+}
+
+interface OnceHubCustomer {
+  name?: string;
+  email?: string;
+  phone?: string;
+}
+interface OnceHubFormSubmission {
+  company?: string;
+  linkedin?: string;
+  linkedin_url?: string;
+}
+interface OnceHubBooking {
+  id: string;
+  customer?: OnceHubCustomer;
+  form_submission?: OnceHubFormSubmission;
+  starting_time: string;
+}
+interface OnceHubBookingsResponse {
+  data?: OnceHubBooking[];
+}
+
+// Raw shape of an inbound booking-platform webhook payload — deliberately
+// loose (every field optional) since the actual shape varies by platform
+// and only a handful of fields are ever read here. See
+// deriveWebhookIdempotencyKey below for exactly which ones.
+interface WebhookPayloadShape {
+  event?: string;
+  trigger?: string;
+  triggerEvent?: string;
+  type?: string;
+  id?: string;
+  uid?: string;
+  payload?: {
+    uri?: string;
+    uid?: string;
+    invitee?: { uri?: string };
+  };
+  appointment?: { id?: string };
+  calendar?: { id?: string };
+  data?: { id?: string };
+  booking?: { id?: string };
+}
+
 export interface NormalizedCall {
   id: string;
   name: string;
@@ -75,17 +215,17 @@ export class CalendlyClient {
     if (!eventsRes.ok) {
       throw new Error(`Calendly events fetch failed [${eventsRes.status}]`);
     }
-    const eventsData = await eventsRes.json();
+    const eventsData = (await eventsRes.json()) as CalendlyEventsResponse;
     const results: NormalizedCall[] = [];
 
     for (const event of eventsData.collection ?? []) {
-      const eventUuid = event.uri.split("/").pop();
+      const eventUuid = event.uri.split("/").pop()!;
       const inviteesRes = await fetchWithTimeout(
         `${this.baseUrl}/scheduled_events/${eventUuid}/invitees`,
         { headers: this.headers }
       );
       if (!inviteesRes.ok) continue;
-      const invData = await inviteesRes.json();
+      const invData = (await inviteesRes.json()) as CalendlyInviteesResponse;
       const invitee = invData.collection?.[0];
       if (!invitee) continue;
 
@@ -94,11 +234,11 @@ export class CalendlyClient {
         name: invitee.name ?? "Unknown",
         email: invitee.email ?? "",
         company:
-          invitee.questions_and_answers?.find((q: any) =>
+          invitee.questions_and_answers?.find((q) =>
             q.question.toLowerCase().includes("company")
           )?.answer ?? "Not Stated",
         linkedInUrl:
-          invitee.questions_and_answers?.find((q: any) =>
+          invitee.questions_and_answers?.find((q) =>
             q.question.toLowerCase().includes("linkedin") || (q.answer ?? "").includes("linkedin.com/in/")
           )?.answer ?? undefined,
         callTime: new Date(event.start_time),
@@ -131,16 +271,16 @@ export class CalendlyClient {
         { headers: this.headers }
       );
       if (!eventsRes.ok) continue;
-      const eventsData = await eventsRes.json();
+      const eventsData = (await eventsRes.json()) as CalendlyEventsResponse;
 
       for (const event of eventsData.collection ?? []) {
-        const eventUuid = event.uri.split("/").pop();
+        const eventUuid = event.uri.split("/").pop()!;
         const inviteesRes = await fetchWithTimeout(
           `${this.baseUrl}/scheduled_events/${eventUuid}/invitees`,
           { headers: this.headers }
         );
         if (!inviteesRes.ok) continue;
-        const invData = await inviteesRes.json();
+        const invData = (await inviteesRes.json()) as CalendlyInviteesResponse;
         const invitee = invData.collection?.[0];
         if (!invitee) continue;
 
@@ -149,7 +289,7 @@ export class CalendlyClient {
           name: invitee.name ?? "Unknown",
           email: invitee.email ?? "",
           company:
-            invitee.questions_and_answers?.find((q: any) =>
+            invitee.questions_and_answers?.find((q) =>
               q.question.toLowerCase().includes("company")
             )?.answer ?? "Not Stated",
           // Calendly's SMS-reminder number is the closest thing to a
@@ -184,14 +324,14 @@ export class CalendlyClient {
     if (!eventsRes.ok) {
       throw new Error(`Calendly events fetch failed [${eventsRes.status}]`);
     }
-    const eventsData = await eventsRes.json();
+    const eventsData = (await eventsRes.json()) as CalendlyEventsResponse;
     const results: NormalizedCall[] = [];
 
     for (const event of eventsData.collection ?? []) {
-      const eventUuid = event.uri.split("/").pop();
+      const eventUuid = event.uri.split("/").pop()!;
       const inviteesRes = await fetchWithTimeout(`${this.baseUrl}/scheduled_events/${eventUuid}/invitees`, { headers: this.headers });
       if (!inviteesRes.ok) continue;
-      const invData = await inviteesRes.json();
+      const invData = (await inviteesRes.json()) as CalendlyInviteesResponse;
       const invitee = invData.collection?.[0];
       if (!invitee) continue;
 
@@ -200,10 +340,10 @@ export class CalendlyClient {
         name: invitee.name ?? "Unknown",
         email: invitee.email ?? "",
         company:
-          invitee.questions_and_answers?.find((q: any) => q.question.toLowerCase().includes("company"))?.answer ?? "Not Stated",
+          invitee.questions_and_answers?.find((q) => q.question.toLowerCase().includes("company"))?.answer ?? "Not Stated",
         linkedInUrl:
           invitee.questions_and_answers?.find(
-            (q: any) => q.question.toLowerCase().includes("linkedin") || (q.answer ?? "").includes("linkedin.com/in/")
+            (q) => q.question.toLowerCase().includes("linkedin") || (q.answer ?? "").includes("linkedin.com/in/")
           )?.answer ?? undefined,
         callTime: new Date(event.start_time),
         meetingUrl: event.location?.join_url ?? undefined,
@@ -281,10 +421,10 @@ export class CalendlyClient {
       // instead of surfacing an error to the prospect.
       return [];
     }
-    const data = await res.json();
+    const data = (await res.json()) as CalendlySlotsResponse;
     return (data.collection ?? [])
       .slice(0, count)
-      .map((slot: any) => new Date(slot.start_time));
+      .map((slot) => new Date(slot.start_time));
   }
 
   /**
@@ -438,9 +578,9 @@ export class CalComClient {
     if (!res.ok) {
       throw new Error(`Cal.com bookings fetch failed [${res.status}]`);
     }
-    const data = await res.json();
+    const data = (await res.json()) as CalComBookingsResponse;
 
-    return (data.data?.bookings ?? []).map((booking: any) => {
+    return (data.data?.bookings ?? []).map((booking) => {
       const attendee = booking.attendees?.[0] ?? {};
       return {
         id: String(booking.id),
@@ -469,9 +609,9 @@ export class CalComClient {
       { headers: this.headers }
     );
     if (!res.ok) return [];
-    const data = await res.json();
+    const data = (await res.json()) as CalComBookingsResponse;
 
-    return (data.data?.bookings ?? []).map((booking: any) => {
+    return (data.data?.bookings ?? []).map((booking) => {
       const attendee = booking.attendees?.[0] ?? {};
       return {
         id: String(booking.id),
@@ -503,9 +643,9 @@ export class CalComClient {
     if (!res.ok) {
       throw new Error(`Cal.com bookings fetch failed [${res.status}]`);
     }
-    const data = await res.json();
+    const data = (await res.json()) as CalComBookingsResponse;
 
-    return (data.data?.bookings ?? []).map((booking: any) => {
+    return (data.data?.bookings ?? []).map((booking) => {
       const attendee = booking.attendees?.[0] ?? {};
       return {
         id: String(booking.id),
@@ -565,10 +705,10 @@ async subscribeWebhook(receiverUrl: string): Promise<string> {
       { headers: this.headers }
     );
     if (!res.ok) return [];
-    const data = await res.json();
+    const data = (await res.json()) as CalComSlotsResponse;
     // Cal.com v2 groups slots by date: { data: { "2026-07-05": [{start: "..."}], ... } }
     const slots: Date[] = [];
-    for (const day of Object.values<any>(data.data ?? {})) {
+    for (const day of Object.values(data.data ?? {})) {
       for (const slot of day) {
         slots.push(new Date(slot.start));
         if (slots.length >= count) return slots;
@@ -603,17 +743,23 @@ async subscribeWebhook(receiverUrl: string): Promise<string> {
         return { username, cal_event_type_id: "" };
       }
 
-      const data = await res.json();
-      const eventTypes = data.data?.eventTypes ?? data.data ?? [];
+      const data = (await res.json()) as CalComEventTypesResponse;
+      // v2's /event-types has been observed returning both
+      // { data: { eventTypes: [...] } } and { data: [...] } shapes —
+      // Array.isArray narrows the union cleanly instead of guessing.
+      const eventTypes: CalComEventType[] = Array.isArray(data.data)
+        ? data.data
+        : data.data?.eventTypes ?? [];
 
-      const match = eventTypes.find((e: any) => e.slug?.toLowerCase() === targetSlug);
+      const match = eventTypes.find((e) => e.slug?.toLowerCase() === targetSlug);
 
       return {
         username,
         cal_event_type_id: match ? String(match.id) : "",
       };
-    } catch (err: any) {
-      console.error("[CalComClient] Error resolving event type from link:", err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[CalComClient] Error resolving event type from link:", message);
       return { username: "", cal_event_type_id: "" };
     }
   }
@@ -649,9 +795,9 @@ export class GHLCalendarClient {
     if (!res.ok) {
       throw new Error(`GHL appointments fetch failed [${res.status}]`);
     }
-    const data = await res.json();
+    const data = (await res.json()) as GHLAppointmentsResponse;
 
-    return (data.appointments ?? []).map((appt: any) => ({
+    return (data.appointments ?? []).map((appt) => ({
       id: appt.id,
       name: appt.contact?.name ?? "Unknown",
       email: appt.contact?.email ?? "",
@@ -681,9 +827,9 @@ export class GHLCalendarClient {
     if (!res.ok) {
       throw new Error(`GHL appointments fetch failed [${res.status}]`);
     }
-    const data = await res.json();
+    const data = (await res.json()) as GHLAppointmentsResponse;
 
-    return (data.appointments ?? []).map((appt: any) => ({
+    return (data.appointments ?? []).map((appt) => ({
       id: appt.id,
       name: appt.contact?.name ?? "Unknown",
       email: appt.contact?.email ?? "",
@@ -709,9 +855,9 @@ export class GHLCalendarClient {
   { headers: this.headers }
 );
     if (!res.ok) return [];
-    const data = await res.json();
+    const data = (await res.json()) as GHLAppointmentsResponse;
 
-    return (data.appointments ?? []).map((appt: any) => ({
+    return (data.appointments ?? []).map((appt) => ({
       id: appt.id,
       name: appt.contact?.name ?? "Unknown",
       email: appt.contact?.email ?? "",
@@ -774,9 +920,9 @@ export class OnceHubClient {
     if (!res.ok) {
       throw new Error(`OnceHub bookings fetch failed [${res.status}]`);
     }
-    const data = await res.json();
+    const data = (await res.json()) as OnceHubBookingsResponse;
 
-    return (data.data ?? []).map((booking: any) => ({
+    return (data.data ?? []).map((booking) => ({
       id: booking.id,
       name: booking.customer?.name ?? "Unknown",
       email: booking.customer?.email ?? "",
@@ -801,9 +947,9 @@ export class OnceHubClient {
     if (!res.ok) {
       throw new Error(`OnceHub bookings fetch failed [${res.status}]`);
     }
-    const data = await res.json();
+    const data = (await res.json()) as OnceHubBookingsResponse;
 
-    return (data.data ?? []).map((booking: any) => ({
+    return (data.data ?? []).map((booking) => ({
       id: booking.id,
       name: booking.customer?.name ?? "Unknown",
       email: booking.customer?.email ?? "",
@@ -833,7 +979,7 @@ export class OnceHubClient {
         { headers: this.headers }
       );
       if (!res.ok) continue;
-      const data = await res.json();
+      const data = (await res.json()) as OnceHubBookingsResponse;
       for (const booking of data.data ?? []) {
         results.push({
           id: booking.id,
@@ -855,7 +1001,7 @@ export class OnceHubClient {
 export async function fetchTomorrowCallsForTenant(
   bookingPlatform: string,
   apiKey: string,
-  meta?: Record<string, any>
+  meta?: BookingPlatformMeta
 ): Promise<NormalizedCall[]> {
   switch (bookingPlatform) {
     case "calendly":
@@ -889,7 +1035,7 @@ export async function fetchTomorrowCallsForTenant(
 export async function fetchUpcomingCallsForTenant(
   bookingPlatform: string,
   apiKey: string,
-  meta: Record<string, any> | undefined,
+  meta: BookingPlatformMeta | undefined,
   startHoursFromNow: number,
   endHoursFromNow: number
 ): Promise<NormalizedCall[]> {
@@ -921,7 +1067,7 @@ export async function registerWebhookForTenant(
   bookingPlatform: string,
   apiKey: string,
   receiverUrl: string,
-  meta?: Record<string, any>
+  meta?: BookingPlatformMeta
 ): Promise<string | void> {
   switch (bookingPlatform) {
     case "calendly":
@@ -954,7 +1100,7 @@ export async function registerWebhookForTenant(
 export async function getAvailableSlotsForTenant(
   bookingPlatform: string,
   apiKey: string,
-  meta: Record<string, any> | undefined,
+  meta: BookingPlatformMeta | undefined,
   count = 3,
   lookaheadDays = 7
 ): Promise<Date[]> {
@@ -996,7 +1142,7 @@ export async function getAvailableSlotsForTenant(
 export async function listBookingsSinceForTenant(
   bookingPlatform: string,
   apiKey: string,
-  meta: Record<string, any> | undefined,
+  meta: BookingPlatformMeta | undefined,
   sinceISO: string
 ): Promise<NormalizedCall[]> {
   switch (bookingPlatform) {
@@ -1030,7 +1176,7 @@ export async function listBookingsSinceForTenant(
 // payload shape doesn't contain anything stable enough to key on — the
 // caller (booking-event/route.ts) logs a warning and proceeds without
 // dedup in that case rather than dropping a legitimate booking.
-export function deriveWebhookIdempotencyKey(bookingPlatform: string, payload: any): string | null {
+export function deriveWebhookIdempotencyKey(bookingPlatform: string, payload: WebhookPayloadShape): string | null {
   switch (bookingPlatform) {
     case "calendly": {
       // Calendly's invitee.created/invitee.canceled payloads carry a

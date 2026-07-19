@@ -43,6 +43,13 @@
       "when": 1784369423005,
       "tag": "0005_careful_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784454819238,
+      "tag": "0006_thankful_chat",
+      "breakpoints": true
     }
   ]
 }

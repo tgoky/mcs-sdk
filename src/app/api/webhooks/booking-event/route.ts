@@ -1,12 +1,35 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements, webhookEvents, type EngagementStack } from "@/models/schema";
-import { eq } from "drizzle-orm";
-import { handleInboundBookingEvent, classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
+import { and, eq, gt, sql } from "drizzle-orm";
+import { classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
 import { deriveWebhookIdempotencyKey } from "@/lib/platforms/booking";
 import { startRun, failRun } from "@/lib/run-log";
 import { gateOrExecute } from "@/lib/approval-gate";
+import { inngest, bookingWebhookProcess } from "@/lib/inngest";
 import crypto from "crypto";
+
+// Reliability fix: this route now only does DB-only work (signature verify,
+// idempotency insert, rate-limit check, startRun, an Inngest event send) —
+// no ESP calls, no LLM calls. 15s is generous headroom over that, and stays
+// comfortably inside every booking platform's webhook ack deadline
+// (Calendly's is ~10s). See src/lib/inngest.ts's bookingWebhookProcess
+// comment for the full reasoning — the actual enrollment work now happens
+// in src/inngest/booking-webhook.ts, fully decoupled from this deadline.
+export const maxDuration = 15;
+
+// Rate limiting — cross-cutting recovery gap, AI Architect Review flag.
+// Nothing previously stopped a webhook replay storm (malicious, or a
+// booking-platform bug re-firing the same events) from enrolling hundreds
+// of prospects in minutes on a buyer's own ESP account, which is what gets
+// *their* Klaviyo/HubSpot account flagged — not ours, but they'll blame us.
+// Deliberately scoped per-engagement, not global, so one noisy tenant can't
+// throttle everyone else. A 429 is the correct response here rather than a
+// silent drop: Calendly (and the other supported platforms) retry
+// non-2xx responses with backoff for up to 24h, so a legitimate burst just
+// gets spread out over time instead of lost.
+const RATE_LIMIT_WINDOW_MINUTES = 5;
+const RATE_LIMIT_MAX_EVENTS_PER_WINDOW = 50;
 
 // ── Signature verification helpers ─────────────────────────────────────────
 
@@ -210,12 +233,17 @@ export async function POST(request: Request) {
           idempotencyKey,
           eventKind,
         });
-      } catch (dedupErr: any) {
+      } catch (dedupErr: unknown) {
         // Unique constraint violation on (event_source, idempotency_key)
         // means we've already accepted this exact event — this is a
         // retry, not a new booking. Acknowledge with 200 so the platform
         // stops retrying, but do NOT run enrollment again.
-        if (dedupErr?.code === "23505" || /duplicate key|unique/i.test(String(dedupErr?.message))) {
+        const dedupErrCode =
+          dedupErr && typeof dedupErr === "object" && "code" in dedupErr
+            ? (dedupErr as { code?: string }).code
+            : undefined;
+        const dedupErrMessage = dedupErr instanceof Error ? dedupErr.message : String(dedupErr);
+        if (dedupErrCode === "23505" || /duplicate key|unique/i.test(dedupErrMessage)) {
           console.log(
             `[webhook] Duplicate delivery ignored (idempotency key: ${idempotencyKey}) for engagement ${engagementId}`
           );
@@ -223,11 +251,36 @@ export async function POST(request: Request) {
         }
         // Any other DB error dedup-checking shouldn't block a legitimate
         // booking from being processed — log and fall through.
-        console.error("[webhook] Idempotency check failed (non-fatal):", dedupErr?.message);
+        console.error("[webhook] Idempotency check failed (non-fatal):", dedupErrMessage);
       }
     } else {
       console.warn(
         `[webhook] Could not derive an idempotency key for platform "${platform}" — proceeding without dedup for this event.`
+      );
+    }
+
+    // ── 6b. Rate limit — reject if this engagement has seen an unusual
+    // burst of events recently. Counts rows already durably inserted into
+    // webhook_events above, so this reuses the idempotency insert instead
+    // of standing up a separate counter table. A tripped limit returns 429
+    // rather than silently dropping the event or enrolling anyway.
+    const [{ recentCount }] = await db
+      .select({ recentCount: sql<number>`count(*)::int` })
+      .from(webhookEvents)
+      .where(
+        and(
+          eq(webhookEvents.engagementId, tenant.engagementId),
+          gt(webhookEvents.receivedAt, new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60_000))
+        )
+      );
+
+    if (recentCount > RATE_LIMIT_MAX_EVENTS_PER_WINDOW) {
+      console.warn(
+        `[webhook] Rate limit exceeded for engagement ${engagementId}: ${recentCount} events in the last ${RATE_LIMIT_WINDOW_MINUTES}m (limit ${RATE_LIMIT_MAX_EVENTS_PER_WINDOW}).`
+      );
+      return new Response(
+        "Rate limit exceeded for this engagement — too many booking events in a short window. This event will be retried automatically by the sending platform.",
+        { status: 429, headers: { "Retry-After": "120" } }
       );
     }
 
@@ -249,7 +302,20 @@ export async function POST(request: Request) {
           phase: "webhook_received",
           label: payload.event ?? payload.trigger ?? "booking event",
         });
-        await handleInboundBookingEvent(payload, tenant, runId, eventKind);
+        // Reliability fix: dispatch instead of awaiting the work itself.
+        // inngest.send() is a single fast network call to Inngest's own
+        // ingest API — the actual ESP enrollment, ad-data cohort sync, and
+        // hybrid personalization now run in src/inngest/booking-webhook.ts,
+        // fully decoupled from this request/response cycle. See the
+        // module comment on bookingWebhookProcess in src/lib/inngest.ts.
+        await inngest.send(
+          bookingWebhookProcess.create({
+            runId,
+            engagementId: tenant.engagementId,
+            eventKind,
+            bookingPayload: payload,
+          })
+        );
       }
     );
 
@@ -261,19 +327,20 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true, runId });
-  } catch (error: any) {
-    console.error("[webhook] booking-event failure:", error.message);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[webhook] booking-event failure:", message);
     await failRun(runId, error, {
       summary: {
         whatWasAttempted: ["Process inbound booking webhook event."],
         whatWorked: [],
-        whatFailed: [error.message],
+        whatFailed: [message],
         openItems: [
           "This booking event was not enrolled in any sequence — check the payload shape against the configured booking platform.",
         ],
         decisionsMade: [],
       },
     });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

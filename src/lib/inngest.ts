@@ -244,6 +244,37 @@ export const conversationIntelligenceProcess = eventType("conversation-intellige
   schema: staticSchema<ConversationIntelligenceProcessData>(),
 });
 
+// ── Reliability fix: booking-event webhook off the request thread ───────────
+// booking-event/route.ts used to `await handleInboundBookingEvent(...)`
+// directly inside the HTTP handler — meaning the ESP enrollment call, the
+// ad-data cohort sync, and (in hybrid mode) the personalized first-message
+// generation all had to complete before the response could be sent back to
+// Calendly/Cal.com/GHL. Calendly's own webhook ack deadline is ~10s; a slow
+// ESP response could blow through that even with fetchWithTimeout's 15s
+// ceiling, risking a platform-side "delivery failed" mark and a real chance
+// of Vercel's own maxDuration killing the invocation mid-flight.
+//
+// The route now does only fast, DB-only work (signature verify, idempotency
+// insert, rate-limit check, startRun) and dispatches this event instead of
+// awaiting the work itself — same pattern already used for pin-down's
+// discovery-prefill and every cron's per-tenant fan-out. Calendly gets its
+// 200 back in single-digit milliseconds once the DB round-trips finish;
+// everything with real external-network risk happens in the worker,
+// completely decoupled from any platform's ack deadline.
+//
+// Only the booking payload + routing fields cross the wire, not credentials
+// — the worker re-fetches the tenant row (and decrypts what it needs) fresh,
+// same re-fetch-don't-trust-the-event-payload principle as skillRunExecute.
+export type BookingWebhookProcessData = {
+  runId: string;
+  engagementId: string;
+  eventKind: "created" | "cancelled" | "unknown";
+  bookingPayload: unknown;
+};
+export const bookingWebhookProcess = eventType("pile-on/booking-webhook-process", {
+  schema: staticSchema<BookingWebhookProcessData>(),
+});
+
 export const inngest = new Inngest({
   id: "showtime-revenue-infrastructure", // App name identifier inside the dashboard
   checkpointing: {

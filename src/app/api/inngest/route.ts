@@ -7,6 +7,7 @@ import { processInboundReply } from "@/inngest/win-back-reply";
 import { processWinBackSmsSequence } from "@/inngest/win-back-sms";
 import { processWinBackEmailSmtpSequence } from "@/inngest/win-back-email-smtp";
 import { processConversationIntelligenceTranscript } from "@/inngest/conversation-intelligence";
+import { processBookingWebhookEvent } from "@/inngest/booking-webhook";
 import {
   nightlyBriefsCron,
   leakMapScheduleCron,
@@ -107,5 +108,11 @@ export const { GET, POST, PUT } = serve({
     // they enroll into the buyer's own automation instead (email.ts).
     processWinBackEmailSmtpSequence,
     processConversationIntelligenceTranscript,
+    // Async worker for booking-event webhooks — see the module comment on
+    // bookingWebhookProcess in src/lib/inngest.ts. Moves ESP enrollment,
+    // ad-data cohort sync, and hybrid personalization off the request
+    // thread so the webhook response to the booking platform is never
+    // gated on external-network calls.
+    processBookingWebhookEvent,
   ],
 });
