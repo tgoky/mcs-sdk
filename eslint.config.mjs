@@ -13,6 +13,16 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Test files mock a lot of loosely-shaped things (fake drizzle query
+  // chains, session objects cast per-scenario, mocked row data) where
+  // precise typing adds little and the production `any` ban isn't the
+  // point — the assertions are.
+  {
+    files: ["tests/**/*.ts", "tests/**/*.tsx"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

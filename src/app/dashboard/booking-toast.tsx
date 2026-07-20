@@ -52,11 +52,12 @@ export function BookingToast() {
   const seenRunIds = useRef<Set<string>>(new Set());
   const isFirstPoll = useRef(true);
 
-  const poll = useCallback(async () => {
+  const poll = useCallback(async (signal: AbortSignal) => {
     try {
-      const res = await fetch("/api/skill-runs/recent", { cache: "no-store" });
-      if (!res.ok) return;
+      const res = await fetch("/api/skill-runs/recent", { cache: "no-store", signal });
+      if (signal.aborted || !res.ok) return;
       const data = await res.json();
+      if (signal.aborted) return;
       const runs: RecentRun[] = data.runs ?? [];
 
       // First poll after mount just establishes the baseline — otherwise
@@ -113,9 +114,15 @@ export function BookingToast() {
   }, []);
 
   useEffect(() => {
-    poll();
-    const interval = setInterval(poll, POLL_MS);
-    return () => clearInterval(interval);
+    const controller = new AbortController();
+    (async () => {
+      await poll(controller.signal);
+    })();
+    const interval = setInterval(() => poll(controller.signal), POLL_MS);
+    return () => {
+      clearInterval(interval);
+      controller.abort();
+    };
   }, [poll]);
 
   // Auto-dismiss each toast on its own timer.

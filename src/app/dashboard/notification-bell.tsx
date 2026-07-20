@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Bell, AlertTriangle, XCircle, Clock, KeyRound, RotateCcw, BarChart3 } from "lucide-react";
-import { skillName, phaseLabel, SKILL_INFO, type SkillName } from "@/lib/copy";
 
 interface NotificationRow {
   id: string;
@@ -53,23 +52,31 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal: AbortSignal) => {
     try {
-      const res = await fetch("/api/notifications", { cache: "no-store" });
-      if (!res.ok) return;
+      const res = await fetch("/api/notifications", { cache: "no-store", signal });
+      if (signal.aborted || !res.ok) return;
       const data = await res.json();
+      if (signal.aborted) return;
       setNotifs(data.notifications ?? []);
       setUnreadCount(data.unreadCount ?? 0);
     } catch {
-      // Silent — a failed poll shouldn't throw a visible error at the user,
-      // it'll just try again on the next interval.
+      // Silent — includes AbortError from a cancelled in-flight request on
+      // unmount. A failed poll shouldn't throw a visible error at the user
+      // either way; it'll just try again on the next interval.
     }
   }, []);
 
   useEffect(() => {
-    load();
-    const interval = setInterval(load, POLL_MS);
-    return () => clearInterval(interval);
+    const controller = new AbortController();
+    (async () => {
+      await load(controller.signal);
+    })();
+    const interval = setInterval(() => load(controller.signal), POLL_MS);
+    return () => {
+      clearInterval(interval);
+      controller.abort();
+    };
   }, [load]);
 
   useEffect(() => {
@@ -127,7 +134,7 @@ export function NotificationBell() {
 
           {notifs.length === 0 ? (
             <div className="px-3 py-8 text-center text-xs font-mono font-medium text-zinc-400 dark:text-zinc-600">
-              Nothing yet — you'll see run failures and connection issues here.
+              Nothing yet — you&apos;ll see run failures and connection issues here.
             </div>
           ) : (
             notifs.map((n) => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Home } from "lucide-react";
 
 interface NavLink {
   href: string;
@@ -45,6 +46,14 @@ export function MobileNav({ links, displayName }: { links: NavLink[]; displayNam
           />
           {/* Menu panel */}
           <div className="fixed top-14 left-0 right-0 z-50 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-900 py-3 px-4 space-y-1 shadow-md dark:shadow-xl transition-all duration-200 animate-in fade-in slide-in-from-top-2 duration-150">
+            <a
+              href="/home"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 mb-1 pb-3 border-b border-zinc-200 dark:border-zinc-900 text-sm font-semibold font-mono rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all"
+            >
+              <Home size={15} />
+              Home
+            </a>
             {links.map((link) => (
               <a
                 key={link.href}

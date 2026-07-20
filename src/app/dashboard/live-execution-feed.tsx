@@ -83,20 +83,22 @@ function ClientCell({ run }: { run: SkillRun }) {
 }
 
 function RelativeTime({ isoString }: { isoString: string }) {
-  const [label, setLabel] = useState("");
+  const compute = useCallback(() => {
+    const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+    if (diff < 60) return `${diff}s`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+    return `${Math.floor(diff / 86400)}d`;
+  }, [isoString]);
+
+  // Lazy initializer computes the first label at mount time directly —
+  // no effect needed just to get an initial value on screen.
+  const [label, setLabel] = useState(compute);
 
   useEffect(() => {
-    function compute() {
-      const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
-      if (diff < 60) return `${diff}s`;
-      if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-      if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-      return `${Math.floor(diff / 86400)}d`;
-    }
-    setLabel(compute());
     const id = setInterval(() => setLabel(compute()), 1000);
     return () => clearInterval(id);
-  }, [isoString]);
+  }, [compute]);
 
   return (
     <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 tabular-nums">{label}</span>
@@ -105,22 +107,40 @@ function RelativeTime({ isoString }: { isoString: string }) {
 
 export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
   const router = useRouter();
+  // A fresh server-rendered prop on every mount (e.g. navigating back into
+  // /dashboard from Home) — useState's initial value already reflects it,
+  // since a route re-entry remounts this component rather than reusing the
+  // old instance with stale state.
   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
   const [polling, setPolling] = useState(true);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal: AbortSignal) => {
     try {
-      const res = await fetch("/api/skill-runs/recent", { cache: "no-store" });
-      if (!res.ok) return;
+      const res = await fetch("/api/skill-runs/recent", { cache: "no-store", signal });
+      if (signal.aborted || !res.ok) return;
       const data = await res.json();
+      if (signal.aborted) return;
       setRuns(data.runs ?? []);
-    } catch {}
+    } catch {
+      // Includes AbortError from a cancelled in-flight request on unmount —
+      // never worth surfacing, the next successful poll (or none, if the
+      // component is gone) picks it back up.
+    }
   }, []);
 
   useEffect(() => {
     if (!polling) return;
-    const id = setInterval(refresh, 5000);
-    return () => clearInterval(id);
+
+    const controller = new AbortController();
+    (async () => {
+      await refresh(controller.signal);
+    })();
+    const id = setInterval(() => refresh(controller.signal), 5000);
+
+    return () => {
+      clearInterval(id);
+      controller.abort();
+    };
   }, [polling, refresh]);
 
   if (runs.length === 0) {

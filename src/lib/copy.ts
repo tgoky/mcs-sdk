@@ -242,6 +242,61 @@ export const DASHBOARD_COPY = {
 };
 
 // ---------------------------------------------------------------------------
+// Home / workspace hub copy (src/app/home/page.tsx)
+//
+// This is the landing page every authenticated buyer sees before picking a
+// product. Keep the voice identical to DASHBOARD_COPY above — plain,
+// second-person, no internal codenames or system-status jargon.
+// ---------------------------------------------------------------------------
+
+export type WorkspaceStatus = "available" | "coming_soon";
+
+export interface WorkspaceProduct {
+  id: string;
+  name: string;
+  description: string;
+  href: string;
+  status: WorkspaceStatus;
+}
+
+export const HOME_COPY = {
+  eyebrow: "Workspace",
+  title: "Your products",
+  subtitle: "Pick a product to open its dashboard.",
+  signOut: "Sign out",
+  footerNote: "Mudd Ventures",
+  statusLabels: {
+    available: "Available",
+    coming_soon: "Coming soon",
+  } as Record<WorkspaceStatus, string>,
+  openLabel: "Open",
+  comingSoonLabel: "Coming soon",
+};
+
+/**
+ * Every product the workspace hub can link to. Add an object here to add
+ * a new tile — nothing else in the page needs to change.
+ */
+export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
+  {
+    id: "showtime",
+    name: "Showtime",
+    description:
+      "Sales execution for your booked calls — client setup, follow-up sequences, call briefs, win-back, and funnel health, all in one place.",
+    href: "/dashboard",
+    status: "available",
+  },
+  {
+    id: "counter-claim",
+    name: "Counter Claim",
+    description:
+      "Automated dispute responses for chargebacks — evidence packs and alerts generated as disputes come in.",
+    href: "/counter-claim",
+    status: "coming_soon",
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Live activity feed copy
 // ---------------------------------------------------------------------------
 

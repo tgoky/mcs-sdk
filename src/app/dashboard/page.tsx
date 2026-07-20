@@ -4,68 +4,81 @@ import { getSession } from "@/lib/session";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { LiveExecutionFeed } from "./live-execution-feed";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
+import Link from "next/link";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function DashboardPage() {
   const session = await getSession();
+  const whopUserId = session.whopUserId!;
 
-  const userEngagements = await db
-    .select()
-    .from(engagements)
-    .where(eq(engagements.whopUserId, session.whopUserId!));
+  // These five queries are all independent of each other — running them
+  // sequentially (as this page previously did) meant paying for five DB
+  // round trips back-to-back before anything could render. Promise.all
+  // fires them concurrently over the same pooled connection instead, which
+  // matters most exactly when this page is freshly mounting (e.g. right
+  // after navigating back from Home) since there's no cached data to fall
+  // back on while they resolve.
+  const [
+    userEngagements,
+    criticalAlerts,
+    totalRunsResult,
+    runningCountResult,
+    recentRunsRaw,
+  ] = await Promise.all([
+    db.select().from(engagements).where(eq(engagements.whopUserId, whopUserId)),
 
-// AFTER (Securely locked to the tenant boundary)
-const criticalAlerts = await db
-  .select()
-  .from(activeAlerts)
-  .innerJoin(engagements, eq(activeAlerts.engagementId, engagements.engagementId))
-  .where(
-    and(
-      eq(activeAlerts.severity, "critical"),
-      eq(engagements.whopUserId, session.whopUserId!)
-    )
-  );
+    db
+      .select()
+      .from(activeAlerts)
+      .innerJoin(engagements, eq(activeAlerts.engagementId, engagements.engagementId))
+      .where(
+        and(
+          eq(activeAlerts.severity, "critical"),
+          eq(engagements.whopUserId, whopUserId)
+        )
+      ),
 
-  // Calculate total successful background tasks executed
-  const totalRunsResult = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(skillRuns)
-    .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-    .where(
-      and(
-        eq(engagements.whopUserId, session.whopUserId!),
-        eq(skillRuns.status, "success")
-      )
-    );
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(skillRuns)
+      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(skillRuns.status, "success")
+        )
+      ),
+
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(skillRuns)
+      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(skillRuns.status, "running")
+        )
+      ),
+
+    db
+      .select({
+        id: skillRuns.id,
+        skillName: skillRuns.skillName,
+        status: skillRuns.status,
+        phase: skillRuns.phase,
+        startedAt: skillRuns.startedAt,
+      })
+      .from(skillRuns)
+      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+      .where(eq(engagements.whopUserId, whopUserId))
+      .orderBy(desc(skillRuns.startedAt))
+      .limit(8),
+  ]);
 
   const completedActions = totalRunsResult[0]?.count ?? 0;
-
-  const runningCount = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(skillRuns)
-    .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-    .where(
-      and(
-        eq(engagements.whopUserId, session.whopUserId!), 
-        eq(skillRuns.status, "running")
-      )
-    )
-    .then((r) => Number(r[0]?.count ?? 0));
-
-  const recentRunsRaw = await db
-    .select({
-      id: skillRuns.id,
-      skillName: skillRuns.skillName,
-      status: skillRuns.status,
-      phase: skillRuns.phase,
-      startedAt: skillRuns.startedAt,
-    })
-    .from(skillRuns)
-    .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-    .where(eq(engagements.whopUserId, session.whopUserId!))
-    .orderBy(desc(skillRuns.startedAt))
-    .limit(8);
+  const runningCount = Number(runningCountResult[0]?.count ?? 0);
 
   // LiveExecutionFeed (client component) expects startedAt as an ISO
   // string. Drizzle returns a native Date for the timestamp column —
@@ -92,24 +105,24 @@ const criticalAlerts = await db
 
         {/* Quick links */}
         <div className="flex items-center space-x-1.5 self-start lg:self-auto text-sm">
-          <a
+          <Link
             href="/dashboard/engagements"
             className="px-2 py-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors text-xs font-mono"
           >
             {copy.accountsLink}
-          </a>
-          <a
+          </Link>
+          <Link
             href="/dashboard/credentials"
             className="px-2 py-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors text-xs font-mono"
           >
             {copy.credentialsLink}
-          </a>
-          <a
+          </Link>
+          <Link
             href="/dashboard/engagements/new"
             className="ml-2 inline-flex items-center px-3 py-1 text-xs border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 rounded hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-mono"
           >
             {copy.newClientButton}
-          </a>
+          </Link>
         </div>
       </div>
 
@@ -166,7 +179,7 @@ const criticalAlerts = await db
       {/* Shortcuts */}
       {userEngagements.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 pt-4 border-t border-zinc-200 dark:border-zinc-900">
-          <a
+          <Link
             href="/dashboard/engagements"
             className="group block p-4 rounded-lg bg-zinc-100/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-900/60 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/20 transition-all shadow-sm"
           >
@@ -176,8 +189,8 @@ const criticalAlerts = await db
             <p className="text-xs font-normal text-zinc-400 dark:text-zinc-600 mt-1">
               {copy.shortcuts.manageEngagements.description}
             </p>
-          </a>
-          <a
+          </Link>
+          <Link
             href="/dashboard/credentials"
             className="group block p-4 rounded-lg bg-zinc-100/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-900/60 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/20 transition-all shadow-sm"
           >
@@ -187,7 +200,7 @@ const criticalAlerts = await db
             <p className="text-xs font-normal text-zinc-400 dark:text-zinc-600 mt-1">
               {copy.shortcuts.manageCredentials.description}
             </p>
-          </a>
+          </Link>
         </div>
       )}
     </div>
