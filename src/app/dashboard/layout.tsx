@@ -5,6 +5,7 @@ import { MobileNav } from "./mobile-nav";
 import { NotificationBell } from "./notification-bell";
 import { BookingToast } from "./booking-toast";
 import { SidebarSkills, SidebarSkillsSkeleton } from "./sidebar-skills";
+import { ThemeToggle } from "@/components/theme-toggle"; // <-- Added ThemeToggle import
 import Link from "next/link";
 import { Home } from "lucide-react";
 
@@ -104,16 +105,19 @@ export default async function DashboardLayout({
         </div>
 
         {/* User context footer */}
-        <div className="p-5 border-t border-zinc-200 dark:border-zinc-900 flex items-center justify-between shrink-0 bg-zinc-100/50 dark:bg-transparent">
-          <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300 truncate max-w-[120px]">
-            {displayName}
-          </span>
-          <Link
-            href="/api/auth/logout"
-            className="text-xs font-mono text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors"
-          >
-            Sign out
-          </Link>
+        <div className="p-4 border-t border-zinc-200 dark:border-zinc-900 flex items-center justify-between shrink-0 bg-zinc-100/50 dark:bg-zinc-900/40 gap-2">
+          <div className="flex flex-col min-w-0">
+            <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300 truncate max-w-[100px]">
+              {displayName}
+            </span>
+            <Link
+              href="/api/auth/logout"
+              className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors"
+            >
+              Sign out
+            </Link>
+          </div>
+          <ThemeToggle />
         </div>
       </aside>
 
@@ -121,7 +125,7 @@ export default async function DashboardLayout({
       <div className="flex flex-col flex-1 min-w-0 bg-white dark:bg-zinc-950 transition-colors duration-200">
         <header className="h-14 border-b border-zinc-200 dark:border-zinc-900 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-between px-6 shrink-0 z-10">
           <MobileNav links={navLinks} displayName={displayName} />
-          <div className="flex items-center ml-auto">
+          <div className="flex items-center ml-auto gap-3">
             <NotificationBell />
           </div>
         </header>

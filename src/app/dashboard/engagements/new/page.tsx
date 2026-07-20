@@ -1137,7 +1137,7 @@ booking_platform_meta: {
                 Smart pre-fill (optional)
               </label>
               <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                Have the client's domain? We'll crawl it and suggest values below — review and edit anything before submitting.
+                Have the clients domain? We will crawl it and suggest values below — review and edit anything before submitting.
               </p>
               <div className="flex gap-2">
                 <input
@@ -1147,15 +1147,14 @@ booking_platform_meta: {
                   className="flex-1 rounded-md px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600"
                   style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
                 />
-                <button
-                  type="button"
-                  onClick={runSmartPrefill}
-                  disabled={prefillLoading || !prefillDomain.trim()}
-                  className="px-3 py-2 text-xs font-bold font-mono uppercase tracking-wider rounded-md transition-all cursor-pointer hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm shrink-0"
-                  style={{ background: "var(--accent)" }}
-                >
-                  {prefillLoading ? "Crawling…" : "Pre-fill"}
-                </button>
+            <button
+  type="button"
+  onClick={runSmartPrefill}
+  disabled={prefillLoading || !prefillDomain.trim()}
+  className="px-3.5 py-2 text-xs font-bold font-mono uppercase tracking-wider rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0"
+>
+  {prefillLoading ? "Crawling…" : "Pre-fill"}
+</button>
               </div>
               {prefillError && (
                 <p className="text-[11px] font-mono" style={{ color: "var(--error)" }}>{prefillError}</p>
@@ -2408,49 +2407,46 @@ booking_platform_meta: {
 
       {/* Navigation footer buttons */}
       <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
-        <button
-          onClick={() => {
-            const idx = STEPS.findIndex((s) => s.id === step);
-            if (idx > 0) setStep(STEPS[idx - 1].id);
-          }}
-          disabled={step === "offer"}
-          className="px-4 py-1.5 text-xs font-bold rounded-md disabled:opacity-20 disabled:cursor-not-allowed border bg-background/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all cursor-pointer shadow-xs"
-          style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}
-        >
-          Back
-        </button>
+       <button
+  onClick={() => {
+    const idx = STEPS.findIndex((s) => s.id === step);
+    if (idx > 0) setStep(STEPS[idx - 1].id);
+  }}
+  disabled={step === "offer"}
+  className="px-4 py-2 text-xs font-bold rounded-md transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
+>
+  Back
+</button>
 
-        {step !== "confirm" ? (
-          <button
-            onClick={() => {
-              const idx = STEPS.findIndex((s) => s.id === step);
-              if (idx < STEPS.length - 1) setStep(STEPS[idx + 1].id);
-            }}
-            className="px-4 py-1.5 text-xs font-bold rounded-md hover:opacity-90 active:translate-y-px text-white shadow-xs cursor-pointer"
-            style={{ background: "var(--accent)" }}
-          >
-            Next
-          </button>
-        ) : (
-          <button
-            onClick={submit}
-            disabled={
-              submitting ||
-              !form.buyerName ||
-              !form.bookingApiKey ||
-              !form.emailApiKey ||
-              (form.emailPlatform === "klaviyo" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
-              (form.emailPlatform === "activecampaign" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
-              (form.emailPlatform === "mailchimp" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
-              (form.emailPlatform === "convertkit" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
-              (form.emailPlatform === "ghl" && (!form.emailGhlLocationId || !form.emailGhlTargetWorkflowId || !form.emailGhlRecoveryWorkflowId))
-            }
-            className="px-4 py-1.5 text-xs font-bold rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:translate-y-px text-white shadow-xs cursor-pointer"
-            style={{ background: "var(--accent)" }}
-          >
-            {submitting ? "Setting up..." : "Finish Setup"}
-          </button>
-        )}
+       {step !== "confirm" ? (
+  <button
+    onClick={() => {
+      const idx = STEPS.findIndex((s) => s.id === step);
+      if (idx < STEPS.length - 1) setStep(STEPS[idx + 1].id);
+    }}
+    className="px-5 py-2 text-xs font-bold rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 shadow-xs active:translate-y-px"
+  >
+    Next
+  </button>
+) : (
+  <button
+    onClick={submit}
+    disabled={
+      submitting ||
+      !form.buyerName ||
+      !form.bookingApiKey ||
+      !form.emailApiKey ||
+      (form.emailPlatform === "klaviyo" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
+      (form.emailPlatform === "activecampaign" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
+      (form.emailPlatform === "mailchimp" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
+      (form.emailPlatform === "convertkit" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
+      (form.emailPlatform === "ghl" && (!form.emailGhlLocationId || !form.emailGhlTargetWorkflowId || !form.emailGhlRecoveryWorkflowId))
+    }
+    className="px-5 py-2 text-xs font-bold rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+  >
+    {submitting ? "Setting up..." : "Finish Setup"}
+  </button>
+)}
       </div>
     </div>
   );
