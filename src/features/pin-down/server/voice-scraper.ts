@@ -176,19 +176,114 @@ function normalizeDomain(domain: string): string {
   return d;
 }
 
+const FIRECRAWL_MAP_TIMEOUT_MS = 6000;
+
+interface DiscoveredLink {
+  url: string;
+  title?: string;
+  description?: string;
+}
+
+// Matched against the full discovered URL string (not just the path) plus
+// Firecrawl's title/description for that link, so a page found via /map
+// still matches even when the slug itself is opaque (e.g. /p/6k2a) but the
+// title says "Apply for coaching".
+const IGNORE_URL_KEYWORDS = [
+  "privacy", "terms", "legal", "cookie", "login", "signin", "signup",
+  "cart", "checkout", "account", "wp-content", "wp-admin", "/tag/",
+  "/category/", "/author/", "sitemap.xml", "/feed", ".pdf", ".png",
+  ".jpg", ".jpeg", ".svg", ".gif", "#",
+];
+const SALES_KEYWORDS = [
+  "offer", "apply", "work-with", "get-started", "getstarted", "enroll",
+  "join", "program", "coaching", "consult", "service", "membership",
+  "mastermind", "book-a-call", "schedule",
+];
+const PRICING_KEYWORDS = ["pricing", "plans", "package", "invest", "cost", "tier", "rate"];
+
+/**
+ * Tier 0 of sales/pricing discovery: asks Firecrawl's /v2/map endpoint —
+ * a link-inventory call, not a per-page render, so it's a small fraction
+ * of the cost/time of fetchPageTextViaFirecrawl — for the domain's actual
+ * URL list, then locally matches it against SALES_KEYWORDS /
+ * PRICING_KEYWORDS on the URL plus the title/description Firecrawl
+ * returns per link. This is what lets a buyer who names their offer page
+ * /mastermind-application or /our-framework still get found: the static
+ * salesPaths/pricingPaths guesses below have no way to hit either of
+ * those, since they only try slugs this codebase happened to guess in
+ * advance.
+ *
+ * Shares the same `deadline` as the rest of the crawl and refuses to
+ * start with less than 2s of budget left, so a slow or absent map call
+ * degrades to the static guess-list tier rather than eating the time
+ * budget the actual page fetches need — this can never make a crawl slower
+ * than it already was, only sometimes more accurate. Never throws (same
+ * soft-fail contract as the rest of this module): missing API key, a
+ * non-2xx response, or a malformed body all just return {}.
+ */
+async function discoverCandidateUrls(
+  base: string,
+  deadline: number
+): Promise<{ salesUrl?: string; pricingUrl?: string }> {
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  const remaining = deadline - Date.now();
+  if (!apiKey || remaining < 2000) return {};
+
+  try {
+    const res = await fetchWithTimeout(
+      "https://api.firecrawl.dev/v2/map",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ url: base, limit: 200 }),
+      },
+      Math.min(FIRECRAWL_MAP_TIMEOUT_MS, remaining - 1000)
+    );
+    if (!res.ok) return {};
+    const data = await res.json();
+    const links: DiscoveredLink[] = data?.links ?? [];
+    if (links.length === 0) return {};
+
+    const matchFirst = (keywords: string[]): string | undefined => {
+      const candidates = links.filter((l) => {
+        const url = l.url.toLowerCase();
+        if (IGNORE_URL_KEYWORDS.some((kw) => url.includes(kw))) return false;
+        const haystack = `${url} ${l.title ?? ""} ${l.description ?? ""}`.toLowerCase();
+        return keywords.some((kw) => haystack.includes(kw));
+      });
+      // Among genuinely keyword-matched candidates, prefer the shorter/
+      // shallower URL — it's more likely to be the primary sales or
+      // pricing page than, say, a blog post that happens to mention price.
+      candidates.sort((a, b) => a.url.length - b.url.length);
+      return candidates[0]?.url;
+    };
+
+    return { salesUrl: matchFirst(SALES_KEYWORDS), pricingUrl: matchFirst(PRICING_KEYWORDS) };
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Rate-limited, best-effort crawl of the buyer's marketing site, sales
  * page, and pricing page. Rate-limiting here is deliberately conservative
  * (sequential fetches, one buyer domain at a time, no concurrent fan-out)
- * — this hits a domain we don't operate maybe 3 times ever per
+ * — this hits a domain we don't operate maybe 3-4 times ever per
  * onboarding, so a simple sequential pass respects the target site
- * without needing a real crawl-delay/robots.txt parser for what is, in
- * practice, three requests.
+ * without needing a real crawl-delay/robots.txt parser.
  *
- * Common sales/pricing paths are tried in order and the first hit per
- * category wins — this is a heuristic, not a sitemap crawl, which matches
- * the OG SKILL.md's own framing of this as "the default path," with a
- * buyer-provided corpus as the documented alternative when it comes up
+ * Sales/pricing URLs come from discoverCandidateUrls() (Firecrawl /map +
+ * keyword match) when available, and fall back to the static
+ * salesPaths/pricingPaths guesses when Firecrawl is unconfigured, the map
+ * call fails, or nothing in the map matched — so a buyer with a
+ * non-standard slug gets found via discovery, and a buyer who happens to
+ * use one of the common slugs still gets found even if discovery comes up
+ * empty (e.g. a JS-only nav Firecrawl's map couldn't resolve in time).
+ * Either way this stays a heuristic, not a full sitemap crawl, with a
+ * buyer-provided corpus as the documented alternative when both come up
  * short.
  */
 export async function scrapeVoiceCorpus(domain: string): Promise<{
@@ -204,20 +299,24 @@ export async function scrapeVoiceCorpus(domain: string): Promise<{
     sources.push({ kind: "marketing_site", url: base, wordCount: homepageText.split(/\s+/).length, text: homepageText });
   }
 
+  const discovered = await discoverCandidateUrls(base, deadline);
+
   const salesPaths = ["/offer", "/work-with-us", "/apply", "/get-started"];
-  for (const path of salesPaths) {
-    const text = await fetchPageTextWithFallback(`${base}${path}`, deadline);
+  const salesCandidates = discovered.salesUrl ? [discovered.salesUrl] : salesPaths.map((p) => `${base}${p}`);
+  for (const url of salesCandidates) {
+    const text = await fetchPageTextWithFallback(url, deadline);
     if (text && text.split(/\s+/).length > 40) {
-      sources.push({ kind: "sales_page", url: `${base}${path}`, wordCount: text.split(/\s+/).length, text });
+      sources.push({ kind: "sales_page", url, wordCount: text.split(/\s+/).length, text });
       break; // one sales page is enough — first real hit wins
     }
   }
 
   const pricingPaths = ["/pricing", "/plans", "/packages"];
-  for (const path of pricingPaths) {
-    const text = await fetchPageTextWithFallback(`${base}${path}`, deadline);
+  const pricingCandidates = discovered.pricingUrl ? [discovered.pricingUrl] : pricingPaths.map((p) => `${base}${p}`);
+  for (const url of pricingCandidates) {
+    const text = await fetchPageTextWithFallback(url, deadline);
     if (text && text.split(/\s+/).length > 20) {
-      sources.push({ kind: "pricing_page", url: `${base}${path}`, wordCount: text.split(/\s+/).length, text });
+      sources.push({ kind: "pricing_page", url, wordCount: text.split(/\s+/).length, text });
       break;
     }
   }

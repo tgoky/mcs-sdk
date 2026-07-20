@@ -18,13 +18,10 @@ import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { GetStepTools, Inngest } from "inngest";
 
-// Same loose typing rationale as brief-service.ts/audit-engine.ts — avoids
-// a circular import back to src/lib/inngest.ts, and lets this function be
-// called with no step context at all if it's ever needed outside a worker.
 type StepTools = GetStepTools<Inngest.Any>;
 
 async function extractVoiceProfile(corpus: string, runId: string): Promise<any> {
-  const wordCount = corpus.trim().split(/\s+/).length;
+  const wordCount = corpus.trim().split(/\s+/).filter(Boolean).length;
 
   if (wordCount < 500) {
     return {
@@ -70,45 +67,13 @@ Return nothing but the JSON object. No preamble, no markdown.`,
   try {
     const cleaned = result.text.replace(/^```json\s*|\s*```$/g, "").trim();
     parsed = JSON.parse(cleaned);
+    parsed.source_path = "ai_extracted";
   } catch {
-    parsed = { source_path: "neutral_default" };
+    parsed = { source_path: "default" };
   }
   return parsed;
 }
 
-/**
- * Pin-down onboarding — the actual heavy lifting.
- *
- * This used to run entirely inline inside the POST /api/engagements/setup
- * request handler: one HTTP request doing a real Claude call (voice
- * extraction), a hosting-platform deploy, and up to 3 round trips to the
- * booking platform's API (org/event discovery, webhook registration,
- * redirect config) — all serially, all before sending a response. On a
- * live buyer's account with a real Calendly key and a real corpus, that
- * routinely ran well past what a serverless platform allows a function to
- * run before killing it and dropping the connection — the client would see
- * a generic "Failed to fetch" with zero information, while the skill_runs
- * row (written incrementally via logStep as the handler progressed) sat
- * frozen at "running" forever, because the code that would've called
- * finishRun() never got the chance to execute.
- *
- * This function is the fix: everything from here down now runs inside the
- * same Inngest-backed worker every other skill (pile-on, win-back,
- * pre-call-read, leak-map) already uses — see src/inngest/skill.ts —
- * immune to any single HTTP request's timeout, checkpointed so a crash
- * mid-run resumes from the last completed phase instead of from scratch,
- * and visible in Live Executions the entire time either way.
- *
- * `tenant` is the engagements row as pre-seeded by the (now fast) setup
- * route: buyer/offerDetails/stack/topCallQuestions/rawVoiceCorpus are
- * already persisted with the buyer's raw form submission by the time this
- * runs. Booking/email/hosting credentials are NOT on this object — they're
- * already encrypted in credentials_refs by the time the route handed off,
- * and get re-resolved here via resolveCredential(), the same pattern
- * brief-service.ts uses. This deliberately mirrors src/lib/inngest.ts's
- * existing rule about never shipping secrets through an Inngest event
- * payload.
- */
 export async function runPinDownOnboarding(
   tenant: any,
   runId: string,
@@ -185,8 +150,9 @@ export async function runPinDownOnboarding(
 
     // ── Zero-config auto-discovery layer ──────────────────────────────────
     if (finalStack.booking_platform === "calendly" && bookingCredential) {
-      finalStack = await run("calendly-discovery", async () => {
+      const discoveryResult = await run("calendly-discovery", async () => {
         const stack = { ...finalStack };
+        let openItem: string | undefined;
         try {
           const calendlyClient = new CalendlyClient(bookingCredential);
           const resolvedOrgUri = await calendlyClient.getCurrentOrganization();
@@ -194,7 +160,6 @@ export async function runPinDownOnboarding(
             ...stack.booking_platform_meta,
             organization_uri: resolvedOrgUri,
           };
-          console.log(`[pin-down onboarding] Auto-discovered Calendly org URI: ${resolvedOrgUri}`);
 
           if (stack.booking_standing_link) {
             const resolvedUuid = await calendlyClient.getEventTypeUuidFromSlug(
@@ -203,26 +168,28 @@ export async function runPinDownOnboarding(
             );
             if (resolvedUuid) {
               stack.booking_platform_meta.event_type_uuid = resolvedUuid;
-              console.log(`[pin-down onboarding] Auto-discovered Calendly event type UUID: ${resolvedUuid}`);
             } else {
-              summary.openItems.push(
-                `Could not auto-detect the Calendly event type from the standing link "${stack.booking_standing_link}". Webhook registration may require manual configuration.`
-              );
+              openItem = `Could not auto-detect the Calendly event type from the standing link "${stack.booking_standing_link}". Webhook registration may require manual configuration.`;
             }
           }
         } catch (discoveryErr: any) {
           console.error("[pin-down onboarding] Calendly metadata auto-discovery warning:", discoveryErr.message);
-          summary.openItems.push(`Calendly metadata auto-discovery notice: ${discoveryErr.message}`);
+          openItem = `Calendly metadata auto-discovery notice: ${discoveryErr.message}`;
         }
-        return stack;
+        return { stack, openItem };
       });
+
+      finalStack = discoveryResult.stack;
+      if (discoveryResult.openItem) {
+        summary.openItems.push(discoveryResult.openItem);
+      }
     }
 
     if (finalStack.booking_platform === "cal_com" && bookingCredential && finalStack.booking_standing_link) {
-      finalStack = await run("cal-com-discovery", async () => {
+      const calResult = await run("cal-com-discovery", async () => {
         const stack = { ...finalStack };
+        let openItem: string | undefined;
         try {
-          console.log("[pin-down onboarding] Auto-discovering Cal.com profile metadata...");
           const calComClient = new CalComClient(bookingCredential);
           const resolvedMeta = await calComClient.resolveEventMetaFromLink(stack.booking_standing_link);
           stack.booking_platform_meta = {
@@ -230,23 +197,23 @@ export async function runPinDownOnboarding(
             username: resolvedMeta.username,
             cal_event_type_id: resolvedMeta.cal_event_type_id,
           };
-          console.log(
-            `[pin-down onboarding] Auto-discovered Cal.com profile: "${resolvedMeta.username}" (ID: ${resolvedMeta.cal_event_type_id || "not found"})`
-          );
           if (!resolvedMeta.cal_event_type_id) {
-            summary.openItems.push(
-              `Could not map a Cal.com event type ID to the link "${stack.booking_standing_link}". Lookahead slot pre-fetching will fall back to standard links.`
-            );
+            openItem = `Could not map a Cal.com event type ID to the link "${stack.booking_standing_link}". Lookahead slot pre-fetching will fall back to standard links.`;
           }
         } catch (calComErr: any) {
           console.error("[pin-down onboarding] Cal.com auto-discovery notice:", calComErr.message);
-          summary.openItems.push(`Cal.com auto-discovery notice: ${calComErr.message}`);
+          openItem = `Cal.com auto-discovery notice: ${calComErr.message}`;
         }
-        return stack;
+        return { stack, openItem };
       });
+
+      finalStack = calResult.stack;
+      if (calResult.openItem) {
+        summary.openItems.push(calResult.openItem);
+      }
     }
 
-    // ── Auto-doc-research for unlisted platforms (Pin-Down recovery gap 6) ──
+    // ── Auto-doc-research for unlisted platforms ──────────────────────────
     for (const [kind, platformValue, discoveredName, discoveredUrl] of [
       ["hosting", finalStack.hosting_platform, finalStack.discovered_platform_name, finalStack.discovered_platform_website],
       ["booking", finalStack.booking_platform, finalStack.discovered_platform_name, finalStack.discovered_platform_website],
@@ -259,7 +226,7 @@ export async function runPinDownOnboarding(
           createPlatformAdapterDraft(engagementId, kind, platformName, discoveredUrl)
         );
         summary.openItems.push(
-          `${kind === "hosting" ? "Hosting" : "Booking"} platform "${platformName}" isn't in the built-in set — researched its docs and drafted an adapter proposal (id: ${draftId}) pending admin review before it can run against this buyer's account. Confirmation page ${kind === "hosting" ? "will ship as paste-ready" : "bookings won't auto-enroll"} until then.`
+          `${kind === "hosting" ? "Hosting" : "Booking"} platform "${platformName}" isn't in the built-in set — researched its docs and drafted an adapter proposal (id: ${draftId}) pending admin review.`
         );
         await logStep(runId, { phase: `doc_research_${kind}`, status: "success", detail: `Draft ${draftId} created, pending_review` });
       } catch (e: any) {
@@ -269,10 +236,10 @@ export async function runPinDownOnboarding(
       }
     }
 
-    // ── Voice scrape (Pin-Down recovery gap 2) ──────────────────────────────
+    // ── Voice scrape ───────────────────────────────────────────────────────
     let combinedVoiceCorpus = rawVoiceCorpus;
     if (finalStack.buyer_domain) {
-      await run("voice-scrape", async () => {
+      const scrapeResult = await run("voice-scrape", async () => {
         await logStep(runId, { phase: "voice_scrape", status: "running" });
         try {
           const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(finalStack.buyer_domain!);
@@ -282,13 +249,17 @@ export async function runPinDownOnboarding(
             espSources = await scrapeEspBroadcasts(finalStack.email_platform, emailCred ?? undefined);
           }
           const allText = [scrapedCorpus, ...espSources.map((s) => s.text)].filter(Boolean).join("\n\n---\n\n");
+          
+          let resultCorpus = rawVoiceCorpus;
           if (allText) {
-            combinedVoiceCorpus = [rawVoiceCorpus, allText].filter(Boolean).join("\n\n---\n\n");
+            resultCorpus = [rawVoiceCorpus, allText].filter(Boolean).join("\n\n---\n\n");
           }
+
           const artifactSources = [
             ...sources.map((s) => ({ kind: s.kind, url: s.url, wordCount: s.wordCount })),
             ...espSources.map((s) => ({ kind: "esp_broadcast" as const, wordCount: s.wordCount })),
           ];
+
           await db
             .update(engagements)
             .set({
@@ -299,24 +270,41 @@ export async function runPinDownOnboarding(
               },
             })
             .where(eq(engagements.engagementId, engagementId));
-          if (artifactSources.length > 0) {
-            summary.whatWorked.push(
-              `Crawled ${artifactSources.length} source(s) (${artifactSources.map((s) => s.kind).join(", ")}) from ${finalStack.buyer_domain} for voice extraction.`
-            );
-          } else {
-            summary.openItems.push(`Voice crawl of ${finalStack.buyer_domain} found nothing usable — voice extraction will rely on the operator-pasted corpus alone.`);
-          }
+
           await logStep(runId, {
             phase: "voice_scrape",
             status: artifactSources.length > 0 ? "success" : "skipped",
             detail: `${artifactSources.length} source(s) pulled`,
           });
+
+          return {
+            combinedCorpus: resultCorpus,
+            sourcesCount: artifactSources.length,
+            sourceKinds: artifactSources.map((s) => s.kind),
+          };
         } catch (e: any) {
           console.error("[pin-down onboarding] Voice scrape failed (non-fatal):", e.message);
-          summary.openItems.push(`Voice crawl of ${finalStack.buyer_domain} failed: ${e.message} — continuing with the operator-pasted corpus.`);
           await logStep(runId, { phase: "voice_scrape", status: "failed", detail: e.message });
+          return {
+            combinedCorpus: rawVoiceCorpus,
+            sourcesCount: 0,
+            sourceKinds: [],
+            error: e.message,
+          };
         }
       });
+
+      combinedVoiceCorpus = scrapeResult.combinedCorpus;
+
+      if (scrapeResult.error) {
+        summary.openItems.push(`Voice crawl of ${finalStack.buyer_domain} failed: ${scrapeResult.error} — continuing with the operator-pasted corpus.`);
+      } else if (scrapeResult.sourcesCount > 0) {
+        summary.whatWorked.push(
+          `Crawled ${scrapeResult.sourcesCount} source(s) (${scrapeResult.sourceKinds.join(", ")}) from ${finalStack.buyer_domain} for voice extraction.`
+        );
+      } else {
+        summary.openItems.push(`Voice crawl of ${finalStack.buyer_domain} found nothing usable — voice extraction will rely on the operator-pasted corpus alone.`);
+      }
     } else {
       await logStep(runId, { phase: "voice_scrape", status: "skipped", detail: "No buyer_domain on file" });
     }
@@ -325,21 +313,25 @@ export async function runPinDownOnboarding(
     const voiceProfile = await run("voice-extraction", async () => {
       await logStep(runId, { phase: "voice_extraction", status: "running" });
       const profile = await extractVoiceProfile(combinedVoiceCorpus, runId);
-      const corpusWordCount = combinedVoiceCorpus.trim().split(/\s+/).filter(Boolean).length;
-      summary.whatWasAttempted.push(`Extracted brand voice profile from a ${corpusWordCount}-word corpus.`);
-      if (profile?.source_path === "scrape") {
-        summary.whatWorked.push("Brand voice profile extracted from buyer-supplied corpus via Claude.");
-      } else {
-        summary.whatWorked.push("Brand voice profile set to neutral default (corpus under 500 words).");
-        summary.openItems.push("Corpus was too short for a real voice extraction — using the operator-grade default tone.");
-      }
+      
+      const isAiExtracted = profile?.source_path === "ai_extracted";
       await logStep(runId, {
         phase: "voice_extraction",
         status: "success",
-        detail: profile?.source_path === "scrape" ? "Tone profile extracted from corpus" : "Neutral default tone applied",
+        detail: isAiExtracted ? "Tone profile extracted from corpus" : "Neutral default tone applied",
       });
       return profile;
     });
+
+    const isAiExtracted = voiceProfile?.source_path === "ai_extracted";
+    const corpusWordCount = combinedVoiceCorpus.trim().split(/\s+/).filter(Boolean).length;
+    summary.whatWasAttempted.push(`Extracted brand voice profile from a ${corpusWordCount}-word corpus.`);
+    if (isAiExtracted) {
+      summary.whatWorked.push("Brand voice profile extracted from buyer-supplied corpus via Claude.");
+    } else {
+      summary.whatWorked.push("Brand voice profile set to neutral default (corpus under 500 words).");
+      summary.openItems.push("Corpus was too short for a real voice extraction — using the operator-grade default tone.");
+    }
 
     // ── Ad creative briefs ──────────────────────────────────────────────────
     try {
@@ -373,7 +365,7 @@ export async function runPinDownOnboarding(
       await logStep(runId, { phase: "ad_creative_briefs", status: "failed", detail: e.message });
     }
 
-    // ── Hero + breakout video scripts (Pin-Down recovery gap 3) ─────────────
+    // ── Hero + breakout video scripts ───────────────────────────────────────
     try {
       await logStep(runId, { phase: "script_pack", status: "running" });
       const scriptPack = await run("script-pack", () =>
@@ -415,10 +407,7 @@ export async function runPinDownOnboarding(
       await logStep(runId, { phase: "script_pack", status: "failed", detail: e.message });
     }
 
-    // ── SMS sequence content (Pile-On recovery gap 1) ────────────────────────
-    // Generated regardless of which sms_platform is configured — content
-    // generation is platform-agnostic; sending/enrolling on it happens
-    // later, per-booking, in pile-on's enrollment-service.ts.
+    // ── SMS sequence content ────────────────────────────────────────────────
     if (finalStack.sms_platform && finalStack.sms_platform !== "none") {
       try {
         await logStep(runId, { phase: "sms_sequence", status: "running" });
@@ -448,7 +437,7 @@ export async function runPinDownOnboarding(
       }
     }
 
-    // ── Existing Pile-On sequence audit (Pile-On recovery gap 4) ─────────────
+    // ── Existing Pile-On sequence audit ─────────────────────────────────────
     if (finalStack.existing_pile_on_sequence_flagged && finalStack.email_platform) {
       try {
         await logStep(runId, { phase: "pile_on_sequence_audit", status: "running" });
@@ -466,7 +455,7 @@ export async function runPinDownOnboarding(
             .where(eq(engagements.engagementId, engagementId));
           if (audit.supported) {
             summary.whatWorked.push(
-              `Audited the existing Pile-On sequence on ${finalStack.email_platform} — ${audit.emails.length} email(s) scored. Build the new sequence under "${audit.recommendedWorkflowLabel}" in ${finalStack.email_platform} with mutually exclusive enrollment so the two can't double-fire.`
+              `Audited existing Pile-On sequence on ${finalStack.email_platform} — ${audit.emails.length} email(s) scored.`
             );
             await logStep(runId, { phase: "pile_on_sequence_audit", status: "success", detail: `${audit.emails.length} emails scored` });
           } else {
@@ -481,7 +470,7 @@ export async function runPinDownOnboarding(
       }
     }
 
-    // ── Existing report/dashboard audit (Leak Map recovery gap 4) ────────────
+    // ── Existing report/dashboard audit ────────────────────────────────────
     if (finalStack.existing_audit_flagged && finalStack.existing_audit_description) {
       try {
         await logStep(runId, { phase: "leak_map_existing_audit", status: "running" });
@@ -493,7 +482,7 @@ export async function runPinDownOnboarding(
           .set({ existingAuditAuditResult: audit })
           .where(eq(engagements.engagementId, engagementId));
         summary.whatWorked.push(
-          `Compared your existing report against Leak Map's coverage — ${audit.overlapping.length} overlapping area(s), ${audit.gapsLeakMapCloses.length} gap(s) Leak Map closes.`
+          `Compared existing report against Leak Map — ${audit.overlapping.length} overlapping area(s), ${audit.gapsLeakMapCloses.length} gap(s) closed.`
         );
         await logStep(runId, { phase: "leak_map_existing_audit", status: "success" });
       } catch (e: any) {
@@ -503,7 +492,7 @@ export async function runPinDownOnboarding(
       }
     }
 
-    // ── Notification pack activation (Leak Map recovery gap 3) ───────────────
+    // ── Notification pack activation ───────────────────────────────────────
     if (finalStack.notification_pack_selections && finalStack.notification_pack_selections.length > 0) {
       let activated = 0;
       for (const packAlertId of finalStack.notification_pack_selections) {
@@ -520,7 +509,7 @@ export async function runPinDownOnboarding(
       }
     }
 
-    // ── Existing-page audit (Pin-Down recovery gap 7) ────────────────────────
+    // ── Existing-page audit ────────────────────────────────────────────────
     if (finalStack.existing_confirmation_page_url) {
       try {
         await logStep(runId, { phase: "existing_page_audit", status: "running" });
@@ -536,7 +525,7 @@ export async function runPinDownOnboarding(
           .set({ pinDownPageAudit: audit })
           .where(eq(engagements.engagementId, engagementId));
         summary.whatWorked.push(
-          `Audited the existing confirmation page at ${finalStack.existing_confirmation_page_url} — ${audit.existingPageWeaknesses.length} gap(s) identified for the new page to close.`
+          `Audited existing confirmation page at ${finalStack.existing_confirmation_page_url} — ${audit.existingPageWeaknesses.length} gap(s) identified.`
         );
         await logStep(runId, {
           phase: "existing_page_audit",
@@ -577,9 +566,6 @@ export async function runPinDownOnboarding(
         );
 
         if (deployResult.mode === "live") {
-          summary.whatWorked.push(
-            `Confirmation page published live on the buyer's own ${finalStack.hosting_platform} at ${deployResult.url}.`
-          );
           await logStep(runId, {
             phase: "confirmation_page_deploy",
             status: "success",
@@ -594,14 +580,10 @@ export async function runPinDownOnboarding(
             },
             pasteReadyHtml: null as string | null,
             pasteReadyInstructions: null as string | null,
-            remoteResourceId: deployResult.resourceId ?? (null as string | number | null), // 🌟 THE FIX: Cache variable inside step execution block
+            remoteResourceId: deployResult.resourceId ?? (null as string | number | null),
           };
         }
 
-        summary.whatFailed.push(`Could not auto-publish to ${finalStack.hosting_platform}: ${deployResult.reason}`);
-        summary.openItems.push(
-          `[needs:manual-page-publish] Paste-ready HTML and instructions are ready for ${finalStack.hosting_platform} — the buyer needs to publish it manually. Using the internal preview page at ${internalFallbackUrl} until then.`
-        );
         await logStep(runId, {
           phase: "confirmation_page_deploy",
           status: "failed",
@@ -616,14 +598,18 @@ export async function runPinDownOnboarding(
           },
           pasteReadyHtml: deployResult.html,
           pasteReadyInstructions: deployResult.instructions,
-          remoteResourceId: null as string | number | null, // 🌟 THE FIX: null (not undefined) survives Inngest's JSON step-result round-trip
+          remoteResourceId: null as string | number | null,
         };
       }
     );
 
-    // 🌟 THE FIX: REPLAY-SAFE PLACEMENT outside the step container block.
-    // If Inngest replays this workflow after a downstream crash, this block re-evaluates 
-    // flawlessly using the cached step parameters, fully preventing state leaks.
+    if (confirmationPageDeployment.mode === "live") {
+      summary.whatWorked.push(`Confirmation page published live on ${finalStack.hosting_platform} at ${confirmationPageUrl}.`);
+    } else {
+      summary.whatFailed.push(`Could not auto-publish to ${finalStack.hosting_platform}: ${confirmationPageDeployment.reason}`);
+      summary.openItems.push(`Paste-ready HTML ready for ${finalStack.hosting_platform} — manual publish required.`);
+    }
+
     if (finalStack.hosting_platform === "wordpress" && confirmationPageDeployment.mode === "live" && remoteResourceId) {
       finalStack = {
         ...finalStack,
@@ -651,8 +637,6 @@ export async function runPinDownOnboarding(
         })
         .where(eq(engagements.engagementId, engagementId));
 
-      summary.whatWasAttempted.push(`Created confirmation page at ${confirmationPageUrl}.`);
-      summary.whatWorked.push("Engagement record updated in Postgres.");
       await logStep(runId, {
         phase: "engagement_upsert",
         status: "success",
@@ -660,12 +644,14 @@ export async function runPinDownOnboarding(
       });
     });
 
-    // ── Webhook registration ────────────────────────────────────────────────
+    summary.whatWasAttempted.push(`Created confirmation page at ${confirmationPageUrl}.`);
+    summary.whatWorked.push("Engagement record updated in Postgres.");
+
+    // ── Webhook registration (FIXED: State returned & summary pushed outside) ─
     if (bookingCredential) {
-      await run("webhook-registration", async () => {
+      const webhookResult = await run("webhook-registration", async () => {
         await logStep(runId, { phase: "webhook_registration", status: "running" });
         const receiverUrl = `${appUrl}/api/webhooks/booking-event?engagement_id=${engagementId}`;
-        summary.whatWasAttempted.push(`Registered ${finalStack.booking_platform} webhook → ${receiverUrl}.`);
         try {
           const subscriptionResult = await registerWebhookForTenant(
             finalStack.booking_platform,
@@ -674,8 +660,6 @@ export async function runPinDownOnboarding(
             finalStack.booking_platform_meta
           );
 
-          // FIXED: Safely decompose the payload result signature whether it arrives as an
-          // analytical object configuration mapping (Calendly) or a truthy tracking string (Cal/GHL).
           const isObjectResult = typeof subscriptionResult === 'object' && subscriptionResult !== null;
           const subId = isObjectResult ? (subscriptionResult as any).uri : subscriptionResult;
           const signingKey = isObjectResult ? (subscriptionResult as any).signingKey : null;
@@ -687,26 +671,19 @@ export async function runPinDownOnboarding(
                 stack: { 
                   ...finalStack, 
                   webhook_subscription_id: subId as string, 
-                  ...(signingKey ? { webhook_signing_secret: signingKey as string } : {}), // Persists critical protection keys
+                  ...(signingKey ? { webhook_signing_secret: signingKey as string } : {}),
                   webhook_receiver_mode: "webhook" 
                 },
                 updatedAt: new Date(),
               })
               .where(eq(engagements.engagementId, engagementId));
-            summary.whatWorked.push(`${finalStack.booking_platform} webhook registered (subscription ${subId}).`);
             await logStep(runId, {
               phase: "webhook_registration",
               status: "success",
               detail: `Subscription ${subId}`,
             });
+            return { mode: "webhook" as const, subId: subId as string, receiverUrl };
           } else {
-            // No subscription ID back — either the platform (OnceHub
-            // today) has no programmatic webhook API at all, or
-            // registration silently no-op'd. Rather than leaving bookings
-            // unmonitored (the exact OG-SKILL.md-vs-UTP gap the transfer
-            // analysis flags), fall back to the polling path automatically
-            // so Pile-On/Win-Back still fire — just on a 5-minute delay
-            // instead of instantly. See booking-poller.ts.
             await db
               .update(engagements)
               .set({
@@ -719,17 +696,11 @@ export async function runPinDownOnboarding(
                 updatedAt: new Date(),
               })
               .where(eq(engagements.engagementId, engagementId));
-            summary.openItems.push(
-              `${finalStack.booking_platform} doesn't support live webhook registration — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 5} minute(s) instead. Bookings will process on a short delay rather than instantly.`
-            );
             await logStep(runId, { phase: "webhook_registration", status: "skipped", detail: "No subscription ID returned — fell back to polling mode" });
+            return { mode: "polling" as const, reason: "no_sub_id", receiverUrl, isError: false };
           }
         } catch (e: any) {
           console.error(`[pin-down onboarding] Webhook registration failed: ${e.message}`);
-          // Same polling fallback on an outright failure (auth error,
-          // rate limit, transient platform outage) — a booking pipeline
-          // that's degraded-but-working beats one that's silently dead
-          // until someone notices and re-runs setup.
           await db
             .update(engagements)
             .set({
@@ -742,45 +713,64 @@ export async function runPinDownOnboarding(
               updatedAt: new Date(),
             })
             .where(eq(engagements.engagementId, engagementId));
-          summary.whatFailed.push(`${finalStack.booking_platform} webhook registration failed: ${e.message}`);
-          summary.openItems.push(`Booking webhook registration failed — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 5} minute(s) as a fallback so bookings still process.`);
           await logStep(runId, { phase: "webhook_registration", status: "failed", detail: `${e.message} — fell back to polling mode` });
+          return { mode: "polling" as const, reason: e.message, receiverUrl, isError: true };
         }
       });
+
+      summary.whatWasAttempted.push(`Registered ${finalStack.booking_platform} webhook → ${webhookResult.receiverUrl}.`);
+      if (webhookResult.mode === "webhook") {
+        summary.whatWorked.push(`${finalStack.booking_platform} webhook registered (subscription ${webhookResult.subId}).`);
+      } else if (webhookResult.isError) {
+        summary.whatFailed.push(`${finalStack.booking_platform} webhook registration failed: ${webhookResult.reason}`);
+        summary.openItems.push(
+          `Booking webhook registration failed — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 5} minute(s) as a fallback so bookings still process.`
+        );
+      } else {
+        summary.openItems.push(
+          `${finalStack.booking_platform} doesn't support live webhook registration — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 5} minute(s) instead. Bookings will process on a short delay rather than instantly.`
+        );
+      }
     } else {
       await logStep(runId, { phase: "webhook_registration", status: "skipped", detail: "No booking credentials available" });
     }
 
-    // ── Post-booking redirect config (Calendly only) ────────────────────────
+    // ── Post-booking redirect config (Calendly only) (FIXED: State returned & summary pushed outside) ─
     if (
       finalStack.booking_platform === "calendly" &&
       bookingCredential &&
       finalStack.booking_platform_meta?.event_type_uuid
     ) {
-      await run("redirect-config", async () => {
+      const redirectResult = await run("redirect-config", async () => {
         await logStep(runId, { phase: "redirect_config", status: "running" });
-        summary.whatWasAttempted.push(`Configured Calendly redirect for event type ${finalStack.booking_platform_meta.event_type_uuid}.`);
         try {
           const calendlyClient = new CalendlyClient(bookingCredential);
           await calendlyClient.configurePostBookingRedirect(
             finalStack.booking_platform_meta.event_type_uuid,
             confirmationPageUrl
           );
-          summary.whatWorked.push("Calendly post-booking redirect configured.");
           await logStep(runId, { phase: "redirect_config", status: "success" });
+          return { success: true };
         } catch (e: any) {
           console.error(`[pin-down onboarding] Calendly redirect config failed: ${e.message}`);
-          summary.whatFailed.push(`Calendly redirect configuration failed: ${e.message}`);
-          summary.openItems.push("Calendly isn't redirecting to the confirmation page yet — set this manually or re-run setup.");
           await logStep(runId, { phase: "redirect_config", status: "failed", detail: e.message });
+          return { success: false, error: e.message };
         }
       });
+
+      summary.whatWasAttempted.push(`Configured Calendly redirect for event type ${finalStack.booking_platform_meta.event_type_uuid}.`);
+      if (redirectResult.success) {
+        summary.whatWorked.push("Calendly post-booking redirect configured.");
+      } else {
+        summary.whatFailed.push(`Calendly redirect configuration failed: ${redirectResult.error}`);
+        summary.openItems.push("Calendly isn't redirecting to the confirmation page yet — set this manually or re-run setup.");
+      }
     } else {
       await logStep(runId, {
         phase: "redirect_config",
         status: "skipped",
         detail: !finalStack.booking_platform_meta?.event_type_uuid
-          ? "No event type UUID available (auto-discovery may have failed or no standing link provided)"
+          ? "No event type UUID available"
           : "Not applicable for this booking platform",
       });
     }
@@ -794,6 +784,6 @@ export async function runPinDownOnboarding(
     console.error("[pin-down onboarding]", error.message);
     summary.whatFailed.push(error.message);
     await failRun(runId, error, { summary });
-    throw error; // let Inngest's retry policy / the worker's own safety net decide
+    throw error;
   }
 }

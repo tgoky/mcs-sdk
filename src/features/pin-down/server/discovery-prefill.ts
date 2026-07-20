@@ -78,15 +78,28 @@ async function fetchRaw(url: string, timeoutMs = 6000): Promise<string | null> {
  * anything obvious already exist here," which is exactly the question
  * Discovery needs answered before deciding whether to run the
  * existing-page audit at all.
+ *
+ * Checked in parallel, not sequentially: this function runs inside a
+ * Promise.all in runDiscoveryPrefill() alongside scrapeVoiceCorpus (up to
+ * CRAWL_BUDGET_MS = 20s), and the whole route has a hard 30s maxDuration
+ * with a Claude inference call still to run *after* that Promise.all
+ * resolves. A sequential loop over 7 paths at a 4s-per-path timeout has a
+ * ~28s worst case by itself — close enough to the 30s ceiling on its own
+ * that a slow-to-fail domain could 504 the route before Claude is ever
+ * called. Running all 7 in parallel bounds this to roughly one timeout
+ * (~3s) instead of the sum of all seven, while still checking every path.
+ * `.find()` over the results (not resolution order) preserves
+ * CONFIRMATION_PAGE_PATHS' priority order for which match wins when more
+ * than one path resolves.
  */
 async function detectExistingConfirmationPage(base: string): Promise<string | undefined> {
-  for (const path of CONFIRMATION_PAGE_PATHS) {
-    const html = await fetchRaw(`${base}${path}`, 4000);
-    if (html && html.length > 500) {
-      return `${base}${path}`;
-    }
-  }
-  return undefined;
+  const results = await Promise.all(
+    CONFIRMATION_PAGE_PATHS.map(async (path) => {
+      const html = await fetchRaw(`${base}${path}`, 3000);
+      return html && html.length > 500 ? `${base}${path}` : undefined;
+    })
+  );
+  return results.find((url): url is string => Boolean(url));
 }
 
 function detectBookingPlatform(homepageHtml: string | null): string | undefined {
