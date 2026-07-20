@@ -22,7 +22,7 @@ const sessionOptions: SessionOptions = {
   password: process.env.SESSION_SECRET!,
   cookieName: "mudd_session",
   cookieOptions: {
-    secure: process.env.NODE_ENV === "production",
+    secure: true, // 🌟 FIXED FOR WHOP IFRAME: sameSite "none" requires secure to be true
     httpOnly: true,
     // Explicit rather than relying on defaults: without a Path attribute,
     // RFC 6265's default-path algorithm scopes a cookie to the directory
@@ -33,8 +33,8 @@ const sessionOptions: SessionOptions = {
     // already used by the temp oauth_state/oauth_nonce cookies in
     // src/app/api/auth/login/route.ts.
     path: "/",
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 14, // ✅ Converts to a persistent cookie that lasts exactly 14 days
+    sameSite: "none", // 🌟 FIXED FOR WHOP IFRAME: Allows cross-site session cookie storage inside iframe
+    maxAge: 60 * 60 * 24 * 14, // Converts to a persistent cookie that lasts exactly 14 days
   },
 };
 

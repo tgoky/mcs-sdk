@@ -9,12 +9,12 @@ export const runtime = "nodejs";
 const MEMBERSHIP_REVALIDATE_MS = 10 * 60 * 1000; // 10 minutes
 const ACTIVE_STATUSES = new Set(["active", "trialing", "canceling", "admin"]);
 
-// Centralize your cookie configuration options to guarantee alignment
+// 🌟 FIXED FOR WHOP IFRAME: sameSite: "none" & secure: true prevent third-party cookie blocking
 const COOKIE_OPTIONS = {
-  secure: process.env.NODE_ENV === "production",
+  secure: true,
   httpOnly: true,
   path: "/",
-  sameSite: "lax" as const,
+  sameSite: "none" as const,
   maxAge: 60 * 60 * 24 * 14, // 14 days
 };
 
@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 🌟 THE FIX: Initialize the mutable response upfront so iron-session can bind headers directly
+  // Initialize the mutable response upfront so iron-session can bind headers directly
   const response = NextResponse.next();
 
   const session = await getIronSession<SessionData>(request, response, {
@@ -56,7 +56,7 @@ export async function middleware(request: NextRequest) {
       const membership = await checkActiveMembership(session.whopUserId);
       session.subscriptionStatus = membership.status;
       session.subscriptionVerifiedAt = Date.now();
-      // 🌟 THE FIX: Natively encrypts and appends the fresh cookie directly into our response object
+      // Natively encrypts and appends the fresh cookie directly into our response object
       await session.save(); 
     } catch (err) {
       console.error("[middleware] membership revalidation failed:", err);
@@ -69,7 +69,7 @@ export async function middleware(request: NextRequest) {
       new URL("/?membership=required", request.url)
     );
     
-    // 🌟 THE FIX: Safely copy the newly minted encryption header over to the redirect response frame
+    // Safely copy the newly minted encryption header over to the redirect response frame
     const setCookieHeader = response.headers.get("Set-Cookie");
     if (setCookieHeader) {
       redirectResponse.headers.set("Set-Cookie", setCookieHeader);

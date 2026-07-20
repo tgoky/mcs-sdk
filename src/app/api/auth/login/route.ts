@@ -13,10 +13,13 @@ export async function GET(request: Request) {
   const codeVerifier = crypto.randomBytes(32).toString("base64url");
 
   const cookieStore = await cookies();
+  
+  // 🌟 FIXED FOR WHOP IFRAME: sameSite "none" + secure true ensure
+  // state/verifier cookies survive cross-site redirects inside the iframe
   const cookieOpts = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
+    secure: true,
+    sameSite: "none" as const,
     path: "/",
     maxAge: 60 * 10, // 10 minutes — only needs to survive the redirect round trip
   };
