@@ -9,19 +9,22 @@ export const runtime = "nodejs";
 const MEMBERSHIP_REVALIDATE_MS = 10 * 60 * 1000; // 10 minutes
 const ACTIVE_STATUSES = new Set(["active", "trialing", "canceling", "admin"]);
 
-// 🌟 FIXED FOR WHOP IFRAME: sameSite: "none" & secure: true prevent third-party cookie blocking
+const isProd = process.env.NODE_ENV === "production";
+
+// 🌟 CHIPS Partitioned Cookies for Whop iFrame Support
 const COOKIE_OPTIONS = {
-  secure: true,
+  secure: isProd,
   httpOnly: true,
   path: "/",
-  sameSite: "none" as const,
+  sameSite: (isProd ? "none" : "lax") as "none" | "lax",
+  ...(isProd ? { partitioned: true } : {}),
   maxAge: 60 * 60 * 24 * 14, // 14 days
 };
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Explicitly allow public authentication endpoints, webhooks, and cron workers to pass through
+  // 1. Explicitly allow public authentication endpoints, webhooks, and cron workers
   if (
     pathname === "/" ||
     pathname.startsWith("/api/auth") ||
@@ -31,7 +34,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Initialize the mutable response upfront so iron-session can bind headers directly
   const response = NextResponse.next();
 
   const session = await getIronSession<SessionData>(request, response, {
@@ -40,14 +42,22 @@ export async function middleware(request: NextRequest) {
     cookieOptions: COOKIE_OPTIONS,
   });
 
-  // 1. Kickout unauthenticated users directly to login flow
+  // 2. Kickout unauthenticated users directly to login flow
   if (!session.whopUserId) {
+    // 🌟 THE FIX: Block background router pre-fetches from triggering OAuth login redirects
+    if (
+      request.headers.get("next-router-prefetch") ||
+      request.headers.get("purpose") === "prefetch"
+    ) {
+      return new NextResponse(null, { status: 401 });
+    }
+
     const loginUrl = new URL("/api/auth/login", request.url);
     loginUrl.searchParams.set("redirect_to", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // 2. Handle membership revalidation updates if cached state is stale
+  // 3. Handle membership revalidation updates if cached state is stale
   const verifiedAt = session.subscriptionVerifiedAt ?? 0;
   const isStale = Date.now() - verifiedAt > MEMBERSHIP_REVALIDATE_MS;
 
@@ -56,20 +66,18 @@ export async function middleware(request: NextRequest) {
       const membership = await checkActiveMembership(session.whopUserId);
       session.subscriptionStatus = membership.status;
       session.subscriptionVerifiedAt = Date.now();
-      // Natively encrypts and appends the fresh cookie directly into our response object
       await session.save(); 
     } catch (err) {
       console.error("[middleware] membership revalidation failed:", err);
     }
   }
 
-  // 3. Kickout authenticated users who do not possess a valid paywall status
+  // 4. Kickout authenticated users who do not possess a valid paywall status
   if (!ACTIVE_STATUSES.has(session.subscriptionStatus)) {
     const redirectResponse = NextResponse.redirect(
       new URL("/?membership=required", request.url)
     );
     
-    // Safely copy the newly minted encryption header over to the redirect response frame
     const setCookieHeader = response.headers.get("Set-Cookie");
     if (setCookieHeader) {
       redirectResponse.headers.set("Set-Cookie", setCookieHeader);
@@ -77,7 +85,6 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  // 4. Standard completion continuation path (contains automatically stamped cookies from session.save)
   return response;
 }
 
