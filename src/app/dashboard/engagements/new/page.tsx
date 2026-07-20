@@ -2202,38 +2202,49 @@ booking_platform_meta: {
               <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
                 How should we learn this client&apos;s voice?
               </label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => set("voiceSource", "scrape")}
-                  className="flex-1 text-left px-3 py-2.5 rounded-lg text-xs transition-all cursor-pointer shadow-xs"
-                  style={{
-                    background: form.voiceSource === "scrape" ? "var(--accent-dim)" : "var(--surface)",
-                    border: `1px solid ${form.voiceSource === "scrape" ? "var(--accent)" : "var(--border)"}`,
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  <span className="font-bold uppercase tracking-wider font-mono">Scrape their website</span>
-                  <p className="mt-1 leading-relaxed font-normal" style={{ color: "var(--text-muted)" }}>
-                    We crawl their site (and recent broadcast emails, if Klaviyo is connected) automatically. Pasting a sample below too still helps if the crawl comes up short.
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => set("voiceSource", "manual")}
-                  className="flex-1 text-left px-3 py-2.5 rounded-lg text-xs transition-all cursor-pointer shadow-xs"
-                  style={{
-                    background: form.voiceSource === "manual" ? "var(--accent-dim)" : "var(--surface)",
-                    border: `1px solid ${form.voiceSource === "manual" ? "var(--accent)" : "var(--border)"}`,
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  <span className="font-bold uppercase tracking-wider font-mono">Paste a writing sample</span>
-                  <p className="mt-1 leading-relaxed font-normal" style={{ color: "var(--text-muted)" }}>
-                    Sales copy, call transcripts, or email examples — ready to use right now.
-                  </p>
-                </button>
-              </div>
+            <div className="flex gap-2">
+  <button
+    type="button"
+    onClick={() => set("voiceSource", "scrape")}
+    className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
+      form.voiceSource === "scrape"
+        ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
+        : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
+    }`}
+  >
+    <span className="font-bold uppercase tracking-wider font-mono block">
+      Scrape their website
+    </span>
+    <p className={`mt-1 leading-relaxed font-normal ${
+      form.voiceSource === "scrape" 
+        ? "text-zinc-700 dark:text-zinc-300" 
+        : "text-zinc-500 dark:text-zinc-400"
+    }`}>
+      We crawl their site (and recent broadcast emails, if Klaviyo is connected) automatically. Pasting a sample below too still helps if the crawl comes up short.
+    </p>
+  </button>
+
+  <button
+    type="button"
+    onClick={() => set("voiceSource", "manual")}
+    className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
+      form.voiceSource === "manual"
+        ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
+        : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
+    }`}
+  >
+    <span className="font-bold uppercase tracking-wider font-mono block">
+      Paste a writing sample
+    </span>
+    <p className={`mt-1 leading-relaxed font-normal ${
+      form.voiceSource === "manual" 
+        ? "text-zinc-700 dark:text-zinc-300" 
+        : "text-zinc-500 dark:text-zinc-400"
+    }`}>
+      Sales copy, call transcripts, or email examples — ready to use right now.
+    </p>
+  </button>
+</div>
             </div>
 
             {form.voiceSource === "scrape" && (
