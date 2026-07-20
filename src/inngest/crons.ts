@@ -348,8 +348,8 @@ export const lostDealSweepCron = inngest.createFunction(
 /** Fanned-out handler: nurture generation (LLM call) + Klaviyo enrollment + notify, one engagement at a time. */
 export const processLostDealEngagementCron = inngest.createFunction(
   { id: "process-lost-deal-engagement", triggers: [lostDealSweepEngagement] },
-  async ({ event }) => {
-    return processLostDealsForEngagement(event.data.engagementId, event.data.enrollmentIds);
+  async ({ event, step }) => {
+    return processLostDealsForEngagement(event.data.engagementId, event.data.enrollmentIds, step);
   }
 );
 
@@ -426,8 +426,8 @@ export const bookingPollCron = inngest.createFunction(
 /** Fanned-out handler: one platform API poll + enrollment pass, one engagement at a time. */
 export const processBookingPollEngagementCron = inngest.createFunction(
   { id: "process-booking-poll-engagement", triggers: [bookingPollEngagement] },
-  async ({ event }) => {
-    return pollBookingsForEngagement(event.data.engagementId);
+  async ({ event, step }) => {
+    return pollBookingsForEngagement(event.data.engagementId, step);
   }
 );
 

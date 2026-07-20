@@ -281,6 +281,7 @@ export async function runPinDownOnboarding(
             combinedCorpus: resultCorpus,
             sourcesCount: artifactSources.length,
             sourceKinds: artifactSources.map((s) => s.kind),
+            error: undefined as string | undefined,
           };
         } catch (e: any) {
           console.error("[pin-down onboarding] Voice scrape failed (non-fatal):", e.message);
@@ -288,8 +289,8 @@ export async function runPinDownOnboarding(
           return {
             combinedCorpus: rawVoiceCorpus,
             sourcesCount: 0,
-            sourceKinds: [],
-            error: e.message,
+            sourceKinds: [] as string[],
+            error: e.message as string | undefined,
           };
         }
       });
@@ -750,11 +751,11 @@ export async function runPinDownOnboarding(
             confirmationPageUrl
           );
           await logStep(runId, { phase: "redirect_config", status: "success" });
-          return { success: true };
+          return { success: true, error: undefined as string | undefined };
         } catch (e: any) {
           console.error(`[pin-down onboarding] Calendly redirect config failed: ${e.message}`);
           await logStep(runId, { phase: "redirect_config", status: "failed", detail: e.message });
-          return { success: false, error: e.message };
+          return { success: false, error: e.message as string | undefined };
         }
       });
 

@@ -6,6 +6,9 @@ import { FIRST_NAME_MERGE } from "./recovery-service";
 import { KlaviyoClient } from "@/lib/platforms/email";
 import { resolveCredential } from "@/lib/credentials";
 import { notifyUser } from "@/lib/notify";
+import type { GetStepTools, Inngest } from "inngest";
+
+type StepTools = GetStepTools<Inngest.Any>;
 
 export interface LostDealSweepResult {
   checked: number;
@@ -89,8 +92,27 @@ export async function markElapsedEnrollmentsLost(): Promise<
  */
 export async function processLostDealsForEngagement(
   engagementId: string,
-  enrollmentIds: string[]
+  enrollmentIds: string[],
+  step?: StepTools
 ): Promise<{ nurtureGenerated: boolean; autoEnrolled: number }> {
+  // Reliability fix — this function used to have zero step boundaries at
+  // all (the fanned-out Inngest handler that calls it, processLostDealEngagementCron
+  // in crons.ts, didn't destructure `step` either) and looped Klaviyo's
+  // enrollInList sequentially across every prospect with no per-row error
+  // isolation: one bad row (a malformed email, a transient rate limit)
+  // threw out of the whole for-loop, which meant the whole function threw,
+  // which meant Inngest's default retry policy re-ran this invocation from
+  // the top — re-issuing Klaviyo's profile-subscription-bulk-create-job
+  // call for every prospect that had already succeeded, including ones
+  // whose enrollment might re-trigger a Klaviyo flow keyed on "subscribed
+  // to list." Same `run` wrapper convention as the rest of this codebase:
+  // each Klaviyo call now gets its own named, checkpointed step, and a
+  // failure on one prospect no longer blocks or restarts the rest of the
+  // cohort.
+  const run = step
+    ? <T,>(id: string, fn: () => Promise<T>) => step.run(id, fn)
+    : <T,>(_id: string, fn: () => Promise<T>) => fn();
+
   const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
   if (!tenant) return { nurtureGenerated: false, autoEnrolled: 0 };
 
@@ -106,40 +128,44 @@ export async function processLostDealsForEngagement(
       const rescheduleUrl = `${appUrl}/reschedule/${engagementId}`;
       const emailPlatform = stack.email_platform ?? "klaviyo";
 
-      const { emails } = await buildLongTermNurture({
-        buyer: tenant.buyer,
-        brandVoiceProfile: tenant.brandVoiceProfile,
-        offerDetails: tenant.offerDetails as any,
-        rescheduleUrlMergeField: rescheduleUrl,
-        firstNameMergeField: FIRST_NAME_MERGE[emailPlatform] ?? "{{first_name}}",
-        prospectMeets: tenant.prospectMeets ?? undefined,
-      });
-
-      await db
-        .update(engagements)
-        .set({
-          longTermNurtureAssetMap: { generatedAt: new Date().toISOString(), emails },
-          updatedAt: new Date(),
+      const { emails } = await run("generate-long-term-nurture", () =>
+        buildLongTermNurture({
+          buyer: tenant.buyer,
+          brandVoiceProfile: tenant.brandVoiceProfile,
+          offerDetails: tenant.offerDetails as any,
+          rescheduleUrlMergeField: rescheduleUrl,
+          firstNameMergeField: FIRST_NAME_MERGE[emailPlatform] ?? "{{first_name}}",
+          prospectMeets: tenant.prospectMeets ?? undefined,
         })
-        .where(eq(engagements.engagementId, engagementId));
-
-      // ✅ FIX: Wipe out any duplicate long_term_nurture artifact mappings before inserting a new entry
-      await db.delete(artifacts).where(
-        and(
-          eq(artifacts.engagementId, engagementId),
-          eq(artifacts.artifactType, "long_term_nurture")
-        )
       );
 
-      // Win-Back recovery gap 7 — same artifact-ownership record as the
-      // recovery cadence in recovery-service.ts, for the long-term
-      // nurture content generated here.
-      await db.insert(artifacts).values({
-        engagementId,
-        skillName: "win-back",
-        artifactType: "long_term_nurture",
-        storagePath: `engagements/${engagementId}/long_term_nurture_asset_map`,
-        owner: "mudd_ventures",
+      await run("persist-long-term-nurture", async () => {
+        await db
+          .update(engagements)
+          .set({
+            longTermNurtureAssetMap: { generatedAt: new Date().toISOString(), emails },
+            updatedAt: new Date(),
+          })
+          .where(eq(engagements.engagementId, engagementId));
+
+        // ✅ FIX: Wipe out any duplicate long_term_nurture artifact mappings before inserting a new entry
+        await db.delete(artifacts).where(
+          and(
+            eq(artifacts.engagementId, engagementId),
+            eq(artifacts.artifactType, "long_term_nurture")
+          )
+        );
+
+        // Win-Back recovery gap 7 — same artifact-ownership record as the
+        // recovery cadence in recovery-service.ts, for the long-term
+        // nurture content generated here.
+        await db.insert(artifacts).values({
+          engagementId,
+          skillName: "win-back",
+          artifactType: "long_term_nurture",
+          storagePath: `engagements/${engagementId}/long_term_nurture_asset_map`,
+          owner: "mudd_ventures",
+        });
       });
 
       nurtureEmails = emails;
@@ -156,36 +182,48 @@ export async function processLostDealsForEngagement(
     .where(inArray(winBackEnrollments.id, enrollmentIds));
 
   // ── Auto-enrollment (Klaviyo only) ──────────────────────────────────
+  // Each row is its own checkpointed step with its own try/catch — a
+  // failure on one prospect is logged and skipped rather than aborting
+  // the whole engagement's batch or forcing a from-scratch retry that
+  // would re-enroll everyone who already succeeded.
   if (stack.email_platform === "klaviyo" && stack.long_term_nurture_list_id) {
     try {
       const apiKey = await resolveCredential(engagementId, "klaviyo");
       const klaviyo = new KlaviyoClient(apiKey);
       for (const row of rows) {
-        await klaviyo.enrollInList(row.prospectEmail, row.prospectName ?? "", stack.long_term_nurture_list_id, {
-          showtime_status: "long_term_nurture",
-        });
-        autoEnrolled++;
+        try {
+          await run(`klaviyo-enroll-${row.id}`, () =>
+            klaviyo.enrollInList(row.prospectEmail, row.prospectName ?? "", stack.long_term_nurture_list_id!, {
+              showtime_status: "long_term_nurture",
+            })
+          );
+          autoEnrolled++;
+        } catch (e: any) {
+          console.error(`[lost-deal-sweep] Klaviyo auto-enrollment failed for ${engagementId} / ${row.prospectEmail}:`, e.message);
+        }
       }
     } catch (e: any) {
-      console.error(`[lost-deal-sweep] Klaviyo auto-enrollment failed for ${engagementId}:`, e.message);
+      console.error(`[lost-deal-sweep] Klaviyo client setup failed for ${engagementId}:`, e.message);
     }
   }
 
   // ── Notify the buyer ─────────────────────────────────────────────
   try {
-    await notifyUser({
-      whopUserId: tenant.whopUserId,
-      engagementId,
-      type: "lost_deal_swept",
-      severity: "info",
-      title: `${rows.length} prospect${rows.length > 1 ? "s" : ""} moved to long-term nurture`,
-      body: `${rows.length} prospect${rows.length > 1 ? "s" : ""} went past the recovery window without rebooking and ${rows.length > 1 ? "have" : "has"} been marked lost. ${
-        stack.email_platform === "klaviyo" && stack.long_term_nurture_list_id
-          ? "Auto-enrolled into the configured long-term nurture list."
-          : "Long-term nurture content is ready in the engagement dashboard — no auto-enrollment list configured yet, so this needs to be loaded manually."
-      }`,
-      slackWebhookUrl: stack.slack_webhook_url,
-    });
+    await run("notify-lost-deal-swept", () =>
+      notifyUser({
+        whopUserId: tenant.whopUserId,
+        engagementId,
+        type: "lost_deal_swept",
+        severity: "info",
+        title: `${rows.length} prospect${rows.length > 1 ? "s" : ""} moved to long-term nurture`,
+        body: `${rows.length} prospect${rows.length > 1 ? "s" : ""} went past the recovery window without rebooking and ${rows.length > 1 ? "have" : "has"} been marked lost. ${
+          stack.email_platform === "klaviyo" && stack.long_term_nurture_list_id
+            ? "Auto-enrolled into the configured long-term nurture list."
+            : "Long-term nurture content is ready in the engagement dashboard — no auto-enrollment list configured yet, so this needs to be loaded manually."
+        }`,
+        slackWebhookUrl: stack.slack_webhook_url,
+      })
+    );
   } catch (e: any) {
     console.error(`[lost-deal-sweep] Notification failed for ${engagementId}:`, e.message);
   }

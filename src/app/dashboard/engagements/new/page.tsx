@@ -480,12 +480,12 @@ function SelectField({
 
 export default function NewEngagementPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>(() => loadDraftStep() ?? "offer");
-  const [form, setForm] = useState<FormData>(() => loadDraft() ?? DEFAULT_FORM);
-  const [restoredDraft] = useState(
-    () => typeof window !== "undefined" && window.sessionStorage.getItem(DRAFT_KEY) !== null
-  );
-  const [showRestoredBanner, setShowRestoredBanner] = useState(restoredDraft);
+const [step, setStep] = useState<Step>("offer");
+const [form, setForm] = useState<FormData>(DEFAULT_FORM);
+  // const [restoredDraft] = useState(
+  //   () => typeof window !== "undefined" && window.sessionStorage.getItem(DRAFT_KEY) !== null
+  // );
+const [showRestoredBanner, setShowRestoredBanner] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -577,26 +577,37 @@ export default function NewEngagementPage() {
   // backup before anything else touches `form`. Skipped entirely when
   // sessionStorage already had something, since that's always the
   // freshest copy for this tab.
-  useEffect(() => {
-    let cancelled = false;
-    if (restoredDraft) {
-      setHasHydratedServerDraft(true);
-      return;
+  // UPDATED (Hydration-safe)
+useEffect(() => {
+  let cancelled = false;
+
+  // 1. Synchronously check sessionStorage on client mount
+  const localDraft = loadDraft();
+  const localStep = loadDraftStep();
+
+  if (localDraft || localStep) {
+    if (localDraft) setForm(localDraft);
+    if (localStep) setStep(localStep);
+    setShowRestoredBanner(true);
+    setHasHydratedServerDraft(true);
+    return; // <--- THE GUARD IS STILL HERE! Skips fetchServerDraft()
+  }
+
+  // 2. Only runs if sessionStorage was completely empty
+  (async () => {
+    const serverDraft = await fetchServerDraft();
+    if (!cancelled && serverDraft) {
+      setForm((f) => ({ ...f, ...serverDraft.formData }));
+      setStep(serverDraft.step);
+      setShowRestoredBanner(true);
     }
-    (async () => {
-      const serverDraft = await fetchServerDraft();
-      if (!cancelled && serverDraft) {
-        setForm((f) => ({ ...f, ...serverDraft.formData }));
-        setStep(serverDraft.step);
-        setShowRestoredBanner(true);
-      }
-      if (!cancelled) setHasHydratedServerDraft(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!cancelled) setHasHydratedServerDraft(true);
+  })();
+
+  return () => {
+    cancelled = true;
+  };
+}, []);
 
   // Draft autosave: keeps onboarding progress across an accidental refresh
   // or back/forward navigation. API keys are stripped before storage inside

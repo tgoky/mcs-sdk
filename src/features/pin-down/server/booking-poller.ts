@@ -6,6 +6,9 @@ import { listBookingsSinceForTenant, deriveWebhookIdempotencyKey } from "@/lib/p
 import { handleInboundBookingEvent, classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
 import { startRun, failRun } from "@/lib/run-log";
 import crypto from "crypto";
+import type { GetStepTools, Inngest } from "inngest";
+
+type StepTools = GetStepTools<Inngest.Any>;
 
 /**
  * Pin-Down recovery gap 5 — polling fallback for booking webhooks.
@@ -71,7 +74,7 @@ export async function findEngagementsDueForPoll(): Promise<string[]> {
  * src/inngest/crons.ts) so one tenant's slow/failing booking API can't
  * block or retry-storm every other tenant's poll cycle.
  */
-export async function pollBookingsForEngagement(engagementId: string): Promise<{
+export async function pollBookingsForEngagement(engagementId: string, step?: StepTools): Promise<{
   polled: number;
   newBookings: number;
   duplicates: number;
@@ -184,7 +187,7 @@ export async function pollBookingsForEngagement(engagementId: string): Promise<{
         label: `${call.name} <${call.email}> (polled)`,
       });
       const classified = classifyBookingEvent(syntheticPayload);
-      await handleInboundBookingEvent(syntheticPayload, tenant, runId, classified === "unknown" ? eventKind : classified);
+      await handleInboundBookingEvent(syntheticPayload, tenant, runId, classified === "unknown" ? eventKind : classified, step);
       newBookings++;
     } catch (e: any) {
       console.error(`[booking-poller] Enrollment failed for polled booking ${call.id}: ${e.message}`);

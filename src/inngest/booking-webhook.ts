@@ -27,6 +27,20 @@ import { failRun } from "@/lib/run-log";
  * is already an unusual case; failing the run visibly and letting the
  * operator see it in the dashboard is safer here than a silent automatic
  * retry that might double-fire a side effect on a real booking platform.
+ *
+ * Reliability fix: `step` is now passed straight into
+ * handleInboundBookingEvent instead of wrapping the whole call in one
+ * step.run("handle-inbound-booking-event"). That single-step shape decoupled
+ * this work from Calendly's ack deadline (the original problem) but was
+ * still exactly the "one giant step, no checkpoint until the whole thing
+ * finishes" pattern flagged everywhere else in this codebase (see the
+ * module comment at the top of crons.ts) — every ESP call, the win-back
+ * exit-signal transaction, the CRM tagger, cohort sync, and hybrid LLM
+ * personalization all ran as one uncheckpointed unit, competing for the
+ * same maxDuration=60s budget on /api/inngest with zero partial-progress
+ * recovery. handleInboundBookingEvent now takes its own `run` wrapper
+ * (same convention as onboarding-service.ts / recovery-service.ts /
+ * audit-engine.ts) and gives each phase its own named step.
  */
 export const processBookingWebhookEvent = inngest.createFunction(
   { id: "process-booking-webhook-event", retries: 0, triggers: [bookingWebhookProcess] },
@@ -45,9 +59,7 @@ export const processBookingWebhookEvent = inngest.createFunction(
     }
 
     try {
-      await step.run("handle-inbound-booking-event", async () => {
-        await handleInboundBookingEvent(bookingPayload, tenant, runId, eventKind);
-      });
+      await handleInboundBookingEvent(bookingPayload, tenant, runId, eventKind, step);
       return { processed: true };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

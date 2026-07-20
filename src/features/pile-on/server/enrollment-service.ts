@@ -13,6 +13,9 @@ import { tagRecoveredFromNoShow } from "@/lib/platforms/crm-tagger";
 import { extractFreshRescheduleLink } from "@/lib/platforms/reschedule";
 import { runWinBackHybridPersonalization } from "@/features/win-back/server/hybrid-personalizer";
 import { gateOrExecute } from "@/lib/approval-gate";
+import type { GetStepTools, Inngest } from "inngest";
+
+type StepTools = GetStepTools<Inngest.Any>;
 
 /**
  * Single source of truth for classifying a booking-platform webhook payload
@@ -59,8 +62,29 @@ export async function handleInboundBookingEvent(
   payload: any,
   tenant: any,
   runId: string,
-  eventKind: "created" | "cancelled" | "unknown"
+  eventKind: "created" | "cancelled" | "unknown",
+  step?: StepTools
 ): Promise<void> {
+  // Reliability fix — each external call this function makes (ESP
+  // enrollment, CRM tagging, cohort sync, hybrid LLM personalization) now
+  // gets its own named step.run() boundary when called from the async
+  // Inngest worker (booking-webhook.ts), instead of the whole function
+  // running as one uncheckpointed unit. Previously this entire function was
+  // wrapped in a single step.run("handle-inbound-booking-event") one level
+  // up — functionally fine for Calendly's ack deadline (already solved by
+  // moving off the HTTP thread), but it meant a transient failure partway
+  // through (say, after the ESP enrollment succeeded but before hybrid
+  // personalization finished) threw away the whole step's progress instead
+  // of resuming from where it left off, and a single long external call
+  // could consume the entire /api/inngest route's maxDuration with nothing
+  // checkpointed. Same `run` wrapper convention as onboarding-service.ts /
+  // recovery-service.ts / audit-engine.ts: falls back to a plain call when
+  // `step` isn't provided (the booking-poller.ts caller doesn't have one),
+  // so this function works identically in both contexts.
+  const run = step
+    ? <T,>(id: string, fn: () => Promise<T>) => step.run(`${id}-${runId}`, fn)
+    : <T,>(_id: string, fn: () => Promise<T>) => fn();
+
   const summary: RunSummary = {
     whatWasAttempted: [],
     whatWorked: [],
@@ -131,17 +155,19 @@ export async function handleInboundBookingEvent(
 
     summary.whatWasAttempted.push(`Enroll ${prospectName} (${prospectEmail}) in the pre-call follow-up sequence on ${stack.email_platform}.`);
 
-    await enrollInPreCallSequence(
-      stack.email_platform,
-      emailApiKey,
-      prospectEmail,
-      prospectName,
-      {
-        target_list_id: stack.target_list_id,
-        location_id: stack.booking_platform_meta?.location_id,
-        target_workflow_id: stack.target_workflow_id,
-        activecampaign_base_url: stack.activecampaign_base_url,
-      }
+    await run("pile-on-enrollment", () =>
+      enrollInPreCallSequence(
+        stack.email_platform,
+        emailApiKey,
+        prospectEmail,
+        prospectName,
+        {
+          target_list_id: stack.target_list_id,
+          location_id: stack.booking_platform_meta?.location_id,
+          target_workflow_id: stack.target_workflow_id,
+          activecampaign_base_url: stack.activecampaign_base_url,
+        }
+      )
     );
 
     summary.whatWorked.push(`Enrolled in ${stack.email_platform} pre-call sequence.`);
@@ -159,12 +185,14 @@ export async function handleInboundBookingEvent(
     // gating on that lookup, since a signal firing for someone who was
     // never enrolled is a harmless no-op on the ESP side either way.
     try {
-      await exitWinBackSequence(stack.email_platform, emailApiKey, prospectEmail, {
-        location_id: stack.booking_platform_meta?.location_id,
-        recovery_workflow_id: stack.recovery_workflow_id,
-        recovery_automation_id: stack.recovery_automation_id,
-        activecampaign_base_url: stack.activecampaign_base_url,
-      });
+      await run("win-back-exit-signal", () =>
+        exitWinBackSequence(stack.email_platform, emailApiKey, prospectEmail, {
+          location_id: stack.booking_platform_meta?.location_id,
+          recovery_workflow_id: stack.recovery_workflow_id,
+          recovery_automation_id: stack.recovery_automation_id,
+          activecampaign_base_url: stack.activecampaign_base_url,
+        })
+      );
       await logStep(runId, {
         phase: "win_back_exit_signal",
         status: "success",
@@ -177,7 +205,7 @@ export async function handleInboundBookingEvent(
       // the engagement's recovery_count ever incrementing. Both DB-only,
       // so the transaction stays short; the CRM tagging call below (a real
       // network request) deliberately stays outside it.
-      const rebookedRows = await db.transaction(async (tx) => {
+      const rebookedRows = await run("win-back-exit-db-update", () => db.transaction(async (tx) => {
         const rows = await tx
           .update(winBackEnrollments)
           .set({ status: "rebooked", exitReason: "rebooked", exitedAt: new Date() })
@@ -207,7 +235,7 @@ export async function handleInboundBookingEvent(
         }
 
         return rows;
-      });
+      }));
 
       if (rebookedRows.length > 0) {
 
@@ -219,9 +247,11 @@ export async function handleInboundBookingEvent(
         if (stack.recovered_from_no_show_tagging_enabled !== false && stack.email_platform) {
           try {
             const emailApiKey = await resolveCredential(tenant.engagementId, stack.email_platform);
-            await tagRecoveredFromNoShow(stack.email_platform, emailApiKey, prospectEmail, {
-              location_id: stack.booking_platform_meta?.location_id,
-            });
+            await run("recovered-tagger", () =>
+              tagRecoveredFromNoShow(stack.email_platform, emailApiKey, prospectEmail, {
+                location_id: stack.booking_platform_meta?.location_id,
+              })
+            );
             summary.whatWorked.push(`Tagged ${prospectEmail} as recovered-from-no-show on ${stack.email_platform}.`);
             await logStep(runId, { phase: "recovered_tagger", status: "success", detail: `Tagged on ${stack.email_platform}` });
           } catch (e: any) {
@@ -246,7 +276,9 @@ export async function handleInboundBookingEvent(
       try {
         if (stack.sms_platform === "hubspot_sms") {
           const smsApiKey = await resolveCredential(tenant.engagementId, stack.sms_platform);
-          await enrollSmsSequenceForTenant(stack.sms_platform, smsApiKey, stack.sms_platform_meta, prospectEmail);
+          await run("sms-enrollment-hubspot", () =>
+            enrollSmsSequenceForTenant(stack.sms_platform, smsApiKey, stack.sms_platform_meta, prospectEmail)
+          );
           summary.whatWorked.push(`Tagged ${prospectEmail} for HubSpot's SMS automation to pick up.`);
           await logStep(runId, { phase: "sms_enrollment", status: "success", detail: "HubSpot SMS tag set" });
         } else if (stack.sms_platform === "twilio" || stack.sms_platform === "ghl_sms") {
@@ -258,16 +290,18 @@ export async function handleInboundBookingEvent(
             const bookingCreatedAt = payload.payload?.created_at ?? payload.createdAt ?? new Date().toISOString();
             const callTime = payload.call_time ?? payload.payload?.start_time ?? payload.payload?.scheduled_time ?? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-            await inngest.send(
-              pileOnSmsSequenceStart.create({
-                engagementId: tenant.engagementId,
-                bookingId,
-                prospectEmail,
-                prospectPhone,
-                prospectName,
-                bookingCreatedAt,
-                callTime,
-              })
+            await run("sms-enrollment-dispatch", () =>
+              inngest.send(
+                pileOnSmsSequenceStart.create({
+                  engagementId: tenant.engagementId,
+                  bookingId,
+                  prospectEmail,
+                  prospectPhone,
+                  prospectName,
+                  bookingCreatedAt,
+                  callTime,
+                })
+              )
             );
             summary.whatWorked.push(`Started ${stack.sms_platform} SMS sequence for ${prospectPhone}.`);
             await logStep(runId, { phase: "sms_enrollment", status: "success", detail: `Durable SMS sequence dispatched for ${prospectPhone}` });
@@ -292,7 +326,7 @@ export async function handleInboundBookingEvent(
           tenant.engagementId,
           "cohort_membership_add",
           { prospectEmail },
-          () => addProspectToAdDataCohort(tenant.engagementId, stack, prospectEmail)
+          () => run("ad-data-cohort-add", () => addProspectToAdDataCohort(tenant.engagementId, stack, prospectEmail))
         );
         if (gated.executed) {
           summary.whatWorked.push(`Added ${prospectEmail} to the ${stack.ad_data_platform} ad-data cohort.`);
@@ -317,17 +351,19 @@ export async function handleInboundBookingEvent(
       await logStep(runId, { phase: "hybrid_synthesis", status: "running" });
       summary.whatWasAttempted.push("Generate a hybrid-mode personalized intro paragraph.");
 
-      const result = await runHybridPersonalization(
-        tenant.engagementId,
-        bookingId,
-        prospectEmail,
-        prospectName,
-        stack.email_platform,
-        emailApiKey,
-        { location_id: stack.booking_platform_meta?.location_id },
-        tenant.brandVoiceProfile,
-        tenant.offerDetails,
-        runId
+      const result = await run("hybrid-synthesis", () =>
+        runHybridPersonalization(
+          tenant.engagementId,
+          bookingId,
+          prospectEmail,
+          prospectName,
+          stack.email_platform,
+          emailApiKey,
+          { location_id: stack.booking_platform_meta?.location_id },
+          tenant.brandVoiceProfile,
+          tenant.offerDetails,
+          runId
+        )
       );
 
       if (result.sentVia === "hybrid") {
@@ -350,17 +386,19 @@ export async function handleInboundBookingEvent(
 
     summary.whatWasAttempted.push(`Enroll ${prospectName} (${prospectEmail}) in the win-back sequence on ${stack.email_platform}.`);
 
-    await enrollInWinBackSequence(
-      stack.email_platform,
-      emailApiKey,
-      prospectEmail,
-      prospectName,
-      {
-        recovery_list_id: stack.recovery_list_id,
-        location_id: stack.booking_platform_meta?.location_id,
-        recovery_workflow_id: stack.recovery_workflow_id,
-        activecampaign_base_url: stack.activecampaign_base_url,
-      }
+    await run("win-back-enrollment", () =>
+      enrollInWinBackSequence(
+        stack.email_platform,
+        emailApiKey,
+        prospectEmail,
+        prospectName,
+        {
+          recovery_list_id: stack.recovery_list_id,
+          location_id: stack.booking_platform_meta?.location_id,
+          recovery_workflow_id: stack.recovery_workflow_id,
+          activecampaign_base_url: stack.activecampaign_base_url,
+        }
+      )
     );
 
     if (stack.email_platform === "smtp") {
@@ -407,9 +445,11 @@ export async function handleInboundBookingEvent(
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
       const linkToDeliver = freshRescheduleLink ?? `${appUrl}/reschedule/${tenant.engagementId}`;
       try {
-        await deliverRescheduleLink(stack.email_platform, emailApiKey, prospectEmail, linkToDeliver, {
-          location_id: stack.booking_platform_meta?.location_id,
-        });
+        await run("reschedule-link-delivery", () =>
+          deliverRescheduleLink(stack.email_platform, emailApiKey, prospectEmail, linkToDeliver, {
+            location_id: stack.booking_platform_meta?.location_id,
+          })
+        );
         await logStep(runId, {
           phase: "reschedule_link",
           status: "success",
@@ -432,17 +472,21 @@ export async function handleInboundBookingEvent(
       try {
         if (stack.sms_platform === "hubspot_sms") {
           const smsApiKey = await resolveCredential(tenant.engagementId, stack.sms_platform);
-          await enrollSmsSequenceForTenant(stack.sms_platform, smsApiKey, stack.sms_platform_meta, prospectEmail);
+          await run("win-back-sms-hubspot", () =>
+            enrollSmsSequenceForTenant(stack.sms_platform, smsApiKey, stack.sms_platform_meta, prospectEmail)
+          );
           summary.whatWorked.push(`Tagged ${prospectEmail} for HubSpot's SMS automation to pick up the win-back cadence.`);
         } else if ((stack.sms_platform === "twilio" || stack.sms_platform === "ghl_sms") && prospectPhone) {
-          await inngest.send(
-            winBackSmsSequenceStart.create({
-              engagementId: tenant.engagementId,
-              enrollmentId: enrollmentRow.id,
-              prospectEmail,
-              prospectPhone,
-              prospectName,
-            })
+          await run("win-back-sms-dispatch", () =>
+            inngest.send(
+              winBackSmsSequenceStart.create({
+                engagementId: tenant.engagementId,
+                enrollmentId: enrollmentRow.id,
+                prospectEmail,
+                prospectPhone,
+                prospectName,
+              })
+            )
           );
           summary.whatWorked.push(`Started ${stack.sms_platform} win-back SMS sequence for ${prospectPhone}.`);
         } else if (stack.sms_platform === "twilio" || stack.sms_platform === "ghl_sms") {
@@ -463,13 +507,15 @@ export async function handleInboundBookingEvent(
     // src/inngest/win-back-email-smtp.ts.
     if (stack.email_platform === "smtp") {
       try {
-        await inngest.send(
-          winBackEmailSmtpSequenceStart.create({
-            engagementId: tenant.engagementId,
-            enrollmentId: enrollmentRow.id,
-            prospectEmail,
-            prospectName,
-          })
+        await run("win-back-email-smtp-dispatch", () =>
+          inngest.send(
+            winBackEmailSmtpSequenceStart.create({
+              engagementId: tenant.engagementId,
+              enrollmentId: enrollmentRow.id,
+              prospectEmail,
+              prospectName,
+            })
+          )
         );
         summary.whatWorked.push(`Started the direct-send SMTP win-back email sequence for ${prospectEmail}.`);
         await logStep(runId, { phase: "win_back_email_smtp", status: "success" });
@@ -486,17 +532,19 @@ export async function handleInboundBookingEvent(
     // server-side compute this app performs itself and must stop once the
     // buyer owns the runtime.
     if (tenant.offerDetails?.hybrid_mode_enabled && stack.runtime_ownership_model !== "buyer_exported") {
-      const result = await runWinBackHybridPersonalization(
-        tenant.engagementId,
-        enrollmentRow.id,
-        prospectEmail,
-        prospectName,
-        stack.email_platform,
-        emailApiKey,
-        { location_id: stack.booking_platform_meta?.location_id },
-        tenant.brandVoiceProfile,
-        tenant.offerDetails,
-        runId
+      const result = await run("win-back-hybrid", () =>
+        runWinBackHybridPersonalization(
+          tenant.engagementId,
+          enrollmentRow.id,
+          prospectEmail,
+          prospectName,
+          stack.email_platform,
+          emailApiKey,
+          { location_id: stack.booking_platform_meta?.location_id },
+          tenant.brandVoiceProfile,
+          tenant.offerDetails,
+          runId
+        )
       );
       if (result.sentVia === "hybrid") {
         summary.whatWorked.push(`Delivered a personalized win-back opening to ${prospectEmail} (${result.latencyMs}ms).`);
@@ -515,7 +563,7 @@ export async function handleInboundBookingEvent(
           tenant.engagementId,
           "cohort_membership_remove",
           { prospectEmail },
-          () => removeProspectFromAdDataCohort(tenant.engagementId, stack, prospectEmail)
+          () => run("ad-data-cohort-remove", () => removeProspectFromAdDataCohort(tenant.engagementId, stack, prospectEmail))
         );
         if (gated.executed) {
           summary.whatWorked.push(`Removed ${prospectEmail} from the ${stack.ad_data_platform} ad-data cohort.`);
