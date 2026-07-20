@@ -83,7 +83,7 @@ export default async function WorkspaceHomePage() {
   const displayName = session.email?.split("@")[0] ?? "there";
 
   return (
-    <div className="min-h-screen bg-white text-zinc-600 antialiased dark:bg-zinc-950 dark:text-zinc-400">
+    <div className="min-h-screen font-sans bg-white text-zinc-600 antialiased dark:bg-zinc-950 dark:text-zinc-400">
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10 sm:px-8">
 
         {/* Header */}
