@@ -18,8 +18,7 @@ export const sessionOptions: SessionOptions = {
     secure: true,
     httpOnly: true,
     path: "/",
-    sameSite: "none" as const,
-    partitioned: true,
+    sameSite: "lax" as const,
     maxAge: 60 * 60 * 24 * 14,
   },
 };

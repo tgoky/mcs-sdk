@@ -11,13 +11,17 @@ const ACTIVE_STATUSES = new Set(["active", "trialing", "canceling", "admin"]);
 
 const isProd = process.env.NODE_ENV === "production";
 
-// 🌟 CHIPS Partitioned Cookies for Whop iFrame Support
+// No iframe embedding anywhere in this app (verified: no postMessage, no
+// Whop embed SDK, no frame-ancestors/X-Frame-Options config) — this is a
+// plain top-level OAuth redirect flow, so CHIPS partitioning and
+// SameSite=None were solving a problem this app doesn't have. Lax is sent
+// on the top-level GET redirect back from Whop, and on every same-origin
+// request inside the dashboard, which is everything this flow needs.
 const COOKIE_OPTIONS = {
-  secure: true,              // Always true for SameSite=None
+  secure: true,
   httpOnly: true,
   path: "/",
-  sameSite: "none" as const, // Always "none" for iframe
-  partitioned: true,          // CHIPS partitioned cookie
+  sameSite: "lax" as const,
   maxAge: 60 * 60 * 24 * 14,
 };
 
