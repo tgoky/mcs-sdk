@@ -10,21 +10,21 @@ export type SessionData = {
   refreshToken?: string;
 };
 
-// For iframe embedding, SameSite=None is REQUIRED in all environments.
-// Browsers treat localhost as a secure context, so Secure:true works locally.
 const sessionOptions: SessionOptions = {
   password: process.env.SESSION_SECRET!,
   cookieName: "mudd_session",
   cookieOptions: {
-    secure: true,           // Required for SameSite=None
+    secure: true,
     httpOnly: true,
     path: "/",
-    sameSite: "none",       // Required for iframe
-    partitioned: true,       // CHIPS - extra safety for third-party context
+    sameSite: "none" as const,
+    partitioned: true,
     maxAge: 60 * 60 * 24 * 14,
   },
 };
 
+// ✅ This single function works for BOTH Server Components AND Route Handlers
+// in iron-session v8+. The library handles response cookie writing internally.
 export async function getSession() {
   const session = await getIronSession<SessionData>(
     await cookies(),

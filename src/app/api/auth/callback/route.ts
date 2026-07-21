@@ -18,36 +18,30 @@ export async function GET(request: Request) {
     }
 
     if (!code || !rawState) {
-      return new Response("Missing code or state parameter", { status: 400 });
+      return new Response("Missing code or state", { status: 400 });
     }
 
-    // 🔑 Decrypt state to recover code_verifier and redirect destination
     const stateData = decryptOAuthState(rawState, process.env.SESSION_SECRET!);
 
     if (!stateData?.codeVerifier) {
       console.error("[whop-callback] Failed to decrypt OAuth state");
       return new Response(
-        "Invalid or expired OAuth state. Please try logging in again.",
+        "Invalid or expired OAuth state. Please try again.",
         { status: 400 }
       );
     }
 
     const { codeVerifier, redirectTo } = stateData;
 
-    // 1. Exchange code for tokens
     const tokens = await exchangeCode(code, codeVerifier);
-
-    // 2. Fetch Whop user profile
     const whopUser = await getWhopUser(tokens.access_token);
     const whopUserId = whopUser.sub;
 
-    // 3. Validate membership
     const admin = isAdminEmail(whopUser.email);
     const membership = admin
       ? { hasAccess: true, status: "admin" as const }
       : await checkActiveMembership(whopUserId);
 
-    // 4. Upsert user record
     await db
       .insert(users)
       .values({
@@ -64,7 +58,7 @@ export async function GET(request: Request) {
         },
       });
 
-    // 5. Create iron-session
+    // ✅ Uses the normal 2-arg getSession() — iron-session v8 handles the rest
     const session = await getSession();
     session.whopUserId = whopUserId;
     session.email = whopUser.email ?? "";
@@ -73,14 +67,13 @@ export async function GET(request: Request) {
     session.refreshToken = tokens.refresh_token;
     await session.save();
 
-    // 6. Determine destination
     const destination = membership.hasAccess
       ? redirectTo || "/home"
       : "/?membership=required";
 
-    // 🌟 THE IFRAME FIX: Return 200 HTML instead of 302 redirect.
-    // Browsers drop Set-Cookie headers on 302 cross-site redirects inside iframes.
-    // A 200 response forces the browser to store the cookie BEFORE navigating.
+    // 🌟 THE FIX: 200 HTML instead of 302 redirect
+    // The iframe will process and store the session cookie from this 200
+    // response BEFORE the meta-refresh/script navigates to the destination.
     const html = `<!DOCTYPE html>
 <html>
   <head>
@@ -96,6 +89,7 @@ export async function GET(request: Request) {
       status: 200,
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });
+
   } catch (err: any) {
     console.error("[whop-callback] Fatal:", err);
     return new Response(`Auth error: ${err.message}`, { status: 500 });
