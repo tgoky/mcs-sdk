@@ -1,58 +1,53 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+// src/app/api/auth/callback/whop/route.ts
 import { exchangeCode, getWhopUser } from "@/lib/whop";
 import { getSession } from "@/lib/session";
 import { checkActiveMembership, isAdminEmail } from "@/lib/whop-access";
 import { db } from "@/lib/db";
 import { users } from "@/models/schema";
+import { decryptOAuthState } from "@/lib/oauth-state";
 
 export async function GET(request: Request) {
-  const cookieStore = await cookies();
-
-  // Short-lived cookie cleanup utility
-  const clearPkceCookies = () => {
-    cookieStore.delete("oauth_state");
-    cookieStore.delete("oauth_nonce");
-    cookieStore.delete("code_verifier");
-    cookieStore.delete("post_login_redirect");
-  };
-
   try {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
-    const state = searchParams.get("state");
+    const rawState = searchParams.get("state");
     const error = searchParams.get("error");
 
-    const storedState = cookieStore.get("oauth_state")?.value;
-    const codeVerifier = cookieStore.get("code_verifier")?.value;
-
     if (error) {
-      clearPkceCookies();
       return new Response(`Whop OAuth error: ${error}`, { status: 400 });
     }
 
-    if (!code || !state || state !== storedState || !codeVerifier) {
-      clearPkceCookies();
+    if (!code || !rawState) {
+      return new Response("Missing code or state parameter", { status: 400 });
+    }
+
+    // 🔑 Decrypt state to recover code_verifier and redirect destination
+    const stateData = decryptOAuthState(rawState, process.env.SESSION_SECRET!);
+
+    if (!stateData?.codeVerifier) {
+      console.error("[whop-callback] Failed to decrypt OAuth state");
       return new Response(
-        `Invalid OAuth state. State matches: ${state === storedState}. Verifier found: ${!!codeVerifier}`, 
+        "Invalid or expired OAuth state. Please try logging in again.",
         { status: 400 }
       );
     }
 
-    // ── 1. Exchange OAuth code for permanent tokens ──
+    const { codeVerifier, redirectTo } = stateData;
+
+    // 1. Exchange code for tokens
     const tokens = await exchangeCode(code, codeVerifier);
-    
-    // ── 2. Fetch authenticated profile identifiers ──
+
+    // 2. Fetch Whop user profile
     const whopUser = await getWhopUser(tokens.access_token);
     const whopUserId = whopUser.sub;
 
-    // ── 3. Evaluate Whop paywall validation scopes ──
+    // 3. Validate membership
     const admin = isAdminEmail(whopUser.email);
     const membership = admin
       ? { hasAccess: true, status: "admin" as const }
       : await checkActiveMembership(whopUserId);
 
-    // ── 4. Persist or update user configuration row ──
+    // 4. Upsert user record
     await db
       .insert(users)
       .values({
@@ -69,7 +64,7 @@ export async function GET(request: Request) {
         },
       });
 
-    // ── 5. Inject encrypted iron-session parameters ──
+    // 5. Create iron-session
     const session = await getSession();
     session.whopUserId = whopUserId;
     session.email = whopUser.email ?? "";
@@ -78,40 +73,31 @@ export async function GET(request: Request) {
     session.refreshToken = tokens.refresh_token;
     await session.save();
 
-    // Read the originally-requested destination (set by login/route.ts,
-    // itself set from middleware.ts's redirect_to param) BEFORE clearing
-    // it below. Re-validated with the same guard as login/route.ts even
-    // though this cookie is httpOnly/server-set — it still traces back to
-    // a client-controlled query param, so the check is worth repeating
-    // rather than trusting it implicitly at the point it actually redirects.
-    const rawRedirectTo = cookieStore.get("post_login_redirect")?.value;
-    const redirectTo =
-      rawRedirectTo && rawRedirectTo.startsWith("/") && !rawRedirectTo.startsWith("//")
-        ? rawRedirectTo
-      : "/home";
+    // 6. Determine destination
+    const destination = membership.hasAccess
+      ? redirectTo || "/home"
+      : "/?membership=required";
 
-    clearPkceCookies();
+    // 🌟 THE IFRAME FIX: Return 200 HTML instead of 302 redirect.
+    // Browsers drop Set-Cookie headers on 302 cross-site redirects inside iframes.
+    // A 200 response forces the browser to store the cookie BEFORE navigating.
+    const html = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="refresh" content="0;url=${destination}" />
+  </head>
+  <body style="background:#1f1a2e;color:#fff;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+    <p>Authenticated — redirecting...</p>
+    <script>window.location.href = ${JSON.stringify(destination)};</script>
+  </body>
+</html>`;
 
-    if (!membership.hasAccess) {
-      redirect("/?membership=required");
-    }
-
-    redirect(redirectTo);
+    return new Response(html, {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
   } catch (err: any) {
-    clearPkceCookies();
-
-    // CRITICAL Next.js Guard: redirect() signals navigation by throwing an internal 
-    // error template. If caught and suppressed, navigation links break completely.
-    if (err instanceof Error && (err.message === "NEXT_REDIRECT" || (err as any).digest?.startsWith("NEXT_REDIRECT"))) {
-      throw err;
-    }
-
-    console.error("[Fatal Auth Callback Exception]:", err);
-    
-    // Outputs the precise system error directly to your browser window
-    return new Response(
-      `Local Server Error (500):\nReason: ${err.message || String(err)}\n\nCheck your terminal and .env.local file properties.`, 
-      { status: 500, headers: { "Content-Type": "text/plain" } }
-    );
+    console.error("[whop-callback] Fatal:", err);
+    return new Response(`Auth error: ${err.message}`, { status: 500 });
   }
 }

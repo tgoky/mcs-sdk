@@ -13,12 +13,12 @@ const isProd = process.env.NODE_ENV === "production";
 
 // 🌟 CHIPS Partitioned Cookies for Whop iFrame Support
 const COOKIE_OPTIONS = {
-  secure: isProd,
+  secure: true,              // Always true for SameSite=None
   httpOnly: true,
   path: "/",
-  sameSite: (isProd ? "none" : "lax") as "none" | "lax",
-  ...(isProd ? { partitioned: true } : {}),
-  maxAge: 60 * 60 * 24 * 14, // 14 days
+  sameSite: "none" as const, // Always "none" for iframe
+  partitioned: true,          // CHIPS partitioned cookie
+  maxAge: 60 * 60 * 24 * 14,
 };
 
 export async function middleware(request: NextRequest) {
