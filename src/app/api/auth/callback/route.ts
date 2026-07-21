@@ -1,4 +1,5 @@
 // src/app/api/auth/callback/whop/route.ts
+import { NextResponse } from "next/server";
 import { getIronSession } from "iron-session";
 import { sessionOptions, type SessionData } from "@/lib/session";
 import { exchangeCode, getWhopUser } from "@/lib/whop";
@@ -16,7 +17,6 @@ function buildRedirectHtml(destination: string): string {
   <body style="background:#1f1a2e;color:#fff;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
     <p>Authenticated — redirecting...</p>
     <script>
-      // Navigates inside Whop iframe context
       window.location.href = ${JSON.stringify(destination)};
     </script>
   </body>
@@ -31,19 +31,29 @@ export async function GET(request: Request) {
     const error = searchParams.get("error");
 
     if (error) {
-      return new Response(`Whop OAuth error: ${error}`, { status: 400 });
+      return new NextResponse(`Whop OAuth error: ${error}`, { status: 400 });
     }
 
     if (!code || !rawState) {
-      return new Response("Missing code or state parameter", { status: 400 });
+      return new NextResponse("Missing code or state parameter", { status: 400 });
     }
 
-    // 1. Decrypt state parameter
-    const stateData = decryptOAuthState(rawState, process.env.SESSION_SECRET!);
+    // Guard: Validate SESSION_SECRET length before running crypto
+    const secret = process.env.SESSION_SECRET;
+    if (!secret || secret.length < 32) {
+      console.error("[whop-callback] CRITICAL: SESSION_SECRET is missing or under 32 characters in Vercel env settings.");
+      return new NextResponse(
+        "Server configuration error: SESSION_SECRET must be set in environment variables and be at least 32 characters long.",
+        { status: 500 }
+      );
+    }
+
+    // 1. Decrypt OAuth state parameter
+    const stateData = decryptOAuthState(rawState, secret);
 
     if (!stateData?.codeVerifier) {
       console.error("[whop-callback] Failed to decrypt OAuth state");
-      return new Response(
+      return new NextResponse(
         "Invalid or expired OAuth state. Please try logging in again.",
         { status: 400 }
       );
@@ -51,7 +61,7 @@ export async function GET(request: Request) {
 
     const { codeVerifier, redirectTo } = stateData;
 
-    // 2. Exchange code for tokens
+    // 2. Exchange authorization code for tokens
     const tokens = await exchangeCode(code, codeVerifier);
 
     // 3. Fetch Whop user profile
@@ -81,13 +91,21 @@ export async function GET(request: Request) {
         },
       });
 
-    // 6. 3-arg getIronSession writing into sessionResponse
-    const sessionResponse = new Response(null, { status: 200 });
+    const destination = membership.hasAccess
+      ? redirectTo || "/home"
+      : "/?membership=required";
 
+    // 6. Create the NextResponse object with the redirect HTML payload
+    const response = new NextResponse(buildRedirectHtml(destination), {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+
+    // 7. Bind iron-session to NextResponse (Next.js automatically serializes Set-Cookie)
     const session = await getIronSession<SessionData>(
       request,
-      sessionResponse,
-      sessionOptions // Imported from @/lib/session
+      response,
+      sessionOptions
     );
 
     session.whopUserId = whopUserId;
@@ -96,30 +114,12 @@ export async function GET(request: Request) {
     session.subscriptionVerifiedAt = Date.now();
     session.refreshToken = tokens.refresh_token;
 
+    // Mutates response.cookies directly on the outgoing NextResponse instance
     await session.save();
 
-    // 7. Extract Set-Cookie header
-    const setCookieHeader = sessionResponse.headers.get("Set-Cookie");
-
-    if (!setCookieHeader) {
-      console.error("[whop-callback] CRITICAL: Set-Cookie header missing from sessionResponse");
-      return new Response("Session creation failed — cookie not set", { status: 500 });
-    }
-
-    const destination = membership.hasAccess
-      ? redirectTo || "/home"
-      : "/?membership=required";
-
-    // 8. Return 200 HTML with Set-Cookie attached
-    return new Response(buildRedirectHtml(destination), {
-      status: 200,
-      headers: {
-        "Content-Type": "text/html; charset=utf-8",
-        "Set-Cookie": setCookieHeader,
-      },
-    });
+    return response;
   } catch (err: any) {
     console.error("[whop-callback] Fatal:", err);
-    return new Response(`Auth error: ${err.message}`, { status: 500 });
+    return new NextResponse(`Auth error: ${err.message}`, { status: 500 });
   }
 }
