@@ -44,11 +44,27 @@ export async function middleware(request: NextRequest) {
 
   // 2. Kickout unauthenticated users directly to login flow
   if (!session.whopUserId) {
-    // 🌟 THE FIX: Block background router pre-fetches from triggering OAuth login redirects
-    if (
-      request.headers.get("next-router-prefetch") ||
-      request.headers.get("purpose") === "prefetch"
-    ) {
+    // 🌟 THE FIX: Any client-side transition (Link click, router.push, AND
+    // background prefetch) fetches the RSC payload directly instead of doing
+    // a full document navigation. These requests never set
+    // `sec-fetch-dest: document`, and carry the RSC/Next-Router-* headers.
+    // If we redirect *these* to a cross-origin URL (Whop), the browser has
+    // to preflight the follow-on hop, and the fetch spec forbids a redirect
+    // response to a preflight request — that's the exact
+    // "Redirect is not allowed for a preflight request" CORS crash.
+    // A same-origin redirect to /api/auth/login is fine on its own, but that
+    // route immediately 307s to Whop, so it inherits the same problem.
+    // Only real top-level document navigations are safe to redirect
+    // cross-origin (that's why the landing-page <a> button works) — so 401
+    // everything else and let the client fall back to a real navigation.
+    const isDocumentRequest = request.headers.get("sec-fetch-dest") === "document";
+    const isRscRequest =
+      request.headers.get("RSC") === "1" ||
+      request.headers.get("next-router-state-tree") !== null ||
+      request.headers.get("next-router-prefetch") !== null ||
+      request.headers.get("purpose") === "prefetch";
+
+    if (!isDocumentRequest || isRscRequest) {
       return new NextResponse(null, { status: 401 });
     }
 
