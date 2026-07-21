@@ -112,7 +112,7 @@ export async function GET(request: Request) {
     session.email = whopUser.email ?? "";
     session.subscriptionStatus = membership.status;
     session.subscriptionVerifiedAt = Date.now();
-    session.refreshToken = tokens.refresh_token;
+    // session.refreshToken = tokens.refresh_token;
 
     // Mutates response.cookies directly on the outgoing NextResponse instance
     await session.save();
