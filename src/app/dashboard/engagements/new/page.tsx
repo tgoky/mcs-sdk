@@ -10,12 +10,12 @@ import {
 } from "@/lib/copy";
 import { stripDraftSecrets } from "@/lib/draft-fields";
 
-type Step = "offer" | "credentials" | "stack" | "voice" | "confirm";
+type Step = "offer" | "stack" | "credentials" | "voice" | "confirm";
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "offer", label: "Your Offer" },
-  { id: "credentials", label: "Account Keys" },
   { id: "stack", label: "Connect Your Tools" },
+  { id: "credentials", label: "Account Keys" },
   { id: "voice", label: "Your Brand Voice" },
   { id: "confirm", label: "Review & Finish" },
 ];
@@ -25,6 +25,12 @@ interface Testimonial {
   role: string;
   company: string;
   quote: string;
+}
+
+interface ValidationError {
+  step: Step;
+  stepLabel: string;
+  issue: string;
 }
 
 interface FormData {
@@ -225,7 +231,7 @@ const DEFAULT_FORM: FormData = {
 // Draft persistence: survives page refresh / accidental navigation within
 // the same tab. Deliberately session-scoped (not localStorage) and
 // deliberately excludes API keys — secrets never touch browser storage,
-// even short-lived storage, so those three fields always come back empty
+// even short-lived storage, so those fields always come back empty
 // after a restore and the buyer re-pastes them.
 const DRAFT_KEY = "mcs:new-engagement:draft";
 const DRAFT_STEP_KEY = "mcs:new-engagement:step";
@@ -480,12 +486,9 @@ function SelectField({
 
 export default function NewEngagementPage() {
   const router = useRouter();
-const [step, setStep] = useState<Step>("offer");
-const [form, setForm] = useState<FormData>(DEFAULT_FORM);
-  // const [restoredDraft] = useState(
-  //   () => typeof window !== "undefined" && window.sessionStorage.getItem(DRAFT_KEY) !== null
-  // );
-const [showRestoredBanner, setShowRestoredBanner] = useState(false);
+  const [step, setStep] = useState<Step>("offer");
+  const [form, setForm] = useState<FormData>(DEFAULT_FORM);
+  const [showRestoredBanner, setShowRestoredBanner] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -577,37 +580,36 @@ const [showRestoredBanner, setShowRestoredBanner] = useState(false);
   // backup before anything else touches `form`. Skipped entirely when
   // sessionStorage already had something, since that's always the
   // freshest copy for this tab.
-  // UPDATED (Hydration-safe)
-useEffect(() => {
-  let cancelled = false;
+  useEffect(() => {
+    let cancelled = false;
 
-  // 1. Synchronously check sessionStorage on client mount
-  const localDraft = loadDraft();
-  const localStep = loadDraftStep();
+    // 1. Synchronously check sessionStorage on client mount
+    const localDraft = loadDraft();
+    const localStep = loadDraftStep();
 
-  if (localDraft || localStep) {
-    if (localDraft) setForm(localDraft);
-    if (localStep) setStep(localStep);
-    setShowRestoredBanner(true);
-    setHasHydratedServerDraft(true);
-    return; // <--- THE GUARD IS STILL HERE! Skips fetchServerDraft()
-  }
-
-  // 2. Only runs if sessionStorage was completely empty
-  (async () => {
-    const serverDraft = await fetchServerDraft();
-    if (!cancelled && serverDraft) {
-      setForm((f) => ({ ...f, ...serverDraft.formData }));
-      setStep(serverDraft.step);
+    if (localDraft || localStep) {
+      if (localDraft) setForm(localDraft);
+      if (localStep) setStep(localStep);
       setShowRestoredBanner(true);
+      setHasHydratedServerDraft(true);
+      return; // Skips fetchServerDraft()
     }
-    if (!cancelled) setHasHydratedServerDraft(true);
-  })();
 
-  return () => {
-    cancelled = true;
-  };
-}, []);
+    // 2. Only runs if sessionStorage was completely empty
+    (async () => {
+      const serverDraft = await fetchServerDraft();
+      if (!cancelled && serverDraft) {
+        setForm((f) => ({ ...f, ...serverDraft.formData }));
+        setStep(serverDraft.step);
+        setShowRestoredBanner(true);
+      }
+      if (!cancelled) setHasHydratedServerDraft(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Draft autosave: keeps onboarding progress across an accidental refresh
   // or back/forward navigation. API keys are stripped before storage inside
@@ -874,9 +876,105 @@ useEffect(() => {
     return `eng_${slug}_${Date.now().toString(36)}`;
   }
 
+  // ── PRE-FLIGHT AUDIT ENGINE: Scans all 5 steps and flags missing inputs ──
+  function getValidationErrors(): ValidationError[] {
+    const errors: ValidationError[] = [];
+
+    // Step 1: Offer
+    if (!form.buyerName.trim()) {
+      errors.push({ step: "offer", stepLabel: "Your Offer", issue: "Client / Company Name is required" });
+    }
+    if (!form.offerName.trim()) {
+      errors.push({ step: "offer", stepLabel: "Your Offer", issue: "Offer Name ('What are you selling?') is required" });
+    }
+    if (!form.offerIcp.trim()) {
+      errors.push({ step: "offer", stepLabel: "Your Offer", issue: "Ideal Customer Profile (ICP) is required" });
+    }
+
+    // Step 2: Stack
+    if (!form.bookingPlatform) {
+      errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "Booking Calendar selection is required" });
+    }
+    if ((form.bookingPlatform === "calendly" || form.bookingPlatform === "cal_com") && !form.bookingStandingLink.trim()) {
+      errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "Standing booking page link is required" });
+    }
+    if (form.bookingPlatform === "ghl_calendar" && !form.bookingLocationId.trim()) {
+      errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "GoHighLevel Location ID is required for GHL Calendar" });
+    }
+    if (!form.emailPlatform) {
+      errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "Email Platform selection is required" });
+    }
+    if (!form.hostingPlatform) {
+      errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "Hosting platform selection is required" });
+    }
+
+    // Step 3: Account Keys
+    if (!form.bookingApiKey.trim()) {
+      errors.push({ step: "credentials", stepLabel: "Account Keys", issue: `Booking Platform (${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform}) API Key is missing` });
+    }
+    if (form.emailPlatform === "smtp") {
+      if (!form.smtpHost.trim() || !form.smtpPort.trim() || !form.smtpUsername.trim() || !form.smtpPassword.trim() || !form.smtpFromAddress.trim()) {
+        errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "Complete SMTP server credentials are required (host, port, username, password, from address)" });
+      }
+    } else if (!form.emailApiKey.trim()) {
+      errors.push({ step: "credentials", stepLabel: "Account Keys", issue: `Email Platform (${EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform}) API Key is missing` });
+    }
+
+    if (form.emailPlatform === "klaviyo") {
+      if (!form.emailTargetListId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "Klaviyo Target List (Pile-On) must be selected" });
+      if (!form.emailRecoveryListId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "Klaviyo Recovery List (Win-Back) must be selected" });
+    }
+    if (form.emailPlatform === "activecampaign") {
+      if (!form.emailActiveCampaignBaseUrl.trim()) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "ActiveCampaign Base API URL is required" });
+      if (!form.emailTargetListId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "ActiveCampaign Target List must be selected" });
+      if (!form.emailRecoveryListId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "ActiveCampaign Recovery List must be selected" });
+    }
+    if (form.emailPlatform === "mailchimp" || form.emailPlatform === "convertkit") {
+      if (!form.emailTargetListId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: `${EMAIL_PLATFORM_LABELS[form.emailPlatform]} Target List / Form ID is required` });
+      if (!form.emailRecoveryListId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: `${EMAIL_PLATFORM_LABELS[form.emailPlatform]} Recovery List / Tag ID is required` });
+    }
+    if (form.emailPlatform === "ghl") {
+      if (!form.emailGhlLocationId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "GHL Location selection is required" });
+      if (!form.emailGhlTargetWorkflowId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "GHL Target Workflow (Pile-On) must be selected" });
+      if (!form.emailGhlRecoveryWorkflowId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "GHL Recovery Workflow (Win-Back) must be selected" });
+    }
+    if (form.hostingPlatform !== "ghl" && form.hostingPlatform !== "plain_html" && !form.hostingApiKey.trim()) {
+      errors.push({ step: "credentials", stepLabel: "Account Keys", issue: `Hosting Platform (${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform}) API Token is missing` });
+    }
+
+    // Step 4: Voice
+    const wordCount = form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount < 500) {
+      errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: `Brand Voice sample needs at least 500 words (currently ${wordCount} words)` });
+    }
+    const questionsCount = form.topCallQuestions.split("\n").map((q) => q.trim()).filter(Boolean).length;
+    if (questionsCount < 3) {
+      errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: `Top Call Questions requires at least 3 items (currently ${questionsCount} provided)` });
+    }
+    const objectionsCount = form.topObjections.split("\n").map((o) => o.trim()).filter(Boolean).length;
+    if (objectionsCount < 2) {
+      errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: `Top Objections requires at least 2 items (currently ${objectionsCount} provided)` });
+    }
+
+    return errors;
+  }
+
+  function isCurrentStepValid(): boolean {
+    const allErrors = getValidationErrors();
+    return !allErrors.some((e) => e.step === step);
+  }
+
   async function submit() {
     setSubmitting(true);
     setError(null);
+
+    // ── Pre-flight validation gate ──
+    const validationErrors = getValidationErrors();
+    if (validationErrors.length > 0) {
+      setError(`Cannot finish setup yet — ${validationErrors.length} requirement(s) missing. Scroll up to see the checklist.`);
+      setSubmitting(false);
+      return;
+    }
 
     const engagementId = form.engagementId || generateEngagementId();
 
@@ -914,7 +1012,7 @@ useEffect(() => {
 
     const testimonials = form.testimonials.filter((t) => t.name && t.role && t.quote);
 
- const payload = {
+    const payload = {
       engagementId,
       whopUserId: "from_session",
       buyerName: form.buyerName,
@@ -965,12 +1063,11 @@ useEffect(() => {
         },
 
         // 4. Booking Platform Meta (Fixes Calendly Booking + GHL Email location_id bug)
-       // ✅ Safe, non-destructive assignment matrix
-booking_platform_meta: {
-  location_id: form.bookingPlatform === "ghl_calendar"
-    ? (form.bookingLocationId || undefined)
-    : (form.emailPlatform === "ghl" ? form.emailGhlLocationId || undefined : undefined),
-},
+        booking_platform_meta: {
+          location_id: form.bookingPlatform === "ghl_calendar"
+            ? (form.bookingLocationId || undefined)
+            : (form.emailPlatform === "ghl" ? form.emailGhlLocationId || undefined : undefined),
+        },
 
         // 5. Unlisted platform auto-docs discovery triggers
         ...((form.bookingPlatform === "discover_from_docs" || form.hostingPlatform === "discover_from_docs") && {
@@ -1096,6 +1193,8 @@ booking_platform_meta: {
     }
   }
 
+  const allValidationErrors = getValidationErrors();
+
   return (
     <div className="space-y-6 w-full max-w-none px-1 transition-colors duration-200" style={{ color: "var(--text-secondary)" }}>
       {/* Header */}
@@ -1158,14 +1257,14 @@ booking_platform_meta: {
                   className="flex-1 rounded-md px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600"
                   style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
                 />
-            <button
-  type="button"
-  onClick={runSmartPrefill}
-  disabled={prefillLoading || !prefillDomain.trim()}
-  className="px-3.5 py-2 text-xs font-bold font-mono uppercase tracking-wider rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0"
->
-  {prefillLoading ? "Crawling…" : "Pre-fill"}
-</button>
+                <button
+                  type="button"
+                  onClick={runSmartPrefill}
+                  disabled={prefillLoading || !prefillDomain.trim()}
+                  className="px-3.5 py-2 text-xs font-bold font-mono uppercase tracking-wider rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0"
+                >
+                  {prefillLoading ? "Crawling…" : "Pre-fill"}
+                </button>
               </div>
               {prefillError && (
                 <p className="text-[11px] font-mono" style={{ color: "var(--error)" }}>{prefillError}</p>
@@ -1243,108 +1342,6 @@ booking_platform_meta: {
                 Personalize each booking confirmation using AI, based on who booked the call.
               </label>
             </div>
-          </div>
-        )}
-
-        {/* Step: Account Keys */}
-        {step === "credentials" && (
-          <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-            <div className="md:col-span-2 text-xs font-mono">
-              <p className="font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>How we keep this secure</p>
-              <p className="font-medium mt-0.5" style={{ color: "var(--text-muted)" }}>
-                Your keys are encrypted before they&apos;re stored, and aren&apos;t shown again once saved.
-              </p>
-            </div>
-            <InputField
-              label={`${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform} API Key`}
-              value={form.bookingApiKey}
-              onChange={(v) => set("bookingApiKey", v)}
-              type="password"
-              placeholder="Paste your API key here..."
-              helpText={form.bookingPlatform === "calendly" ? "From Calendly → Integrations & Apps → API & Webhooks → Personal Access Tokens." : undefined}
-              required
-            />
-            {form.emailPlatform === "smtp" ? (
-              <>
-                <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
-                  Custom SMTP has no single API key — enter your mail server's connection details below. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
-                </div>
-                <InputField
-                  label="SMTP Host"
-                  value={form.smtpHost}
-                  onChange={(v) => set("smtpHost", v)}
-                  placeholder="smtp.yourprovider.com"
-                  required
-                />
-                <InputField
-                  label="SMTP Port"
-                  value={form.smtpPort}
-                  onChange={(v) => set("smtpPort", v)}
-                  placeholder="587"
-                  required
-                />
-                <InputField
-                  label="SMTP Username"
-                  value={form.smtpUsername}
-                  onChange={(v) => set("smtpUsername", v)}
-                  placeholder="mailer@yourdomain.com"
-                  required
-                />
-                <InputField
-                  label="SMTP Password"
-                  value={form.smtpPassword}
-                  onChange={(v) => set("smtpPassword", v)}
-                  type="password"
-                  placeholder="••••••••"
-                  required
-                />
-                <InputField
-                  label="From address"
-                  value={form.smtpFromAddress}
-                  onChange={(v) => set("smtpFromAddress", v)}
-                  placeholder="hello@yourdomain.com"
-                  required
-                />
-                <InputField
-                  label="From name (optional)"
-                  value={form.smtpFromName}
-                  onChange={(v) => set("smtpFromName", v)}
-                  placeholder="Your Company"
-                />
-                <div className="flex items-start space-x-3 md:col-span-2 select-none">
-                  <input
-                    type="checkbox"
-                    id="smtpSecure"
-                    checked={form.smtpSecure}
-                    onChange={(e) => set("smtpSecure", e.target.checked)}
-                    className="w-4 h-4 rounded cursor-pointer mt-0.5 border border-zinc-300 dark:border-zinc-800"
-                    style={{ accentColor: "var(--accent)" }}
-                  />
-                  <label htmlFor="smtpSecure" className="text-xs cursor-pointer leading-normal" style={{ color: "var(--text-secondary)" }}>
-                    Use implicit TLS (typically port 465). Leave unchecked for STARTTLS on 587.
-                  </label>
-                </div>
-              </>
-            ) : (
-              <InputField
-                label={`${EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform} API Key`}
-                value={form.emailApiKey}
-                onChange={(v) => set("emailApiKey", v)}
-                type="password"
-                placeholder="Paste your API key here..."
-                required
-              />
-            )}
-            {form.hostingPlatform !== "ghl" && form.hostingPlatform !== "plain_html" && (
-              <InputField
-                label={`${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform} ${form.hostingPlatform === "wordpress" ? "Application Password (user:password)" : "API Token"}`}
-                value={form.hostingApiKey}
-                onChange={(v) => set("hostingApiKey", v)}
-                type="password"
-                placeholder="Paste your API key or token here..."
-                helpText={form.hostingPlatform === "wordpress" ? "WordPress → Users → Profile → Application Passwords. Format: username:password." : "If this isn't available yet, we'll generate the page as ready-to-paste HTML."}
-              />
-            )}
           </div>
         )}
 
@@ -1454,15 +1451,15 @@ booking_platform_meta: {
                   helpText="Select the audience list configured to lock in canceled no-show recoveries."
                 />
                 <SelectField
-      label="Klaviyo Long-Term Nurture List"
-      value={form.longTermNurtureListId}
-      onChange={(v) => set("longTermNurtureListId", v)}
-      options={[
-        { value: "", label: "-- Choose a Long-Term Nurture List (Optional) --" },
-        ...klaviyoLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` }))
-      ]}
-      helpText="Select the list where prospects should be auto-enrolled when their 30-day win-back window expires."
-    />
+                  label="Klaviyo Long-Term Nurture List"
+                  value={form.longTermNurtureListId}
+                  onChange={(v) => set("longTermNurtureListId", v)}
+                  options={[
+                    { value: "", label: "-- Choose a Long-Term Nurture List (Optional) --" },
+                    ...klaviyoLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` }))
+                  ]}
+                  helpText="Select the list where prospects should be auto-enrolled when their 30-day win-back window expires."
+                />
               </>
             )}
 
@@ -1513,12 +1510,12 @@ booking_platform_meta: {
                   helpText="The audience for your win-back recovery sequence."
                 />
                 <InputField
-      label="ActiveCampaign Recovery Automation ID"
-      value={form.recoveryAutomationId}
-      onChange={(v) => set("recoveryAutomationId", v)}
-      placeholder="e.g. 12"
-      helpText="The numeric ID of your win-back automation flow inside ActiveCampaign, used for direct API exits."
-    />
+                  label="ActiveCampaign Recovery Automation ID"
+                  value={form.recoveryAutomationId}
+                  onChange={(v) => set("recoveryAutomationId", v)}
+                  placeholder="e.g. 12"
+                  helpText="The numeric ID of your win-back automation flow inside ActiveCampaign, used for direct API exits."
+                />
               </>
             )}
 
@@ -1663,21 +1660,21 @@ booking_platform_meta: {
             )}
 
             <SelectField
-  label="Pre-Call Brief Schedule"
-  value={form.briefTriggerType}
-  onChange={(v) => set("briefTriggerType", v as any)}
-  options={[
-    { 
-      value: "nightly", 
-      label: "Nightly Batch — Group and brief tomorrow's roster at 20:00 UTC" 
-    },
-    { 
-      value: "dynamic_webhook", 
-      label: "Dynamic Poll — Brief individually within 15 minutes of entering the lead window" 
-    },
-  ]}
-  helpText="Choose 'Dynamic' if your sales reps require briefs to be generated on-demand as soon as an upcoming call crosses into its imminent lead-time window."
-/>
+              label="Pre-Call Brief Schedule"
+              value={form.briefTriggerType}
+              onChange={(v) => set("briefTriggerType", v as any)}
+              options={[
+                { 
+                  value: "nightly", 
+                  label: "Nightly Batch — Group and brief tomorrow's roster at 20:00 UTC" 
+                },
+                { 
+                  value: "dynamic_webhook", 
+                  label: "Dynamic Poll — Brief individually within 15 minutes of entering the lead window" 
+                },
+              ]}
+              helpText="Choose 'Dynamic' if your sales reps require briefs to be generated on-demand as soon as an upcoming call crosses into its imminent lead-time window."
+            />
 
             <SelectField
               label="Where is the confirmation page hosted?"
@@ -2206,6 +2203,108 @@ booking_platform_meta: {
           </div>
         )}
 
+        {/* Step: Account Keys */}
+        {step === "credentials" && (
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+            <div className="md:col-span-2 text-xs font-mono">
+              <p className="font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>How we keep this secure</p>
+              <p className="font-medium mt-0.5" style={{ color: "var(--text-muted)" }}>
+                Your keys are encrypted before they&apos;re stored, and aren&apos;t shown again once saved.
+              </p>
+            </div>
+            <InputField
+              label={`${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform} API Key`}
+              value={form.bookingApiKey}
+              onChange={(v) => set("bookingApiKey", v)}
+              type="password"
+              placeholder="Paste your API key here..."
+              helpText={form.bookingPlatform === "calendly" ? "From Calendly → Integrations & Apps → API & Webhooks → Personal Access Tokens." : undefined}
+              required
+            />
+            {form.emailPlatform === "smtp" ? (
+              <>
+                <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
+                  Custom SMTP has no single API key — enter your mail server's connection details below. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
+                </div>
+                <InputField
+                  label="SMTP Host"
+                  value={form.smtpHost}
+                  onChange={(v) => set("smtpHost", v)}
+                  placeholder="smtp.yourprovider.com"
+                  required
+                />
+                <InputField
+                  label="SMTP Port"
+                  value={form.smtpPort}
+                  onChange={(v) => set("smtpPort", v)}
+                  placeholder="587"
+                  required
+                />
+                <InputField
+                  label="SMTP Username"
+                  value={form.smtpUsername}
+                  onChange={(v) => set("smtpUsername", v)}
+                  placeholder="mailer@yourdomain.com"
+                  required
+                />
+                <InputField
+                  label="SMTP Password"
+                  value={form.smtpPassword}
+                  onChange={(v) => set("smtpPassword", v)}
+                  type="password"
+                  placeholder="••••••••"
+                  required
+                />
+                <InputField
+                  label="From address"
+                  value={form.smtpFromAddress}
+                  onChange={(v) => set("smtpFromAddress", v)}
+                  placeholder="hello@yourdomain.com"
+                  required
+                />
+                <InputField
+                  label="From name (optional)"
+                  value={form.smtpFromName}
+                  onChange={(v) => set("smtpFromName", v)}
+                  placeholder="Your Company"
+                />
+                <div className="flex items-start space-x-3 md:col-span-2 select-none">
+                  <input
+                    type="checkbox"
+                    id="smtpSecure"
+                    checked={form.smtpSecure}
+                    onChange={(e) => set("smtpSecure", e.target.checked)}
+                    className="w-4 h-4 rounded cursor-pointer mt-0.5 border border-zinc-300 dark:border-zinc-800"
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                  <label htmlFor="smtpSecure" className="text-xs cursor-pointer leading-normal" style={{ color: "var(--text-secondary)" }}>
+                    Use implicit TLS (typically port 465). Leave unchecked for STARTTLS on 587.
+                  </label>
+                </div>
+              </>
+            ) : (
+              <InputField
+                label={`${EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform} API Key`}
+                value={form.emailApiKey}
+                onChange={(v) => set("emailApiKey", v)}
+                type="password"
+                placeholder="Paste your API key here..."
+                required
+              />
+            )}
+            {form.hostingPlatform !== "ghl" && form.hostingPlatform !== "plain_html" && (
+              <InputField
+                label={`${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform} ${form.hostingPlatform === "wordpress" ? "Application Password (user:password)" : "API Token"}`}
+                value={form.hostingApiKey}
+                onChange={(v) => set("hostingApiKey", v)}
+                type="password"
+                placeholder="Paste your API key or token here..."
+                helpText={form.hostingPlatform === "wordpress" ? "WordPress → Users → Profile → Application Passwords. Format: username:password." : "If this isn't available yet, we'll generate the page as ready-to-paste HTML."}
+              />
+            )}
+          </div>
+        )}
+
         {/* Step: Your Brand Voice */}
         {step === "voice" && (
           <div className="space-y-6 w-full">
@@ -2213,49 +2312,49 @@ booking_platform_meta: {
               <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
                 How should we learn this client&apos;s voice?
               </label>
-            <div className="flex gap-2">
-  <button
-    type="button"
-    onClick={() => set("voiceSource", "scrape")}
-    className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
-      form.voiceSource === "scrape"
-        ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
-        : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
-    }`}
-  >
-    <span className="font-bold uppercase tracking-wider font-mono block">
-      Scrape their website
-    </span>
-    <p className={`mt-1 leading-relaxed font-normal ${
-      form.voiceSource === "scrape" 
-        ? "text-zinc-700 dark:text-zinc-300" 
-        : "text-zinc-500 dark:text-zinc-400"
-    }`}>
-      We crawl their site (and recent broadcast emails, if Klaviyo is connected) automatically. Pasting a sample below too still helps if the crawl comes up short.
-    </p>
-  </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => set("voiceSource", "scrape")}
+                  className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
+                    form.voiceSource === "scrape"
+                      ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
+                      : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
+                  }`}
+                >
+                  <span className="font-bold uppercase tracking-wider font-mono block">
+                    Scrape their website
+                  </span>
+                  <p className={`mt-1 leading-relaxed font-normal ${
+                    form.voiceSource === "scrape" 
+                      ? "text-zinc-700 dark:text-zinc-300" 
+                      : "text-zinc-500 dark:text-zinc-400"
+                  }`}>
+                    We crawl their site (and recent broadcast emails, if Klaviyo is connected) automatically. Pasting a sample below too still helps if the crawl comes up short.
+                  </p>
+                </button>
 
-  <button
-    type="button"
-    onClick={() => set("voiceSource", "manual")}
-    className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
-      form.voiceSource === "manual"
-        ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
-        : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
-    }`}
-  >
-    <span className="font-bold uppercase tracking-wider font-mono block">
-      Paste a writing sample
-    </span>
-    <p className={`mt-1 leading-relaxed font-normal ${
-      form.voiceSource === "manual" 
-        ? "text-zinc-700 dark:text-zinc-300" 
-        : "text-zinc-500 dark:text-zinc-400"
-    }`}>
-      Sales copy, call transcripts, or email examples — ready to use right now.
-    </p>
-  </button>
-</div>
+                <button
+                  type="button"
+                  onClick={() => set("voiceSource", "manual")}
+                  className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
+                    form.voiceSource === "manual"
+                      ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
+                      : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
+                  }`}
+                >
+                  <span className="font-bold uppercase tracking-wider font-mono block">
+                    Paste a writing sample
+                  </span>
+                  <p className={`mt-1 leading-relaxed font-normal ${
+                    form.voiceSource === "manual" 
+                      ? "text-zinc-700 dark:text-zinc-300" 
+                      : "text-zinc-500 dark:text-zinc-400"
+                  }`}>
+                    Sales copy, call transcripts, or email examples — ready to use right now.
+                  </p>
+                </button>
+              </div>
             </div>
 
             {form.voiceSource === "scrape" && (
@@ -2393,29 +2492,87 @@ booking_platform_meta: {
           </div>
         )}
 
-        {/* Step: Review & Finish */}
+        {/* Step: Review & Finish — WITH DYNAMIC MISSING REQUIREMENTS CHECKLIST */}
         {step === "confirm" && (
-          <div className="space-y-3 w-full">
-            <h2 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>Review your setup</h2>
-            <div className="text-xs font-mono font-medium space-y-2 rounded-lg p-4 shadow-xs" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-              {[
-                ["Client Name", form.buyerName],
-                ["Selling Asset", form.offerName],
-                ["Price Baseline", form.offerPrice || "—"],
-                ["Booking Calendar", BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform],
-                ["Email Platform", EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform],
-                ["Hosting Node", HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform],
-                ["Brief Delivery Channel", BRIEF_DESTINATION_LABELS[form.briefDestination] ?? form.briefDestination],
-                ["Voice Corpus Size", `${form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length} words`],
-                ["Questions Matrix", `${form.topCallQuestions.split("\n").filter(Boolean).length}`],
-                ["Objections Logged", `${form.topObjections.split("\n").filter(Boolean).length}`],
-                ["Social Proof Count", `${form.testimonials.filter((t) => t.name && t.role && t.quote).length}`],
-              ].map(([label, value]) => (
-                <div key={label} className="flex justify-between pb-1.5 last:pb-0" style={{ borderBottom: "1px solid var(--border)" }}>
-                  <span style={{ color: "var(--text-muted)" }}>{label}</span>
-                  <span className="text-[11px] font-bold" style={{ color: "var(--text-primary)" }}>{value}</span>
+          <div className="space-y-6 w-full">
+            {/* Pre-Flight Checklist Display */}
+            {allValidationErrors.length > 0 ? (
+              <div
+                className="rounded-lg p-4 space-y-3 font-mono border text-xs shadow-xs"
+                style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
+              >
+                <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: "var(--border)" }}>
+                  <span className="font-bold uppercase tracking-wider text-rose-500 flex items-center gap-1.5">
+                    <span>⚠</span> Pre-Flight Setup Checklist ({allValidationErrors.length} item{allValidationErrors.length > 1 ? "s" : ""} remaining)
+                  </span>
                 </div>
-              ))}
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  Some required fields are missing or incomplete. Jump back to the relevant step to complete them before finishing setup:
+                </p>
+                <div className="space-y-2 pt-1">
+                  {/* Group errors by step */}
+                  {(["offer", "stack", "credentials", "voice"] as Step[]).map((stepId) => {
+                    const stepErrors = allValidationErrors.filter((e) => e.step === stepId);
+                    if (stepErrors.length === 0) return null;
+                    const stepLabel = STEPS.find((s) => s.id === stepId)?.label ?? stepId;
+                    return (
+                      <div key={stepId} className="space-y-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                          {stepLabel}
+                        </span>
+                        {stepErrors.map((err, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between p-2 rounded border bg-background/60"
+                            style={{ borderColor: "var(--border)" }}
+                          >
+                            <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                              {err.issue}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setStep(err.step)}
+                              className="px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer border bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 shrink-0 ml-3"
+                            >
+                              Jump to Step →
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div
+                className="rounded-lg p-3 text-xs font-mono font-semibold flex items-center gap-2 border text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30"
+              >
+                <span>✓</span> All pre-flight setup checks passed! You are ready to launch this client.
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>Review your setup</h2>
+              <div className="text-xs font-mono font-medium space-y-2 rounded-lg p-4 shadow-xs" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                {[
+                  ["Client Name", form.buyerName],
+                  ["Selling Asset", form.offerName],
+                  ["Price Baseline", form.offerPrice || "—"],
+                  ["Booking Calendar", BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform],
+                  ["Email Platform", EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform],
+                  ["Hosting Node", HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform],
+                  ["Brief Delivery Channel", BRIEF_DESTINATION_LABELS[form.briefDestination] ?? form.briefDestination],
+                  ["Voice Corpus Size", `${form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length} words`],
+                  ["Questions Matrix", `${form.topCallQuestions.split("\n").filter(Boolean).length}`],
+                  ["Objections Logged", `${form.topObjections.split("\n").filter(Boolean).length}`],
+                  ["Social Proof Count", `${form.testimonials.filter((t) => t.name && t.role && t.quote).length}`],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex justify-between pb-1.5 last:pb-0" style={{ borderBottom: "1px solid var(--border)" }}>
+                    <span style={{ color: "var(--text-muted)" }}>{label}</span>
+                    <span className="text-[11px] font-bold" style={{ color: "var(--text-primary)" }}>{value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {error && (
@@ -2429,46 +2586,37 @@ booking_platform_meta: {
 
       {/* Navigation footer buttons */}
       <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
-       <button
-  onClick={() => {
-    const idx = STEPS.findIndex((s) => s.id === step);
-    if (idx > 0) setStep(STEPS[idx - 1].id);
-  }}
-  disabled={step === "offer"}
-  className="px-4 py-2 text-xs font-bold rounded-md transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
->
-  Back
-</button>
+        <button
+          onClick={() => {
+            const idx = STEPS.findIndex((s) => s.id === step);
+            if (idx > 0) setStep(STEPS[idx - 1].id);
+          }}
+          disabled={step === "offer"}
+          className="px-4 py-2 text-xs font-bold rounded-md transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
+        >
+          Back
+        </button>
 
-       {step !== "confirm" ? (
-  <button
-    onClick={() => {
-      const idx = STEPS.findIndex((s) => s.id === step);
-      if (idx < STEPS.length - 1) setStep(STEPS[idx + 1].id);
-    }}
-    className="px-5 py-2 text-xs font-bold rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 shadow-xs active:translate-y-px"
-  >
-    Next
-  </button>
-) : (
-  <button
-    onClick={submit}
-    disabled={
-      submitting ||
-      !form.buyerName ||
-      !form.bookingApiKey ||
-      !form.emailApiKey ||
-      (form.emailPlatform === "klaviyo" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
-      (form.emailPlatform === "activecampaign" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
-      (form.emailPlatform === "mailchimp" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
-      (form.emailPlatform === "convertkit" && (!form.emailTargetListId || !form.emailRecoveryListId)) ||
-      (form.emailPlatform === "ghl" && (!form.emailGhlLocationId || !form.emailGhlTargetWorkflowId || !form.emailGhlRecoveryWorkflowId))
-    }
-    className="px-5 py-2 text-xs font-bold rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
-  >
-    {submitting ? "Setting up..." : "Finish Setup"}
-  </button>
-)}
+        {step !== "confirm" ? (
+          <button
+            onClick={() => {
+              const idx = STEPS.findIndex((s) => s.id === step);
+              if (idx < STEPS.length - 1) setStep(STEPS[idx + 1].id);
+            }}
+            disabled={!isCurrentStepValid()}
+            className="px-5 py-2 text-xs font-bold rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+          >
+            Next
+          </button>
+        ) : (
+          <button
+            onClick={submit}
+            disabled={submitting || allValidationErrors.length > 0}
+            className="px-5 py-2 text-xs font-bold rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+          >
+            {submitting ? "Setting up..." : "Finish Setup"}
+          </button>
+        )}
       </div>
     </div>
   );
