@@ -10,7 +10,8 @@ export type SessionData = {
   refreshToken?: string;
 };
 
-const sessionOptions: SessionOptions = {
+// ← Added "export" here
+export const sessionOptions: SessionOptions = {
   password: process.env.SESSION_SECRET!,
   cookieName: "mudd_session",
   cookieOptions: {
@@ -23,8 +24,7 @@ const sessionOptions: SessionOptions = {
   },
 };
 
-// ✅ This single function works for BOTH Server Components AND Route Handlers
-// in iron-session v8+. The library handles response cookie writing internally.
+// Keep using this for Server Components (page.tsx, layout.tsx)
 export async function getSession() {
   const session = await getIronSession<SessionData>(
     await cookies(),
