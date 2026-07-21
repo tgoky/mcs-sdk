@@ -18,8 +18,8 @@ export const sessionOptions: SessionOptions = {
     secure: true,
     httpOnly: true,
     path: "/",
-    sameSite: "none" as const,
-    partitioned: true,
+    sameSite: "lax", // was "none"
+    // partitioned: true,  ← remove this line
     maxAge: 60 * 60 * 24 * 14,
   },
 };
