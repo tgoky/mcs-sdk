@@ -101,6 +101,7 @@ export default async function WorkspaceHomePage() {
             <ThemeToggle />
             <Link
               href="/api/auth/logout"
+               prefetch={false}
               className="font-mono text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
             >
               {HOME_COPY.signOut}

@@ -110,12 +110,14 @@ export default async function DashboardLayout({
             <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300 truncate max-w-[100px]">
               {displayName}
             </span>
-            <Link
-              href="/api/auth/logout"
-              className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors"
-            >
-              Sign out
-            </Link>
+           <form action="/api/auth/logout" method="POST">
+  <button 
+    type="submit" 
+    className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors bg-transparent border-none cursor-pointer p-0"
+  >
+    Sign out
+  </button>
+</form>
           </div>
           <ThemeToggle />
         </div>

@@ -71,6 +71,7 @@ export function MobileNav({ links, displayName }: { links: NavLink[]; displayNam
                 </span>
                 <a
                   href="/api/auth/logout"
+                  
                   className="text-xs font-mono text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
                 >
                   Sign out
