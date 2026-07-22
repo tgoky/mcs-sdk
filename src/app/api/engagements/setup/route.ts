@@ -76,7 +76,12 @@ export async function POST(request: Request) {
 
     finalStack.slack_webhook_url = credentials?.slack_webhook_url ?? finalStack.slack_webhook_url;
 
-    // ── Step 1: Pre-seed engagement row FIRST (Satisfies skill_runs Foreign Key) ──
+    // ── Step 1: Ensure engagement row exists (satisfies skill_runs FK) ──
+    // CRITICAL: must target engagementId's unique constraint explicitly.
+    // Without a target, onConflictDoNothing() falls back to the PRIMARY KEY
+    // (the random UUID `id`), which never conflicts — so if the row already
+    // exists under its business key, the INSERT throws a unique-constraint
+    // violation that the catch block intercepts before startRun ever runs.
     await db
       .insert(engagements)
       .values({
@@ -88,9 +93,9 @@ export async function POST(request: Request) {
         createdAt: new Date(),
         updatedAt: new Date(),
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing({ target: engagements.engagementId });
 
-    // ── Step 2: Now start the run in skill_runs ──
+    // ── Step 2: Now start the run (FK is satisfied) ──
     await startRun({
       id: runId,
       engagementId,
