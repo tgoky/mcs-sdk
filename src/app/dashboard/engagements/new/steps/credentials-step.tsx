@@ -1,10 +1,14 @@
 import { InputField, SelectField } from "../form-fields";
 import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS, HOSTING_PLATFORM_LABELS } from "@/lib/copy";
 import type { FormData, RemoteOption } from "../types";
+import type { BookingOption } from "../use-email-integrations";
 
 export function CredentialsStep({
   form,
   set,
+  bookingOptions,
+  fetchingBookingOptions,
+  bookingOptionsError,
   klaviyoLists,
   fetchingLists,
   listsFetchError,
@@ -21,6 +25,9 @@ export function CredentialsStep({
 }: {
   form: FormData;
   set: (field: keyof FormData, value: string | boolean) => void;
+  bookingOptions: BookingOption[];
+  fetchingBookingOptions: boolean;
+  bookingOptionsError: string | null;
   klaviyoLists: RemoteOption[];
   fetchingLists: boolean;
   listsFetchError: string | null;
@@ -38,24 +45,68 @@ export function CredentialsStep({
   return (
     <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
       <div className="md:col-span-2 text-xs font-mono">
-        <p className="font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>How we keep this secure</p>
+        <p className="font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+          How we keep this secure
+        </p>
         <p className="font-medium mt-0.5" style={{ color: "var(--text-muted)" }}>
           Your keys are encrypted before they&apos;re stored, and aren&apos;t shown again once saved.
         </p>
       </div>
+
+      {/* ── Booking Platform API Key Input ── */}
       <InputField
-        label={`${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform} API Key`}
+        label={`${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform} API Key / Token`}
         value={form.bookingApiKey}
         onChange={(v) => set("bookingApiKey", v)}
         type="password"
         placeholder="Paste your API key here..."
-        helpText={form.bookingPlatform === "calendly" ? "From Calendly → Integrations & Apps → API & Webhooks → Personal Access Tokens." : undefined}
+        helpText={
+          form.bookingPlatform === "calendly"
+            ? "From Calendly → Integrations & Apps → API & Webhooks → Personal Access Tokens."
+            : undefined
+        }
         required
       />
+
+      {/* ── Live Booking Calendar / Event Type Selection Dropdown ── */}
+      {form.bookingApiKey.trim() && (
+        <div className="md:col-span-2 space-y-2">
+          {fetchingBookingOptions && (
+            <div className="text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">
+              ⚡ Contacting {BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform}... Fetching live calendar options...
+            </div>
+          )}
+          {bookingOptionsError && (
+            <div className="rounded p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
+              ⚠ Warning: {bookingOptionsError}
+            </div>
+          )}
+          <SelectField
+            label="Target Booking Calendar / Event Page"
+            value={form.bookingStandingLink}
+            onChange={(v) => set("bookingStandingLink", v)}
+            required
+            disabled={fetchingBookingOptions}
+            options={[
+              { value: "", label: fetchingBookingOptions ? "-- Loading..." : "-- Choose an Active Calendar --" },
+              ...bookingOptions.map((b) => ({
+                value: b.link,
+                label: `${b.name} (${b.link || b.id})`,
+              })),
+            ]}
+            helpText="Selecting your calendar automatically binds its standing booking link."
+          />
+        </div>
+      )}
+
+      {/* ── Email Platform / Credentials ── */}
       {form.emailPlatform === "smtp" ? (
         <>
-          <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
-            Custom SMTP has no single API key — enter your mail server's connection details below. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
+          <div
+            className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium"
+            style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
+          >
+            Custom SMTP has no single API key — enter your mail servers connection details below. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
           </div>
           <InputField
             label="SMTP Host"
@@ -124,9 +175,7 @@ export function CredentialsStep({
             required
           />
 
-          {/* Lists/workflows for whichever email platform is selected — kept
-              directly beneath the API key field above so the fetch has a
-              key to use the moment it's pasted in. */}
+          {/* ── Klaviyo Target / Recovery Lists ── */}
           {form.emailPlatform === "klaviyo" && (
             <>
               {fetchingLists && (
@@ -147,7 +196,7 @@ export function CredentialsStep({
                 required
                 options={[
                   { value: "", label: "-- Choose an Active Klaviyo Audience --" },
-                  ...klaviyoLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` }))
+                  ...klaviyoLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` })),
                 ]}
                 helpText="Select the target list that houses your main pre-call nurture follow-up flow configuration."
               />
@@ -158,7 +207,7 @@ export function CredentialsStep({
                 required
                 options={[
                   { value: "", label: "-- Choose an Active Klaviyo Audience --" },
-                  ...klaviyoLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` }))
+                  ...klaviyoLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` })),
                 ]}
                 helpText="Select the audience list configured to lock in canceled no-show recoveries."
               />
@@ -168,13 +217,14 @@ export function CredentialsStep({
                 onChange={(v) => set("longTermNurtureListId", v)}
                 options={[
                   { value: "", label: "-- Choose a Long-Term Nurture List (Optional) --" },
-                  ...klaviyoLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` }))
+                  ...klaviyoLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` })),
                 ]}
                 helpText="Select the list where prospects should be auto-enrolled when their 30-day win-back window expires."
               />
             </>
           )}
 
+          {/* ── ActiveCampaign Target / Recovery Lists ── */}
           {form.emailPlatform === "activecampaign" && (
             <>
               <InputField
@@ -205,7 +255,7 @@ export function CredentialsStep({
                 disabled={!form.emailActiveCampaignBaseUrl.trim() || fetchingAcLists}
                 options={[
                   { value: "", label: form.emailActiveCampaignBaseUrl.trim() ? "-- Choose a List --" : "-- Enter API URL above first --" },
-                  ...acLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` }))
+                  ...acLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` })),
                 ]}
                 helpText="The audience for your main follow-up sequence."
               />
@@ -217,7 +267,7 @@ export function CredentialsStep({
                 disabled={!form.emailActiveCampaignBaseUrl.trim() || fetchingAcLists}
                 options={[
                   { value: "", label: form.emailActiveCampaignBaseUrl.trim() ? "-- Choose a List --" : "-- Enter API URL above first --" },
-                  ...acLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` }))
+                  ...acLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` })),
                 ]}
                 helpText="The audience for your win-back recovery sequence."
               />
@@ -231,6 +281,7 @@ export function CredentialsStep({
             </>
           )}
 
+          {/* ── Mailchimp ── */}
           {form.emailPlatform === "mailchimp" && (
             <>
               <InputField
@@ -252,6 +303,7 @@ export function CredentialsStep({
             </>
           )}
 
+          {/* ── ConvertKit ── */}
           {form.emailPlatform === "convertkit" && (
             <>
               <InputField
@@ -273,6 +325,7 @@ export function CredentialsStep({
             </>
           )}
 
+          {/* ── GoHighLevel Email Workflows ── */}
           {form.emailPlatform === "ghl" && (
             <>
               {fetchingGhlLocations && (
@@ -297,7 +350,7 @@ export function CredentialsStep({
                 required
                 options={[
                   { value: "", label: "-- Choose a Location --" },
-                  ...ghlLocations.map((l) => ({ value: l.id, label: l.name }))
+                  ...ghlLocations.map((l) => ({ value: l.id, label: l.name })),
                 ]}
                 helpText="Your GoHighLevel sub-account. Workflows will load after selection."
               />
@@ -323,7 +376,7 @@ export function CredentialsStep({
                     disabled={fetchingGhlWorkflows}
                     options={[
                       { value: "", label: fetchingGhlWorkflows ? "-- Loading..." : "-- Choose a Workflow --" },
-                      ...ghlWorkflows.map((w) => ({ value: w.id, label: w.name }))
+                      ...ghlWorkflows.map((w) => ({ value: w.id, label: w.name })),
                     ]}
                     helpText="The workflow for your pre-call automation."
                   />
@@ -335,7 +388,7 @@ export function CredentialsStep({
                     disabled={fetchingGhlWorkflows}
                     options={[
                       { value: "", label: fetchingGhlWorkflows ? "-- Loading..." : "-- Choose a Workflow --" },
-                      ...ghlWorkflows.map((w) => ({ value: w.id, label: w.name }))
+                      ...ghlWorkflows.map((w) => ({ value: w.id, label: w.name })),
                     ]}
                     helpText="The workflow for your win-back cancellation sequence."
                   />
@@ -345,14 +398,22 @@ export function CredentialsStep({
           )}
         </>
       )}
+
+      {/* ── Hosting Platform Credentials (Optional) ── */}
       {form.hostingPlatform !== "ghl" && form.hostingPlatform !== "plain_html" && (
         <InputField
-          label={`${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform} ${form.hostingPlatform === "wordpress" ? "Application Password (user:password)" : "API Token"}`}
+          label={`${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform} ${
+            form.hostingPlatform === "wordpress" ? "Application Password (user:password)" : "API Token"
+          }`}
           value={form.hostingApiKey}
           onChange={(v) => set("hostingApiKey", v)}
           type="password"
           placeholder="Paste your API key or token here..."
-          helpText={form.hostingPlatform === "wordpress" ? "WordPress → Users → Profile → Application Passwords. Format: username:password." : "If this isn't available yet, we'll generate the page as ready-to-paste HTML."}
+          helpText={
+            form.hostingPlatform === "wordpress"
+              ? "WordPress → Users → Profile → Application Passwords. Format: username:password."
+              : "If this isn't available yet, we'll generate the page as ready-to-paste HTML."
+          }
         />
       )}
     </div>

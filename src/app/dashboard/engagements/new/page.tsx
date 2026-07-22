@@ -167,22 +167,25 @@ export default function NewEngagementPage() {
 
         {step === "credentials" && (
           <CredentialsStep
-            form={form}
-            set={set}
-            klaviyoLists={emailIntegrations.klaviyoLists}
-            fetchingLists={emailIntegrations.fetchingLists}
-            listsFetchError={emailIntegrations.listsFetchError}
-            klaviyoMissingKeyMessage={emailIntegrations.klaviyoMissingKeyMessage}
-            acLists={emailIntegrations.acLists}
-            fetchingAcLists={emailIntegrations.fetchingAcLists}
-            acListsError={emailIntegrations.acListsError}
-            ghlLocations={emailIntegrations.ghlLocations}
-            fetchingGhlLocations={emailIntegrations.fetchingGhlLocations}
-            ghlLocationsError={emailIntegrations.ghlLocationsError}
-            ghlWorkflows={emailIntegrations.ghlWorkflows}
-            fetchingGhlWorkflows={emailIntegrations.fetchingGhlWorkflows}
-            ghlWorkflowsError={emailIntegrations.ghlWorkflowsError}
-          />
+  form={form}
+  set={set}
+  bookingOptions={emailIntegrations.bookingOptions}
+  fetchingBookingOptions={emailIntegrations.fetchingBookingOptions}
+  bookingOptionsError={emailIntegrations.bookingOptionsError}
+  klaviyoLists={emailIntegrations.klaviyoLists}
+  fetchingLists={emailIntegrations.fetchingLists}
+  listsFetchError={emailIntegrations.listsFetchError}
+  klaviyoMissingKeyMessage={emailIntegrations.klaviyoMissingKeyMessage}
+  acLists={emailIntegrations.acLists}
+  fetchingAcLists={emailIntegrations.fetchingAcLists}
+  acListsError={emailIntegrations.acListsError}
+  ghlLocations={emailIntegrations.ghlLocations}
+  fetchingGhlLocations={emailIntegrations.fetchingGhlLocations}
+  ghlLocationsError={emailIntegrations.ghlLocationsError}
+  ghlWorkflows={emailIntegrations.ghlWorkflows}
+  fetchingGhlWorkflows={emailIntegrations.fetchingGhlWorkflows}
+  ghlWorkflowsError={emailIntegrations.ghlWorkflowsError}
+/>
         )}
 
         {step === "voice" && (
