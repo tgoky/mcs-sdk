@@ -39,6 +39,14 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* Direct handles for the brand gold accent — new code (the queue panel,
+     future components) can reach for bg-gold/text-gold/border-gold instead
+     of remembering "amber means brand gold here." Same value in both
+     themes on purpose: the accent is a brand constant, not something that
+     should re-tint between light and dark. */
+  --color-gold: var(--gold);
+  --color-gold-hover: var(--gold-hover);
+  --color-gold-foreground: var(--gold-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -49,17 +57,68 @@
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
+/* BRAND PALETTE REPAINT                                                  */
+/*                                                                        */
+/* The whole app (see every dashboard/*.tsx file) already funnels its     */
+/* dark-mode surfaces through exactly two Tailwind shades — zinc-950 for  */
+/* "page background" and zinc-900 for "one step lighter, i.e. a card" —   */
+/* used either directly (dark:bg-zinc-950) or via their /NN opacity       */
+/* variants (dark:bg-zinc-900/50 etc., which is where the frosted-glass   */
+/* translucency in existing cards already comes from). Repainting those   */
+/* two shades here re-skins the entire dark theme centrally instead of    */
+/* touching every component file, and every existing opacity variant      */
+/* keeps working since Tailwind derives them from these same custom       */
+/* properties via color-mix.                                             */
+/*                                                                        */
+/* Confirmed safe by grepping the whole tree first: neither shade is ever */
+/* used bare (i.e. as a *light*-mode value) or as dark-mode *text* — both */
+/* are exclusively a dark-mode background/border role.                   */
+/*                                                                        */
+/* The amber-* scale gets the same treatment: it's used exclusively for  */
+/* "needs attention / pending" indicators (timed-out runs, cancelled      */
+/* runs, credential warnings, the theme toggle's sun icon) — never for    */
+/* anything unrelated — so repainting the whole scale to the exact brand  */
+/* gold keeps every existing indicator on-brand with no component edits.  */
+/* ────────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-zinc-950: #1f1a2e;
+  --color-zinc-900: #2d2643;
+
+  --color-amber-50: #fcf8f3;
+  --color-amber-100: #f7efe3;
+  --color-amber-200: #f2d7ad;
+  --color-amber-300: #ebc386;
+  --color-amber-400: #eab768;
+  --color-amber-500: #e7ac52;
+  --color-amber-600: #d18b20;
+  --color-amber-700: #a46e1b;
+  --color-amber-900: #3a2c18;
+  --color-amber-950: #241c0f;
+}
+
+/* ────────────────────────────────────────────────────────────────────── */
 /* LIGHT MODE DESIGN SYSTEM TOKENS */
 /* ────────────────────────────────────────────────────────────────────── */
 :root {
-  --background: oklch(0.985 0 0);
+  /* Faint brand (purple) undertone instead of a flat neutral white, so
+     light mode reads as the same product as the purple-tinted dark mode
+     rather than a completely separate palette. */
+  --background: oklch(0.985 0.003 290);
   --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
+
+  /* Cards/popovers: slightly DARKER than the background (mirrors dark
+     mode going slightly lighter), tinted toward the brand dark color
+     rather than a flat gray "colored fill" — this is what gives the
+     frosted look instead of a block of a totally different hue. */
+  --card: color-mix(in oklch, var(--background) 92%, #1f1a2e 8%);
   --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
+  --popover: color-mix(in oklch, var(--background) 92%, #1f1a2e 8%);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+
+  /* Brand accent (gold) drives the default button/ring color in both
+     themes — see the --gold tokens below. */
+  --primary: var(--gold);
+  --primary-foreground: var(--gold-foreground);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -67,47 +126,60 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: color-mix(in oklch, var(--background) 90%, #1f1a2e 10%);
+  --input: color-mix(in oklch, var(--background) 88%, #1f1a2e 12%);
+  --ring: color-mix(in oklch, var(--gold) 55%, transparent);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: var(--background);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-primary: var(--gold);
+  --sidebar-primary-foreground: var(--gold-foreground);
+  --sidebar-accent: var(--card);
   --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 
   /* Unified Light Mode Structural Surface Elements */
-  --surface: oklch(0.95 0.005 285);             /* Light structural card base */
-  --surface-2: oklch(0.89 0.005 285);           /* Nested/Hover element layers */
+  --surface: color-mix(in oklch, var(--background) 92%, #1f1a2e 8%);   /* Light structural card base — darker than bg, brand-tinted */
+  --surface-2: color-mix(in oklch, var(--background) 85%, #1f1a2e 15%); /* Nested/hover element layers */
   --text-primary: oklch(0.145 0 0);              /* High contrast body headings */
   --text-secondary: oklch(0.35 0.005 285);       /* Secondary layout text labels */
   --text-muted: oklch(0.55 0.005 285);           /* Least emphasis placeholders */
   --error: oklch(0.6 0.18 15);                   /* Polished semantic error colors */
   --success: oklch(0.45 0.15 155);               /* Polished semantic success indicators */
-  --accent-dim: oklch(0.5 0.2 260 / 6%);         /* Muted visual telemetry backgrounds */
+  --accent-dim: color-mix(in oklch, var(--gold) 8%, transparent); /* Muted gold telemetry/callout backgrounds */
+
+  /* Brand gold accent — sampled directly from product spec (#E7AC52).
+     Same value in light and dark so buttons/indicators/highlighted text
+     stay perfectly consistent across the theme toggle. */
+  --gold: #e7ac52;
+  --gold-hover: #d18b20;
+  --gold-foreground: #241c0f;
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
 /* DARK MODE DESIGN SYSTEM OVERRIDES */
 /* ────────────────────────────────────────────────────────────────────── */
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: #1f1a2e;
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+
+  /* Cards/popovers: slightly LIGHTER than the background instead of the
+     previous flat gray fill — same "one step off the page" idea as
+     surface/surface-2 below, kept in sync so shadcn components (Button,
+     etc.) and the hand-rolled card markup elsewhere read as one system. */
+  --card: #2d2643;
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
+  --popover: #2d2643;
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+
+  --primary: var(--gold);
+  --primary-foreground: var(--gold-foreground);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -117,30 +189,34 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: color-mix(in oklch, var(--gold) 60%, transparent);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
+  --sidebar: var(--background);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-primary: var(--gold);
+  --sidebar-primary-foreground: var(--gold-foreground);
+  --sidebar-accent: var(--card);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: var(--ring);
 
   /* Unified Dark Mode Structural Surface Elements */
-  --surface: oklch(0.21 0.006 285.885);         /* zinc-900 card backgrounds */
-  --surface-2: oklch(0.274 0.006 286.033);      /* zinc-800 nested wrappers */
+  --surface: #2d2643;    /* one step lighter than --background — frosted card, not a colored fill */
+  --surface-2: #352c4f;  /* nested/hover layer, one step lighter still */
   --text-primary: oklch(0.92 0.004 286.32);     /* zinc-200 clear readable headers */
   --text-secondary: oklch(0.705 0.015 286.067); /* zinc-400 copy layouts */
   --text-muted: oklch(0.552 0.016 285.938);     /* zinc-500 timeline parameters */
   --error: oklch(0.712 0.194 13.428);           /* rose-400 failure highlights */
   --success: oklch(0.765 0.177 163.223);        /* emerald-400 completed tasks */
-  --accent-dim: oklch(0.585 0.233 277.117 / 12%);
+  --accent-dim: color-mix(in oklch, var(--gold) 14%, transparent);
+
+  --gold: #e7ac52;
+  --gold-hover: #d18b20;
+  --gold-foreground: #241c0f;
 }
 
 @layer base {

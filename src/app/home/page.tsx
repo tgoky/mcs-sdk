@@ -54,7 +54,7 @@ function ProductCard({ product }: { product: WorkspaceProduct }) {
 
       <div className="pt-6">
         {isAvailable ? (
-          <Button className="w-full cursor-pointer bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 font-medium">
+          <Button className="w-full cursor-pointer bg-gold text-gold-foreground hover:bg-gold-hover font-medium">
             {HOME_COPY.openLabel} {product.name}
             <ArrowRight size={15} className="ml-1 transition-transform group-hover:translate-x-0.5" />
           </Button>
@@ -101,7 +101,7 @@ export default async function WorkspaceHomePage() {
             <ThemeToggle />
             <Link
               href="/api/auth/logout"
-               prefetch={false}
+                prefetch={false}
               className="font-mono text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
             >
               {HOME_COPY.signOut}

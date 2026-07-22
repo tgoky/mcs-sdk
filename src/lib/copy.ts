@@ -193,6 +193,52 @@ export const BRIEF_DESTINATION_LABELS: Record<string, string> = {
   crm_note: "Note in your CRM",
 };
 
+// ---------------------------------------------------------------------------
+// Queue copy — see src/lib/queue.ts. These translate the raw
+// pending_actions.action_type and human_blockers.blocker_type enum values
+// (see the comments above those columns in src/models/schema.ts) into what
+// a human should actually read on the queue panel and sidebar badge.
+// ---------------------------------------------------------------------------
+
+export const ACTION_TYPE_LABELS: Record<string, string> = {
+  webhook_enrollment: "Enroll prospect from booking webhook",
+  cohort_membership_add: "Add prospect to cohort",
+  cohort_membership_remove: "Remove prospect from cohort",
+};
+
+export const BLOCKER_TYPE_LABELS: Record<string, string> = {
+  video_recording: "Video recording needed",
+  a2p_10dlc_approval: "A2P 10DLC approval pending",
+  editor_hire: "Editor needs to be hired",
+  credential_grant: "Credential access needed",
+  buyer_content_approval: "Waiting on your content approval",
+  other: "Needs your attention",
+};
+
+export const QUEUE_COPY = {
+  sectionTitle: "Queue",
+  sectionSubtitle: "Ranked by priority — the top item needs you first.",
+  emptyState: "Nothing waiting on you right now.",
+  sidebarLabel: "Queue",
+  categoryLabels: {
+    approve: "Approve",
+    action_needed: "Needs action",
+    alert: "Alert",
+    fyi: "FYI",
+  } as Record<string, string>,
+  actions: {
+    approve: "Approve",
+    reject: "Reject",
+    resolve: "Resolve",
+    dismiss: "Dismiss",
+    open: "Open",
+  },
+  errors: {
+    adminOnly: "Admin access required.",
+    generic: "Something went wrong — try again.",
+  },
+};
+
 /** Friendly booking-platform name, with a safe fallback. */
 export function bookingPlatformLabel(raw: string | null | undefined): string {
   if (!raw) return "Not connected yet";

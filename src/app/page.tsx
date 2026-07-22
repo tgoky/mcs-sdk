@@ -361,7 +361,7 @@ export default async function LandingIndexPage({
                 <div className="pt-2">
                   {session.whopUserId && hasAccess ? (
                     <a href="/home" className="block w-full">
-                      <Button className="w-full h-11 text-xs font-mono uppercase tracking-widest bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-none hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all cursor-pointer">
+                      <Button className="w-full h-11 text-xs font-mono uppercase tracking-widest bg-gold text-gold-foreground rounded-none hover:bg-gold-hover transition-all cursor-pointer">
                         [ Enter Workspace ]
                       </Button>
                     </a>
@@ -376,7 +376,7 @@ export default async function LandingIndexPage({
                     </a>
                   ) : (
                     <a href="/api/auth/login" className="block w-full">
-                      <Button className="w-full h-11 text-xs font-mono uppercase tracking-wider bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-none hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors cursor-pointer">
+                      <Button className="w-full h-11 text-xs font-mono uppercase tracking-wider bg-gold text-gold-foreground rounded-none hover:bg-gold-hover transition-colors cursor-pointer">
                         Authenticate with Whop
                       </Button>
                     </a>
