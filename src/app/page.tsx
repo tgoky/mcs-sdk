@@ -248,8 +248,8 @@ export default async function LandingIndexPage({
                 </div>
                 <div className="my-3.5 h-32 border border-border bg-zinc-50/50 dark:bg-zinc-950/40 flex flex-col justify-center px-6 space-y-2.5 text-zinc-400 dark:text-zinc-500 select-none">
                   <div className="space-y-1">
-                    <div className="flex justify-between text-[8px]"><span>INBOUND_BOOKING_ALERT</span><span className="text-emerald-600 dark:text-emerald-400">100%</span></div>
-                    <div className="h-1 w-full bg-zinc-200 dark:bg-zinc-900 border border-border"><div className="h-full bg-emerald-500" style={{ width: "100%" }} /></div>
+                    <div className="flex justify-between text-[8px]"><span>INBOUND_BOOKING_ALERT</span><span className="text-gold-hover dark:text-gold">100%</span></div>
+                    <div className="h-1 w-full bg-zinc-200 dark:bg-zinc-900 border border-border"><div className="h-full bg-gold" style={{ width: "100%" }} /></div>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-[8px]"><span>MESSAGE_PERSONALIZATION</span><span className="text-indigo-600 dark:text-indigo-400 animate-pulse">75%</span></div>

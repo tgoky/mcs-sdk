@@ -58,16 +58,18 @@ export function skillName(raw: string | null | undefined): string {
 // Overall module status (per-client module cards)
 // ---------------------------------------------------------------------------
 
-export type ModuleStatus = "live" | "failed" | "not_run";
+export type ModuleStatus = "live" | "running" | "failed" | "not_run";
 
 export const MODULE_STATUS_LABELS: Record<ModuleStatus, string> = {
   live: "Running fine",
+  running: "In progress",
   failed: "Needs attention",
   not_run: "Not started yet",
 };
 
 export const MODULE_STATUS_COLORS: Record<ModuleStatus, string> = {
-  live: "text-emerald-400",
+  live: "text-gold-hover dark:text-gold",
+  running: "text-sky-600 dark:text-sky-400",
   failed: "text-rose-400",
   not_run: "text-zinc-600",
 };
@@ -85,7 +87,7 @@ export const RUN_STATUS_LABELS: Record<string, string> = {
 };
 
 export const RUN_STATUS_COLORS: Record<string, string> = {
-  success: "text-emerald-400 font-medium",
+  success: "text-gold font-medium",
   failed: "text-rose-400",
   running: "text-zinc-400 italic",
   cancelled: "text-amber-400",

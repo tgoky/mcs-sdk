@@ -34,7 +34,7 @@ function ProductCard({ product }: { product: WorkspaceProduct }) {
           <span
             className={`shrink-0 rounded-md border px-2.5 py-0.5 font-mono text-[11px] font-medium tracking-tight ${
               isAvailable
-                ? "border-emerald-200/80 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-400"
+                ? "border-gold/40 bg-gold/10 text-gold-hover dark:border-gold/30 dark:bg-gold/10 dark:text-gold"
                 : "border-zinc-200 bg-zinc-100 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
             }`}
           >

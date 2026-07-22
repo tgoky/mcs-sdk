@@ -1,8 +1,11 @@
 import { db } from "@/lib/db";
 import { skillRuns, engagements, activeAlerts } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getQueueItems } from "@/lib/queue";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { LiveExecutionFeed } from "./live-execution-feed";
+import { QueuePanel } from "./queue-panel";
+import { QUEUE_COPY } from "@/lib/copy";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import Link from "next/link";
 
@@ -26,6 +29,7 @@ export default async function DashboardPage() {
     totalRunsResult,
     runningCountResult,
     recentRunsRaw,
+    queueItems,
   ] = await Promise.all([
     db.select().from(engagements).where(eq(engagements.whopUserId, whopUserId)),
 
@@ -75,6 +79,8 @@ export default async function DashboardPage() {
       .where(eq(engagements.whopUserId, whopUserId))
       .orderBy(desc(skillRuns.startedAt))
       .limit(8),
+
+    getQueueItems(whopUserId),
   ]);
 
   const completedActions = totalRunsResult[0]?.count ?? 0;
@@ -163,6 +169,26 @@ export default async function DashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Queue — what's waiting on a human, ranked above the feed of what's
+          already running unattended */}
+      <div className="pt-2">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
+            {QUEUE_COPY.sectionTitle}
+          </p>
+          {queueItems.length > 0 && (
+            <Link
+              href="/dashboard/queue"
+              className="text-xs font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
+            >
+              View all →
+            </Link>
+          )}
+        </div>
+
+        <QueuePanel initialItems={queueItems} />
       </div>
 
       {/* Activity feed */}

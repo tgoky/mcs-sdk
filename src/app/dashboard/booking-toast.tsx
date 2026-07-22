@@ -159,7 +159,7 @@ export function BookingToast() {
             <div
               className={`flex items-center justify-center w-8 h-8 rounded-full shrink-0 ${
                 t.kind === "booking" 
-                  ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400" 
+                  ? "bg-gold/15 text-gold-hover dark:text-gold" 
                   : "bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400"
               }`}
             >
@@ -187,7 +187,7 @@ export function BookingToast() {
           {/* Decaying progress bar showing time left before auto-dismiss */}
           <div className="h-0.5 bg-zinc-100 dark:bg-zinc-900">
             <div
-              className={`h-full ${t.kind === "booking" ? "bg-emerald-500/70" : "bg-sky-500/70"}`}
+              className={`h-full ${t.kind === "booking" ? "bg-gold/70" : "bg-sky-500/70"}`}
               style={{
                 animation: `shrinkWidth ${TOAST_LIFETIME_MS}ms linear forwards`,
               }}

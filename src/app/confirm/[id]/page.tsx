@@ -67,7 +67,7 @@ export default async function PublicBookingConfirmationPage({
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 selection:bg-zinc-800 tracking-tight">
       <div className="w-full max-w-md border border-zinc-900 bg-zinc-950/60 rounded-xl p-8 space-y-6 shadow-2xl relative overflow-hidden">
         {/* Glowing Top Context Node Ring */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[1px] w-32 bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[1px] w-32 bg-gradient-to-r from-transparent via-gold/40 to-transparent" />
         
         <div className="space-y-2 text-center">
           <div className="h-8 w-8 rounded-lg bg-zinc-100 flex items-center justify-center text-zinc-950 font-black text-xs mx-auto mb-4 shadow-sm">
@@ -86,7 +86,7 @@ export default async function PublicBookingConfirmationPage({
             Hello <span className="text-zinc-200 font-mono font-medium">{prospectName}</span>, your meeting parameters have been correctly recorded.
           </p>
           <p>
-            You are scheduled to connect with <span className="text-zinc-200 font-medium capitalize">{assignedHost}</span> on <span className="text-emerald-400 font-mono font-medium">{localizedTimeText}</span>.
+            You are scheduled to connect with <span className="text-zinc-200 font-medium capitalize">{assignedHost}</span> on <span className="text-gold font-mono font-medium">{localizedTimeText}</span>.
           </p>
           <p className="text-[11px] text-zinc-500 font-light pt-1">
             An automated calendar invitation containing direct video coordinates has been dispatched to your provided contact record. Our systems are preparing brief metrics for our team ahead of the sync.

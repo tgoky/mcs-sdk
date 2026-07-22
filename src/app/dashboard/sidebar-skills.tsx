@@ -149,7 +149,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
                 <div className="flex items-center shrink-0 relative group/icon">
                   {status === "live" && (
                     <>
-                      <CheckCircle2 size={15} className="text-emerald-500" />
+                      <CheckCircle2 size={15} className="text-gold" />
                       <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
                         {getStatusTooltip(status)}
                       </span>

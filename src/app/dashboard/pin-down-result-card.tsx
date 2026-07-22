@@ -100,7 +100,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
             className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
               isPasteReady
                 ? "bg-indigo-600 dark:bg-indigo-500 text-white"
-                : "bg-emerald-600 dark:bg-emerald-400 text-white dark:text-zinc-950"
+                : "bg-gold text-gold-foreground"
             }`}
           >
             {isPasteReady ? "!" : "✓"}

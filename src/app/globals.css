@@ -135,7 +135,11 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: var(--background);
+  /* Deliberately darker than --background (not just card-tinted) so the
+     sidebar reads as a distinct panel next to the main viewport instead of
+     blending into it — previously this was set to var(--background), which
+     meant the aside and the page behind it were literally the same color. */
+  --sidebar: color-mix(in oklch, var(--background) 80%, #1f1a2e 20%);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: var(--gold);
   --sidebar-primary-foreground: var(--gold-foreground);
@@ -195,7 +199,9 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: var(--background);
+  /* ~25% darker than --background (#1f1a2e) — still the same plum hue as
+     the rest of the app, deliberately not black. */
+  --sidebar: #16121e;
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: var(--gold);
   --sidebar-primary-foreground: var(--gold-foreground);

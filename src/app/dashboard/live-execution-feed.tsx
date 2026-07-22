@@ -50,7 +50,7 @@ function actionSummary(run: SkillRun): string {
 
 function RunStatusIcon({ status }: { status: string }) {
   const s = status.toLowerCase();
-  if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />;
+  if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 text-gold shrink-0" />;
   if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 text-rose-500 shrink-0" />;
   if (s === "timed_out") return <Clock className="w-4 h-4 text-amber-500 shrink-0" />;
   if (s === "cancelled") return <Ban className="w-4 h-4 text-amber-500 shrink-0" />;
@@ -60,7 +60,7 @@ function RunStatusIcon({ status }: { status: string }) {
 
 function StatusLabel({ status }: { status: string }) {
   const s = status.toLowerCase();
-  if (s === "success" || s === "completed") return <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-500 font-mono">Done</span>;
+  if (s === "success" || s === "completed") return <span className="text-xs font-semibold text-gold-hover dark:text-gold font-mono">Done</span>;
   if (s === "failed" || s === "error") return <span className="text-xs font-semibold text-rose-600 dark:text-rose-400 font-mono">Failed</span>;
   if (s === "timed_out") return <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 font-mono">Timed out</span>;
   if (s === "cancelled") return <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 font-mono">Cancelled</span>;

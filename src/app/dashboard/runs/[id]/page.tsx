@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { PinDownResultCard } from "../../pin-down-result-card";
+import { CancelRunButton } from "../../cancel-run-button";
 import {
   CheckCircle2,
   XCircle,
@@ -86,7 +87,7 @@ function formatDate(iso: string): string {
 
 function StepCenterIcon({ status, displayInterrupted }: { status: RunStep["status"]; displayInterrupted?: boolean }) {
   if (displayInterrupted) return <Ban className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />;
-  if (status === "success") return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />;
+  if (status === "success") return <CheckCircle2 className="w-4 h-4 text-gold shrink-0 mt-0.5" />;
   if (status === "failed") return <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />;
   if (status === "cancelled") return <Ban className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />;
   if (status === "skipped") return <SkipForward className="w-4 h-4 text-zinc-400 dark:text-zinc-600 shrink-0 mt-0.5" />;
@@ -162,7 +163,7 @@ function SummarySection({
 
   const fields: { key: keyof RunSummary; label: string; color: string }[] = [
     { key: "whatWasAttempted", label: "1. What Was Attempted", color: "text-zinc-600 dark:text-zinc-400 font-mono font-bold" },
-    { key: "whatWorked",       label: "2. What Worked",        color: "text-emerald-600 dark:text-emerald-400 font-mono font-bold" },
+    { key: "whatWorked",       label: "2. What Worked",        color: "text-gold-hover dark:text-gold font-mono font-bold" },
     { key: "whatFailed",       label: "3. What Failed",        color: "text-rose-600 dark:text-rose-400 font-mono font-bold"    },
     { key: "openItems",        label: "4. Open Items",         color: "text-amber-600 dark:text-amber-400 font-mono font-bold"   },
     { key: "decisionsMade",    label: "5. Decisions Made",     color: "text-sky-600 dark:text-sky-400 font-mono font-bold"     },
@@ -221,7 +222,7 @@ function SummarySection({
 function RunStatusBadge({ status }: { status: string }) {
   const s = status.toLowerCase();
   const cfg = {
-    success: { icon: <CheckCircle2 className="w-4 h-4" />, cls: "text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30" },
+    success: { icon: <CheckCircle2 className="w-4 h-4" />, cls: "text-gold-hover dark:text-gold border-gold/25 bg-gold/10" },
     failed:  { icon: <XCircle className="w-4 h-4" />,      cls: "text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30"         },
     cancelled: { icon: <Ban className="w-4 h-4" />,         cls: "text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30"        },
     timed_out: { icon: <Clock className="w-4 h-4" />,       cls: "text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30"        },
@@ -245,9 +246,6 @@ export default function RunDetailPage() {
   const [run, setRun] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [confirmingCancel, setConfirmingCancel] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
-  const [cancelError, setCancelError] = useState<string | null>(null);
 
   // Reusable background data worker: Only changes data state, never touches loading/error screens
   const fetchRun = useCallback(async (signal?: AbortSignal) => {
@@ -263,26 +261,6 @@ export default function RunDetailPage() {
       // Background polling errors are intentionally swallowed to preserve UI stability
     }
   }, [runId]);
-
-  const handleCancel = useCallback(async () => {
-    if (!runId) return;
-    setCancelling(true);
-    setCancelError(null);
-    try {
-      const res = await fetch(`/api/skill-runs/${runId}/cancel`, { method: "POST" });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setCancelError(body.error ?? "Failed to cancel run.");
-        return;
-      }
-      await fetchRun(); // don't wait for the next 3s poll tick
-      setConfirmingCancel(false);
-    } catch (e: any) {
-      setCancelError(e.message ?? "Failed to cancel run.");
-    } finally {
-      setCancelling(false);
-    }
-  }, [runId, fetchRun]);
 
   // Hook 1: Initial load (Handles isolated error and component-unmount loading safety)
   useEffect(() => {
@@ -401,45 +379,12 @@ export default function RunDetailPage() {
             {isRunning && (
               <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 animate-pulse">Live — refreshing every 3s</span>
             )}
-            {isRunning && !confirmingCancel && (
-              <button
-                onClick={() => setConfirmingCancel(true)}
-                className="inline-flex items-center gap-1.5 text-xs font-bold font-mono px-2.5 py-1 rounded-full border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors cursor-pointer"
-              >
-                <Ban size={13} />
-                Cancel run
-              </button>
-            )}
-            {isRunning && confirmingCancel && (
-              <div className="inline-flex items-center gap-2 text-xs font-mono">
-                <span className="text-zinc-400 dark:text-zinc-500">Stop this run?</span>
-                <button
-                  onClick={handleCancel}
-                  disabled={cancelling}
-                  className="inline-flex items-center gap-1.5 font-bold px-2.5 py-1 rounded-full border border-rose-300 dark:border-rose-900/50 text-rose-600 bg-rose-50 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-950/40 transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  {cancelling ? <Loader2 size={13} className="animate-spin" /> : <Ban size={13} />}
-                  {cancelling ? "Cancelling…" : "Confirm"}
-                </button>
-                <button
-                  onClick={() => { setConfirmingCancel(false); setCancelError(null); }}
-                  disabled={cancelling}
-                  className="text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 px-1.5 py-1 disabled:opacity-50 cursor-pointer font-bold"
-                >
-                  Back
-                </button>
-              </div>
+            {isRunning && (
+              <CancelRunButton runId={runId} onCancelled={() => fetchRun()} />
             )}
           </div>
         </div>
       </div>
-
-      {/* Cancel error notice window */}
-      {cancelError && (
-        <div className="border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/10 rounded-lg p-3 shadow-xs animate-in fade-in-40">
-          <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-300">{cancelError}</p>
-        </div>
-      )}
 
       {/* Overview Metric Performance Grid Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -472,7 +417,7 @@ export default function RunDetailPage() {
             <Coins size={13} />
             <span className="text-[11px] font-mono uppercase tracking-wider font-bold">Cost</span>
           </div>
-          <p className="text-xs text-emerald-600 dark:text-emerald-400 font-mono font-bold">{run.costInCents !== null ? formatCost(run.costInCents) : "—"}</p>
+          <p className="text-xs text-gold-hover dark:text-gold font-mono font-bold">{run.costInCents !== null ? formatCost(run.costInCents) : "—"}</p>
         </div>
       </div>
 
