@@ -23,9 +23,9 @@ export function getValidationErrors(form: FormData): ValidationError[] {
   if ((form.bookingPlatform === "calendly" || form.bookingPlatform === "cal_com") && !form.bookingStandingLink.trim()) {
     errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "Standing booking page link is required" });
   }
-  if (form.bookingPlatform === "ghl_calendar" && !form.bookingLocationId.trim()) {
-    errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "GoHighLevel Location ID is required for GHL Calendar" });
-  }
+  // if (form.bookingPlatform === "ghl_calendar" && !form.bookingLocationId.trim()) {
+  //   errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "GoHighLevel Location ID is required for GHL Calendar" });
+  // }
   if (!form.emailPlatform) {
     errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "Email Platform selection is required" });
   }
