@@ -217,9 +217,14 @@ export function StackStep({
           { value: "hubspot_sms", label: "HubSpot SMS" },
         ]}
       />
-      {form.smsPlatform !== "none" && (
+      {form.smsPlatform === "ghl_sms" && (
+        <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
+          No key needed here — the next step (Account Keys) has one shared GoHighLevel token that covers SMS along with any GHL calendar or email workflow use.
+        </div>
+      )}
+      {form.smsPlatform !== "none" && form.smsPlatform !== "ghl_sms" && (
         <InputField
-          label={form.smsPlatform === "twilio" ? "Twilio Auth Token" : form.smsPlatform === "ghl_sms" ? "GoHighLevel API Key" : "HubSpot API Key"}
+          label={form.smsPlatform === "twilio" ? "Twilio Auth Token" : "HubSpot API Key"}
           value={form.smsApiKey}
           onChange={(v) => set("smsApiKey", v)}
           type="password"

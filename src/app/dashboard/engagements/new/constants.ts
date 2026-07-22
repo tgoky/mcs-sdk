@@ -86,6 +86,8 @@ export const DEFAULT_FORM: FormData = {
   rawVoiceCorpus: "",
   bookingApiKey: "",
   emailApiKey: "",
+  ghlApiKey: "",
+  ghlLocationId: "",
   testimonials: [],
   discoveredPlatformName: "",
   discoveredPlatformWebsite: "",

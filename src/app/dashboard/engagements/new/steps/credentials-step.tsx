@@ -42,6 +42,16 @@ export function CredentialsStep({
   fetchingGhlWorkflows: boolean;
   ghlWorkflowsError: string | null;
 }) {
+  // GoHighLevel Private Integration Tokens are scoped to a single sub-account
+  // and cover calendars, workflows, and SMS all at once — so if the buyer's
+  // stack uses GHL for more than one of those, we ask for the token and
+  // Location ID exactly once here instead of once per slot.
+  const bookingIsGhl = form.bookingPlatform === "ghl_calendar";
+  const emailIsGhl = form.emailPlatform === "ghl";
+  const smsIsGhl = form.smsPlatform === "ghl_sms";
+  const usesGhl = bookingIsGhl || emailIsGhl || smsIsGhl;
+  const verifiedGhlLocation = ghlLocations[0];
+
   return (
     <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
       <div className="md:col-span-2 text-xs font-mono">
@@ -53,20 +63,63 @@ export function CredentialsStep({
         </p>
       </div>
 
-      {/* ── Booking Platform API Key Input ── */}
-      <InputField
-        label={`${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform} API Key / Token`}
-        value={form.bookingApiKey}
-        onChange={(v) => set("bookingApiKey", v)}
-        type="password"
-        placeholder="Paste your API key here..."
-        helpText={
-          form.bookingPlatform === "calendly"
-            ? "From Calendly → Integrations & Apps → API & Webhooks → Personal Access Tokens."
-            : undefined
-        }
-        required
-      />
+      {/* ── Shared GoHighLevel Account (covers booking / email / sms slots below) ── */}
+      {usesGhl && (
+        <>
+          <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
+            GoHighLevel Account — used below for{" "}
+            {[bookingIsGhl && "booking", emailIsGhl && "email workflows", smsIsGhl && "SMS"].filter(Boolean).join(", ")}.
+            One Private Integration Token covers all of these for its sub-account, so you only enter it once here.
+          </div>
+          <InputField
+            label="GoHighLevel Private Integration Token"
+            value={form.ghlApiKey}
+            onChange={(v) => set("ghlApiKey", v)}
+            type="password"
+            placeholder="Paste your Private Integration Token here..."
+            helpText="Sub-account Settings → Private Integrations → create one with Calendars, Workflows, and/or Conversations scopes as needed."
+            required
+          />
+          <InputField
+            label="GoHighLevel Location ID"
+            value={form.ghlLocationId}
+            onChange={(v) => set("ghlLocationId", v)}
+            placeholder="e.g. ve9EPM428h8vShlRW1KT"
+            helpText="Sub-account Settings → Business Profile → Location ID. This token can only see this one location."
+            required
+          />
+          {form.ghlApiKey.trim() && form.ghlLocationId.trim() && (
+            <div className="md:col-span-2 text-xs font-mono">
+              {fetchingGhlLocations && <span className="italic text-zinc-500 dark:text-zinc-400 animate-pulse">⚡ Verifying against GoHighLevel...</span>}
+              {ghlLocationsError && (
+                <div className="rounded p-3 border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
+                  ⚠ Warning: {ghlLocationsError}
+                </div>
+              )}
+              {!fetchingGhlLocations && verifiedGhlLocation && (
+                <span className="text-emerald-600 dark:text-emerald-400">✓ Verified: {verifiedGhlLocation.name}</span>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Booking Platform API Key Input (GHL uses the shared panel above) ── */}
+      {!bookingIsGhl && (
+        <InputField
+          label={`${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform} API Key / Token`}
+          value={form.bookingApiKey}
+          onChange={(v) => set("bookingApiKey", v)}
+          type="password"
+          placeholder="Paste your API key here..."
+          helpText={
+            form.bookingPlatform === "calendly"
+              ? "From Calendly → Integrations & Apps → API & Webhooks → Personal Access Tokens."
+              : undefined
+          }
+          required
+        />
+      )}
 
       {/* ── Live Booking Calendar / Event Type Selection Dropdown ── */}
       {form.bookingApiKey.trim() && (
@@ -166,14 +219,16 @@ export function CredentialsStep({
         </>
       ) : (
         <>
-          <InputField
-            label={`${EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform} API Key`}
-            value={form.emailApiKey}
-            onChange={(v) => set("emailApiKey", v)}
-            type="password"
-            placeholder="Paste your API key here..."
-            required
-          />
+          {!emailIsGhl && (
+            <InputField
+              label={`${EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform} API Key`}
+              value={form.emailApiKey}
+              onChange={(v) => set("emailApiKey", v)}
+              type="password"
+              placeholder="Paste your API key here..."
+              required
+            />
+          )}
 
           {/* ── Klaviyo Target / Recovery Lists ── */}
           {form.emailPlatform === "klaviyo" && (
@@ -325,37 +380,10 @@ export function CredentialsStep({
             </>
           )}
 
-          {/* ── GoHighLevel Email Workflows ── */}
+          {/* ── GoHighLevel Email Workflows (location + token come from the shared panel above) ── */}
           {form.emailPlatform === "ghl" && (
             <>
-              {fetchingGhlLocations && (
-                <div className="md:col-span-2 text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">
-                  ⚡ Contacting GoHighLevel... Fetching locations...
-                </div>
-              )}
-              {ghlLocationsError && (
-                <div className="md:col-span-2 rounded p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
-                  ⚠ Warning: {ghlLocationsError}
-                </div>
-              )}
-
-              <SelectField
-                label="GoHighLevel Location"
-                value={form.emailGhlLocationId}
-                onChange={(v) => {
-                  set("emailGhlLocationId", v);
-                  set("emailGhlTargetWorkflowId", "");
-                  set("emailGhlRecoveryWorkflowId", "");
-                }}
-                required
-                options={[
-                  { value: "", label: "-- Choose a Location --" },
-                  ...ghlLocations.map((l) => ({ value: l.id, label: l.name })),
-                ]}
-                helpText="Your GoHighLevel sub-account. Workflows will load after selection."
-              />
-
-              {form.emailGhlLocationId && (
+              {form.emailGhlLocationId && verifiedGhlLocation && (
                 <>
                   {fetchingGhlWorkflows && (
                     <div className="md:col-span-2 text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">

@@ -21,8 +21,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing API Key or Location ID" }, { status: 400 });
     }
 
+    // GHL's Workflows endpoint is flat (GET /workflows/) and scoped via a
+    // locationId query parameter, the same pattern as Contacts, Calendars,
+    // etc. — it is NOT nested under /locations/{id}/workflows/ (that path
+    // doesn't exist and 404s).
     const res = await fetch(
-      `https://services.leadconnectorhq.com/locations/${locationId}/workflows/`,
+      `https://services.leadconnectorhq.com/workflows/?locationId=${encodeURIComponent(locationId)}`,
       {
         headers: {
           Authorization: `Bearer ${apiKey}`,

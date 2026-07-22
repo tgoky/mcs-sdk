@@ -96,6 +96,16 @@ export interface FormData {
   rawVoiceCorpus: string;
   bookingApiKey: string;
   emailApiKey: string;
+  // Single shared GoHighLevel credential pair. GHL Private Integration
+  // Tokens are scoped to one sub-account and cover calendars, workflows,
+  // and SMS all at once — so whenever bookingPlatform is "ghl_calendar",
+  // emailPlatform is "ghl", and/or smsPlatform is "ghl_sms", the user fills
+  // this in ONCE and it gets mirrored into bookingApiKey/emailApiKey/
+  // smsApiKey and bookingLocationId/emailGhlLocationId (see the mirror
+  // effect in use-email-integrations.ts) rather than asking for the same
+  // token 2-3 times across the wizard.
+  ghlApiKey: string;
+  ghlLocationId: string;
   testimonials: Testimonial[];
   // Pin-Down recovery gap 6 — populated when bookingPlatform or
   // hostingPlatform is "discover_from_docs".

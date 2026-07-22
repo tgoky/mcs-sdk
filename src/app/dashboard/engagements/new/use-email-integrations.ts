@@ -39,6 +39,59 @@ export function useEmailIntegrations(
   const [fetchingGhlWorkflows, setFetchingGhlWorkflows] = useState(false);
   const [ghlWorkflowsError, setGhlWorkflowsError] = useState<string | null>(null);
 
+  // 0. GHL: mirror the single shared ghlApiKey/ghlLocationId into whichever
+  // per-slot fields are currently pointed at a GHL variant. A GHL Private
+  // Integration Token covers calendars, workflows, and SMS for its one
+  // sub-account all at once, so there's no reason to make the user paste
+  // it into 2-3 separate password fields — they fill in the shared pair
+  // once in the panel credentials-step.tsx renders, and this effect keeps
+  // bookingApiKey/emailApiKey/smsApiKey and bookingLocationId/
+  // emailGhlLocationId (the fields the rest of the app already reads) in
+  // sync with it.
+  useEffect(() => {
+    setForm((f) => {
+      const next = { ...f };
+      let changed = false;
+
+      const wantsKey = f.bookingPlatform === "ghl_calendar" || f.emailPlatform === "ghl" || f.smsPlatform === "ghl_sms";
+      const wantsLocation = f.bookingPlatform === "ghl_calendar" || f.emailPlatform === "ghl";
+
+      if (wantsKey) {
+        if (f.bookingPlatform === "ghl_calendar" && f.bookingApiKey !== f.ghlApiKey) {
+          next.bookingApiKey = f.ghlApiKey;
+          changed = true;
+        }
+        if (f.emailPlatform === "ghl" && f.emailApiKey !== f.ghlApiKey) {
+          next.emailApiKey = f.ghlApiKey;
+          changed = true;
+        }
+        if (f.smsPlatform === "ghl_sms" && f.smsApiKey !== f.ghlApiKey) {
+          next.smsApiKey = f.ghlApiKey;
+          changed = true;
+        }
+      }
+      if (wantsLocation) {
+        if (f.bookingPlatform === "ghl_calendar" && f.bookingLocationId !== f.ghlLocationId) {
+          next.bookingLocationId = f.ghlLocationId;
+          changed = true;
+        }
+        if (f.emailPlatform === "ghl" && f.emailGhlLocationId !== f.ghlLocationId) {
+          next.emailGhlLocationId = f.ghlLocationId;
+          changed = true;
+        }
+      }
+
+      return changed ? next : f;
+    });
+  }, [
+    form.ghlApiKey,
+    form.ghlLocationId,
+    form.bookingPlatform,
+    form.emailPlatform,
+    form.smsPlatform,
+    setForm,
+  ]);
+
   // 1. Booking Calendar / Event Types: Fetch active booking options (500ms Debounce)
   useEffect(() => {
     if (form.bookingApiKey?.trim() && form.bookingPlatform) {
@@ -209,9 +262,14 @@ export function useEmailIntegrations(
     setForm,
   ]);
 
-  // 5. GHL: Fetch locations (500ms Debounce)
+  // 5. GHL: Verify the shared Location ID against the shared API key
+  // (500ms Debounce). There's nothing to list here — a Private Integration
+  // Token only ever sees the one sub-account it was created in — so this
+  // just confirms the ID the user typed is a real location that token can
+  // reach, and surfaces its name back so they know it matched.
   useEffect(() => {
-    if (form.emailPlatform === "ghl" && form.emailApiKey?.trim()) {
+    const needsGhl = form.bookingPlatform === "ghl_calendar" || form.emailPlatform === "ghl";
+    if (needsGhl && form.ghlApiKey?.trim() && form.ghlLocationId?.trim()) {
       const timer = setTimeout(() => {
         setFetchingGhlLocations(true);
         setGhlLocationsError(null);
@@ -221,7 +279,7 @@ export function useEmailIntegrations(
         fetch(`/api/integrations/ghl/locations`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: form.emailApiKey.trim() }),
+          body: JSON.stringify({ key: form.ghlApiKey.trim(), locationId: form.ghlLocationId.trim() }),
         })
           .then(async (res) => {
             const data = await res.json().catch(() => ({}));
@@ -232,14 +290,15 @@ export function useEmailIntegrations(
           })
           .then((data) => {
             if (data.success) {
-              setGhlLocations(data.locations ?? []);
+              setGhlLocations(data.location ? [data.location] : []);
             } else {
               throw new Error(data.error ?? "Unknown error");
             }
           })
           .catch((err: any) => {
-            console.error("[useEmailIntegrations] ghl locations fetch error:", err);
-            setGhlLocationsError(err.message || "Could not retrieve GHL locations.");
+            console.error("[useEmailIntegrations] ghl location verify error:", err);
+            setGhlLocationsError(err.message || "Could not verify this Location ID against your key.");
+            setGhlLocations([]);
           })
           .finally(() => {
             setFetchingGhlLocations(false);
@@ -250,14 +309,15 @@ export function useEmailIntegrations(
     } else {
       setGhlLocations([]);
     }
-  }, [form.emailPlatform, form.emailApiKey, setForm]);
+  }, [form.bookingPlatform, form.emailPlatform, form.ghlApiKey, form.ghlLocationId, setForm]);
 
-  // 6. GHL: Fetch workflows when location is selected
+  // 6. GHL: Fetch workflows once the location above is verified
   useEffect(() => {
     if (
       form.emailPlatform === "ghl" &&
       form.emailGhlLocationId &&
-      form.emailApiKey?.trim()
+      form.emailApiKey?.trim() &&
+      ghlLocations.length > 0
     ) {
       setFetchingGhlWorkflows(true);
       setGhlWorkflowsError(null);
@@ -294,7 +354,7 @@ export function useEmailIntegrations(
     } else {
       setGhlWorkflows([]);
     }
-  }, [form.emailPlatform, form.emailGhlLocationId, form.emailApiKey]);
+  }, [form.emailPlatform, form.emailGhlLocationId, form.emailApiKey, ghlLocations]);
 
   const klaviyoMissingKeyMessage =
     form.emailPlatform === "klaviyo" && !form.emailApiKey?.trim()
