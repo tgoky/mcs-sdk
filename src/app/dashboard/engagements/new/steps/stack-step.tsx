@@ -4,11 +4,9 @@ import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS, HOSTING_PLATFORM_LABELS
 import type { FormData } from "../types";
 
 // NOTE: Klaviyo/ActiveCampaign/GHL/Mailchimp/ConvertKit list & workflow
-// selection used to live in this step. It's been moved to
-// credentials-step.tsx, directly beneath each platform's API key field —
-// those dropdowns need a live API key to fetch their options, and the key
-// is entered on the credentials step, not here. See
-// use-email-integrations.ts for the fetch logic.
+// selection + Booking calendar selection live in credentials-step.tsx.
+// Those dropdowns need a live API key to fetch their options, which is
+// entered on the credentials step (Step 3), not here.
 export function StackStep({
   form,
   set,
@@ -20,6 +18,7 @@ export function StackStep({
 }) {
   return (
     <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+      {/* ── Booking Calendar Selection ── */}
       <SelectField
         label="Booking Calendar"
         value={form.bookingPlatform}
@@ -28,28 +27,14 @@ export function StackStep({
         helpText="The tool your client uses to schedule calls."
       />
 
-      {form.bookingPlatform === "calendly" && (
+      {/* Auto-Detection Banner for Standard Platforms */}
+      {form.bookingPlatform && form.bookingPlatform !== "discover_from_docs" && (
         <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
-          <strong>Zero-Config Mode Active:</strong> You don&apos;t need to look up or paste any organization links or event IDs. We automatically detect your workspace parameters.
+          ✨ <strong>Auto-Detection Active:</strong> No need to copy-paste URLs or Location IDs. On the next step, entering your API key will automatically fetch your live calendar options for you to choose from.
         </div>
       )}
 
-      {form.bookingPlatform === "cal_com" && (
-        <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
-          ✨ <strong>Zero-Config Mode Active:</strong> We will automatically parse your account username and event context from the standing link behind the scenes.
-        </div>
-      )}
-
-      {form.bookingPlatform === "ghl_calendar" && (
-        <InputField
-          label="GoHighLevel Location ID"
-          value={form.bookingLocationId}
-          onChange={(v) => set("bookingLocationId", v)}
-          placeholder="e.g. loc_abc123"
-          helpText="Found in GoHighLevel under your sub-account settings."
-        />
-      )}
-
+      {/* Unlisted/Custom Platform Discovery */}
       {form.bookingPlatform === "discover_from_docs" && (
         <>
           <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
@@ -71,22 +56,16 @@ export function StackStep({
         </>
       )}
 
-      <InputField
-        label="Standing booking page link"
-        value={form.bookingStandingLink}
-        onChange={(v) => set("bookingStandingLink", v)}
-        placeholder="https://calendly.com/client/discovery-call"
-        helpText="The client's always-open booking page. We'll automatically find the matching event parameters from this link."
-      />
-
+      {/* ── Email Platform Selection ── */}
       <SelectField
         label="Email Platform"
         value={form.emailPlatform}
         onChange={(v) => set("emailPlatform", v)}
         options={Object.entries(EMAIL_PLATFORM_LABELS).map(([value, label]) => ({ value, label }))}
-        helpText="Where follow-up and win-back emails get sent from. List/workflow selection for whichever platform you pick here happens on the next step, right below its API key."
+        helpText="Where follow-up and win-back emails get sent from. List/workflow selection happens on the next step, right below its API key."
       />
 
+      {/* ── Brief Delivery Settings ── */}
       <SelectField
         label="Where should call briefs go?"
         value={form.briefDestination}
@@ -125,6 +104,7 @@ export function StackStep({
         helpText="Choose 'Dynamic' if your sales reps require briefs to be generated on-demand as soon as an upcoming call crosses into its imminent lead-time window."
       />
 
+      {/* ── Hosting Platform Selection ── */}
       <SelectField
         label="Where is the confirmation page hosted?"
         value={form.hostingPlatform}
