@@ -1077,15 +1077,12 @@ export async function registerWebhookForTenant(
       return new CalendlyClient(apiKey).subscribeWebhook(meta.organization_uri, receiverUrl);
 
     case "cal_com":
-      // Now cleanly forwards Promise<string>
-      return new CalComClient(apiKey).subscribeWebhook(receiverUrl); 
+      return new CalComClient(apiKey).subscribeWebhook(receiverUrl);
 
     case "ghl_calendar":
-      if (!meta?.location_id) {
-        throw new Error("GHL webhook registration requires location_id in meta");
-      }
-      // Now cleanly forwards Promise<string>
-      return new GHLCalendarClient(apiKey, meta.location_id).subscribeWebhook(receiverUrl); 
+      // GHL v2 Private Integrations do not expose an API endpoint for dynamic webhooks.
+      // Returning undefined cleanly signals onboarding-service to activate 5-minute background polling.
+      return;
 
     case "oncehub":
       console.warn("OnceHub does not support programmatic webhook registration. Buyer must configure manually.");
@@ -1095,6 +1092,7 @@ export async function registerWebhookForTenant(
       return;
   }
 }
+
 
 
 export async function getAvailableSlotsForTenant(

@@ -306,8 +306,11 @@ export async function runPinDownOnboarding(
       } else {
         summary.openItems.push(`Voice crawl of ${finalStack.buyer_domain} found nothing usable — voice extraction will rely on the operator-pasted corpus alone.`);
       }
-    } else {
+   } else {
       await logStep(runId, { phase: "voice_scrape", status: "skipped", detail: "No buyer_domain on file" });
+      summary.openItems.push(
+        "No website domain on file — voice extraction had no scraped content to work with. Add a domain and re-run setup to get a real brand voice profile instead of the neutral default."
+      );
     }
 
     // ── Voice extraction ───────────────────────────────────────────────────
@@ -719,15 +722,17 @@ export async function runPinDownOnboarding(
         }
       });
 
-      summary.whatWasAttempted.push(`Registered ${finalStack.booking_platform} webhook → ${webhookResult.receiverUrl}.`);
       if (webhookResult.mode === "webhook") {
+        summary.whatWasAttempted.push(`Registered ${finalStack.booking_platform} webhook → ${webhookResult.receiverUrl}.`);
         summary.whatWorked.push(`${finalStack.booking_platform} webhook registered (subscription ${webhookResult.subId}).`);
       } else if (webhookResult.isError) {
+        summary.whatWasAttempted.push(`Attempted ${finalStack.booking_platform} webhook registration → ${webhookResult.receiverUrl}.`);
         summary.whatFailed.push(`${finalStack.booking_platform} webhook registration failed: ${webhookResult.reason}`);
         summary.openItems.push(
           `Booking webhook registration failed — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 5} minute(s) as a fallback so bookings still process.`
         );
       } else {
+        summary.whatWasAttempted.push(`Evaluated ${finalStack.booking_platform} webhook capability — polling mode selected.`);
         summary.openItems.push(
           `${finalStack.booking_platform} doesn't support live webhook registration — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 5} minute(s) instead. Bookings will process on a short delay rather than instantly.`
         );
