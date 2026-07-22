@@ -1,5 +1,16 @@
-import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS, HOSTING_PLATFORM_LABELS } from "@/lib/copy";
+import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS } from "@/lib/copy";
 import type { FormData, Step, ValidationError } from "./types";
+
+/**
+ * Smart helper: Splits text by newlines, commas, semicolons, or numbered lists (e.g. 1., 2.)
+ */
+function countItems(text: string): number {
+  if (!text || !text.trim()) return 0;
+  return text
+    .split(/[\n,;]|\d+\.\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean).length;
+}
 
 // ── PRE-FLIGHT AUDIT ENGINE: Scans all 5 steps and flags missing inputs ──
 export function getValidationErrors(form: FormData): ValidationError[] {
@@ -23,9 +34,6 @@ export function getValidationErrors(form: FormData): ValidationError[] {
   if ((form.bookingPlatform === "calendly" || form.bookingPlatform === "cal_com") && !form.bookingStandingLink.trim()) {
     errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "Standing booking page link is required" });
   }
-  // if (form.bookingPlatform === "ghl_calendar" && !form.bookingLocationId.trim()) {
-  //   errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "GoHighLevel Location ID is required for GHL Calendar" });
-  // }
   if (!form.emailPlatform) {
     errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "Email Platform selection is required" });
   }
@@ -63,22 +71,29 @@ export function getValidationErrors(form: FormData): ValidationError[] {
     if (!form.emailGhlTargetWorkflowId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "GHL Target Workflow (Pile-On) must be selected" });
     if (!form.emailGhlRecoveryWorkflowId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "GHL Recovery Workflow (Win-Back) must be selected" });
   }
-  // if (form.hostingPlatform !== "ghl" && form.hostingPlatform !== "plain_html" && !form.hostingApiKey.trim()) {
-  //   errors.push({ step: "credentials", stepLabel: "Account Keys", issue: `Hosting Platform (${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform}) API Token is missing` });
-  // }
 
   // Step 4: Voice
-  const wordCount = form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length;
-  if (wordCount < 500) {
-    errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: `Brand Voice sample needs at least 500 words (currently ${wordCount} words)` });
+  if (form.voiceSource === "scrape") {
+    // Scraping Mode: Website domain required, pasted text optional!
+    if (!form.marketingDomain.trim() && !form.publishDomain.trim()) {
+      errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: "Marketing website URL is required when scraping brand voice" });
+    }
+  } else {
+    // Manual Mode: Require at least 50 words
+    const wordCount = form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount < 50) {
+      errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: `Brand Voice sample needs at least 50 words (currently ${wordCount} words)` });
+    }
   }
-  const questionsCount = form.topCallQuestions.split("\n").map((q) => q.trim()).filter(Boolean).length;
-  if (questionsCount < 3) {
-    errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: `Top Call Questions requires at least 3 items (currently ${questionsCount} provided)` });
+
+  // Common Call Questions: Require at least 1 item (accepts commas, newlines, semicolons, or numbered lists)
+  if (countItems(form.topCallQuestions) < 1) {
+    errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: "At least 1 common call question is required" });
   }
-  const objectionsCount = form.topObjections.split("\n").map((o) => o.trim()).filter(Boolean).length;
-  if (objectionsCount < 2) {
-    errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: `Top Objections requires at least 2 items (currently ${objectionsCount} provided)` });
+
+  // Common Objections: Require at least 1 item (accepts commas, newlines, semicolons, or numbered lists)
+  if (countItems(form.topObjections) < 1) {
+    errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: "At least 1 common objection is required" });
   }
 
   return errors;
