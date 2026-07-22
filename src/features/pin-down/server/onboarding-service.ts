@@ -772,13 +772,23 @@ export async function runPinDownOnboarding(
         summary.openItems.push("Calendly isn't redirecting to the confirmation page yet — set this manually or re-run setup.");
       }
     } else {
-      await logStep(runId, {
-        phase: "redirect_config",
-        status: "skipped",
-        detail: !finalStack.booking_platform_meta?.event_type_uuid
-          ? "No event type UUID available"
-          : "Not applicable for this booking platform",
-      });
+      // Post-booking redirect config is a Calendly-only feature (it calls
+      // CalendlyClient.configurePostBookingRedirect, which has no GHL/Cal.com/
+      // OnceHub equivalent). The detail message used to check
+      // `!event_type_uuid` first regardless of platform, so every non-Calendly
+      // tenant (GHL Calendar, Cal.com, OnceHub — none of which ever populate
+      // event_type_uuid) was told "No event type UUID available", which reads
+      // like a Calendly auto-discovery failure even when Calendly was never
+      // involved. Check platform first so the message actually matches why
+      // the step was skipped.
+      const detail =
+        finalStack.booking_platform !== "calendly"
+          ? "Not applicable for this booking platform"
+          : !bookingCredential
+            ? "No booking credential on file for Calendly redirect configuration"
+            : "No event type UUID available (Calendly auto-discovery may have failed or no standing link was provided)";
+
+      await logStep(runId, { phase: "redirect_config", status: "skipped", detail });
     }
 
     summary.decisionsMade.push(

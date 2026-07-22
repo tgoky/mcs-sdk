@@ -868,23 +868,12 @@ export class GHLCalendarClient {
     }));
   }
 
-async subscribeWebhook(receiverUrl: string): Promise<string> {
-  const res = await fetchWithTimeout(`${this.baseUrl}/locations/${this.locationId}/webhooks/`, {
-    method: "POST",
-    headers: this.headers,
-    body: JSON.stringify({
-      name: "Showtime Pre-Call Read",
-      url: receiverUrl,
-      events: ["AppointmentCreate", "AppointmentDelete"],
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(`GHL webhook subscription failed [${res.status}]: ${await res.text()}`);
-  }
-  // FIXED: Returns a truthy string to satisfy onboarding-service's live activation gate
-  return "active"; 
-}
-
+  // subscribeWebhook was removed: GHL v2 Private Integrations don't expose
+  // an endpoint for creating webhook subscriptions programmatically. POSTing
+  // to /locations/{id}/webhooks/ 404s every time ("Cannot POST ..."), which
+  // is exactly the error this class used to throw before
+  // registerWebhookForTenant (booking.ts) was changed to skip straight to
+  // the polling fallback for ghl_calendar instead of attempting this call.
 }
 
 // ── OnceHub ───────────────────────────────────────────────────────────────

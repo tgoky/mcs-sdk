@@ -71,6 +71,39 @@ export function ConfirmStep({
         </div>
       )}
 
+      {allValidationErrors.length === 0 && (
+        <div
+          className="rounded-lg p-4 text-xs font-mono space-y-2 border"
+          style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
+        >
+          <div className="font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>
+            <span>▶</span> What happens when you click Finish Setup
+          </div>
+          <p style={{ color: "var(--text-muted)" }}>
+            This isn&apos;t a preview — clicking the button below immediately kicks off a live run against{" "}
+            <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{form.buyerName || "this client"}&apos;s</span>{" "}
+            real accounts. In order, it will:
+          </p>
+          <ol className="list-decimal list-inside space-y-1" style={{ color: "var(--text-secondary)" }}>
+            <li>Encrypt and store the API keys you entered.</li>
+            <li>
+              {form.voiceSource === "scrape"
+                ? `Crawl ${form.marketingDomain || form.publishDomain || "the marketing site"} to learn the brand voice.`
+                : "Analyze the pasted writing sample to learn the brand voice."}
+            </li>
+            <li>Generate ad creative briefs, video scripts, and a confirmation page via Claude.</li>
+            <li>
+              Attempt to register a live booking webhook with{" "}
+              {BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform}. If that platform doesn&apos;t
+              support it, this falls back to automatic 5-minute polling — no action needed from you or the client either way.
+            </li>
+          </ol>
+          <p style={{ color: "var(--text-muted)" }}>
+            You&apos;ll land on a live status page right after this and can watch each step happen in real time.
+          </p>
+        </div>
+      )}
+
       <div className="space-y-3">
         <h2 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>Review your setup</h2>
         <div className="text-xs font-mono font-medium space-y-2 rounded-lg p-4 shadow-xs" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -82,7 +115,12 @@ export function ConfirmStep({
             ["Email Platform", EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform],
             ["Hosting Node", HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform],
             ["Brief Delivery Channel", BRIEF_DESTINATION_LABELS[form.briefDestination] ?? form.briefDestination],
-            ["Voice Corpus Size", `${form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length} words`],
+            [
+              "Voice Source",
+              form.voiceSource === "scrape"
+                ? `Live crawl of ${form.marketingDomain || form.publishDomain || "—"}${form.rawVoiceCorpus.trim() ? " + pasted sample" : ""}`
+                : `${form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length} words pasted`,
+            ],
             ["Questions Matrix", `${form.topCallQuestions.split("\n").filter(Boolean).length}`],
             ["Objections Logged", `${form.topObjections.split("\n").filter(Boolean).length}`],
             ["Social Proof Count", `${form.testimonials.filter((t) => t.name && t.role && t.quote).length}`],
