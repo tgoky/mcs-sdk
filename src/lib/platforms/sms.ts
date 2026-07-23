@@ -73,7 +73,10 @@ export class TwilioClient {
   /** Lightweight liveness check — GET the account resource. */
   async checkCredentialHealth(): Promise<void> {
     const res = await fetchWithTimeout(`${this.baseUrl}.json`, { headers: { Authorization: this.authHeader } });
-    if (!res.ok) throw new Error(`Twilio credential check failed [${res.status}]`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Twilio credential check failed [${res.status}]: ${body.slice(0, 300)}`);
+    }
   }
 }
 

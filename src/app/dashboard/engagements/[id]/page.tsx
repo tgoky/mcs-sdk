@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { TriggerSkillButton } from "./trigger-skill-button";
+import { EngagementPauseControl } from "./pause-control";
 import { CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRight, Server, DollarSign } from "lucide-react";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import {
@@ -133,21 +134,36 @@ export default async function EngagementDetailPage({
             <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">{engagement.buyer}</h1>
             <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">{engagement.engagementId}</p>
           </div>
-          <div className="flex flex-wrap gap-2 self-start font-mono">
-            <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
-              {bookingPlatformLabel(stack?.booking_platform)}
-            </span>
-            <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
-              {emailPlatformLabel(stack?.email_platform)}
-            </span>
-            {offerDetails?.traffic_temperature && (
-              <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60 capitalize">
-                {String(offerDetails.traffic_temperature)} traffic
+          <div className="flex flex-col items-start sm:items-end gap-2">
+            <EngagementPauseControl
+              engagementId={engagement.engagementId}
+              initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
+              initialPausedReason={engagement.pausedReason}
+            />
+            <div className="flex flex-wrap gap-2 self-start sm:self-end font-mono">
+              <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
+                {bookingPlatformLabel(stack?.booking_platform)}
               </span>
-            )}
+              <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
+                {emailPlatformLabel(stack?.email_platform)}
+              </span>
+              {offerDetails?.traffic_temperature && (
+                <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60 capitalize">
+                  {String(offerDetails.traffic_temperature)} traffic
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {engagement.pausedAt && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-2.5 text-xs font-mono text-amber-800 dark:text-amber-400">
+          This client is paused — nightly briefs, leak map, win-back, weekly metrics, and booking polling are all
+          skipping it.{engagement.pausedReason ? ` Reason: ${engagement.pausedReason}` : ""} Manual "Run" buttons
+          below still work if you need to test something.
+        </div>
+      )}
 
       {/* Offer metric metadata summaries */}
       {offerDetails && (

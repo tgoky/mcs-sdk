@@ -4,6 +4,7 @@ import { and, eq, gte, lt } from "drizzle-orm";
 import { KlaviyoClient } from "@/lib/platforms/email";
 import { resolveCredential } from "@/lib/credentials";
 import { notifyUser } from "@/lib/notify";
+import { isEngagementPaused } from "@/lib/engagement-status";
 
 export interface WeeklyMetricsResult {
   engagementsProcessed: number;
@@ -48,10 +49,14 @@ export async function findEngagementsForWeeklyReadout(): Promise<string[]> {
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-  const allEngagements = await db.select({ engagementId: engagements.engagementId }).from(engagements);
+  const allEngagements = await db
+    .select({ engagementId: engagements.engagementId, pausedAt: engagements.pausedAt })
+    .from(engagements);
   const eligible: string[] = [];
 
-  for (const { engagementId } of allEngagements) {
+  for (const { engagementId, pausedAt } of allEngagements) {
+    if (isEngagementPaused({ pausedAt })) continue;
+
     const [thisWeekBookings, priorWeekBookings] = await Promise.all([
       db
         .select({ id: skillRuns.id })

@@ -5,6 +5,7 @@ import { resolveCredential } from "@/lib/credentials";
 import { CalendlyClient, CalComClient } from "@/lib/platforms/booking";
 import { MailchimpClient, ConvertKitClient, SMTPClient, parseSmtpCredential } from "@/lib/platforms/email";
 import { notifyUser } from "@/lib/notify";
+import { isEngagementPaused } from "@/lib/engagement-status";
 
 /**
  * Providers with a verified "am I still authenticated" endpoint wired up.
@@ -47,8 +48,11 @@ export interface CredentialHealthResult {
  * finished.
  */
 export async function findCredentialsNeedingCheck(): Promise<string[]> {
-  const rows = await db.select({ id: credentialsRefs.id, provider: credentialsRefs.provider }).from(credentialsRefs);
-  return rows.filter((r) => VALIDATORS[r.provider]).map((r) => r.id);
+  const rows = await db
+    .select({ id: credentialsRefs.id, provider: credentialsRefs.provider, pausedAt: engagements.pausedAt })
+    .from(credentialsRefs)
+    .innerJoin(engagements, eq(credentialsRefs.engagementId, engagements.engagementId));
+  return rows.filter((r) => VALIDATORS[r.provider] && !isEngagementPaused(r)).map((r) => r.id);
 }
 
 /**

@@ -5,6 +5,7 @@ import { resolveCredential } from "@/lib/credentials";
 import { listBookingsSinceForTenant, deriveWebhookIdempotencyKey } from "@/lib/platforms/booking";
 import { handleInboundBookingEvent, classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
 import { startRun, failRun } from "@/lib/run-log";
+import { isEngagementPaused } from "@/lib/engagement-status";
 import crypto from "crypto";
 import type { GetStepTools, Inngest } from "inngest";
 
@@ -43,7 +44,7 @@ type StepTools = GetStepTools<Inngest.Any>;
  */
 export async function findEngagementsDueForPoll(): Promise<string[]> {
   const rows = await db
-    .select({ engagementId: engagements.engagementId, stack: engagements.stack })
+    .select({ engagementId: engagements.engagementId, stack: engagements.stack, pausedAt: engagements.pausedAt })
     .from(engagements)
     .where(sql`${engagements.stack}->>'webhook_receiver_mode' = 'polling'`);
 
@@ -51,6 +52,8 @@ export async function findEngagementsDueForPoll(): Promise<string[]> {
   const due: string[] = [];
 
   for (const row of rows) {
+    if (isEngagementPaused(row)) continue;
+
     const stack = row.stack as EngagementStack | null;
     if (!stack?.booking_platform_credentials_ref) continue;
 

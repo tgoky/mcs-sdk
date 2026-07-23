@@ -36,6 +36,8 @@ export async function GET(
       pasteReadyInstructions: engagements.pasteReadyInstructions,
       pinDownScriptPack: engagements.pinDownScriptPack,
       pinDownPageAudit: engagements.pinDownPageAudit,
+      pausedAt: engagements.pausedAt,
+      pausedReason: engagements.pausedReason,
     })
     .from(engagements)
     .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))

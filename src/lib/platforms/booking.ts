@@ -439,7 +439,8 @@ export class CalendlyClient {
   async checkCredentialHealth(): Promise<void> {
     const res = await fetchWithTimeout(`${this.baseUrl}/users/me`, { headers: this.headers });
     if (!res.ok) {
-      throw new Error(`Calendly token check failed [${res.status}]`);
+      const body = await res.text().catch(() => "");
+      throw new Error(`Calendly token check failed [${res.status}]: ${body.slice(0, 300)}`);
     }
   }
 
@@ -576,7 +577,8 @@ export class CalComClient {
       { headers: this.headers }
     );
     if (!res.ok) {
-      throw new Error(`Cal.com bookings fetch failed [${res.status}]`);
+      const body = await res.text().catch(() => "");
+      throw new Error(`Cal.com bookings fetch failed [${res.status}]: ${body.slice(0, 300)}`);
     }
     const data = (await res.json()) as CalComBookingsResponse;
 
@@ -641,7 +643,8 @@ export class CalComClient {
       { headers: this.headers }
     );
     if (!res.ok) {
-      throw new Error(`Cal.com bookings fetch failed [${res.status}]`);
+      const body = await res.text().catch(() => "");
+      throw new Error(`Cal.com bookings fetch failed [${res.status}]: ${body.slice(0, 300)}`);
     }
     const data = (await res.json()) as CalComBookingsResponse;
 
@@ -668,7 +671,8 @@ export class CalComClient {
   async checkCredentialHealth(): Promise<void> {
     const res = await fetchWithTimeout(`${this.baseUrl}/me`, { headers: this.headers });
     if (!res.ok) {
-      throw new Error(`Cal.com token check failed [${res.status}]`);
+      const body = await res.text().catch(() => "");
+      throw new Error(`Cal.com token check failed [${res.status}]: ${body.slice(0, 300)}`);
     }
   }
 
@@ -793,7 +797,8 @@ export class GHLCalendarClient {
   { headers: this.headers }
 );
     if (!res.ok) {
-      throw new Error(`GHL appointments fetch failed [${res.status}]`);
+      const body = await res.text().catch(() => "");
+      throw new Error(`GHL appointments fetch failed [${res.status}]: ${body.slice(0, 300)}`);
     }
     const data = (await res.json()) as GHLAppointmentsResponse;
 
@@ -825,7 +830,8 @@ export class GHLCalendarClient {
   { headers: this.headers }
 );
     if (!res.ok) {
-      throw new Error(`GHL appointments fetch failed [${res.status}]`);
+      const body = await res.text().catch(() => "");
+      throw new Error(`GHL appointments fetch failed [${res.status}]: ${body.slice(0, 300)}`);
     }
     const data = (await res.json()) as GHLAppointmentsResponse;
 
@@ -907,7 +913,8 @@ export class OnceHubClient {
       { headers: this.headers }
     );
     if (!res.ok) {
-      throw new Error(`OnceHub bookings fetch failed [${res.status}]`);
+      const body = await res.text().catch(() => "");
+      throw new Error(`OnceHub bookings fetch failed [${res.status}]: ${body.slice(0, 300)}`);
     }
     const data = (await res.json()) as OnceHubBookingsResponse;
 
@@ -934,7 +941,8 @@ export class OnceHubClient {
       { headers: this.headers }
     );
     if (!res.ok) {
-      throw new Error(`OnceHub bookings fetch failed [${res.status}]`);
+      const body = await res.text().catch(() => "");
+      throw new Error(`OnceHub bookings fetch failed [${res.status}]: ${body.slice(0, 300)}`);
     }
     const data = (await res.json()) as OnceHubBookingsResponse;
 

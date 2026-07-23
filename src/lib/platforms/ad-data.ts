@@ -61,7 +61,10 @@ export class HyrosClient {
 
   async checkCredentialHealth(): Promise<void> {
     const res = await fetchWithTimeout(`${this.baseUrl}/leads?limit=1`, { headers: this.headers });
-    if (!res.ok) throw new Error(`Hyros credential check failed [${res.status}]`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Hyros credential check failed [${res.status}]: ${body.slice(0, 300)}`);
+    }
   }
 
   /**

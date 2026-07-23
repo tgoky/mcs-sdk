@@ -638,11 +638,20 @@ export const engagements = pgTable("engagements", {
     recommendation: string;
   }>(),
 
+  // Operator-facing off switch. NULL = active (default, no behavior change
+  // for existing engagements). When set, every recurring cron
+  // (nightlyBriefsCron, dynamicBriefCron, leak map, win-back sweep,
+  // weekly metrics, booking poll) skips this engagement — see the shared
+  // `isEngagementPaused` filter in src/lib/engagement-status.ts, which all
+  // of them import so this can't drift between crons. Does not touch a run
+  // already in flight; that's what POST /api/skill-runs/[id]/cancel is
+  // for. This is "stop starting new ones," not "kill what's running."
+  pausedAt: timestamp("paused_at"),
+  pausedReason: text("paused_reason"),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
-
-// ── Engagement Drafts ───────────────────────────────────────────────────────
 // Server-side backup of the "new engagement" wizard's in-progress state.
 // The wizard's primary draft copy lives in the browser's sessionStorage
 // (fast, no round trip, survives a same-tab refresh). sessionStorage is

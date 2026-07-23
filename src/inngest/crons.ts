@@ -42,6 +42,7 @@ import { computeAndPersistBenchmarks } from "@/features/leak-map/server/leak-map
 import { CANARY_CHECKS, runCanaryCheck, getCanaryEngagementId } from "@/lib/platforms/canary";
 import { and, eq, lt } from "drizzle-orm";
 import type { EngagementStack } from "@/models/schema";
+import { isEngagementPaused } from "@/lib/engagement-status";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
 // ONE step.run(), then fans out via a SINGLE step.sendEvent() carrying the
@@ -63,6 +64,7 @@ export const nightlyBriefsCron = inngest.createFunction(
     const eligible = all.filter((t) => {
   const stack = t.stack as any;
   return (
+    !isEngagementPaused(t) &&
     stack?.booking_platform &&
     stack?.booking_platform_credentials_ref &&
     // ✅ Exclude dynamic polling clients so they don't get double-processed at night
@@ -121,6 +123,8 @@ export const leakMapScheduleCron = inngest.createFunction(
       const out: { runId: string; engagementId: string; auditType: "weekly" | "monthly" }[] = [];
 
       for (const tenant of targets) {
+        if (isEngagementPaused(tenant)) continue;
+
         const stack = tenant.stack as EngagementStack | null;
 
         // A tenant whose weekly and monthly schedule happen to collide on
@@ -482,7 +486,12 @@ export const dynamicBriefCron = inngest.createFunction(
       return all
         .filter((t) => {
           const stack = t.stack as any;
-          return stack?.brief_trigger_type === "dynamic_webhook" && stack?.booking_platform && stack?.booking_platform_credentials_ref;
+          return (
+            !isEngagementPaused(t) &&
+            stack?.brief_trigger_type === "dynamic_webhook" &&
+            stack?.booking_platform &&
+            stack?.booking_platform_credentials_ref
+          );
         })
         .map((t) => t.engagementId);
     });
@@ -509,6 +518,7 @@ export const processDynamicBriefEngagementCron = inngest.createFunction(
       return row ?? null;
     });
     if (!tenantRaw) return { briefed: 0, reason: "engagement not found" };
+    if (isEngagementPaused(tenantRaw)) return { briefed: 0, reason: "engagement paused" };
 
     const tenant = { ...tenantRaw, createdAt: new Date(tenantRaw.createdAt), updatedAt: new Date(tenantRaw.updatedAt) };
 

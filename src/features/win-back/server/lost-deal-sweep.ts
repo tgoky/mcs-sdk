@@ -6,6 +6,7 @@ import { FIRST_NAME_MERGE } from "./recovery-service";
 import { KlaviyoClient } from "@/lib/platforms/email";
 import { resolveCredential } from "@/lib/credentials";
 import { notifyUser } from "@/lib/notify";
+import { isEngagementPaused } from "@/lib/engagement-status";
 import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
@@ -115,6 +116,7 @@ export async function processLostDealsForEngagement(
 
   const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
   if (!tenant) return { nurtureGenerated: false, autoEnrolled: 0 };
+  if (isEngagementPaused(tenant)) return { nurtureGenerated: false, autoEnrolled: 0 };
 
   const stack = (tenant.stack as EngagementStack | null) ?? ({} as EngagementStack);
   let nurtureGenerated = false;

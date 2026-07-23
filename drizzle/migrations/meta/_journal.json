@@ -50,6 +50,13 @@
       "when": 1784454819238,
       "tag": "0006_thankful_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784806484700,
+      "tag": "0007_skinny_toad_men",
+      "breakpoints": true
     }
   ]
 }

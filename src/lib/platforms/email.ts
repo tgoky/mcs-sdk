@@ -1070,7 +1070,10 @@ export class MailchimpClient {
   /** Root account ping — confirms the key (and the datacenter parsed from it) is valid. */
   async checkCredentialHealth(): Promise<void> {
     const res = await fetchWithTimeout(`${this.baseUrl}/`, { headers: this.headers });
-    if (!res.ok) throw new Error(`Mailchimp credential check failed [${res.status}]`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Mailchimp credential check failed [${res.status}]: ${body.slice(0, 300)}`);
+    }
   }
 }
 
@@ -1163,7 +1166,10 @@ export class ConvertKitClient {
   /** Confirms the api_secret is valid. */
   async checkCredentialHealth(): Promise<void> {
     const res = await fetchWithTimeout(`${this.baseUrl}/account?api_secret=${encodeURIComponent(this.apiSecret)}`);
-    if (!res.ok) throw new Error(`ConvertKit credential check failed [${res.status}]`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`ConvertKit credential check failed [${res.status}]: ${body.slice(0, 300)}`);
+    }
   }
 }
 
