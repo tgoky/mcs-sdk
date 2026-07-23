@@ -94,14 +94,20 @@ interface GHLContact {
   companyName?: string;
   phone?: string;
 }
-interface GHLAppointment {
+interface GHLCalendarEvent {
   id: string;
-  contact?: GHLContact;
+  contactId?: string;
   startTime: string;
-  status?: string;
+  appointmentStatus?: string;
 }
-interface GHLAppointmentsResponse {
-  appointments?: GHLAppointment[];
+interface GHLCalendarEventsResponse {
+  events?: GHLCalendarEvent[];
+}
+interface GHLCalendarListResponse {
+  calendars?: { id: string; isActive?: boolean }[];
+}
+interface GHLContactByIdResponse {
+  contact?: GHLContact;
 }
 
 interface OnceHubCustomer {
@@ -773,14 +779,106 @@ async subscribeWebhook(receiverUrl: string): Promise<string> {
 
 export class GHLCalendarClient {
   private baseUrl = "https://services.leadconnectorhq.com";
-  private headers: HeadersInit;
+  private authHeader: string;
+  private calendarIdCache: string | null = null;
+  private contactCache = new Map<string, GHLContact | null>();
 
-  constructor(apiKey: string, private locationId: string) {
-    this.headers = {
-      Authorization: `Bearer ${apiKey}`,
-      Version: "2021-07-28",
-      "Content-Type": "application/json",
-    };
+  constructor(private apiKey: string, private locationId: string) {
+    this.authHeader = `Bearer ${apiKey}`;
+  }
+
+  /** Version header is per-resource-group in GHL's API, not global — confirmed against the public spec. */
+  private calendarsHeaders(): HeadersInit {
+    return { Authorization: this.authHeader, Version: "2021-04-15", "Content-Type": "application/json" };
+  }
+  private contactsHeaders(): HeadersInit {
+    return { Authorization: this.authHeader, Version: "2021-07-28", "Content-Type": "application/json" };
+  }
+
+  /**
+   * /calendars/events requires one of userId, calendarId, or groupId —
+   * this app only ever collects locationId from the buyer, so resolve the
+   * location's calendar id once (first active calendar; falls back to the
+   * first calendar at all if none are marked active) and reuse it for the
+   * lifetime of this client instance.
+   */
+  private async resolveCalendarId(): Promise<string> {
+    if (this.calendarIdCache) return this.calendarIdCache;
+
+    const res = await fetchWithTimeout(
+      `${this.baseUrl}/calendars/?locationId=${this.locationId}`,
+      { headers: this.calendarsHeaders() }
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`GHL calendar list fetch failed [${res.status}]: ${body.slice(0, 300)}`);
+    }
+    const data = (await res.json()) as GHLCalendarListResponse;
+    const calendars = data.calendars ?? [];
+    const chosen = calendars.find((c) => c.isActive !== false) ?? calendars[0];
+    if (!chosen) {
+      throw new Error(`No calendars found for GHL location ${this.locationId} — nothing to poll.`);
+    }
+    this.calendarIdCache = chosen.id;
+    return chosen.id;
+  }
+
+  /** GET /contacts/{contactId} is a separate resource group from calendars — CalendarEventDTO only has contactId, no embedded name/email. */
+  private async enrichContact(contactId: string | undefined): Promise<GHLContact | null> {
+    if (!contactId) return null;
+    if (this.contactCache.has(contactId)) return this.contactCache.get(contactId) ?? null;
+
+    try {
+      const res = await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}`, { headers: this.contactsHeaders() });
+      if (!res.ok) {
+        this.contactCache.set(contactId, null);
+        return null;
+      }
+      const data = (await res.json()) as GHLContactByIdResponse;
+      const contact = data.contact ?? null;
+      this.contactCache.set(contactId, contact);
+      return contact;
+    } catch {
+      this.contactCache.set(contactId, null);
+      return null;
+    }
+  }
+
+  private async fetchEventsInRange(startTime: Date, endTime: Date): Promise<NormalizedCall[]> {
+    const calendarId = await this.resolveCalendarId();
+
+    const res = await fetchWithTimeout(
+      `${this.baseUrl}/calendars/events?locationId=${this.locationId}&calendarId=${calendarId}&startTime=${startTime.getTime()}&endTime=${endTime.getTime()}`,
+      { headers: this.calendarsHeaders() }
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`GHL appointments fetch failed [${res.status}]: ${body.slice(0, 300)}`);
+    }
+    const data = (await res.json()) as GHLCalendarEventsResponse;
+    const events = data.events ?? [];
+
+    const calls: NormalizedCall[] = [];
+    for (const event of events) {
+      const contact = await this.enrichContact(event.contactId);
+      const isCancelled = event.appointmentStatus?.toLowerCase() === "cancelled";
+      calls.push({
+        id: event.id,
+        name: contact?.name ?? "Unknown",
+        email: contact?.email ?? "",
+        company: contact?.companyName ?? "Not Stated",
+        phone: contact?.phone ?? undefined,
+        // No linkedInUrl extraction here — GHL contacts don't have a
+        // standard LinkedIn field; it would only live in a buyer-specific
+        // custom field this app has no stable way to identify by name
+        // across accounts. person-match.ts's LinkedIn tier simply scores 0
+        // for GHL-sourced calls unless a future pass adds custom-field-name
+        // configuration.
+        callTime: new Date(event.startTime),
+        eventKind: isCancelled ? "cancelled" : "created",
+      });
+    }
+    return calls;
   }
 
   async getTomorrowCalls(): Promise<NormalizedCall[]> {
@@ -792,29 +890,8 @@ export class GHLCalendarClient {
     tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
     tomorrowEnd.setHours(23, 59, 59, 999);
 
-    const res = await fetchWithTimeout(
-  `${this.baseUrl}/calendars/events?locationId=${this.locationId}&startTime=${tomorrowStart.toISOString()}&endTime=${tomorrowEnd.toISOString()}`,
-  { headers: this.headers }
-);
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`GHL appointments fetch failed [${res.status}]: ${body.slice(0, 300)}`);
-    }
-    const data = (await res.json()) as GHLAppointmentsResponse;
-
-    return (data.appointments ?? []).map((appt) => ({
-      id: appt.id,
-      name: appt.contact?.name ?? "Unknown",
-      email: appt.contact?.email ?? "",
-      company: appt.contact?.companyName ?? "Not Stated",
-      // No linkedInUrl extraction here — GHL contacts don't have a
-      // standard LinkedIn field; it would only live in a buyer-specific
-      // custom field this app has no stable way to identify by name
-      // across accounts. person-match.ts's LinkedIn tier simply scores 0
-      // for GHL-sourced calls unless a future pass adds custom-field-name
-      // configuration.
-      callTime: new Date(appt.startTime),
-    }));
+    const calls = await this.fetchEventsInRange(tomorrowStart, tomorrowEnd);
+    return calls.filter((c) => c.eventKind !== "cancelled");
   }
 
   /**
@@ -824,24 +901,8 @@ export class GHLCalendarClient {
   async getUpcomingCallsWithinWindow(startHoursFromNow: number, endHoursFromNow: number): Promise<NormalizedCall[]> {
     const windowStart = new Date(Date.now() + startHoursFromNow * 3_600_000);
     const windowEnd = new Date(Date.now() + endHoursFromNow * 3_600_000);
-
-   const res = await fetchWithTimeout(
-  `${this.baseUrl}/calendars/events?locationId=${this.locationId}&startTime=${windowStart.toISOString()}&endTime=${windowEnd.toISOString()}`,
-  { headers: this.headers }
-);
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`GHL appointments fetch failed [${res.status}]: ${body.slice(0, 300)}`);
-    }
-    const data = (await res.json()) as GHLAppointmentsResponse;
-
-    return (data.appointments ?? []).map((appt) => ({
-      id: appt.id,
-      name: appt.contact?.name ?? "Unknown",
-      email: appt.contact?.email ?? "",
-      company: appt.contact?.companyName ?? "Not Stated",
-      callTime: new Date(appt.startTime),
-    }));
+    const calls = await this.fetchEventsInRange(windowStart, windowEnd);
+    return calls.filter((c) => c.eventKind !== "cancelled");
   }
 
   /**
@@ -849,29 +910,21 @@ export class GHLCalendarClient {
    * events endpoint filters by start/end time, not creation time, so —
    * same approximation as Calendly — this pulls a forward-looking window
    * from sinceISO and relies on webhook_events idempotency to prevent
-   * double-processing across poll cycles.
+   * double-processing across poll cycles. Unlike the two briefing methods
+   * above, this deliberately keeps cancelled events — the poller uses
+   * eventKind to detect cancellations and route them to Win-Back instead
+   * of Pile-On (see pollBookingsForEngagement in booking-poller.ts).
    */
   async listBookingsSince(sinceISO: string, lookaheadDays = 14): Promise<NormalizedCall[]> {
     const start = new Date(sinceISO);
     const end = new Date(sinceISO);
     end.setDate(end.getDate() + lookaheadDays);
 
-   const res = await fetchWithTimeout(
-  `${this.baseUrl}/calendars/events?locationId=${this.locationId}&startTime=${start.toISOString()}&endTime=${end.toISOString()}`,
-  { headers: this.headers }
-);
-    if (!res.ok) return [];
-    const data = (await res.json()) as GHLAppointmentsResponse;
-
-    return (data.appointments ?? []).map((appt) => ({
-      id: appt.id,
-      name: appt.contact?.name ?? "Unknown",
-      email: appt.contact?.email ?? "",
-      company: appt.contact?.companyName ?? "Not Stated",
-      phone: appt.contact?.phone ?? undefined,
-      callTime: new Date(appt.startTime),
-      eventKind: (appt.status === "cancelled" || appt.status === "no-show" ? "cancelled" : "created") as "created" | "cancelled",
-    }));
+    try {
+      return await this.fetchEventsInRange(start, end);
+    } catch {
+      return [];
+    }
   }
 
   // subscribeWebhook was removed: GHL v2 Private Integrations don't expose
