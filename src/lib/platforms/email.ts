@@ -677,6 +677,7 @@ export class HubSpotClient {
 
 export class ActiveCampaignClient {
   private headers: HeadersInit;
+  private tagIdCache = new Map<string, string>();
 
   constructor(private baseUrl: string, apiKey: string) {
     // baseUrl format: https://ACCOUNT.api-us1.com/api/3
@@ -684,6 +685,46 @@ export class ActiveCampaignClient {
       "Api-Token": apiKey,
       "Content-Type": "application/json",
     };
+  }
+
+  /**
+   * ActiveCampaign's contactTags.tag field is a numeric tag ID, not a
+   * name — confirmed against ActiveCampaign's own docs example response
+   * for POST /contactTags: {"contactTag": {"contact":"1", "tag":"20"}}.
+   * Tags are a separate resource (GET/POST /tags) resolved by name via the
+   * `search` query param; not found → create it. Cached per-instance so
+   * repeated markRebooked calls for the same tag name don't re-resolve it.
+   */
+  private async resolveTagId(tagName: string): Promise<string | null> {
+    if (this.tagIdCache.has(tagName)) return this.tagIdCache.get(tagName)!;
+
+    try {
+      const searchRes = await fetchWithTimeout(
+        `${this.baseUrl}/tags?search=${encodeURIComponent(tagName)}`,
+        { headers: this.headers }
+      );
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        const exact = (searchData.tags ?? []).find((t: { tag?: string; id?: string }) => t.tag === tagName);
+        if (exact?.id) {
+          this.tagIdCache.set(tagName, exact.id);
+          return exact.id;
+        }
+      }
+
+      const createRes = await fetchWithTimeout(`${this.baseUrl}/tags`, {
+        method: "POST",
+        headers: this.headers,
+        body: JSON.stringify({ tag: { tag: tagName, tagType: "contact" } }),
+      });
+      if (!createRes.ok) return null;
+      const createData = await createRes.json();
+      const id = createData.tag?.id;
+      if (id) this.tagIdCache.set(tagName, id);
+      return id ?? null;
+    } catch {
+      return null;
+    }
   }
 
   async enrollInList(email: string, firstName: string, listId: string): Promise<void> {
@@ -740,11 +781,14 @@ export class ActiveCampaignClient {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
-    await fetchWithTimeout(`${this.baseUrl}/contactTags`, {
-      method: "POST",
-      headers: this.headers,
-      body: JSON.stringify({ contactTag: { contact: contactId, tag: statusTag } }),
-    }).catch(() => {});
+    const tagId = await this.resolveTagId(statusTag);
+    if (tagId) {
+      await fetchWithTimeout(`${this.baseUrl}/contactTags`, {
+        method: "POST",
+        headers: this.headers,
+        body: JSON.stringify({ contactTag: { contact: contactId, tag: tagId } }),
+      }).catch(() => {});
+    }
 
     if (automationId) {
       try {

@@ -67,12 +67,12 @@ interface CalComBookingResponses {
 interface CalComBooking {
   id: string | number;
   attendees?: CalComAttendee[];
-  responses?: CalComBookingResponses;
-  startTime: string;
+  bookingFieldsResponses?: CalComBookingResponses;
+  start: string;
   status?: string;
 }
 interface CalComBookingsResponse {
-  data?: { bookings?: CalComBooking[] };
+  data?: CalComBooking[];
 }
 interface CalComSlot {
   start: string;
@@ -110,21 +110,16 @@ interface GHLContactByIdResponse {
   contact?: GHLContact;
 }
 
-interface OnceHubCustomer {
-  name?: string;
-  email?: string;
-  phone?: string;
-}
-interface OnceHubFormSubmission {
-  company?: string;
-  linkedin?: string;
-  linkedin_url?: string;
+interface OnceHubCustomField {
+  name: string;
+  value?: string;
 }
 interface OnceHubBooking {
   id: string;
-  customer?: OnceHubCustomer;
-  form_submission?: OnceHubFormSubmission;
+  attendees?: string[];
+  custom_fields?: OnceHubCustomField[];
   starting_time: string;
+  status?: string;
 }
 interface OnceHubBookingsResponse {
   data?: OnceHubBooking[];
@@ -192,12 +187,41 @@ export interface NormalizedCall {
 export class CalendlyClient {
   private baseUrl = "https://api.calendly.com";
   private headers: HeadersInit;
+  private userUriCache: string | null = null;
 
   constructor(personalAccessToken: string) {
     this.headers = {
       Authorization: `Bearer ${personalAccessToken}`,
       "Content-Type": "application/json",
     };
+  }
+
+  /**
+   * GET /scheduled_events requires either a `user` or `organization` query
+   * parameter — confirmed directly against Calendly's own community docs
+   * ("the list events endpoint requires that you pass either a user or
+   * organization parameter"). None of this class's three list methods
+   * were sending either, which means every Calendly-based client was
+   * hitting an error on every single fetch, not just an edge case. This
+   * app only ever stores a personal access token (no user/org URI
+   * collected anywhere in onboarding), so resolve it once via
+   * GET /users/me — { resource: { uri, current_organization } } — and
+   * scope every list call to that single user, which matches "a client's
+   * own calendar" better than the org-wide scope would anyway.
+   */
+  private async resolveUserUri(): Promise<string> {
+    if (this.userUriCache) return this.userUriCache;
+    const res = await fetchWithTimeout(`${this.baseUrl}/users/me`, { headers: this.headers });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Calendly current-user fetch failed [${res.status}]: ${body.slice(0, 300)}`);
+    }
+    const data = (await res.json()) as { resource?: { uri?: string } };
+    if (!data.resource?.uri) {
+      throw new Error("Calendly GET /users/me returned no resource.uri to scope scheduled_events to.");
+    }
+    this.userUriCache = data.resource.uri;
+    return this.userUriCache;
   }
 
   /**
@@ -214,12 +238,14 @@ export class CalendlyClient {
     tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
     tomorrowEnd.setHours(23, 59, 59, 999);
 
+    const userUri = await this.resolveUserUri();
     const eventsRes = await fetchWithTimeout(
-      `${this.baseUrl}/scheduled_events?min_start_time=${tomorrowStart.toISOString()}&max_start_time=${tomorrowEnd.toISOString()}&status=active`,
+      `${this.baseUrl}/scheduled_events?min_start_time=${tomorrowStart.toISOString()}&max_start_time=${tomorrowEnd.toISOString()}&status=active&user=${encodeURIComponent(userUri)}`,
       { headers: this.headers }
     );
     if (!eventsRes.ok) {
-      throw new Error(`Calendly events fetch failed [${eventsRes.status}]`);
+      const body = await eventsRes.text().catch(() => "");
+      throw new Error(`Calendly events fetch failed [${eventsRes.status}]: ${body.slice(0, 300)}`);
     }
     const eventsData = (await eventsRes.json()) as CalendlyEventsResponse;
     const results: NormalizedCall[] = [];
@@ -270,10 +296,11 @@ export class CalendlyClient {
     windowEnd.setDate(windowEnd.getDate() + lookaheadDays);
 
     const results: NormalizedCall[] = [];
+    const userUri = await this.resolveUserUri();
 
     for (const status of ["active", "canceled"] as const) {
       const eventsRes = await fetchWithTimeout(
-        `${this.baseUrl}/scheduled_events?min_start_time=${sinceISO}&max_start_time=${windowEnd.toISOString()}&status=${status}`,
+        `${this.baseUrl}/scheduled_events?min_start_time=${sinceISO}&max_start_time=${windowEnd.toISOString()}&status=${status}&user=${encodeURIComponent(userUri)}`,
         { headers: this.headers }
       );
       if (!eventsRes.ok) continue;
@@ -323,12 +350,14 @@ export class CalendlyClient {
     const windowStart = new Date(Date.now() + startHoursFromNow * 3_600_000);
     const windowEnd = new Date(Date.now() + endHoursFromNow * 3_600_000);
 
+    const userUri = await this.resolveUserUri();
     const eventsRes = await fetchWithTimeout(
-      `${this.baseUrl}/scheduled_events?min_start_time=${windowStart.toISOString()}&max_start_time=${windowEnd.toISOString()}&status=active`,
+      `${this.baseUrl}/scheduled_events?min_start_time=${windowStart.toISOString()}&max_start_time=${windowEnd.toISOString()}&status=active&user=${encodeURIComponent(userUri)}`,
       { headers: this.headers }
     );
     if (!eventsRes.ok) {
-      throw new Error(`Calendly events fetch failed [${eventsRes.status}]`);
+      const body = await eventsRes.text().catch(() => "");
+      throw new Error(`Calendly events fetch failed [${eventsRes.status}]: ${body.slice(0, 300)}`);
     }
     const eventsData = (await eventsRes.json()) as CalendlyEventsResponse;
     const results: NormalizedCall[] = [];
@@ -579,7 +608,7 @@ export class CalComClient {
     tomorrowEnd.setHours(23, 59, 59, 999);
 
     const res = await fetchWithTimeout(
-      `${this.baseUrl}/bookings?startTime=${tomorrowStart.toISOString()}&endTime=${tomorrowEnd.toISOString()}&status=accepted`,
+      `${this.baseUrl}/bookings?afterStart=${tomorrowStart.toISOString()}&beforeEnd=${tomorrowEnd.toISOString()}&status=upcoming`,
       { headers: this.headers }
     );
     if (!res.ok) {
@@ -588,18 +617,18 @@ export class CalComClient {
     }
     const data = (await res.json()) as CalComBookingsResponse;
 
-    return (data.data?.bookings ?? []).map((booking) => {
+    return (data.data ?? []).map((booking) => {
       const attendee = booking.attendees?.[0] ?? {};
       return {
         id: String(booking.id),
         name: attendee.name ?? "Unknown",
         email: attendee.email ?? "",
         company:
-          booking.responses?.company ??
-          booking.responses?.organization ??
+          booking.bookingFieldsResponses?.company ??
+          booking.bookingFieldsResponses?.organization ??
           "Not Stated",
-        linkedInUrl: booking.responses?.linkedin ?? booking.responses?.linkedInUrl ?? undefined,
-        callTime: new Date(booking.startTime),
+        linkedInUrl: booking.bookingFieldsResponses?.linkedin ?? booking.bookingFieldsResponses?.linkedInUrl ?? undefined,
+        callTime: new Date(booking.start),
       };
     });
   }
@@ -619,18 +648,18 @@ export class CalComClient {
     if (!res.ok) return [];
     const data = (await res.json()) as CalComBookingsResponse;
 
-    return (data.data?.bookings ?? []).map((booking) => {
+    return (data.data ?? []).map((booking) => {
       const attendee = booking.attendees?.[0] ?? {};
       return {
         id: String(booking.id),
         name: attendee.name ?? "Unknown",
         email: attendee.email ?? "",
         company:
-          booking.responses?.company ??
-          booking.responses?.organization ??
+          booking.bookingFieldsResponses?.company ??
+          booking.bookingFieldsResponses?.organization ??
           "Not Stated",
-        phone: attendee.phoneNumber ?? booking.responses?.attendeePhoneNumber ?? booking.responses?.phone ?? undefined,
-        callTime: new Date(booking.startTime),
+        phone: attendee.phoneNumber ?? booking.bookingFieldsResponses?.attendeePhoneNumber ?? booking.bookingFieldsResponses?.phone ?? undefined,
+        callTime: new Date(booking.start),
         eventKind: (booking.status === "cancelled" ? "cancelled" : "created") as "created" | "cancelled",
       };
     });
@@ -645,7 +674,7 @@ export class CalComClient {
     const windowEnd = new Date(Date.now() + endHoursFromNow * 3_600_000);
 
     const res = await fetchWithTimeout(
-      `${this.baseUrl}/bookings?startTime=${windowStart.toISOString()}&endTime=${windowEnd.toISOString()}&status=accepted`,
+      `${this.baseUrl}/bookings?afterStart=${windowStart.toISOString()}&beforeEnd=${windowEnd.toISOString()}&status=upcoming`,
       { headers: this.headers }
     );
     if (!res.ok) {
@@ -654,15 +683,15 @@ export class CalComClient {
     }
     const data = (await res.json()) as CalComBookingsResponse;
 
-    return (data.data?.bookings ?? []).map((booking) => {
+    return (data.data ?? []).map((booking) => {
       const attendee = booking.attendees?.[0] ?? {};
       return {
         id: String(booking.id),
         name: attendee.name ?? "Unknown",
         email: attendee.email ?? "",
-        company: booking.responses?.company ?? booking.responses?.organization ?? "Not Stated",
-        linkedInUrl: booking.responses?.linkedin ?? booking.responses?.linkedInUrl ?? undefined,
-        callTime: new Date(booking.startTime),
+        company: booking.bookingFieldsResponses?.company ?? booking.bookingFieldsResponses?.organization ?? "Not Stated",
+        linkedInUrl: booking.bookingFieldsResponses?.linkedin ?? booking.bookingFieldsResponses?.linkedInUrl ?? undefined,
+        callTime: new Date(booking.start),
       };
     });
   }
@@ -711,7 +740,7 @@ async subscribeWebhook(receiverUrl: string): Promise<string> {
 
     const res = await fetchWithTimeout(
       `${this.baseUrl}/slots?eventTypeId=${eventTypeId}` +
-        `&start=${start.toISOString()}&end=${end.toISOString()}`,
+        `&startTime=${start.toISOString()}&endTime=${end.toISOString()}`,
       { headers: this.headers }
     );
     if (!res.ok) return [];
@@ -952,6 +981,42 @@ export class OnceHubClient {
     };
   }
 
+  /**
+   * OnceHub's booking object has no nested "customer" object and no
+   * "form_submission" object — confirmed against OnceHub's own webhook
+   * payload documentation, which their v2.0.0 API changelog states shares
+   * the same booking schema as REST responses. It's `attendees: [email,
+   * email, ...]` (bare strings, no name field at all) and
+   * `custom_fields: [{name, value}, ...]`. Name isn't a real field on this
+   * object, so this falls back to scanning custom_fields for a name-like
+   * question, same pattern CalendlyClient uses for its own free-text Q&A.
+   * NOTE: unlike the GHL/Calendly/Cal.com fixes in this file, I could not
+   * reach OnceHub's actual query-parameter reference (their docs are
+   * client-rendered with no public OpenAPI spec I could locate), so the
+   * `starting_after`/`starting_before`/`status` query params below are
+   * unverified — only the response-shape parsing here is confirmed.
+   */
+  private normalizeBooking(booking: OnceHubBooking, eventKind: "created" | "cancelled"): NormalizedCall {
+    const email = booking.attendees?.[0] ?? "";
+    const nameField = booking.custom_fields?.find((f) =>
+      /name/i.test(f.name) && !/company|organization/i.test(f.name)
+    );
+    const companyField = booking.custom_fields?.find((f) => /company|organization/i.test(f.name));
+    const linkedinField = booking.custom_fields?.find(
+      (f) => /linkedin/i.test(f.name) || (f.value ?? "").includes("linkedin.com/in/")
+    );
+
+    return {
+      id: booking.id,
+      name: nameField?.value ?? "Unknown",
+      email,
+      company: companyField?.value ?? "Not Stated",
+      linkedInUrl: linkedinField?.value ?? undefined,
+      callTime: new Date(booking.starting_time),
+      eventKind,
+    };
+  }
+
   async getTomorrowCalls(): Promise<NormalizedCall[]> {
     const tomorrowStart = new Date();
     tomorrowStart.setDate(tomorrowStart.getDate() + 1);
@@ -970,15 +1035,7 @@ export class OnceHubClient {
       throw new Error(`OnceHub bookings fetch failed [${res.status}]: ${body.slice(0, 300)}`);
     }
     const data = (await res.json()) as OnceHubBookingsResponse;
-
-    return (data.data ?? []).map((booking) => ({
-      id: booking.id,
-      name: booking.customer?.name ?? "Unknown",
-      email: booking.customer?.email ?? "",
-      company: booking.form_submission?.company ?? "Not Stated",
-      linkedInUrl: booking.form_submission?.linkedin ?? booking.form_submission?.linkedin_url ?? undefined,
-      callTime: new Date(booking.starting_time),
-    }));
+    return (data.data ?? []).map((booking) => this.normalizeBooking(booking, "created"));
   }
 
   /**
@@ -998,15 +1055,7 @@ export class OnceHubClient {
       throw new Error(`OnceHub bookings fetch failed [${res.status}]: ${body.slice(0, 300)}`);
     }
     const data = (await res.json()) as OnceHubBookingsResponse;
-
-    return (data.data ?? []).map((booking) => ({
-      id: booking.id,
-      name: booking.customer?.name ?? "Unknown",
-      email: booking.customer?.email ?? "",
-      company: booking.form_submission?.company ?? "Not Stated",
-      linkedInUrl: booking.form_submission?.linkedin ?? booking.form_submission?.linkedin_url ?? undefined,
-      callTime: new Date(booking.starting_time),
-    }));
+    return (data.data ?? []).map((booking) => this.normalizeBooking(booking, "created"));
   }
 
   /**
@@ -1031,15 +1080,7 @@ export class OnceHubClient {
       if (!res.ok) continue;
       const data = (await res.json()) as OnceHubBookingsResponse;
       for (const booking of data.data ?? []) {
-        results.push({
-          id: booking.id,
-          name: booking.customer?.name ?? "Unknown",
-          email: booking.customer?.email ?? "",
-          company: booking.form_submission?.company ?? "Not Stated",
-          phone: booking.customer?.phone ?? undefined,
-          callTime: new Date(booking.starting_time),
-          eventKind: status === "canceled" ? "cancelled" : "created",
-        });
+        results.push(this.normalizeBooking(booking, status === "canceled" ? "cancelled" : "created"));
       }
     }
     return results;
