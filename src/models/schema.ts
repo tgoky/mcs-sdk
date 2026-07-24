@@ -32,7 +32,7 @@ export type RunSummary = {
 export type RunStep = {
   phase: string;            // internal phase key, e.g. "voice_extraction" — pass through phaseLabel() to render
   label?: string;           // optional human-readable detail beyond the phase name, e.g. "Sarah Jenkins (sarah@acme.com)"
-   status: "running" | "success" | "failed" | "skipped" | "cancelled";
+   status: "running" | "success" | "failed" | "skipped" | "cancelled" | "pending_review";
   detail?: string;          // free-text outcome for this specific step, e.g. "Identity confidence 98/100 — brief sent via Slack"
   startedAt: string;        // ISO timestamp
   completedAt?: string;     // ISO timestamp, set when the step finishes
@@ -315,20 +315,25 @@ export type EngagementStack = {
   // ── Cross-cutting recovery gap 22: explicit human-approval gates ───────
   // Per the transfer analysis section 8.2: "Every hard change or actual
   // execution requires explicit human confirmation" was a Skill Pack
-  // principle UTP's webhook-driven auto-fire model dropped. This is an
-  // opt-in per-engagement gate (default off, preserving today's behavior)
-  // — see src/lib/approval-gate.ts. When on, the actions listed in
-  // require_approval_action_types (or every gateable action type, if that
-  // array is omitted) are queued to pendingActions instead of executing
-  // immediately, and only run once an admin approves them via
-  // POST /api/actions/[id]/review.
+  // principle UTP's webhook-driven auto-fire model dropped. This is a
+  // per-engagement gate — see src/lib/approval-gate.ts. New engagements
+  // created via the setup wizard opt into this by default, scoped to
+  // confirmation_page_deploy (see submit-payload.ts); engagements from
+  // before that default still read as off unless set explicitly, same as
+  // any other column that gained a new default after rows already existed.
+  // When on, the actions listed in require_approval_action_types (or every
+  // gateable action type, if that array is omitted) are queued to
+  // pendingActions instead of executing immediately, and only run once an
+  // admin approves them via POST /api/actions/[id]/review.
   require_approval_for_side_effects?: boolean;
-  // Scoped to two action types with real, wired executors in this pass —
-  // see approval-gate.ts's module comment for why SMS dispatch isn't a
-  // third gateable type yet (its timing math is booking-relative and
+  // Scoped to the action types with real, wired executors — see
+  // approval-gate.ts's module comment for why SMS dispatch isn't a
+  // gateable type yet (its timing math is booking-relative and
   // re-deriving it correctly from a deferred payload is real work, not
   // a mechanical extension of this gate).
-  require_approval_action_types?: Array<"webhook_enrollment" | "cohort_membership_add" | "cohort_membership_remove">;
+  require_approval_action_types?: Array<
+    "webhook_enrollment" | "cohort_membership_add" | "cohort_membership_remove" | "confirmation_page_deploy"
+  >;
 
   // ── Cross-cutting recovery gap 17: human-only-blocker resume ───────────
   // See src/lib/human-blockers.ts. Doesn't gate anything by itself — this
@@ -445,9 +450,13 @@ export const engagements = pgTable("engagements", {
   // asset."
   confirmationPageUrl: text("confirmation_page_url"),
   confirmationPageDeployment: jsonb("confirmation_page_deployment").$type<{
-    mode: "live" | "paste_ready" | "not_deployed";
+    mode: "live" | "paste_ready" | "not_deployed" | "pending_review";
     deployedVia?: string;
     reason?: string;
+    // Set only when mode === "pending_review" — the confirmation_page_deploy
+    // pending_actions row a human needs to approve/reject before this page
+    // is actually published. See src/lib/approval-gate.ts.
+    pendingActionId?: string;
     lastAttemptedAt: string;
   }>(),
   topCallQuestions: jsonb("top_call_questions").$type<string[]>(),

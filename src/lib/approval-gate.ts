@@ -34,7 +34,11 @@ import { pendingActions, engagements, type EngagementStack } from "@/models/sche
 import { eq } from "drizzle-orm";
 import { notifyUser } from "@/lib/notify";
 
-export type PendingActionType = "webhook_enrollment" | "cohort_membership_add" | "cohort_membership_remove";
+export type PendingActionType =
+  | "webhook_enrollment"
+  | "cohort_membership_add"
+  | "cohort_membership_remove"
+  | "confirmation_page_deploy";
 
 export function isApprovalRequired(
   stack: EngagementStack | null | undefined,
@@ -145,5 +149,83 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
     const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
     if (!tenant) throw new Error(`Engagement ${engagementId} not found`);
     await removeProspectFromAdDataCohort(engagementId, tenant.stack as EngagementStack, payload.prospectEmail);
+  },
+
+  // payload only ever carries { runId, pageContent } — never a credential.
+  // The hosting credential is re-resolved fresh below, same as every other
+  // executor in this file re-derives its secrets rather than trusting
+  // anything that sat in pending_actions between queue and approval.
+  confirmation_page_deploy: async (engagementId, payload) => {
+    const { publishConfirmationPage } = await import("@/lib/platforms/hosting");
+    const { resolveCredential } = await import("@/lib/credentials");
+    const { logStep } = await import("@/lib/run-log");
+
+    const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+    if (!tenant) throw new Error(`Engagement ${engagementId} not found`);
+    const stack = tenant.stack as EngagementStack;
+
+    const hostingCredential = stack.hosting_platform
+      ? await resolveCredential(engagementId, stack.hosting_platform).catch(() => null)
+      : null;
+
+    await logStep(payload.runId, {
+      phase: "confirmation_page_deploy",
+      status: "running",
+      detail: "Approved — publishing now.",
+    });
+
+    const deployResult = await publishConfirmationPage(
+      stack.hosting_platform,
+      hostingCredential,
+      stack.hosting_platform_meta,
+      payload.pageContent,
+      engagementId
+    );
+
+    const nowIso = new Date().toISOString();
+
+    if (deployResult.mode === "live") {
+      const updatedStack =
+        stack.hosting_platform === "wordpress" && deployResult.resourceId
+          ? { ...stack, hosting_platform_meta: { ...stack.hosting_platform_meta, wordpress_page_id: deployResult.resourceId as number } }
+          : stack;
+
+      await db
+        .update(engagements)
+        .set({
+          stack: updatedStack,
+          confirmationPageUrl: deployResult.url,
+          confirmationPageDeployment: { mode: "live", deployedVia: deployResult.deployedVia, lastAttemptedAt: nowIso },
+          pasteReadyHtml: null,
+          pasteReadyInstructions: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(engagements.engagementId, engagementId));
+
+      await logStep(payload.runId, {
+        phase: "confirmation_page_deploy",
+        status: "success",
+        detail: `Live on buyer's ${stack.hosting_platform}: ${deployResult.url}`,
+      });
+      return;
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+    await db
+      .update(engagements)
+      .set({
+        confirmationPageUrl: `${appUrl}/confirm/${engagementId}`,
+        confirmationPageDeployment: { mode: "paste_ready", reason: deployResult.reason, lastAttemptedAt: nowIso },
+        pasteReadyHtml: deployResult.html,
+        pasteReadyInstructions: deployResult.instructions,
+        updatedAt: new Date(),
+      })
+      .where(eq(engagements.engagementId, engagementId));
+
+    await logStep(payload.runId, {
+      phase: "confirmation_page_deploy",
+      status: "failed",
+      detail: deployResult.reason,
+    });
   },
 };

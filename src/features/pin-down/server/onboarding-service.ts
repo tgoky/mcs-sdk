@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { registerWebhookForTenant, CalendlyClient, CalComClient } from "@/lib/platforms/booking";
 import { publishConfirmationPage } from "@/lib/platforms/hosting";
+import { gateOrExecute } from "@/lib/approval-gate";
 import { buildConfirmationPageHtml } from "./page-builder";
 import { buildAdCreativeBriefs } from "@/features/pile-on/server/ad-creative-briefs";
 import { buildScriptPack } from "./script-builder";
@@ -561,13 +562,41 @@ export async function runPinDownOnboarding(
           existingProof,
         });
 
-        const deployResult = await publishConfirmationPage(
-          finalStack.hosting_platform,
-          hostingCredential,
-          finalStack.hosting_platform_meta,
-          pageContent,
-          engagementId
+        const gated = await gateOrExecute(
+          finalStack,
+          engagementId,
+          "confirmation_page_deploy",
+          { runId, pageContent },
+          () =>
+            publishConfirmationPage(
+              finalStack.hosting_platform,
+              hostingCredential,
+              finalStack.hosting_platform_meta,
+              pageContent,
+              engagementId
+            )
         );
+
+        if (!gated.executed) {
+          await logStep(runId, {
+            phase: "confirmation_page_deploy",
+            status: "pending_review",
+            detail: "Queued for your approval — nothing has been published yet. Approve it from the dashboard queue to go live.",
+          });
+          return {
+            confirmationPageUrl: internalFallbackUrl,
+            confirmationPageDeployment: {
+              mode: "pending_review" as const,
+              pendingActionId: gated.pendingActionId,
+              lastAttemptedAt: new Date().toISOString(),
+            },
+            pasteReadyHtml: null as string | null,
+            pasteReadyInstructions: null as string | null,
+            remoteResourceId: null as string | number | null,
+          };
+        }
+
+        const deployResult = gated.result;
 
         if (deployResult.mode === "live") {
           await logStep(runId, {
@@ -609,6 +638,8 @@ export async function runPinDownOnboarding(
 
     if (confirmationPageDeployment.mode === "live") {
       summary.whatWorked.push(`Confirmation page published live on ${finalStack.hosting_platform} at ${confirmationPageUrl}.`);
+    } else if (confirmationPageDeployment.mode === "pending_review") {
+      summary.openItems.push(`Confirmation page drafted and waiting on your approval before it publishes to ${finalStack.hosting_platform}.`);
     } else {
       summary.whatFailed.push(`Could not auto-publish to ${finalStack.hosting_platform}: ${confirmationPageDeployment.reason}`);
       summary.openItems.push(`Paste-ready HTML ready for ${finalStack.hosting_platform} — manual publish required.`);

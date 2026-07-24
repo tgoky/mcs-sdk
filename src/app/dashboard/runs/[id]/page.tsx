@@ -18,7 +18,8 @@ import {
   Coins,
   ChevronLeft,
   Clock,
-  Ban
+  Ban,
+  ClipboardCheck
 } from "lucide-react";
 import {
   skillName,
@@ -91,6 +92,7 @@ function StepCenterIcon({ status, displayInterrupted }: { status: RunStep["statu
   if (status === "failed") return <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />;
   if (status === "cancelled") return <Ban className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />;
   if (status === "skipped") return <SkipForward className="w-4 h-4 text-zinc-400 dark:text-zinc-600 shrink-0 mt-0.5" />;
+  if (status === "pending_review") return <ClipboardCheck className="w-4 h-4 text-gold shrink-0 mt-0.5" />;
   return <Loader2 className="w-4 h-4 text-zinc-500 dark:text-zinc-400 animate-spin shrink-0 mt-0.5" />;
 }
 

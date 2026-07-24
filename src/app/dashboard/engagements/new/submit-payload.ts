@@ -40,6 +40,15 @@ export function buildEngagementPayload(form: FormData) {
       vertical: form.offerVertical || undefined,
     },
     stack: {
+      // Default every new engagement to reviewing the confirmation page
+      // before it goes live on the buyer's real hosting platform — see
+      // src/lib/approval-gate.ts. Scoped to just this one action type so
+      // Pile-On's webhook-driven prospect handling stays fully automatic;
+      // an operator can widen or turn this off from the engagement's
+      // settings once they trust a given client's runs.
+      require_approval_for_side_effects: true,
+      require_approval_action_types: ["confirmation_page_deploy"],
+
       // 1. Core Platform Selection
       booking_platform: form.bookingPlatform,
       booking_platform_credentials_ref: `secrets://${engagementId}/${form.bookingPlatform}_pat`,

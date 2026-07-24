@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { engagements, skillRuns, artifacts } from "@/models/schema";
+import { engagements, skillRuns, artifacts, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { eq, and, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { TriggerSkillButton } from "./trigger-skill-button";
 import { EngagementPauseControl } from "./pause-control";
+import { ApprovalModeToggle } from "./approval-mode-toggle";
 import { CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRight, Server, DollarSign } from "lucide-react";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import {
@@ -82,6 +83,7 @@ export default async function EngagementDetailPage({
     .orderBy(desc(skillRuns.startedAt));
 
   const stack = engagement.stack as Record<string, string> | null;
+  const requireApproval = (engagement.stack as EngagementStack | null)?.require_approval_for_side_effects ?? false;
   const offerDetails = engagement.offerDetails as Record<string, string | boolean> | null;
 
   const runsBySkill = Object.fromEntries(
@@ -139,6 +141,10 @@ export default async function EngagementDetailPage({
               engagementId={engagement.engagementId}
               initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
               initialPausedReason={engagement.pausedReason}
+            />
+            <ApprovalModeToggle
+              engagementId={engagement.engagementId}
+              initialRequireApproval={requireApproval}
             />
             <div className="flex flex-wrap gap-2 self-start sm:self-end font-mono">
               <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
