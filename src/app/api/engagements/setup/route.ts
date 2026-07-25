@@ -4,15 +4,19 @@ import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { storeCredential } from "@/lib/credentials";
 import { getSession } from "@/lib/session";
-import { startRun, logStep, failRun } from "@/lib/run-log";
-import { inngest, skillRunExecute } from "@/lib/inngest";
 import crypto from "crypto";
 
 export const maxDuration = 30;
 
+/**
+ * Persists a new engagement's config and encrypted credentials only.
+ * Deliberately does NOT start a run or dispatch the pin-down skill event —
+ * that only happens once the client explicitly calls POST
+ * /api/pin-down/launch, so there's a real gap between "I filled out the
+ * form" and "an agent is now touching real accounts", not just a warning
+ * in the confirm-step copy about what a single button click will do.
+ */
 export async function POST(request: Request) {
-  const runId = crypto.randomUUID();
-
   try {
     const session = await getSession();
     if (!session?.whopUserId) {
@@ -76,12 +80,12 @@ export async function POST(request: Request) {
 
     finalStack.slack_webhook_url = credentials?.slack_webhook_url ?? finalStack.slack_webhook_url;
 
-    // ── Step 1: Ensure engagement row exists (satisfies skill_runs FK) ──
+    // ── Step 1: Ensure engagement row exists ──
     // CRITICAL: must target engagementId's unique constraint explicitly.
     // Without a target, onConflictDoNothing() falls back to the PRIMARY KEY
     // (the random UUID `id`), which never conflicts — so if the row already
     // exists under its business key, the INSERT throws a unique-constraint
-    // violation that the catch block intercepts before startRun ever runs.
+    // violation that the catch block intercepts.
     await db
       .insert(engagements)
       .values({
@@ -95,17 +99,7 @@ export async function POST(request: Request) {
       })
       .onConflictDoNothing({ target: engagements.engagementId });
 
-    // ── Step 2: Now start the run (FK is satisfied) ──
-    await startRun({
-      id: runId,
-      engagementId,
-      skillName: "pin-down",
-      phase: "onboarding_start",
-      label: buyerName,
-    });
-    await logStep(runId, { phase: "credential_storage", status: "running" });
-
-    // ── Step 3: Store encrypted credentials and update stack in transaction ──
+    // ── Step 2: Store encrypted credentials and update stack in transaction ──
     await db.transaction(async (tx) => {
       if (credentials?.booking) {
         await storeCredential(
@@ -195,24 +189,14 @@ export async function POST(request: Request) {
         .where(eq(engagements.engagementId, engagementId));
     });
 
-    await logStep(runId, {
-      phase: "credential_storage",
-      status: "success",
-      detail: credentials?.booking || credentials?.email ? "Credentials stored" : "No credentials supplied",
-    });
-
-    // ── Hand off to the async worker ──────────────────────────────────────
-    await inngest.send(skillRunExecute.create({ runId, engagementId, skillName: "pin-down" }));
-
     return NextResponse.json({
       success: true,
-      runId,
       engagementId,
-      status: "processing",
+      status: "ready_to_launch",
     });
-  } catch (error: any) {
-    console.error("[pin-down setup]", error.message);
-    await failRun(runId, error).catch(() => {});
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[pin-down setup]", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

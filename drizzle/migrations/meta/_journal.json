@@ -57,6 +57,13 @@
       "when": 1784806484700,
       "tag": "0007_skinny_toad_men",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785000350890,
+      "tag": "0008_cold_molten_man",
+      "breakpoints": true
     }
   ]
 }

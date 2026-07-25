@@ -2,11 +2,9 @@ import { inngest, skillRunExecute, skillRunCancel } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
-import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/brief-service";
-import { AuditEngine } from "@/features/leak-map/server/audit-engine";
-import { generateRecoveryCadence } from "@/features/win-back/server/recovery-service";
-import { runPinDownOnboarding } from "@/features/pin-down/server/onboarding-service";
-import { failRun } from "@/lib/run-log";
+import { failRun, logStep, finishRun } from "@/lib/run-log";
+import { SKILL_REGISTRY, isSkillId } from "@/lib/skill-registry";
+import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 
 /**
  * Unified Background Skill Execution Worker
@@ -71,23 +69,37 @@ export const executeSkillRun = inngest.createFunction(
     };
 
     try {
-      if (skillName === "pin-down") {
-        await runPinDownOnboarding(tenant, runId, step);
+      if (!isSkillId(skillName)) {
+        throw new Error(`Unknown skill: ${skillName}`);
       }
 
-      if (skillName === "pre-call-read") {
-        await executeNightlyBriefingCycle(tenant, runId, step);
+      const definition = SKILL_REGISTRY[skillName];
+
+      const enabled = await step.run("check-skill-enabled", () =>
+        isSkillEnabledForEngagement(engagementId, skillName)
+      );
+
+      if (!enabled) {
+        // An intentional user choice (see the future Skill Library
+        // toggle backed by src/lib/engagement-skills.ts), not an error —
+        // finish clean rather than routing through failRun below.
+        await logStep(runId, {
+          phase: "skill_disabled",
+          status: "skipped",
+          detail: `${definition.name} is turned off for this engagement — nothing ran.`,
+        });
+        await finishRun(runId);
+        return;
       }
 
-      if (skillName === "leak-map") {
-        const engine = new AuditEngine();
-        await engine.runAuditPipeline(engagementId, auditType ?? "weekly", runId, step);
+      if (!definition.execute) {
+        // e.g. pile-on: registered in SKILL_REGISTRY for its manifest, but
+        // only ever runs from its own webhook-triggered Inngest functions.
+        throw new Error(`${definition.name} has no direct executor — it only runs from its own event handlers.`);
       }
 
-      if (skillName === "win-back") {
-        await generateRecoveryCadence(tenant, runId, step);
-      }
-    } catch (err: any) {
+      await definition.execute(tenant, runId, step, { auditType });
+    } catch (err: unknown) {
       // Safety net only — brief-service.ts and audit-engine.ts already call
       // failRun() internally before rethrowing, so this mainly covers
       // errors thrown by load-tenant or anything outside their own

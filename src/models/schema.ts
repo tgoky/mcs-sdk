@@ -1112,6 +1112,38 @@ export const pendingActions = pgTable("pending_actions", {
   executionError: text("execution_error"), // set only if status is execution_failed
 });
 
+// ── Engagement Skills (per-engagement skill enablement) ────────────────────
+// Decouples "this client bought an agent bundle" from "this specific skill
+// is turned on for them" — the prerequisite for a Skill Library where a
+// client can run e.g. just leak-map without the rest of Showtime, and for
+// a future agent marketplace where a bundle is just a named list of skill
+// ids rather than a hardcoded branch in the dispatcher. See
+// src/lib/skill-registry.ts. No row for a given (engagementId, skillId)
+// pair means enabled — this table only ever needs to hold explicit
+// disables, so every existing engagement (all skills on) needs zero rows
+// and nothing changes for them until someone actually flips a toggle.
+export const engagementSkills = pgTable(
+  "engagement_skills",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    // Matches a key in SKILL_REGISTRY (src/lib/skill-registry.ts), e.g.
+    // "pin-down", "pile-on", "pre-call-read", "win-back", "leak-map".
+    skillId: text("skill_id").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    // Per-skill overrides, if a skill ever needs config beyond what
+    // already lives on the engagement's stack. Unused by every skill today.
+    config: jsonb("config"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    engagementSkillUnique: uniqueIndex("engagement_skill_unique").on(table.engagementId, table.skillId),
+  })
+);
+
 // ── Show-Rate Features (recovery gap 25: predictive show-rate scoring) ────
 // One row per scored call. Two jobs at once: (1) the features actually
 // used to compute the score that shipped on that call's brief, kept for

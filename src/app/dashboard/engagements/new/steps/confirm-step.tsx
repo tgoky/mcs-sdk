@@ -77,15 +77,16 @@ export function ConfirmStep({
           style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
         >
           <div className="font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>
-            <span>▶</span> What happens when you click Finish Setup
+            <span>▶</span> What happens when you click Save Setup
           </div>
           <p style={{ color: "var(--text-muted)" }}>
-            This isn&apos;t a preview — clicking the button below immediately kicks off a live run against{" "}
+            Clicking the button below encrypts and stores what you entered — it does{" "}
+            <span className="font-semibold" style={{ color: "var(--text-primary)" }}>not</span> touch{" "}
             <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{form.buyerName || "this client"}&apos;s</span>{" "}
-            real accounts. In order, it will:
+            real accounts yet. After saving, you&apos;ll get a separate Launch Setup screen — nothing runs until you click that.
+            Launching will, in order:
           </p>
           <ol className="list-decimal list-inside space-y-1" style={{ color: "var(--text-secondary)" }}>
-            <li>Encrypt and store the API keys you entered.</li>
             <li>
               {form.voiceSource === "scrape"
                 ? `Crawl ${form.marketingDomain || form.publishDomain || "the marketing site"} to learn the brand voice.`
@@ -99,7 +100,7 @@ export function ConfirmStep({
             </li>
           </ol>
           <p style={{ color: "var(--text-muted)" }}>
-            You&apos;ll land on a live status page right after this and can watch each step happen in real time.
+            Once you launch, you&apos;ll land on a live status page and can watch each step happen in real time.
           </p>
         </div>
       )}

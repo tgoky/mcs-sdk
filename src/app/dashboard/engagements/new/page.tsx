@@ -23,6 +23,9 @@ export default function NewEngagementPage() {
   const [form, setForm] = useState<FormData>(DEFAULT_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [readyToLaunch, setReadyToLaunch] = useState<{ engagementId: string; buyerName: string } | null>(null);
+  const [launching, setLaunching] = useState(false);
+  const [launchError, setLaunchError] = useState<string | null>(null);
 
   const { showRestoredBanner, setShowRestoredBanner, discardDraft } = useDraftPersistence(
     form,
@@ -93,18 +96,102 @@ export default function NewEngagementPage() {
 
       clearDraft();
       deleteServerDraft();
-      router.push(`/dashboard/runs/${data.runId}`);
-    } catch (e: any) {
+      setReadyToLaunch({ engagementId: data.engagementId, buyerName: form.buyerName });
+      setSubmitting(false);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Unknown error";
       setError(
-        e.message === "Failed to fetch"
+        message === "Failed to fetch"
           ? "Couldn't reach the server. Check your connection and try again — nothing was set up yet."
-          : e.message
+          : message
       );
       setSubmitting(false);
     }
   }
 
+  async function launch() {
+    if (!readyToLaunch) return;
+    setLaunching(true);
+    setLaunchError(null);
+    try {
+      const res = await fetch("/api/pin-down/launch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engagementId: readyToLaunch.engagementId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setLaunchError(data.error ?? "Launch failed. You can try again — nothing else was affected.");
+        setLaunching(false);
+        return;
+      }
+      router.push(`/dashboard/runs/${data.runId}`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Unknown error";
+      setLaunchError(
+        message === "Failed to fetch"
+          ? "Couldn't reach the server. Check your connection and try again."
+          : message
+      );
+      setLaunching(false);
+    }
+  }
+
   const allValidationErrors = getValidationErrors(form);
+
+  if (readyToLaunch) {
+    return (
+      <div className="space-y-6 w-full max-w-none px-1 transition-colors duration-200" style={{ color: "var(--text-secondary)" }}>
+        <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
+          <h1 className="text-lg font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
+            {readyToLaunch.buyerName} is saved
+          </h1>
+          <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
+            Nothing has run yet. Launch when you&apos;re ready.
+          </p>
+        </div>
+
+        <div
+          className="rounded-lg p-4 text-xs font-mono space-y-2 border"
+          style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
+        >
+          <div className="font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>
+            <span>▶</span> What happens when you click Launch Setup
+          </div>
+          <p style={{ color: "var(--text-muted)" }}>
+            This is the step that touches{" "}
+            <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{readyToLaunch.buyerName}&apos;s</span>{" "}
+            real accounts. It will crawl or read the brand voice source you provided, generate ad creative briefs, video
+            scripts, and a confirmation page, then attempt to register a live booking webhook. You&apos;ll land on a live
+            status page right after and can watch each step happen in real time.
+          </p>
+        </div>
+
+        {launchError && (
+          <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
+            ⚠ Error: {launchError}
+          </p>
+        )}
+
+        <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
+          <button
+            onClick={() => setReadyToLaunch(null)}
+            disabled={launching}
+            className="px-4 py-2 text-xs font-bold rounded-md transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
+          >
+            Back to review
+          </button>
+          <button
+            onClick={launch}
+            disabled={launching}
+            className="px-5 py-2 text-xs font-bold rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+          >
+            {launching ? "Launching..." : "Launch Setup"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 w-full max-w-none px-1 transition-colors duration-200" style={{ color: "var(--text-secondary)" }}>
@@ -114,7 +201,7 @@ export default function NewEngagementPage() {
           Set Up a New Client
         </h1>
         <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-          A one-time setup. Connect their booking calendar and email tool, and teach the system their brand voice — everything below runs automatically after this.
+          A one-time setup. Connect their booking calendar and email tool, and teach the system their brand voice — you&apos;ll get a chance to launch separately once everything&apos;s saved.
         </p>
       </div>
 
@@ -238,7 +325,7 @@ export default function NewEngagementPage() {
             disabled={submitting || allValidationErrors.length > 0}
             className="px-5 py-2 text-xs font-bold rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
           >
-            {submitting ? "Setting up..." : "Finish Setup"}
+            {submitting ? "Saving..." : "Save Setup"}
           </button>
         )}
       </div>
