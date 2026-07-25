@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { TriggerSkillButton } from "./trigger-skill-button";
 import { EngagementPauseControl } from "./pause-control";
-import { ApprovalModeToggle } from "./approval-mode-toggle";
+import { ApprovalModeToggle } from "./approval-mode/approval-mode-toggle";
 import { CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRight, Server, DollarSign } from "lucide-react";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import {
