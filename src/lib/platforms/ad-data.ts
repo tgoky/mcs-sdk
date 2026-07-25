@@ -35,11 +35,20 @@ export class HyrosClient {
    * which Hyros's own reporting/segmentation UI can filter and exclude
    * on. `cohortId` here is used as that tag name.
    */
+  /**
+   * Hyros's tag endpoint is a PUT-upsert on /leads (confirmed against
+   * Hyros's official Apiary docs and multiple third-party integrations),
+   * not a dedicated /update-lead-tags sub-path — no source describes that
+   * path. Also works around a documented Hyros-side bug (tracked as
+   * HPC-10694 by third-party integrators): lead-update requests that omit
+   * `tags` entirely can 400, so `tags` is always included even when
+   * empty-equivalent.
+   */
   async addToCohort(email: string, cohortId: string): Promise<void> {
-    const res = await fetchWithTimeout(`${this.baseUrl}/leads/update-lead-tags`, {
-      method: "POST",
+    const res = await fetchWithTimeout(`${this.baseUrl}/leads`, {
+      method: "PUT",
       headers: this.headers,
-      body: JSON.stringify({ email, tags: [cohortId], action: "add" }),
+      body: JSON.stringify({ email, tags: [cohortId] }),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
@@ -47,11 +56,21 @@ export class HyrosClient {
     }
   }
 
+  /**
+   * Hyros has no tag-delete capability in its current API version at
+   * all — confirmed as an explicit, documented platform limitation by
+   * third-party integrators who exhaustively tested the v1.0 API surface,
+   * not something this code can work around with a different request
+   * shape. Adds a distinctly-named "_removed" tag instead, so the buyer's
+   * Hyros segmentation can still filter it out — same append-a-marker
+   * approach GoogleSheetsCohortClient uses below for its own no-delete
+   * limitation.
+   */
   async removeFromCohort(email: string, cohortId: string): Promise<void> {
-    const res = await fetchWithTimeout(`${this.baseUrl}/leads/update-lead-tags`, {
-      method: "POST",
+    const res = await fetchWithTimeout(`${this.baseUrl}/leads`, {
+      method: "PUT",
       headers: this.headers,
-      body: JSON.stringify({ email, tags: [cohortId], action: "remove" }),
+      body: JSON.stringify({ email, tags: [`${cohortId}_removed`] }),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
@@ -82,7 +101,15 @@ export class HyrosClient {
       const res = await fetchWithTimeout(`${this.baseUrl}/leads?email=${encodeURIComponent(email)}`, { headers: this.headers });
       if (!res.ok) return { found: false };
       const data = await res.json();
-      const lead = data.result?.[0] ?? data.data?.[0];
+      const leads: Array<Record<string, any>> = data.result ?? data.data ?? [];
+      // Hyros has a confirmed, documented server-side bug where this
+      // endpoint's email/id filter params are silently ignored and it
+      // returns ALL leads unfiltered — trusting leads[0] as "the match"
+      // would confidently present a different lead's ad-attribution data
+      // as this prospect's. Verify the email client-side instead.
+      const lead = leads.find(
+        (l) => typeof l.email === "string" && l.email.toLowerCase() === email.toLowerCase()
+      );
       if (!lead) return { found: false };
       return {
         found: true,

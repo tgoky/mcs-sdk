@@ -94,14 +94,15 @@ export class GHLSmsClient {
     };
   }
 
+  /** Same fix as GHLCRMClient.findContactId in email.ts — see that comment for the full explanation. */
   private async findContactId(email: string): Promise<string | null> {
     const res = await fetchWithTimeout(
-      `${this.baseUrl}/contacts/?email=${encodeURIComponent(email)}&locationId=${this.locationId}`,
+      `${this.baseUrl}/contacts/search/duplicate?locationId=${this.locationId}&email=${encodeURIComponent(email)}`,
       { headers: this.headers }
     );
     if (!res.ok) return null;
     const data = await res.json();
-    return data.contacts?.[0]?.id ?? null;
+    return data.contact?.id ?? null;
   }
 
   /**

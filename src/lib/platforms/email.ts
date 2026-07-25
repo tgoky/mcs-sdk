@@ -22,22 +22,17 @@ import nodemailer from "nodemailer";
 interface KlaviyoFlowAction {
   id?: string;
   attributes?: {
-    action_type?: string;
-    settings?: { delay_seconds?: number };
+    definition?: {
+      type?: string;
+      data?: { value?: number; unit?: string };
+    };
   };
   relationships?: {
     "flow-messages"?: { data?: Array<{ id?: string }> };
   };
 }
-interface KlaviyoIncludedResource {
-  id?: string;
-  attributes?: {
-    content?: { subject?: string; body?: string };
-  };
-}
 interface KlaviyoFlowActionsResponse {
   data?: KlaviyoFlowAction[];
-  included?: KlaviyoIncludedResource[];
 }
 interface KlaviyoEngagementEvent {
   id?: string;
@@ -121,6 +116,50 @@ export class KlaviyoClient {
   }
 
   /**
+   * /profiles/match/ is not a real Klaviyo endpoint — confirmed against
+   * Klaviyo's current OpenAPI spec (github.com/klaviyo/openapi), which has
+   * no such path, and their own migration docs, which direct developers to
+   * GET /api/profiles/?filter=equals(email,"...") instead. This was
+   * breaking every method below at the first step (resolving a profile ID
+   * from an email) on every single call.
+   */
+  private async resolveProfileId(email: string): Promise<string | null> {
+    const res = await fetchWithTimeout(
+      `${this.baseUrl}/profiles/?filter=${encodeURIComponent(`equals(email,"${email}")`)}`,
+      { headers: this.headers }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.data?.[0]?.id ?? null;
+  }
+
+  /**
+   * metric_id filters on GET /events must be a real, per-account opaque
+   * metric ID (Klaviyo's own docs example: "KxhW33") — not a name slug.
+   * There's no server-side filter-by-name on GET /metrics either (only
+   * integration.name/integration.category), so this fetches Klaviyo's
+   * built-in metrics and matches by display name client-side. Cached
+   * per-instance since these two metric IDs never change for a given
+   * account.
+   */
+  private metricIdCache = new Map<string, string | null>();
+  private async resolveMetricId(displayName: string): Promise<string | null> {
+    if (this.metricIdCache.has(displayName)) return this.metricIdCache.get(displayName) ?? null;
+
+    const res = await fetchWithTimeout(
+      `${this.baseUrl}/metrics/?filter=${encodeURIComponent(`equals(integration.name,"Klaviyo")`)}`,
+      { headers: this.headers }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const metrics: Array<{ id: string; attributes?: { name?: string } }> = data.data ?? [];
+    for (const m of metrics) {
+      if (m.attributes?.name) this.metricIdCache.set(m.attributes.name, m.id);
+    }
+    return this.metricIdCache.get(displayName) ?? null;
+  }
+
+  /**
    * Returns a list's current profile count. Verified against Klaviyo's
    * docs (developers.klaviyo.com/en/reference/get_list): profile_count is
    * only included when explicitly requested via
@@ -173,10 +212,9 @@ export class KlaviyoClient {
   async getFlowEmailActions(flowId: string): Promise<
     Array<{ subject: string; bodyPreview: string; sendDelayDays: number | null }>
   > {
-    const res = await fetchWithTimeout(
-      `${this.baseUrl}/flows/${flowId}/flow-actions/?include=flow-messages`,
-      { headers: this.headers }
-    );
+    const res = await fetchWithTimeout(`${this.baseUrl}/flows/${flowId}/flow-actions/`, {
+      headers: this.headers,
+    });
     if (!res.ok) return [];
     const data = (await res.json()) as KlaviyoFlowActionsResponse;
 
@@ -184,17 +222,40 @@ export class KlaviyoClient {
     const results: Array<{ subject: string; bodyPreview: string; sendDelayDays: number | null }> = [];
 
     for (const action of data.data ?? []) {
-      const actionType: string = action.attributes?.action_type ?? "";
-      if (actionType === "TIME_DELAY") {
-        const seconds: number = action.attributes?.settings?.delay_seconds ?? 0;
-        cumulativeDelayDays += seconds / 86400;
+      const def = action.attributes?.definition;
+      const actionType = def?.type ?? "";
+
+      if (actionType === "time-delay") {
+        const value: number = def?.data?.value ?? 0;
+        const unit: string = def?.data?.unit ?? "days";
+        const days = unit === "hours" ? value / 24 : unit === "minutes" ? value / 1440 : value;
+        cumulativeDelayDays += days;
         continue;
       }
-      if (actionType === "SEND_EMAIL") {
+
+      if (actionType === "send-email") {
         const messageId = action.relationships?.["flow-messages"]?.data?.[0]?.id;
-        const included = (data.included ?? []).find((inc) => inc.id === messageId);
-        const subject = included?.attributes?.content?.subject ?? "(no subject found)";
-        const bodyPreview = (included?.attributes?.content?.body ?? "").replace(/<[^>]+>/g, " ").slice(0, 500);
+        let subject = "(no subject found)";
+        let bodyPreview = "";
+
+        if (messageId) {
+          const msgRes = await fetchWithTimeout(`${this.baseUrl}/flow-actions/${action.id}/flow-messages/`, {
+            headers: this.headers,
+          });
+          if (msgRes.ok) {
+            const msgData = await msgRes.json();
+            const message = (msgData.data ?? []).find((m: { id: string }) => m.id === messageId) ?? msgData.data?.[0];
+            const emailDef = message?.attributes?.definition;
+            subject = emailDef?.subject_line ?? subject;
+            // Klaviyo doesn't expose the rendered HTML body on the flow-message
+            // resource itself — only on a separate `template` relationship,
+            // which would need one more fetch per message. preview_text (the
+            // email's inbox preview snippet) is the closest thing available
+            // without an N+1 fan-out per flow, and is enough for the audit's
+            // "roughly how spaced out and what's it about" purpose.
+            bodyPreview = emailDef?.preview_text ?? "";
+          }
+        }
         results.push({ subject, bodyPreview, sendDelayDays: cumulativeDelayDays || null });
       }
     }
@@ -204,6 +265,18 @@ export class KlaviyoClient {
   /**
    * Enrolls a prospect into a Klaviyo list (triggers any flows listening to that list).
    * Used for both pile-on (target_list_id) and win-back (recovery_list_id).
+   *
+   * Two calls, not one — confirmed against Klaviyo's schema:
+   * 1. POST /profile-import (Create or Update Profile) sets first_name/
+   *    properties. These aren't valid attributes on the subscription-jobs
+   *    endpoint at all (its schema only allows email, phone_number,
+   *    subscriptions, age_gated_date_of_birth) — the original code sent
+   *    them there, where they'd be silently dropped.
+   * 2. POST /profile-subscription-bulk-create-jobs actually adds the list
+   *    membership + marketing consent. `attributes.subscriptions` is a
+   *    required field on this endpoint's schema and was missing entirely,
+   *    which means this call was rejected outright on every invocation —
+   *    list enrollment never actually happened.
    */
   async enrollInList(
     email: string,
@@ -211,6 +284,24 @@ export class KlaviyoClient {
     listId: string,
     customProperties: Record<string, string> = {}
   ): Promise<void> {
+    const importRes = await fetchWithTimeout(`${this.baseUrl}/profile-import/`, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({
+        data: {
+          type: "profile",
+          attributes: {
+            email,
+            first_name: firstName,
+            properties: customProperties,
+          },
+        },
+      }),
+    });
+    if (!importRes.ok) {
+      throw new Error(`Klaviyo profile upsert failed [${importRes.status}]: ${await importRes.text()}`);
+    }
+
     const res = await fetchWithTimeout(
       `${this.baseUrl}/profile-subscription-bulk-create-jobs/`,
       {
@@ -226,8 +317,9 @@ export class KlaviyoClient {
                     type: "profile",
                     attributes: {
                       email,
-                      first_name: firstName,
-                      properties: customProperties,
+                      subscriptions: {
+                        email: { marketing: { consent: "SUBSCRIBED" } },
+                      },
                     },
                   },
                 ],
@@ -264,29 +356,32 @@ export class KlaviyoClient {
    * to a closer than an empty one caused by a filter that didn't match.
    */
   async getProfileEngagement(email: string, sequenceId?: string): Promise<KlaviyoEngagementEvent[]> {
-    // First resolve profile ID
-    const profileRes = await fetchWithTimeout(`${this.baseUrl}/profiles/match/`, {
-      method: "POST",
-      headers: this.headers,
-      body: JSON.stringify({
-        data: { type: "profile", attributes: { email } },
-      }),
-    });
-    if (!profileRes.ok) return [];
-    const profileData = await profileRes.json();
-    const profileId = profileData.data?.id;
+    const profileId = await this.resolveProfileId(email);
     if (!profileId) return [];
 
-    // Fetch open/click events
-    const eventsRes = await fetchWithTimeout(
-      `${this.baseUrl}/events/?filter=${encodeURIComponent(
-        `equals(profile_id,"${profileId}"),contains-any(metric_id,["opened-email","clicked-email"])`
-      )}&include=metric`,
-      { headers: this.headers }
-    );
-    if (!eventsRes.ok) return [];
-    const eventsData = (await eventsRes.json()) as KlaviyoEventsResponse;
-    const allEvents: KlaviyoEngagementEvent[] = eventsData.data ?? [];
+    // metric_id only supports the 'equals' operator (single value) per
+    // Klaviyo's schema — no multi-value operator is supported for this
+    // field, so this queries each metric separately and merges results,
+    // rather than one combined filter.
+    const [openedId, clickedId] = await Promise.all([
+      this.resolveMetricId("Opened Email"),
+      this.resolveMetricId("Clicked Email"),
+    ]);
+    const metricIds = [openedId, clickedId].filter((id): id is string => Boolean(id));
+    if (metricIds.length === 0) return [];
+
+    const allEvents: KlaviyoEngagementEvent[] = [];
+    for (const metricId of metricIds) {
+      const eventsRes = await fetchWithTimeout(
+        `${this.baseUrl}/events/?filter=${encodeURIComponent(
+          `equals(profile_id,"${profileId}"),equals(metric_id,"${metricId}")`
+        )}`,
+        { headers: this.headers }
+      );
+      if (!eventsRes.ok) continue;
+      const eventsData = (await eventsRes.json()) as KlaviyoEventsResponse;
+      allEvents.push(...(eventsData.data ?? []));
+    }
 
     if (!sequenceId) return allEvents;
 
@@ -305,16 +400,7 @@ export class KlaviyoClient {
    * so we write to a custom property visible in the profile view).
    */
   async attachBriefAsProfileNote(email: string, briefText: string): Promise<void> {
-    const profileRes = await fetchWithTimeout(`${this.baseUrl}/profiles/match/`, {
-      method: "POST",
-      headers: this.headers,
-      body: JSON.stringify({
-        data: { type: "profile", attributes: { email } },
-      }),
-    });
-    if (!profileRes.ok) return;
-    const profileData = await profileRes.json();
-    const profileId = profileData.data?.id;
+    const profileId = await this.resolveProfileId(email);
     if (!profileId) return;
 
     await fetchWithTimeout(`${this.baseUrl}/profiles/${profileId}/`, {
@@ -343,16 +429,7 @@ export class KlaviyoClient {
     email: string,
     properties: Record<string, string | boolean>
   ): Promise<void> {
-    const profileRes = await fetchWithTimeout(`${this.baseUrl}/profiles/match/`, {
-      method: "POST",
-      headers: this.headers,
-      body: JSON.stringify({
-        data: { type: "profile", attributes: { email } },
-      }),
-    });
-    if (!profileRes.ok) return;
-    const profileData = await profileRes.json();
-    const profileId = profileData.data?.id;
+    const profileId = await this.resolveProfileId(email);
     if (!profileId) return;
 
     await fetchWithTimeout(`${this.baseUrl}/profiles/${profileId}/`, {
@@ -455,17 +532,27 @@ export class HubSpotClient {
   }
 
   async enrollInWorkflow(email: string, firstName: string): Promise<void> {
-    // Upsert contact first
-    const upsertRes = await fetchWithTimeout(`${this.baseUrl}/contacts`, {
+    // POST /contacts (create-only) 409s on any contact that already
+    // exists — which the old code silently swallowed, meaning
+    // showtime_status/firstname never actually got set for a repeat
+    // prospect. batch/upsert (confirmed against HubSpot's official spec)
+    // creates or updates by idProperty in one call.
+    const res = await fetchWithTimeout(`${this.baseUrl}/contacts/batch/upsert`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
-        properties: { email, firstname: firstName, showtime_status: "enrolled" },
+        inputs: [
+          {
+            id: email,
+            idProperty: "email",
+            properties: { email, firstname: firstName, showtime_status: "enrolled" },
+          },
+        ],
       }),
     });
-    // 409 = already exists, that's fine
-    if (!upsertRes.ok && upsertRes.status !== 409) {
-      throw new Error(`HubSpot contact upsert failed [${upsertRes.status}]`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`HubSpot contact upsert failed [${res.status}]: ${body.slice(0, 300)}`);
     }
   }
 
@@ -594,7 +681,7 @@ export class HubSpotClient {
       headers: this.headers,
       body: JSON.stringify({
         filterGroups: [
-          { filters: [{ propertyName: "createdate", operator: "GTE", value: since.getTime() }] },
+          { filters: [{ propertyName: "createdate", operator: "GTE", value: String(since.getTime()) }] },
         ],
         properties: ["dealstage", "createdate", "closedate", "hs_is_closed", "hs_is_closed_won"],
         limit: 100,
@@ -662,8 +749,12 @@ export class HubSpotClient {
 
     if (workflowId) {
       try {
+        // /automation/v4/workflows/.../enrollments/{contactId} doesn't
+        // exist in HubSpot's current API (v4 only exposes /flows, no
+        // per-contact enrollment sub-resource). The endpoint that still
+        // actually works is the older v2 Workflows API, keyed by email:
         await fetchWithTimeout(
-          `https://api.hubapi.com/automation/v4/workflows/${workflowId}/enrollments/${contactId}`,
+          `https://api.hubapi.com/automation/v2/workflows/${workflowId}/enrollments/contacts/${encodeURIComponent(email)}`,
           { method: "DELETE", headers: this.headers }
         );
       } catch {
@@ -820,6 +911,7 @@ export class ActiveCampaignClient {
 export class GHLCRMClient {
   private baseUrl = "https://services.leadconnectorhq.com";
   private headers: HeadersInit;
+  private customFieldIdCache: Map<string, string> | null = null;
 
   constructor(apiKey: string, private locationId: string) {
     this.headers = {
@@ -829,14 +921,56 @@ export class GHLCRMClient {
     };
   }
 
+  /**
+   * GHL's customFields schema on PUT /contacts/{contactId} marks `id` as
+   * required (`key` is present but optional) — confirmed against the
+   * official spec. The custom-object field lookup checked earlier
+   * (/custom-fields/object-key/{objectKey}) explicitly documents "Only
+   * supports Custom Objects and Company (Business) today" — Contact isn't
+   * covered. The one that does cover Contact is a Locations-scoped
+   * endpoint: GET /locations/{locationId}/customFields?model=contact,
+   * which lists every field with both its `id` and `fieldKey` (e.g.
+   * "contact.showtime_status"). Fetched once and cached per-instance —
+   * callers pass the bare key ("showtime_status"), matched here against
+   * fieldKey with the "contact." prefix stripped.
+   */
+  private async resolveCustomFieldId(key: string): Promise<string | null> {
+    if (!this.customFieldIdCache) {
+      this.customFieldIdCache = new Map();
+      const res = await fetchWithTimeout(
+        `${this.baseUrl}/locations/${this.locationId}/customFields?model=contact`,
+        { headers: this.headers }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        for (const f of data.customFields ?? []) {
+          const bareKey = String(f.fieldKey ?? "").replace(/^contact\./, "");
+          if (bareKey && f.id) this.customFieldIdCache.set(bareKey, f.id);
+        }
+      }
+    }
+    return this.customFieldIdCache.get(key) ?? null;
+  }
+
+  /**
+   * GET /contacts/ has no `email` query parameter at all — confirmed
+   * against GHL's official spec, which only lists Version, locationId,
+   * startAfterId, startAfter, query, limit. The old code's `?email=...`
+   * was silently ignored, meaning this was returning whichever contact
+   * happened to be first in the location's unfiltered list — every
+   * downstream write (enroll, tag, note, custom field) could hit the
+   * wrong contact. /contacts/search/duplicate is GHL's actual endpoint
+   * for "find the contact matching this email," confirmed to accept an
+   * `email` param directly.
+   */
   private async findContactId(email: string): Promise<string | null> {
     const res = await fetchWithTimeout(
-      `${this.baseUrl}/contacts/?email=${encodeURIComponent(email)}&locationId=${this.locationId}`,
+      `${this.baseUrl}/contacts/search/duplicate?locationId=${this.locationId}&email=${encodeURIComponent(email)}`,
       { headers: this.headers }
     );
     if (!res.ok) return null;
     const data = await res.json();
-    return data.contacts?.[0]?.id ?? null;
+    return data.contact?.id ?? null;
   }
 
   async enrollInWorkflow(
@@ -849,37 +983,34 @@ export class GHLCRMClient {
 
     await fetchWithTimeout(
       `${this.baseUrl}/contacts/${contactId}/workflow/${workflowId}`,
-      { method: "POST", headers: this.headers }
+      { method: "POST", headers: this.headers, body: JSON.stringify({}) }
     );
   }
 
   /**
    * Sets one or more arbitrary custom fields, generalizing the pattern
-   * markRebooked already uses inline for showtime_status. GHL's custom
-   * fields are referenced by string key on this endpoint (not a
-   * pre-registered numeric ID like ActiveCampaign requires), so this is a
-   * direct generalization rather than a new mechanism.
-   *
-   * A note on the exact shape: public GHL docs/examples are genuinely
-   * inconsistent here — some show {key, field_value} (the shape used
-   * here and already established by markRebooked elsewhere in this same
-   * class), others show {id, value} referencing a pre-looked-up internal
-   * field ID. Kept consistent with this codebase's existing, pre-existing
-   * convention rather than switching to the competing shape on the
-   * strength of an equally-unverified claim — but this is worth a real
-   * test against a live GHL account before depending on it heavily, since
-   * neither shape was confirmed with full certainty from public docs alone.
+   * markRebooked uses for showtime_status. GHL's customFields schema on
+   * PUT /contacts/{contactId} requires `id` (confirmed against the
+   * official spec — `key` is present on the schema but optional, not a
+   * substitute), so this resolves each key to its real field id via
+   * resolveCustomFieldId first. A key with no matching custom field on
+   * the account is skipped rather than sent as a guess.
    */
   async setCustomFields(email: string, fields: Record<string, string>): Promise<void> {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
+    const customFields: Array<{ id: string; field_value: string }> = [];
+    for (const [key, field_value] of Object.entries(fields)) {
+      const id = await this.resolveCustomFieldId(key);
+      if (id) customFields.push({ id, field_value });
+    }
+    if (customFields.length === 0) return;
+
     await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}`, {
       method: "PUT",
       headers: this.headers,
-      body: JSON.stringify({
-        customFields: Object.entries(fields).map(([key, field_value]) => ({ key, field_value })),
-      }),
+      body: JSON.stringify({ customFields }),
     }).catch(() => {});
   }
 
@@ -971,11 +1102,7 @@ export class GHLCRMClient {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
-    await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}`, {
-      method: "PUT",
-      headers: this.headers,
-      body: JSON.stringify({ customFields: [{ key: "showtime_status", field_value: statusValue }] }),
-    }).catch(() => {});
+    await this.setCustomFields(email, { showtime_status: statusValue });
 
     if (workflowId) {
       try {

@@ -100,12 +100,21 @@ export class WebflowClient {
     return { itemId: data.id };
   }
 
-  /** Publishes the site so the new/updated item goes live at its public URL. */
+  /**
+   * Publishes the site so the new/updated item goes live at its public
+   * URL. This must publish to the .webflow.io subdomain (not false) —
+   * publishConfirmationPage below returns exactly that subdomain URL to
+   * the caller, so if this doesn't actually publish there, the returned
+   * "live" URL 404s. Doesn't attempt to also publish to a custom domain:
+   * that requires resolving the buyer's domain IDs via a separate
+   * GET /sites/{siteId}/custom_domains call this class has no meta field
+   * to cache the result of yet.
+   */
   async publishSite(siteId: string): Promise<void> {
     const res = await fetchWithTimeout(`${this.baseUrl}/sites/${siteId}/publish`, {
       method: "POST",
       headers: this.headers,
-      body: JSON.stringify({ publishToWebflowSubdomain: false }),
+      body: JSON.stringify({ publishToWebflowSubdomain: true }),
     });
     if (!res.ok) {
       throw new Error(`Webflow site publish failed [${res.status}]: ${await res.text()}`);
@@ -227,7 +236,8 @@ export class VercelClient {
         files: [
           {
             file: "index.html",
-            data: content.html,
+            data: Buffer.from(content.html, "utf-8").toString("base64"),
+            encoding: "base64",
           },
         ],
         projectSettings: { framework: null },
