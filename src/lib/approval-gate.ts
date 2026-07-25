@@ -123,10 +123,20 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
   webhook_enrollment: async (engagementId, payload) => {
     const { handleInboundBookingEvent } = await import("@/features/pile-on/server/enrollment-service");
     const { startRun } = await import("@/lib/run-log");
+    const { isSkillEnabledForEngagement } = await import("@/lib/engagement-skills");
     const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
     if (!tenant) throw new Error(`Engagement ${engagementId} not found`);
     const runId = crypto.randomUUID();
     const skillName = payload.eventKind === "cancelled" ? "win-back" : "pile-on";
+
+    // The skill may have been turned off for this engagement in the time
+    // between this action being queued and an admin approving it now —
+    // that's a more recent signal than the approval click, so honor it
+    // rather than silently re-enrolling anyway.
+    if (!(await isSkillEnabledForEngagement(engagementId, skillName))) {
+      throw new Error(`${skillName} is turned off for this engagement — approve after re-enabling it, if that's intended.`);
+    }
+
     await startRun({
       id: runId,
       engagementId,

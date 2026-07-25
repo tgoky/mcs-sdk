@@ -4,8 +4,10 @@ import { eq, sql } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { listBookingsSinceForTenant, deriveWebhookIdempotencyKey } from "@/lib/platforms/booking";
 import { handleInboundBookingEvent, classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
-import { startRun, failRun } from "@/lib/run-log";
+import { startRun, failRun, logStep, finishRun } from "@/lib/run-log";
 import { isEngagementPaused } from "@/lib/engagement-status";
+import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { SKILL_REGISTRY } from "@/lib/skill-registry";
 import crypto from "crypto";
 import type { GetStepTools, Inngest } from "inngest";
 
@@ -112,8 +114,9 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
   try {
     const apiKey = await resolveCredential(engagementId, stack.booking_platform);
     calls = await listBookingsSinceForTenant(stack.booking_platform, apiKey, stack.booking_platform_meta, sinceISO);
-  } catch (e: any) {
-    console.error(`[booking-poller] Poll failed for engagement ${engagementId}: ${e.message}`);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.error(`[booking-poller] Poll failed for engagement ${engagementId}: ${message}`);
     errors = 1;
     // Don't advance the watermark on a failed poll — the next cycle will
     // retry the same window rather than silently skipping it.
@@ -181,19 +184,32 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
     }
 
     const runId = crypto.randomUUID();
+    const skillId = eventKind === "cancelled" ? "win-back" : "pile-on";
     try {
       await startRun({
         id: runId,
         engagementId,
-        skillName: eventKind === "cancelled" ? "win-back" : "pile-on",
+        skillName: skillId,
         phase: "webhook_received",
         label: `${call.name} <${call.email}> (polled)`,
       });
+
+      if (!(await isSkillEnabledForEngagement(engagementId, skillId))) {
+        await logStep(runId, {
+          phase: "skill_disabled",
+          status: "skipped",
+          detail: `${SKILL_REGISTRY[skillId].name} is turned off for this engagement — this polled booking was not enrolled.`,
+        });
+        await finishRun(runId);
+        continue;
+      }
+
       const classified = classifyBookingEvent(syntheticPayload);
       await handleInboundBookingEvent(syntheticPayload, tenant, runId, classified === "unknown" ? eventKind : classified, step);
       newBookings++;
-    } catch (e: any) {
-      console.error(`[booking-poller] Enrollment failed for polled booking ${call.id}: ${e.message}`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Unknown error";
+      console.error(`[booking-poller] Enrollment failed for polled booking ${call.id}: ${message}`);
       await failRun(runId, e).catch(() => {});
       errors++;
     }

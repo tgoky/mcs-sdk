@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { engagementSkills } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
-import type { SkillId } from "@/lib/skill-registry";
+import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
 
 /**
  * No row for (engagementId, skillId) means enabled — this table only ever
@@ -20,9 +20,22 @@ export async function isSkillEnabledForEngagement(engagementId: string, skillId:
 }
 
 /**
- * Upserts the enabled flag for one (engagementId, skillId) pair. Used by
- * the future Skill Library toggle UI — not called anywhere in the app yet.
+ * One query for every skill's enabled state, for the engagement detail
+ * page's Skills panel — avoids five round trips (one per SKILL_IDS entry)
+ * to render the initial toggle states.
  */
+export async function getEngagementSkillStates(engagementId: string): Promise<Record<SkillId, boolean>> {
+  const rows = await db
+    .select({ skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
+    .from(engagementSkills)
+    .where(eq(engagementSkills.engagementId, engagementId));
+
+  const disabled = new Set(rows.filter((r) => !r.enabled).map((r) => r.skillId));
+
+  return Object.fromEntries(SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<SkillId, boolean>;
+}
+
+/** Upserts the enabled flag for one (engagementId, skillId) pair — see the Skills panel on the engagement detail page. */
 export async function setSkillEnabledForEngagement(
   engagementId: string,
   skillId: SkillId,

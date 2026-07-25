@@ -8,6 +8,8 @@ import Link from "next/link";
 import { TriggerSkillButton } from "./trigger-skill-button";
 import { EngagementPauseControl } from "./pause-control";
 import { ApprovalModeToggle } from "./approval-mode/approval-mode-toggle";
+import { SkillsPanel } from "./skills-panel";
+import { getEngagementSkillStates } from "@/lib/engagement-skills";
 import { CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRight, Server, DollarSign } from "lucide-react";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import {
@@ -85,6 +87,7 @@ export default async function EngagementDetailPage({
   const stack = engagement.stack as Record<string, string> | null;
   const requireApproval = (engagement.stack as EngagementStack | null)?.require_approval_for_side_effects ?? false;
   const offerDetails = engagement.offerDetails as Record<string, string | boolean> | null;
+  const skillStates = await getEngagementSkillStates(id);
 
   const runsBySkill = Object.fromEntries(
     SKILLS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
@@ -163,10 +166,12 @@ export default async function EngagementDetailPage({
         </div>
       </div>
 
+      <SkillsPanel engagementId={engagement.engagementId} initialStates={skillStates} />
+
       {engagement.pausedAt && (
         <div className="rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-2.5 text-xs font-mono text-amber-800 dark:text-amber-400">
           This client is paused — nightly briefs, leak map, win-back, weekly metrics, and booking polling are all
-          skipping it.{engagement.pausedReason ? ` Reason: ${engagement.pausedReason}` : ""} Manual "Run" buttons
+          skipping it.{engagement.pausedReason ? ` Reason: ${engagement.pausedReason}` : ""} Manual &quot;Run&quot; buttons
           below still work if you need to test something.
         </div>
       )}
@@ -238,7 +243,7 @@ export default async function EngagementDetailPage({
                       )}
                       {latestRun.status.toLowerCase() === "failed" && !latestRun.errorMessage && (
                         <p className="text-[11px] text-rose-600 dark:text-rose-400/80 leading-snug pt-0.5 font-medium">
-                          This module needs attention. Click "View run" for details.
+                          This module needs attention. Click &quot;View run&quot; for details.
                         </p>
                       )}
                     </div>
@@ -311,7 +316,7 @@ export default async function EngagementDetailPage({
           </h2>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-2 shadow-sm">
             <p className="text-[11px] text-zinc-500 dark:text-zinc-500 leading-relaxed font-mono">
-              What runs on our infrastructure vs. what would move to {engagement.buyer}'s own systems under an export.
+              What runs on our infrastructure vs. what would move to {engagement.buyer}&apos;s own systems under an export.
             </p>
             <div className="divide-y divide-zinc-100 dark:divide-zinc-900/50">
               {artifactRows.map((a) => (

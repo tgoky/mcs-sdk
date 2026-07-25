@@ -5,6 +5,8 @@ import { getSession } from "@/lib/session";
 import { startRun, failRun } from "@/lib/run-log";
 import { and, eq } from "drizzle-orm";
 import { inngest, skillRunExecute } from "@/lib/inngest";
+import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { SKILL_REGISTRY } from "@/lib/skill-registry";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
@@ -54,6 +56,16 @@ export async function POST(request: Request) {
 
     // ── Delegate long-running tasks to background queue ────────────────
     if (skillName === "pre-call-read" || skillName === "leak-map") {
+      const enabled = await isSkillEnabledForEngagement(engagementId, skillName);
+      if (!enabled) {
+        return NextResponse.json(
+          {
+            error: `${SKILL_REGISTRY[skillName].name} is turned off for this client. Enable it from the Skills panel first.`,
+          },
+          { status: 422 }
+        );
+      }
+
       const runId = crypto.randomUUID();
       
       // Seed the run log row instantly before returning to clear the UI race path
@@ -79,7 +91,7 @@ export async function POST(request: Request) {
             ...(skillName === "leak-map" && { auditType: "weekly" as const }),
           })
         );
-      } catch (dispatchErr: any) {
+      } catch (dispatchErr: unknown) {
         // startRun() already committed a "running" row above. If dispatch
         // to Inngest fails (outage, network blip), that row would
         // otherwise sit at "running" forever with nothing to ever close
@@ -127,8 +139,9 @@ export async function POST(request: Request) {
           { status: 400 }
         );
     }
-  } catch (err: any) {
-    console.error("[skill-runs/trigger]", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[skill-runs/trigger]", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

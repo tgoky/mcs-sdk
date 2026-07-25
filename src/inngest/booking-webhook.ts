@@ -3,7 +3,9 @@ import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { handleInboundBookingEvent } from "@/features/pile-on/server/enrollment-service";
-import { failRun } from "@/lib/run-log";
+import { failRun, logStep, finishRun } from "@/lib/run-log";
+import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { SKILL_REGISTRY } from "@/lib/skill-registry";
 
 /**
  * Reliability fix — see the module comment on bookingWebhookProcess in
@@ -56,6 +58,24 @@ export const processBookingWebhookEvent = inngest.createFunction(
       // Engagement was deleted between the webhook arriving and this worker
       // picking it up — nothing to enroll. Not worth failing the run over.
       return { processed: false, reason: "engagement not found" };
+    }
+
+    // Matches the skillName booking-event/route.ts already used to start
+    // this run: a cancellation exits/enrolls into Win-Back, anything else
+    // is a Pile-On enrollment. Neither goes through the generic
+    // skill/run.execute dispatcher (see src/inngest/skill.ts), so the
+    // per-engagement enablement check has to live here instead.
+    const skillId = eventKind === "cancelled" ? "win-back" : "pile-on";
+    const enabled = await step.run("check-skill-enabled", () => isSkillEnabledForEngagement(engagementId, skillId));
+
+    if (!enabled) {
+      await logStep(runId, {
+        phase: "skill_disabled",
+        status: "skipped",
+        detail: `${SKILL_REGISTRY[skillId].name} is turned off for this engagement — this booking event was not enrolled.`,
+      });
+      await finishRun(runId);
+      return { processed: false, reason: "skill disabled for this engagement" };
     }
 
     try {

@@ -43,6 +43,7 @@ import { CANARY_CHECKS, runCanaryCheck, getCanaryEngagementId } from "@/lib/plat
 import { and, eq, lt } from "drizzle-orm";
 import type { EngagementStack } from "@/models/schema";
 import { isEngagementPaused } from "@/lib/engagement-status";
+import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
 // ONE step.run(), then fans out via a SINGLE step.sendEvent() carrying the
@@ -62,7 +63,7 @@ export const nightlyBriefsCron = inngest.createFunction(
       // Only engagements that finished Pin-Down (booking platform wired
       // up) have anything to brief tonight.
     const eligible = all.filter((t) => {
-  const stack = t.stack as any;
+  const stack = t.stack as EngagementStack;
   return (
     !isEngagementPaused(t) &&
     stack?.booking_platform &&
@@ -485,7 +486,7 @@ export const dynamicBriefCron = inngest.createFunction(
       const all = await db.select().from(engagements);
       return all
         .filter((t) => {
-          const stack = t.stack as any;
+          const stack = t.stack as EngagementStack;
           return (
             !isEngagementPaused(t) &&
             stack?.brief_trigger_type === "dynamic_webhook" &&
@@ -520,6 +521,13 @@ export const processDynamicBriefEngagementCron = inngest.createFunction(
     if (!tenantRaw) return { briefed: 0, reason: "engagement not found" };
     if (isEngagementPaused(tenantRaw)) return { briefed: 0, reason: "engagement paused" };
 
+    // This function calls executeNightlyBriefingCycle directly rather than
+    // going through executeSkillRun (src/inngest/skill.ts), so it needs its
+    // own copy of the enablement check that dispatcher already applies to
+    // every other pre-call-read trigger (nightly cron, manual "Run Now").
+    const enabled = await isSkillEnabledForEngagement(engagementId, "pre-call-read");
+    if (!enabled) return { briefed: 0, reason: "skill disabled for this engagement" };
+
     const tenant = { ...tenantRaw, createdAt: new Date(tenantRaw.createdAt), updatedAt: new Date(tenantRaw.updatedAt) };
 
     const runId = crypto.randomUUID();
@@ -534,7 +542,7 @@ export const processDynamicBriefEngagementCron = inngest.createFunction(
     try {
       const briefed = await executeNightlyBriefingCycle(tenant, runId, step, "dynamic_webhook");
       return { briefed };
-    } catch (err: any) {
+    } catch (err: unknown) {
       await failRun(runId, err).catch(() => {});
       throw err;
     }
