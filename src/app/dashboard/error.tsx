@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { RotateCcw } from "lucide-react";
+import { BackLink } from "@/components/back-link";
 
 /**
  * Catches any error thrown while rendering dashboard/page.tsx or any other
@@ -45,12 +46,7 @@ export default function DashboardError({
           >
             Try again
           </button>
-          <a
-            href="/home"
-            className="text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
-          >
-            Back to Home
-          </a>
+          <BackLink href="/home" label="Back to Home" />
         </div>
       </div>
     </div>

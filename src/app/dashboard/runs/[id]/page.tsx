@@ -16,17 +16,14 @@ import {
   Cpu,
   Terminal,
   Coins,
-  ChevronLeft,
   Clock,
   Ban,
   ClipboardCheck,
   Zap
 } from "lucide-react";
-import {
-  skillName,
-  phaseLabel,
-  runStatusLabel,
-} from "@/lib/copy";
+import { skillName, phaseLabel, runStatusLabel } from "@/lib/copy";
+import { BackLink } from "@/components/back-link";
+import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import type { RunStep, RunSummary } from "@/models/schema";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -368,25 +365,14 @@ export default function RunDetailPage() {
   return (
     <div className="space-y-6 w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
 
-      {/* Top Header Breadcrumbs Panel */}
+      {/* Back navigation + run title */}
       <div className="flex items-center gap-3 flex-wrap border-b border-zinc-200 dark:border-zinc-900 pb-4">
+        <SetBreadcrumbLabel label={`${skillName(run.skillName)} run`} />
         {run.engagementId && (
-          <Link
-            href={`/dashboard/engagements/${run.engagementId}`}
-            className="inline-flex items-center text-xs font-bold font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors gap-0.5"
-          >
-            <ChevronLeft size={14} />
-            Back to {run.buyerName ?? "Client Workspace"}
-          </Link>
+          <BackLink href={`/dashboard/engagements/${run.engagementId}`} label={`Back to ${run.buyerName ?? "Client Workspace"}`} />
         )}
         {!run.engagementId && (
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center text-xs font-bold font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors gap-0.5"
-          >
-            <ChevronLeft size={14} />
-            Back to Dashboard
-          </Link>
+          <BackLink href="/dashboard" label="Back to Dashboard" />
         )}
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 w-full pt-1">

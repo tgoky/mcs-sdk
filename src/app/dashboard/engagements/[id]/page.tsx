@@ -14,6 +14,8 @@ import { CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRight, Server, Dollar
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
 import { BookingSyncStatusCard } from "@/components/booking-sync-status-card";
+import { BackLink } from "@/components/back-link";
+import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import {
   SKILL_INFO,
   SKILLS,
@@ -129,12 +131,8 @@ export default async function EngagementDetailPage({
 
       {/* Back + header navigation anchor strip */}
       <div className="space-y-3 border-b border-zinc-200 dark:border-zinc-900 pb-4">
-        <Link
-          href="/dashboard/engagements"
-          className="inline-flex items-center text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors gap-1 font-mono"
-        >
-          <span className="text-zinc-400 dark:text-zinc-500 mr-1">←</span>All Clients
-        </Link>
+        <SetBreadcrumbLabel label={engagement.buyer} />
+        <BackLink href="/dashboard/engagements" label="All Clients" />
 
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div className="space-y-1">

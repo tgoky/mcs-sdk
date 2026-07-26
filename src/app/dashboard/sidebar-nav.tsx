@@ -2,13 +2,7 @@ import { db } from "@/lib/db";
 import { engagements, credentialsRefs } from "@/models/schema";
 import { getQueueActionableCount } from "@/lib/queue";
 import { eq } from "drizzle-orm";
-import Link from "next/link";
-
-interface NavLinkDef {
-  href: string;
-  label: string;
-  icon: React.ReactNode;
-}
+import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 
 const DASHBOARD_ICON = (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -57,15 +51,6 @@ const QUEUE_ICON = (
   </svg>
 );
 
-function CountBadge({ count }: { count: number }) {
-  if (count <= 0) return null;
-  return (
-    <span className="ml-auto shrink-0 min-w-[18px] text-center px-1.5 py-[1px] rounded-full text-[10px] font-mono font-bold bg-gold/15 text-gold-hover dark:text-gold">
-      {count}
-    </span>
-  );
-}
-
 /**
  * The sidebar's primary nav. Pulled out of DashboardLayout (same reasoning
  * as SidebarSkills below it): the counts each need a DB round trip, and
@@ -92,7 +77,7 @@ export async function SidebarNav({ whopUserId }: { whopUserId: string }) {
     getQueueActionableCount(whopUserId),
   ]);
 
-  const links: (NavLinkDef & { count?: number })[] = [
+  const links: NavLinkItem[] = [
     { href: "/dashboard", label: "Dashboard", icon: DASHBOARD_ICON },
     { href: "/dashboard/engagements", label: "Engagements", icon: ENGAGEMENTS_ICON, count: engagementRows.length },
     { href: "/dashboard/queue", label: "Queue", icon: QUEUE_ICON, count: queueCount },
@@ -101,23 +86,7 @@ export async function SidebarNav({ whopUserId }: { whopUserId: string }) {
     { href: "/dashboard/settings", label: "Settings", icon: SETTINGS_ICON, count: credentialRows.length },
   ];
 
-  return (
-    <nav className="flex flex-col space-y-0.5">
-      {links.map((link) => (
-        <Link
-          key={link.href}
-          href={link.href}
-          className="flex items-center gap-2.5 px-2 py-2 text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/30 transition-all rounded group font-medium"
-        >
-          <span className="text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors">
-            {link.icon}
-          </span>
-          <span>{link.label}</span>
-          {link.count !== undefined && <CountBadge count={link.count} />}
-        </Link>
-      ))}
-    </nav>
-  );
+  return <SidebarNavLinks links={links} />;
 }
 
 /** Static placeholder shown while SidebarNav resolves its counts. */
@@ -131,9 +100,9 @@ export function SidebarNavSkeleton() {
     { label: "Settings", icon: SETTINGS_ICON },
   ];
   return (
-    <nav className="flex flex-col space-y-0.5">
+    <nav className="flex flex-col gap-0.5">
       {links.map((link) => (
-        <div key={link.label} className="flex items-center gap-2.5 px-2 py-2 text-sm font-medium">
+        <div key={link.label} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium">
           <span className="text-zinc-400 dark:text-zinc-500">{link.icon}</span>
           <span className="text-zinc-600 dark:text-zinc-400">{link.label}</span>
         </div>
