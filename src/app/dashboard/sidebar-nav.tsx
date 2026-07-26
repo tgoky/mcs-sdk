@@ -25,12 +25,27 @@ const ENGAGEMENTS_ICON = (
   </svg>
 );
 
-const CREDENTIALS_ICON = (
+const SETTINGS_ICON = (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M3 6V4.5C3 2.01472 5.01472 0 7.5 0C9.98528 0 12 2.01472 12 4.5V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-    <rect x="1" y="6" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-    <circle cx="8" cy="10.5" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
-    <path d="M8 10.5V13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    <circle cx="8" cy="8" r="2.25" stroke="currentColor" strokeWidth="1.5"/>
+    <path d="M8 1.5V3M8 13V14.5M14.5 8H13M3 8H1.5M12.36 3.64L11.3 4.7M4.7 11.3L3.64 12.36M12.36 12.36L11.3 11.3M4.7 4.7L3.64 3.64" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+
+const ANALYTICS_ICON = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2 14V2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M2 14H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    <rect x="4.5" y="8.5" width="2" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.5"/>
+    <rect x="8" y="5.5" width="2" height="7" rx="0.5" stroke="currentColor" strokeWidth="1.5"/>
+    <rect x="11.5" y="3" width="2" height="9.5" rx="0.5" stroke="currentColor" strokeWidth="1.5"/>
+  </svg>
+);
+
+const LIBRARY_ICON = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2 3C2 2.44772 2.44772 2 3 2H6.5C7.32843 2 8 2.67157 8 3.5V14C8 13.4477 7.55228 13 7 13H2V3Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+    <path d="M14 3C14 2.44772 13.5523 2 13 2H9.5C8.67157 2 8 2.67157 8 3.5V14C8 13.4477 8.44772 13 9 13H14V3Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
   </svg>
 );
 
@@ -80,8 +95,10 @@ export async function SidebarNav({ whopUserId }: { whopUserId: string }) {
   const links: (NavLinkDef & { count?: number })[] = [
     { href: "/dashboard", label: "Dashboard", icon: DASHBOARD_ICON },
     { href: "/dashboard/engagements", label: "Engagements", icon: ENGAGEMENTS_ICON, count: engagementRows.length },
-    { href: "/dashboard/credentials", label: "Credentials", icon: CREDENTIALS_ICON, count: credentialRows.length },
     { href: "/dashboard/queue", label: "Queue", icon: QUEUE_ICON, count: queueCount },
+    { href: "/dashboard/analytics", label: "Analytics", icon: ANALYTICS_ICON },
+    { href: "/dashboard/library", label: "Library", icon: LIBRARY_ICON },
+    { href: "/dashboard/settings", label: "Settings", icon: SETTINGS_ICON, count: credentialRows.length },
   ];
 
   return (
@@ -108,8 +125,10 @@ export function SidebarNavSkeleton() {
   const links = [
     { label: "Dashboard", icon: DASHBOARD_ICON },
     { label: "Engagements", icon: ENGAGEMENTS_ICON },
-    { label: "Credentials", icon: CREDENTIALS_ICON },
     { label: "Queue", icon: QUEUE_ICON },
+    { label: "Analytics", icon: ANALYTICS_ICON },
+    { label: "Library", icon: LIBRARY_ICON },
+    { label: "Settings", icon: SETTINGS_ICON },
   ];
   return (
     <nav className="flex flex-col space-y-0.5">

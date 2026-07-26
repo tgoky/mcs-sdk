@@ -118,10 +118,10 @@ export default async function DashboardPage() {
             {copy.accountsLink}
           </Link>
           <Link
-            href="/dashboard/credentials"
+            href="/dashboard/settings"
             className="px-2 py-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors text-xs font-mono"
           >
-            {copy.credentialsLink}
+            Settings
           </Link>
           <Link
             href="/dashboard/engagements/new"
@@ -217,14 +217,14 @@ export default async function DashboardPage() {
             </p>
           </Link>
           <Link
-            href="/dashboard/credentials"
+            href="/dashboard/settings"
             className="group block p-4 rounded-lg bg-zinc-100/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-900/60 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/20 transition-all shadow-sm"
           >
             <p className="text-sm font-medium text-zinc-700 dark:text-zinc-400 group-hover:text-zinc-900 group-hover:dark:text-zinc-100 transition-colors">
-              {copy.shortcuts.manageCredentials.title} 
+              Settings & booking sync
             </p>
             <p className="text-xs font-normal text-zinc-400 dark:text-zinc-600 mt-1">
-              {copy.shortcuts.manageCredentials.description}
+              Manage connected accounts, and switch any engagement between auto-polling and instant webhook sync.
             </p>
           </Link>
         </div>

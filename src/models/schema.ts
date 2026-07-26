@@ -76,6 +76,30 @@ export type EngagementStack = {
   // poll cycle reads forward from. Only meaningful when
   // webhook_receiver_mode === "polling".
   webhook_receiver_last_polled_at?: string;
+  // ── Booking sync observability (Settings → Booking Sync card) ─────────
+  // ISO timestamp of the last inbound webhook delivery this engagement
+  // accepted (signature verified, whether or not it turned out to be a
+  // duplicate). Written by src/app/api/webhooks/booking-event/route.ts.
+  // This is the one field that answers "is the webhook actually firing?"
+  // independent of webhook_receiver_mode — a tenant can be in "polling"
+  // mode and still have a webhook mid-setup delivering test events, and
+  // this is how the status card shows that instead of only ever showing
+  // the poll watermark.
+  webhook_last_received_at?: string;
+  // Human-readable reason for the most recent REJECTED delivery (bad/
+  // missing signature, missing secret, etc.) — cleared on the next
+  // successful delivery. Surfaced directly in the sync status card so a
+  // buyer sees *why* their webhook isn't registering instead of silence.
+  webhook_last_error?: string;
+  // Set true when a buyer on ghl_calendar/oncehub (platforms with no
+  // programmatic webhook registration — see registerWebhookForTenant in
+  // booking.ts) explicitly dismisses the "add your webhook" setup nudge,
+  // choosing to stay on polling. Respected by needsWebhookSetupNudge() in
+  // booking-sync-status.ts so the nudge doesn't keep reappearing for a
+  // buyer who made an informed choice — mirrors the two-tier "auto-sync
+  // vs instant webhook" choice these buyers are explicitly offered.
+  webhook_receiver_setup_dismissed?: boolean;
+
   hosting_platform: "webflow" | "lovable" | "ghl" | "wordpress" | "nextjs_vercel" | "plain_html" | "discover_from_docs";
   hosting_platform_credentials_ref: string;
   hosting_site_id?: string;

@@ -21,12 +21,13 @@
 // mistake this codebase already found and fixed once).
 
 import { db } from "@/lib/db";
-import { pendingActions, humanBlockers, notifications, engagements } from "@/models/schema";
+import { pendingActions, humanBlockers, notifications, engagements, type EngagementStack } from "@/models/schema";
 import { and, eq, desc } from "drizzle-orm";
-import { ACTION_TYPE_LABELS, BLOCKER_TYPE_LABELS } from "@/lib/copy";
+import { ACTION_TYPE_LABELS, BLOCKER_TYPE_LABELS, bookingPlatformLabel } from "@/lib/copy";
+import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
 
 export type QueueCategory = "approve" | "action_needed" | "alert" | "fyi";
-export type QueueSource = "action" | "blocker" | "notification";
+export type QueueSource = "action" | "blocker" | "notification" | "sync_setup";
 
 export interface QueueItem {
   id: string;
@@ -53,8 +54,42 @@ const CATEGORY_PRIORITY: Record<QueueCategory, number> = {
  * blockers (things a run is durably paused on) always outrank alerts and
  * FYIs (things nothing is waiting on).
  */
+/**
+ * Synthesized, not stored — read-time derived from each engagement's
+ * stack via needsWebhookSetupNudge (src/lib/booking-sync-status.ts), the
+ * same predicate the Booking Sync status card uses. No new table, and it
+ * self-heals the instant a buyer flips to webhook mode or dismisses it:
+ * there's nothing to clean up on either transition, unlike a real
+ * pendingActions/humanBlockers row would need.
+ */
+function syncSetupQueueItems(
+  rows: { engagementId: string; buyer: string; stack: unknown }[]
+): QueueItem[] {
+  const items: QueueItem[] = [];
+  for (const row of rows) {
+    const stack = row.stack as EngagementStack | null;
+    if (!needsWebhookSetupNudge(stack)) continue;
+    items.push({
+      id: `sync-setup:${row.engagementId}`,
+      source: "sync_setup",
+      category: "action_needed",
+      title: `Add webhook to ${bookingPlatformLabel(stack?.booking_platform)}`,
+      subtitle: `${row.buyer} · currently on auto-polling`,
+      engagementId: row.engagementId,
+      buyer: row.buyer,
+      runId: null,
+      // Nothing is actually blocked on this (unlike a real human_blocker
+      // pausing a run), so it deliberately sorts to the back of the
+      // action_needed tier rather than outranking genuine blockers —
+      // "now" sorts last under the ascending-createdAt tiebreak below.
+      createdAt: new Date().toISOString(),
+    });
+  }
+  return items;
+}
+
 export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
-  const [actionRows, blockerRows, notificationRows] = await Promise.all([
+  const [actionRows, blockerRows, notificationRows, engagementStackRows] = await Promise.all([
     db
       .select({
         id: pendingActions.id,
@@ -87,6 +122,11 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
       .where(and(eq(notifications.whopUserId, whopUserId), eq(notifications.read, false)))
       .orderBy(desc(notifications.createdAt))
       .limit(50),
+
+    db
+      .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, stack: engagements.stack })
+      .from(engagements)
+      .where(eq(engagements.whopUserId, whopUserId)),
   ]);
 
   const items: QueueItem[] = [
@@ -123,6 +163,7 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
       runId: n.runId,
       createdAt: n.createdAt.toISOString(),
     })),
+    ...syncSetupQueueItems(engagementStackRows),
   ];
 
   items.sort((x, y) => {
@@ -143,7 +184,7 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
  * double-count the same number in two places on screen at once.
  */
 export async function getQueueActionableCount(whopUserId: string): Promise<number> {
-  const [pendingCount, blockerCount] = await Promise.all([
+  const [pendingCount, blockerCount, engagementStackRows] = await Promise.all([
     db
       .select({ id: pendingActions.id })
       .from(pendingActions)
@@ -154,7 +195,15 @@ export async function getQueueActionableCount(whopUserId: string): Promise<numbe
       .from(humanBlockers)
       .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
       .where(and(eq(engagements.whopUserId, whopUserId), eq(humanBlockers.status, "open"))),
+    db
+      .select({ stack: engagements.stack })
+      .from(engagements)
+      .where(eq(engagements.whopUserId, whopUserId)),
   ]);
 
-  return pendingCount.length + blockerCount.length;
+  const syncSetupCount = engagementStackRows.filter((r) =>
+    needsWebhookSetupNudge(r.stack as EngagementStack | null)
+  ).length;
+
+  return pendingCount.length + blockerCount.length + syncSetupCount;
 }

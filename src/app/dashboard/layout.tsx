@@ -29,8 +29,10 @@ export default async function DashboardLayout({
   const navLinks = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/dashboard/engagements", label: "Engagements" },
-    { href: "/dashboard/credentials", label: "Credentials" },
     { href: "/dashboard/queue", label: "Queue" },
+    { href: "/dashboard/analytics", label: "Analytics" },
+    { href: "/dashboard/library", label: "Library" },
+    { href: "/dashboard/settings", label: "Settings" },
   ];
 
   return (

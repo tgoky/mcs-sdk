@@ -14,9 +14,52 @@ import { LiveTime } from "./live-time";
 
 type SkillStatus = "live" | "failed" | "not_run" | "running";
 
-function getStatusTooltip(status: SkillStatus): string {
+function statusTooltip(status: SkillStatus): string {
   if (status === "running") return "Executing now";
   return MODULE_STATUS_LABELS[status as ModuleStatus] ?? "Not started yet";
+}
+
+function StatusIcon({ status }: { status: SkillStatus }) {
+  const tooltip = statusTooltip(status);
+
+  switch (status) {
+    case "live":
+      return (
+        <span className="relative group/icon shrink-0">
+          <CheckCircle2 size={14} className="text-gold" />
+          <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+            {tooltip}
+          </span>
+        </span>
+      );
+    case "running":
+      return (
+        <span className="relative group/icon shrink-0">
+          <Loader2 size={14} className="text-zinc-500 dark:text-zinc-400 animate-spin" />
+          <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+            {tooltip}
+          </span>
+        </span>
+      );
+    case "failed":
+      return (
+        <span className="relative group/icon shrink-0">
+          <AlertCircle size={14} className="text-rose-500 dark:text-rose-400" />
+          <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+            {tooltip}
+          </span>
+        </span>
+      );
+    case "not_run":
+      return (
+        <span className="relative group/icon shrink-0">
+          <Circle size={14} className="text-zinc-300 dark:text-zinc-700" />
+          <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+            {tooltip}
+          </span>
+        </span>
+      );
+  }
 }
 
 /**
@@ -31,6 +74,13 @@ function getStatusTooltip(status: SkillStatus): string {
  * Wrapping just this piece in <Suspense> (see layout.tsx) means the static
  * shell renders immediately and this panel streams in a moment later,
  * with its own skeleton instead of a blank sidebar.
+ *
+ * Rows are intentionally single-line/minimal here — the full description +
+ * two-line meta block this used to render made five rows read as the
+ * tallest thing in the whole sidebar for information most people only
+ * glance at (a status dot + last-run time). The description now lives in
+ * the row's title tooltip instead of always being on screen; hover it or
+ * open the module page for the full explanation.
  */
 export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
   const skillStatuses: Record<SkillName, SkillStatus> = {
@@ -100,21 +150,20 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
 
   return (
     <div className="pt-4 border-t border-zinc-200 dark:border-zinc-900">
-      <div className="px-1 mb-3 space-y-1">
-        <p className="text-xs font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-          EXECUTIONS
+      <div className="px-1 mb-2 flex items-center justify-between">
+        <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+          Executions
         </p>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono text-zinc-500">
-            <span className="text-zinc-700 dark:text-zinc-400">{activeCount} active</span>
-            {failedCount > 0 && <span className="text-zinc-300 dark:text-zinc-600 mx-1">·</span>}
-            {failedCount > 0 && <span className="text-rose-600 dark:text-rose-400 font-medium">{failedCount} issue{failedCount !== 1 ? 's' : ''}</span>}
-          </span>
-        </div>
+        <span className="text-[10px] font-mono text-zinc-500">
+          <span className="text-zinc-600 dark:text-zinc-400">{activeCount} active</span>
+          {failedCount > 0 && (
+            <span className="text-rose-600 dark:text-rose-400 font-medium"> · {failedCount} issue{failedCount !== 1 ? "s" : ""}</span>
+          )}
+        </span>
       </div>
 
-      <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-900 rounded-lg overflow-hidden transition-colors duration-200">
-        {SKILLS.map((skill, index) => {
+      <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-900 rounded-lg overflow-hidden divide-y divide-zinc-200 dark:divide-zinc-900 transition-colors duration-200">
+        {SKILLS.map((skill) => {
           const status = skillStatuses[skill];
           const info = SKILL_INFO[skill];
           const lastRun = skillLastRun[skill];
@@ -124,86 +173,23 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
             <Link
               key={skill}
               href={`/dashboard/modules/${skill}`}
-              className={`
-                block px-3 py-2.5 transition-colors
-                hover:bg-zinc-100 dark:hover:bg-zinc-800/80 cursor-pointer
-                group relative
-                ${index !== SKILLS.length - 1 ? 'border-b border-zinc-200 dark:border-zinc-900' : ''}
-              `}
+              title={info.description}
+              className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors group"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 group-hover:text-zinc-950 group-hover:dark:text-zinc-100 transition-colors truncate">
-                    {info.name}
-                  </span>
-                  <svg
-                    className="w-3 h-3 opacity-0 group-hover:opacity-100 text-zinc-400 dark:text-zinc-500 shrink-0 transition-all duration-200"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-
-                <div className="flex items-center shrink-0 relative group/icon">
-                  {status === "live" && (
-                    <>
-                      <CheckCircle2 size={15} className="text-gold" />
-                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
-                        {getStatusTooltip(status)}
-                      </span>
-                    </>
-                  )}
-                  {status === "running" && (
-                    <>
-                      <Loader2 size={15} className="text-zinc-500 dark:text-zinc-400 animate-spin" />
-                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
-                        {getStatusTooltip(status)}
-                      </span>
-                    </>
-                  )}
-                  {status === "failed" && (
-                    <>
-                      <AlertCircle size={15} className="text-rose-500 dark:text-rose-400" />
-                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
-                        {getStatusTooltip(status)}
-                      </span>
-                    </>
-                  )}
-                  {status === "not_run" && (
-                    <>
-                      <Circle size={15} className="text-zinc-300 dark:text-zinc-700" />
-                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
-                        {getStatusTooltip(status)}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-snug mt-0.5">
-                {info.description}
-              </p>
-
-              <div className="flex items-center gap-3 mt-1 font-mono">
+              <StatusIcon status={status} />
+              <span className="font-semibold text-zinc-800 dark:text-zinc-200 group-hover:text-zinc-950 dark:group-hover:text-zinc-100 truncate transition-colors">
+                {info.name}
+              </span>
+              <span className="ml-auto shrink-0 flex items-center gap-1.5 font-mono text-[10px] text-zinc-400 dark:text-zinc-600 tabular-nums">
                 {status === "running" ? (
-                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 tabular-nums animate-pulse">
-                    Running...
-                  </span>
+                  <span className="text-zinc-500 dark:text-zinc-400 animate-pulse">Running…</span>
                 ) : lastRun ? (
                   <LiveTime isoString={lastRun.toISOString()} />
                 ) : (
-                  <span className="text-[10px] text-zinc-400 dark:text-zinc-700">
-                    Never run
-                  </span>
+                  "Never run"
                 )}
-                {runCount > 0 && (
-                  <span className="text-[10px] text-zinc-400 dark:text-zinc-700 tabular-nums">
-                    {runCount} run{runCount !== 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
+                {runCount > 0 && <span className="opacity-70">· {runCount}</span>}
+              </span>
             </Link>
           );
         })}
@@ -216,17 +202,16 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
 export function SidebarSkillsSkeleton() {
   return (
     <div className="pt-4 border-t border-zinc-200 dark:border-zinc-900">
-      <div className="px-1 mb-3 space-y-1">
-        <p className="text-xs font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-          EXECUTIONS
+      <div className="px-1 mb-2 space-y-1">
+        <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+          Executions
         </p>
-        <div className="h-3 w-20 rounded bg-zinc-100 dark:bg-zinc-900" />
       </div>
       <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-900 rounded-lg overflow-hidden divide-y divide-zinc-200 dark:divide-zinc-900">
         {SKILLS.map((skill) => (
-          <div key={skill} className="px-3 py-2.5 space-y-1.5">
-            <div className="h-3 w-24 rounded bg-zinc-100 dark:bg-zinc-900" />
-            <div className="h-2.5 w-full max-w-[160px] rounded bg-zinc-100 dark:bg-zinc-900" />
+          <div key={skill} className="px-2.5 py-1.5 flex items-center gap-2">
+            <div className="w-3.5 h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-800 shrink-0" />
+            <div className="h-2.5 w-20 rounded bg-zinc-100 dark:bg-zinc-900" />
           </div>
         ))}
       </div>

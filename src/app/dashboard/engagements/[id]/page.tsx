@@ -12,6 +12,8 @@ import { SkillsPanel } from "./skills-panel";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
 import { CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRight, Server, DollarSign } from "lucide-react";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
+import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
+import { BookingSyncStatusCard } from "@/components/booking-sync-status-card";
 import {
   SKILL_INFO,
   SKILLS,
@@ -191,6 +193,15 @@ export default async function EngagementDetailPage({
             </div>
           ))}
         </div>
+      )}
+
+      {/* Booking sync — deep status + the "add your webhook" nudge, right
+          where an operator is already looking at this client. */}
+      {stack?.booking_platform && (
+        <BookingSyncStatusCard
+          engagementId={engagement.engagementId}
+          status={computeBookingSyncStatus(engagement.engagementId, engagement.stack as EngagementStack | null)}
+        />
       )}
 
       {/* Module skill selector grid */}

@@ -7,7 +7,7 @@ import { QUEUE_COPY as copy } from "@/lib/copy";
 
 export interface QueueItemDTO {
   id: string;
-  source: "action" | "blocker" | "notification";
+  source: "action" | "blocker" | "notification" | "sync_setup";
   category: "approve" | "action_needed" | "alert" | "fyi";
   title: string;
   subtitle: string;
@@ -105,12 +105,12 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     errorTimeoutRef.current = setTimeout(() => setErrorId(null), 4000);
   }
 
-  async function runMutation(item: QueueItemDTO, url: string, body?: object) {
+  async function runMutation(item: QueueItemDTO, url: string, body?: object, method: "POST" | "PATCH" = "POST") {
     setBusyId(item.id);
     setErrorId(null);
     try {
       const res = await fetch(url, {
-        method: "POST",
+        method,
         headers: body ? { "Content-Type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -137,6 +137,21 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
       return runMutation(item, `/api/blockers/${item.id}/resolve`, { decision });
     }
     return runMutation(item, `/api/notifications/${item.id}/read`);
+  }
+
+  // sync_setup items are synthesized read-time from engagement.stack (see
+  // src/lib/queue.ts) — there's no pending_actions/human_blockers/
+  // notifications row behind them, so "resolve" means "go set it up" and
+  // "dismiss" means PATCH the engagement's own webhook_receiver_setup_dismissed
+  // flag, not any of the three existing decision endpoints above.
+  function dismissSyncSetup(item: QueueItemDTO) {
+    if (!item.engagementId) return;
+    return runMutation(
+      item,
+      `/api/engagements/${item.engagementId}/sync-mode`,
+      { dismissSetupNudge: true },
+      "PATCH"
+    );
   }
 
   const openHref = (item: QueueItemDTO) =>
@@ -199,7 +214,28 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
                 </>
               )}
 
-              {item.category === "action_needed" && (
+              {item.category === "action_needed" && item.source === "sync_setup" && (
+                <>
+                  {href ? (
+                    <Link
+                      href={href}
+                      onClick={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
+                    >
+                      <ArrowUpRight size={13} /> Review
+                    </Link>
+                  ) : null}
+                  <button
+                    disabled={isBusy}
+                    onClick={() => dismissSyncSetup(item)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <X size={13} /> Not now
+                  </button>
+                </>
+              )}
+
+              {item.category === "action_needed" && item.source !== "sync_setup" && (
                 <>
                   <button
                     disabled={isBusy}

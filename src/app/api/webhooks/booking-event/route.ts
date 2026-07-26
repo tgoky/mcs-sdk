@@ -104,22 +104,48 @@ function verifyCalComSignature(
 }
 
 /**
- * Generic HMAC-SHA256 verification for GHL / OnceHub / unknown providers
- * that pass an X-Signature header with hex-encoded HMAC of the raw body.
+ * Verification for GHL / OnceHub manual webhook setups.
+ *
+ * FIXED: this used to assume both platforms send a computed HMAC-SHA256
+ * digest of the raw body, matching Calendly/Cal.com's pattern. That's true
+ * for OnceHub's own native webhook subscriptions (their signing_secret
+ * flow computes a real digest, same shape as Calendly/Stripe), but it is
+ * NOT possible for GoHighLevel's Workflow "Custom Webhook" action — GHL's
+ * workflow builder can only attach a static header VALUE you type in
+ * (confirmed against HighLevel's own "Actions: Custom Webhook" support
+ * doc: "Add a header key... Set the header value... Include any custom
+ * headers your destination system expects"). It has no way to compute an
+ * HMAC of its own outbound request body at send time, so the old
+ * HMAC-only check silently rejected every GHL delivery even with a
+ * correctly-configured header — the manual webhook could never have
+ * worked. This now accepts either shape:
+ *   1. The header IS the shared secret itself, sent verbatim (what GHL's
+ *      Workflow action does, and the only thing it CAN do).
+ *   2. The header is a computed HMAC-SHA256 hex digest of the raw body,
+ *      optionally prefixed "sha256=" (what OnceHub's own webhook
+ *      subscriptions do).
+ * A leaked secret can't forge a request either way, so accepting both
+ * doesn't weaken verification — it just matches what each platform is
+ * actually capable of sending.
  */
-function verifyGenericHmacSignature(
+function verifyGhlOrOnceHubSignature(
   rawBody: string,
   signatureHeader: string | null,
   secret: string
 ): boolean {
   if (!signatureHeader || !secret) return false;
 
+  // Shape 1 — static shared-secret header (GHL Workflow webhook action).
+  if (safeEqual(signatureHeader, secret)) return true;
+
+  // Shape 2 — computed HMAC digest (OnceHub native webhook subscriptions).
+  const provided = signatureHeader.replace(/^sha256=/, "");
   const expected = crypto
     .createHmac("sha256", secret)
     .update(rawBody)
     .digest("hex");
 
-  return safeEqual(signatureHeader, expected);
+  return safeEqual(provided, expected);
 }
 
 // ── Route handler ──────────────────────────────────────────────────────────
@@ -181,11 +207,15 @@ export async function POST(request: Request) {
       }
       case "ghl_calendar":
       case "oncehub": {
-        // These typically send X-Signature or X-Webhook-Signature
+        // GHL's Workflow "Custom Webhook" action can only send a static
+        // header value you typed in (it can't compute an HMAC of its own
+        // request at send time); OnceHub's native subscriptions send a
+        // real computed digest. verifyGhlOrOnceHubSignature accepts
+        // either — see its doc comment above.
         const header =
           request.headers.get("x-signature") ??
           request.headers.get("x-webhook-signature");
-        signatureValid = verifyGenericHmacSignature(rawBody, header, signingSecret);
+        signatureValid = verifyGhlOrOnceHubSignature(rawBody, header, signingSecret);
         break;
       }
       case "unsupported":
@@ -205,8 +235,31 @@ export async function POST(request: Request) {
       console.warn(
         `[webhook] Signature verification FAILED for engagement ${engagementId}`
       );
+      // Best-effort — surfaced in the Booking Sync status card so a buyer
+      // sees *why* deliveries aren't registering instead of just silence.
+      // Never let this write block or fail the actual rejection response.
+      await db
+        .update(engagements)
+        .set({
+          stack: { ...stack, webhook_last_error: `Signature check failed on ${new Date().toISOString()} — check the header name/value configured in ${platform === "ghl_calendar" ? "your GHL workflow" : "OnceHub"} against Settings → Booking Sync.` },
+          updatedAt: new Date(),
+        })
+        .where(eq(engagements.engagementId, engagementId))
+        .catch((e) => console.error("[webhook] Failed to persist webhook_last_error (non-fatal):", e));
       return new Response("Invalid webhook signature", { status: 401 });
     }
+
+    // Signature accepted — clear any previously recorded error and record
+    // the delivery timestamp. Best-effort: never let this block the
+    // actual enrollment path below.
+    await db
+      .update(engagements)
+      .set({
+        stack: { ...stack, webhook_last_received_at: new Date().toISOString(), webhook_last_error: undefined },
+        updatedAt: new Date(),
+      })
+      .where(eq(engagements.engagementId, engagementId))
+      .catch((e) => console.error("[webhook] Failed to persist webhook_last_received_at (non-fatal):", e));
 
     // ── 5. NOW parse the verified payload and process ──
     const payload = JSON.parse(rawBody);

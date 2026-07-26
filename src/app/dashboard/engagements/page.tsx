@@ -1,8 +1,10 @@
 import { db } from "@/lib/db";
-import { engagements, skillRuns } from "@/models/schema";
+import { engagements, skillRuns, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { eq, desc, inArray } from "drizzle-orm";
 import Link from "next/link";
+import { Zap } from "lucide-react";
+import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
 import {
   skillName,
   bookingPlatformLabel,
@@ -122,6 +124,7 @@ export default async function EngagementsPage() {
 
             const bookingLabel = bookingPlatformLabel(stack?.booking_platform);
             const emailLabel = emailPlatformLabel(stack?.email_platform);
+            const syncSetupNeeded = needsWebhookSetupNudge(eng.stack as EngagementStack | null);
 
             const smsActive =
               stack?.sms_platform && stack.sms_platform !== "none";
@@ -162,6 +165,14 @@ export default async function EngagementsPage() {
                     <span className="text-xs font-normal text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
                       {bookingLabel}
                     </span>
+                    {syncSetupNeeded && (
+                      <span
+                        title="Auto-polling is covering you, but a direct webhook fires instantly — see the engagement page to set it up"
+                        className="inline-flex items-center gap-1 text-xs font-normal text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-900/40"
+                      >
+                        <Zap size={10} /> Webhook needed
+                      </span>
+                    )}
                     <span className="text-xs font-normal text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
                       {emailLabel}
                     </span>

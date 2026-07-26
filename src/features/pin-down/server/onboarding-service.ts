@@ -18,6 +18,7 @@ import { activateNotificationPackAlert } from "@/features/leak-map/server/notifi
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { GetStepTools, Inngest } from "inngest";
+import crypto from "crypto";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -719,6 +720,16 @@ export async function runPinDownOnboarding(
             });
             return { mode: "webhook" as const, subId: subId as string, receiverUrl };
           } else {
+            // No programmatic subscription came back (ghl_calendar /
+            // oncehub — see registerWebhookForTenant). Falls back to
+            // polling, but a signing secret is generated right now
+            // rather than waiting for the buyer to flip the toggle
+            // later — it costs nothing today and means Settings →
+            // Booking Sync can show the receiver URL + secret + setup
+            // instructions immediately, with no second onboarding pass
+            // required to "unlock" manual webhook mode.
+            const signingSecret =
+              finalStack.webhook_signing_secret ?? crypto.randomBytes(32).toString("hex");
             await db
               .update(engagements)
               .set({
@@ -727,15 +738,18 @@ export async function runPinDownOnboarding(
                   webhook_receiver_mode: "polling",
                   webhook_poll_interval_minutes: finalStack.webhook_poll_interval_minutes ?? 5,
                   webhook_receiver_last_polled_at: new Date().toISOString(),
+                  webhook_signing_secret: signingSecret,
                 },
                 updatedAt: new Date(),
               })
               .where(eq(engagements.engagementId, engagementId));
-            await logStep(runId, { phase: "webhook_registration", status: "skipped", detail: "No subscription ID returned — fell back to polling mode" });
+            await logStep(runId, { phase: "webhook_registration", status: "skipped", detail: "No subscription ID returned — fell back to polling mode (manual webhook secret pre-generated for later)" });
             return { mode: "polling" as const, reason: "no_sub_id", receiverUrl, isError: false };
           }
         } catch (e: any) {
           console.error(`[pin-down onboarding] Webhook registration failed: ${e.message}`);
+          const signingSecret =
+            finalStack.webhook_signing_secret ?? crypto.randomBytes(32).toString("hex");
           await db
             .update(engagements)
             .set({
@@ -744,11 +758,12 @@ export async function runPinDownOnboarding(
                 webhook_receiver_mode: "polling",
                 webhook_poll_interval_minutes: finalStack.webhook_poll_interval_minutes ?? 5,
                 webhook_receiver_last_polled_at: new Date().toISOString(),
+                webhook_signing_secret: signingSecret,
               },
               updatedAt: new Date(),
             })
             .where(eq(engagements.engagementId, engagementId));
-          await logStep(runId, { phase: "webhook_registration", status: "failed", detail: `${e.message} — fell back to polling mode` });
+          await logStep(runId, { phase: "webhook_registration", status: "failed", detail: `${e.message} — fell back to polling mode (manual webhook secret pre-generated for later)` });
           return { mode: "polling" as const, reason: e.message, receiverUrl, isError: true };
         }
       });

@@ -19,7 +19,8 @@ import {
   ChevronLeft,
   Clock,
   Ban,
-  ClipboardCheck
+  ClipboardCheck,
+  Zap
 } from "lucide-react";
 import {
   skillName,
@@ -104,11 +105,21 @@ function StepCenterIcon({ status, displayInterrupted }: { status: RunStep["statu
  * dangling "running" step on a now-"timed_out" run needs to be shown as
  * interrupted here instead of being persisted as such.
  */
-function StepCard({ step, displayInterrupted }: { step: RunStep; displayInterrupted?: boolean }) {
+function StepCard({ step, displayInterrupted, engagementId }: { step: RunStep; displayInterrupted?: boolean; engagementId?: string }) {
   const stepDurationMs =
     step.completedAt && step.startedAt
       ? new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime()
       : null;
+
+  // The webhook_registration step is where a GHL/OnceHub buyer first learns
+  // they fell back to polling (see onboarding-service.ts) — this is the
+  // moment they're most likely to notice and act on it, so the CTA lives
+  // right here instead of only in Settings/Queue where they'd have to go
+  // looking for it.
+  const showSyncCta =
+    step.phase === "webhook_registration" &&
+    (step.status === "skipped" || step.status === "failed") &&
+    Boolean(engagementId);
 
   return (
     <div className="flex gap-3 group">
@@ -148,6 +159,15 @@ function StepCard({ step, displayInterrupted }: { step: RunStep; displayInterrup
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed font-normal">
             {step.detail}
           </p>
+        )}
+
+        {showSyncCta && (
+          <Link
+            href={`/dashboard/engagements/${engagementId}`}
+            className="mt-2 inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition-colors"
+          >
+            <Zap size={11} /> Auto-polling is covering you for now — set up instant sync →
+          </Link>
         )}
       </div>
     </div>
@@ -477,6 +497,7 @@ export default function RunDetailPage() {
               <StepCard
                 key={`${step.phase}-${i}`}
                 step={step}
+                engagementId={run.engagementId}
                 displayInterrupted={
                   step.status === "running" && (run.status === "timed_out" || run.status === "cancelled")
                 }
