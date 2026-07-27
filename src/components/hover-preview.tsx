@@ -56,7 +56,7 @@ export function HoverPreview({
         coords.flip ? "motion-safe:origin-top-right" : "motion-safe:origin-top-left",
       ].join(" ")}
     >
-      <div className="rounded-lg border border-border bg-card shadow-lg p-3.5 text-xs">
+      <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg p-3.5 text-sm font-sans text-zinc-600 dark:text-zinc-400 tracking-tight">
         {preview}
       </div>
     </div>,
