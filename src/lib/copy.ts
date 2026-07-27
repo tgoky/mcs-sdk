@@ -378,6 +378,36 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Run detail page copy (src/app/dashboard/runs/[id]/page.tsx)
+//
+// The previous labels here ("Task Execution History Tree", "Phase Log
+// Compaction Summary", "Telemetry Audit", "Fatal Pipeline Exception") read
+// like raw AI-generated systems jargon instead of the plain, second-person
+// voice the rest of the app uses (see PHASE_LABELS above) — renamed to
+// match.
+// ---------------------------------------------------------------------------
+
+export const RUN_DETAIL_COPY = {
+  pageTitleSuffix: "run",
+  stepsSectionTitle: "Steps",
+  summarySectionTitle: "Summary",
+  errorSectionTitle: "What went wrong",
+  noStepsRecorded: "No steps were recorded for this run.",
+  awaitingFirstStep: "Waiting on the first step…",
+  noSummaryRecorded:
+    "No summary was recorded for this run. Re-triggering the module will produce a full summary going forward.",
+  nextStepCompiling: "Next step…",
+  summaryFields: {
+    whatWasAttempted: "What was attempted",
+    whatWorked: "What worked",
+    whatFailed: "What failed",
+    openItems: "Open items",
+    decisionsMade: "Decisions made",
+  },
+  noFailuresNote: "No errors during this run.",
+};
+
+// ---------------------------------------------------------------------------
 // Live activity feed copy
 // ---------------------------------------------------------------------------
 
@@ -395,4 +425,3 @@ export const ACTIVITY_FEED_COPY = {
   columnStatus: "Status",
   columnTime: "Time",
 };
-
