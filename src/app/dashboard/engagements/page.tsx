@@ -94,7 +94,7 @@ export default async function EngagementsPage() {
         <div className="flex items-center self-start lg:self-auto">
           <Link
             href="/dashboard/engagements/new"
-            className="inline-flex items-center px-3 py-1.5 text-xs font-medium border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-mono"
+       className="inline-flex items-center px-3 py-1.5 text-xs font-medium border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-sm hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-mono"
           >
             + Add a New Client
           </Link>
@@ -162,22 +162,22 @@ export default async function EngagementsPage() {
 
                   {/* Connected tool tag items */}
                   <div className="flex flex-wrap gap-2 font-mono">
-                    <span className="text-xs font-normal text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
+                      <span className="text-xs font-normal text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60">
                       {bookingLabel}
                     </span>
                     {syncSetupNeeded && (
                       <span
                         title="Auto-polling is covering you, but a direct webhook fires instantly — see the engagement page to set it up"
-                        className="inline-flex items-center gap-1 text-xs font-normal text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-900/40"
+                          className="inline-flex items-center gap-1 text-xs font-normal text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-sm border border-amber-200 dark:border-amber-900/40"
                       >
                         <Zap size={10} /> Webhook needed
                       </span>
                     )}
-                    <span className="text-xs font-normal text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
+       <span className="text-xs font-normal text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60">
                       {emailLabel}
                     </span>
                     <span
-                      className={`text-xs font-normal px-2 py-0.5 rounded border ${
+                    className={`text-xs font-normal px-2 py-0.5 rounded-sm border ${
                         smsActive
                           ? "text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-900/60 border-zinc-300 dark:border-zinc-800"
                           : "text-zinc-400 dark:text-zinc-600 bg-zinc-100/50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-900/40"

@@ -37,13 +37,13 @@ export function ConfirmStep({
               const stepLabel = STEPS.find((s) => s.id === stepId)?.label ?? stepId;
               return (
                 <div key={stepId} className="space-y-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                 <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                     {stepLabel}
                   </span>
                   {stepErrors.map((err, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between p-2 rounded border bg-background/60"
+                               className="flex items-center justify-between p-2 rounded-sm border bg-background/60"
                       style={{ borderColor: "var(--border)" }}
                     >
                       <span className="font-medium" style={{ color: "var(--text-primary)" }}>
@@ -52,7 +52,7 @@ export function ConfirmStep({
                       <button
                         type="button"
                         onClick={() => setStep(err.step)}
-                        className="px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer border bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 shrink-0 ml-3"
+   className="px-2.5 py-1 text-[11px] font-bold rounded-sm transition-all cursor-pointer border bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 shrink-0 ml-3"
                       >
                         Jump to Step →
                       </button>

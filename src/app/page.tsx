@@ -336,7 +336,7 @@ export default async function LandingIndexPage({
                     </p>
                   </div>
                   {membershipRequired && (
-                    <div className="rounded border border-amber-500/20 bg-amber-500/5 p-3.5 text-left text-xs text-amber-600 dark:text-amber-400 font-mono space-y-1">
+        <div className="rounded-sm border border-amber-500/20 bg-amber-500/5 p-3.5 text-left text-xs text-amber-600 dark:text-amber-400 font-mono space-y-1">         
                       <div className="font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-500">
                         ! ACCESS_DENIED
                       </div>

@@ -123,7 +123,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
             {data.pasteReadyInstructions}
           </p>
           {data.confirmationPageDeployment?.reason && (
-            <p className="text-[11px] font-mono p-2 rounded bg-red-500/5 border border-red-500/10" style={{ color: "var(--error)" }}>
+     <p className="text-[11px] font-mono p-2 rounded-sm bg-red-500/5 border border-red-500/10" style={{ color: "var(--error)" }}>           
               Reason: {data.confirmationPageDeployment.reason}
             </p>
           )}
@@ -132,7 +132,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
             <button
               type="button"
               onClick={() => navigator.clipboard.writeText(data.pasteReadyHtml ?? "")}
-              className="px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer border bg-background/50 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+  className="px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer border bg-background/50 hover:bg-zinc-100 dark:hover:bg-zinc-800"      
               style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
             >
               Copy HTML
@@ -142,7 +142,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
             readOnly
             value={data.pasteReadyHtml}
             rows={6}
-            className="w-full rounded-md px-3 py-2 text-[11px] font-mono resize-y focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 shadow-inner"
+     className="w-full rounded-lg px-3 py-2 text-[11px] font-mono resize-y focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 shadow-inner"    
             style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
           />
         </div>
@@ -235,7 +235,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
       {/* Call to action panel trigger button */}
       <button
         onClick={() => router.push(`/dashboard/engagements/${data.engagementId}`)}
-        className="px-4 py-2 text-sm font-bold font-mono uppercase tracking-wider rounded-md transition-all cursor-pointer hover:opacity-90 active:translate-y-px text-white shadow-sm"
+            className="px-4 py-2 text-sm font-bold font-mono uppercase tracking-wider rounded-lg transition-all cursor-pointer hover:opacity-90 active:translate-y-px text-white shadow-sm"
         style={{ background: "var(--accent)" }}
       >
         Go to Client Dashboard

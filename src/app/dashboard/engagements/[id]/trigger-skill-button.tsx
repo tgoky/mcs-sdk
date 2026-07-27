@@ -58,14 +58,14 @@ export function TriggerSkillButton({
       <button
         onClick={trigger}
         disabled={state === "running"}
-        className="w-full text-left px-3 py-2 text-[10px] font-mono font-bold tracking-wider rounded border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
+        className="w-full text-left px-3 py-2 text-[10px] font-mono font-bold tracking-wider rounded-sm border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
       >
         {state === "running" ? "RUNNING…" : label.toUpperCase()}
       </button>
 
       {message && (
         <p
-          className={`text-[10px] font-mono font-semibold px-1 py-0.5 rounded flex items-center justify-between ${
+        className={`text-[10px] font-mono font-semibold px-1 py-0.5 rounded-sm flex items-center justify-between ${
             state === "error" 
               ? "text-rose-600 dark:text-rose-400" 
               : "text-emerald-600 dark:text-emerald-400"

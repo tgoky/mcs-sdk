@@ -68,7 +68,7 @@ export function InputField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-md px-3 py-1.5 text-sm transition-colors focus:outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-600 shadow-xs"
+   className="w-full rounded-lg px-3 py-1.5 text-sm transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-600 shadow-xs"
         style={{
           background: "var(--surface)",
           border: "1px solid var(--border)",
@@ -123,7 +123,7 @@ export function SelectField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="w-full rounded-md px-3 py-1.5 text-sm focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-xs"
+        className="w-full rounded-lg px-3 py-1.5 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-xs"
         style={{
           background: "var(--surface)",
           border: "1px solid var(--border)",

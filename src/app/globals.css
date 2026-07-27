@@ -81,8 +81,33 @@
 /* gold keeps every existing indicator on-brand with no component edits.  */
 /* ────────────────────────────────────────────────────────────────────── */
 @theme {
-  --color-zinc-950: #1f1a2e;
-  --color-zinc-900: #2d2643;
+  --color-zinc-950: #0b0812;
+ --color-zinc-900: #1c1729;
+
+
+  --color-rose-50:  #fde8e7;
+  --color-rose-100: #fbd5d3;
+  --color-rose-200: #f7b4b0;
+  --color-rose-300: #f28b84;
+  --color-rose-400: #ff8a80;
+  --color-rose-500: #ff453a;
+  --color-rose-600: #c4271c;
+  --color-rose-700: #a11d14;
+  --color-rose-900: #4a1a18;
+  --color-rose-950: #33161f;
+
+  /* Success */
+  --color-emerald-50:  #e4f5e9;
+  --color-emerald-100: #c8ebd3;
+  --color-emerald-200: #a3ddb5;
+  --color-emerald-300: #6fcb8c;
+  --color-emerald-400: #4fd97c;
+  --color-emerald-500: #30d158;
+  --color-emerald-600: #1b7f3b;
+  --color-emerald-700: #146430;
+  --color-emerald-900: #17402a;
+  --color-emerald-950: #14291c;
+  
 
   --color-amber-50: #fcf8f3;
   --color-amber-100: #f7efe3;
@@ -232,6 +257,38 @@
   body {
     @apply bg-background text-foreground;
   }
+
+
+
+  /* ── Focus ───────────────────────────────────────────────────────────────
+     One visible keyboard-focus treatment for every interactive element.
+
+     Why this exists: 12 elements used `focus:outline-none` and only 3 gave
+     anything back, so 9 — every input and textarea in the 5-step onboarding
+     wizard, plus the API-key fields — had NO visible focus indicator at all.
+     Those surfaces could not be navigated by keyboard. That is a WCAG 2.4.7
+     (Focus Visible, AA) failure.
+
+     :focus-visible rather than :focus on purpose — it fires for keyboard
+     users but not on mouse click, so buttons don't keep a ring after being
+     clicked. This matches what shadcn's own button.tsx already does.
+
+     2px meets the minimum thickness in WCAG 2.4.13, and --ring is blue in
+     both themes so it reads as "focused" rather than as the action colour. */
+  :where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Never leave an element with no focus affordance. Anything that clears the
+     outline must supply a ring instead; this catches the ones that don't. */
+  :where(input, select, textarea):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+
+  
   html {
     @apply font-sans;
   }

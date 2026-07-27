@@ -88,7 +88,7 @@ export function Breadcrumbs() {
     >
       <Link
         href="/dashboard"
-        className="flex items-center justify-center h-6 w-6 shrink-0 rounded-md text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
+       className="flex items-center justify-center h-6 w-6 shrink-0 rounded-lg text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
         title="Dashboard"
       >
         <Home size={13} />

@@ -34,14 +34,14 @@ export function OfferStep({
             value={prefillDomain}
             onChange={(e) => setPrefillDomain(e.target.value)}
             placeholder="clientsite.com"
-            className="flex-1 rounded-md px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600"
+          className="flex-1 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600"
             style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
           />
           <button
             type="button"
             onClick={runSmartPrefill}
             disabled={prefillLoading || !prefillDomain.trim()}
-            className="px-3.5 py-2 text-xs font-bold font-mono uppercase tracking-wider rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0"
+          className="px-3.5 py-2 text-xs font-bold font-mono uppercase tracking-wider rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0"
           >
             {prefillLoading ? "Crawling…" : "Pre-fill"}
           </button>
@@ -115,7 +115,7 @@ export function OfferStep({
           id="hybrid"
           checked={form.hybridMode}
           onChange={(e) => set("hybridMode", e.target.checked)}
-          className="w-4 h-4 rounded cursor-pointer mt-0.5 border border-zinc-300 dark:border-zinc-800"
+          className="w-4 h-4 rounded-sm cursor-pointer mt-0.5 border border-zinc-300 dark:border-zinc-800"
           style={{ accentColor: "var(--accent)" }}
         />
         <label htmlFor="hybrid" className="text-xs cursor-pointer leading-normal" style={{ color: "var(--text-secondary)" }}>

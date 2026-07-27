@@ -187,7 +187,7 @@ export default async function AnalyticsPage() {
                     {s.costCents > 0 && <span className="ml-2 text-zinc-400 dark:text-zinc-600">{fmtCents(s.costCents)}</span>}
                   </span>
                 </div>
-                <Bar value={s.total} max={maxSkillRuns} className={s.failed > 0 ? "bg-amber-500" : "bg-gold"} />
+   <Bar value={s.total} max={maxSkillRuns} className={s.failed > 0 ? "bg-rose-500" : "bg-gold"} />
               </div>
             );
           })}

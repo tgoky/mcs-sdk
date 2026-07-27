@@ -92,7 +92,7 @@ export function VoiceStep({
           onChange={(e) => set("rawVoiceCorpus", e.target.value)}
           placeholder="Paste sales call transcripts, email copy, or scripts here..."
           rows={8}
-          className="w-full rounded-md px-3 py-2 text-xs resize-y focus:outline-none transition-colors shadow-xs placeholder:text-zinc-400 dark:placeholder:text-zinc-600 font-medium"
+      className="w-full rounded-lg px-3 py-2 text-xs resize-y transition-colors shadow-xs placeholder:text-zinc-400 dark:placeholder:text-zinc-600 font-medium"
           style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
         />
         <p className="text-[11px] font-mono font-bold" style={{ color: "var(--text-muted)" }}>
@@ -113,7 +113,7 @@ export function VoiceStep({
             onChange={(e) => set("topCallQuestions", e.target.value)}
             placeholder={"How long does onboarding take?\nWhat results can I expect?"}
             rows={4}
-            className="w-full rounded-md px-3 py-2 text-xs resize-y focus:outline-none transition-colors shadow-xs placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+              className="w-full rounded-lg px-3 py-2 text-xs resize-y transition-colors shadow-xs placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
             style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
           />
         </div>
@@ -127,7 +127,7 @@ export function VoiceStep({
             onChange={(e) => set("topObjections", e.target.value)}
             placeholder={"It's too expensive for our budget right now.\nThe timing doesn't work for us right now."}
             rows={4}
-            className="w-full rounded-md px-3 py-2 text-xs resize-y focus:outline-none transition-colors shadow-xs placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+      className="w-full rounded-lg px-3 py-2 text-xs resize-y transition-colors shadow-xs placeholder:text-zinc-400 dark:placeholder:text-zinc-600"         
             style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
           />
         </div>
@@ -146,7 +146,7 @@ export function VoiceStep({
           <button
             type="button"
             onClick={addTestimonial}
-            className="px-3 py-1.5 text-xs font-bold font-mono uppercase tracking-wider rounded-md transition-all cursor-pointer border bg-background/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 shrink-0 shadow-xs"
+         className="px-3 py-1.5 text-xs font-bold font-mono uppercase tracking-wider rounded-lg transition-all cursor-pointer border bg-background/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 shrink-0 shadow-xs"
             style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
           >
             + Add testimonial
@@ -190,7 +190,7 @@ export function VoiceStep({
                 onChange={(e) => updateTestimonial(i, "quote", e.target.value)}
                 placeholder="What they said about working with this client..."
                 rows={2}
-                className="w-full rounded-md px-3 py-2 text-xs resize-y focus:outline-none transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+          className="w-full rounded-lg px-3 py-2 text-xs resize-y transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
                 style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
               />
             </div>

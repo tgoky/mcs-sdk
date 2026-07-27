@@ -125,7 +125,7 @@ export default async function DashboardPage() {
           </Link>
           <Link
             href="/dashboard/engagements/new"
-            className="ml-2 inline-flex items-center px-3 py-1 text-xs border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 rounded hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-mono"
+          className="ml-2 inline-flex items-center px-3 py-1 text-xs border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-sm hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-mono"
           >
             {copy.newClientButton}
           </Link>

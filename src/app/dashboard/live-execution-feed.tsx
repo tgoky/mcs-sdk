@@ -209,7 +209,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
           <h3 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider font-mono">
             {title ?? "Live Executions"}
           </h3>
-          <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 bg-zinc-200/60 dark:bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-300/40 dark:border-zinc-800/40">{runs.length}</span>
+  <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 bg-zinc-200/60 dark:bg-zinc-900 px-1.5 py-0.5 rounded-sm border border-zinc-300/40 dark:border-zinc-800/40">{runs.length}</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 dark:text-zinc-600">

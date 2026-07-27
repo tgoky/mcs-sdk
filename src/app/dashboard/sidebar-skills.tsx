@@ -27,7 +27,7 @@ function StatusIcon({ status }: { status: SkillStatus }) {
       return (
         <span className="relative group/icon shrink-0">
           <CheckCircle2 size={14} className="text-gold" />
-          <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+             <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
             {tooltip}
           </span>
         </span>
@@ -36,7 +36,7 @@ function StatusIcon({ status }: { status: SkillStatus }) {
       return (
         <span className="relative group/icon shrink-0">
           <Loader2 size={14} className="text-zinc-500 dark:text-zinc-400 animate-spin" />
-          <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+  <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
             {tooltip}
           </span>
         </span>
@@ -45,7 +45,7 @@ function StatusIcon({ status }: { status: SkillStatus }) {
       return (
         <span className="relative group/icon shrink-0">
           <AlertCircle size={14} className="text-rose-500 dark:text-rose-400" />
-          <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+      <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
             {tooltip}
           </span>
         </span>
@@ -54,7 +54,7 @@ function StatusIcon({ status }: { status: SkillStatus }) {
       return (
         <span className="relative group/icon shrink-0">
           <Circle size={14} className="text-zinc-300 dark:text-zinc-700" />
-          <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+     <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
             {tooltip}
           </span>
         </span>
@@ -211,7 +211,7 @@ export function SidebarSkillsSkeleton() {
         {SKILLS.map((skill) => (
           <div key={skill} className="px-2.5 py-1.5 flex items-center gap-2">
             <div className="w-3.5 h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-800 shrink-0" />
-            <div className="h-2.5 w-20 rounded bg-zinc-100 dark:bg-zinc-900" />
+        <div className="h-2.5 w-20 rounded-sm bg-zinc-100 dark:bg-zinc-900" />        
           </div>
         ))}
       </div>

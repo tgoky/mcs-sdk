@@ -74,13 +74,13 @@ export function EngagementPauseControl({
   if (pausedAt) {
     return (
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 px-2 py-1 rounded">
+     <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 px-2 py-1 rounded-sm">
           <PauseCircle className="w-3 h-3" /> Paused — no new runs will start
         </span>
         <button
           onClick={resume}
           disabled={busy}
-          className="text-[11px] font-mono font-bold px-2 py-1 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-50 transition-all cursor-pointer inline-flex items-center gap-1"
+          className="text-[11px] font-mono font-bold px-2 py-1 rounded-sm border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-50 transition-all cursor-pointer inline-flex items-center gap-1"
         >
           <PlayCircle className="w-3 h-3" /> {busy ? "Resuming…" : "Resume"}
         </button>
@@ -97,13 +97,13 @@ export function EngagementPauseControl({
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="Why? (optional)"
-          className="text-[11px] font-mono px-2 py-1 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 w-40"
+        className="text-[11px] font-mono px-2 py-1 rounded-sm border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 w-40"
           onKeyDown={(e) => e.key === "Enter" && pause()}
         />
         <button
           onClick={pause}
           disabled={busy}
-          className="text-[11px] font-mono font-bold px-2 py-1 rounded border border-amber-300 dark:border-amber-900/60 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 disabled:opacity-50 transition-all cursor-pointer"
+       className="text-[11px] font-mono font-bold px-2 py-1 rounded-sm border border-amber-300 dark:border-amber-900/60 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 disabled:opacity-50 transition-all cursor-pointer"          
         >
           {busy ? "Pausing…" : "Confirm pause"}
         </button>
@@ -121,7 +121,7 @@ export function EngagementPauseControl({
     <div className="flex items-center gap-2">
       <button
         onClick={() => setShowReasonInput(true)}
-        className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-1 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-amber-300 dark:hover:border-amber-900/60 hover:text-amber-700 dark:hover:text-amber-400 transition-all cursor-pointer"
+   className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-1 rounded-sm border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-amber-300 dark:hover:border-amber-900/60 hover:text-amber-700 dark:hover:text-amber-400 transition-all cursor-pointer"
       >
         <PauseCircle className="w-3 h-3" /> Pause automation
       </button>

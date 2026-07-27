@@ -92,7 +92,7 @@ export function CredentialsStep({
             <div className="md:col-span-2 text-xs font-mono">
               {fetchingGhlLocations && <span className="italic text-zinc-500 dark:text-zinc-400 animate-pulse">⚡ Verifying against GoHighLevel...</span>}
               {ghlLocationsError && (
-                <div className="rounded p-3 border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
+                   <div className="rounded-sm p-3 border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
                   ⚠ Warning: {ghlLocationsError}
                 </div>
               )}
@@ -130,7 +130,7 @@ export function CredentialsStep({
             </div>
           )}
           {bookingOptionsError && (
-            <div className="rounded p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
+                   <div className="rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
               ⚠ Warning: {bookingOptionsError}
             </div>
           )}
@@ -209,7 +209,7 @@ export function CredentialsStep({
               id="smtpSecure"
               checked={form.smtpSecure}
               onChange={(e) => set("smtpSecure", e.target.checked)}
-              className="w-4 h-4 rounded cursor-pointer mt-0.5 border border-zinc-300 dark:border-zinc-800"
+        className="w-4 h-4 rounded-sm cursor-pointer mt-0.5 border border-zinc-300 dark:border-zinc-800"
               style={{ accentColor: "var(--accent)" }}
             />
             <label htmlFor="smtpSecure" className="text-xs cursor-pointer leading-normal" style={{ color: "var(--text-secondary)" }}>
@@ -239,7 +239,7 @@ export function CredentialsStep({
                 </div>
               )}
               {(klaviyoMissingKeyMessage ?? listsFetchError) && (
-                <div className="md:col-span-2 rounded p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
+    <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">         
                   ⚠ Warning: {klaviyoMissingKeyMessage ?? listsFetchError}
                 </div>
               )}
@@ -297,7 +297,7 @@ export function CredentialsStep({
                 </div>
               )}
               {acListsError && (
-                <div className="md:col-span-2 rounded p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
+          <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
                   ⚠ Warning: {acListsError}
                 </div>
               )}
@@ -391,7 +391,7 @@ export function CredentialsStep({
                     </div>
                   )}
                   {ghlWorkflowsError && (
-                    <div className="md:col-span-2 rounded p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
+         <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
                       ⚠ Warning: {ghlWorkflowsError}
                     </div>
                   )}

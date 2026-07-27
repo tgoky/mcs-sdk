@@ -17,7 +17,7 @@ function CountBadge({ count, active }: { count: number; active: boolean }) {
     <span
       className={`ml-auto shrink-0 min-w-[18px] text-center px-1.5 py-[1px] rounded-full text-[10px] font-mono font-bold transition-colors ${
         active
-          ? "bg-zinc-900 text-gold dark:bg-zinc-100 dark:text-zinc-900"
+            ? "bg-gold text-gold-foreground"
           : "bg-gold/15 text-gold-hover dark:text-gold"
       }`}
     >

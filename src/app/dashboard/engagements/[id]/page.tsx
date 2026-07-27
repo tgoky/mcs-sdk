@@ -154,14 +154,14 @@ export default async function EngagementDetailPage({
               initialRequireApproval={requireApproval}
             />
             <div className="flex flex-wrap gap-2 self-start sm:self-end font-mono">
-              <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
+     <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60">
                 {bookingPlatformLabel(stack?.booking_platform)}
               </span>
-              <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
+ <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60">
                 {emailPlatformLabel(stack?.email_platform)}
               </span>
               {offerDetails?.traffic_temperature && (
-                <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60 capitalize">
+      <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60 capitalize">             
                   {String(offerDetails.traffic_temperature)} traffic
                 </span>
               )}
@@ -249,7 +249,7 @@ export default async function EngagementDetailPage({
                       <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">{info.name}</p>
                       <p className="text-[11px] font-normal text-zinc-500 dark:text-zinc-500 leading-snug">{info.description}</p>
                     </div>
-                    <span className={`text-[11px] font-mono font-bold shrink-0 p-1 bg-zinc-100 dark:bg-zinc-900/40 rounded border border-zinc-200/60 dark:border-zinc-800/40 ml-2 ${MODULE_STATUS_COLORS[status]}`}>
+          <span className={`text-[11px] font-mono font-bold shrink-0 p-1 bg-zinc-100 dark:bg-zinc-900/40 rounded-sm border border-zinc-200/60 dark:border-zinc-800/40 ml-2 ${MODULE_STATUS_COLORS[status]}`}>
                       {MODULE_STATUS_LABELS[status]}
                     </span>
                   </div>
@@ -371,7 +371,7 @@ export default async function EngagementDetailPage({
                     {ARTIFACT_TYPE_LABELS[a.artifactType] ?? a.artifactType}
                   </span>
                   <span
-                    className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded border ${
+                            className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-sm border ${
                       a.owner === "buyer"
                         ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40"
                         : "text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800/40"

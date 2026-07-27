@@ -41,7 +41,7 @@ function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 ${
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 ${
         isGold
           ? "bg-gold/10 text-gold-hover dark:text-gold border border-gold/25"
           : "bg-muted text-muted-foreground border border-border"
@@ -239,14 +239,14 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
                   <button
                     disabled={isBusy}
                     onClick={() => decide(item, "approved")}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+       className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <Check size={13} /> {copy.actions.approve}
                   </button>
                   <button
                     disabled={isBusy}
                     onClick={() => decide(item, "rejected")}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <X size={13} /> {copy.actions.reject}
                   </button>
@@ -259,7 +259,7 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
                     <Link
                       href={href}
                       onClick={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
+    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
                     >
                       <ArrowUpRight size={13} /> Review
                     </Link>
@@ -267,7 +267,7 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
                   <button
                     disabled={isBusy}
                     onClick={() => dismissSyncSetup(item)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+     className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"             
                   >
                     <X size={13} /> Not now
                   </button>
@@ -288,7 +288,7 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
                   <button
                     disabled={isBusy}
                     onClick={() => dismissRunFailure(item)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+     className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <X size={13} /> Not now
                   </button>
@@ -300,14 +300,14 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
                   <button
                     disabled={isBusy}
                     onClick={() => decide(item, "resolved")}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <Check size={13} /> {copy.actions.resolve}
                   </button>
                   <button
                     disabled={isBusy}
                     onClick={() => decide(item, "abandoned")}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <X size={13} /> {copy.actions.dismiss}
                   </button>
@@ -320,7 +320,7 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
                     <Link
                       href={href}
                       onClick={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
+                         className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
                     >
                       <ArrowUpRight size={13} /> {copy.actions.open}
                     </Link>
@@ -328,7 +328,7 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
                   <button
                     disabled={isBusy}
                     onClick={() => runMutation(item, `/api/notifications/${item.id}/read`)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <X size={13} /> {copy.actions.dismiss}
                   </button>

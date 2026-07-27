@@ -88,7 +88,7 @@ export function SkillsPanel({
                 onClick={() => toggle(skillId)}
                 disabled={busy}
                 aria-pressed={enabled}
-                className={`shrink-0 inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2.5 py-1 rounded border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+   className={`shrink-0 inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2.5 py-1 rounded-sm border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                   enabled
                     ? "text-gold-hover dark:text-gold bg-gold/10 border-gold/25 hover:bg-gold/15"
                     : "text-zinc-500 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-900/60 hover:border-zinc-300 dark:hover:border-zinc-700"

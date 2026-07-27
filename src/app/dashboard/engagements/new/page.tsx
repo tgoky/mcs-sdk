@@ -177,14 +177,14 @@ export default function NewEngagementPage() {
           <button
             onClick={() => setReadyToLaunch(null)}
             disabled={launching}
-            className="px-4 py-2 text-xs font-bold rounded-md transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
+         className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
           >
             Back to review
           </button>
           <button
             onClick={launch}
             disabled={launching}
-            className="px-5 py-2 text-xs font-bold rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+     className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"         
           >
             {launching ? "Launching..." : "Launch Setup"}
           </button>
@@ -219,7 +219,7 @@ export default function NewEngagementPage() {
             <button
               type="button"
               onClick={() => setShowRestoredBanner(false)}
-              className="px-2 py-1 rounded hover:opacity-80 cursor-pointer"
+              className="px-2 py-1 rounded-sm hover:opacity-80 cursor-pointer"
               style={{ color: "var(--text-secondary)" }}
             >
               [ Dismiss ]
@@ -227,7 +227,7 @@ export default function NewEngagementPage() {
             <button
               type="button"
               onClick={discardDraft}
-              className="px-2 py-1 rounded border bg-background/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+    className="px-2 py-1 rounded-sm border bg-background/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
               style={{ color: "var(--text-secondary)", borderColor: "var(--border)" }}
             >
               Start over
@@ -303,7 +303,7 @@ export default function NewEngagementPage() {
             if (idx > 0) setStep(STEPS[idx - 1].id);
           }}
           disabled={step === "offer"}
-          className="px-4 py-2 text-xs font-bold rounded-md transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
+        className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
         >
           Back
         </button>
@@ -315,7 +315,7 @@ export default function NewEngagementPage() {
               if (idx < STEPS.length - 1) setStep(STEPS[idx + 1].id);
             }}
             disabled={!isCurrentStepValid(form, step)}
-            className="px-5 py-2 text-xs font-bold rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+    className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
           >
             Next
           </button>
@@ -323,7 +323,7 @@ export default function NewEngagementPage() {
           <button
             onClick={submit}
             disabled={submitting || allValidationErrors.length > 0}
-            className="px-5 py-2 text-xs font-bold rounded-md transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+  className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
           >
             {submitting ? "Saving..." : "Save Setup"}
           </button>

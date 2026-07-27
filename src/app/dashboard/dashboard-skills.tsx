@@ -150,7 +150,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
                   {status === "live" && (
                     <>
                       <CheckCircle2 size={15} className="text-gold" />
-                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
                         {getStatusTooltip(status)}
                       </span>
                     </>
@@ -158,7 +158,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
                   {status === "running" && (
                     <>
                       <Loader2 size={15} className="text-zinc-500 dark:text-zinc-400 animate-spin" />
-                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
                         {getStatusTooltip(status)}
                       </span>
                     </>
@@ -166,7 +166,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
                   {status === "failed" && (
                     <>
                       <AlertCircle size={15} className="text-rose-500 dark:text-rose-400" />
-                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+                  <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
                         {getStatusTooltip(status)}
                       </span>
                     </>
@@ -174,7 +174,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
                   {status === "not_run" && (
                     <>
                       <Circle size={15} className="text-zinc-300 dark:text-zinc-700" />
-                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+                 <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
                         {getStatusTooltip(status)}
                       </span>
                     </>
@@ -220,13 +220,13 @@ export function SidebarSkillsSkeleton() {
         <p className="text-xs font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
           EXECUTIONS
         </p>
-        <div className="h-3 w-20 rounded bg-zinc-100 dark:bg-zinc-900" />
+           <div className="h-3 w-20 rounded-sm bg-zinc-100 dark:bg-zinc-900" />
       </div>
       <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-900 rounded-lg overflow-hidden divide-y divide-zinc-200 dark:divide-zinc-900">
         {SKILLS.map((skill) => (
           <div key={skill} className="px-3 py-2.5 space-y-1.5">
-            <div className="h-3 w-24 rounded bg-zinc-100 dark:bg-zinc-900" />
-            <div className="h-2.5 w-full max-w-[160px] rounded bg-zinc-100 dark:bg-zinc-900" />
+            <div className="h-3 w-24 rounded-sm bg-zinc-100 dark:bg-zinc-900" />
+               <div className="h-2.5 w-full max-w-[160px] rounded-sm bg-zinc-100 dark:bg-zinc-900" />
           </div>
         ))}
       </div>

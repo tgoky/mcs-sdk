@@ -28,10 +28,10 @@ const HEALTH_STYLES: Record<
     Icon: CheckCircle2,
   },
   warning: {
-    dot: "bg-amber-500",
-    text: "text-amber-700 dark:text-amber-400",
-    bg: "bg-amber-50 dark:bg-amber-950/20",
-    border: "border-amber-200 dark:border-amber-900/40",
+ dot: "bg-sky-500",
+    text: "text-sky-700 dark:text-sky-400",
+    bg: "bg-sky-50 dark:bg-sky-950/20",
+    border: "border-sky-200 dark:border-sky-900/40",
     Icon: AlertTriangle,
   },
   error: {
@@ -89,14 +89,14 @@ function CopyField({ label, value, mask }: { label: string; value: string; mask?
     <div className="space-y-1">
       <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500">{label}</p>
       <div className="flex items-center gap-1.5">
-        <code className="flex-1 min-w-0 truncate text-xs font-mono px-2 py-1.5 rounded-md bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300">
+      <code className="flex-1 min-w-0 truncate text-xs font-mono px-2 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300">
           {revealed ? value : "•".repeat(Math.min(value.length, 40))}
         </code>
         {mask && (
           <button
             type="button"
             onClick={() => setRevealed((r) => !r)}
-            className="shrink-0 p-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+    className="shrink-0 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
             title={revealed ? "Hide" : "Reveal"}
           >
             {revealed ? <EyeOff size={13} /> : <Eye size={13} />}
@@ -105,7 +105,7 @@ function CopyField({ label, value, mask }: { label: string; value: string; mask?
         <button
           type="button"
           onClick={copy}
-          className="shrink-0 p-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+        className="shrink-0 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
           title="Copy"
         >
           {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
@@ -214,14 +214,14 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
 
       {/* Action banner */}
       {status.actionNeeded && (
-        <div className="mx-4 mb-4 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 p-4 space-y-3">
+             <div className="mx-4 mb-4 rounded-lg border border-sky-200 dark:border-sky-900/40 bg-sky-50 dark:bg-sky-950/20 p-4 space-y-3">
           <div className="flex items-start gap-2">
-            <Zap size={15} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                <Zap size={15} className="text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                 <p className="text-sm font-semibold text-sky-800 dark:text-sky-300">
                 Action needed — add your webhook to {platformLabel}
               </p>
-              <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                  <p className="text-xs text-sky-700/80 dark:text-sky-400/80 mt-0.5">
                 {platformLabel} can&apos;t register this automatically. Auto-polling is covering you every{" "}
                 {status.pollIntervalMinutes ?? 5} minutes in the meantime, but a direct webhook fires instantly.
               </p>
@@ -236,7 +236,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
           />
 
           {setupSteps.length > 0 && (
-            <ol className="space-y-1.5 pl-4 list-decimal text-xs text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
+   <ol className="space-y-1.5 pl-4 list-decimal text-xs text-sky-800/90 dark:text-sky-300/90 leading-relaxed">
               {setupSteps.map((step, i) => (
                 <li key={i}>{step}</li>
               ))}
@@ -250,7 +250,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
               type="button"
               disabled={busy !== null}
               onClick={() => patch({ mode: "webhook" }, "webhook")}
-              className="px-3 py-1.5 text-xs font-mono font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover disabled:opacity-50 transition-colors"
+    className="px-3 py-1.5 text-xs font-mono font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover disabled:opacity-50 transition-colors"         
             >
               {busy === "webhook" ? "Switching…" : "I've added it — switch to Direct Webhook"}
             </button>
@@ -258,7 +258,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
               type="button"
               disabled={busy !== null}
               onClick={() => patch({ dismissSetupNudge: true }, "dismiss")}
-              className="px-3 py-1.5 text-xs font-mono font-medium rounded-md border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50 transition-colors"
+    className="px-3 py-1.5 text-xs font-mono font-medium rounded-lg border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50 transition-colors"
             >
               {busy === "dismiss" ? "Saving…" : "Keep auto-polling for now"}
             </button>
@@ -276,7 +276,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
             type="button"
             disabled={busy !== null}
             onClick={() => patch({ mode: "polling" }, "polling")}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono rounded-md border border-zinc-300 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50 transition-colors"
+    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono rounded-lg border border-zinc-300 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50 transition-colors"
           >
             <RefreshCw size={11} className={busy === "polling" ? "animate-spin" : ""} />
             {busy === "polling" ? "Switching…" : "Switch to auto-polling"}

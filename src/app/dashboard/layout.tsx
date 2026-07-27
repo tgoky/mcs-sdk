@@ -99,7 +99,7 @@ export default async function DashboardLayout({
                 <button
                   type="submit"
                   title="Sign out"
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/70 transition-colors cursor-pointer bg-transparent border-none"
+             className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/70 transition-colors cursor-pointer bg-transparent border-none"
                 >
                   <LogOut size={14} />
                 </button>
