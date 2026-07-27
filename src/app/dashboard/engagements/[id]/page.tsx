@@ -9,6 +9,10 @@ import { TriggerSkillButton } from "./trigger-skill-button";
 import { EngagementPauseControl } from "./pause-control";
 import { ApprovalModeToggle } from "./approval-mode/approval-mode-toggle";
 import { SkillsPanel } from "./skills-panel";
+import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
+import { EditStackSettings } from "./edit-stack-settings";
+import { UpdateCredentialsForm } from "./update-credentials-form";
+import { DeleteClientSection } from "./delete-client-section";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
 import { CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRight, Server, DollarSign } from "lucide-react";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
@@ -164,7 +168,27 @@ export default async function EngagementDetailPage({
             </div>
           </div>
         </div>
+
+        {/* Full-width row — these two expand into grid-based forms that need
+            more room than the narrow right-aligned column above allows. */}
+        <div className="flex flex-wrap gap-2">
+          <EditStackSettings
+            engagementId={engagement.engagementId}
+            initialStack={engagement.stack as EngagementStack | null}
+          />
+          <UpdateCredentialsForm
+            engagementId={engagement.engagementId}
+            bookingPlatform={stack?.booking_platform}
+            emailPlatform={stack?.email_platform}
+          />
+        </div>
       </div>
+
+      <DeleteClientSection
+        engagementId={engagement.engagementId}
+        buyerName={engagement.buyer}
+        initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
+      />
 
       <SkillsPanel engagementId={engagement.engagementId} initialStates={skillStates} />
 
@@ -271,6 +295,15 @@ export default async function EngagementDetailPage({
           })}
         </div>
       </div>
+
+      <DeliverablesPanel
+        discoveryPrefill={engagement.discoveryPrefill}
+        voiceScrapeArtifacts={engagement.voiceScrapeArtifacts}
+        brandVoiceProfile={engagement.brandVoiceProfile as BrandVoiceProfile}
+        adCreativeBriefs={engagement.adCreativeBriefs}
+        pinDownScriptPack={engagement.pinDownScriptPack}
+        pinDownPageAudit={engagement.pinDownPageAudit}
+      />
 
       {/* Win-Back revenue attribution (Tier 4 #26) */}
       <div className="space-y-2">

@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { engagements, skillRuns, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, isNull, and } from "drizzle-orm";
 import Link from "next/link";
 import { Zap } from "lucide-react";
 import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
@@ -59,7 +59,7 @@ export default async function EngagementsPage() {
   const userEngagements = await db
     .select()
     .from(engagements)
-    .where(eq(engagements.whopUserId, session.whopUserId!));
+    .where(and(eq(engagements.whopUserId, session.whopUserId!), isNull(engagements.deletedAt)));
 
   const targetEngagementIds = userEngagements.map((e) => e.engagementId);
 

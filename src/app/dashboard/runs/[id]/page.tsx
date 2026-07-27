@@ -5,12 +5,12 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { PinDownResultCard } from "../../pin-down-result-card";
 import { CancelRunButton } from "../../cancel-run-button";
+import { StepTimeline } from "./step-timeline";
 import {
   CheckCircle2,
   XCircle,
   Loader2,
   AlertCircle,
-  SkipForward,
   ChevronDown,
   ChevronUp,
   Cpu,
@@ -18,8 +18,6 @@ import {
   Coins,
   Clock,
   Ban,
-  ClipboardCheck,
-  Zap
 } from "lucide-react";
 import { skillName, phaseLabel, runStatusLabel } from "@/lib/copy";
 import { BackLink } from "@/components/back-link";
@@ -66,110 +64,7 @@ function formatCost(cents: number | null): string {
   return `$${(cents / 100).toFixed(4)}`;
 }
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function StepCenterIcon({ status, displayInterrupted }: { status: RunStep["status"]; displayInterrupted?: boolean }) {
-  if (displayInterrupted) return <Ban className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />;
-  if (status === "success") return <CheckCircle2 className="w-4 h-4 text-gold shrink-0 mt-0.5" />;
-  if (status === "failed") return <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />;
-  if (status === "cancelled") return <Ban className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />;
-  if (status === "skipped") return <SkipForward className="w-4 h-4 text-zinc-400 dark:text-zinc-600 shrink-0 mt-0.5" />;
-  if (status === "pending_review") return <ClipboardCheck className="w-4 h-4 text-gold shrink-0 mt-0.5" />;
-  return <Loader2 className="w-4 h-4 text-zinc-500 dark:text-zinc-400 animate-spin shrink-0 mt-0.5" />;
-}
-
-/**
- * `displayInterrupted` is deliberately a render-time-only flag, never
- * written back to the database. See the comment on timeoutRun() in
- * src/lib/run-log.ts for why: a stale run's steps array is never rewritten
- * by the reaper (to avoid a lost-update race against logStep()), so a
- * dangling "running" step on a now-"timed_out" run needs to be shown as
- * interrupted here instead of being persisted as such.
- */
-function StepCard({ step, displayInterrupted, engagementId }: { step: RunStep; displayInterrupted?: boolean; engagementId?: string }) {
-  const stepDurationMs =
-    step.completedAt && step.startedAt
-      ? new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime()
-      : null;
-
-  // The webhook_registration step is where a GHL/OnceHub buyer first learns
-  // they fell back to polling (see onboarding-service.ts) — this is the
-  // moment they're most likely to notice and act on it, so the CTA lives
-  // right here instead of only in Settings/Queue where they'd have to go
-  // looking for it.
-  const showSyncCta =
-    step.phase === "webhook_registration" &&
-    (step.status === "skipped" || step.status === "failed") &&
-    Boolean(engagementId);
-
-  return (
-    <div className="flex gap-3 group">
-      {/* Timeline spine layout channel */}
-      <div className="flex flex-col items-center">
-        <StepCenterIcon status={step.status} displayInterrupted={displayInterrupted} />
-        <div className="w-px flex-1 mt-1 bg-zinc-200 dark:bg-zinc-800 group-last:hidden" />
-      </div>
-
-      {/* Content wrapper */}
-      <div className="pb-4 min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2 flex-wrap">
-          <div>
-            <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-              {phaseLabel(step.phase)}
-            </span>
-            {step.label && (
-              <span className="ml-2 text-xs text-zinc-500 font-mono">
-                [{step.label}]
-              </span>
-            )}
-            {displayInterrupted && (
-              <span className="ml-2 text-[10px] text-amber-600 dark:text-amber-400 font-mono font-bold uppercase tracking-wide">
-                Interrupted
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-zinc-400 dark:text-zinc-600 shrink-0 font-mono">
-            {stepDurationMs !== null && (
-              <span>{formatDuration(stepDurationMs)}</span>
-            )}
-            <span>{formatTime(step.startedAt)}</span>
-          </div>
-        </div>
-
-        {step.detail && (
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed font-normal">
-            {step.detail}
-          </p>
-        )}
-
-        {showSyncCta && (
-          <Link
-            href={`/dashboard/engagements/${engagementId}`}
-            className="mt-2 inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition-colors"
-          >
-            <Zap size={11} /> Auto-polling is covering you for now — set up instant sync →
-          </Link>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function SummarySection({
   summary,
@@ -346,12 +241,7 @@ export default function RunDetailPage() {
   if (error || !run) {
     return (
       <div className="space-y-4 px-1 py-4">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center text-sm font-semibold font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
-        >
-          <span className="mr-1">←</span> Dashboard
-        </Link>
+        <BackLink href="/dashboard" label="Back to Dashboard" />
         <div className="border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 rounded-lg p-6 text-center shadow-xs animate-in fade-in-50">
           <XCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
           <p className="text-sm font-mono font-bold text-rose-600 dark:text-rose-300">{error ?? "Run trace not found"}</p>
@@ -478,24 +368,8 @@ export default function RunDetailPage() {
             </p>
           </div>
         ) : (
-          <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white/40 dark:bg-zinc-950/20 p-4 space-y-1 shadow-sm">
-            {steps.map((step, i) => (
-              <StepCard
-                key={`${step.phase}-${i}`}
-                step={step}
-                engagementId={run.engagementId}
-                displayInterrupted={
-                  step.status === "running" && (run.status === "timed_out" || run.status === "cancelled")
-                }
-              />
-            ))}
-
-            {isRunning && (
-              <div className="flex gap-3 mt-1 items-center">
-                <Loader2 className="w-4 h-4 text-zinc-400 dark:text-zinc-600 animate-spin shrink-0 mt-0.5" />
-                <span className="text-xs text-zinc-400 dark:text-zinc-600 font-medium italic">Next automated task compiling…</span>
-              </div>
-            )}
+          <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white/40 dark:bg-zinc-950/20 p-4 shadow-sm">
+            <StepTimeline steps={steps} isRunning={isRunning} runStatus={run.status} />
           </div>
         )}
       </div>

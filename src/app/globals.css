@@ -236,3 +236,27 @@
     @apply font-sans;
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* RUN TIMELINE — LIVE EDGE CONNECTOR (src/app/dashboard/runs/[id]/step-timeline.tsx) */
+/*                                                                        */
+/* The one animated connector on the run detail page's step timeline: the */
+/* segment between the last logged step and "what's next," shown only    */
+/* while that run is still live. A plain CSS class (not a Tailwind        */
+/* motion-safe: utility) because it's applied to an SVG <line>'s className*/
+/* from a computed value, not a static utility string — so the reduced-   */
+/* motion opt-out has to live here instead.                              */
+/* ────────────────────────────────────────────────────────────────────── */
+.step-spine-flow {
+  animation: step-spine-flow 900ms linear infinite;
+}
+@keyframes step-spine-flow {
+  to {
+    stroke-dashoffset: -8;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .step-spine-flow {
+    animation: none;
+  }
+}

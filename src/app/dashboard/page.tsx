@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { skillRuns, engagements, activeAlerts } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getQueueItems } from "@/lib/queue";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, isNull } from "drizzle-orm";
 import { LiveExecutionFeed } from "./live-execution-feed";
 import { QueuePanel } from "./queue-panel";
 import { QUEUE_COPY } from "@/lib/copy";
@@ -31,7 +31,7 @@ export default async function DashboardPage() {
     recentRunsRaw,
     queueItems,
   ] = await Promise.all([
-    db.select().from(engagements).where(eq(engagements.whopUserId, whopUserId)),
+    db.select().from(engagements).where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
 
     db
       .select()

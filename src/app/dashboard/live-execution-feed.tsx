@@ -23,6 +23,10 @@ interface SkillRun {
 
 interface LiveExecutionFeedProps {
   initialRuns: SkillRun[];
+  /** Defaults to "/api/skill-runs/recent". Pass e.g. "/api/skill-runs/recent?skill=pre-call-read&limit=50" to scope the live poll to one module (see /dashboard/modules/[skill]). */
+  apiUrl?: string;
+  /** Defaults to "Live Executions". */
+  title?: string;
 }
 
 function actionSummary(run: SkillRun): string {
@@ -105,7 +109,7 @@ function RelativeTime({ isoString }: { isoString: string }) {
   );
 }
 
-export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
+export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionFeedProps) {
   const router = useRouter();
   // A fresh server-rendered prop on every mount (e.g. navigating back into
   // /dashboard from Home) — useState's initial value already reflects it,
@@ -116,7 +120,7 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
 
   const refresh = useCallback(async (signal: AbortSignal) => {
     try {
-      const res = await fetch("/api/skill-runs/recent", { cache: "no-store", signal });
+      const res = await fetch(apiUrl ?? "/api/skill-runs/recent", { cache: "no-store", signal });
       if (signal.aborted || !res.ok) return;
       const data = await res.json();
       if (signal.aborted) return;
@@ -126,7 +130,7 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
       // never worth surfacing, the next successful poll (or none, if the
       // component is gone) picks it back up.
     }
-  }, []);
+  }, [apiUrl]);
 
   useEffect(() => {
     if (!polling) return;
@@ -161,7 +165,7 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50">
         <div className="flex items-center gap-2">
           <h3 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider font-mono">
-            Live Executions
+            {title ?? "Live Executions"}
           </h3>
           <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 bg-zinc-200/60 dark:bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-300/40 dark:border-zinc-800/40">{runs.length}</span>
         </div>

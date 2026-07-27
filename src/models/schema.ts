@@ -682,6 +682,23 @@ export const engagements = pgTable("engagements", {
   pausedAt: timestamp("paused_at"),
   pausedReason: text("paused_reason"),
 
+  // ── Soft delete ─────────────────────────────────────────────────────
+  // Deliberately not a hard DELETE. ~20 tables (skillRuns, artifacts,
+  // credentialsRefs, notifications, activeAlerts, engagementSkills, etc.)
+  // store engagementId as a plain text column with no FK/cascade — most
+  // don't even have a formal foreign key constraint, just the same string.
+  // A hard delete here would either leave orphaned rows scattered across
+  // every one of those tables, or require a hand-maintained list of every
+  // child table to wipe in a transaction, which silently drifts out of
+  // date the next time someone adds a new engagement-scoped table. Setting
+  // deletedAt instead: hides the engagement from every list (see the
+  // `isNull(engagements.deletedAt)` filters at each read site) and — via
+  // the DELETE handler also setting pausedAt — stops every cron from
+  // picking it up, without needing to touch a single child table. Nothing
+  // is destroyed, so a mis-click during onboarding is recoverable with a
+  // restore action instead of a support ticket.
+  deletedAt: timestamp("deleted_at"),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
