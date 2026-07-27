@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { PinDownResultCard } from "../../pin-down-result-card";
 import { CancelRunButton } from "../../cancel-run-button";
 import { StepTimeline } from "./step-timeline";
@@ -19,7 +18,7 @@ import {
   Clock,
   Ban,
 } from "lucide-react";
-import { skillName, phaseLabel, runStatusLabel } from "@/lib/copy";
+import { skillName, phaseLabel, runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
 import { BackLink } from "@/components/back-link";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import type { RunStep, RunSummary } from "@/models/schema";
@@ -93,7 +92,7 @@ function SummarySection({
         className="w-full flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-950/60 hover:bg-zinc-100 dark:hover:bg-zinc-900/20 transition-colors text-left font-sans cursor-pointer"
       >
         <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider font-mono">
-          Phase Log Compaction Summary
+          {copy.summarySectionTitle}
         </span>
         {open ? (
           <ChevronUp className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
@@ -122,7 +121,7 @@ function SummarySection({
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-zinc-400 dark:text-zinc-600 italic font-medium">No structural errors or processing anomalies detected in this frame slice.</p>
+                  <p className="text-zinc-400 dark:text-zinc-600 italic font-medium">{copy.noFailuresNote}</p>
                 )}
               </div>
             );
@@ -171,7 +170,7 @@ export default function RunDetailPage() {
       if (!res.ok) return;
       const data = await res.json();
       setRun(data.run);
-    } catch (e: any) {
+    } catch {
       // Background polling errors are intentionally swallowed to preserve UI stability
     }
   }, [runId]);
@@ -195,8 +194,8 @@ export default function RunDetailPage() {
         }
         const data = await res.json();
         setRun(data.run);
-      } catch (e: any) {
-        if (e.name !== "AbortError") {
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name !== "AbortError") {
           setError(e.message);
         }
       } finally {
@@ -268,7 +267,7 @@ export default function RunDetailPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 w-full pt-1">
           <div className="space-y-1">
             <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
-              {skillName(run.skillName)} — Telemetry Audit
+              {skillName(run.skillName)} {copy.pageTitleSuffix}
             </h1>
             <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">Run ID: {run.id}</p>
           </div>
@@ -322,7 +321,7 @@ export default function RunDetailPage() {
       {/* Stack Error Trace Window */}
       {run.status === "failed" && run.errorMessage && (
         <div className="border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/10 rounded-lg p-4 space-y-1 shadow-sm">
-          <p className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider font-mono">Fatal Pipeline Exception</p>
+          <p className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider font-mono">{copy.errorSectionTitle}</p>
           <p className="text-xs text-rose-600 dark:text-rose-300 font-mono leading-relaxed break-all">{run.errorMessage}</p>
         </div>
       )}
@@ -342,7 +341,7 @@ export default function RunDetailPage() {
         <div className="border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/10 rounded-lg p-4 space-y-1 shadow-sm">
           <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider font-mono">Run Timed Out</p>
           <p className="text-xs text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
-            This run sat in progress longer than its allowed runtime and was closed automatically. If this keeps happening for the same module, check the step where it stalled — that's usually an upstream API call hanging.
+            This run sat in progress longer than its allowed runtime and was closed automatically. If this keeps happening for the same module, check the step where it stalled — that&apos;s usually an upstream API call hanging.
           </p>
         </div>
       )}
@@ -355,7 +354,7 @@ export default function RunDetailPage() {
       {/* Timeline Tracking execution Tree layouts list content */}
       <div className="space-y-2">
         <h2 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider font-mono">
-          Task Execution History Tree
+          {copy.stepsSectionTitle}
           <span className="ml-2 font-mono text-[10px] text-zinc-400 dark:text-zinc-700 font-normal lowercase">
             ({steps.length} step{steps.length !== 1 ? "s" : ""})
           </span>
@@ -364,12 +363,14 @@ export default function RunDetailPage() {
         {steps.length === 0 ? (
           <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg p-6 text-center bg-zinc-50/20 dark:bg-transparent">
             <p className="text-xs text-zinc-400 dark:text-zinc-600 font-mono">
-              {isRunning ? "Awaiting first active micro-step register…" : "No step log was recorded for this run."}
+              {isRunning ? copy.awaitingFirstStep : copy.noStepsRecorded}
             </p>
           </div>
         ) : (
-          <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white/40 dark:bg-zinc-950/20 p-4 shadow-sm">
-            <StepTimeline steps={steps} isRunning={isRunning} runStatus={run.status} />
+          <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white/40 dark:bg-zinc-950/20 shadow-sm overflow-hidden">
+            <div className="max-h-[420px] overflow-y-auto p-4">
+              <StepTimeline steps={steps} isRunning={isRunning} runStatus={run.status} />
+            </div>
           </div>
         )}
       </div>
@@ -383,7 +384,7 @@ export default function RunDetailPage() {
       {!run.summary && run.status !== "running" && (
         <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg p-4 bg-zinc-50/20 dark:bg-transparent transition-colors">
           <p className="text-xs text-zinc-400 dark:text-zinc-600 font-mono">
-            No structured summary was recorded for this run. Re-triggering the module will produce a full five-field summary going forward.
+            {copy.noSummaryRecorded}
           </p>
         </div>
       )}

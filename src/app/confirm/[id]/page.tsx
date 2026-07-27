@@ -88,13 +88,13 @@ export default async function PublicBookingConfirmationPage({
           <p>
             You are scheduled to connect with <span className="text-zinc-200 font-medium capitalize">{assignedHost}</span> on <span className="text-gold font-mono font-medium">{localizedTimeText}</span>.
           </p>
-          <p className="text-[11px] text-zinc-500 font-light pt-1">
+          <p className="text-[13px] text-zinc-500 font-light pt-1">
             An automated calendar invitation containing direct video coordinates has been dispatched to your provided contact record. Our systems are preparing brief metrics for our team ahead of the sync.
           </p>
         </div>
 
         <div className="text-center">
-          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">
+          <p className="text-[11px] font-mono text-zinc-600 uppercase tracking-widest">
             Showtime Telemetry Secured
           </p>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface EngagementResult {
@@ -47,6 +47,13 @@ interface EngagementResult {
  * receiving this data as props, since it no longer arrives synchronously
  * in the setup POST response — see src/app/api/engagements/setup/route.ts
  * for why that changed.
+ *
+ * Restyled onto the app's actual bg-card/border-border Tailwind tokens
+ * instead of a var(--surface) inline-style-per-element pattern — same
+ * visual system as the rest of the dashboard, and each card now carries
+ * a colored left accent (gold = fully done, indigo = one manual step
+ * left) so the status reads at a glance instead of every card looking
+ * like the same undifferentiated box.
  */
 export function PinDownResultCard({ engagementId }: { engagementId: string }) {
   const router = useRouter();
@@ -64,8 +71,8 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
       .then((engagement) => {
         if (!cancelled) setData(engagement);
       })
-      .catch((e: any) => {
-        if (!cancelled) setLoadError(e.message);
+      .catch((e: unknown) => {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : "Something went wrong.");
       });
     return () => {
       cancelled = true;
@@ -75,14 +82,14 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
   if (loadError) {
     return (
       <div className="rounded-lg p-4 text-sm font-mono text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 shadow-sm animate-in fade-in-50 duration-200">
-        Couldn't load the setup result: {loadError}
+        Couldn&apos;t load the setup result: {loadError}
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="rounded-lg p-4 text-sm font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 animate-pulse shadow-sm">
+      <div className="rounded-lg p-4 text-sm font-mono text-zinc-500 dark:text-zinc-400 bg-card border border-border animate-pulse shadow-sm">
         Loading setup result…
       </div>
     );
@@ -91,13 +98,17 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
   const isPasteReady = data.confirmationPageDeployment?.mode === "paste_ready";
 
   return (
-    <div className="space-y-6 w-full max-w-none transition-colors duration-200" style={{ color: "var(--text-secondary)" }}>
-      
-      {/* Primary Status Card Wrapper */}
-      <div className="rounded-lg p-5 space-y-2.5 shadow-sm" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-        <div className="flex items-center space-x-2">
+    <div className="space-y-4 w-full max-w-none text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
+
+      {/* Primary status card — colored left accent flags status at a glance */}
+      <div
+        className={`rounded-lg p-5 space-y-2.5 shadow-sm bg-card border border-border border-l-4 ${
+          isPasteReady ? "border-l-indigo-500 dark:border-l-indigo-400" : "border-l-gold"
+        }`}
+      >
+        <div className="flex items-center gap-2.5">
           <span
-            className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
+            className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-mono font-bold shrink-0 ${
               isPasteReady
                 ? "bg-indigo-600 dark:bg-indigo-500 text-white"
                 : "bg-gold text-gold-foreground"
@@ -105,7 +116,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
           >
             {isPasteReady ? "!" : "✓"}
           </span>
-          <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+          <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
             {isPasteReady ? "Setup complete — one manual step left" : "Setup complete"}
           </span>
         </div>
@@ -116,24 +127,23 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
         </p>
       </div>
 
-      {/* Manual Paste Code Interface Block */}
+      {/* Manual paste-code block */}
       {isPasteReady && data.pasteReadyHtml && (
-        <div className="rounded-lg p-4 space-y-3 shadow-sm" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-          <p className="text-xs font-bold leading-relaxed" style={{ color: "var(--text-primary)" }}>
+        <div className="rounded-lg p-4 space-y-3 shadow-sm bg-card border border-border">
+          <p className="text-xs font-bold leading-relaxed text-zinc-900 dark:text-zinc-100">
             {data.pasteReadyInstructions}
           </p>
           {data.confirmationPageDeployment?.reason && (
-     <p className="text-[11px] font-mono p-2 rounded-sm bg-red-500/5 border border-red-500/10" style={{ color: "var(--error)" }}>           
+            <p className="text-[13px] font-mono p-2 rounded bg-rose-50 dark:bg-rose-950/25 border border-rose-200 dark:border-rose-900/40 text-rose-700 dark:text-rose-300">
               Reason: {data.confirmationPageDeployment.reason}
             </p>
           )}
           <div className="flex items-center justify-between pt-1 font-mono">
-            <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Page HTML</span>
+            <span className="text-[13px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">Page HTML</span>
             <button
               type="button"
               onClick={() => navigator.clipboard.writeText(data.pasteReadyHtml ?? "")}
-  className="px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer border bg-background/50 hover:bg-zinc-100 dark:hover:bg-zinc-800"      
-              style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+              className="px-2.5 py-1 text-[13px] font-bold rounded-md transition-all cursor-pointer border border-border bg-black/[0.02] dark:bg-white/5 hover:bg-black/[0.05] dark:hover:bg-white/10 text-zinc-800 dark:text-zinc-200"
             >
               Copy HTML
             </button>
@@ -142,21 +152,20 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
             readOnly
             value={data.pasteReadyHtml}
             rows={6}
-     className="w-full rounded-lg px-3 py-2 text-[11px] font-mono resize-y focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 shadow-inner"    
-            style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+            className="w-full rounded-md px-3 py-2 text-[13px] font-mono resize-y focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 shadow-inner bg-black/[0.03] dark:bg-black/20 border border-border text-zinc-700 dark:text-zinc-300"
           />
         </div>
       )}
 
-      {/* Metadata ID + Link Grid Parameters Layout */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-lg p-4 space-y-1 shadow-sm" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-          <p className="text-[11px] font-mono uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Engagement ID</p>
-          <p className="font-mono text-sm font-bold" style={{ color: "var(--text-primary)" }}>{data.engagementId}</p>
+      {/* Engagement ID + confirmation link */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg p-4 space-y-1 shadow-sm bg-card border border-border">
+          <p className="text-[13px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-500">Engagement ID</p>
+          <p className="font-mono text-sm font-bold text-zinc-900 dark:text-zinc-100">{data.engagementId}</p>
         </div>
 
-        <div className="rounded-lg p-4 space-y-1 shadow-sm" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-          <p className="text-[11px] font-mono uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+        <div className="rounded-lg p-4 space-y-1 shadow-sm bg-card border border-border">
+          <p className="text-[13px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
             {isPasteReady ? "Preview Link (temporary)" : "Confirmation Page Link"}
           </p>
           {data.confirmationPageUrl && (
@@ -164,8 +173,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
               href={data.confirmationPageUrl}
               target="_blank"
               rel="noreferrer"
-              className="font-mono text-sm underline underline-offset-4 break-all block transition-colors font-bold hover:opacity-80"
-              style={{ color: "var(--accent)" }}
+              className="font-mono text-sm underline underline-offset-4 break-all block transition-colors font-bold text-gold-hover dark:text-gold hover:opacity-80"
             >
               {data.confirmationPageUrl}
             </a>
@@ -175,13 +183,13 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
 
       {/* Existing-page audit (Pin-Down recovery gap 7) */}
       {data.pinDownPageAudit && (
-        <div className="rounded-lg p-4 space-y-3 shadow-sm" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-          <p className="text-[11px] font-mono uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+        <div className="rounded-lg p-4 space-y-3 shadow-sm bg-card border border-border">
+          <p className="text-[13px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
             Existing Page Audit — {data.pinDownPageAudit.auditedUrl}
           </p>
           {data.pinDownPageAudit.existingPageStrengths.length > 0 && (
             <div>
-              <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>What's already working</p>
+              <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">What&apos;s already working</p>
               <ul className="text-xs list-disc list-inside space-y-0.5 mt-1">
                 {data.pinDownPageAudit.existingPageStrengths.map((s, i) => <li key={i}>{s}</li>)}
               </ul>
@@ -189,7 +197,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
           )}
           {data.pinDownPageAudit.existingPageWeaknesses.length > 0 && (
             <div>
-              <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>Gaps the new page closes</p>
+              <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Gaps the new page closes</p>
               <ul className="text-xs list-disc list-inside space-y-0.5 mt-1">
                 {data.pinDownPageAudit.existingPageWeaknesses.map((s, i) => <li key={i}>{s}</li>)}
               </ul>
@@ -200,12 +208,12 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
 
       {/* Hero + breakout video scripts (Pin-Down recovery gap 3) */}
       {data.pinDownScriptPack && (
-        <div className="rounded-lg p-4 space-y-3 shadow-sm" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-          <p className="text-[11px] font-mono uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+        <div className="rounded-lg p-4 space-y-3 shadow-sm bg-card border border-border">
+          <p className="text-[13px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
             Video Script Pack
           </p>
           <div>
-            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{data.pinDownScriptPack.heroScript.title}</p>
+            <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{data.pinDownScriptPack.heroScript.title}</p>
             <p className="text-xs italic mt-0.5">{data.pinDownScriptPack.heroScript.recordingPrompt}</p>
             <div className="mt-2 space-y-2">
               {data.pinDownScriptPack.heroScript.chapters.map((c, i) => (
@@ -216,8 +224,8 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
               ))}
             </div>
           </div>
-          <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
-            <p className="text-xs font-bold mb-2" style={{ color: "var(--text-primary)" }}>
+          <div className="pt-2 border-t border-border">
+            <p className="text-xs font-bold mb-2 text-zinc-900 dark:text-zinc-100">
               Breakout scripts ({data.pinDownScriptPack.breakoutScripts.length})
             </p>
             <div className="space-y-3">
@@ -232,11 +240,10 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
         </div>
       )}
 
-      {/* Call to action panel trigger button */}
+      {/* CTA */}
       <button
         onClick={() => router.push(`/dashboard/engagements/${data.engagementId}`)}
-            className="px-4 py-2 text-sm font-bold font-mono uppercase tracking-wider rounded-lg transition-all cursor-pointer hover:opacity-90 active:translate-y-px text-white shadow-sm"
-        style={{ background: "var(--accent)" }}
+        className="px-4 py-2 text-sm font-bold font-mono uppercase tracking-wider rounded-md transition-all cursor-pointer hover:opacity-90 active:translate-y-px text-gold-foreground bg-gold hover:bg-gold-hover shadow-sm"
       >
         Go to Client Dashboard
       </button>

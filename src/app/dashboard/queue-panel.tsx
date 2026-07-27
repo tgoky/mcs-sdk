@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, X, ArrowUpRight, ShieldAlert, CircleAlert, Info, ClipboardCheck } from "lucide-react";
 import { QUEUE_COPY as copy } from "@/lib/copy";
+import { HoverPreview, useHoverPreview } from "@/components/hover-preview";
 
 export interface QueueItemDTO {
   id: string;
@@ -41,7 +42,7 @@ function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 ${
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-mono font-bold uppercase tracking-wider shrink-0 ${
         isGold
           ? "bg-gold/10 text-gold-hover dark:text-gold border border-gold/25"
           : "bg-muted text-muted-foreground border border-border"
@@ -50,6 +51,175 @@ function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
       {icon}
       {copy.categoryLabels[category]}
     </span>
+  );
+}
+
+function QueueItemPreview({ item }: { item: QueueItemDTO }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <CategoryBadge category={item.category} />
+      </div>
+      <p className="font-semibold text-foreground leading-snug">{item.title}</p>
+      <p className="text-muted-foreground leading-snug">{item.subtitle}</p>
+      {item.buyer && <p className="font-mono text-muted-foreground/80">{item.buyer}</p>}
+      <p className="text-muted-foreground/70">{relativeTime(item.createdAt)}</p>
+    </div>
+  );
+}
+
+function QueueRow({
+  item,
+  isBusy,
+  errorText,
+  href,
+  onDecide,
+  onDismissSyncSetup,
+  onDismissRunFailure,
+  onRunMutation,
+  onLinkNavigate,
+}: {
+  item: QueueItemDTO;
+  isBusy: boolean;
+  errorText: string | null;
+  href: string | null;
+  onDecide: (decision: string) => void;
+  onDismissSyncSetup: () => void;
+  onDismissRunFailure: () => void;
+  onRunMutation: (url: string) => void;
+  onLinkNavigate: () => void;
+}) {
+  const { ref, hovering, onMouseEnter, onMouseLeave } = useHoverPreview<HTMLDivElement>();
+
+  return (
+    <>
+      <div
+        ref={ref}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        className="flex items-center gap-3 py-3 first:pt-2"
+      >
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <CategoryBadge category={item.category} />
+            <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
+          </div>
+          <p className="text-xs text-muted-foreground truncate">
+            {item.buyer ? `${item.buyer} · ` : ""}
+            {item.subtitle}
+            {" · "}
+            {relativeTime(item.createdAt)}
+          </p>
+          {errorText && (
+            <p className="text-[14px] text-destructive font-mono">{errorText}</p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {item.category === "approve" && (
+            <>
+              <button
+                disabled={isBusy}
+                onClick={() => onDecide("approved")}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <Check size={13} /> {copy.actions.approve}
+              </button>
+              <button
+                disabled={isBusy}
+                onClick={() => onDecide("rejected")}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <X size={13} /> {copy.actions.reject}
+              </button>
+            </>
+          )}
+
+          {item.category === "action_needed" && item.source === "sync_setup" && (
+            <>
+              {href ? (
+                <Link
+                  href={href}
+                  onClick={onLinkNavigate}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
+                >
+                  <ArrowUpRight size={13} /> Review
+                </Link>
+              ) : null}
+              <button
+                disabled={isBusy}
+                onClick={onDismissSyncSetup}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <X size={13} /> Not now
+              </button>
+            </>
+          )}
+
+          {item.category === "action_needed" && item.source === "run_failure" && (
+            <>
+              {href ? (
+                <Link
+                  href={href}
+                  onClick={onLinkNavigate}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
+                >
+                  <ArrowUpRight size={13} /> Fix now
+                </Link>
+              ) : null}
+              <button
+                disabled={isBusy}
+                onClick={onDismissRunFailure}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <X size={13} /> Not now
+              </button>
+            </>
+          )}
+
+          {item.category === "action_needed" && item.source !== "sync_setup" && item.source !== "run_failure" && (
+            <>
+              <button
+                disabled={isBusy}
+                onClick={() => onDecide("resolved")}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <Check size={13} /> {copy.actions.resolve}
+              </button>
+              <button
+                disabled={isBusy}
+                onClick={() => onDecide("abandoned")}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <X size={13} /> {copy.actions.dismiss}
+              </button>
+            </>
+          )}
+
+          {(item.category === "alert" || item.category === "fyi") && (
+            <>
+              {href ? (
+                <Link
+                  href={href}
+                  onClick={onLinkNavigate}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
+                >
+                  <ArrowUpRight size={13} /> {copy.actions.open}
+                </Link>
+              ) : null}
+              <button
+                disabled={isBusy}
+                onClick={() => onRunMutation(`/api/notifications/${item.id}/read`)}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <X size={13} /> {copy.actions.dismiss}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <HoverPreview anchorRef={ref} hovering={hovering} preview={<QueueItemPreview item={item} />} />
+    </>
   );
 }
 
@@ -208,136 +378,20 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
   return (
     <div className="pt-1 border-t border-border/60">
       <div className="divide-y divide-border/60">
-      {pagedItems.map((item) => {
-        const isBusy = busyId === item.id;
-        const href = openHref(item);
-
-        return (
-          <div
+        {pagedItems.map((item) => (
+          <QueueRow
             key={item.id}
-            className="flex items-center gap-3 py-3 first:pt-2"
-          >
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <CategoryBadge category={item.category} />
-                <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
-              </div>
-              <p className="text-xs text-muted-foreground truncate">
-                {item.buyer ? `${item.buyer} · ` : ""}
-                {item.subtitle}
-                {" · "}
-                {relativeTime(item.createdAt)}
-              </p>
-              {errorId === item.id && (
-                <p className="text-[11px] text-destructive font-mono">{errorText}</p>
-              )}
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              {item.category === "approve" && (
-                <>
-                  <button
-                    disabled={isBusy}
-                    onClick={() => decide(item, "approved")}
-       className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <Check size={13} /> {copy.actions.approve}
-                  </button>
-                  <button
-                    disabled={isBusy}
-                    onClick={() => decide(item, "rejected")}
-  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <X size={13} /> {copy.actions.reject}
-                  </button>
-                </>
-              )}
-
-              {item.category === "action_needed" && item.source === "sync_setup" && (
-                <>
-                  {href ? (
-                    <Link
-                      href={href}
-                      onClick={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
-    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
-                    >
-                      <ArrowUpRight size={13} /> Review
-                    </Link>
-                  ) : null}
-                  <button
-                    disabled={isBusy}
-                    onClick={() => dismissSyncSetup(item)}
-     className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"             
-                  >
-                    <X size={13} /> Not now
-                  </button>
-                </>
-              )}
-
-              {item.category === "action_needed" && item.source === "run_failure" && (
-                <>
-                  {href ? (
-                    <Link
-                      href={href}
-                      onClick={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
-                    >
-                      <ArrowUpRight size={13} /> Fix now
-                    </Link>
-                  ) : null}
-                  <button
-                    disabled={isBusy}
-                    onClick={() => dismissRunFailure(item)}
-     className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <X size={13} /> Not now
-                  </button>
-                </>
-              )}
-
-              {item.category === "action_needed" && item.source !== "sync_setup" && item.source !== "run_failure" && (
-                <>
-                  <button
-                    disabled={isBusy}
-                    onClick={() => decide(item, "resolved")}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <Check size={13} /> {copy.actions.resolve}
-                  </button>
-                  <button
-                    disabled={isBusy}
-                    onClick={() => decide(item, "abandoned")}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <X size={13} /> {copy.actions.dismiss}
-                  </button>
-                </>
-              )}
-
-              {(item.category === "alert" || item.category === "fyi") && (
-                <>
-                  {href ? (
-                    <Link
-                      href={href}
-                      onClick={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
-                         className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
-                    >
-                      <ArrowUpRight size={13} /> {copy.actions.open}
-                    </Link>
-                  ) : null}
-                  <button
-                    disabled={isBusy}
-                    onClick={() => runMutation(item, `/api/notifications/${item.id}/read`)}
-    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <X size={13} /> {copy.actions.dismiss}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        );
-      })}
+            item={item}
+            isBusy={busyId === item.id}
+            errorText={errorId === item.id ? errorText : null}
+            href={openHref(item)}
+            onDecide={(decision) => decide(item, decision)}
+            onDismissSyncSetup={() => dismissSyncSetup(item)}
+            onDismissRunFailure={() => dismissRunFailure(item)}
+            onRunMutation={(url) => runMutation(item, url)}
+            onLinkNavigate={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
+          />
+        ))}
       </div>
 
       {items.length > 5 && (

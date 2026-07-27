@@ -9,7 +9,7 @@ import {
   ClipboardCheck,
   ArrowDown,
 } from "lucide-react";
-import { phaseLabel } from "@/lib/copy";
+import { phaseLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
 import type { RunStep } from "@/models/schema";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -104,7 +104,7 @@ function StepNode({ status, displayInterrupted }: { status: RunStepStatus; displ
 /** The line below a node connecting it to the next one. `flowing` is the one animated, colored segment — reserved for the live edge of a running run. */
 function ConnectorSegment({ flowing }: { flowing: boolean }) {
   return (
-    <div className="w-7 flex justify-center flex-1 min-h-[1.5rem]">
+    <div className="w-7 flex justify-center flex-1 min-h-[0.75rem]">
       <svg width="2" height="100%" className="overflow-visible">
         <line
           x1="1" y1="0" x2="1" y2="100%"
@@ -148,35 +148,35 @@ function StepCard({
   return (
     <div
       className={[
-        "min-w-0 flex-1 mb-2 rounded-lg border p-3 transition-colors",
+        "min-w-0 flex-1 mb-1.5 rounded-lg border px-3 py-2 transition-colors",
         displayInterrupted
-          ? "border-amber-200 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/10"
+          ? "border-amber-200 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/20"
           : step.status === "failed"
-          ? "border-rose-200 dark:border-rose-900/40 bg-rose-50/30 dark:bg-rose-950/10"
-          : "border-zinc-200 dark:border-zinc-800 bg-white/40 dark:bg-zinc-950/20 hover:border-zinc-300 dark:hover:border-zinc-700",
+          ? "border-rose-200 dark:border-rose-900/40 bg-rose-50/30 dark:bg-rose-950/20"
+          : "border-border bg-black/[0.02] dark:bg-black/10 hover:border-zinc-300 dark:hover:border-zinc-700",
         "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-300 motion-safe:fill-mode-both",
       ].join(" ")}
       style={{ animationDelay: `${delayMs}ms` }}
     >
-      <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div className="min-w-0">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="min-w-0 flex items-baseline gap-2">
           <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
             {phaseLabel(step.phase)}
           </span>
-          {step.label && <span className="ml-2 text-xs text-zinc-500 font-mono">[{step.label}]</span>}
+          {step.label && <span className="text-xs text-zinc-500 font-mono truncate">[{step.label}]</span>}
           {displayInterrupted && (
-            <span className="ml-2 text-[10px] text-amber-600 dark:text-amber-400 font-mono font-bold uppercase tracking-wide">
+            <span className="text-[11px] text-amber-600 dark:text-amber-400 font-mono font-bold uppercase tracking-wide shrink-0">
               Interrupted
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-zinc-400 dark:text-zinc-600 shrink-0 font-mono">
+        <div className="flex items-center gap-2 text-[13px] text-zinc-400 dark:text-zinc-600 shrink-0 font-mono">
           {stepDurationMs !== null && <span>{formatDuration(stepDurationMs)}</span>}
           <span>{formatTime(step.startedAt)}</span>
         </div>
       </div>
       {step.detail && (
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">{step.detail}</p>
+        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400 leading-snug">{step.detail}</p>
       )}
     </div>
   );
@@ -232,7 +232,7 @@ export function StepTimeline({
           <span className="w-7 h-7 flex items-center justify-center shrink-0">
             <ArrowDown className="w-3.5 h-3.5 motion-safe:animate-bounce" />
           </span>
-          <span className="text-xs italic">Next step compiling…</span>
+          <span className="text-xs italic">{copy.nextStepCompiling}</span>
         </div>
       )}
     </div>
