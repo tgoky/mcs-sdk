@@ -43,7 +43,8 @@ export function HoverPreview({
         coords.flip ? "motion-safe:origin-top-right" : "motion-safe:origin-top-left",
       ].join(" ")}
     >
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-md shadow-2xl shadow-black/50 p-4 text-xs text-zinc-200 leading-relaxed">
+      {/* Explicitly using font-mono to match the rest of the technical dashboard UI */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-md shadow-2xl shadow-black/50 p-4 text-xs font-mono text-zinc-200 leading-normal">
         {preview}
       </div>
     </div>,
