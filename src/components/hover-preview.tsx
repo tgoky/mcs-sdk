@@ -5,24 +5,8 @@ import { createPortal } from "react-dom";
 
 const OPEN_DELAY_MS = 350; // long enough that a mouse just passing through a row doesn't trigger it
 const CLOSE_DELAY_MS = 150; // short grace period so moving from the row into the popover itself doesn't close it
-const PANEL_WIDTH = 300;
+const PANEL_WIDTH = 380; // Expanded width so content has room to breathe
 
-/**
- * Renders `preview` in a small floating card anchored next to whatever
- * element `anchorRef` points at, once `hovering` goes true — not a centered
- * modal, no backdrop blur. Rendered via a portal to `document.body` so it
- * isn't clipped by a table's `overflow-x-auto` ancestor (setting overflow-x
- * forces overflow-y to compute as `auto` too, per the CSS spec, so anything
- * absolutely positioned inside that container would get cut off or force a
- * scrollbar otherwise).
- *
- * The caller owns the anchor ref and the hover state (attach `ref` and
- * onMouseEnter/onMouseLeave directly on the row in JSX — see
- * `useHoverPreview` below for the common wiring) rather than this
- * component cloning the row to inject them, since forwarding a ref through
- * cloneElement across a function boundary is exactly the pattern the
- * project's react-hooks/refs lint rule flags.
- */
 export function HoverPreview({
   anchorRef,
   hovering,
@@ -38,11 +22,14 @@ export function HoverPreview({
     if (!hovering) return;
     const el = anchorRef.current;
     if (!el) return;
+
     const rect = el.getBoundingClientRect();
     const spaceRight = window.innerWidth - rect.right;
-    const flip = spaceRight < PANEL_WIDTH + 24; // not enough room on the right — show it to the left instead
-    const left = flip ? rect.left - PANEL_WIDTH - 10 : rect.right + 10;
-    const top = Math.min(Math.max(rect.top, 8), window.innerHeight - 160);
+    const flip = spaceRight < PANEL_WIDTH + 24; // not enough room on the right – show it to the left instead
+
+    const left = flip ? rect.left - PANEL_WIDTH - 12 : rect.right + 12;
+    const top = Math.min(Math.max(rect.top, 8), window.innerHeight - 180);
+
     setCoords({ top, left: Math.max(8, left), flip });
   }, [hovering, anchorRef]);
 
@@ -56,7 +43,7 @@ export function HoverPreview({
         coords.flip ? "motion-safe:origin-top-right" : "motion-safe:origin-top-left",
       ].join(" ")}
     >
-      <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg p-3.5 text-sm font-sans text-zinc-600 dark:text-zinc-400 tracking-tight">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-md shadow-2xl shadow-black/50 p-4 text-xs text-zinc-200 leading-relaxed">
         {preview}
       </div>
     </div>,
@@ -64,17 +51,10 @@ export function HoverPreview({
   );
 }
 
-/**
- * Wires up the open-delay/close-delay hover behavior for one row: attach
- * the returned `ref`, `onMouseEnter`, and `onMouseLeave` to the row element
- * directly in JSX, then render `<HoverPreview anchorRef={ref} hovering={hovering} preview={...} />`
- * as a sibling. Kept as a hook (rather than folded into HoverPreview
- * itself) so the row keeps a plain, literal JSX ref — no cloneElement
- * involved anywhere.
- */
 export function useHoverPreview<T extends HTMLElement>() {
   const ref = useRef<T | null>(null);
   const [hovering, setHovering] = useState(false);
+
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -95,9 +75,6 @@ export function useHoverPreview<T extends HTMLElement>() {
     closeTimer.current = setTimeout(() => setHovering(false), CLOSE_DELAY_MS);
   }, [clearTimers]);
 
-  // Scrolling or resizing while a preview is open would leave it pointing at
-  // stale coordinates — just close it rather than tracking scroll, since a
-  // preview mid-flight from a scroll gesture is more distracting than useful.
   useEffect(() => {
     if (!hovering) return;
     const close = () => setHovering(false);
