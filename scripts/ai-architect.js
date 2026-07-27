@@ -82,28 +82,78 @@ async function main() {
     codebaseContext += `\n--- END OF FILE: ${relativePath} ---\n`;
   }
 
-  // 5. Tailored Brainstorming Prompt for your Unified Revenue Operations System
+  // 5. CRITICAL PROMPT WITH ALL YOUR CONCERNS
   const brainStormPrompt = `
-You are a senior full-stack software engineer, visionary architect, and enterprise product strategist. I am giving you the entire context of my project.
+You are a senior full-stack software engineer, visionary architect, and enterprise product strategist with deep experience in distributed systems, background workers, and SaaS architecture. I am giving you the entire context of my project and I need a CRITICAL, HONEST, AND THOROUGH analysis.
 
-This system is an automation, workflow orchestration, and revenue intelligence engine for high-ticket sales ecosystems. It operates using five core modules ("Skills"):
-1. Pin Down: Automates client onboarding setups, encrypted credential token vaulting, brand voice profile extraction via Claude, and booking calendar landing zone confirmation generation.
-2. Pile On: Fires automated pre-call sequences (emails/SMS) when a booking is logged.
-3. Pre-Call Read: Compiles contextual closer briefings by running live web-search background research on prospects using a specialized Claude tool, speaking of claude tool if there are better or more efficient ways to do research or conduct background research for prospects let us know, i was thinking of apollo but that would require users to add their apollo keys i dont know if that is ideal just think of how we can improve this pre call reads.
-4. Win-Back: Coordinates re-engagement cadences for prospects who cancelled or no-showed, scaling the touches to custom recovery time windows, think of how we can improve this too.
-5. Leak Map: Audits pipeline metrics (show-rate, open-rate, CRM win-rate) using data sample minimums to alert operators to conversion leaks,think of how we can improve the leak map too .
+## URGENT CRISIS SITUATION
 
-Review the codebase attached below and provide:
-1. Code & Architectural Critique: Analyze how our Inngest background workers handle step-level checkpointing, multi-tenant state separation, database transactions via Drizzle, or error handling. Point out potential vulnerabilities or structural optimizations , basically analyze if there is any additional or improvement we can do to make our background workers highly efficient .
-2. 10x Product Expansion Ideas: Suggest advanced product enhancements or intelligence features that fit natively into this system's architecture (e.g., real-time cross-client analytics, conversation intelligence hooks, predictive pipeline scoring), i need very good ideas that would make people really dependable on this platform, i noticed that we integrate with like klaviyo or GHL, do we build our own CRM so people depend on our platform , i know building a scheduling platform like calendly make not be ideal but the CRM route what are your opinions, i need this to be the all in one sales app for call reps, dont limit the project , need ways we can expand to other related sales sector that will make this app really expansive and ideal.
-3. Integration Synergy: How can we expand or deepen platform connectivity with additional CRM flows, communication nodes, or data signals to amplify value for our end operators?
-4. What can we do to make this app dependable and also i am aware there may be many saas or business similar to this, what can we do to stand out, seems we are integrating lots of external apis but what do we own that makes us stand out and not just be a wrapper, i am open to expanding to current stack by anymeans even if it means integrating Golang or rust or whatever to make this highly efficient, i need this to be so good people recommended it for businesses
-5. Study the pin down, pile on, pre call read, win back, ,leak map infact study the codebase and understand better  what areas can we improve , like any email tracking or what we can do better , i dont want this to be dull or a place that stresses people out or for people to have second thought on why they need this platform, 
-6. Also give advice , if theres any vulnerability that could affect the project in the longrun, what we can do better, i need ideas, not saying you should code anything but think like a business manager that is looking at the business and analyzing
+I am experiencing severe issues with my Inngest background workers that are making the system unpredictable and frustrating to use. Here's what happened:
+
+**The Black Box Error Problem:**
+I started onboarding and registered a new client. During the process, I encountered:
+
+> GHL appointments fetch failed [422]
+
+Steps(3 steps)
+Run started [Nightly cron (Inngest)] - 0ms 20:00:15
+Checking today's calls - 35.0s 20:00:32
+Interrupted — the run failed before this step finished.
+Checking today's calls - 11.7s 20:00:55
+Interrupted — the run failed before this step finished.
+
+• GHL appointments fetch failed [422]
+
+Claude told me this was because of a bad location ID, but my location ID IS correct. This is a black box error - I have no idea what's actually wrong or how to fix it.
+
+**The Pause System Is Broken:**
+I paused the automations in dashboard/engagements/id last night. The system explicitly said:
+> "This client is paused — nightly briefs, leak map, win-back, weekly metrics, and booking polling are all skipping it. Reason: error. Manual 'Run' buttons below still work if you need to test something."
+
+BUT 3 hours later I checked and found:
+
+Leak Map run - Run ID: 54ab7e59-e72c-4ce7-9298-1eacd54b5f66
+Run started [Weekly cron (Inngest)] - 0ms 09:00:09
+Pulling your account data - 149ms 09:00:51
+0 brief(s) in current window
+Crunching the numbers - 194ms 09:00:51
+Flagging the biggest issues - 0ms 09:00:51
+Overall severity: none
+Writing your report - 58ms 09:00:51
+No summary was recorded for this run. Re-triggering the module will produce a full summary going forward.
+
+**THE PAUSE DID NOT ACTUALLY PAUSE THE CLIENT!** The leak map ran anyway, and the pre-call reads gave me the same 422 error. This is incredibly frustrating - I don't know what to do, I'm contemplating deleting the client, but I'm afraid Inngest will keep doing its thing regardless.
+
+**The "No Summary Was Recorded" Mystery:**
+What is this "no summary was recorded for this run" thing? I'm confused whether this whole flow even works or if I'm just wasting my time creating TS files and everything is poorly executed. If I cancel or execute the skill run on Inngest, would that break the system? I don't even know why the leak map ran - was it after the pause automations or after some days?
+
+## THE USER EXPERIENCE NIGHTMARE
+
+The app is just frustrating to use. Users can't master anything - they don't know when to expect what. Everything is rigid with no user understanding. The leak map runs say "Pipeline - Writing your report" but then renders:
+
+Steps(5 steps)
+Run started [Weekly cron (Inngest)] - 0ms 09:00:09
+Pulling your account data - 149ms 09:00:51
+0 brief(s) in current window
+Crunching the numbers - 194ms 09:00:51
+Flagging the biggest issues - 0ms 09:00:51
+Overall severity: none
+Writing your report - 58ms 09:00:51
+No summary was recorded for this run. Re-triggering the module will produce a full summary going forward.
+
+If the app has issues or configuration errors (like a user using wrong params), it should show up on the queue for their intervention and properly diagnose and guide the user for what credentials to update. We need to ensure we're doing this well.
+
+i need to understand what i am doing, everything looks fallen apart, scan the entire file in this project and come up with solutions, not saying you should like write the codes for all the files, but detail everything in serious details,what is wrong, what i should do right for this to compete in the international market
+
+i also feel we are not utilizing what the queue could be for actions, review and all that the app has to offer
+
+
 
 
 Here is the codebase:
 ${codebaseContext}
+
+Please provide your complete, honest, and actionable analysis.
 `;
 
   console.log(`🚀 Transmitting context to OpenRouter using model: ${MODEL}...`);
@@ -115,7 +165,7 @@ ${codebaseContext}
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://localhost:3000',
-        'X-Title': ' Architect Tool',
+        'X-Title': 'Architect Tool',
       },
       body: JSON.stringify({
         model: MODEL,
