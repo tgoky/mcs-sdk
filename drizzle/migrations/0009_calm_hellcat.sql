@@ -1,0 +1,1 @@
+ALTER TABLE "engagements" ADD COLUMN "deleted_at" timestamp;

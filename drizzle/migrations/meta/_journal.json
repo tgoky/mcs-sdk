@@ -64,6 +64,13 @@
       "when": 1785000350890,
       "tag": "0008_cold_molten_man",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785112341311,
+      "tag": "0009_calm_hellcat",
+      "breakpoints": true
     }
   ]
 }
