@@ -118,9 +118,29 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
   const [polling, setPolling] = useState(true);
 
+  // Pagination is layered on top of the existing live-poll rather than a
+  // separate mode: page 0 is "live" (auto-refreshes every 5s, same as
+  // before pagination existed), and stepping to any later page pauses
+  // that refresh — reusing the polling flag the manual "Pause live"
+  // button already toggled, rather than tracking a second independent
+  // paused/live concept that could disagree with it. Paging back to 0
+  // resumes it. Deliberately no "load more" — Next/Prev issue a real
+  // server request with limit+offset (see /api/skill-runs/recent), so
+  // this scales to actual run history instead of only ever showing
+  // whatever the first fetch happened to return.
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<5 | 10>(10);
+
+  const buildUrl = useCallback((offset: number, limit: number) => {
+    const url = new URL(apiUrl ?? "/api/skill-runs/recent", window.location.origin);
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("offset", String(offset));
+    return url.pathname + url.search;
+  }, [apiUrl]);
+
   const refresh = useCallback(async (signal: AbortSignal) => {
     try {
-      const res = await fetch(apiUrl ?? "/api/skill-runs/recent", { cache: "no-store", signal });
+      const res = await fetch(buildUrl(page * pageSize, pageSize), { cache: "no-store", signal });
       if (signal.aborted || !res.ok) return;
       const data = await res.json();
       if (signal.aborted) return;
@@ -130,24 +150,46 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
       // never worth surfacing, the next successful poll (or none, if the
       // component is gone) picks it back up.
     }
-  }, [apiUrl]);
+  }, [buildUrl, page, pageSize]);
 
+  // Single effect drives every fetch trigger: initial mount, a page/
+  // pageSize change, and resuming from pause all need an immediate
+  // refetch, not just "wait for the next 5s tick" — splitting this into
+  // a separate "fetch on page change" effect and a separate "run the
+  // interval" effect (an earlier version of this component did) loses
+  // that immediate refetch on resume, since toggling `polling` back to
+  // true wouldn't touch `page`/`pageSize` and so wouldn't retrigger the
+  // fetch-effect. One effect, one clear trigger list, avoids that gap.
   useEffect(() => {
-    if (!polling) return;
-
     const controller = new AbortController();
     (async () => {
       await refresh(controller.signal);
     })();
-    const id = setInterval(() => refresh(controller.signal), 5000);
 
+    if (!polling || page !== 0) {
+      return () => controller.abort();
+    }
+
+    const id = setInterval(() => refresh(controller.signal), 5000);
     return () => {
       clearInterval(id);
       controller.abort();
     };
-  }, [polling, refresh]);
+  }, [page, pageSize, polling, refresh]);
 
-  if (runs.length === 0) {
+  function goToPage(next: number) {
+    const clamped = Math.max(0, next);
+    setPage(clamped);
+    setPolling(clamped === 0);
+  }
+
+  function changePageSize(size: 5 | 10) {
+    setPageSize(size);
+    setPage(0);
+    setPolling(true);
+  }
+
+  if (runs.length === 0 && page === 0) {
     return (
       <div className="h-32 flex items-center justify-center border border-dashed border-zinc-300 dark:border-zinc-800 rounded-lg bg-zinc-50/50 dark:bg-zinc-950/50 transition-colors">
         <div className="text-center space-y-1">
@@ -169,12 +211,29 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
           </h3>
           <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 bg-zinc-200/60 dark:bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-300/40 dark:border-zinc-800/40">{runs.length}</span>
         </div>
-        <button
-          onClick={() => setPolling((p) => !p)}
-          className="text-xs font-bold font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors cursor-pointer"
-        >
-          {polling ? "[ Pause live ]" : "[ Resume live ]"}
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
+            {([5, 10] as const).map((size) => (
+              <button
+                key={size}
+                onClick={() => changePageSize(size)}
+                className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                  pageSize === size
+                    ? "border-gold/40 bg-gold/10 text-gold-hover dark:text-gold"
+                    : "border-transparent hover:text-zinc-600 dark:hover:text-zinc-400"
+                }`}
+              >
+                {size}/page
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setPolling((p) => !p)}
+            className="text-xs font-bold font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+          >
+            {polling && page === 0 ? "[ Pause live ]" : "[ Resume live ]"}
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -254,6 +313,28 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex items-center justify-between px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/30">
+        <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
+          {page === 0 ? "Showing most recent" : `Page ${page + 1}`}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => goToPage(page - 1)}
+            disabled={page === 0}
+            className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-zinc-300 dark:border-zinc-800 text-zinc-500 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-zinc-400 dark:hover:border-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-500 disabled:hover:border-zinc-300 dark:disabled:hover:border-zinc-800 transition-colors cursor-pointer"
+          >
+            ← Prev
+          </button>
+          <button
+            onClick={() => goToPage(page + 1)}
+            disabled={runs.length < pageSize}
+            className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-zinc-300 dark:border-zinc-800 text-zinc-500 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-zinc-400 dark:hover:border-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-500 disabled:hover:border-zinc-300 dark:disabled:hover:border-zinc-800 transition-colors cursor-pointer"
+          >
+            Next →
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -100,6 +100,17 @@ export type EngagementStack = {
   // vs instant webhook" choice these buyers are explicitly offered.
   webhook_receiver_setup_dismissed?: boolean;
 
+  // ── Failed-run fix-it queue items (error-classification.ts) ────────────
+  // Keyed by skillName. A buyer dismissing "GHL rejected the request" for
+  // pre-call-read shouldn't also hide a completely unrelated pile-on
+  // failure, hence per-skill rather than one flag. Self-heals the same way
+  // webhook_receiver_setup_dismissed does: queue.ts's
+  // failedRunQueueItems only suppresses an item when this timestamp is
+  // >= the failed run's completedAt, so the *next* failure for that skill
+  // (a newer completedAt) shows up again automatically — no cleanup step,
+  // no new table.
+  failed_run_dismissals?: Record<string, string>;
+
   hosting_platform: "webflow" | "lovable" | "ghl" | "wordpress" | "nextjs_vercel" | "plain_html" | "discover_from_docs";
   hosting_platform_credentials_ref: string;
   hosting_site_id?: string;
@@ -142,7 +153,7 @@ export type EngagementStack = {
   // how sms_platform's twilio/ghl_sms differ from hubspot_sms below. See
   // the module comment at the top of src/lib/platforms/email.ts's SMTPClient
   // section and src/inngest/win-back-email-smtp.ts.
-  email_platform?: "klaviyo" | "hubspot" | "activecampaign" | "convertkit" | "mailchimp" | "smtp";
+  email_platform?: "klaviyo" | "hubspot" | "activecampaign" | "ghl" | "convertkit" | "mailchimp" | "smtp";
   email_platform_credentials_ref?: string;
   // ── SMS as a native channel (Pile-On recovery gap 1) ────────────────────
   // "twilio" and "ghl_sms" are direct-send platforms — this app calls their

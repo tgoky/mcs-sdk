@@ -172,15 +172,19 @@ export default async function EngagementDetailPage({
         {/* Full-width row — these two expand into grid-based forms that need
             more room than the narrow right-aligned column above allows. */}
         <div className="flex flex-wrap gap-2">
-          <EditStackSettings
-            engagementId={engagement.engagementId}
-            initialStack={engagement.stack as EngagementStack | null}
-          />
-          <UpdateCredentialsForm
-            engagementId={engagement.engagementId}
-            bookingPlatform={stack?.booking_platform}
-            emailPlatform={stack?.email_platform}
-          />
+          <div id="stack-settings" className="scroll-mt-24">
+            <EditStackSettings
+              engagementId={engagement.engagementId}
+              initialStack={engagement.stack as EngagementStack | null}
+            />
+          </div>
+          <div id="update-credentials" className="scroll-mt-24">
+            <UpdateCredentialsForm
+              engagementId={engagement.engagementId}
+              bookingPlatform={stack?.booking_platform}
+              emailPlatform={stack?.email_platform}
+            />
+          </div>
         </div>
       </div>
 

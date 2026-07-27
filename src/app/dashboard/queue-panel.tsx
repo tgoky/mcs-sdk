@@ -7,7 +7,7 @@ import { QUEUE_COPY as copy } from "@/lib/copy";
 
 export interface QueueItemDTO {
   id: string;
-  source: "action" | "blocker" | "notification" | "sync_setup";
+  source: "action" | "blocker" | "notification" | "sync_setup" | "run_failure";
   category: "approve" | "action_needed" | "alert" | "fyi";
   title: string;
   subtitle: string;
@@ -15,6 +15,8 @@ export interface QueueItemDTO {
   buyer: string | null;
   runId: string | null;
   createdAt: string;
+  fixHref?: string;
+  skillName?: string;
 }
 
 const POLL_MS = 8_000;
@@ -71,6 +73,26 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
   const [errorId, setErrorId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string>(copy.errors.generic);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Client-side pagination over the already-fetched, already-prioritized
+  // list (see src/lib/queue.ts) rather than a server-paginated query —
+  // this list is a read-time merge of five different source tables/
+  // synthesized states, so "page 2 of the merge" doesn't correspond to
+  // any single offset/limit a database query could express. The full
+  // list is never large enough (bounded by "currently outstanding work,"
+  // not historical volume, unlike run history) for fetching all of it up
+  // front to be a real cost.
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<5 | 10>(10);
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  // Derived at render time rather than synced via an effect that calls
+  // setPage — a poll refresh or a resolved/dismissed item can shrink
+  // `items` out from under whatever page the user was on, and clamping
+  // here (instead of scheduling a state update to correct it a render
+  // later) means the displayed page is never wrong even for one frame.
+  const clampedPage = Math.min(page, pageCount - 1);
+
+  const pagedItems = items.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
 
   const load = useCallback(async (signal: AbortSignal) => {
     try {
@@ -154,8 +176,24 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     );
   }
 
+  // run_failure items are synthesized read-time from a classified skillRuns
+  // failure (see src/lib/error-classification.ts + queue.ts) — same
+  // "no real row behind it" situation as sync_setup above, so dismissal
+  // goes through its own dedicated endpoint rather than the generic
+  // decide() paths, which all assume a real pending_actions/human_blockers/
+  // notifications row with an id they can PATCH by.
+  function dismissRunFailure(item: QueueItemDTO) {
+    if (!item.engagementId || !item.skillName) return;
+    return runMutation(
+      item,
+      `/api/engagements/${item.engagementId}/dismiss-run-failure`,
+      { skillName: item.skillName },
+      "PATCH"
+    );
+  }
+
   const openHref = (item: QueueItemDTO) =>
-    item.runId ? `/dashboard/runs/${item.runId}` : item.engagementId ? `/dashboard/engagements/${item.engagementId}` : null;
+    item.fixHref ?? (item.runId ? `/dashboard/runs/${item.runId}` : item.engagementId ? `/dashboard/engagements/${item.engagementId}` : null);
 
   if (items.length === 0) {
     return (
@@ -168,8 +206,9 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
   }
 
   return (
-    <div className="pt-1 border-t border-border/60 divide-y divide-border/60">
-      {items.map((item) => {
+    <div className="pt-1 border-t border-border/60">
+      <div className="divide-y divide-border/60">
+      {pagedItems.map((item) => {
         const isBusy = busyId === item.id;
         const href = openHref(item);
 
@@ -235,7 +274,28 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
                 </>
               )}
 
-              {item.category === "action_needed" && item.source !== "sync_setup" && (
+              {item.category === "action_needed" && item.source === "run_failure" && (
+                <>
+                  {href ? (
+                    <Link
+                      href={href}
+                      onClick={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
+                    >
+                      <ArrowUpRight size={13} /> Fix now
+                    </Link>
+                  ) : null}
+                  <button
+                    disabled={isBusy}
+                    onClick={() => dismissRunFailure(item)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <X size={13} /> Not now
+                  </button>
+                </>
+              )}
+
+              {item.category === "action_needed" && item.source !== "sync_setup" && item.source !== "run_failure" && (
                 <>
                   <button
                     disabled={isBusy}
@@ -278,6 +338,44 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
           </div>
         );
       })}
+      </div>
+
+      {items.length > 5 && (
+        <div className="flex items-center justify-between px-1 py-2 border-t border-border/60">
+          <div className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
+            {([5, 10] as const).map((size) => (
+              <button
+                key={size}
+                onClick={() => { setPageSize(size); setPage(0); }}
+                className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                  pageSize === size
+                    ? "border-gold/40 bg-gold/10 text-gold-hover dark:text-gold"
+                    : "border-transparent hover:text-foreground"
+                }`}
+              >
+                {size}/page
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-muted-foreground">Page {clampedPage + 1} of {pageCount}</span>
+            <button
+              onClick={() => setPage(Math.max(0, clampedPage - 1))}
+              disabled={clampedPage === 0}
+              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              ← Prev
+            </button>
+            <button
+              onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}
+              disabled={clampedPage >= pageCount - 1}
+              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

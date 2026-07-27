@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { KeyRound } from "lucide-react";
 import { bookingPlatformLabel, emailPlatformLabel } from "@/lib/copy";
 
@@ -85,7 +86,11 @@ export function UpdateCredentialsForm({
   bookingPlatform?: string | null;
   emailPlatform?: string | null;
 }) {
-  const [open, setOpen] = useState(false);
+  // Set by the Queue's "Fix now" link on a classified 401/403 run failure
+  // (see src/lib/error-classification.ts) — opens straight to this form
+  // instead of landing on a collapsed button the buyer has to know exists.
+  const searchParams = useSearchParams();
+  const [open, setOpen] = useState(() => searchParams.get("fixCredential") === "1");
 
   if (!bookingPlatform && !emailPlatform) return null;
 

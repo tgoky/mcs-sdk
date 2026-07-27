@@ -63,22 +63,59 @@ const EDITABLE_EMAIL_PLATFORMS = [
   "klaviyo",
   "hubspot",
   "activecampaign",
+  "ghl",
   "convertkit",
   "mailchimp",
   "smtp",
 ] as const;
 
+const EDITABLE_HOSTING_PLATFORMS = [
+  "webflow",
+  "lovable",
+  "ghl",
+  "wordpress",
+  "nextjs_vercel",
+  "plain_html",
+  "discover_from_docs",
+] as const;
+
+const EDITABLE_SMS_PLATFORMS = ["twilio", "ghl_sms", "hubspot_sms", "none"] as const;
+
+const EDITABLE_AD_DATA_PLATFORMS = ["hyros", "native_crm", "google_sheets", "none"] as const;
+
 const EDITABLE_WEBHOOK_MODES = ["webhook", "polling", "none"] as const;
 
+// Flat (non-nested) structural IDs a buyer's account might change or that
+// might get fat-fingered during onboarding — Klaviyo/Mailchimp/ConvertKit
+// list IDs, HubSpot/GHL workflow IDs, ActiveCampaign automation ID + base
+// URL, and the HubSpot portal ID used to route inbound-reply webhooks.
+// Deliberately plain strings validated the same simple way, not nested
+// under a *_meta object, because that's how they're actually stored on
+// EngagementStack (see src/models/schema.ts) and read in
+// src/lib/platforms/email.ts.
+const EDITABLE_FLAT_STRING_FIELDS = [
+  "target_list_id",
+  "recovery_list_id",
+  "recovery_workflow_id",
+  "recovery_automation_id",
+  "target_workflow_id",
+  "activecampaign_base_url",
+  "hubspot_portal_id",
+] as const;
+
 /**
- * Edits the handful of stack fields that actually cause the "someone
- * fat-fingered onboarding" scenario — booking_platform, its meta (e.g. GHL
- * location_id/calendar_id), how it receives booking events, and
- * email_platform. Deliberately NOT a general-purpose "PATCH the whole
- * stack blob" endpoint: accepting an arbitrary merge would let a stray
- * client bug silently overwrite server-managed fields (hosting config,
- * discovery results, credentials refs) that have nothing to do with what
- * this form edits. Everything else on `stack` is left untouched.
+ * Edits the stack fields that actually cause the "someone fat-fingered
+ * onboarding, or the buyer's account structure changed" scenario:
+ * booking/hosting/email/sms/ad-data platform choice, each one's
+ * platform-specific meta (location IDs, site IDs, list/workflow IDs,
+ * etc.), how booking events are received, and the flat ESP structural IDs
+ * (target_list_id, recovery_workflow_id, etc.) enrollment code reads
+ * directly off the stack. Deliberately NOT a general-purpose "PATCH the
+ * whole stack blob" endpoint: accepting an arbitrary merge would let a
+ * stray client bug silently overwrite server-managed fields (discovery
+ * results, credentials refs, artifact ownership, cadence/policy settings
+ * like recovery_window_days) that have nothing to do with what this form
+ * edits. Everything else on `stack` is left untouched.
  *
  * Also handles restoring a soft-deleted engagement (`{ restore: true }`) —
  * see DELETE below for why deletion is soft.
@@ -139,6 +176,26 @@ export async function PATCH(
       return NextResponse.json({ error: `Invalid email_platform: ${incoming.email_platform}` }, { status: 400 });
     }
     if (
+      incoming.hosting_platform !== undefined &&
+      !EDITABLE_HOSTING_PLATFORMS.includes(incoming.hosting_platform)
+    ) {
+      return NextResponse.json({ error: `Invalid hosting_platform: ${incoming.hosting_platform}` }, { status: 400 });
+    }
+    if (
+      incoming.sms_platform !== undefined &&
+      incoming.sms_platform !== null &&
+      !EDITABLE_SMS_PLATFORMS.includes(incoming.sms_platform)
+    ) {
+      return NextResponse.json({ error: `Invalid sms_platform: ${incoming.sms_platform}` }, { status: 400 });
+    }
+    if (
+      incoming.ad_data_platform !== undefined &&
+      incoming.ad_data_platform !== null &&
+      !EDITABLE_AD_DATA_PLATFORMS.includes(incoming.ad_data_platform)
+    ) {
+      return NextResponse.json({ error: `Invalid ad_data_platform: ${incoming.ad_data_platform}` }, { status: 400 });
+    }
+    if (
       incoming.webhook_receiver_mode !== undefined &&
       incoming.webhook_receiver_mode !== null &&
       !EDITABLE_WEBHOOK_MODES.includes(incoming.webhook_receiver_mode)
@@ -148,16 +205,47 @@ export async function PATCH(
     if (incoming.booking_platform_meta !== undefined && typeof incoming.booking_platform_meta !== "object") {
       return NextResponse.json({ error: "booking_platform_meta must be an object." }, { status: 400 });
     }
+    if (incoming.hosting_platform_meta !== undefined && typeof incoming.hosting_platform_meta !== "object") {
+      return NextResponse.json({ error: "hosting_platform_meta must be an object." }, { status: 400 });
+    }
+    if (incoming.sms_platform_meta !== undefined && typeof incoming.sms_platform_meta !== "object") {
+      return NextResponse.json({ error: "sms_platform_meta must be an object." }, { status: 400 });
+    }
+    if (incoming.ad_data_platform_meta !== undefined && typeof incoming.ad_data_platform_meta !== "object") {
+      return NextResponse.json({ error: "ad_data_platform_meta must be an object." }, { status: 400 });
+    }
+    for (const field of EDITABLE_FLAT_STRING_FIELDS) {
+      if (incoming[field] !== undefined && incoming[field] !== null && typeof incoming[field] !== "string") {
+        return NextResponse.json({ error: `${field} must be a string.` }, { status: 400 });
+      }
+    }
 
     const currentStack = (existing.stack as EngagementStack | null) ?? ({} as EngagementStack);
     const nextStack: EngagementStack = {
       ...currentStack,
       ...(incoming.booking_platform !== undefined ? { booking_platform: incoming.booking_platform } : {}),
       ...(incoming.email_platform !== undefined ? { email_platform: incoming.email_platform } : {}),
+      ...(incoming.hosting_platform !== undefined ? { hosting_platform: incoming.hosting_platform } : {}),
+      ...(incoming.sms_platform !== undefined ? { sms_platform: incoming.sms_platform } : {}),
+      ...(incoming.ad_data_platform !== undefined ? { ad_data_platform: incoming.ad_data_platform } : {}),
       ...(incoming.webhook_receiver_mode !== undefined ? { webhook_receiver_mode: incoming.webhook_receiver_mode } : {}),
       ...(incoming.booking_platform_meta !== undefined
         ? { booking_platform_meta: { ...currentStack.booking_platform_meta, ...incoming.booking_platform_meta } }
         : {}),
+      ...(incoming.hosting_platform_meta !== undefined
+        ? { hosting_platform_meta: { ...currentStack.hosting_platform_meta, ...incoming.hosting_platform_meta } }
+        : {}),
+      ...(incoming.sms_platform_meta !== undefined
+        ? { sms_platform_meta: { ...currentStack.sms_platform_meta, ...incoming.sms_platform_meta } }
+        : {}),
+      ...(incoming.ad_data_platform_meta !== undefined
+        ? { ad_data_platform_meta: { ...currentStack.ad_data_platform_meta, ...incoming.ad_data_platform_meta } }
+        : {}),
+      ...Object.fromEntries(
+        EDITABLE_FLAT_STRING_FIELDS
+          .filter((f) => incoming[f] !== undefined)
+          .map((f) => [f, incoming[f]])
+      ),
     };
 
     await db

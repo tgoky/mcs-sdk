@@ -21,13 +21,14 @@
 // mistake this codebase already found and fixed once).
 
 import { db } from "@/lib/db";
-import { pendingActions, humanBlockers, notifications, engagements, type EngagementStack } from "@/models/schema";
-import { and, eq, desc } from "drizzle-orm";
-import { ACTION_TYPE_LABELS, BLOCKER_TYPE_LABELS, bookingPlatformLabel } from "@/lib/copy";
+import { pendingActions, humanBlockers, notifications, engagements, skillRuns, type EngagementStack } from "@/models/schema";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { ACTION_TYPE_LABELS, BLOCKER_TYPE_LABELS, bookingPlatformLabel, skillName as skillDisplayName } from "@/lib/copy";
 import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
+import { classifyRunError } from "@/lib/error-classification";
 
 export type QueueCategory = "approve" | "action_needed" | "alert" | "fyi";
-export type QueueSource = "action" | "blocker" | "notification" | "sync_setup";
+export type QueueSource = "action" | "blocker" | "notification" | "sync_setup" | "run_failure";
 
 export interface QueueItem {
   id: string;
@@ -39,6 +40,16 @@ export interface QueueItem {
   buyer: string | null;
   runId: string | null;
   createdAt: string; // ISO
+  /**
+   * Only set for source "run_failure" — where in "Edit stack settings" the
+   * likely-wrong field lives, e.g. "/dashboard/engagements/eng_123?fixSection=hosting#stack-settings".
+   * Distinct from the generic engagement-page link every other source
+   * falls back to, since this one should land the buyer already scrolled
+   * to (and with) the right section open instead of a blank engagement page.
+   */
+  fixHref?: string;
+  /** Only set for source "run_failure" — the raw skill id (e.g. "pre-call-read"), needed by the dismiss-run-failure endpoint. */
+  skillName?: string;
 }
 
 const CATEGORY_PRIORITY: Record<QueueCategory, number> = {
@@ -88,6 +99,90 @@ function syncSetupQueueItems(
   return items;
 }
 
+/**
+ * The most recent run per (engagement, skill) that's currently "failed",
+ * classified via error-classification.ts into an actionable diagnosis —
+ * turning "GHL appointments fetch failed [422]" from a dead-end red log
+ * line into a queue item that says what's wrong and links straight to the
+ * field that's probably wrong.
+ *
+ * Synthesized at read time, same as syncSetupQueueItems above and for the
+ * same reasons: no new table, and it self-heals for free — the moment the
+ * next run for that (engagement, skill) succeeds, its errorMessage/status
+ * is gone from the "most recent" row and this simply stops generating an
+ * item, no cleanup step needed. Dismissal (stack.failed_run_dismissals) is
+ * the one piece of state this does need, since "the buyer already knows
+ * and will deal with it later" can't be inferred from run history alone —
+ * see the schema.ts comment on that field for how it stays self-healing
+ * too (a dismissal only suppresses runs at-or-before the timestamp it was
+ * recorded against; a newer failure for the same skill shows up again).
+ */
+async function failedRunQueueItems(
+  engagementRows: { engagementId: string; buyer: string; stack: unknown }[]
+): Promise<QueueItem[]> {
+  if (engagementRows.length === 0) return [];
+  const engagementIds = engagementRows.map((r) => r.engagementId);
+  const stackByEngagement = new Map(engagementRows.map((r) => [r.engagementId, r.stack as EngagementStack | null]));
+  const buyerByEngagement = new Map(engagementRows.map((r) => [r.engagementId, r.buyer]));
+
+  // Ordered desc so the first row seen per (engagementId, skillName) pair
+  // below is that pair's most recent run — same dedupe-in-JS approach
+  // getModuleClientSummaries (module-overview.ts) already uses for the
+  // identical "most recent per group" problem. Capped rather than
+  // unbounded: only the last 500 failures across the tenant are
+  // considered, which comfortably covers "is this skill currently broken
+  // for this client" without an unbounded table scan as history grows.
+  const recentFailures = await db
+    .select({
+      id: skillRuns.id,
+      engagementId: skillRuns.engagementId,
+      skillName: skillRuns.skillName,
+      errorMessage: skillRuns.errorMessage,
+      completedAt: skillRuns.completedAt,
+      startedAt: skillRuns.startedAt,
+    })
+    .from(skillRuns)
+    .where(and(eq(skillRuns.status, "failed"), inArray(skillRuns.engagementId, engagementIds)))
+    .orderBy(desc(skillRuns.startedAt))
+    .limit(500);
+
+  const seen = new Set<string>();
+  const items: QueueItem[] = [];
+
+  for (const run of recentFailures) {
+    const key = `${run.engagementId}:${run.skillName}`;
+    if (seen.has(key)) continue; // already saw this pair's more-recent run
+    seen.add(key);
+
+    const diagnosis = classifyRunError(run.errorMessage);
+    if (!diagnosis) continue; // no confident fix — leave it to the existing notification instead
+
+    const stack = stackByEngagement.get(run.engagementId) ?? null;
+    const dismissedAt = stack?.failed_run_dismissals?.[run.skillName];
+    const runCompletedAt = (run.completedAt ?? run.startedAt).toISOString();
+    if (dismissedAt && dismissedAt >= runCompletedAt) continue; // dismissed, and no newer failure since
+
+    const buyer = buyerByEngagement.get(run.engagementId) ?? "";
+    items.push({
+      id: `run-failure:${run.id}`,
+      source: "run_failure",
+      category: "action_needed",
+      title: diagnosis.title,
+      subtitle: `${skillDisplayName(run.skillName)} · ${diagnosis.explanation}`,
+      engagementId: run.engagementId,
+      buyer,
+      runId: run.id,
+      createdAt: runCompletedAt,
+      fixHref: diagnosis.isCredentialIssue
+        ? `/dashboard/engagements/${run.engagementId}?fixCredential=1#update-credentials`
+        : `/dashboard/engagements/${run.engagementId}?fixSection=${diagnosis.section}#stack-settings`,
+      skillName: run.skillName,
+    });
+  }
+
+  return items;
+}
+
 export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
   const [actionRows, blockerRows, notificationRows, engagementStackRows] = await Promise.all([
     db
@@ -129,6 +224,8 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
       .where(eq(engagements.whopUserId, whopUserId)),
   ]);
 
+  const failureItems = await failedRunQueueItems(engagementStackRows);
+
   const items: QueueItem[] = [
     ...actionRows.map((a): QueueItem => ({
       id: a.id,
@@ -164,6 +261,7 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
       createdAt: n.createdAt.toISOString(),
     })),
     ...syncSetupQueueItems(engagementStackRows),
+    ...failureItems,
   ];
 
   items.sort((x, y) => {
@@ -196,7 +294,7 @@ export async function getQueueActionableCount(whopUserId: string): Promise<numbe
       .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
       .where(and(eq(engagements.whopUserId, whopUserId), eq(humanBlockers.status, "open"))),
     db
-      .select({ stack: engagements.stack })
+      .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, stack: engagements.stack })
       .from(engagements)
       .where(eq(engagements.whopUserId, whopUserId)),
   ]);
@@ -205,5 +303,7 @@ export async function getQueueActionableCount(whopUserId: string): Promise<numbe
     needsWebhookSetupNudge(r.stack as EngagementStack | null)
   ).length;
 
-  return pendingCount.length + blockerCount.length + syncSetupCount;
+  const failureCount = (await failedRunQueueItems(engagementStackRows)).length;
+
+  return pendingCount.length + blockerCount.length + syncSetupCount + failureCount;
 }

@@ -190,6 +190,20 @@ export const HOSTING_PLATFORM_LABELS: Record<string, string> = {
   discover_from_docs: "Something else (research + review)",
 };
 
+export const SMS_PLATFORM_LABELS: Record<string, string> = {
+  twilio: "Twilio",
+  ghl_sms: "GoHighLevel SMS",
+  hubspot_sms: "HubSpot SMS",
+  none: "Not tracked",
+};
+
+export const AD_DATA_PLATFORM_LABELS: Record<string, string> = {
+  hyros: "Hyros",
+  native_crm: "Tag on existing CRM (no separate platform)",
+  google_sheets: "Google Sheets",
+  none: "Not connected",
+};
+
 export const BRIEF_DESTINATION_LABELS: Record<string, string> = {
   slack: "Slack message",
   crm_note: "Note in your CRM",
@@ -252,6 +266,24 @@ export function bookingPlatformLabel(raw: string | null | undefined): string {
 export function emailPlatformLabel(raw: string | null | undefined): string {
   if (!raw) return "Not connected yet";
   return EMAIL_PLATFORM_LABELS[raw] ?? raw;
+}
+
+/** Friendly hosting-platform name, with a safe fallback. */
+export function hostingPlatformLabel(raw: string | null | undefined): string {
+  if (!raw) return "Not connected yet";
+  return HOSTING_PLATFORM_LABELS[raw] ?? raw;
+}
+
+/** Friendly SMS-platform name, with a safe fallback. */
+export function smsPlatformLabel(raw: string | null | undefined): string {
+  if (!raw) return "Not connected yet";
+  return SMS_PLATFORM_LABELS[raw] ?? raw;
+}
+
+/** Friendly ad-data-platform name, with a safe fallback. */
+export function adDataPlatformLabel(raw: string | null | undefined): string {
+  if (!raw) return "Not connected yet";
+  return AD_DATA_PLATFORM_LABELS[raw] ?? raw;
 }
 
 // ---------------------------------------------------------------------------

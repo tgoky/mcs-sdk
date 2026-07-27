@@ -981,10 +981,13 @@ export class GHLCRMClient {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
 
-    await fetchWithTimeout(
+    const res = await fetchWithTimeout(
       `${this.baseUrl}/contacts/${contactId}/workflow/${workflowId}`,
       { method: "POST", headers: this.headers, body: JSON.stringify({}) }
     );
+    if (!res.ok) {
+      throw new Error(`GHL CRM workflow enrollment failed [${res.status}]: ${(await res.text()).slice(0, 300)}`);
+    }
   }
 
   /**
@@ -1007,11 +1010,14 @@ export class GHLCRMClient {
     }
     if (customFields.length === 0) return;
 
-    await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}`, {
       method: "PUT",
       headers: this.headers,
       body: JSON.stringify({ customFields }),
-    }).catch(() => {});
+    });
+    if (!res.ok) {
+      throw new Error(`GHL contact update failed [${res.status}]: ${(await res.text()).slice(0, 300)}`);
+    }
   }
 
   /**

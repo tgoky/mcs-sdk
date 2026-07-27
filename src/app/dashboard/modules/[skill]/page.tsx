@@ -255,7 +255,7 @@ export default async function ModulePage({
 
       <LiveExecutionFeed
         initialRuns={recentRuns}
-        apiUrl={`/api/skill-runs/recent?skill=${skill}&limit=50`}
+        apiUrl={`/api/skill-runs/recent?skill=${skill}`}
         title={`${info.name} history`}
       />
     </div>

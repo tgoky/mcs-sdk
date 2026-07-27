@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { skillRuns, engagements, type RunStep } from "@/models/schema";
 import { getSession } from "@/lib/session";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { SKILL_IDS } from "@/lib/skill-manifest";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
+
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 200;
 
 /**
  * Pulls the most specific human-readable detail out of a run's step log —
@@ -25,12 +29,25 @@ function latestStepLabel(steps: RunStep[] | null | undefined): string | null {
   return null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getSession();
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const { searchParams } = new URL(request.url);
+
+    const skillParam = searchParams.get("skill");
+    const skill = skillParam && (SKILL_IDS as readonly string[]).includes(skillParam) ? skillParam : null;
+
+    const limitParam = Number(searchParams.get("limit"));
+    const limit = Number.isFinite(limitParam) && limitParam > 0
+      ? Math.min(Math.trunc(limitParam), MAX_LIMIT)
+      : DEFAULT_LIMIT;
+
+    const offsetParam = Number(searchParams.get("offset"));
+    const offset = Number.isFinite(offsetParam) && offsetParam > 0 ? Math.trunc(offsetParam) : 0;
 
     const rows = await db
       .select({
@@ -52,9 +69,14 @@ export async function GET() {
         engagements,
         eq(skillRuns.engagementId, engagements.engagementId)
       )
-      .where(eq(engagements.whopUserId, session.whopUserId))
+      .where(
+        skill
+          ? and(eq(engagements.whopUserId, session.whopUserId), eq(skillRuns.skillName, skill))
+          : eq(engagements.whopUserId, session.whopUserId)
+      )
       .orderBy(desc(skillRuns.startedAt))
-      .limit(20);
+      .limit(limit)
+      .offset(offset);
 
     const runs = rows.map(({ steps, ...rest }) => ({
       ...rest,
