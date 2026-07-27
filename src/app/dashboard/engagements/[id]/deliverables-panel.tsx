@@ -24,6 +24,17 @@ const PILLAR_LABELS: Record<string, string> = {
   objections: "Objections",
 };
 
+// Each tone key from onboarding-service.ts (e.g. "formal_casual") encodes a
+// spectrum's two poles. Was previously rendered as `key.replace(/_/g, " → ")`
+// — literal db-key stringification, e.g. "warm → neutral" — with no real
+// design behind it. This is the human-readable version of the same three
+// axes onboarding-service.ts's extractVoiceProfile always produces.
+const TONE_AXIS_LABELS: Record<string, { left: string; right: string }> = {
+  formal_casual: { left: "Formal", right: "Casual" },
+  technical_plain: { left: "Technical", right: "Plain-spoken" },
+  warm_neutral: { left: "Warm", right: "Neutral" },
+};
+
 const SOURCE_KIND_LABELS: Record<string, string> = {
   marketing_site: "Marketing site",
   sales_page: "Sales page",
@@ -114,16 +125,40 @@ function SectionHeader({ title, count }: { title: string; count?: number }) {
   );
 }
 
-function ToneBar({ score }: { score: number }) {
-  const clamped = Math.max(0, Math.min(5, Math.round(score)));
+function ToneSpectrum({ axisKey, score, note }: { axisKey: string; score: number; note: string }) {
+  const clamped = Math.max(1, Math.min(5, score));
+  const pct = ((clamped - 1) / 4) * 100; // 1 → 0%, 5 → 100%
+  const axis = TONE_AXIS_LABELS[axisKey];
+  const leaning = clamped < 2.5 ? "left" : clamped > 3.5 ? "right" : "center";
+
+  if (!axis) {
+    // Unknown axis key from a future prompt version — fall back gracefully
+    // rather than rendering nothing or a raw db key.
+    return (
+      <div className="space-y-1">
+        <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500 capitalize">{axisKey.replace(/_/g, " / ")}</p>
+        <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono">{note}</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex gap-0.5">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <span
-          key={i}
-          className={`h-1.5 w-4 rounded-full ${i < clamped ? "bg-gold" : "bg-zinc-200 dark:bg-zinc-800"}`}
-        />
-      ))}
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className={`text-[11px] font-semibold w-24 text-right shrink-0 ${leaning === "left" ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400 dark:text-zinc-600"}`}>
+          {axis.left}
+        </span>
+        <div className="relative flex-1 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 min-w-[64px]">
+          <div
+            className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-gold border-2 border-white dark:border-zinc-950 shadow-sm"
+            style={{ left: `calc(${pct}% - 5px)` }}
+          />
+        </div>
+        <span className={`text-[11px] font-semibold w-24 shrink-0 ${leaning === "right" ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400 dark:text-zinc-600"}`}>
+          {axis.right}
+        </span>
+      </div>
+      <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono text-center">{note}</p>
     </div>
   );
 }
@@ -241,15 +276,9 @@ export function DeliverablesPanel({
           </div>
 
           {toneEntries.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {toneEntries.map(([key, val]) => (
-                <div key={key} className="space-y-0.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500 capitalize">{key.replace(/_/g, " → ")}</span>
-                    <ToneBar score={val.score} />
-                  </div>
-                  <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono">{val.note}</p>
-                </div>
+                <ToneSpectrum key={key} axisKey={key} score={val.score} note={val.note} />
               ))}
             </div>
           )}

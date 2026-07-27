@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Settings2, Save } from "lucide-react";
 import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS } from "@/lib/copy";
+import { platformSupportsAutoWebhook } from "@/lib/booking-sync-status";
 import type { EngagementStack } from "@/models/schema";
 
 // Kept in lockstep with the PATCH route's own allow-list — a value the
@@ -57,7 +58,11 @@ export function EditStackSettings({
     account_id: initialStack?.booking_platform_meta?.account_id ?? "",
   });
   const [emailPlatform, setEmailPlatform] = useState(initialStack?.email_platform ?? "");
-  const [webhookMode, setWebhookMode] = useState(initialStack?.webhook_receiver_mode ?? "webhook");
+  // Was defaulting to "webhook" whenever nothing had been saved yet, which
+  // silently pre-selected an option the buyer never chose and made an
+  // unconfigured engagement look configured. Reflect the real stored value
+  // (including "unset") instead — see the "— not set —" option below.
+  const [webhookMode, setWebhookMode] = useState(initialStack?.webhook_receiver_mode ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -83,7 +88,7 @@ export function EditStackSettings({
             ...(bookingPlatform ? { booking_platform: bookingPlatform } : {}),
             ...(Object.keys(metaPayload).length > 0 ? { booking_platform_meta: metaPayload } : {}),
             ...(emailPlatform ? { email_platform: emailPlatform } : {}),
-            webhook_receiver_mode: webhookMode,
+            ...(webhookMode ? { webhook_receiver_mode: webhookMode } : {}),
           },
         }),
       });
@@ -152,10 +157,22 @@ export function EditStackSettings({
             onChange={(e) => setWebhookMode(e.target.value as typeof webhookMode)}
             className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
           >
-            <option value="webhook">Webhook (default)</option>
-            <option value="polling">Polling</option>
+            <option value="">— not set —</option>
+            <option value="webhook">
+              {platformSupportsAutoWebhook(bookingPlatform)
+                ? "Webhook (registered automatically)"
+                : "Webhook (you paste this into the platform manually)"}
+            </option>
+            <option value="polling">
+              Polling{platformSupportsAutoWebhook(bookingPlatform) ? "" : " (automatic fallback)"}
+            </option>
             <option value="none">Not tracked</option>
           </select>
+          {!platformSupportsAutoWebhook(bookingPlatform) && (
+            <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
+              {BOOKING_PLATFORM_LABELS[bookingPlatform as keyof typeof BOOKING_PLATFORM_LABELS] ?? "This platform"} can&apos;t register a webhook by itself — polling covers you every 5 min until you paste one in (see the sync status card above).
+            </p>
+          )}
         </label>
 
         {activeMetaFields.map((f) => (
