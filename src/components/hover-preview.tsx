@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
-const OPEN_DELAY_MS = 350; // long enough that a mouse just passing through a row doesn't trigger it
-const CLOSE_DELAY_MS = 150; // short grace period so moving from the row into the popover itself doesn't close it
-const PANEL_WIDTH = 380; // Expanded width so content has room to breathe
+const OPEN_DELAY_MS = 350;
+const CLOSE_DELAY_MS = 150;
+const PANEL_WIDTH = 380;
 
 export function HoverPreview({
   anchorRef,
@@ -22,14 +22,11 @@ export function HoverPreview({
     if (!hovering) return;
     const el = anchorRef.current;
     if (!el) return;
-
     const rect = el.getBoundingClientRect();
     const spaceRight = window.innerWidth - rect.right;
-    const flip = spaceRight < PANEL_WIDTH + 24; // not enough room on the right – show it to the left instead
-
+    const flip = spaceRight < PANEL_WIDTH + 24;
     const left = flip ? rect.left - PANEL_WIDTH - 12 : rect.right + 12;
     const top = Math.min(Math.max(rect.top, 8), window.innerHeight - 180);
-
     setCoords({ top, left: Math.max(8, left), flip });
   }, [hovering, anchorRef]);
 
@@ -43,8 +40,7 @@ export function HoverPreview({
         coords.flip ? "motion-safe:origin-top-right" : "motion-safe:origin-top-left",
       ].join(" ")}
     >
-      {/* Explicitly using font-mono to match the rest of the technical dashboard UI */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-md shadow-2xl shadow-black/50 p-4 text-xs font-mono text-zinc-200 leading-normal">
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md shadow-xl dark:shadow-2xl dark:shadow-black/50 p-4 text-xs font-mono text-zinc-800 dark:text-zinc-200 leading-normal">
         {preview}
       </div>
     </div>,
@@ -55,7 +51,6 @@ export function HoverPreview({
 export function useHoverPreview<T extends HTMLElement>() {
   const ref = useRef<T | null>(null);
   const [hovering, setHovering] = useState(false);
-
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

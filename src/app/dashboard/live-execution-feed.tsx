@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, XCircle, Loader2, AlertCircle, Hash, ArrowRight, Clock, Ban } from "lucide-react";
 import { skillName, phaseLabel, SKILL_INFO, type SkillName } from "@/lib/copy";
+import { HoverPreview, useHoverPreview } from "@/components/hover-preview";
 
 interface SkillRun {
   id: string;
@@ -23,6 +24,10 @@ interface SkillRun {
 
 interface LiveExecutionFeedProps {
   initialRuns: SkillRun[];
+  /** Defaults to "/api/skill-runs/recent". Pass e.g. "/api/skill-runs/recent?skill=pre-call-read&limit=50" to scope the live poll to one module. */
+  apiUrl?: string;
+  /** Defaults to "Live Executions". */
+  title?: string;
 }
 
 function actionSummary(run: SkillRun): string {
@@ -91,8 +96,6 @@ function RelativeTime({ isoString }: { isoString: string }) {
     return `${Math.floor(diff / 86400)}d`;
   }, [isoString]);
 
-  // Lazy initializer computes the first label at mount time directly —
-  // no effect needed just to get an initial value on screen.
   const [label, setLabel] = useState(compute);
 
   useEffect(() => {
@@ -105,45 +108,157 @@ function RelativeTime({ isoString }: { isoString: string }) {
   );
 }
 
-export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
+function RunPreview({ run }: { run: SkillRun }) {
+  const displayName = run.buyerName ?? run.engagementId ?? "Unknown client";
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{displayName}</span>
+        <RelativeTime isoString={run.startedAt} />
+      </div>
+      <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+        <span className="font-mono font-bold uppercase tracking-wide text-[11px]">{skillName(run.skillName)}</span>
+        <span>·</span>
+        <div className="flex items-center gap-1">
+          <RunStatusIcon status={run.status} />
+          <StatusLabel status={run.status} />
+        </div>
+      </div>
+      <p className="text-zinc-600 dark:text-zinc-400 leading-snug">{actionSummary(run)}</p>
+      {run.subjectLabel && (
+        <p className="font-mono text-zinc-400 dark:text-zinc-600 truncate">{run.subjectLabel}</p>
+      )}
+      <p className="text-zinc-400 dark:text-zinc-600 italic">Click for the full run detail</p>
+    </div>
+  );
+}
+
+function RunRow({ run, onOpen }: { run: SkillRun; onOpen: () => void }) {
+  const isRunning = run.status.toLowerCase() === "running";
+  const isFailed = run.status.toLowerCase() === "failed" || run.status.toLowerCase() === "timed_out";
+  const { ref, hovering, onMouseEnter, onMouseLeave } = useHoverPreview<HTMLTableRowElement>();
+
+  return (
+    <>
+      <tr
+        ref={ref}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        className={`group hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors cursor-pointer relative ${isRunning ? "bg-zinc-100/30 dark:bg-zinc-900/20" : ""}`}
+        onClick={onOpen}
+      >
+        <td className="px-4 py-2.5 max-w-[180px]" onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
+          {run.buyerName && run.engagementId ? (
+            <Link href={`/dashboard/engagements/${run.engagementId}`} onClick={(e) => e.stopPropagation()} className="hover:text-zinc-900 dark:hover:text-white transition-colors relative z-20">
+              <ClientCell run={run} />
+            </Link>
+          ) : (
+            <ClientCell run={run} />
+          )}
+        </td>
+
+        <td className="px-4 py-2.5">
+          <span className="text-sm text-zinc-600 dark:text-zinc-400 font-semibold whitespace-nowrap">
+            {skillName(run.skillName)}
+          </span>
+          {(run.stepCount ?? 0) > 0 && (
+            <span className="ml-2 text-[10px] font-mono text-zinc-400 dark:text-zinc-700">
+              {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
+            </span>
+          )}
+        </td>
+
+        <td className="px-4 py-2.5 max-w-[280px]">
+          <span
+            className={`text-sm truncate block font-medium ${isFailed ? "text-rose-600 dark:text-rose-400/80 font-mono" : isRunning ? "text-zinc-800 dark:text-zinc-300" : "text-zinc-500"}`}
+            title={actionSummary(run)}
+          >
+            {actionSummary(run)}
+          </span>
+          {run.subjectLabel && (
+            <span className="text-[11px] text-zinc-400 dark:text-zinc-600 truncate block font-mono" title={run.subjectLabel}>
+              {run.subjectLabel}
+            </span>
+          )}
+        </td>
+
+        <td className="px-4 py-2.5 whitespace-nowrap">
+          <div className="flex items-center gap-2">
+            <RunStatusIcon status={run.status} />
+            <StatusLabel status={run.status} />
+          </div>
+        </td>
+
+        <td className="px-4 py-2.5 text-right whitespace-nowrap">
+          <RelativeTime isoString={run.startedAt} />
+        </td>
+
+        <td className="pr-3 text-right">
+          <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-2px] group-hover:translate-x-0 duration-150" />
+        </td>
+      </tr>
+      <HoverPreview anchorRef={ref} hovering={hovering} preview={<RunPreview run={run} />} />
+    </>
+  );
+}
+
+export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionFeedProps) {
   const router = useRouter();
-  // A fresh server-rendered prop on every mount (e.g. navigating back into
-  // /dashboard from Home) — useState's initial value already reflects it,
-  // since a route re-entry remounts this component rather than reusing the
-  // old instance with stale state.
   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
   const [polling, setPolling] = useState(true);
 
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<5 | 10>(10);
+
+  const buildUrl = useCallback((offset: number, limit: number) => {
+    const url = new URL(apiUrl ?? "/api/skill-runs/recent", window.location.origin);
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("offset", String(offset));
+    return url.pathname + url.search;
+  }, [apiUrl]);
+
   const refresh = useCallback(async (signal: AbortSignal) => {
     try {
-      const res = await fetch("/api/skill-runs/recent", { cache: "no-store", signal });
+      const res = await fetch(buildUrl(page * pageSize, pageSize), { cache: "no-store", signal });
       if (signal.aborted || !res.ok) return;
       const data = await res.json();
       if (signal.aborted) return;
       setRuns(data.runs ?? []);
     } catch {
-      // Includes AbortError from a cancelled in-flight request on unmount —
-      // never worth surfacing, the next successful poll (or none, if the
-      // component is gone) picks it back up.
+      // Ignore AbortError on unmount/re-fetch
     }
-  }, []);
+  }, [buildUrl, page, pageSize]);
 
   useEffect(() => {
-    if (!polling) return;
-
     const controller = new AbortController();
     (async () => {
       await refresh(controller.signal);
     })();
-    const id = setInterval(() => refresh(controller.signal), 5000);
 
+    if (!polling || page !== 0) {
+      return () => controller.abort();
+    }
+
+    const id = setInterval(() => refresh(controller.signal), 5000);
     return () => {
       clearInterval(id);
       controller.abort();
     };
-  }, [polling, refresh]);
+  }, [page, pageSize, polling, refresh]);
 
-  if (runs.length === 0) {
+  function goToPage(next: number) {
+    const clamped = Math.max(0, next);
+    setPage(clamped);
+    setPolling(clamped === 0);
+  }
+
+  function changePageSize(size: 5 | 10) {
+    setPageSize(size);
+    setPage(0);
+    setPolling(true);
+  }
+
+  if (runs.length === 0 && page === 0) {
     return (
       <div className="h-32 flex items-center justify-center border border-dashed border-zinc-300 dark:border-zinc-800 rounded-lg bg-zinc-50/50 dark:bg-zinc-950/50 transition-colors">
         <div className="text-center space-y-1">
@@ -161,16 +276,33 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50">
         <div className="flex items-center gap-2">
           <h3 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider font-mono">
-            Live Executions
+            {title ?? "Live Executions"}
           </h3>
           <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 bg-zinc-200/60 dark:bg-zinc-900 px-1.5 py-0.5 rounded-sm border border-zinc-300/40 dark:border-zinc-800/40">{runs.length}</span>
         </div>
-        <button
-          onClick={() => setPolling((p) => !p)}
-          className="text-xs font-bold font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors cursor-pointer"
-        >
-          {polling ? "[ Pause live ]" : "[ Resume live ]"}
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
+            {([5, 10] as const).map((size) => (
+              <button
+                key={size}
+                onClick={() => changePageSize(size)}
+                className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                  pageSize === size
+                    ? "border-zinc-400 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300"
+                    : "border-transparent hover:text-zinc-700 dark:hover:text-zinc-300"
+                }`}
+              >
+                {size}/page
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setPolling((p) => !p)}
+            className="text-xs font-bold font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+          >
+            {polling && page === 0 ? "[ Pause live ]" : "[ Resume live ]"}
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -186,70 +318,33 @@ export function LiveExecutionFeed({ initialRuns }: LiveExecutionFeedProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/30">
-            {runs.map((run) => {
-              const isRunning = run.status.toLowerCase() === "running";
-              const isFailed = run.status.toLowerCase() === "failed" || run.status.toLowerCase() === "timed_out";
-
-              return (
-                <tr
-                  key={run.id}
-                  className={`group hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors cursor-pointer relative ${isRunning ? "bg-zinc-100/30 dark:bg-zinc-900/20" : ""}`}
-                  onClick={() => { router.push(`/dashboard/runs/${run.id}`); }}
-                >
-                  <td className="px-4 py-2.5 max-w-[180px]" onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
-                    {run.buyerName && run.engagementId ? (
-                      <Link href={`/dashboard/engagements/${run.engagementId}`} onClick={(e) => e.stopPropagation()} className="hover:text-zinc-900 dark:hover:text-white transition-colors relative z-20">
-                        <ClientCell run={run} />
-                      </Link>
-                    ) : (
-                      <ClientCell run={run} />
-                    )}
-                  </td>
-
-                  <td className="px-4 py-2.5">
-                    <span className="text-sm text-zinc-600 dark:text-zinc-400 font-semibold whitespace-nowrap">
-                      {skillName(run.skillName)}
-                    </span>
-                    {(run.stepCount ?? 0) > 0 && (
-                      <span className="ml-2 text-[10px] font-mono text-zinc-400 dark:text-zinc-700">
-                        {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
-                      </span>
-                    )}
-                  </td>
-
-                  <td className="px-4 py-2.5 max-w-[280px]">
-                    <span
-                      className={`text-sm truncate block font-medium ${isFailed ? "text-rose-600 dark:text-rose-400/80 font-mono" : isRunning ? "text-zinc-800 dark:text-zinc-300" : "text-zinc-500"}`}
-                      title={actionSummary(run)}
-                    >
-                      {actionSummary(run)}
-                    </span>
-                    {run.subjectLabel && (
-                      <span className="text-[11px] text-zinc-400 dark:text-zinc-600 truncate block font-mono" title={run.subjectLabel}>
-                        {run.subjectLabel}
-                      </span>
-                    )}
-                  </td>
-
-                  <td className="px-4 py-2.5 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <RunStatusIcon status={run.status} />
-                      <StatusLabel status={run.status} />
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <RelativeTime isoString={run.startedAt} />
-                  </td>
-
-                  <td className="pr-3 text-right">
-                    <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-2px] group-hover:translate-x-0 duration-150" />
-                  </td>
-                </tr>
-              );
-            })}
+            {runs.map((run) => (
+              <RunRow key={run.id} run={run} onOpen={() => router.push(`/dashboard/runs/${run.id}`)} />
+            ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex items-center justify-between px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-transparent">
+        <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
+          {page === 0 ? "Showing most recent" : `Page ${page + 1}`}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => goToPage(page - 1)}
+            disabled={page === 0}
+            className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            ← Prev
+          </button>
+          <button
+            onClick={() => goToPage(page + 1)}
+            disabled={runs.length < pageSize}
+            className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            Next →
+          </button>
+        </div>
       </div>
     </div>
   );
