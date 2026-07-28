@@ -14,7 +14,18 @@ import { EditStackSettings } from "./edit-stack-settings";
 import { UpdateCredentialsForm } from "./update-credentials-form";
 import { DeleteClientSection } from "./delete-client-section";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
-import { CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRight, Server, DollarSign } from "lucide-react";
+import { 
+  CheckCircle2, 
+  XCircle, 
+  Loader2, 
+  AlertCircle, 
+  ArrowRight, 
+  Server, 
+  DollarSign,
+  Briefcase,
+  Target,
+  Sparkles
+} from "lucide-react";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
 import { BookingSyncStatusCard } from "@/components/booking-sync-status-card";
@@ -68,7 +79,7 @@ function PhaseTag({ phase, status }: { phase: string | null; status: string }) {
   const label = phaseLabel(phase);
   const isRunning = status.toLowerCase() === "running";
   return (
-    <span className={`text-[11px] font-mono tracking-tight ${isRunning ? "text-zinc-600 dark:text-zinc-300 italic animate-pulse" : "text-zinc-400 dark:text-zinc-500"}`}>
+    <span className={`text-[11px] font-mono tracking-tight ${isRunning ? "text-zinc-600 dark:text-zinc-300 italic" : "text-zinc-400 dark:text-zinc-500"}`}>
       {label}
     </span>
   );
@@ -139,10 +150,17 @@ export default async function EngagementDetailPage({
 
   const revenueAttribution = await computeWinBackRevenueAttribution(id);
 
+  // Cleaned Offer Metadata values
+  const offerName = String(offerDetails?.name || "").trim() || "—";
+  const offerPrice = String(offerDetails?.price || "").trim() || "—";
+  const offerIcp = String(offerDetails?.icp || "").trim() || "—";
+  const isAiEnabled = Boolean(offerDetails?.hybrid_mode_enabled);
+
   return (
     <div className="space-y-6 w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
 
-      <div className="space-y-4 border-b border-zinc-200 dark:border-zinc-900 pb-5">
+      {/* Header Section */}
+      <div className="space-y-4 border-b border-zinc-200 dark:border-zinc-800/80 pb-5">
         <SetBreadcrumbLabel label={engagement.buyer} />
         <BackLink href="/dashboard/engagements" label="All Clients" />
 
@@ -153,14 +171,14 @@ export default async function EngagementDetailPage({
               <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">{engagement.engagementId}</p>
             </div>
             <div className="flex flex-wrap gap-1.5 font-mono">
-              <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60">
+              <span className="text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/60 px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800">
                 {bookingPlatformLabel(stack?.booking_platform)}
               </span>
-              <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60">
+              <span className="text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/60 px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800">
                 {emailPlatformLabel(stack?.email_platform)}
               </span>
               {offerDetails?.traffic_temperature && (
-                <span className="text-[11px] text-zinc-500 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60 capitalize">
+                <span className="text-[11px] text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/60 px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800 capitalize">
                   {String(offerDetails.traffic_temperature)} traffic
                 </span>
               )}
@@ -180,8 +198,9 @@ export default async function EngagementDetailPage({
           </div>
         </div>
 
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/10 p-3 space-y-3">
-          <p className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">
+        {/* Client Management Card */}
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/30 p-3.5 space-y-3">
+          <p className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
             Client management
           </p>
           <div className="flex flex-wrap gap-2">
@@ -200,7 +219,7 @@ export default async function EngagementDetailPage({
               />
             </div>
           </div>
-          <div className="pt-2 border-t border-zinc-200/70 dark:border-zinc-900/70">
+          <div className="pt-2 border-t border-zinc-200/70 dark:border-zinc-800/60">
             <DeleteClientSection
               engagementId={engagement.engagementId}
               buyerName={engagement.buyer}
@@ -213,26 +232,80 @@ export default async function EngagementDetailPage({
       <SkillsPanel engagementId={engagement.engagementId} initialStates={skillStates} />
 
       {engagement.pausedAt && (
-        <div className="rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-2.5 text-xs font-mono text-amber-800 dark:text-amber-400">
+        <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-xs font-mono text-amber-800 dark:text-amber-400">
           This client is paused — nightly briefs, leak map, win-back, weekly metrics, and booking polling are all
           skipping it.{engagement.pausedReason ? ` Reason: ${engagement.pausedReason}` : ""} Manual &quot;Run&quot; buttons
           below still work if you need to test something.
         </div>
       )}
 
+      {/* Offer Summary Metadata */}
       {offerDetails && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: "Offer", value: String(offerDetails.name ?? "—") },
-            { label: "Price", value: String(offerDetails.price ?? "—") },
-            { label: "Ideal Customer", value: String(offerDetails.icp ?? "—") },
-            { label: "AI Personalization", value: offerDetails.hybrid_mode_enabled ? "On" : "Off" },
-          ].map(({ label, value }) => (
-            <div key={label} className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-950/20 p-3 space-y-1 shadow-sm">
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono uppercase tracking-wider">{label}</p>
-              <p className="text-xs text-zinc-800 dark:text-zinc-300 font-semibold leading-snug">{value}</p>
+        <div className="space-y-2">
+          <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">
+            Offer Summary
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+
+            {/* Offer Name */}
+            <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-3.5 flex flex-col justify-between shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                  Offer
+                </span>
+                <Briefcase className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
+              </div>
+              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate" title={offerName}>
+                {offerName}
+              </p>
             </div>
-          ))}
+
+            {/* Price */}
+            <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-3.5 flex flex-col justify-between shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                  Price
+                </span>
+                <DollarSign className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
+              </div>
+              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 font-mono">
+                {offerPrice}
+              </p>
+            </div>
+
+            {/* Ideal Customer */}
+            <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-3.5 flex flex-col justify-between shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                  Ideal Customer
+                </span>
+                <Target className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
+              </div>
+              <p className="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-medium line-clamp-2" title={offerIcp}>
+                {offerIcp}
+              </p>
+            </div>
+
+            {/* AI Personalization */}
+            <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-3.5 flex flex-col justify-between shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                  AI Personalization
+                </span>
+                <Sparkles className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
+              </div>
+              <div>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold ${
+                  isAiEnabled 
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
+                    : "bg-zinc-500/10 text-zinc-500 dark:text-zinc-400 border border-zinc-500/20"
+                }`}>
+                  {isAiEnabled ? "Enabled" : "Disabled"}
+                </span>
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
 
@@ -243,6 +316,7 @@ export default async function EngagementDetailPage({
         />
       )}
 
+      {/* Modules Selector Grid */}
       <div className="space-y-2">
         <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">Modules</h2>
 
@@ -254,22 +328,22 @@ export default async function EngagementDetailPage({
             const latestRun = skillRunList[0] ?? null;
 
             return (
-              <div key={skill} className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 flex flex-col justify-between min-h-[190px] shadow-sm">
+              <div key={skill} className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-4 flex flex-col justify-between min-h-[190px] shadow-xs">
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-0.5 min-w-0">
                       <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">{info.name}</p>
-                      <p className="text-[11px] font-normal text-zinc-500 dark:text-zinc-500 leading-snug">{info.description}</p>
+                      <p className="text-[11px] font-normal text-zinc-500 dark:text-zinc-400 leading-snug">{info.description}</p>
                     </div>
-                    <span className={`text-[11px] font-mono font-bold shrink-0 p-1 bg-zinc-100 dark:bg-zinc-900/40 rounded border border-zinc-200/60 dark:border-zinc-800/40 ml-2 ${MODULE_STATUS_COLORS[status]}`}>
+                    <span className={`text-[11px] font-mono font-bold shrink-0 px-2 py-0.5 bg-zinc-100 dark:bg-zinc-900 rounded-md border border-zinc-200 dark:border-zinc-800 ml-2 ${MODULE_STATUS_COLORS[status]}`}>
                       {MODULE_STATUS_LABELS[status]}
                     </span>
                   </div>
 
                   {latestRun && (
-                    <div className="border-t border-zinc-200 dark:border-zinc-900/50 pt-2.5 space-y-1">
+                    <div className="border-t border-zinc-200 dark:border-zinc-800/60 pt-2.5 space-y-1">
                       <div className="flex items-center justify-between font-mono text-[11px]">
-                        <p className="text-zinc-400 dark:text-zinc-600">Last execution</p>
+                        <p className="text-zinc-400 dark:text-zinc-500">Last execution</p>
                         <Link
                           href={`/dashboard/runs/${latestRun.id}`}
                           className="text-[10px] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors flex items-center gap-0.5 font-bold"
@@ -279,7 +353,7 @@ export default async function EngagementDetailPage({
                       </div>
                       <div className="flex items-center justify-between">
                         <PhaseTag phase={latestRun.phase} status={latestRun.status} />
-                        <span className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono">
+                        <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
                           {new Date(latestRun.startedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                         </span>
                       </div>
@@ -299,7 +373,7 @@ export default async function EngagementDetailPage({
                   )}
                 </div>
 
-                <div className="pt-3 border-t border-zinc-100 dark:border-zinc-900/40 mt-3">
+                <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/50 mt-3">
                   <TriggerSkillButton
                     engagementId={engagement.engagementId}
                     skillName={skill}
@@ -321,70 +395,72 @@ export default async function EngagementDetailPage({
         pinDownPageAudit={engagement.pinDownPageAudit}
       />
 
+      {/* Win-Back Revenue Recovered */}
       <div className="space-y-2">
         <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
           <DollarSign className="w-3.5 h-3.5" /> Win-Back Revenue Recovered — {revenueAttribution.periodLabel}
         </h2>
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 shadow-sm">
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-4 shadow-xs">
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono uppercase tracking-wider">Recovered</p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">Recovered</p>
               <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
                 {revenueAttribution.recoveredCount}
               </p>
             </div>
             <div className="space-y-1">
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono uppercase tracking-wider">Revenue</p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">Revenue</p>
               <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
                 ${revenueAttribution.totalRevenue.toLocaleString()}
               </p>
             </div>
             <div className="space-y-1">
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono uppercase tracking-wider">Avg / recovery</p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">Avg / recovery</p>
               <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
                 ${Math.round(revenueAttribution.averageRecoveryValue).toLocaleString()}
               </p>
             </div>
           </div>
           {revenueAttribution.recoveredEnrollments.length > 0 ? (
-            <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-900/40 divide-y divide-zinc-100 dark:divide-zinc-900/50">
+            <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/50 divide-y divide-zinc-100 dark:divide-zinc-800/40">
               {revenueAttribution.recoveredEnrollments.slice(0, 10).map((r) => (
                 <div key={r.prospectEmail} className="flex items-center justify-between py-1.5 text-xs">
                   <span className="text-zinc-700 dark:text-zinc-300 font-medium">{r.prospectName ?? r.prospectEmail}</span>
-                  <span className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono">
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
                     {new Date(r.rebookedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-900/40 text-[11px] text-zinc-400 dark:text-zinc-600 font-mono">
+            <p className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/50 text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
               No recoveries attributed yet this period — this fills in automatically as Win-Back rebooks prospects.
             </p>
           )}
         </div>
       </div>
 
+      {/* Runtime Ownership */}
       {artifactRows.length > 0 && (
         <div className="space-y-2">
           <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
             <Server className="w-3.5 h-3.5" /> Runtime Ownership
           </h2>
-          <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-2 shadow-sm">
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-500 leading-relaxed font-mono">
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-4 space-y-2 shadow-xs">
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed font-mono">
               What runs on our infrastructure vs. what would move to {engagement.buyer}&apos;s own systems under an export.
             </p>
-            <div className="divide-y divide-zinc-100 dark:divide-zinc-900/50">
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800/40">
               {artifactRows.map((a) => (
                 <div key={a.id} className="flex items-center justify-between py-2 text-xs">
                   <span className="text-zinc-700 dark:text-zinc-300 font-medium">
                     {ARTIFACT_TYPE_LABELS[a.artifactType] ?? a.artifactType}
                   </span>
                   <span
-                    className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded border ${
+                    className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-md border ${
                       a.owner === "buyer"
                         ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40"
-                        : "text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800/40"
+                        : "text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800"
                     }`}
                   >
                     {OWNER_LABELS[a.owner] ?? a.owner}
@@ -396,17 +472,18 @@ export default async function EngagementDetailPage({
         </div>
       )}
 
+      {/* Run History */}
       {runs.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">Run History</h2>
             {runs.length > 20 && (
-              <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">Showing 20 most recent</span>
+              <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">Showing 20 most recent</span>
             )}
           </div>
 
-          <div className="w-full overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/10 shadow-sm transition-colors">
-            <ol className="divide-y divide-zinc-200 dark:divide-zinc-900/50">
+          <div className="w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 shadow-xs transition-colors">
+            <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
               {runs.slice(0, 20).map((run) => {
                 const isFailed = run.status.toLowerCase() === "failed";
 
@@ -417,7 +494,7 @@ export default async function EngagementDetailPage({
                       className="absolute inset-0 z-10"
                       aria-label={`View run details for ${skillName(run.skillName)}`}
                     />
-                    <div className="relative flex items-center gap-3 px-4 py-3 hover:bg-zinc-100 dark:hover:bg-zinc-900/20 transition-colors">
+                    <div className="relative flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
                       <RunStatusIcon status={run.status} />
                       <div className="min-w-0 flex-1 flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -429,7 +506,7 @@ export default async function EngagementDetailPage({
                               {runStatusLabel(run.status)}
                             </span>
                           </div>
-                          <div className="text-[11px] font-mono mt-0.5 text-zinc-400 dark:text-zinc-600">
+                          <div className="text-[11px] font-mono mt-0.5 text-zinc-400 dark:text-zinc-500">
                             {phaseLabel(run.phase)}{run.stepCount > 0 ? ` · ${run.stepCount} step${run.stepCount === 1 ? "" : "s"}` : ""}
                           </div>
                           {isFailed && run.errorMessage && (
@@ -439,7 +516,7 @@ export default async function EngagementDetailPage({
                           )}
                         </div>
                         <div
-                          className="shrink-0 flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 dark:text-zinc-600 pt-0.5"
+                          className="shrink-0 flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 pt-0.5"
                           title={new Date(run.startedAt).toLocaleString()}
                         >
                           {relativeTime(String(run.startedAt))}
@@ -456,9 +533,9 @@ export default async function EngagementDetailPage({
       )}
 
       {runs.length === 0 && (
-        <div className="h-32 border border-dashed border-zinc-200 dark:border-zinc-900 bg-zinc-50/50 dark:bg-transparent rounded-lg flex flex-col items-center justify-center space-y-1.5 transition-colors">
+        <div className="h-32 border border-dashed border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-transparent rounded-xl flex flex-col items-center justify-center space-y-1.5 transition-colors">
           <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">No modules have run yet for this client.</p>
-          <p className="text-xs text-zinc-400 dark:text-zinc-600 font-mono">Pick a module above to get started.</p>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">Pick a module above to get started.</p>
         </div>
       )}
     </div>
