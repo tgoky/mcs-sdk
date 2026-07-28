@@ -143,7 +143,7 @@ function RunRow({ run, onOpen }: { run: SkillRun; onOpen: () => void }) {
       ref={ref}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className={`group bg-zinc-50/40 dark:bg-zinc-900/40 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer relative ${
+      className={`group bg-zinc-50/40 dark:bg-zinc-900/40 hover:bg-zinc-100 dark:hover:bg-zinc-900/80 transition-colors cursor-pointer relative ${
         isRunning ? "bg-zinc-100/60 dark:bg-zinc-900/70" : ""
       }`}
       onClick={onOpen}
