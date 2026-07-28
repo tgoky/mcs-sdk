@@ -55,9 +55,9 @@ function actionSummary(run: SkillRun): string {
 
 function RunStatusIcon({ status }: { status: string }) {
   const s = status.toLowerCase();
-  if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 text-gold shrink-0" />;
+  if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />;
   if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 text-rose-500 shrink-0" />;
-  if (s === "timed_out") return <Clock className="w-4 h-4 text-amber-500 shrink-0" />;
+  if (s === "timed_out") return <Clock className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />;
   if (s === "cancelled") return <Ban className="w-4 h-4 text-amber-500 shrink-0" />;
   if (s === "running" || s === "in_progress") return <Loader2 className="w-4 h-4 text-zinc-500 dark:text-zinc-400 animate-spin shrink-0" />;
   return <AlertCircle className="w-4 h-4 text-zinc-400 dark:text-zinc-600 shrink-0" />;
@@ -65,9 +65,9 @@ function RunStatusIcon({ status }: { status: string }) {
 
 function StatusLabel({ status }: { status: string }) {
   const s = status.toLowerCase();
-  if (s === "success" || s === "completed") return <span className="text-xs font-semibold text-gold-hover dark:text-gold font-mono">Done</span>;
+  if (s === "success" || s === "completed") return <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 font-mono">Done</span>;
   if (s === "failed" || s === "error") return <span className="text-xs font-semibold text-rose-600 dark:text-rose-400 font-mono">Failed</span>;
-  if (s === "timed_out") return <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 font-mono">Timed out</span>;
+  if (s === "timed_out") return <span className="text-xs font-semibold text-rose-600 dark:text-rose-400 font-mono">Timed out</span>;
   if (s === "cancelled") return <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 font-mono">Cancelled</span>;
   if (s === "running" || s === "in_progress") return <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 italic font-mono">Running</span>;
   return <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-600 font-mono">Pending</span>;
@@ -96,8 +96,6 @@ function RelativeTime({ isoString }: { isoString: string }) {
     return `${Math.floor(diff / 86400)}d`;
   }, [isoString]);
 
-  // Lazy initializer computes the first label at mount time directly —
-  // no effect needed just to get an initial value on screen.
   const [label, setLabel] = useState(compute);
 
   useEffect(() => {
@@ -115,10 +113,10 @@ function RunPreview({ run }: { run: SkillRun }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold text-foreground truncate">{displayName}</span>
+        <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{displayName}</span>
         <RelativeTime isoString={run.startedAt} />
       </div>
-      <div className="flex items-center gap-1.5 text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
         <span className="font-mono font-bold uppercase tracking-wide text-[11px]">{skillName(run.skillName)}</span>
         <span>·</span>
         <div className="flex items-center gap-1">
@@ -126,11 +124,11 @@ function RunPreview({ run }: { run: SkillRun }) {
           <StatusLabel status={run.status} />
         </div>
       </div>
-      <p className="text-foreground/80 leading-snug">{actionSummary(run)}</p>
+      <p className="text-zinc-600 dark:text-zinc-400 leading-snug">{actionSummary(run)}</p>
       {run.subjectLabel && (
-        <p className="font-mono text-muted-foreground truncate">{run.subjectLabel}</p>
+        <p className="font-mono text-zinc-400 dark:text-zinc-600 truncate">{run.subjectLabel}</p>
       )}
-      <p className="text-muted-foreground italic">Click for the full run detail</p>
+      <p className="text-zinc-400 dark:text-zinc-600 italic">Click for the full run detail</p>
     </div>
   );
 }
@@ -164,7 +162,7 @@ function RunRow({ run, onOpen }: { run: SkillRun; onOpen: () => void }) {
             {skillName(run.skillName)}
           </span>
           {(run.stepCount ?? 0) > 0 && (
-            <span className="ml-2 text-[13px] font-mono text-zinc-400 dark:text-zinc-700">
+            <span className="ml-2 text-[10px] font-mono text-zinc-400 dark:text-zinc-700">
               {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
             </span>
           )}
@@ -178,7 +176,7 @@ function RunRow({ run, onOpen }: { run: SkillRun; onOpen: () => void }) {
             {actionSummary(run)}
           </span>
           {run.subjectLabel && (
-            <span className="text-[14px] text-zinc-400 dark:text-zinc-600 truncate block font-mono" title={run.subjectLabel}>
+            <span className="text-[11px] text-zinc-400 dark:text-zinc-600 truncate block font-mono" title={run.subjectLabel}>
               {run.subjectLabel}
             </span>
           )}
@@ -206,23 +204,9 @@ function RunRow({ run, onOpen }: { run: SkillRun; onOpen: () => void }) {
 
 export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionFeedProps) {
   const router = useRouter();
-  // A fresh server-rendered prop on every mount (e.g. navigating back into
-  // /dashboard from Home) — useState's initial value already reflects it,
-  // since a route re-entry remounts this component rather than reusing the
-  // old instance with stale state.
   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
   const [polling, setPolling] = useState(true);
 
-  // Pagination is layered on top of the existing live-poll rather than a
-  // separate mode: page 0 is "live" (auto-refreshes every 5s, same as
-  // before pagination existed), and stepping to any later page pauses
-  // that refresh — reusing the polling flag the manual "Pause live"
-  // button already toggled, rather than tracking a second independent
-  // paused/live concept that could disagree with it. Paging back to 0
-  // resumes it. Deliberately no "load more" — Next/Prev issue a real
-  // server request with limit+offset (see /api/skill-runs/recent), so
-  // this scales to actual run history instead of only ever showing
-  // whatever the first fetch happened to return.
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState<5 | 10>(10);
 
@@ -247,14 +231,6 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
     }
   }, [buildUrl, page, pageSize]);
 
-  // Single effect drives every fetch trigger: initial mount, a page/
-  // pageSize change, and resuming from pause all need an immediate
-  // refetch, not just "wait for the next 5s tick" — splitting this into
-  // a separate "fetch on page change" effect and a separate "run the
-  // interval" effect (an earlier version of this component did) loses
-  // that immediate refetch on resume, since toggling `polling` back to
-  // true wouldn't touch `page`/`pageSize` and so wouldn't retrigger the
-  // fetch-effect. One effect, one clear trigger list, avoids that gap.
   useEffect(() => {
     const controller = new AbortController();
     (async () => {
@@ -286,10 +262,10 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
 
   if (runs.length === 0 && page === 0) {
     return (
-      <div className="h-32 flex items-center justify-center border border-dashed border-border rounded-lg bg-card/60 transition-colors">
+      <div className="h-32 flex items-center justify-center border border-dashed border-zinc-300 dark:border-zinc-800 rounded-lg bg-zinc-50/50 dark:bg-zinc-950/50 transition-colors">
         <div className="text-center space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">No executions yet</p>
-          <p className="text-xs text-muted-foreground/70 max-w-sm font-mono">
+          <p className="text-sm font-medium text-zinc-500">No executions yet</p>
+          <p className="text-xs text-zinc-400 dark:text-zinc-600 max-w-sm font-mono">
             Skill runs will appear here once triggered for a client engagement
           </p>
         </div>
@@ -298,24 +274,24 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
   }
 
   return (
-    <div className="border border-border rounded-lg bg-card overflow-hidden shadow-sm transition-colors duration-200">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-black/[0.02] dark:bg-black/10">
+    <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white/40 dark:bg-zinc-950/30 overflow-hidden shadow-sm transition-colors duration-200">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50">
         <div className="flex items-center gap-2">
-          <h3 className="text-xs font-bold text-foreground/80 uppercase tracking-wider font-mono">
+          <h3 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider font-mono">
             {title ?? "Live Executions"}
           </h3>
-          <span className="text-xs font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-sm border border-border">{runs.length}</span>
+          <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 bg-zinc-200/60 dark:bg-zinc-900 px-1.5 py-0.5 rounded-sm border border-zinc-300/40 dark:border-zinc-800/40">{runs.length}</span>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
+          <div className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
             {([5, 10] as const).map((size) => (
               <button
                 key={size}
                 onClick={() => changePageSize(size)}
                 className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
                   pageSize === size
-                    ? "border-gold/40 bg-gold/10 text-gold-hover dark:text-gold"
-                    : "border-transparent hover:text-foreground"
+                    ? "border-zinc-400 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300"
+                    : "border-transparent hover:text-zinc-700 dark:hover:text-zinc-300"
                 }`}
               >
                 {size}/page
@@ -324,7 +300,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
           </div>
           <button
             onClick={() => setPolling((p) => !p)}
-            className="text-xs font-bold font-mono text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            className="text-xs font-bold font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors cursor-pointer"
           >
             {polling && page === 0 ? "[ Pause live ]" : "[ Resume live ]"}
           </button>
@@ -334,7 +310,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
       <div className="overflow-x-auto">
         <table className="w-full min-w-[680px] text-left border-collapse text-xs font-sans tracking-tight">
           <thead>
-            <tr className="border-b border-border bg-muted/30 text-muted-foreground uppercase tracking-wider font-mono text-[11px] select-none">
+            <tr className="border-b border-zinc-200 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-transparent text-zinc-400 dark:text-zinc-600 uppercase tracking-wider font-mono text-[10px] select-none">
               <th className="px-4 py-2 w-[180px] font-normal">Client</th>
               <th className="px-4 py-2 font-normal">Module</th>
               <th className="px-4 py-2 font-normal">Action</th>
@@ -343,7 +319,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
               <th className="w-8 px-2" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-border">
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/30">
             {runs.map((run) => (
               <RunRow key={run.id} run={run} onOpen={() => router.push(`/dashboard/runs/${run.id}`)} />
             ))}
@@ -351,22 +327,22 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
         </table>
       </div>
 
-      <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/20">
-        <span className="text-[10px] font-mono text-muted-foreground">
+      <div className="flex items-center justify-between px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-transparent">
+        <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
           {page === 0 ? "Showing most recent" : `Page ${page + 1}`}
         </span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => goToPage(page - 1)}
             disabled={page === 0}
-            className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
           >
             ← Prev
           </button>
           <button
             onClick={() => goToPage(page + 1)}
             disabled={runs.length < pageSize}
-            className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
           >
             Next →
           </button>
