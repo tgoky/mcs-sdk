@@ -139,66 +139,64 @@ function RunRow({ run, onOpen }: { run: SkillRun; onOpen: () => void }) {
   const { ref, hovering, onMouseEnter, onMouseLeave } = useHoverPreview<HTMLTableRowElement>();
 
   return (
-    <>
-      <tr
-        ref={ref}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-        className={`group hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors cursor-pointer relative ${isRunning ? "bg-zinc-100/30 dark:bg-zinc-900/20" : ""}`}
-        onClick={onOpen}
-      >
-        <td className="px-4 py-2.5 max-w-[180px]" onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
-          {run.buyerName && run.engagementId ? (
-            <Link href={`/dashboard/engagements/${run.engagementId}`} onClick={(e) => e.stopPropagation()} className="hover:text-zinc-900 dark:hover:text-white transition-colors relative z-20">
-              <ClientCell run={run} />
-            </Link>
-          ) : (
+    <tr
+      ref={ref}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      className={`group hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors cursor-pointer relative ${isRunning ? "bg-zinc-100/30 dark:bg-zinc-900/20" : ""}`}
+      onClick={onOpen}
+    >
+      <td className="px-4 py-2.5 max-w-[180px]" onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
+        {run.buyerName && run.engagementId ? (
+          <Link href={`/dashboard/engagements/${run.engagementId}`} onClick={(e) => e.stopPropagation()} className="hover:text-zinc-900 dark:hover:text-white transition-colors relative z-20">
             <ClientCell run={run} />
-          )}
-        </td>
+          </Link>
+        ) : (
+          <ClientCell run={run} />
+        )}
+      </td>
 
-        <td className="px-4 py-2.5">
-          <span className="text-sm text-zinc-600 dark:text-zinc-400 font-semibold whitespace-nowrap">
-            {skillName(run.skillName)}
+      <td className="px-4 py-2.5">
+        <span className="text-sm text-zinc-600 dark:text-zinc-400 font-semibold whitespace-nowrap">
+          {skillName(run.skillName)}
+        </span>
+        {(run.stepCount ?? 0) > 0 && (
+          <span className="ml-2 text-[10px] font-mono text-zinc-400 dark:text-zinc-700">
+            {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
           </span>
-          {(run.stepCount ?? 0) > 0 && (
-            <span className="ml-2 text-[10px] font-mono text-zinc-400 dark:text-zinc-700">
-              {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
-            </span>
-          )}
-        </td>
+        )}
+      </td>
 
-        <td className="px-4 py-2.5 max-w-[280px]">
-          <span
-            className={`text-sm truncate block font-medium ${isFailed ? "text-rose-600 dark:text-rose-400/80 font-mono" : isRunning ? "text-zinc-800 dark:text-zinc-300" : "text-zinc-500"}`}
-            title={actionSummary(run)}
-          >
-            {actionSummary(run)}
+      <td className="px-4 py-2.5 max-w-[280px]">
+        <span
+          className={`text-sm truncate block font-medium ${isFailed ? "text-rose-600 dark:text-rose-400/80 font-mono" : isRunning ? "text-zinc-800 dark:text-zinc-300" : "text-zinc-500"}`}
+          title={actionSummary(run)}
+        >
+          {actionSummary(run)}
+        </span>
+        {run.subjectLabel && (
+          <span className="text-[11px] text-zinc-400 dark:text-zinc-600 truncate block font-mono" title={run.subjectLabel}>
+            {run.subjectLabel}
           </span>
-          {run.subjectLabel && (
-            <span className="text-[11px] text-zinc-400 dark:text-zinc-600 truncate block font-mono" title={run.subjectLabel}>
-              {run.subjectLabel}
-            </span>
-          )}
-        </td>
+        )}
+      </td>
 
-        <td className="px-4 py-2.5 whitespace-nowrap">
-          <div className="flex items-center gap-2">
-            <RunStatusIcon status={run.status} />
-            <StatusLabel status={run.status} />
-          </div>
-        </td>
+      <td className="px-4 py-2.5 whitespace-nowrap">
+        <div className="flex items-center gap-2">
+          <RunStatusIcon status={run.status} />
+          <StatusLabel status={run.status} />
+        </div>
+      </td>
 
-        <td className="px-4 py-2.5 text-right whitespace-nowrap">
-          <RelativeTime isoString={run.startedAt} />
-        </td>
+      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+        <RelativeTime isoString={run.startedAt} />
+      </td>
 
-        <td className="pr-3 text-right">
-          <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-2px] group-hover:translate-x-0 duration-150" />
-        </td>
-      </tr>
-      <HoverPreview anchorRef={ref} hovering={hovering} preview={<RunPreview run={run} />} />
-    </>
+      <td className="pr-3 text-right">
+        <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-2px] group-hover:translate-x-0 duration-150" />
+        <HoverPreview anchorRef={ref} hovering={hovering} preview={<RunPreview run={run} />} />
+      </td>
+    </tr>
   );
 }
 
