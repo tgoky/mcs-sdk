@@ -26,8 +26,8 @@ function StatusIcon({ status }: { status: SkillStatus }) {
     case "live":
       return (
         <span className="relative group/icon shrink-0">
-          <CheckCircle2 size={14} className="text-gold" />
-             <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+          <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400" />
+          <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
             {tooltip}
           </span>
         </span>
@@ -36,7 +36,7 @@ function StatusIcon({ status }: { status: SkillStatus }) {
       return (
         <span className="relative group/icon shrink-0">
           <Loader2 size={14} className="text-zinc-500 dark:text-zinc-400 animate-spin" />
-  <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+          <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
             {tooltip}
           </span>
         </span>
@@ -45,7 +45,7 @@ function StatusIcon({ status }: { status: SkillStatus }) {
       return (
         <span className="relative group/icon shrink-0">
           <AlertCircle size={14} className="text-rose-500 dark:text-rose-400" />
-      <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+          <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
             {tooltip}
           </span>
         </span>
@@ -54,7 +54,7 @@ function StatusIcon({ status }: { status: SkillStatus }) {
       return (
         <span className="relative group/icon shrink-0">
           <Circle size={14} className="text-zinc-300 dark:text-zinc-700" />
-     <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+          <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
             {tooltip}
           </span>
         </span>
@@ -62,26 +62,6 @@ function StatusIcon({ status }: { status: SkillStatus }) {
   }
 }
 
-/**
- * Everything in the sidebar that depends on a database round trip — the
- * per-module status list and the "N active / N issues" summary line.
- *
- * Pulled out of DashboardLayout on purpose: that layout is a shared ancestor
- * for every /dashboard/* route, so if this query lived directly in the
- * layout function body, EVERY navigation into the dashboard from outside it
- * (e.g. clicking "Home" and coming back) would block the entire sidebar —
- * logo, nav links, sign-out — behind this fetch before anything painted.
- * Wrapping just this piece in <Suspense> (see layout.tsx) means the static
- * shell renders immediately and this panel streams in a moment later,
- * with its own skeleton instead of a blank sidebar.
- *
- * Rows are intentionally single-line/minimal here — the full description +
- * two-line meta block this used to render made five rows read as the
- * tallest thing in the whole sidebar for information most people only
- * glance at (a status dot + last-run time). The description now lives in
- * the row's title tooltip instead of always being on screen; hover it or
- * open the module page for the full explanation.
- */
 export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
   const skillStatuses: Record<SkillName, SkillStatus> = {
     "pin-down": "not_run",
@@ -107,11 +87,10 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
     "leak-map": 0,
   };
 
-   const userEngagements = await db
+  const userEngagements = await db
     .select({ engagementId: engagements.engagementId })
     .from(engagements)
     .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)));
-
 
   if (userEngagements.length > 0) {
     const recentRuns = await db
@@ -122,7 +101,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
       })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-           .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))) // Strict tenant boundary + soft-delete filter
+      .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)))
       .orderBy(desc(skillRuns.startedAt))
       .limit(100);
 
@@ -163,7 +142,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
         </span>
       </div>
 
-      <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-900 rounded-lg overflow-hidden divide-y divide-zinc-200 dark:divide-zinc-900 transition-colors duration-200">
+      <div className="bg-white/60 backdrop-blur-md dark:bg-zinc-900/50 border border-white/70 dark:border-zinc-900 rounded-lg overflow-hidden divide-y divide-zinc-200 dark:divide-zinc-900 transition-colors duration-200">
         {SKILLS.map((skill) => {
           const status = skillStatuses[skill];
           const info = SKILL_INFO[skill];
@@ -199,7 +178,6 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
   );
 }
 
-/** Static placeholder shown while SidebarSkills resolves its query. */
 export function SidebarSkillsSkeleton() {
   return (
     <div className="pt-4 border-t border-zinc-200 dark:border-zinc-900">
@@ -208,11 +186,11 @@ export function SidebarSkillsSkeleton() {
           Executions
         </p>
       </div>
-      <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-900 rounded-lg overflow-hidden divide-y divide-zinc-200 dark:divide-zinc-900">
+      <div className="bg-white/60 backdrop-blur-md dark:bg-zinc-900/50 border border-white/70 dark:border-zinc-900 rounded-lg overflow-hidden divide-y divide-zinc-200 dark:divide-zinc-900">
         {SKILLS.map((skill) => (
           <div key={skill} className="px-2.5 py-1.5 flex items-center gap-2">
             <div className="w-3.5 h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-800 shrink-0" />
-        <div className="h-2.5 w-20 rounded-sm bg-zinc-100 dark:bg-zinc-900" />        
+            <div className="h-2.5 w-20 rounded-sm bg-zinc-100 dark:bg-zinc-900" />
           </div>
         ))}
       </div>
