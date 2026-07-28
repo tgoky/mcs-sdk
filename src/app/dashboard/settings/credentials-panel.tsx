@@ -221,7 +221,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
               Which account is this for?
             </label>
             <input
-                  className="w-full bg-white/40 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors"
+              className="w-full bg-white/40 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors"
               value={engagementId}
               onChange={(e) => setEngagementId(e.target.value)}
               placeholder="e.g. eng_acme_corp_001"
@@ -267,7 +267,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <input
-    className="w-full bg-white/40 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 pr-8 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors"
+                      className="w-full bg-white/40 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 pr-8 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors"
                       type={visible[platform.provider] ? "text" : "password"}
                       value={values[platform.provider] ?? ""}
                       onChange={(e) =>
@@ -296,7 +296,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                   <button
                     onClick={() => save(platform.provider)}
                     disabled={saving === platform.provider}
-      className="px-4 py-2 text-sm rounded-lg font-medium bg-gold text-gold-foreground hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
+                    className="px-4 py-2 text-sm rounded-lg font-medium bg-gold text-gold-foreground hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
                   >
                     {saving === platform.provider ? "Saving…" : "Save"}
                   </button>
@@ -305,7 +305,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                       onClick={() => testConnection(platform.provider)}
                       disabled={testing === platform.provider}
                       title="Confirms the saved key still works, without waiting for the daily check"
-                         className="px-3 py-2 text-sm rounded-lg font-medium border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
+                      className="px-3 py-2 text-sm rounded-lg font-medium border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
                     >
                       {testing === platform.provider ? "Testing…" : "Test"}
                     </button>
@@ -444,7 +444,7 @@ function SmtpCredentialCard() {
   }
 
   const inputClass =
-     "w-full bg-white/40 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors";
+    "w-full bg-white/40 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors";
 
   return (
     <div
@@ -547,7 +547,7 @@ function SmtpCredentialCard() {
             <button
               onClick={save}
               disabled={saving}
-                 className="px-4 py-2 text-sm rounded-lg font-medium bg-gold text-gold-foreground hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
+              className="px-4 py-2 text-sm rounded-lg font-medium bg-gold text-gold-foreground hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
             >
               {saving ? "Saving…" : "Save"}
             </button>
@@ -555,7 +555,7 @@ function SmtpCredentialCard() {
               onClick={test}
               disabled={testing}
               title="Confirms the saved SMTP credentials actually connect, without waiting for the daily check"
-      className="px-3 py-2 text-sm rounded-lg font-medium border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
+              className="px-3 py-2 text-sm rounded-lg font-medium border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
             >
               {testing ? "Testing…" : "Test"}
             </button>
@@ -616,13 +616,13 @@ export function CredentialsPanel() {
         className="flex items-start gap-3 p-4 rounded-xl"
         style={{
           background: "var(--accent-dim)",
-          border: "1px solid rgba(99,102,241,0.2)",
+          border: "1px solid var(--border)",
         }}
       >
         <KeyRound
           size={16}
           style={{
-            color: "var(--accent)",
+            color: "var(--text-secondary)",
             marginTop: "1px",
             flexShrink: 0,
           }}
