@@ -21,10 +21,7 @@ import {
   AlertCircle, 
   ArrowRight, 
   Server, 
-  DollarSign,
-  Briefcase,
-  Target,
-  Sparkles
+  DollarSign 
 } from "lucide-react";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
@@ -151,9 +148,9 @@ export default async function EngagementDetailPage({
   const revenueAttribution = await computeWinBackRevenueAttribution(id);
 
   // Cleaned Offer Metadata values
-  const offerName = String(offerDetails?.name || "").trim() || "—";
-  const offerPrice = String(offerDetails?.price || "").trim() || "—";
-  const offerIcp = String(offerDetails?.icp || "").trim() || "—";
+  const offerName = String(offerDetails?.name || "").trim() || "Unspecified Offer";
+  const offerPrice = String(offerDetails?.price || "").trim();
+  const offerIcp = String(offerDetails?.icp || "").trim();
   const isAiEnabled = Boolean(offerDetails?.hybrid_mode_enabled);
 
   return (
@@ -239,73 +236,51 @@ export default async function EngagementDetailPage({
         </div>
       )}
 
-      {/* Offer Summary Metadata */}
+      {/* Integrated Executive Narrative Banner */}
       {offerDetails && (
-        <div className="space-y-2">
-          <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">
-            Offer Summary
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="rounded-lg border-l-2 border-zinc-400 dark:border-zinc-600 bg-zinc-100/60 dark:bg-zinc-900/40 py-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          
+          {/* Left: Offer Name & Target ICP Narrative */}
+          <div className="min-w-0 flex-1 leading-relaxed text-zinc-700 dark:text-zinc-300">
+            <span className="font-bold text-zinc-900 dark:text-zinc-100 font-mono text-sm">{offerName}</span>
+            {offerIcp && (
+              <>
+                <span className="mx-2 text-zinc-300 dark:text-zinc-700">•</span>
+                <span className="text-zinc-500 dark:text-zinc-400 font-mono text-[11px] uppercase tracking-wide">Targeting:</span>{" "}
+                <span className="font-medium text-zinc-800 dark:text-zinc-200">{offerIcp}</span>
+              </>
+            )}
+          </div>
 
-            {/* Offer Name */}
-            <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-3.5 flex flex-col justify-between shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                  Offer
-                </span>
-                <Briefcase className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
-              </div>
-              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate" title={offerName}>
-                {offerName}
-              </p>
+          {/* Right Top Extreme: Price, then AI Personalization */}
+          <div className="shrink-0 flex items-center gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-200 dark:border-zinc-800 font-mono">
+            
+            {/* Price Badge */}
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                Price
+              </span>
+              <span className="px-2 py-0.5 rounded text-[11px] font-bold text-zinc-800 dark:text-zinc-200 bg-zinc-200/60 dark:bg-zinc-800/60 border border-zinc-300 dark:border-zinc-700">
+                {offerPrice ? `$${offerPrice}` : "$—"}
+              </span>
             </div>
 
-            {/* Price */}
-            <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-3.5 flex flex-col justify-between shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                  Price
-                </span>
-                <DollarSign className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
-              </div>
-              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 font-mono">
-                {offerPrice}
-              </p>
-            </div>
-
-            {/* Ideal Customer */}
-            <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-3.5 flex flex-col justify-between shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                  Ideal Customer
-                </span>
-                <Target className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-              </div>
-              <p className="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-medium line-clamp-2" title={offerIcp}>
-                {offerIcp}
-              </p>
-            </div>
-
-            {/* AI Personalization */}
-            <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-3.5 flex flex-col justify-between shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                  AI Personalization
-                </span>
-                <Sparkles className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
-              </div>
-              <div>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold ${
-                  isAiEnabled 
-                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
-                    : "bg-zinc-500/10 text-zinc-500 dark:text-zinc-400 border border-zinc-500/20"
-                }`}>
-                  {isAiEnabled ? "Enabled" : "Disabled"}
-                </span>
-              </div>
+            {/* AI Personalization Badge */}
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                AI Personalization
+              </span>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                isAiEnabled 
+                  ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20" 
+                  : "text-zinc-500 dark:text-zinc-400 bg-zinc-500/10 border border-zinc-500/20"
+              }`}>
+                {isAiEnabled ? "On" : "Off"}
+              </span>
             </div>
 
           </div>
+
         </div>
       )}
 

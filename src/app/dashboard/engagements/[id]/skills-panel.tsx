@@ -19,15 +19,15 @@ function Switch({ enabled, busy }: { enabled: boolean; busy: boolean }) {
   return (
     <span
       role="presentation"
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
         enabled
           ? "bg-emerald-500 dark:bg-emerald-600"
-          : "bg-rose-500/20 dark:bg-rose-950/70 border border-rose-500/30"
+          : "bg-zinc-300 dark:bg-zinc-800"
       } ${busy ? "opacity-50" : ""}`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-200 ease-in-out ${
-          enabled ? "translate-x-[22px]" : "translate-x-[4px]"
+        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition-transform duration-200 ease-in-out ${
+          enabled ? "translate-x-[18px]" : "translate-x-[3px]"
         }`}
       />
     </span>
@@ -78,27 +78,24 @@ export function SkillsPanel({
   const onCount = TOGGLEABLE_SKILLS.filter((id) => states[id]).length;
 
   return (
-    <div
-      className="rounded-xl border p-5 space-y-4 shadow-xs"
-      style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
-    >
+    <div className="w-full space-y-3 py-1">
       {/* Header Section */}
-      <div className="flex items-center justify-between gap-4 pb-3 border-b" style={{ borderColor: "var(--border)" }}>
+      <div className="flex items-center justify-between gap-4 pb-2 border-b border-zinc-200/80 dark:border-zinc-800/60">
         <div>
-          <h3 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>
+          <h3 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100">
             Automation Skills
           </h3>
-          <p className="text-xs mt-1 leading-relaxed font-sans" style={{ color: "var(--text-muted)" }}>
-            Turn off anything this client doesn&apos;t need. Takes effect on the next run — an in-progress run finishes as started.
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed font-sans">
+            Turn off anything this client doesn&apos;t need. Takes effect on the next run.
           </p>
         </div>
-        <span className="shrink-0 text-xs font-mono font-bold px-3 py-1 rounded-full bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-          {onCount}/{TOGGLEABLE_SKILLS.length} Active
+        <span className="shrink-0 text-xs font-mono font-medium text-zinc-500 dark:text-zinc-400">
+          <span className="font-bold text-emerald-600 dark:text-emerald-400">{onCount}</span>/{TOGGLEABLE_SKILLS.length} active
         </span>
       </div>
 
-      {/* Skill Cards Grid */}
-      <div className="space-y-2.5">
+      {/* Flat Clean List */}
+      <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
         {TOGGLEABLE_SKILLS.map((skillId) => {
           const skill = SKILL_MANIFEST[skillId];
           const enabled = states[skillId];
@@ -106,63 +103,58 @@ export function SkillsPanel({
           const Icon = SKILL_ICONS[skillId];
 
           return (
-            <button
+            <div
               key={skillId}
-              onClick={() => toggle(skillId)}
-              disabled={busy}
-              role="switch"
-              aria-checked={enabled}
-              className={`w-full flex items-center gap-4 p-3.5 rounded-xl border transition-all duration-200 cursor-pointer disabled:cursor-not-allowed text-left ${
-                enabled
-                  ? "bg-emerald-500/[0.02] dark:bg-emerald-500/[0.04] border-emerald-500/25 hover:border-emerald-500/40 hover:bg-emerald-500/[0.05]"
-                  : "bg-zinc-500/[0.02] dark:bg-zinc-500/[0.03] border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700"
-              }`}
+              onClick={() => !busy && toggle(skillId)}
+              className="group flex items-center justify-between gap-4 py-3 px-1.5 hover:bg-zinc-500/[0.03] rounded-lg transition-colors cursor-pointer select-none"
             >
-              {/* Icon Box */}
-              <span
-                className={`shrink-0 grid place-items-center h-10 w-10 rounded-lg border transition-colors ${
-                  enabled
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                    : "bg-rose-500/10 border-rose-500/20 text-rose-500/80 dark:text-rose-400/80"
-                }`}
-              >
-                <Icon className="h-5 w-5" strokeWidth={2} />
-              </span>
-
-              {/* Title & Description */}
-              <span className="min-w-0 flex-1">
+              <div className="flex items-center gap-3.5 min-w-0 flex-1">
                 <span
-                  className="block text-sm font-semibold tracking-tight font-mono"
-                  style={{ color: enabled ? "var(--text-primary)" : "var(--text-secondary)" }}
+                  className={`shrink-0 grid place-items-center h-8 w-8 rounded-md transition-colors ${
+                    enabled
+                      ? "text-emerald-500 dark:text-emerald-400 bg-emerald-500/10"
+                      : "text-zinc-400 dark:text-zinc-600 bg-zinc-100 dark:bg-zinc-800/40"
+                  }`}
                 >
-                  {skill.name}
+                  <Icon className="h-4 w-4" strokeWidth={1.75} />
                 </span>
-                <span className="block text-xs mt-0.5 leading-relaxed font-sans" style={{ color: "var(--text-muted)" }}>
-                  {skill.description}
-                </span>
-              </span>
 
-              {/* Status Text & Switch */}
-              <span className="shrink-0 flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <span
+                    className={`block text-sm font-semibold tracking-tight transition-colors ${
+                      enabled
+                        ? "text-zinc-900 dark:text-zinc-100"
+                        : "text-zinc-400 dark:text-zinc-500"
+                    }`}
+                  >
+                    {skill.name}
+                  </span>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug truncate font-sans">
+                    {skill.description}
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0 flex items-center gap-3">
                 <span
-                  className={`text-xs font-mono font-bold uppercase tracking-wider w-7 text-right ${
+                  className={`text-[11px] font-mono font-semibold uppercase tracking-wider ${
                     busy
                       ? "text-zinc-400"
                       : enabled
                       ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-rose-500 dark:text-rose-400"
+                      : "text-zinc-400 dark:text-zinc-600"
                   }`}
                 >
                   {busy ? "…" : enabled ? "On" : "Off"}
                 </span>
                 <Switch enabled={enabled} busy={busy} />
-              </span>
-            </button>
+              </div>
+            </div>
           );
         })}
       </div>
 
-      {error && <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400 pt-1">⚠ {error}</p>}
+      {error && <p className="text-xs font-mono text-rose-600 dark:text-rose-400 pt-1">⚠ {error}</p>}
     </div>
   );
 }
