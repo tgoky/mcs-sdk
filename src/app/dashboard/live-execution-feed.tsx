@@ -24,7 +24,7 @@ interface SkillRun {
 
 interface LiveExecutionFeedProps {
   initialRuns: SkillRun[];
-  /** Defaults to "/api/skill-runs/recent". Pass e.g. "/api/skill-runs/recent?skill=pre-call-read&limit=50" to scope the live poll to one module (see /dashboard/modules/[skill]). */
+  /** Defaults to "/api/skill-runs/recent". Pass e.g. "/api/skill-runs/recent?skill=pre-call-read&limit=50" to scope the live poll to one module. */
   apiUrl?: string;
   /** Defaults to "Live Executions". */
   title?: string;
@@ -225,9 +225,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
       if (signal.aborted) return;
       setRuns(data.runs ?? []);
     } catch {
-      // Includes AbortError from a cancelled in-flight request on unmount —
-      // never worth surfacing, the next successful poll (or none, if the
-      // component is gone) picks it back up.
+      // Ignore AbortError on unmount/re-fetch
     }
   }, [buildUrl, page, pageSize]);
 
@@ -274,7 +272,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
   }
 
   return (
-<div className="border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white/40 dark:bg-zinc-950/30 overflow-hidden shadow-sm transition-colors duration-200">
+    <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white/40 dark:bg-zinc-950/30 overflow-hidden shadow-sm transition-colors duration-200">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50">
         <div className="flex items-center gap-2">
           <h3 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider font-mono">
