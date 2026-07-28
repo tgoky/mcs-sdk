@@ -19,19 +19,6 @@ function getStatusTooltip(status: SkillStatus): string {
   return MODULE_STATUS_LABELS[status as ModuleStatus] ?? "Not started yet";
 }
 
-/**
- * Everything in the sidebar that depends on a database round trip — the
- * per-module status list and the "N active / N issues" summary line.
- *
- * Pulled out of DashboardLayout on purpose: that layout is a shared ancestor
- * for every /dashboard/* route, so if this query lived directly in the
- * layout function body, EVERY navigation into the dashboard from outside it
- * (e.g. clicking "Home" and coming back) would block the entire sidebar —
- * logo, nav links, sign-out — behind this fetch before anything painted.
- * Wrapping just this piece in <Suspense> (see layout.tsx) means the static
- * shell renders immediately and this panel streams in a moment later,
- * with its own skeleton instead of a blank sidebar.
- */
 export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
   const skillStatuses: Record<SkillName, SkillStatus> = {
     "pin-down": "not_run",
@@ -57,7 +44,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
     "leak-map": 0,
   };
 
-    const userEngagements = await db
+  const userEngagements = await db
     .select({ engagementId: engagements.engagementId })
     .from(engagements)
     .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)));
@@ -71,7 +58,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
       })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-           .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))) // Strict tenant boundary + soft-delete filter
+      .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)))
       .orderBy(desc(skillRuns.startedAt))
       .limit(100);
 
@@ -108,12 +95,16 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
           <span className="text-[11px] font-mono text-zinc-500">
             <span className="text-zinc-700 dark:text-zinc-400">{activeCount} active</span>
             {failedCount > 0 && <span className="text-zinc-300 dark:text-zinc-600 mx-1">·</span>}
-            {failedCount > 0 && <span className="text-rose-600 dark:text-rose-400 font-medium">{failedCount} issue{failedCount !== 1 ? 's' : ''}</span>}
+            {failedCount > 0 && (
+              <span className="text-rose-600 dark:text-rose-400 font-medium">
+                {failedCount} issue{failedCount !== 1 ? "s" : ""}
+              </span>
+            )}
           </span>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-900 rounded-lg overflow-hidden transition-colors duration-200">
+      <div className="bg-white/60 backdrop-blur-md dark:bg-zinc-900/50 border border-white/70 dark:border-zinc-900 rounded-lg overflow-hidden transition-colors duration-200">
         {SKILLS.map((skill, index) => {
           const status = skillStatuses[skill];
           const info = SKILL_INFO[skill];
@@ -128,7 +119,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
                 block px-3 py-2.5 transition-colors
                 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 cursor-pointer
                 group relative
-                ${index !== SKILLS.length - 1 ? 'border-b border-zinc-200 dark:border-zinc-900' : ''}
+                ${index !== SKILLS.length - 1 ? "border-b border-zinc-200 dark:border-zinc-900" : ""}
               `}
             >
               <div className="flex items-center justify-between">
@@ -149,7 +140,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
                 <div className="flex items-center shrink-0 relative group/icon">
                   {status === "live" && (
                     <>
-                      <CheckCircle2 size={15} className="text-gold" />
+                      <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
                       <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
                         {getStatusTooltip(status)}
                       </span>
@@ -166,7 +157,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
                   {status === "failed" && (
                     <>
                       <AlertCircle size={15} className="text-rose-500 dark:text-rose-400" />
-                  <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
                         {getStatusTooltip(status)}
                       </span>
                     </>
@@ -174,7 +165,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
                   {status === "not_run" && (
                     <>
                       <Circle size={15} className="text-zinc-300 dark:text-zinc-700" />
-                 <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
+                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-zinc-800 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm opacity-0 group-hover/icon:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md dark:shadow-xl z-10 font-mono">
                         {getStatusTooltip(status)}
                       </span>
                     </>
@@ -194,13 +185,11 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
                 ) : lastRun ? (
                   <LiveTime isoString={lastRun.toISOString()} />
                 ) : (
-                  <span className="text-[10px] text-zinc-400 dark:text-zinc-700">
-                    Never run
-                  </span>
+                  <span className="text-[10px] text-zinc-400 dark:text-zinc-700">Never run</span>
                 )}
                 {runCount > 0 && (
                   <span className="text-[10px] text-zinc-400 dark:text-zinc-700 tabular-nums">
-                    {runCount} run{runCount !== 1 ? 's' : ''}
+                    {runCount} run{runCount !== 1 ? "s" : ""}
                   </span>
                 )}
               </div>
@@ -212,7 +201,6 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
   );
 }
 
-/** Static placeholder shown while SidebarSkills resolves its query. */
 export function SidebarSkillsSkeleton() {
   return (
     <div className="pt-4 border-t border-zinc-200 dark:border-zinc-900">
@@ -220,13 +208,13 @@ export function SidebarSkillsSkeleton() {
         <p className="text-xs font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
           EXECUTIONS
         </p>
-           <div className="h-3 w-20 rounded-sm bg-zinc-100 dark:bg-zinc-900" />
+        <div className="h-3 w-20 rounded-sm bg-zinc-100 dark:bg-zinc-900" />
       </div>
-      <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-900 rounded-lg overflow-hidden divide-y divide-zinc-200 dark:divide-zinc-900">
+      <div className="bg-white/60 backdrop-blur-md dark:bg-zinc-900/50 border border-white/70 dark:border-zinc-900 rounded-lg overflow-hidden divide-y divide-zinc-200 dark:divide-zinc-900">
         {SKILLS.map((skill) => (
           <div key={skill} className="px-3 py-2.5 space-y-1.5">
             <div className="h-3 w-24 rounded-sm bg-zinc-100 dark:bg-zinc-900" />
-               <div className="h-2.5 w-full max-w-[160px] rounded-sm bg-zinc-100 dark:bg-zinc-900" />
+            <div className="h-2.5 w-full max-w-[160px] rounded-sm bg-zinc-100 dark:bg-zinc-900" />
           </div>
         ))}
       </div>
