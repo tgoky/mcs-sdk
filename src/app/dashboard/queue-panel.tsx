@@ -42,9 +42,9 @@ function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-mono font-bold uppercase tracking-wider shrink-0 ${
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 ${
         isGold
-          ? "bg-gold/10 text-gold-hover dark:text-gold border border-gold/25"
+          ? "bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50"
           : "bg-muted text-muted-foreground border border-border"
       }`}
     >
@@ -121,14 +121,14 @@ function QueueRow({
               <button
                 disabled={isBusy}
                 onClick={() => onDecide("approved")}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <Check size={13} /> {copy.actions.approve}
               </button>
               <button
                 disabled={isBusy}
                 onClick={() => onDecide("rejected")}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <X size={13} /> {copy.actions.reject}
               </button>
@@ -141,7 +141,7 @@ function QueueRow({
                 <Link
                   href={href}
                   onClick={onLinkNavigate}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
                 >
                   <ArrowUpRight size={13} /> Review
                 </Link>
@@ -149,7 +149,7 @@ function QueueRow({
               <button
                 disabled={isBusy}
                 onClick={onDismissSyncSetup}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <X size={13} /> Not now
               </button>
@@ -162,7 +162,7 @@ function QueueRow({
                 <Link
                   href={href}
                   onClick={onLinkNavigate}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
                 >
                   <ArrowUpRight size={13} /> Fix now
                 </Link>
@@ -170,7 +170,7 @@ function QueueRow({
               <button
                 disabled={isBusy}
                 onClick={onDismissRunFailure}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <X size={13} /> Not now
               </button>
@@ -182,14 +182,14 @@ function QueueRow({
               <button
                 disabled={isBusy}
                 onClick={() => onDecide("resolved")}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <Check size={13} /> {copy.actions.resolve}
               </button>
               <button
                 disabled={isBusy}
                 onClick={() => onDecide("abandoned")}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <X size={13} /> {copy.actions.dismiss}
               </button>
@@ -202,7 +202,7 @@ function QueueRow({
                 <Link
                   href={href}
                   onClick={onLinkNavigate}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
                 >
                   <ArrowUpRight size={13} /> {copy.actions.open}
                 </Link>
@@ -210,7 +210,7 @@ function QueueRow({
               <button
                 disabled={isBusy}
                 onClick={() => onRunMutation(`/api/notifications/${item.id}/read`)}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <X size={13} /> {copy.actions.dismiss}
               </button>
@@ -223,20 +223,6 @@ function QueueRow({
   );
 }
 
-/**
- * The dashboard queue — a unified, actionable view over everything
- * genuinely waiting on a human: pending_actions (approve/reject),
- * open human_blockers (resolve/dismiss), and unread notifications
- * (open/dismiss). Sits above the live execution feed on purpose (see
- * dashboard/page.tsx) — this is "what needs you," the feed below it is
- * "what's already running on its own."
- *
- * Mirrors live-execution-feed.tsx's poll-with-AbortController pattern.
- * Mutations go straight to the endpoints that already existed for each
- * source table (see src/lib/queue.ts's header comment) — this component
- * never writes to the database itself, only reads /api/queue and calls
- * those existing routes.
- */
 export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
   const [items, setItems] = useState<QueueItemDTO[]>(initialItems);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -244,22 +230,9 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
   const [errorText, setErrorText] = useState<string>(copy.errors.generic);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Client-side pagination over the already-fetched, already-prioritized
-  // list (see src/lib/queue.ts) rather than a server-paginated query —
-  // this list is a read-time merge of five different source tables/
-  // synthesized states, so "page 2 of the merge" doesn't correspond to
-  // any single offset/limit a database query could express. The full
-  // list is never large enough (bounded by "currently outstanding work,"
-  // not historical volume, unlike run history) for fetching all of it up
-  // front to be a real cost.
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState<5 | 10>(10);
   const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
-  // Derived at render time rather than synced via an effect that calls
-  // setPage — a poll refresh or a resolved/dismissed item can shrink
-  // `items` out from under whatever page the user was on, and clamping
-  // here (instead of scheduling a state update to correct it a render
-  // later) means the displayed page is never wrong even for one frame.
   const clampedPage = Math.min(page, pageCount - 1);
 
   const pagedItems = items.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
@@ -272,8 +245,7 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
       if (signal.aborted) return;
       setItems(data.items ?? []);
     } catch {
-      // Silent — includes AbortError on unmount; a missed poll just tries
-      // again next interval, same as the notification bell and live feed.
+      // Silent catch
     }
   }, []);
 
@@ -331,11 +303,6 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     return runMutation(item, `/api/notifications/${item.id}/read`);
   }
 
-  // sync_setup items are synthesized read-time from engagement.stack (see
-  // src/lib/queue.ts) — there's no pending_actions/human_blockers/
-  // notifications row behind them, so "resolve" means "go set it up" and
-  // "dismiss" means PATCH the engagement's own webhook_receiver_setup_dismissed
-  // flag, not any of the three existing decision endpoints above.
   function dismissSyncSetup(item: QueueItemDTO) {
     if (!item.engagementId) return;
     return runMutation(
@@ -346,12 +313,6 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     );
   }
 
-  // run_failure items are synthesized read-time from a classified skillRuns
-  // failure (see src/lib/error-classification.ts + queue.ts) — same
-  // "no real row behind it" situation as sync_setup above, so dismissal
-  // goes through its own dedicated endpoint rather than the generic
-  // decide() paths, which all assume a real pending_actions/human_blockers/
-  // notifications row with an id they can PATCH by.
   function dismissRunFailure(item: QueueItemDTO) {
     if (!item.engagementId || !item.skillName) return;
     return runMutation(
@@ -403,7 +364,7 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
                 onClick={() => { setPageSize(size); setPage(0); }}
                 className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
                   pageSize === size
-                    ? "border-gold/40 bg-gold/10 text-gold-hover dark:text-gold"
+                    ? "border-zinc-400 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300"
                     : "border-transparent hover:text-foreground"
                 }`}
               >
