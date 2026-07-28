@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 import { db } from "@/lib/db";
-import { credentialsRefs } from "@/models/schema";
+import { credentialsRefs, credentialVault } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 
 // Either the module-level pooled db, or the `tx` handle inside a
@@ -99,6 +99,14 @@ function decrypt(encryptedValue: string, iv: string, keyVersion: number): string
 /**
  * Stores or updates a credential in the database.
  * Call this during Pin-Down onboarding when the buyer submits their API keys.
+ *
+ * If this engagement/provider was previously linked to a shared vault
+ * credential (see storeVaultCredential/linkEngagementToVault below),
+ * typing a fresh value here de-links it — vaultId is cleared and this
+ * row goes back to storing its own independent encrypted value, exactly
+ * as it always did before the vault existed. This is deliberate: pasting
+ * a new key is "use my own value from here," not a silent overwrite of a
+ * credential other engagements are still sharing.
  */
 export async function storeCredential(
   engagementId: string,
@@ -127,7 +135,7 @@ export async function storeCredential(
     // separate bulk-migration job.
     await dbClient
       .update(credentialsRefs)
-      .set({ encryptedValue, iv, keyVersion, refKey, updatedAt: new Date() })
+      .set({ encryptedValue, iv, keyVersion, refKey, vaultId: null, updatedAt: new Date() })
       .where(eq(credentialsRefs.id, existing[0].id));
   } else {
     await dbClient.insert(credentialsRefs).values({
@@ -145,9 +153,107 @@ export async function storeCredential(
 }
 
 /**
+ * Links an engagement/provider to a shared vault credential instead of
+ * storing its own value — the "reuse a saved credential" action. Any
+ * previously-stored local value for this engagement/provider is
+ * discarded (encryptedValue/iv cleared) since it's no longer the source
+ * of truth; resolveCredential will read from the vault row from here on.
+ *
+ * Does NOT verify the vault row belongs to the caller's whopUserId —
+ * callers (the API route) must check that themselves before calling
+ * this, the same way every other credentials.ts function trusts its
+ * caller to have already checked the engagement belongs to the right
+ * tenant.
+ */
+export async function linkEngagementToVault(
+  engagementId: string,
+  provider: string,
+  vaultId: string,
+  dbClient: DbClient = db
+): Promise<void> {
+  const existing = await dbClient
+    .select({ id: credentialsRefs.id })
+    .from(credentialsRefs)
+    .where(and(eq(credentialsRefs.engagementId, engagementId), eq(credentialsRefs.provider, provider)))
+    .limit(1);
+
+  if (existing.length > 0) {
+    await dbClient
+      .update(credentialsRefs)
+      .set({ vaultId, encryptedValue: null, iv: null, updatedAt: new Date() })
+      .where(eq(credentialsRefs.id, existing[0].id));
+  } else {
+    // refKey has always been a human-audit label, never used to look
+    // anything up — safe to synthesize one here rather than requiring
+    // the caller to invent a refKey for a row that has no local secret.
+    await dbClient.insert(credentialsRefs).values({
+      id: crypto.randomUUID(),
+      engagementId,
+      provider,
+      refKey: `vault://${vaultId}`,
+      encryptedValue: null,
+      iv: null,
+      vaultId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+}
+
+/**
+ * Saves a new reusable credential to the operator's vault. Call this from
+ * the "save this so I can reuse it for other clients" checkbox — separate
+ * from storeCredential, which writes an engagement-local value.
+ */
+export async function storeVaultCredential(
+  whopUserId: string,
+  provider: string,
+  label: string,
+  refKey: string,
+  plainValue: string
+): Promise<string> {
+  const { encryptedValue, iv, keyVersion } = encrypt(plainValue);
+  const id = crypto.randomUUID();
+  await db.insert(credentialVault).values({
+    id,
+    whopUserId,
+    provider,
+    label,
+    refKey,
+    encryptedValue,
+    iv,
+    keyVersion,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  return id;
+}
+
+/** Rotates the value and/or renames a vault credential. Every engagement linked via vaultId picks up the new value on its next resolveCredential() call — no re-linking needed. */
+export async function rotateVaultCredential(
+  vaultId: string,
+  updates: { plainValue?: string; label?: string }
+): Promise<void> {
+  const set: Record<string, unknown> = { updatedAt: new Date() };
+  if (updates.plainValue !== undefined) {
+    const { encryptedValue, iv, keyVersion } = encrypt(updates.plainValue);
+    Object.assign(set, { encryptedValue, iv, keyVersion });
+  }
+  if (updates.label !== undefined) {
+    set.label = updates.label;
+  }
+  await db.update(credentialVault).set(set).where(eq(credentialVault.id, vaultId));
+}
+
+/**
  * Resolves a credential for runtime use.
  * Looks up by engagementId + provider, decrypts, returns plaintext value.
  * Throws clearly if the credential hasn't been set up.
+ *
+ * Transparently follows vaultId when this engagement/provider is linked
+ * to a shared vault credential rather than storing its own value — every
+ * other caller in the codebase (all the platform clients in
+ * src/lib/platforms/*.ts) stays completely unaware a vault exists at all.
  */
 export async function resolveCredential(
   engagementId: string,
@@ -171,7 +277,35 @@ export async function resolveCredential(
     );
   }
 
-  return decrypt(rows[0].encryptedValue, rows[0].iv, rows[0].keyVersion);
+  const row = rows[0];
+
+  if (row.vaultId) {
+    const vaultRows = await db
+      .select()
+      .from(credentialVault)
+      .where(eq(credentialVault.id, row.vaultId))
+      .limit(1);
+    if (vaultRows.length === 0) {
+      // Shouldn't happen (deleteVaultCredential refuses to delete an
+      // in-use row), but if it ever does, fail with a message that points
+      // straight at the fix instead of a generic "vault row is null" crash.
+      throw new Error(
+        `Engagement [${engagementId}] provider [${provider}] is linked to a vault credential that no longer exists. ` +
+        "Re-link it to a saved credential, or enter a new value directly."
+      );
+    }
+    const v = vaultRows[0];
+    return decrypt(v.encryptedValue, v.iv, v.keyVersion);
+  }
+
+  if (!row.encryptedValue || !row.iv) {
+    throw new Error(
+      `Credential row for engagement [${engagementId}] provider [${provider}] has neither a local value nor a vault link. ` +
+      "This shouldn't be reachable — storeCredential and linkEngagementToVault both always set one or the other."
+    );
+  }
+
+  return decrypt(row.encryptedValue, row.iv, row.keyVersion);
 }
 
 /**
@@ -193,4 +327,69 @@ export async function hasCredential(
     )
     .limit(1);
   return rows.length > 0;
+}
+
+/** For the "reuse a saved credential" picker — never returns decrypted values, just enough to render a labeled option list. */
+export async function listVaultCredentials(
+  whopUserId: string,
+  provider?: string
+): Promise<Array<{ id: string; provider: string; label: string; healthStatus: string; createdAt: Date }>> {
+  const rows = await db
+    .select({
+      id: credentialVault.id,
+      provider: credentialVault.provider,
+      label: credentialVault.label,
+      healthStatus: credentialVault.healthStatus,
+      createdAt: credentialVault.createdAt,
+    })
+    .from(credentialVault)
+    .where(
+      provider
+        ? and(eq(credentialVault.whopUserId, whopUserId), eq(credentialVault.provider, provider))
+        : eq(credentialVault.whopUserId, whopUserId)
+    );
+  return rows;
+}
+
+/** Confirms a vault row belongs to the given tenant before any mutating call touches it — every vault API route checks this first. */
+export async function vaultCredentialBelongsToTenant(vaultId: string, whopUserId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: credentialVault.id })
+    .from(credentialVault)
+    .where(and(eq(credentialVault.id, vaultId), eq(credentialVault.whopUserId, whopUserId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/** Which engagements currently resolve this vault credential — used both to block deletion while in use and to show "used by 3 clients" in the picker. */
+export async function listEngagementsUsingVaultCredential(vaultId: string): Promise<string[]> {
+  const rows = await db
+    .select({ engagementId: credentialsRefs.engagementId })
+    .from(credentialsRefs)
+    .where(eq(credentialsRefs.vaultId, vaultId));
+  return rows.map((r) => r.engagementId);
+}
+
+/**
+ * De-links an engagement/provider from the vault without supplying a
+ * replacement value — leaves it in the same "not configured" state a
+ * brand new engagement is in. Distinct from storeCredential's implicit
+ * de-link, which always pairs de-linking with a fresh value in the same
+ * call; this is for "stop using the shared one and I'll decide what's
+ * next" with no value in hand yet.
+ */
+export async function unlinkEngagementFromVault(engagementId: string, provider: string): Promise<void> {
+  await db
+    .delete(credentialsRefs)
+    .where(and(eq(credentialsRefs.engagementId, engagementId), eq(credentialsRefs.provider, provider)));
+}
+
+/** Deletes a vault credential — refuses if any engagement is still linked to it, since that would silently break their next run rather than fail loudly at delete time. */
+export async function deleteVaultCredential(vaultId: string): Promise<{ ok: true } | { ok: false; usedBy: string[] }> {
+  const usedBy = await listEngagementsUsingVaultCredential(vaultId);
+  if (usedBy.length > 0) {
+    return { ok: false, usedBy };
+  }
+  await db.delete(credentialVault).where(eq(credentialVault.id, vaultId));
+  return { ok: true };
 }

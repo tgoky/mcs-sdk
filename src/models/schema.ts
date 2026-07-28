@@ -860,6 +860,36 @@ export const activeAlerts = pgTable("active_alerts", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ── Credential Vault (whopUserId-scoped, reusable across engagements) ────
+// Solves the "I manage 5 clients on the same GoHighLevel sub-account and
+// have to paste the same API key 5 times" problem — the same one n8n's
+// shared-credentials picker solves. A vault row belongs to the operator
+// (whopUserId), not to any one engagement. credentialsRefs.vaultId (below)
+// is how an engagement "uses" one: not a copy, a live reference — rotate
+// the key here and every engagement pointing at it picks up the new value
+// on its very next resolveCredential() call, no re-entry anywhere.
+export const credentialVault = pgTable("credential_vault", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  whopUserId: text("whop_user_id").notNull(),
+  provider: text("provider").notNull(),
+  // Operator-chosen nickname so a picker showing "GoHighLevel" three times
+  // over is actually useful — e.g. "Acme's GHL sub-account" vs "Widget Co
+  // GHL sub-account". Required, not inferred, since there's no reliable
+  // way to derive a meaningful name from an opaque API key.
+  label: text("label").notNull(),
+  refKey: text("ref_key").notNull(),
+  encryptedValue: text("encrypted_value").notNull(),
+  iv: text("iv").notNull(),
+  keyVersion: integer("key_version").notNull().default(1),
+  // Same health-check contract as credentials_refs — "unknown" until the
+  // daily cron (or a manual "Test connection") has actually checked it.
+  healthStatus: text("health_status").notNull().default("unknown"),
+  lastCheckedAt: timestamp("last_checked_at"),
+  lastCheckError: text("last_check_error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // ── Credentials Refs (encrypted value, not raw) ───────────────────────────
 export const credentialsRefs = pgTable("credentials_refs", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -868,8 +898,21 @@ export const credentialsRefs = pgTable("credentials_refs", {
     .references(() => engagements.engagementId),
   provider: text("provider").notNull(),
   refKey: text("ref_key").notNull(),       // secrets://acme/calendly_pat
-  encryptedValue: text("encrypted_value").notNull(), // AES-256-GCM encrypted
-  iv: text("iv").notNull(),                // initialization vector
+  // Nullable as of credential_vault: a row with vaultId set stores its
+  // secret in credential_vault instead, and these two columns are left
+  // null — see resolveCredential() in src/lib/credentials.ts for the
+  // "check vaultId first" resolution order this depends on. A row NOT
+  // linked to the vault (the original, still-default behavior) keeps
+  // storing its own encrypted value here exactly as before.
+  encryptedValue: text("encrypted_value"), // AES-256-GCM encrypted
+  iv: text("iv"),                          // initialization vector
+  // Points at a shared credential_vault row instead of storing a value
+  // locally. Set by "link this engagement to a saved credential" (the
+  // reuse picker); cleared back to null the moment this engagement's
+  // provider gets a fresh value typed in directly (typing a new key is an
+  // explicit "stop sharing, use my own value from here" action, not a
+  // silent overwrite of the shared credential).
+  vaultId: uuid("vault_id").references(() => credentialVault.id),
   // Which CREDENTIAL_ENCRYPTION_KEY (or CREDENTIAL_ENCRYPTION_KEY_V<n> for
   // an older, rotated-out key) this row was encrypted with. Defaults to 1
   // for every row written before this column existed, which is correct —
@@ -877,7 +920,8 @@ export const credentialsRefs = pgTable("credentials_refs", {
   // Lets the encryption key be rotated (new writes move to a new version,
   // old rows keep decrypting against the old key referenced by this column)
   // instead of a leaked/rotated key requiring every customer to re-enter
-  // every credential. See src/lib/credentials.ts.
+  // every credential. See src/lib/credentials.ts. Meaningless (left at its
+  // default) on a vault-linked row — the vault row has its own.
   keyVersion: integer("key_version").notNull().default(1),
   // ── Credential health (see src/features/notifications/server/credential-health.ts) ──
   // "ok" | "invalid" | "unknown". "unknown" is the default until the daily
@@ -893,6 +937,7 @@ export const credentialsRefs = pgTable("credentials_refs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
 
 // ── Notifications (multi-channel fan-out log + in-app inbox) ─────────────
 // Written by src/lib/notify.ts. This table IS the in-app channel — the

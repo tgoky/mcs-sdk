@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { engagements, skillRuns, artifacts, type EngagementStack } from "@/models/schema";
+import { engagements, skillRuns, artifacts, credentialsRefs, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { eq, and, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -52,6 +52,18 @@ function RunStatusIcon({ status }: { status: string }) {
   return <AlertCircle className="w-4 h-4 text-zinc-400 dark:text-zinc-600 shrink-0" />;
 }
 
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 function PhaseTag({ phase, status }: { phase: string | null; status: string }) {
   const label = phaseLabel(phase);
   const isRunning = status.toLowerCase() === "running";
@@ -77,6 +89,14 @@ export default async function EngagementDetailPage({
 
   if (!engagement) notFound();
 
+  const credentialRows = await db
+    .select({ provider: credentialsRefs.provider, vaultId: credentialsRefs.vaultId })
+    .from(credentialsRefs)
+    .where(eq(credentialsRefs.engagementId, id));
+  const vaultLinksByProvider = Object.fromEntries(
+    credentialRows.map((r) => [r.provider, r.vaultId])
+  );
+
   const runs = await db
     .select({
       id: skillRuns.id,
@@ -101,12 +121,6 @@ export default async function EngagementDetailPage({
     SKILLS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
   ) as Record<SkillName, typeof runs>;
 
-  // Win-Back recovery gap 7 — artifact ownership. Every row here is
-  // "mudd_ventures" today (see artifacts.owner's default and the
-  // recovery-service.ts/lost-deal-sweep.ts call sites that write it) —
-  // this surfaces that plainly rather than leaving it implicit, and gives
-  // a real place for "owner: buyer" to show up the moment an export
-  // capability exists (see the gap 1 discussion in recovery-service.ts).
   const artifactRows = await db
     .select()
     .from(artifacts)
@@ -123,27 +137,37 @@ export default async function EngagementDetailPage({
     buyer: "Exported to buyer's infra",
   };
 
-  // Tier 4 #26 — revenue-attribution dashboard. Cheap to always compute
-  // (one indexed query + arithmetic, no external calls) — showing
-  // recoveredCount: 0 for an engagement that hasn't run Win-Back yet is a
-  // more honest empty state than hiding the section, since "$0 recovered
-  // this quarter" is itself a real, useful signal for a brand-new client.
   const revenueAttribution = await computeWinBackRevenueAttribution(id);
 
   return (
     <div className="space-y-6 w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
 
-      {/* Back + header navigation anchor strip */}
-      <div className="space-y-3 border-b border-zinc-200 dark:border-zinc-900 pb-4">
+      <div className="space-y-4 border-b border-zinc-200 dark:border-zinc-900 pb-5">
         <SetBreadcrumbLabel label={engagement.buyer} />
         <BackLink href="/dashboard/engagements" label="All Clients" />
 
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div className="space-y-1">
-            <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">{engagement.buyer}</h1>
-            <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">{engagement.engagementId}</p>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">{engagement.buyer}</h1>
+              <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">{engagement.engagementId}</p>
+            </div>
+            <div className="flex flex-wrap gap-1.5 font-mono">
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
+                {bookingPlatformLabel(stack?.booking_platform)}
+              </span>
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
+                {emailPlatformLabel(stack?.email_platform)}
+              </span>
+              {offerDetails?.traffic_temperature && (
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60 capitalize">
+                  {String(offerDetails.traffic_temperature)} traffic
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex flex-col items-start sm:items-end gap-2">
+
+          <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
             <EngagementPauseControl
               engagementId={engagement.engagementId}
               initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
@@ -153,46 +177,38 @@ export default async function EngagementDetailPage({
               engagementId={engagement.engagementId}
               initialRequireApproval={requireApproval}
             />
-            <div className="flex flex-wrap gap-2 self-start sm:self-end font-mono">
-     <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60">
-                {bookingPlatformLabel(stack?.booking_platform)}
-              </span>
- <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60">
-                {emailPlatformLabel(stack?.email_platform)}
-              </span>
-              {offerDetails?.traffic_temperature && (
-      <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60 capitalize">             
-                  {String(offerDetails.traffic_temperature)} traffic
-                </span>
-              )}
-            </div>
           </div>
         </div>
 
-        {/* Full-width row — these two expand into grid-based forms that need
-            more room than the narrow right-aligned column above allows. */}
-        <div className="flex flex-wrap gap-2">
-          <div id="stack-settings" className="scroll-mt-24">
-            <EditStackSettings
-              engagementId={engagement.engagementId}
-              initialStack={engagement.stack as EngagementStack | null}
-            />
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/10 p-3 space-y-3">
+          <p className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">
+            Client management
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <div id="stack-settings" className="scroll-mt-24">
+              <EditStackSettings
+                engagementId={engagement.engagementId}
+                initialStack={engagement.stack as EngagementStack | null}
+              />
+            </div>
+            <div id="update-credentials" className="scroll-mt-24">
+              <UpdateCredentialsForm
+                engagementId={engagement.engagementId}
+                bookingPlatform={stack?.booking_platform}
+                emailPlatform={stack?.email_platform}
+                vaultLinksByProvider={vaultLinksByProvider}
+              />
+            </div>
           </div>
-          <div id="update-credentials" className="scroll-mt-24">
-            <UpdateCredentialsForm
+          <div className="pt-2 border-t border-zinc-200/70 dark:border-zinc-900/70">
+            <DeleteClientSection
               engagementId={engagement.engagementId}
-              bookingPlatform={stack?.booking_platform}
-              emailPlatform={stack?.email_platform}
+              buyerName={engagement.buyer}
+              initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
             />
           </div>
         </div>
       </div>
-
-      <DeleteClientSection
-        engagementId={engagement.engagementId}
-        buyerName={engagement.buyer}
-        initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
-      />
 
       <SkillsPanel engagementId={engagement.engagementId} initialStates={skillStates} />
 
@@ -204,7 +220,6 @@ export default async function EngagementDetailPage({
         </div>
       )}
 
-      {/* Offer metric metadata summaries */}
       {offerDetails && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
@@ -221,8 +236,6 @@ export default async function EngagementDetailPage({
         </div>
       )}
 
-      {/* Booking sync — deep status + the "add your webhook" nudge, right
-          where an operator is already looking at this client. */}
       {stack?.booking_platform && (
         <BookingSyncStatusCard
           engagementId={engagement.engagementId}
@@ -230,7 +243,6 @@ export default async function EngagementDetailPage({
         />
       )}
 
-      {/* Module skill selector grid */}
       <div className="space-y-2">
         <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">Modules</h2>
 
@@ -249,7 +261,7 @@ export default async function EngagementDetailPage({
                       <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">{info.name}</p>
                       <p className="text-[11px] font-normal text-zinc-500 dark:text-zinc-500 leading-snug">{info.description}</p>
                     </div>
-          <span className={`text-[11px] font-mono font-bold shrink-0 p-1 bg-zinc-100 dark:bg-zinc-900/40 rounded-sm border border-zinc-200/60 dark:border-zinc-800/40 ml-2 ${MODULE_STATUS_COLORS[status]}`}>
+                    <span className={`text-[11px] font-mono font-bold shrink-0 p-1 bg-zinc-100 dark:bg-zinc-900/40 rounded border border-zinc-200/60 dark:border-zinc-800/40 ml-2 ${MODULE_STATUS_COLORS[status]}`}>
                       {MODULE_STATUS_LABELS[status]}
                     </span>
                   </div>
@@ -309,7 +321,6 @@ export default async function EngagementDetailPage({
         pinDownPageAudit={engagement.pinDownPageAudit}
       />
 
-      {/* Win-Back revenue attribution (Tier 4 #26) */}
       <div className="space-y-2">
         <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
           <DollarSign className="w-3.5 h-3.5" /> Win-Back Revenue Recovered — {revenueAttribution.periodLabel}
@@ -354,7 +365,6 @@ export default async function EngagementDetailPage({
         </div>
       </div>
 
-      {/* Artifact ownership (Win-Back recovery gap 7) */}
       {artifactRows.length > 0 && (
         <div className="space-y-2">
           <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
@@ -371,7 +381,7 @@ export default async function EngagementDetailPage({
                     {ARTIFACT_TYPE_LABELS[a.artifactType] ?? a.artifactType}
                   </span>
                   <span
-                            className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-sm border ${
+                    className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded border ${
                       a.owner === "buyer"
                         ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40"
                         : "text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800/40"
@@ -386,77 +396,73 @@ export default async function EngagementDetailPage({
         </div>
       )}
 
-      {/* Historic executions grid table */}
       {runs.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">Run History</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">Run History</h2>
+            {runs.length > 20 && (
+              <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">Showing 20 most recent</span>
+            )}
+          </div>
 
-          <div className="w-full overflow-hidden border border-zinc-200 dark:border-zinc-900 rounded-lg bg-white/40 dark:bg-zinc-950/10 shadow-sm transition-colors">
-            <table className="w-full text-left border-collapse text-xs font-sans tracking-tight">
-              <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-900/20 text-zinc-400 dark:text-zinc-500 text-[11px] uppercase tracking-wide font-mono select-none">
-                  <th className="p-3 font-normal">Module</th>
-                  <th className="p-3 font-normal">Last Phase</th>
-                  <th className="p-3 font-normal">Steps</th>
-                  <th className="p-3 font-normal">Result</th>
-                  <th className="p-3 font-normal text-right">Date</th>
-                  <th className="w-10 px-2" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-900/50">
-                {runs.slice(0, 20).map((run) => {
-                  const isFailed = run.status.toLowerCase() === "failed";
-                  return (
-                    <tr
-                      key={run.id}
-                      className="group hover:bg-zinc-100 dark:hover:bg-zinc-900/20 transition-colors duration-150 relative"
-                    >
-                      <td className="p-3 text-zinc-800 dark:text-zinc-200 font-semibold">
-                        {/* full-row link semantics remain completely balanced and preserved */}
-                        <Link
-                          href={`/dashboard/runs/${run.id}`}
-                          className="absolute inset-0 z-10"
-                          aria-label={`View run details for ${skillName(run.skillName)}`}
-                        />
-                        <span className="relative z-0">{skillName(run.skillName)}</span>
-                      </td>
-                      <td className="p-3">
-                        <div className="space-y-0.5 relative z-0">
-                          <div className="text-zinc-500 dark:text-zinc-400 font-medium">{phaseLabel(run.phase)}</div>
+          <div className="w-full overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/10 shadow-sm transition-colors">
+            <ol className="divide-y divide-zinc-200 dark:divide-zinc-900/50">
+              {runs.slice(0, 20).map((run) => {
+                const isFailed = run.status.toLowerCase() === "failed";
+                const isRunning = run.status.toLowerCase() === "running" || run.status.toLowerCase() === "in_progress";
+                const pillClass = isFailed
+                  ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                  : isRunning
+                    ? "bg-zinc-500/10 text-zinc-500 dark:text-zinc-400"
+                    : run.status.toLowerCase() === "success"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : "bg-zinc-500/10 text-zinc-500 dark:text-zinc-400";
+
+                return (
+                  <li key={run.id} className="group relative">
+                    <Link
+                      href={`/dashboard/runs/${run.id}`}
+                      className="absolute inset-0 z-10"
+                      aria-label={`View run details for ${skillName(run.skillName)}`}
+                    />
+                    <div className="relative flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
+                      <RunStatusIcon status={run.status} />
+                      <div className="min-w-0 flex-1 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">
+                              {skillName(run.skillName)}
+                            </span>
+                            <span className={`text-[10px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${pillClass}`}>
+                              {runStatusLabel(run.status)}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-mono mt-0.5 text-zinc-400 dark:text-zinc-600">
+                            {phaseLabel(run.phase)}{run.stepCount > 0 ? ` · ${run.stepCount} step${run.stepCount === 1 ? "" : "s"}` : ""}
+                          </div>
                           {isFailed && run.errorMessage && (
-                            <div className="text-[10px] text-rose-600 dark:text-rose-400/80 font-mono leading-relaxed max-w-[200px] truncate" title={run.errorMessage}>
+                            <div className="text-[11px] font-mono text-rose-500/90 dark:text-rose-400/80 mt-1 leading-relaxed line-clamp-2 max-w-xl">
                               {run.errorMessage}
                             </div>
                           )}
                         </div>
-                      </td>
-                      <td className="p-3 font-mono text-zinc-400 dark:text-zinc-600">
-                        {run.stepCount > 0 ? run.stepCount : "—"}
-                      </td>
-                      <td className="p-3 relative z-0">
-                        <div className="flex items-center gap-2">
-                          <RunStatusIcon status={run.status} />
-                          <span className="text-zinc-600 dark:text-zinc-400 text-xs font-normal font-mono">{runStatusLabel(run.status)}</span>
+                        <div
+                          className="shrink-0 flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 dark:text-zinc-600 pt-0.5"
+                          title={new Date(run.startedAt).toLocaleString()}
+                        >
+                          {relativeTime(String(run.startedAt))}
+                          <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
                         </div>
-                      </td>
-                      <td className="p-3 text-right text-zinc-400 dark:text-zinc-600 font-mono">
-                        {new Date(run.startedAt).toLocaleDateString(undefined, {
-                          month: "short", day: "numeric", year: "numeric",
-                        })}
-                      </td>
-                      <td className="pr-3 text-right">
-                        <ArrowRight className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
           </div>
         </div>
       )}
 
-      {/* Empty run log parameter box */}
       {runs.length === 0 && (
         <div className="h-32 border border-dashed border-zinc-200 dark:border-zinc-900 bg-zinc-50/50 dark:bg-transparent rounded-lg flex flex-col items-center justify-center space-y-1.5 transition-colors">
           <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">No modules have run yet for this client.</p>
