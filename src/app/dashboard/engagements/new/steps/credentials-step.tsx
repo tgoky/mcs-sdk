@@ -42,15 +42,16 @@ export function CredentialsStep({
   fetchingGhlWorkflows: boolean;
   ghlWorkflowsError: string | null;
 }) {
-  // GoHighLevel Private Integration Tokens are scoped to a single sub-account
-  // and cover calendars, workflows, and SMS all at once — so if the buyer's
-  // stack uses GHL for more than one of those, we ask for the token and
-  // Location ID exactly once here instead of once per slot.
   const bookingIsGhl = form.bookingPlatform === "ghl_calendar";
   const emailIsGhl = form.emailPlatform === "ghl";
   const smsIsGhl = form.smsPlatform === "ghl_sms";
   const usesGhl = bookingIsGhl || emailIsGhl || smsIsGhl;
   const verifiedGhlLocation = ghlLocations[0];
+
+  // Determines whether we have a valid key to trigger calendar option fetching
+  const hasBookingAuth = bookingIsGhl
+    ? Boolean(form.ghlApiKey?.trim() && form.ghlLocationId?.trim())
+    : Boolean(form.bookingApiKey?.trim());
 
   return (
     <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
@@ -63,7 +64,7 @@ export function CredentialsStep({
         </p>
       </div>
 
-      {/* ── Shared GoHighLevel Account (covers booking / email / sms slots below) ── */}
+      {/* ── Shared GoHighLevel Account ── */}
       {usesGhl && (
         <>
           <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
@@ -92,7 +93,7 @@ export function CredentialsStep({
             <div className="md:col-span-2 text-xs font-mono">
               {fetchingGhlLocations && <span className="italic text-zinc-500 dark:text-zinc-400 animate-pulse">⚡ Verifying against GoHighLevel...</span>}
               {ghlLocationsError && (
-                   <div className="rounded-sm p-3 border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
+                <div className="rounded-sm p-3 border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
                   ⚠ Warning: {ghlLocationsError}
                 </div>
               )}
@@ -104,7 +105,7 @@ export function CredentialsStep({
         </>
       )}
 
-      {/* ── Booking Platform API Key Input (GHL uses the shared panel above) ── */}
+      {/* ── Non-GHL Booking API Key ── */}
       {!bookingIsGhl && (
         <InputField
           label={`${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform} API Key / Token`}
@@ -121,8 +122,8 @@ export function CredentialsStep({
         />
       )}
 
-      {/* ── Live Booking Calendar / Event Type Selection Dropdown ── */}
-      {form.bookingApiKey.trim() && (
+      {/* ── Live Booking Calendar Selection Dropdown ── */}
+      {hasBookingAuth && (
         <div className="md:col-span-2 space-y-2">
           {fetchingBookingOptions && (
             <div className="text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">
@@ -130,24 +131,30 @@ export function CredentialsStep({
             </div>
           )}
           {bookingOptionsError && (
-                   <div className="rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
+            <div className="rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
               ⚠ Warning: {bookingOptionsError}
             </div>
           )}
           <SelectField
             label="Target Booking Calendar / Event Page"
-            value={form.bookingStandingLink}
-            onChange={(v) => set("bookingStandingLink", v)}
+            value={form.bookingCalendarId || ""}
+            onChange={(selectedId) => {
+              set("bookingCalendarId", selectedId);
+              const matchedOpt = bookingOptions.find((b) => b.id === selectedId);
+              if (matchedOpt?.link) {
+                set("bookingStandingLink", matchedOpt.link);
+              }
+            }}
             required
             disabled={fetchingBookingOptions}
             options={[
               { value: "", label: fetchingBookingOptions ? "-- Loading..." : "-- Choose an Active Calendar --" },
               ...bookingOptions.map((b) => ({
-                value: b.link,
+                value: b.id,
                 label: `${b.name} (${b.link || b.id})`,
               })),
             ]}
-            helpText="Selecting your calendar automatically binds its standing booking link."
+            helpText="Selecting your calendar automatically binds its ID and standing booking link."
           />
         </div>
       )}
@@ -159,7 +166,7 @@ export function CredentialsStep({
             className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium"
             style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
           >
-            Custom SMTP has no single API key — enter your mail servers connection details below. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
+            Custom SMTP has no single API key — enter your mail server's connection details below. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
           </div>
           <InputField
             label="SMTP Host"
@@ -209,7 +216,7 @@ export function CredentialsStep({
               id="smtpSecure"
               checked={form.smtpSecure}
               onChange={(e) => set("smtpSecure", e.target.checked)}
-        className="w-4 h-4 rounded-sm cursor-pointer mt-0.5 border border-zinc-300 dark:border-zinc-800"
+              className="w-4 h-4 rounded-sm cursor-pointer mt-0.5 border border-zinc-300 dark:border-zinc-800"
               style={{ accentColor: "var(--accent)" }}
             />
             <label htmlFor="smtpSecure" className="text-xs cursor-pointer leading-normal" style={{ color: "var(--text-secondary)" }}>
@@ -230,7 +237,7 @@ export function CredentialsStep({
             />
           )}
 
-          {/* ── Klaviyo Target / Recovery Lists ── */}
+          {/* ── Klaviyo ── */}
           {form.emailPlatform === "klaviyo" && (
             <>
               {fetchingLists && (
@@ -239,7 +246,7 @@ export function CredentialsStep({
                 </div>
               )}
               {(klaviyoMissingKeyMessage ?? listsFetchError) && (
-    <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">         
+                <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">         
                   ⚠ Warning: {klaviyoMissingKeyMessage ?? listsFetchError}
                 </div>
               )}
@@ -279,7 +286,7 @@ export function CredentialsStep({
             </>
           )}
 
-          {/* ── ActiveCampaign Target / Recovery Lists ── */}
+          {/* ── ActiveCampaign ── */}
           {form.emailPlatform === "activecampaign" && (
             <>
               <InputField
@@ -297,7 +304,7 @@ export function CredentialsStep({
                 </div>
               )}
               {acListsError && (
-          <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
+                <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
                   ⚠ Warning: {acListsError}
                 </div>
               )}
@@ -380,10 +387,10 @@ export function CredentialsStep({
             </>
           )}
 
-          {/* ── GoHighLevel Email Workflows (location + token come from the shared panel above) ── */}
+          {/* ── GoHighLevel Email Workflows ── */}
           {form.emailPlatform === "ghl" && (
             <>
-              {form.emailGhlLocationId && verifiedGhlLocation && (
+              {(form.ghlLocationId || form.emailGhlLocationId) && verifiedGhlLocation && (
                 <>
                   {fetchingGhlWorkflows && (
                     <div className="md:col-span-2 text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">
@@ -391,7 +398,7 @@ export function CredentialsStep({
                     </div>
                   )}
                   {ghlWorkflowsError && (
-         <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
+                    <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
                       ⚠ Warning: {ghlWorkflowsError}
                     </div>
                   )}
@@ -427,7 +434,7 @@ export function CredentialsStep({
         </>
       )}
 
-      {/* ── Hosting Platform Credentials (Optional) ── */}
+      {/* ── Hosting Platform Credentials ── */}
       {form.hostingPlatform !== "ghl" && form.hostingPlatform !== "plain_html" && (
         <InputField
           label={`${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform} ${

@@ -305,26 +305,40 @@ Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})
         });
       });
 
-      // ── Report delivery (Leak Map recovery gap 2) ───────────────────────
-      // Deliberately outside any step.run — delivery failures shouldn't
-      // fail the retry-replay of the whole pipeline (the audit itself
-      // already succeeded and is safely persisted above); a delivery
-      // failure is logged and surfaced, not thrown.
-      await run("deliver-report", async () => {
+        // ── Report delivery (Leak Map recovery gap 2) ───────────────────────
+      // Deliberately inside a step.run so delivery result can be returned
+      // for the summary below, but delivery failures are logged and surfaced,
+      // not thrown, so they don't fail the retry-replay of the whole pipeline.
+      const deliveryResult = await run("deliver-report", async () => {
         await logStep(runId, { phase: "report_delivery", status: "running" });
-        const deliveryResult = await deliverAuditReport(stack?.audit_output_format, type, tenant.buyer, report, {
+        const res = await deliverAuditReport(stack?.audit_output_format, type, tenant.buyer, report, {
           slackWebhookUrl: stack?.slack_webhook_url,
           reportEmail: stack?.leak_map_report_email,
         });
-        if (deliveryResult.delivered) {
-          await logStep(runId, { phase: "report_delivery", status: "success", detail: `Delivered via ${deliveryResult.channel}` });
+        if (res.delivered) {
+          await logStep(runId, { phase: "report_delivery", status: "success", detail: `Delivered via ${res.channel}` });
         } else {
-          await logStep(runId, { phase: "report_delivery", status: "failed", detail: `${deliveryResult.channel}: ${deliveryResult.error}` });
+          await logStep(runId, { phase: "report_delivery", status: "failed", detail: `${res.channel}: ${res.error}` });
         }
+        return res; // <--- Return so we can use it for the summary
       });
 
-      // Clean terminal execution closeout
-      await finishRun(runId);
+      // Clean terminal execution closeout with 5-field summary
+      await finishRun(runId, {
+        summary: {
+          whatWasAttempted: [
+            `Audited conversion funnel metrics (${type} run)`,
+            `Evaluated drop-off points and severity thresholds`,
+          ],
+          whatWorked: [
+            `Computed funnel metrics across pipeline stages`,
+            `Generated comprehensive audit report`,
+          ],
+          whatFailed: deliveryResult.delivered ? [] : [deliveryResult.error ?? "Report delivery failed"],
+          openItems: deliveryResult.delivered ? [] : [`Review undelivered report in dashboard`],
+          decisionsMade: [`Assigned funnel health severity: ${highestSeverity}`], // <--- FIXED: was "severity"
+        },
+      });
 
       return report;
     } catch (err: any) {
@@ -577,10 +591,14 @@ async function pullCrmPipelineMetrics(
     );
   }
 
-  if (stack.email_platform === "ghl") {
-    if (!stack.booking_platform_meta?.location_id) return null;
+   if (stack.email_platform === "ghl") {
+    const locationId = 
+      stack.booking_platform_meta?.location_id || 
+      stack.email_platform_meta?.location_id;
+
+    if (!locationId) return null;
     const apiKey = await resolveCredential(engagementId, "ghl");
-    const client = new GHLCRMClient(apiKey, stack.booking_platform_meta.location_id);
+    const client = new GHLCRMClient(apiKey, locationId);
 
     const [currentOpps, priorOpps] = await Promise.all([
       client.searchOpportunitiesCreatedSince(currentStart),

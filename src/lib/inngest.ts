@@ -13,7 +13,9 @@ export type SkillRunExecuteData = {
   engagementId: string;
   skillName: "pin-down" | "pile-on" | "pre-call-read" | "win-back" | "leak-map";
   auditType?: "weekly" | "monthly";
+  manualOverride?: boolean; // <--- ADD THIS
 };
+
 
 export const skillRunExecute = eventType("skill/run.execute", {
   schema: staticSchema<SkillRunExecuteData>(),

@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { engagements, skillRuns } from "@/models/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, isNull } from "drizzle-orm";
 import Link from "next/link";
 import { CheckCircle2, AlertCircle, Circle, Loader2 } from "lucide-react";
 import {
@@ -107,10 +107,11 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
     "leak-map": 0,
   };
 
-  const userEngagements = await db
+   const userEngagements = await db
     .select({ engagementId: engagements.engagementId })
     .from(engagements)
-    .where(eq(engagements.whopUserId, whopUserId));
+    .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)));
+
 
   if (userEngagements.length > 0) {
     const recentRuns = await db
@@ -121,7 +122,7 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
       })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-      .where(eq(engagements.whopUserId, whopUserId)) // Strict tenant boundary
+           .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))) // Strict tenant boundary + soft-delete filter
       .orderBy(desc(skillRuns.startedAt))
       .limit(100);
 

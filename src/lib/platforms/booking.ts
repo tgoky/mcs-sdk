@@ -28,6 +28,7 @@ interface CalendlyQuestionAnswer {
   answer?: string;
 }
 interface CalendlyInvitee {
+    uri?: string;
   name?: string;
   email?: string;
   text_reminder_number?: string;
@@ -317,18 +318,15 @@ export class CalendlyClient {
         const invitee = invData.collection?.[0];
         if (!invitee) continue;
 
-        results.push({
-          id: eventUuid,
+
+                results.push({
+          id: invitee.uri ?? eventUuid, // <--- This is all you need
           name: invitee.name ?? "Unknown",
           email: invitee.email ?? "",
           company:
             invitee.questions_and_answers?.find((q) =>
               q.question.toLowerCase().includes("company")
             )?.answer ?? "Not Stated",
-          // Calendly's SMS-reminder number is the closest thing to a
-          // structured phone field on an invitee — it's opt-in (only
-          // present if the invitee enabled a text reminder), so this is
-          // frequently empty even when the invitee has a phone number.
           phone: invitee.text_reminder_number ?? undefined,
           callTime: new Date(event.start_time),
           meetingUrl: event.location?.join_url ?? undefined,
@@ -812,8 +810,15 @@ export class GHLCalendarClient {
   private calendarIdCache: string | null = null;
   private contactCache = new Map<string, GHLContact | null>();
 
-  constructor(private apiKey: string, private locationId: string) {
+  constructor(
+    private apiKey: string,
+    private locationId: string,
+    preferredCalendarId?: string
+  ) {
     this.authHeader = `Bearer ${apiKey}`;
+    if (preferredCalendarId) {
+      this.calendarIdCache = preferredCalendarId;
+    }
   }
 
   /** Version header is per-resource-group in GHL's API, not global — confirmed against the public spec. */
@@ -1101,11 +1106,11 @@ export async function fetchTomorrowCallsForTenant(
     case "cal_com":
       return new CalComClient(apiKey).getTomorrowCalls();
 
-    case "ghl_calendar":
-      if (!meta?.location_id) {
-        throw new Error("GHL Calendar requires location_id in booking_platform_meta");
-      }
-      return new GHLCalendarClient(apiKey, meta.location_id).getTomorrowCalls();
+case "ghl_calendar":
+  if (!meta?.location_id) {
+    throw new Error("GHL Calendar requires location_id in booking_platform_meta");
+  }
+  return new GHLCalendarClient(apiKey, meta.location_id, meta.calendar_id).getTomorrowCalls();
 
     case "oncehub":
       return new OnceHubClient(apiKey).getTomorrowCalls();
@@ -1137,11 +1142,12 @@ export async function fetchUpcomingCallsForTenant(
     case "cal_com":
       return new CalComClient(apiKey).getUpcomingCallsWithinWindow(startHoursFromNow, endHoursFromNow);
 
-    case "ghl_calendar":
-      if (!meta?.location_id) {
-        throw new Error("GHL Calendar requires location_id in booking_platform_meta");
-      }
-      return new GHLCalendarClient(apiKey, meta.location_id).getUpcomingCallsWithinWindow(startHoursFromNow, endHoursFromNow);
+case "ghl_calendar":
+  if (!meta?.location_id) {
+    throw new Error("GHL Calendar requires location_id in booking_platform_meta");
+  }
+  return new GHLCalendarClient(apiKey, meta.location_id, meta.calendar_id)
+    .getUpcomingCallsWithinWindow(startHoursFromNow, endHoursFromNow);
 
     case "oncehub":
       return new OnceHubClient(apiKey).getUpcomingCallsWithinWindow(startHoursFromNow, endHoursFromNow);
@@ -1241,11 +1247,12 @@ export async function listBookingsSinceForTenant(
     case "cal_com":
       return new CalComClient(apiKey).listBookingsSince(sinceISO);
 
-    case "ghl_calendar":
-      if (!meta?.location_id) {
-        throw new Error("GHL Calendar requires location_id in booking_platform_meta");
-      }
-      return new GHLCalendarClient(apiKey, meta.location_id).listBookingsSince(sinceISO);
+case "ghl_calendar":
+  if (!meta?.location_id) {
+    throw new Error("GHL Calendar requires location_id in booking_platform_meta");
+  }
+  return new GHLCalendarClient(apiKey, meta.location_id, meta.calendar_id)
+    .listBookingsSince(sinceISO);
 
     case "oncehub":
       return new OnceHubClient(apiKey).listBookingsSince(sinceISO);

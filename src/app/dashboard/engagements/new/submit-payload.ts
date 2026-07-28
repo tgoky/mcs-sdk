@@ -27,6 +27,13 @@ export function buildEngagementPayload(form: FormData) {
 
   const testimonials = form.testimonials.filter((t) => t.name && t.role && t.quote);
 
+  // Helper to resolve the correct GHL Location ID across any slot
+  const resolvedGhlLocationId =
+    form.ghlLocationId || form.bookingLocationId || form.emailGhlLocationId || undefined;
+
+  // Helper to resolve the correct GHL API key across any slot
+  const resolvedGhlApiKey = form.ghlApiKey || form.bookingApiKey || form.emailApiKey || undefined;
+
   const payload = {
     engagementId,
     whopUserId: "from_session",
@@ -40,12 +47,6 @@ export function buildEngagementPayload(form: FormData) {
       vertical: form.offerVertical || undefined,
     },
     stack: {
-      // Default every new engagement to reviewing the confirmation page
-      // before it goes live on the buyer's real hosting platform — see
-      // src/lib/approval-gate.ts. Scoped to just this one action type so
-      // Pile-On's webhook-driven prospect handling stays fully automatic;
-      // an operator can widen or turn this off from the engagement's
-      // settings once they trust a given client's runs.
       require_approval_for_side_effects: true,
       require_approval_action_types: ["confirmation_page_deploy"],
 
@@ -65,7 +66,7 @@ export function buildEngagementPayload(form: FormData) {
       buyer_domain: form.marketingDomain || undefined,
       existing_confirmation_page_url: form.existingConfirmationPageUrl || undefined,
 
-      // 2. Flat DB Properties (Matches database schema.ts exactly)
+      // 2. Flat DB Properties
       target_list_id: form.emailTargetListId || undefined,
       recovery_list_id: form.emailRecoveryListId || undefined,
       activecampaign_base_url: form.emailActiveCampaignBaseUrl || undefined,
@@ -74,23 +75,24 @@ export function buildEngagementPayload(form: FormData) {
       recovery_automation_id: form.emailPlatform === "activecampaign" ? form.recoveryAutomationId || undefined : undefined,
       long_term_nurture_list_id: form.longTermNurtureListId || undefined,
 
-      // 3. Email Platform Nested Metadata Block (Downstream Backward Compatibility)
+      // 3. Email Platform Nested Metadata Block
       email_platform_meta: {
         target_list_id: form.emailTargetListId || undefined,
         recovery_list_id: form.emailRecoveryListId || undefined,
         base_url: form.emailActiveCampaignBaseUrl || undefined,
-        location_id: form.emailGhlLocationId || undefined,
+        location_id: resolvedGhlLocationId,
         target_workflow_id: form.emailGhlTargetWorkflowId || undefined,
         recovery_workflow_id: form.emailGhlRecoveryWorkflowId || undefined,
         recovery_automation_id: form.recoveryAutomationId || undefined,
         long_term_nurture_list_id: form.longTermNurtureListId || undefined,
       },
 
-      // 4. Booking Platform Meta (Fixes Calendly Booking + GHL Email location_id bug)
+      // 4. Booking Platform Meta (FIXED: Added calendar_id + unified location_id)
       booking_platform_meta: {
-        location_id: form.bookingPlatform === "ghl_calendar"
-          ? (form.bookingLocationId || undefined)
-          : (form.emailPlatform === "ghl" ? form.emailGhlLocationId || undefined : undefined),
+        location_id: form.bookingPlatform === "ghl_calendar" || form.emailPlatform === "ghl" 
+          ? resolvedGhlLocationId 
+          : undefined,
+        calendar_id: form.bookingCalendarId || undefined, // <--- FIXED: Now persisted into DB!
       },
 
       // 5. Unlisted platform auto-docs discovery triggers
@@ -110,7 +112,7 @@ export function buildEngagementPayload(form: FormData) {
               twilio_from_number: form.smsTwilioFromNumber || undefined,
             }
           : form.smsPlatform === "ghl_sms"
-            ? { ghl_location_id: form.bookingLocationId || form.emailGhlLocationId || undefined }
+            ? { ghl_location_id: resolvedGhlLocationId }
             : undefined,
       sms_a2p_10dlc_status: form.smsPlatform === "twilio" ? form.smsA2p10dlcStatus : undefined,
       sms_compliance_footer_variant: form.smsComplianceFooterVariant,
@@ -159,16 +161,12 @@ export function buildEngagementPayload(form: FormData) {
       recovered_from_no_show_tagging_enabled: form.recoveredFromNoShowTaggingEnabled,
       inbound_reply_mode: form.inboundReplyMode,
       hubspot_portal_id: form.inboundReplyMode === "native" && form.emailPlatform === "hubspot" ? form.hubspotPortalId || undefined : undefined,
-      // ── Leak Map recovery gap 1 — buyer-configurable, timezone-aware cadence
       weekly_summary_schedule: { dayOfWeek: form.weeklyScheduleDayOfWeek, hourLocal: form.weeklyScheduleHour, timezone: form.leakMapTimezone },
       monthly_deep_dive_schedule: { dayOfMonth: form.monthlyScheduleDayOfMonth, hourLocal: form.weeklyScheduleHour, timezone: form.leakMapTimezone },
-      // ── Leak Map recovery gap 2 — report delivery format ────────────────
       audit_output_format: form.auditOutputFormat,
       leak_map_report_email: form.auditOutputFormat === "email" ? form.leakMapReportEmail || undefined : undefined,
-      // ── Leak Map recovery gap 4 — existing-audit audit ──────────────────
       existing_audit_flagged: form.existingAuditFlagged || undefined,
       existing_audit_description: form.existingAuditFlagged ? form.existingAuditDescription || undefined : undefined,
-      // ── Leak Map recovery gap 3 — notification pack ─────────────────────
       notification_pack_selections: form.notificationPackSelections.length > 0 ? form.notificationPackSelections : undefined,
     },
     topCallQuestions: form.topCallQuestions.split("\n").map((q) => q.trim()).filter(Boolean),
@@ -176,11 +174,15 @@ export function buildEngagementPayload(form: FormData) {
     prospectMeets: form.prospectMeets,
     rawVoiceCorpus: form.rawVoiceCorpus,
     existingProof: testimonials.length ? { testimonials } : undefined,
+
+    // 12. Credentials Block (FIXED: Uses form.ghlApiKey for GHL booking & email slots)
     credentials: {
-      booking: form.bookingApiKey,
-      email: form.emailApiKey,
+      booking: form.bookingPlatform === "ghl_calendar" ? resolvedGhlApiKey : form.bookingApiKey,
+      email: form.emailPlatform === "ghl" ? resolvedGhlApiKey : form.emailApiKey,
       hosting: form.hostingApiKey || undefined,
-      sms: form.smsPlatform !== "none" ? form.smsApiKey || undefined : undefined,
+      sms: form.smsPlatform === "ghl_sms" 
+        ? resolvedGhlApiKey 
+        : (form.smsPlatform !== "none" ? form.smsApiKey || undefined : undefined),
       adData: form.adDataPlatform !== "none" && form.adDataPlatform !== "native_crm" ? form.adDataApiKey || undefined : undefined,
       videoEngagement: form.videoEngagementPlatform !== "none" ? form.videoEngagementApiKey || undefined : undefined,
       apollo: form.prospectResearchSourcesUsed.includes("apollo") ? form.apolloApiKey || undefined : undefined,

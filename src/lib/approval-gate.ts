@@ -33,6 +33,7 @@ import { db } from "@/lib/db";
 import { pendingActions, engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { notifyUser } from "@/lib/notify";
+import { isEngagementPaused } from "@/lib/engagement-status";
 
 export type PendingActionType =
   | "webhook_enrollment"
@@ -126,6 +127,13 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
     const { isSkillEnabledForEngagement } = await import("@/lib/engagement-skills");
     const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
     if (!tenant) throw new Error(`Engagement ${engagementId} not found`);
+    
+    if (tenant.deletedAt || isEngagementPaused(tenant)) {
+      throw new Error(
+        `Cannot execute action: engagement is currently ${tenant.deletedAt ? "deleted" : "paused"}.`
+      );
+    }
+
     const runId = crypto.randomUUID();
     const skillName = payload.eventKind === "cancelled" ? "win-back" : "pile-on";
 
@@ -151,6 +159,13 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
     const { addProspectToAdDataCohort } = await import("@/features/pile-on/server/cohort-sync");
     const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
     if (!tenant) throw new Error(`Engagement ${engagementId} not found`);
+    
+    if (tenant.deletedAt || isEngagementPaused(tenant)) {
+      throw new Error(
+        `Cannot execute action: engagement is currently ${tenant.deletedAt ? "deleted" : "paused"}.`
+      );
+    }
+
     await addProspectToAdDataCohort(engagementId, tenant.stack as EngagementStack, payload.prospectEmail);
   },
 
@@ -158,6 +173,13 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
     const { removeProspectFromAdDataCohort } = await import("@/features/pile-on/server/cohort-sync");
     const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
     if (!tenant) throw new Error(`Engagement ${engagementId} not found`);
+    
+    if (tenant.deletedAt || isEngagementPaused(tenant)) {
+      throw new Error(
+        `Cannot execute action: engagement is currently ${tenant.deletedAt ? "deleted" : "paused"}.`
+      );
+    }
+
     await removeProspectFromAdDataCohort(engagementId, tenant.stack as EngagementStack, payload.prospectEmail);
   },
 
@@ -172,6 +194,13 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
 
     const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
     if (!tenant) throw new Error(`Engagement ${engagementId} not found`);
+    
+    if (tenant.deletedAt || isEngagementPaused(tenant)) {
+      throw new Error(
+        `Cannot execute action: engagement is currently ${tenant.deletedAt ? "deleted" : "paused"}.`
+      );
+    }
+
     const stack = tenant.stack as EngagementStack;
 
     const hostingCredential = stack.hosting_platform

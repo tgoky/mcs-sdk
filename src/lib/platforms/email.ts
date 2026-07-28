@@ -601,17 +601,23 @@ export class HubSpotClient {
 
   async enrollInRecoveryWorkflow(email: string): Promise<void> {
     const contactId = await this.findContactId(email);
-    if (!contactId) return;
-    // Update lifecycle stage to trigger win-back workflows
-    await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}`, {
+    if (!contactId) {
+      throw new Error(`HubSpot win-back enrollment failed: contact ${email} was not found.`);
+    }
+
+    const res = await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}`, {
       method: "PATCH",
       headers: this.headers,
       body: JSON.stringify({
         properties: { showtime_status: "win_back", hs_lead_status: "IN_PROGRESS" },
       }),
     });
-  }
 
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`HubSpot win-back enrollment failed [${res.status}]: ${body.slice(0, 300)}`);
+    }
+  }
   /**
    * Sets one or more arbitrary contact properties. Generic counterpart to
    * markRebooked's inline property update — added so any future signal
@@ -818,7 +824,7 @@ export class ActiveCampaignClient {
     }
   }
 
-  async enrollInList(email: string, firstName: string, listId: string): Promise<void> {
+    async enrollInList(email: string, firstName: string, listId: string): Promise<void> {
     // Upsert contact
     const contactRes = await fetchWithTimeout(`${this.baseUrl}/contacts/sync`, {
       method: "POST",
@@ -832,16 +838,22 @@ export class ActiveCampaignClient {
     }
     const contactData = await contactRes.json();
     const contactId = contactData.contact?.id;
-    if (!contactId) return;
+    if (!contactId) {
+      throw new Error(`ActiveCampaign contact sync returned no contact ID for ${email}`);
+    }
 
     // Add to list
-    await fetchWithTimeout(`${this.baseUrl}/contactLists`, {
+    const listRes = await fetchWithTimeout(`${this.baseUrl}/contactLists`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
         contactList: { list: listId, contact: contactId, status: 1 },
       }),
     });
+    if (!listRes.ok) {
+      const errText = await listRes.text().catch(() => "");
+      throw new Error(`ActiveCampaign list enrollment failed [${listRes.status}]: ${errText.slice(0, 300)}`);
+    }
   }
 
   private async findContactId(email: string): Promise<string | null> {
@@ -973,13 +985,15 @@ export class GHLCRMClient {
     return data.contact?.id ?? null;
   }
 
-  async enrollInWorkflow(
+   async enrollInWorkflow(
     email: string,
     firstName: string,
     workflowId: string
   ): Promise<void> {
     const contactId = await this.findContactId(email);
-    if (!contactId) return;
+    if (!contactId) {
+      throw new Error(`GHL CRM workflow enrollment failed: no contact found for ${email}`);
+    }
 
     const res = await fetchWithTimeout(
       `${this.baseUrl}/contacts/${contactId}/workflow/${workflowId}`,

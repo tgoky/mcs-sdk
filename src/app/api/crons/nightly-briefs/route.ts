@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { startRun } from "@/lib/run-log";
 import { inngest, skillRunExecute } from "@/lib/inngest";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
+import { requireCronOrAdmin } from "@/lib/cron-auth";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
@@ -11,42 +12,32 @@ export const runtime = "nodejs";
 /**
  * Nightly Pre-Call Read cron — fires the Vercel cron job defined in
  * vercel.json: { "path": "/api/crons/nightly-briefs", "schedule": "0 20 * * *" }.
- *
- * This file previously was a near-duplicate of the manual dashboard trigger
- * endpoint: it required a logged-in user session (getSession()) and only
- * exported a POST handler expecting { engagementId, skillName } in the
- * body. Vercel Cron Jobs invoke via GET with no body and no user cookie —
- * so this cron has never actually fired successfully. It also called
- * executeNightlyBriefingCycle(tenant) directly with the old 1-arg
- * signature, which no longer compiles now that runId is required.
- *
- * Rewritten to match the working leak-map-audit cron's pattern: GET +
- * CRON_SECRET auth, loop every engagement with pre-call-read configured,
- * dispatch each through the same Inngest pipeline the manual trigger uses
- * (so retries/checkpointing/telemetry are identical on both paths).
  */
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("Authorization");
-  const cronSecret = process.env.CRON_SECRET;
+  // 1. Unified security gate
+  const auth = await requireCronOrAdmin(request);
+  if (!auth.ok) return auth.response;
 
   const { searchParams } = new URL(request.url);
   const urlEngagementId = searchParams.get("engagement_id");
 
-  if (
-    process.env.NODE_ENV === "production" &&
-    authHeader !== `Bearer ${cronSecret}`
-  ) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  // 2. Base query: skip paused and soft-deleted
+  const baseFilters = [
+    isNull(engagements.deletedAt),
+    isNull(engagements.pausedAt), // Verify this matches your exact schema column name (e.g., pausedReason?)
+  ];
 
   let targets;
   if (urlEngagementId) {
     targets = await db
       .select()
       .from(engagements)
-      .where(eq(engagements.engagementId, urlEngagementId));
+      .where(and(eq(engagements.engagementId, urlEngagementId), ...baseFilters));
   } else {
-    targets = await db.select().from(engagements);
+    targets = await db
+      .select()
+      .from(engagements)
+      .where(and(...baseFilters));
   }
 
   // Only engagements that have completed Pin-Down (booking platform wired
@@ -59,6 +50,7 @@ export async function GET(request: Request) {
   const dispatched: string[] = [];
   const errors: string[] = [];
 
+  // 3. Safe Inngest dispatch (fast, no Vercel timeout risk)
   for (const tenant of eligible) {
     try {
       const runId = crypto.randomUUID();

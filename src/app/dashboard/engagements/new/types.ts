@@ -28,6 +28,7 @@ export interface FormData {
   bookingPlatform: string;
   bookingLocationId: string;
   bookingStandingLink: string;
+  bookingCalendarId?: string;
 
   recoveryAutomationId: string;
   longTermNurtureListId: string;

@@ -5,42 +5,26 @@ import { eq } from "drizzle-orm";
 import { failRun, logStep, finishRun } from "@/lib/run-log";
 import { SKILL_REGISTRY, isSkillId } from "@/lib/skill-registry";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { isEngagementPaused } from "@/lib/engagement-status"; // <--- ADDED
 
 /**
  * Unified Background Skill Execution Worker
  * Decoupled from incoming client request thresholds to prevent gateway timeouts.
- *
- * v4 API: triggers live in the options object (1st arg), not a separate
- * positional arg. `skillRunExecute` (eventType()) gives `event` a real type
- * instead of falling back to implicit `any`.
  */
 export const executeSkillRun = inngest.createFunction(
   {
     id: "execute-skill-run",
     retries: 1,
     triggers: [skillRunExecute],
-    // Matches on data.runId between the triggering event and any later
-    // skill/run.cancel event. This stops Inngest from scheduling this run's
-    // *next* step — it can't interrupt a step.run() callback already
-    // mid-execution. That's why the DB write happens immediately in the
-    // cancel route below, instead of waiting on this to take effect.
     cancelOn: [{ event: skillRunCancel, match: "data.runId" }],
-    // 🛡️ THE FIX: Limits execution to exactly 1 active automation thread per tenant
     concurrency: {
-      key: "event.data.engagementId", // Reads the client identifier dynamically from the event data
-      limit: 1,                       // Guarantees dual runs will queue or back off instead of racing
+      key: "event.data.engagementId",
+      limit: 1,
     },
   },
   async ({ event, step }) => {
-    const { runId, engagementId, skillName, auditType } = event.data;
+    const { runId, engagementId, skillName, auditType, manualOverride } = event.data; // <--- ADDED manualOverride
 
-    // Re-fetch the tenant row inside the worker rather than trusting the
-    // event payload. The old version serialized the FULL engagement row
-    // (including stack.slack_webhook_url and stack.webhook_signing_secret
-    // in plaintext) into the Inngest event, which Inngest Cloud stores —
-    // unnecessary secret exposure to a third party. This also means the
-    // worker always sees current tenant config, not a stale snapshot from
-    // whenever the event was enqueued.
     const tenantRaw = await step.run("load-tenant", async () => {
       const [row] = await db
         .select()
@@ -51,22 +35,30 @@ export const executeSkillRun = inngest.createFunction(
       return row;
     });
 
-    // engagements.createdAt/updatedAt are `timestamp` columns (real Date
-    // objects from Drizzle), but they just crossed a step.run() boundary,
-    // which Inngest JSON-serializes by default. On a fresh execution
-    // they're still Dates; on any checkpoint-resumed replay they come
-    // back as ISO strings. Nothing downstream currently reads these two
-    // fields as Dates, so this isn't live-broken today — but it's the
-    // same class of bug the roster callTime fix in brief-service.ts
-    // addresses, and leaving it unnormalized means the next person who
-    // adds `tenant.createdAt.getTime()` to a report or filter gets a
-    // runtime-only failure that only reproduces on a replayed step.
-    // Closing it here once instead of leaving it as a landmine.
     const tenant = {
       ...tenantRaw,
       createdAt: new Date(tenantRaw.createdAt),
       updatedAt: new Date(tenantRaw.updatedAt),
     };
+
+    // ── 🛡️ CENTRAL PAUSE & SOFT-DELETE CHOKEPOINT ─────────────────────
+    // Hard-blocks any automated/scheduled run if engagement is paused or deleted.
+    // Explicit manual triggers (`manualOverride: true`) are allowed through.
+    if ((tenant.deletedAt || isEngagementPaused(tenant)) && !manualOverride) {
+      const skipReason = tenant.deletedAt
+        ? "Engagement is deleted"
+        : tenant.pausedReason
+        ? `Engagement is paused (${tenant.pausedReason})`
+        : "Engagement is paused";
+
+      await logStep(runId, {
+        phase: "skill_disabled",
+        status: "skipped",
+        detail: `${skipReason} — run skipped.`,
+      });
+      await finishRun(runId);
+      return;
+    }
 
     try {
       if (!isSkillId(skillName)) {
@@ -80,9 +72,6 @@ export const executeSkillRun = inngest.createFunction(
       );
 
       if (!enabled) {
-        // An intentional user choice (see the future Skill Library
-        // toggle backed by src/lib/engagement-skills.ts), not an error —
-        // finish clean rather than routing through failRun below.
         await logStep(runId, {
           phase: "skill_disabled",
           status: "skipped",
@@ -93,20 +82,13 @@ export const executeSkillRun = inngest.createFunction(
       }
 
       if (!definition.execute) {
-        // e.g. pile-on: registered in SKILL_REGISTRY for its manifest, but
-        // only ever runs from its own webhook-triggered Inngest functions.
         throw new Error(`${definition.name} has no direct executor — it only runs from its own event handlers.`);
       }
 
       await definition.execute(tenant, runId, step, { auditType });
     } catch (err: unknown) {
-      // Safety net only — brief-service.ts and audit-engine.ts already call
-      // failRun() internally before rethrowing, so this mainly covers
-      // errors thrown by load-tenant or anything outside their own
-      // try/catch. Calling failRun() twice on the same runId is harmless
-      // (idempotent overwrite), not duplicated work.
       await failRun(runId, err).catch(() => {});
-      throw err; // Let Inngest's retry policy decide whether to re-invoke.
+      throw err;
     }
   }
 );

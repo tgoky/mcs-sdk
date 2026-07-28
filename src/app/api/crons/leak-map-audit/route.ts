@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm"; // <--- Added isNull
 import { startRun } from "@/lib/run-log";
 import { inngest, skillRunExecute } from "@/lib/inngest";
 import { requireCronOrAdmin } from "@/lib/cron-auth";
 import crypto from "crypto";
+
+export const runtime = "nodejs"; // <--- Ensure this is present
 
 export async function GET(request: Request) {
   const auth = await requireCronOrAdmin(request);
@@ -15,28 +17,25 @@ export async function GET(request: Request) {
   const type = (searchParams.get("type") ?? "weekly") as "weekly" | "monthly";
   const urlEngagementId = searchParams.get("engagement_id");
 
-  // Only CRON_SECRET or an admin session reaches this point (see
-  // requireCronOrAdmin above), so an unscoped sweep of every tenant is the
-  // intended behavior here, not a leak — this endpoint's whole job is the
-  // scheduler's full-fleet weekly/monthly run. `engagement_id` is only an
-  // optional narrowing for admin ad-hoc re-runs of a single tenant.
+  // <--- ADDED: Base filters for pause and soft-delete
+  const baseFilters = [
+    isNull(engagements.deletedAt),
+    isNull(engagements.pausedAt), // Verify this matches your schema column name
+  ];
+
   let targets: (typeof engagements.$inferSelect)[] = [];
   if (urlEngagementId) {
     targets = await db
       .select()
       .from(engagements)
-      .where(eq(engagements.engagementId, urlEngagementId));
+      .where(and(eq(engagements.engagementId, urlEngagementId), ...baseFilters)); // <--- APPLIED
   } else {
-    targets = await db.select().from(engagements);
+    targets = await db
+      .select()
+      .from(engagements)
+      .where(and(...baseFilters)); // <--- APPLIED
   }
 
-  // Dispatches each engagement's audit through the same Inngest pipeline
-  // the manual trigger uses, instead of calling AuditEngine directly.
-  // The direct call (`engine.runAuditPipeline(tenant.engagementId, type)`)
-  // no longer compiles now that runId is a required argument — and even if
-  // it did, running every tenant's audit synchronously in a loop inside
-  // one request is exactly the kind of long-running work this whole
-  // refactor was meant to get off the request thread.
   const dispatched: string[] = [];
   const errors: string[] = [];
 
@@ -56,13 +55,13 @@ export async function GET(request: Request) {
           runId,
           engagementId: tenant.engagementId,
           skillName: "leak-map",
-          auditType: type,
+          auditType: type, // <--- PRESERVED: Still uses dynamic type
         })
       );
 
       dispatched.push(tenant.engagementId);
     } catch (err: any) {
-      errors.push(`${tenant.engagementId}: ${err.message}`);
+      errors.push(`${tenant.engagementId}: ${err.message}`); // <--- PRESERVED: Error handling
     }
   }
 

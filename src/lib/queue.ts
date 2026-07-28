@@ -22,7 +22,7 @@
 
 import { db } from "@/lib/db";
 import { pendingActions, humanBlockers, notifications, engagements, skillRuns, type EngagementStack } from "@/models/schema";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { ACTION_TYPE_LABELS, BLOCKER_TYPE_LABELS, bookingPlatformLabel, skillName as skillDisplayName } from "@/lib/copy";
 import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
 import { classifyRunError } from "@/lib/error-classification";
@@ -221,7 +221,7 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
     db
       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, stack: engagements.stack })
       .from(engagements)
-      .where(eq(engagements.whopUserId, whopUserId)),
+      .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
   ]);
 
   const failureItems = await failedRunQueueItems(engagementStackRows);
@@ -293,10 +293,10 @@ export async function getQueueActionableCount(whopUserId: string): Promise<numbe
       .from(humanBlockers)
       .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
       .where(and(eq(engagements.whopUserId, whopUserId), eq(humanBlockers.status, "open"))),
-    db
+        db
       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, stack: engagements.stack })
       .from(engagements)
-      .where(eq(engagements.whopUserId, whopUserId)),
+      .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
   ]);
 
   const syncSetupCount = engagementStackRows.filter((r) =>
