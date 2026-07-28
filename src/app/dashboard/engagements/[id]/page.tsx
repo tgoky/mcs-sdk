@@ -153,10 +153,10 @@ export default async function EngagementDetailPage({
               <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">{engagement.engagementId}</p>
             </div>
             <div className="flex flex-wrap gap-1.5 font-mono">
-              <span className="text-[11px] text-zinc-500 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
+              <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60">
                 {bookingPlatformLabel(stack?.booking_platform)}
               </span>
-              <span className="text-[11px] text-zinc-500 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-900/60">
+              <span className="text-xs text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60">
                 {emailPlatformLabel(stack?.email_platform)}
               </span>
               {offerDetails?.traffic_temperature && (
@@ -409,14 +409,6 @@ export default async function EngagementDetailPage({
             <ol className="divide-y divide-zinc-200 dark:divide-zinc-900/50">
               {runs.slice(0, 20).map((run) => {
                 const isFailed = run.status.toLowerCase() === "failed";
-                const isRunning = run.status.toLowerCase() === "running" || run.status.toLowerCase() === "in_progress";
-                const pillClass = isFailed
-                  ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
-                  : isRunning
-                    ? "bg-zinc-500/10 text-zinc-500 dark:text-zinc-400"
-                    : run.status.toLowerCase() === "success"
-                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      : "bg-zinc-500/10 text-zinc-500 dark:text-zinc-400";
 
                 return (
                   <li key={run.id} className="group relative">
@@ -425,7 +417,7 @@ export default async function EngagementDetailPage({
                       className="absolute inset-0 z-10"
                       aria-label={`View run details for ${skillName(run.skillName)}`}
                     />
-                    <div className="relative flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
+                    <div className="relative flex items-center gap-3 px-4 py-3 hover:bg-zinc-100 dark:hover:bg-zinc-900/20 transition-colors">
                       <RunStatusIcon status={run.status} />
                       <div className="min-w-0 flex-1 flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -433,7 +425,7 @@ export default async function EngagementDetailPage({
                             <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">
                               {skillName(run.skillName)}
                             </span>
-                            <span className={`text-[10px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${pillClass}`}>
+                            <span className="text-zinc-600 dark:text-zinc-400 text-xs font-normal font-mono">
                               {runStatusLabel(run.status)}
                             </span>
                           </div>
