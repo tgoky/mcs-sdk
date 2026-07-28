@@ -5,18 +5,8 @@ import { useRouter } from "next/navigation";
 import { Rocket, Layers, ClipboardList, RotateCcw, Map as MapIcon, type LucideIcon } from "lucide-react";
 import { SKILL_IDS, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
 
-// pin-down is a one-time setup-time skill, not an ongoing automation a
-// client turns on or off after the fact — see the route's doc comment at
-// src/app/api/engagements/[id]/skills/[skillId]/route.ts. Excluded here
-// rather than just left disabled, since a toggle with no real effect on
-// an already-onboarded engagement is worse than no toggle at all.
 const TOGGLEABLE_SKILLS: SkillId[] = SKILL_IDS.filter((id) => id !== "pin-down");
 
-// One icon per skill, chosen for what the skill's own description
-// (skill-manifest.ts) actually says it does — not decoration. Pin-Down
-// launches onboarding, Pile-On stacks prospects into sequences,
-// Pre-Call Read produces a briefing document, Win-Back is a
-// re-engagement loop, Leak-Map audits the funnel.
 const SKILL_ICONS: Record<SkillId, LucideIcon> = {
   "pin-down": Rocket,
   "pile-on": Layers,
@@ -29,13 +19,15 @@ function Switch({ enabled, busy }: { enabled: boolean; busy: boolean }) {
   return (
     <span
       role="presentation"
-      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ${
-        enabled ? "bg-gold" : "bg-zinc-300 dark:bg-zinc-700"
-      } ${busy ? "opacity-60" : ""}`}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
+        enabled
+          ? "bg-emerald-500 dark:bg-emerald-600"
+          : "bg-rose-500/20 dark:bg-rose-950/70 border border-rose-500/30"
+      } ${busy ? "opacity-50" : ""}`}
     >
       <span
-        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-          enabled ? "translate-x-[18px]" : "translate-x-[3px]"
+        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-200 ease-in-out ${
+          enabled ? "translate-x-[22px]" : "translate-x-[4px]"
         }`}
       />
     </span>
@@ -58,8 +50,6 @@ export function SkillsPanel({
     const next = !states[skillId];
     const previous = states[skillId];
 
-    // Optimistic update — this is a settings toggle, not a destructive
-    // action, so it should feel instant; rolled back below on failure.
     setStates((s) => ({ ...s, [skillId]: next }));
     setPending(skillId);
     setError(null);
@@ -89,35 +79,32 @@ export function SkillsPanel({
 
   return (
     <div
-      className="rounded-lg border p-4 space-y-4"
+      className="rounded-xl border p-5 space-y-4 shadow-xs"
       style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
     >
-      <div className="flex items-start justify-between gap-3">
+      {/* Header Section */}
+      <div className="flex items-center justify-between gap-4 pb-3 border-b" style={{ borderColor: "var(--border)" }}>
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
-            Skills
+          <h3 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>
+            Automation Skills
           </h3>
-          <p className="text-[11px] font-mono mt-0.5" style={{ color: "var(--text-muted)" }}>
-            Turn off anything this client doesn&apos;t need. Takes effect on the next run.
+          <p className="text-xs mt-1 leading-relaxed font-sans" style={{ color: "var(--text-muted)" }}>
+            Turn off anything this client doesn&apos;t need. Takes effect on the next run — an in-progress run finishes as started.
           </p>
         </div>
-        {/* Reading the toggle column top-to-bottom already tells the whole
-            story — this count is just the same information compressed
-            into one glance, not a second control. */}
-        <span
-          className="shrink-0 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full"
-          style={{ background: "var(--accent-dim)", color: "var(--gold-hover)" }}
-        >
-          {onCount}/{TOGGLEABLE_SKILLS.length} on
+        <span className="shrink-0 text-xs font-mono font-bold px-3 py-1 rounded-full bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+          {onCount}/{TOGGLEABLE_SKILLS.length} Active
         </span>
       </div>
 
-      <div className="space-y-1">
+      {/* Skill Cards Grid */}
+      <div className="space-y-2.5">
         {TOGGLEABLE_SKILLS.map((skillId) => {
           const skill = SKILL_MANIFEST[skillId];
           const enabled = states[skillId];
           const busy = pending === skillId;
           const Icon = SKILL_ICONS[skillId];
+
           return (
             <button
               key={skillId}
@@ -125,33 +112,47 @@ export function SkillsPanel({
               disabled={busy}
               role="switch"
               aria-checked={enabled}
-              className="w-full flex items-center gap-3 py-2.5 px-2 -mx-2 rounded-md transition-colors cursor-pointer disabled:cursor-not-allowed text-left hover:bg-black/[0.03] dark:hover:bg-white/[0.03]"
+              className={`w-full flex items-center gap-4 p-3.5 rounded-xl border transition-all duration-200 cursor-pointer disabled:cursor-not-allowed text-left ${
+                enabled
+                  ? "bg-emerald-500/[0.02] dark:bg-emerald-500/[0.04] border-emerald-500/25 hover:border-emerald-500/40 hover:bg-emerald-500/[0.05]"
+                  : "bg-zinc-500/[0.02] dark:bg-zinc-500/[0.03] border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700"
+              }`}
             >
+              {/* Icon Box */}
               <span
-                className={`shrink-0 grid place-items-center h-8 w-8 rounded-md border transition-colors ${
+                className={`shrink-0 grid place-items-center h-10 w-10 rounded-lg border transition-colors ${
                   enabled
-                    ? "bg-gold/10 border-gold/25 text-gold-hover dark:text-gold"
-                    : "border-transparent text-zinc-400 dark:text-zinc-600"
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                    : "bg-rose-500/10 border-rose-500/20 text-rose-500/80 dark:text-rose-400/80"
                 }`}
-                style={!enabled ? { background: "var(--surface)" } : undefined}
               >
-                <Icon className="h-4 w-4" strokeWidth={2} />
+                <Icon className="h-5 w-5" strokeWidth={2} />
               </span>
 
+              {/* Title & Description */}
               <span className="min-w-0 flex-1">
                 <span
-                  className="block text-[13px] font-semibold"
+                  className="block text-sm font-semibold tracking-tight font-mono"
                   style={{ color: enabled ? "var(--text-primary)" : "var(--text-secondary)" }}
                 >
                   {skill.name}
                 </span>
-                <span className="block text-[11px] font-mono mt-0.5 leading-snug" style={{ color: "var(--text-muted)" }}>
+                <span className="block text-xs mt-0.5 leading-relaxed font-sans" style={{ color: "var(--text-muted)" }}>
                   {skill.description}
                 </span>
               </span>
 
-              <span className="shrink-0 flex items-center gap-2">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wide w-6 text-right" style={{ color: "var(--text-muted)" }}>
+              {/* Status Text & Switch */}
+              <span className="shrink-0 flex items-center gap-3">
+                <span
+                  className={`text-xs font-mono font-bold uppercase tracking-wider w-7 text-right ${
+                    busy
+                      ? "text-zinc-400"
+                      : enabled
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-rose-500 dark:text-rose-400"
+                  }`}
+                >
                   {busy ? "…" : enabled ? "On" : "Off"}
                 </span>
                 <Switch enabled={enabled} busy={busy} />
@@ -161,7 +162,7 @@ export function SkillsPanel({
         })}
       </div>
 
-      {error && <p className="text-[11px] font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {error}</p>}
+      {error && <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400 pt-1">⚠ {error}</p>}
     </div>
   );
 }
