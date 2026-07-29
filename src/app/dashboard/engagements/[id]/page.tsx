@@ -204,55 +204,47 @@ export default async function EngagementDetailPage({
 
         {/* What this client's about, up front: offer, targeting, price, AI personalization */}
         {offerDetails && (
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 shadow-xs overflow-hidden">
-            <div className="flex flex-col lg:flex-row lg:items-center gap-4 p-4">
-              <div className="min-w-0 flex-1 space-y-1">
-                <p className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Offer</p>
-                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">{offerName}</h2>
-                {offerIcp && (
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                    <span className="font-mono uppercase text-[10px] tracking-wide text-zinc-400 dark:text-zinc-600">Targeting</span>{" "}
-                    <span className="font-medium text-zinc-700 dark:text-zinc-300">{offerIcp}</span>
-                  </p>
-                )}
-              </div>
+  <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-5 shadow-xs overflow-hidden">
+    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
+      {/* Left Details */}
+      <div className="flex-1 space-y-4 min-w-0">
+        {/* Offer Name */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
+            Offer
+          </p>
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
+            {offerName}
+          </h2>
+        </div>
 
-              <div className="flex items-center gap-2.5 shrink-0">
-                <div className="flex flex-col items-center justify-center px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 min-w-[84px]">
-                  <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                    <DollarSign className="w-2.5 h-2.5" /> Price
-                  </span>
-                  <span className="text-base font-bold text-zinc-900 dark:text-zinc-100 tabular-nums mt-0.5">
-                    {offerPrice ? `$${offerPrice}` : "—"}
-                  </span>
-                </div>
-
-                <div
-                  className={`flex flex-col items-center justify-center px-4 py-2 rounded-lg border min-w-[128px] ${
-                    isAiEnabled
-                      ? "border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/20"
-                      : "border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50"
-                  }`}
-                >
-                  <span
-                    className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold uppercase tracking-wider ${
-                      isAiEnabled ? "text-emerald-700 dark:text-emerald-400" : "text-zinc-400 dark:text-zinc-500"
-                    }`}
-                  >
-                    <Sparkles className="w-2.5 h-2.5" /> AI Personalization
-                  </span>
-                  <span
-                    className={`text-base font-bold mt-0.5 ${
-                      isAiEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500 dark:text-zinc-400"
-                    }`}
-                  >
-                    {isAiEnabled ? "On" : "Off"}
-                  </span>
-                </div>
-              </div>
-            </div>
+        {/* Targeting Section */}
+        {offerIcp && (
+          <div className="space-y-1 pt-1.5 border-t border-zinc-100 dark:border-zinc-800/60">
+            <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
+              Targeting
+            </p>
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed">
+              {offerIcp}
+            </p>
           </div>
         )}
+      </div>
+
+      {/* Right Price Stat Box */}
+      <div className="shrink-0 self-start">
+        <div className="flex flex-col items-center justify-center px-5 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/40 min-w-[100px]">
+          <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
+            Price
+          </span>
+          <span className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tabular-nums mt-0.5">
+            {offerPrice ? `$${offerPrice}` : "—"}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
       </div>
 
       <SkillsPanel engagementId={engagement.engagementId} initialStates={skillStates} />
