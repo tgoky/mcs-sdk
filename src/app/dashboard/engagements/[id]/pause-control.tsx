@@ -72,13 +72,13 @@ export function EngagementPauseControl({
   // 1. Paused State Control
   if (pausedAt) {
     return (
-      <div className="inline-flex items-center gap-3 p-1.5 bg-black text-zinc-100 rounded-xl border border-amber-500/30 shadow-md">
-        {/* Literal Pause Icon Badge */}
-        <div className="flex items-center gap-2 px-3.5 py-1.5 text-sm font-semibold text-amber-400 bg-amber-500/10 rounded-lg select-none border border-amber-500/20">
-          <PauseCircle className="w-4 h-4 shrink-0 text-amber-400" />
+      <div className="inline-flex items-center gap-3 p-1.5 bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 rounded-xl border border-amber-500/30 shadow-xs dark:shadow-md">
+        {/* Pause Badge */}
+        <div className="flex items-center gap-2 px-3.5 py-1.5 text-sm font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-lg select-none border border-amber-200 dark:border-amber-500/20">
+          <PauseCircle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <span>Paused</span>
           {initialPausedReason && (
-            <span className="text-xs font-normal text-amber-400/80 truncate max-w-[180px]" title={initialPausedReason}>
+            <span className="text-xs font-normal text-amber-700/80 dark:text-amber-400/80 truncate max-w-[180px]" title={initialPausedReason}>
               — {initialPausedReason}
             </span>
           )}
@@ -89,17 +89,17 @@ export function EngagementPauseControl({
           type="button"
           onClick={resume}
           disabled={busy}
-          className="inline-flex items-center gap-2 px-4 py-1.5 text-sm font-semibold text-zinc-100 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg border border-zinc-700 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-2 px-4 py-1.5 text-sm font-semibold text-zinc-800 dark:text-zinc-100 hover:text-zinc-900 dark:hover:text-white bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {busy ? (
-            <Loader2 className="w-4 h-4 animate-spin text-zinc-400" />
+            <Loader2 className="w-4 h-4 animate-spin text-zinc-500 dark:text-zinc-400" />
           ) : (
-            <PlayCircle className="w-4 h-4 text-emerald-400 fill-emerald-400/20" />
+            <PlayCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 fill-emerald-600/20 dark:fill-emerald-400/20" />
           )}
           <span>{busy ? "Resuming…" : "Resume"}</span>
         </button>
 
-        {error && <span className="text-xs font-medium text-rose-400 px-2">{error}</span>}
+        {error && <span className="text-xs font-medium text-rose-600 dark:text-rose-400 px-2">{error}</span>}
       </div>
     );
   }
@@ -107,13 +107,13 @@ export function EngagementPauseControl({
   // 2. Expanded Reason Input Form
   if (showReasonInput) {
     return (
-      <div className="inline-flex items-center gap-2.5 p-1.5 bg-black text-zinc-100 rounded-xl border border-zinc-800 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+      <div className="inline-flex items-center gap-2.5 p-1.5 bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xl animate-in fade-in zoom-in-95 duration-150">
         <input
           autoFocus
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="Reason for pausing? (optional)"
-          className="text-sm px-3.5 py-2 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-amber-500/60 w-64 sm:w-80 transition-all"
+          className="text-sm px-3.5 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-amber-500/60 w-64 sm:w-80 transition-all"
           onKeyDown={(e) => e.key === "Enter" && pause()}
         />
 
@@ -129,13 +129,13 @@ export function EngagementPauseControl({
         <button
           type="button"
           onClick={() => setShowReasonInput(false)}
-          className="p-2 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer select-none rounded-lg hover:bg-zinc-800"
+          className="p-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer select-none rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
           title="Cancel"
         >
           <X className="w-4 h-4" />
         </button>
 
-        {error && <span className="text-xs font-medium text-rose-400 px-2">{error}</span>}
+        {error && <span className="text-xs font-medium text-rose-600 dark:text-rose-400 px-2">{error}</span>}
       </div>
     );
   }
@@ -146,13 +146,13 @@ export function EngagementPauseControl({
       <button
         type="button"
         onClick={() => setShowReasonInput(true)}
-        className="group inline-flex items-center gap-2.5 text-sm font-semibold px-4 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800/90 text-zinc-200 hover:text-amber-400 hover:border-amber-500/40 shadow-xs transition-all active:scale-95 cursor-pointer"
+        className="group inline-flex items-center gap-2.5 text-sm font-semibold px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/90 text-zinc-800 dark:text-zinc-200 hover:text-amber-600 dark:hover:text-amber-400 hover:border-amber-500/40 shadow-xs transition-all active:scale-95 cursor-pointer"
       >
-        <PauseCircle className="w-4.5 h-4.5 text-zinc-400 group-hover:text-amber-400 transition-colors" />
+        <PauseCircle className="w-4.5 h-4.5 text-zinc-500 dark:text-zinc-400 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" />
         <span>Pause automation</span>
       </button>
 
-      {error && <span className="text-xs font-medium text-rose-400">{error}</span>}
+      {error && <span className="text-xs font-medium text-rose-600 dark:text-rose-400">{error}</span>}
     </div>
   );
 }
