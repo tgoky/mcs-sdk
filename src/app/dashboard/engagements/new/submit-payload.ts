@@ -34,6 +34,10 @@ export function buildEngagementPayload(form: FormData) {
   // Helper to resolve the correct GHL API key across any slot
   const resolvedGhlApiKey = form.ghlApiKey || form.bookingApiKey || form.emailApiKey || undefined;
 
+  // 🌟 FIX: Unified Calendar ID resolver across all possible form state keys
+  const resolvedCalendarId =
+    form.bookingCalendarId || form.ghlCalendarId || form.calendarId || undefined;
+
   const payload = {
     engagementId,
     whopUserId: "from_session",
@@ -87,12 +91,13 @@ export function buildEngagementPayload(form: FormData) {
         long_term_nurture_list_id: form.longTermNurtureListId || undefined,
       },
 
-      // 4. Booking Platform Meta (FIXED: Added calendar_id + unified location_id)
+      // 4. Booking Platform Meta (Persists location_id and calendar_id cleanly)
       booking_platform_meta: {
-        location_id: form.bookingPlatform === "ghl_calendar" || form.emailPlatform === "ghl" 
-          ? resolvedGhlLocationId 
-          : undefined,
-        calendar_id: form.bookingCalendarId || undefined, // <--- FIXED: Now persisted into DB!
+        location_id:
+          form.bookingPlatform === "ghl_calendar" || form.emailPlatform === "ghl"
+            ? resolvedGhlLocationId
+            : undefined,
+        calendar_id: resolvedCalendarId, // 🌟 FIXED: Uses unified fallback resolver
       },
 
       // 5. Unlisted platform auto-docs discovery triggers
@@ -175,7 +180,7 @@ export function buildEngagementPayload(form: FormData) {
     rawVoiceCorpus: form.rawVoiceCorpus,
     existingProof: testimonials.length ? { testimonials } : undefined,
 
-    // 12. Credentials Block (FIXED: Uses form.ghlApiKey for GHL booking & email slots)
+    // 12. Credentials Block
     credentials: {
       booking: form.bookingPlatform === "ghl_calendar" ? resolvedGhlApiKey : form.bookingApiKey,
       email: form.emailPlatform === "ghl" ? resolvedGhlApiKey : form.emailApiKey,

@@ -17,6 +17,8 @@ import { createRecallBot, type RecallRegion } from "@/lib/platforms/conversation
 import crypto from "crypto";
 import type { GetStepTools, Inngest } from "inngest";
 
+import { isEngagementPaused } from "@/lib/engagement-status";
+
 // Loose type so this file doesn't need to import the concrete client type
 // from src/lib/inngest.ts (would create a circular import: inngest.ts has
 // no dependency on this file, but skill.ts imports both). `step` is
@@ -490,6 +492,25 @@ export async function executeNightlyBriefingCycle(
   step?: StepTools,
   triggerMode: "nightly" | "dynamic_webhook" = "nightly"
 ): Promise<number> {
+  // 🛡️ Pause & Soft-Delete Guardrail: Exit cleanly if the client is paused or deleted.
+  // This is a defense-in-depth check. The central Inngest worker (skill.ts) also 
+  // checks this, but this protects direct invocations (e.g., cron fallbacks, tests).
+  if (tenant.deletedAt || isEngagementPaused(tenant)) {
+    const skipReason = tenant.deletedAt
+      ? "Engagement is deleted"
+      : tenant.pausedReason
+        ? `Engagement is paused (${tenant.pausedReason})`
+        : "Engagement is paused";
+
+    await logStep(runId, {
+      phase: "roster_fetch",
+      status: "skipped",
+      detail: `${skipReason} — briefing cycle skipped.`,
+    });
+    await finishRun(runId);
+    return 0;
+  }
+
   let deliveredCount = 0;
   const summary = emptySummary();
 

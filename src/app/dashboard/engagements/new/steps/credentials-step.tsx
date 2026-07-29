@@ -123,41 +123,45 @@ export function CredentialsStep({
       )}
 
       {/* ── Live Booking Calendar Selection Dropdown ── */}
-      {hasBookingAuth && (
-        <div className="md:col-span-2 space-y-2">
-          {fetchingBookingOptions && (
-            <div className="text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">
-              ⚡ Contacting {BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform}... Fetching live calendar options...
-            </div>
-          )}
-          {bookingOptionsError && (
-            <div className="rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
-              ⚠ Warning: {bookingOptionsError}
-            </div>
-          )}
-          <SelectField
-            label="Target Booking Calendar / Event Page"
-            value={form.bookingCalendarId || ""}
-            onChange={(selectedId) => {
-              set("bookingCalendarId", selectedId);
-              const matchedOpt = bookingOptions.find((b) => b.id === selectedId);
-              if (matchedOpt?.link) {
-                set("bookingStandingLink", matchedOpt.link);
-              }
-            }}
-            required
-            disabled={fetchingBookingOptions}
-            options={[
-              { value: "", label: fetchingBookingOptions ? "-- Loading..." : "-- Choose an Active Calendar --" },
-              ...bookingOptions.map((b) => ({
-                value: b.id,
-                label: `${b.name} (${b.link || b.id})`,
-              })),
-            ]}
-            helpText="Selecting your calendar automatically binds its ID and standing booking link."
-          />
-        </div>
-      )}
+
+
+{/* Live Booking Calendar Selection Dropdown */}
+{hasBookingAuth && (
+  <div className="md:col-span-2 space-y-2">
+    {fetchingBookingOptions && (
+      <div className="text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">
+        Contacting {BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform}... Fetching live calendar options...
+      </div>
+    )}
+    {bookingOptionsError && (
+      <div className="rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
+        Warning: {bookingOptionsError}
+      </div>
+    )}
+    <SelectField
+      label="Target Booking Calendar / Event Page"
+      value={form.bookingCalendarId || form.ghlCalendarId || form.calendarId || ""}
+      onChange={(selectedId) => {
+        set("bookingCalendarId", selectedId);
+        const matchedOpt = bookingOptions.find((b) => b.id === selectedId);
+        if (matchedOpt?.link) {
+          set("bookingStandingLink", matchedOpt.link);
+        }
+      }}
+      required
+      disabled={fetchingBookingOptions}
+      options={[
+        { value: "", label: fetchingBookingOptions ? "-- Loading..." : "-- Choose an Active Calendar --" },
+        ...bookingOptions.map((b) => ({
+          value: b.id,
+          label: `${b.name} (${b.link || b.id})`,
+        })),
+      ]}
+      helpText="Selecting your calendar automatically binds its ID and standing booking link."
+    />
+  </div>
+)}
+
 
       {/* ── Email Platform / Credentials ── */}
       {form.emailPlatform === "smtp" ? (

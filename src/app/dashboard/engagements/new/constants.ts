@@ -28,6 +28,9 @@ export const DEFAULT_FORM: FormData = {
   bookingPlatform: "calendly",
   bookingLocationId: "",
   bookingStandingLink: "",
+  bookingCalendarId: "",     // 👈 ADD THIS
+  ghlCalendarId: "",        // 👈 ADD THIS
+  calendarId: "",
   emailPlatform: "klaviyo",
   recoveryAutomationId: "",
   longTermNurtureListId: "",

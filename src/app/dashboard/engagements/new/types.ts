@@ -29,6 +29,8 @@ export interface FormData {
   bookingLocationId: string;
   bookingStandingLink: string;
   bookingCalendarId?: string;
+  ghlCalendarId?: string;     // 👈 ADD THIS
+  calendarId?: string;
 
   recoveryAutomationId: string;
   longTermNurtureListId: string;
