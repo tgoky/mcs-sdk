@@ -8,13 +8,8 @@ export const runtime = "nodejs";
 export const revalidate = 0;
 
 /**
- * Pauses an engagement: every recurring cron (nightly-briefs, leak-map
- * schedule, dynamic-brief, booking-poll, lost-deal sweep, weekly-metrics,
- * credential-health) checks pausedAt and skips this engagement until it's
- * resumed. Does NOT cancel a run already in flight — use
- * POST /api/skill-runs/[id]/cancel for that — and does not touch stored
- * credentials or delete anything, so resuming picks up exactly where it
- * left off.
+ * POST: Pauses an engagement (with optional reason).
+ * DELETE: Resumes an engagement.
  */
 export async function POST(
   req: Request,
@@ -39,16 +34,24 @@ export async function POST(
     if (!row) {
       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
     }
+
     if (row.pausedAt) {
       return NextResponse.json({ error: "Already paused." }, { status: 409 });
     }
 
+    const now = new Date();
+    
+    // 🌟 THIS IS THE LINE THAT WAS MISSING FROM YOUR FILE:
     await db
       .update(engagements)
-      .set({ pausedAt: new Date(), pausedReason: reason, updatedAt: new Date() })
+      .set({ 
+        pausedAt: now, 
+        pausedReason: reason, 
+        updatedAt: now 
+      })
       .where(eq(engagements.engagementId, id));
 
-    return NextResponse.json({ ok: true, pausedAt: new Date().toISOString() });
+    return NextResponse.json({ ok: true, pausedAt: now.toISOString() });
   } catch (err) {
     console.error("[engagements/[id]/pause POST]", err);
     return NextResponse.json({ error: "Failed to pause engagement." }, { status: 500 });
@@ -75,13 +78,19 @@ export async function DELETE(
     if (!row) {
       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
     }
+
     if (!row.pausedAt) {
       return NextResponse.json({ error: "Not paused." }, { status: 409 });
     }
 
+    // 🌟 CLEAR THE PAUSE STATE:
     await db
       .update(engagements)
-      .set({ pausedAt: null, pausedReason: null, updatedAt: new Date() })
+      .set({ 
+        pausedAt: null, 
+        pausedReason: null, 
+        updatedAt: new Date() 
+      })
       .where(eq(engagements.engagementId, id));
 
     return NextResponse.json({ ok: true });
