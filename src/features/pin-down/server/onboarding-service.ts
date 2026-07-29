@@ -22,24 +22,41 @@ import crypto from "crypto";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
+// The neutral placeholder shown when there isn't enough real content to
+// analyze. Kept as its own constant (not inlined twice) because it now
+// gets returned from two different failure paths below — corpus-too-short
+// and extraction-parse-failed — and those two paths used to return
+// different shapes (one full, one bare `{ source_path: "default" }`),
+// which meant a parse failure left the deliverables panel with an empty
+// card instead of a usable one. Both paths now return the identical
+// neutral shape, tagged with WHY it's a placeholder via `fallback_reason`
+// and `corpus_word_count`, so the UI can tell the buyer what actually
+// happened instead of silently showing generic tone/vocabulary as if it
+// were real analysis.
+const NEUTRAL_DEFAULT_VOICE_PROFILE = {
+  tone: {
+    formal_casual: { score: 3, note: "Operator-grade, plain analytical posture." },
+    technical_plain: { score: 3, note: "Balanced, jargon-free." },
+    warm_neutral: { score: 3, note: "Direct, non-promotional." },
+  },
+  vocabulary: { signature: ["outcome", "pipeline", "process"], brand_terms: [] },
+  sentence_length: { short_pct: 30, medium_pct: 55, long_pct: 15 },
+  banned_phrases: [
+    { phrase: "revolutionary", confidence: 0.95 },
+    { phrase: "best-in-class", confidence: 0.9 },
+  ],
+};
+
 async function extractVoiceProfile(corpus: string, runId: string): Promise<any> {
   const wordCount = corpus.trim().split(/\s+/).filter(Boolean).length;
 
   if (wordCount < 500) {
     return {
       source_path: "default",
+      fallback_reason: "corpus_too_short",
+      corpus_word_count: wordCount,
       extracted_at: new Date().toISOString(),
-      tone: {
-        formal_casual: { score: 3, note: "Operator-grade, plain analytical posture." },
-        technical_plain: { score: 3, note: "Balanced, jargon-free." },
-        warm_neutral: { score: 3, note: "Direct, non-promotional." },
-      },
-      vocabulary: { signature: ["outcome", "pipeline", "process"], brand_terms: [] },
-      sentence_length: { short_pct: 30, medium_pct: 55, long_pct: 15 },
-      banned_phrases: [
-        { phrase: "revolutionary", confidence: 0.95 },
-        { phrase: "best-in-class", confidence: 0.9 },
-      ],
+      ...NEUTRAL_DEFAULT_VOICE_PROFILE,
     };
   }
 
@@ -70,8 +87,23 @@ Return nothing but the JSON object. No preamble, no markdown.`,
     const cleaned = result.text.replace(/^```json\s*|\s*```$/g, "").trim();
     parsed = JSON.parse(cleaned);
     parsed.source_path = "ai_extracted";
+    parsed.corpus_word_count = wordCount;
   } catch {
-    parsed = { source_path: "default" };
+    // Previously just `{ source_path: "default" }` — missing tone,
+    // vocabulary, sentence_length, and banned_phrases entirely, which left
+    // the deliverables panel rendering an empty card with nothing but the
+    // "Neutral default tone" badge. This corpus WAS long enough (we only
+    // get here past the wordCount < 500 return above), so the fix here is
+    // different from the too-short case — the buyer doesn't need to feed
+    // it more content, a retry is the actual next step — hence a distinct
+    // fallback_reason rather than collapsing both into one generic label.
+    parsed = {
+      source_path: "default",
+      fallback_reason: "extraction_parse_failed",
+      corpus_word_count: wordCount,
+      extracted_at: new Date().toISOString(),
+      ...NEUTRAL_DEFAULT_VOICE_PROFILE,
+    };
   }
   return parsed;
 }

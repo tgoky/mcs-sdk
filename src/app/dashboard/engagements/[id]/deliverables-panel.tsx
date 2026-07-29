@@ -61,6 +61,10 @@ type VoiceScrapeArtifacts = {
 
 export type BrandVoiceProfile = {
   source_path?: "default" | "ai_extracted" | string;
+  /** Why this is a placeholder rather than real analysis — absent when source_path is "ai_extracted". */
+  fallback_reason?: "corpus_too_short" | "extraction_parse_failed" | string;
+  /** Word count of whatever corpus was actually fed into extraction (scraped + pasted, combined). */
+  corpus_word_count?: number;
   tone?: Record<string, { score: number; note: string }>;
   vocabulary?: { signature?: string[]; brand_terms?: string[] };
   sentence_length?: { short_pct?: number; medium_pct?: number; long_pct?: number };
@@ -211,6 +215,29 @@ export function DeliverablesPanel({
   const toneEntries = Object.entries(tone);
   const isAiExtracted = brandVoiceProfile?.source_path === "ai_extracted";
 
+  // Everything below only matters when the profile is NOT ai_extracted —
+  // it explains, in the buyer's own deliverables panel rather than buried
+  // in a run log, exactly why they're looking at a placeholder instead of
+  // a real read of this client's site. Previously the only signal was a
+  // small "Neutral default tone" badge next to tone/vocabulary chips that
+  // looked identical either way, which is indistinguishable from a real
+  // result unless you already knew to be suspicious of it.
+  const scrapedWordCount = voiceScrapeArtifacts?.totalWordCount ?? 0;
+  const scrapedSourceCount = voiceScrapeArtifacts?.sources?.length ?? 0;
+  const corpusWordCount = brandVoiceProfile?.corpus_word_count ?? scrapedWordCount;
+  const fallbackHeadline =
+    brandVoiceProfile?.fallback_reason === "extraction_parse_failed"
+      ? "The AI extraction ran but didn't return usable output"
+      : corpusWordCount > 0
+      ? `Only found ${corpusWordCount.toLocaleString()} word${corpusWordCount === 1 ? "" : "s"} of usable content — that's not enough for a real read (need 500+)`
+      : "Couldn't pull any usable content from this client's site";
+  const fallbackDetail =
+    brandVoiceProfile?.fallback_reason === "extraction_parse_failed"
+      ? "This corpus was long enough — the model's response just didn't come back as valid JSON that run. Worth trying again; if it keeps happening, that's a real bug, not a content problem."
+      : scrapedSourceCount > 0
+      ? `Checked ${scrapedSourceCount} page${scrapedSourceCount === 1 ? "" : "s"} on ${discoveryPrefill?.domain ?? "the domain on file"} (see Site & voice crawl above) and came up short. Often means the site is JS-rendered and needs a real headless crawl, or the sales/pricing pages live at URLs we didn't guess.`
+      : `No domain-based crawl produced anything (see Site & voice crawl above if one ran), and there's no operator-pasted sample either. There's nothing yet to base a real voice profile on for ${discoveryPrefill?.domain ?? "this client"}.`;
+
   return (
     <div className="space-y-5">
       <SectionHeader title="Deliverables & Assets" />
@@ -270,12 +297,22 @@ export function DeliverablesPanel({
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Brand voice profile</p>
-            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${isAiExtracted ? "text-gold-hover dark:text-gold bg-gold/10 border-gold/30" : "text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800/40"}`}>
-              {isAiExtracted ? "AI-extracted from corpus" : "Neutral default tone"}
+            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${isAiExtracted ? "text-gold-hover dark:text-gold bg-gold/10 border-gold/30" : "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40"}`}>
+              {isAiExtracted ? "AI-extracted from corpus" : "Placeholder — not from this client"}
             </span>
           </div>
 
-          {toneEntries.length > 0 && (
+          {!isAiExtracted && (
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-1.5">
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-400">{fallbackHeadline}</p>
+              <p className="text-[11px] text-amber-700/90 dark:text-amber-400/80 leading-relaxed">{fallbackDetail}</p>
+              <p className="text-[11px] text-amber-700/90 dark:text-amber-400/80 leading-relaxed">
+                To fix: make sure the site&apos;s key pages are reachable (or paste a writing sample during onboarding), then click <span className="font-semibold">Run Pin Down</span> in Modules above to try again.
+              </p>
+            </div>
+          )}
+
+          {isAiExtracted && toneEntries.length > 0 && (
             <div className="space-y-3">
               {toneEntries.map(([key, val]) => (
                 <ToneSpectrum key={key} axisKey={key} score={val.score} note={val.note} />
@@ -283,7 +320,7 @@ export function DeliverablesPanel({
             </div>
           )}
 
-          {(brandVoiceProfile.vocabulary?.signature?.length || brandVoiceProfile.vocabulary?.brand_terms?.length) ? (
+          {isAiExtracted && (brandVoiceProfile.vocabulary?.signature?.length || brandVoiceProfile.vocabulary?.brand_terms?.length) ? (
             <div className="pt-2 border-t border-zinc-100 dark:border-zinc-900/50 space-y-1.5">
               {!!brandVoiceProfile.vocabulary?.signature?.length && (
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -300,7 +337,7 @@ export function DeliverablesPanel({
             </div>
           ) : null}
 
-          {!!brandVoiceProfile.banned_phrases?.length && (
+          {isAiExtracted && !!brandVoiceProfile.banned_phrases?.length && (
             <div className="pt-2 border-t border-zinc-100 dark:border-zinc-900/50">
               <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 block mb-1">Avoid using:</span>
               <div className="flex flex-wrap gap-1.5">
