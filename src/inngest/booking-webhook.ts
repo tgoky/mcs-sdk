@@ -6,6 +6,7 @@ import { handleInboundBookingEvent } from "@/features/pile-on/server/enrollment-
 import { failRun, logStep, finishRun } from "@/lib/run-log";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { SKILL_REGISTRY } from "@/lib/skill-registry";
+import { isEngagementPaused } from "@/lib/engagement-status"; // 🌟 ADDED
 
 /**
  * Reliability fix — see the module comment on bookingWebhookProcess in
@@ -58,6 +59,18 @@ export const processBookingWebhookEvent = inngest.createFunction(
       // Engagement was deleted between the webhook arriving and this worker
       // picking it up — nothing to enroll. Not worth failing the run over.
       return { processed: false, reason: "engagement not found" };
+    }
+
+    // 🌟 FIX: Guard against paused or soft-deleted clients receiving webhook enrollments
+    if (tenant.deletedAt || isEngagementPaused(tenant)) {
+      const statusReason = tenant.deletedAt ? "deleted" : "paused";
+      await logStep(runId, {
+        phase: "webhook_received",
+        status: "skipped",
+        detail: `Engagement is ${statusReason} — booking webhook enrollment skipped.`,
+      });
+      await finishRun(runId);
+      return { processed: false, reason: `engagement is ${statusReason}` };
     }
 
     // Matches the skillName booking-event/route.ts already used to start
