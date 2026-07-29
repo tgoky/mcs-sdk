@@ -248,22 +248,29 @@ export function UpdateCredentialsForm({
   bookingPlatform,
   emailPlatform,
   vaultLinksByProvider,
+  embedded = false,
+  onRequestClose,
 }: {
   engagementId: string;
   bookingPlatform?: string | null;
   emailPlatform?: string | null;
   /** provider → the vault credential id it's currently linked to, or null if it stores its own value. Absent entirely = no credential saved yet at all. */
   vaultLinksByProvider?: Record<string, string | null>;
+  /** Rendered inside the Edit action menu's Modal — parent already owns visibility. */
+  embedded?: boolean;
+  /** Called (in addition to the internal Close button) so the wrapping Modal can dismiss itself too. */
+  onRequestClose?: () => void;
 }) {
   // Set by the Queue's "Fix now" link on a classified 401/403 run failure
   // (see src/lib/error-classification.ts) — opens straight to this form
   // instead of landing on a collapsed button the buyer has to know exists.
   const searchParams = useSearchParams();
-  const [open, setOpen] = useState(() => searchParams.get("fixCredential") === "1");
+  const [open, setOpen] = useState(() => searchParams.get("fixCredential") === "1" || embedded);
 
   if (!bookingPlatform && !emailPlatform) return null;
 
   if (!open) {
+    if (embedded) return null;
     return (
       <button
         onClick={() => setOpen(true)}
@@ -275,18 +282,20 @@ export function UpdateCredentialsForm({
   }
 
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-          <KeyRound className="w-3.5 h-3.5" /> Update credentials
-        </p>
-        <button
-          onClick={() => setOpen(false)}
-          className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors cursor-pointer"
-        >
-          Close
-        </button>
-      </div>
+    <div className={embedded ? "space-y-3" : "rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-3 shadow-sm"}>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+            <KeyRound className="w-3.5 h-3.5" /> Update credentials
+          </p>
+          <button
+            onClick={() => { setOpen(false); onRequestClose?.(); }}
+            className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
+      )}
       <div className="space-y-2">
         {bookingPlatform && (
           <CredentialRow

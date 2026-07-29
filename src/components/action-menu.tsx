@@ -109,7 +109,7 @@ export function ActionMenu({
             <div
               ref={panelRef}
               role="menu"
-              className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/97 dark:bg-zinc-900/97 backdrop-blur-md shadow-xl dark:shadow-2xl dark:shadow-black/50 py-1.5 max-h-[70vh] overflow-y-auto"
+              className="rounded-2xl border border-zinc-800 bg-zinc-900/95 backdrop-blur-md text-zinc-100 shadow-2xl shadow-black/80 py-1.5 max-h-[70vh] overflow-y-auto"
             >
               {typeof children === "function" ? children(close) : children}
             </div>
@@ -124,7 +124,7 @@ export function ActionMenuSection({ label, children }: { label?: string; childre
   return (
     <div className="px-1.5 py-1">
       {label && (
-        <p className="px-2.5 pb-1 pt-1 text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider truncate">
+        <p className="px-2.5 pb-1 pt-1 text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider truncate">
           {label}
         </p>
       )}
@@ -134,7 +134,7 @@ export function ActionMenuSection({ label, children }: { label?: string; childre
 }
 
 export function ActionMenuDivider() {
-  return <div className="my-1 border-t border-zinc-100 dark:border-zinc-800/70" />;
+  return <div className="my-1 border-t border-zinc-800/80" />;
 }
 
 export function ActionMenuItem({
@@ -158,17 +158,17 @@ export function ActionMenuItem({
 }) {
   const toneClass =
     tone === "danger"
-      ? "text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+      ? "text-rose-400 hover:bg-rose-500/15"
       : tone === "accent"
-      ? "text-gold-hover dark:text-gold hover:bg-gold/10"
-      : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800/60";
+      ? "text-amber-400 hover:bg-amber-400/10"
+      : "text-zinc-200 hover:bg-zinc-800/80";
 
   const iconClass =
     tone === "danger"
-      ? "text-rose-500 dark:text-rose-400"
+      ? "text-rose-400"
       : tone === "accent"
-      ? "text-gold-hover dark:text-gold"
-      : "text-zinc-400 dark:text-zinc-500";
+      ? "text-amber-400"
+      : "text-zinc-400";
 
   const content = (
     <>
@@ -176,7 +176,7 @@ export function ActionMenuItem({
       <span className="flex-1 min-w-0">
         <span className="block text-[13px] font-medium leading-tight">{label}</span>
         {description && (
-          <span className="block text-[11px] text-zinc-400 dark:text-zinc-500 font-mono leading-snug mt-0.5">
+          <span className="block text-[11px] text-zinc-400 font-mono leading-snug mt-0.5">
             {description}
           </span>
         )}

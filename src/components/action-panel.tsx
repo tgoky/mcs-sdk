@@ -7,19 +7,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import type { QuickActionResult } from "@/lib/quick-actions";
 
-// =============================================================================
-// ACTION PANEL
-//
-// The click-to-open "settings" panel used on Live Executions rows and Queue
-// rows. Replaces the old hover-triggered preview (src/components/hover-
-// preview.tsx, now removed) with an explicit trigger button, so nothing
-// opens just because the mouse passed over a row. Visually it borrows the
-// layout of a Linear-style popover — rounded card, uppercase section
-// labels, icon + label rows, a thin divider between groups — repainted in
-// this app's own popover/border/accent tokens so it matches light + dark
-// mode instead of being hardcoded to one palette.
-// =============================================================================
-
 export interface ActionPanelItem {
   key: string;
   icon: LucideIcon;
@@ -37,12 +24,6 @@ export interface ActionPanelSection {
   items: ActionPanelItem[];
 }
 
-/**
- * Tracks which single action is in flight and the last error, so the panel
- * can show an inline spinner + error banner instead of a toast. Deliberately
- * local/per-panel state (not a global store) — each row's panel is a fresh
- * mount, so there's nothing to keep in sync across rows.
- */
 export function useQuickActions() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,15 +53,17 @@ function ActionPanelRow({ item, busy, onClose }: { item: ActionPanelItem; busy: 
   const className = cn(
     "w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors cursor-pointer",
     "disabled:opacity-40 disabled:cursor-not-allowed",
-    danger ? "text-rose-600 dark:text-rose-400 hover:bg-rose-500/10" : "text-foreground hover:bg-accent/70"
+    danger 
+      ? "text-rose-400 hover:bg-rose-500/15" 
+      : "text-zinc-200 hover:bg-zinc-800/80"
   );
 
   const content = (
     <>
       {busy ? (
-        <Loader2 size={15} className="shrink-0 animate-spin text-muted-foreground" />
+        <Loader2 size={15} className="shrink-0 animate-spin text-zinc-400" />
       ) : (
-        <Icon size={15} className={cn("shrink-0", !danger && "text-muted-foreground")} />
+        <Icon size={15} className={cn("shrink-0", !danger && "text-zinc-400")} />
       )}
       <span className="flex-1 truncate font-medium">{item.label}</span>
     </>
@@ -136,8 +119,8 @@ export function ActionPanel({
           className={cn(
             "inline-flex items-center justify-center w-7 h-7 rounded-md border shrink-0 transition-colors cursor-pointer",
             open
-              ? "border-border bg-accent text-foreground"
-              : "border-transparent text-muted-foreground/70 hover:bg-accent hover:text-foreground hover:border-border",
+              ? "border-zinc-700 bg-zinc-800 text-zinc-100"
+              : "border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700",
             triggerClassName
           )}
         >
@@ -149,10 +132,10 @@ export function ActionPanel({
         side={side}
         align={align}
         onClick={(e) => e.stopPropagation()}
-        className="w-[300px] p-0 rounded-2xl border border-border/70 bg-popover text-popover-foreground shadow-2xl shadow-black/20 dark:shadow-black/60 overflow-hidden"
+        className="w-[300px] p-0 rounded-2xl border border-zinc-800 bg-zinc-900 text-zinc-100 shadow-2xl shadow-black/80 overflow-hidden"
       >
         {header && (
-          <div className="px-4 pt-3.5 pb-3 border-b border-border/60 text-xs font-mono leading-normal">
+          <div className="px-4 pt-3.5 pb-3 border-b border-zinc-800/80 text-xs font-mono leading-normal text-zinc-300">
             {header}
           </div>
         )}
@@ -161,7 +144,7 @@ export function ActionPanel({
           {sections.map((section, i) => (
             <div key={section.label ?? i}>
               {section.label && (
-                <p className="px-4 pt-2 pb-1 text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground/70">
+                <p className="px-4 pt-2 pb-1 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
                   {section.label}
                 </p>
               )}
@@ -173,19 +156,19 @@ export function ActionPanel({
                   onClose={() => onOpenChange(false)}
                 />
               ))}
-              {i < sections.length - 1 && <div className="my-1 border-t border-border/60" />}
+              {i < sections.length - 1 && <div className="my-1 border-t border-zinc-800/80" />}
             </div>
           ))}
         </div>
 
         {errorText && (
-          <p className="px-4 py-2 border-t border-border/60 bg-rose-50 dark:bg-rose-950/30 text-[11px] font-mono text-rose-600 dark:text-rose-400">
+          <p className="px-4 py-2 border-t border-zinc-800/80 bg-rose-950/40 text-[11px] font-mono text-rose-400">
             {errorText}
           </p>
         )}
 
         {footer && (
-          <div className="px-4 py-2 border-t border-border/60 text-[10px] font-mono text-muted-foreground/70">
+          <div className="px-4 py-2 border-t border-zinc-800/80 text-[10px] font-mono text-zinc-400">
             {footer}
           </div>
         )}

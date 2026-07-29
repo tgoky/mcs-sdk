@@ -15,14 +15,20 @@ export function DeleteClientSection({
   engagementId,
   buyerName,
   initialDeletedAt,
+  embedded = false,
+  onRequestClose,
 }: {
   engagementId: string;
   buyerName: string;
   initialDeletedAt: string | null;
+  /** Rendered inside the Edit action menu's Modal — parent already owns visibility. */
+  embedded?: boolean;
+  /** Called (in addition to the internal Cancel button) so the wrapping Modal can dismiss itself too. */
+  onRequestClose?: () => void;
 }) {
   const router = useRouter();
   const [deletedAt, setDeletedAt] = useState(initialDeletedAt);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => embedded);
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +98,7 @@ export function DeleteClientSection({
   }
 
   if (!open) {
+    if (embedded) return null;
     return (
       <div className="flex items-center justify-between">
         <button
@@ -131,7 +138,7 @@ export function DeleteClientSection({
           {busy ? "Deleting…" : "Confirm delete"}
         </button>
         <button
-          onClick={() => { setOpen(false); setConfirmText(""); setError(null); }}
+          onClick={() => { setOpen(false); setConfirmText(""); setError(null); onRequestClose?.(); }}
           className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors cursor-pointer shrink-0"
         >
           Cancel

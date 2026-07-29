@@ -7,12 +7,10 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { TriggerSkillButton } from "./trigger-skill-button";
 import { EngagementPauseControl } from "./pause-control";
-import { ApprovalModeToggle } from "./approval-mode/approval-mode-toggle";
 import { SkillsPanel } from "./skills-panel";
 import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
-import { EditStackSettings } from "./edit-stack-settings";
-import { UpdateCredentialsForm } from "./update-credentials-form";
-import { DeleteClientSection } from "./delete-client-section";
+import { EngagementActionsMenu } from "./engagement-actions-menu";
+import { RunRowActions } from "./run-row-actions";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
 import { 
   CheckCircle2, 
@@ -21,7 +19,8 @@ import {
   AlertCircle, 
   ArrowRight, 
   Server, 
-  DollarSign 
+  DollarSign,
+  Sparkles,
 } from "lucide-react";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
@@ -183,47 +182,77 @@ export default async function EngagementDetailPage({
           </div>
 
           <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
-            <EngagementPauseControl
-              engagementId={engagement.engagementId}
-              initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
-              initialPausedReason={engagement.pausedReason}
-            />
-            <ApprovalModeToggle
-              engagementId={engagement.engagementId}
-              initialRequireApproval={requireApproval}
-            />
-          </div>
-        </div>
-
-        {/* Client Management Card */}
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/30 p-3.5 space-y-3">
-          <p className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-            Client management
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <div id="stack-settings" className="scroll-mt-24">
-              <EditStackSettings
+            <div className="flex items-center gap-2">
+              <EngagementPauseControl
                 engagementId={engagement.engagementId}
-                initialStack={engagement.stack as EngagementStack | null}
+                initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
+                initialPausedReason={engagement.pausedReason}
               />
-            </div>
-            <div id="update-credentials" className="scroll-mt-24">
-              <UpdateCredentialsForm
+              <EngagementActionsMenu
                 engagementId={engagement.engagementId}
+                buyerName={engagement.buyer}
+                initialStack={engagement.stack as EngagementStack | null}
                 bookingPlatform={stack?.booking_platform}
                 emailPlatform={stack?.email_platform}
                 vaultLinksByProvider={vaultLinksByProvider}
+                initialRequireApproval={requireApproval}
+                initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
               />
             </div>
           </div>
-          <div className="pt-2 border-t border-zinc-200/70 dark:border-zinc-800/60">
-            <DeleteClientSection
-              engagementId={engagement.engagementId}
-              buyerName={engagement.buyer}
-              initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
-            />
-          </div>
         </div>
+
+        {/* What this client's about, up front: offer, targeting, price, AI personalization */}
+        {offerDetails && (
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 shadow-xs overflow-hidden">
+            <div className="flex flex-col lg:flex-row lg:items-center gap-4 p-4">
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Offer</p>
+                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">{offerName}</h2>
+                {offerIcp && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                    <span className="font-mono uppercase text-[10px] tracking-wide text-zinc-400 dark:text-zinc-600">Targeting</span>{" "}
+                    <span className="font-medium text-zinc-700 dark:text-zinc-300">{offerIcp}</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2.5 shrink-0">
+                <div className="flex flex-col items-center justify-center px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 min-w-[84px]">
+                  <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    <DollarSign className="w-2.5 h-2.5" /> Price
+                  </span>
+                  <span className="text-base font-bold text-zinc-900 dark:text-zinc-100 tabular-nums mt-0.5">
+                    {offerPrice ? `$${offerPrice}` : "—"}
+                  </span>
+                </div>
+
+                <div
+                  className={`flex flex-col items-center justify-center px-4 py-2 rounded-lg border min-w-[128px] ${
+                    isAiEnabled
+                      ? "border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/20"
+                      : "border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50"
+                  }`}
+                >
+                  <span
+                    className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold uppercase tracking-wider ${
+                      isAiEnabled ? "text-emerald-700 dark:text-emerald-400" : "text-zinc-400 dark:text-zinc-500"
+                    }`}
+                  >
+                    <Sparkles className="w-2.5 h-2.5" /> AI Personalization
+                  </span>
+                  <span
+                    className={`text-base font-bold mt-0.5 ${
+                      isAiEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500 dark:text-zinc-400"
+                    }`}
+                  >
+                    {isAiEnabled ? "On" : "Off"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <SkillsPanel engagementId={engagement.engagementId} initialStates={skillStates} />
@@ -233,54 +262,6 @@ export default async function EngagementDetailPage({
           This client is paused — nightly briefs, leak map, win-back, weekly metrics, and booking polling are all
           skipping it.{engagement.pausedReason ? ` Reason: ${engagement.pausedReason}` : ""} Manual &quot;Run&quot; buttons
           below still work if you need to test something.
-        </div>
-      )}
-
-      {/* Integrated Executive Narrative Banner */}
-      {offerDetails && (
-        <div className="rounded-lg border-l-2 border-zinc-400 dark:border-zinc-600 bg-zinc-100/60 dark:bg-zinc-900/40 py-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          
-          {/* Left: Offer Name & Target ICP Narrative */}
-          <div className="min-w-0 flex-1 leading-relaxed text-zinc-700 dark:text-zinc-300">
-            <span className="font-bold text-zinc-900 dark:text-zinc-100 font-mono text-sm">{offerName}</span>
-            {offerIcp && (
-              <>
-                <span className="mx-2 text-zinc-300 dark:text-zinc-700">•</span>
-                <span className="text-zinc-500 dark:text-zinc-400 font-mono text-[11px] uppercase tracking-wide">Targeting:</span>{" "}
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">{offerIcp}</span>
-              </>
-            )}
-          </div>
-
-          {/* Right Top Extreme: Price, then AI Personalization */}
-          <div className="shrink-0 flex items-center gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-200 dark:border-zinc-800 font-mono">
-            
-            {/* Price Badge */}
-            <div className="flex items-center gap-1.5 text-[11px]">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Price
-              </span>
-              <span className="px-2 py-0.5 rounded text-[11px] font-bold text-zinc-800 dark:text-zinc-200 bg-zinc-200/60 dark:bg-zinc-800/60 border border-zinc-300 dark:border-zinc-700">
-                {offerPrice ? `$${offerPrice}` : "$—"}
-              </span>
-            </div>
-
-            {/* AI Personalization Badge */}
-            <div className="flex items-center gap-1.5 text-[11px]">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                AI Personalization
-              </span>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                isAiEnabled 
-                  ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20" 
-                  : "text-zinc-500 dark:text-zinc-400 bg-zinc-500/10 border border-zinc-500/20"
-              }`}>
-                {isAiEnabled ? "On" : "Off"}
-              </span>
-            </div>
-
-          </div>
-
         </div>
       )}
 
@@ -496,6 +477,13 @@ export default async function EngagementDetailPage({
                         >
                           {relativeTime(String(run.startedAt))}
                           <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                          <RunRowActions
+                            runId={run.id}
+                            engagementId={engagement.engagementId}
+                            skillName={run.skillName}
+                            skillLabel={skillName(run.skillName)}
+                            status={run.status}
+                          />
                         </div>
                       </div>
                     </div>

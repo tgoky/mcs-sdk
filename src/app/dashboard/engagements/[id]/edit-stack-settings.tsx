@@ -204,9 +204,15 @@ function GroupHeading({ children }: { children: React.ReactNode }) {
 export function EditStackSettings({
   engagementId,
   initialStack,
+  embedded = false,
+  onRequestClose,
 }: {
   engagementId: string;
   initialStack: EngagementStack | null;
+  /** Rendered inside the Edit action menu's Modal — parent already owns visibility, so skip the collapsed trigger button and the bordered card chrome. */
+  embedded?: boolean;
+  /** Called (in addition to the internal Close button) so the wrapping Modal can dismiss itself too. */
+  onRequestClose?: () => void;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -216,7 +222,7 @@ export function EditStackSettings({
   // the wrong value, instead of landing on a collapsed panel the buyer has
   // to know to open and then hunt through five sections themselves.
   const fixSection = searchParams.get("fixSection");
-  const [open, setOpen] = useState(() => Boolean(fixSection));
+  const [open, setOpen] = useState(() => Boolean(fixSection) || embedded);
   const [highlightSection, setHighlightSection] = useState<string | null>(fixSection);
   // Five fixed, individually-declared refs rather than a dynamic
   // Record<string, ref> built from a per-render factory function — the
@@ -359,6 +365,7 @@ export function EditStackSettings({
   }
 
   if (!open) {
+    if (embedded) return null;
     return (
       <button
         onClick={() => setOpen(true)}
@@ -370,18 +377,20 @@ export function EditStackSettings({
   }
 
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-          <Settings2 className="w-3.5 h-3.5" /> Edit stack settings
-        </p>
-        <button
-          onClick={() => setOpen(false)}
-          className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors cursor-pointer"
-        >
-          Close
-        </button>
-      </div>
+    <div className={embedded ? "space-y-4" : "rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-4 shadow-sm"}>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+            <Settings2 className="w-3.5 h-3.5" /> Edit stack settings
+          </p>
+          <button
+            onClick={() => { setOpen(false); onRequestClose?.(); }}
+            className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
+      )}
       <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono leading-relaxed">
         Fixes a mistake made during onboarding, or an account ID that changed on the buyer&apos;s end —
         every platform this engagement can be connected to is editable here, not just booking.
