@@ -2,16 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, Zap } from "lucide-react";
+import { ShieldCheck, Bot, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /**
  * Co-Pilot / Autopilot toggle for this engagement's confirmation_page_deploy
- * step (see src/lib/approval-gate.ts). Co-Pilot queues the publish for
- * review in the dashboard queue; Autopilot publishes immediately.
+ * step (see src/lib/approval-gate.ts). Co-Pilot queues actions for
+ * review in the dashboard queue; Autopilot executes immediately.
  *
  * Deliberately asymmetric: Co-Pilot -> Autopilot needs a confirm click,
- * Autopilot -> Co-Pilot doesn't. Adding a review step should never need
- * friction; removing one should always need a little.
+ * Autopilot -> Co-Pilot doesn't.
  */
 export function ApprovalModeToggle({
   engagementId,
@@ -50,62 +50,100 @@ export function ApprovalModeToggle({
     }
   }
 
+  // 1. Confirmation state when switching to Autopilot
   if (confirming) {
     return (
-      <div className="flex flex-col items-start gap-1.5">
-        <span className="text-[11px] font-mono text-amber-700 dark:text-amber-400 leading-relaxed">
-          Switch to Autopilot? The confirmation page will publish immediately, no review.
-        </span>
-        <div className="flex items-center gap-2">
+      <div className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 space-y-2 select-none">
+        <p className="text-xs font-sans text-zinc-700 dark:text-zinc-300 leading-normal">
+          Switch to Autopilot? Actions will publish immediately without manual approval.
+        </p>
+        <div className="flex items-center gap-2 pt-0.5">
           <button
+            type="button"
             onClick={() => setMode(false)}
             disabled={busy}
-            className="text-[11px] font-mono font-bold px-2 py-1 rounded-sm border border-amber-300 dark:border-amber-900/60 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 disabled:opacity-50 transition-all cursor-pointer"
+            className="inline-flex items-center justify-center text-xs font-sans font-semibold px-3 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-white transition-all active:scale-95 cursor-pointer disabled:opacity-50"
           >
-            {busy ? "Switching…" : "Confirm Autopilot"}
+            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm Autopilot"}
           </button>
           <button
+            type="button"
             onClick={() => setConfirming(false)}
-            className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors cursor-pointer"
+            className="text-xs font-sans font-medium px-2.5 py-1.5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
           >
             Cancel
           </button>
         </div>
+        {error && <p className="text-xs font-sans text-rose-600 dark:text-rose-400">{error}</p>}
       </div>
     );
   }
 
+  // 2. Co-Pilot Mode State
   if (requireApproval) {
     return (
-      <div className="flex flex-col items-start gap-1.5">
-        <span className="inline-flex items-start gap-1.5 text-[11px] font-mono font-bold text-gold-hover dark:text-gold bg-gold/10 border border-gold/25 px-2 py-1.5 rounded-md leading-snug">
-          <ShieldCheck className="w-3 h-3 mt-0.5 shrink-0" /> Co-Pilot — confirmation page needs your approval to publish
-        </span>
+      <div className="space-y-1 select-none">
         <button
+          type="button"
           onClick={() => setConfirming(true)}
           disabled={busy}
-          className="text-[11px] font-mono font-bold px-2 py-1 rounded-sm border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-50 transition-all cursor-pointer"
+          className={cn(
+            "group w-full flex items-center justify-between gap-3 px-2.5 py-2 rounded-xl text-left transition-colors cursor-pointer",
+            "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 hover:text-zinc-900 dark:hover:text-white",
+            "disabled:opacity-50 disabled:cursor-not-allowed"
+          )}
         >
-          Switch to Autopilot
+          <div className="flex items-center gap-2.5 min-w-0">
+            {busy ? (
+              <Loader2 className="w-4 h-4 shrink-0 animate-spin text-zinc-400" />
+            ) : (
+              <ShieldCheck className="w-4 h-4 shrink-0 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-700 dark:group-hover:text-zinc-200 transition-colors" />
+            )}
+            <div className="flex flex-col min-w-0">
+              <span className="text-[13px] font-sans font-medium leading-snug">
+                Co-Pilot mode
+              </span>
+              <span className="text-[11px] font-sans text-zinc-500 dark:text-zinc-400 leading-normal truncate">
+                Click to switch to Autopilot
+              </span>
+            </div>
+          </div>
         </button>
-        {error && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">{error}</span>}
+        {error && <p className="text-xs font-sans text-rose-600 dark:text-rose-400 px-2.5">{error}</p>}
       </div>
     );
   }
 
+  // 3. Autopilot Mode State
   return (
-    <div className="flex flex-col items-start gap-1.5">
-      <span className="inline-flex items-start gap-1.5 text-[11px] font-mono font-bold text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-900/60 px-2 py-1.5 rounded-md leading-snug">
-        <Zap className="w-3 h-3 mt-0.5 shrink-0" /> Autopilot — confirmation page publishes automatically
-      </span>
+    <div className="space-y-1 select-none">
       <button
+        type="button"
         onClick={() => setMode(true)}
         disabled={busy}
-        className="text-[11px] font-mono font-bold px-2 py-1 rounded-sm border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-gold/40 hover:text-gold-hover dark:hover:text-gold transition-all cursor-pointer disabled:opacity-50"
+        className={cn(
+          "group w-full flex items-center justify-between gap-3 px-2.5 py-2 rounded-xl text-left transition-colors cursor-pointer",
+          "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 hover:text-zinc-900 dark:hover:text-white",
+          "disabled:opacity-50 disabled:cursor-not-allowed"
+        )}
       >
-        {busy ? "Switching…" : "Switch to Co-Pilot"}
+        <div className="flex items-center gap-2.5 min-w-0">
+          {busy ? (
+            <Loader2 className="w-4 h-4 shrink-0 animate-spin text-zinc-400" />
+          ) : (
+            <Bot className="w-4 h-4 shrink-0 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-700 dark:group-hover:text-zinc-200 transition-colors" />
+          )}
+          <div className="flex flex-col min-w-0">
+            <span className="text-[13px] font-sans font-medium leading-snug">
+              Autopilot mode
+            </span>
+            <span className="text-[11px] font-sans text-zinc-500 dark:text-zinc-400 leading-normal truncate">
+              Click to switch to Co-Pilot
+            </span>
+          </div>
+        </div>
       </button>
-      {error && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">{error}</span>}
+      {error && <p className="text-xs font-sans text-rose-600 dark:text-rose-400 px-2.5">{error}</p>}
     </div>
   );
 }
