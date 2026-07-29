@@ -51,7 +51,7 @@ function ActionPanelRow({ item, busy, onClose }: { item: ActionPanelItem; busy: 
   const danger = item.tone === "danger";
 
   const className = cn(
-    "w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors cursor-pointer",
+    "w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-mono font-semibold text-left transition-colors cursor-pointer",
     "disabled:opacity-40 disabled:cursor-not-allowed",
     danger 
       ? "text-rose-400 hover:bg-rose-500/15" 
@@ -61,11 +61,11 @@ function ActionPanelRow({ item, busy, onClose }: { item: ActionPanelItem; busy: 
   const content = (
     <>
       {busy ? (
-        <Loader2 size={15} className="shrink-0 animate-spin text-zinc-400" />
+        <Loader2 size={14} className="shrink-0 animate-spin text-zinc-400" />
       ) : (
-        <Icon size={15} className={cn("shrink-0", !danger && "text-zinc-400")} />
+        <Icon size={14} className={cn("shrink-0", !danger && "text-zinc-400")} />
       )}
-      <span className="flex-1 truncate font-medium">{item.label}</span>
+      <span className="flex-1 truncate leading-tight">{item.label}</span>
     </>
   );
 
@@ -119,7 +119,7 @@ export function ActionPanel({
           className={cn(
             "inline-flex items-center justify-center w-7 h-7 rounded-md border shrink-0 transition-colors cursor-pointer",
             open
-              ? "border-zinc-700 bg-zinc-800 text-zinc-100"
+              ? "border-zinc-700 bg-black text-zinc-100"
               : "border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700",
             triggerClassName
           )}
@@ -129,11 +129,11 @@ export function ActionPanel({
       </PopoverTrigger>
 
       <PopoverContent
-  side={side}
-  align={align}
-  onClick={(e) => e.stopPropagation()}
-  className="w-[300px] p-0 rounded-2xl border border-zinc-800 bg-black text-zinc-100 shadow-2xl shadow-black/80 overflow-hidden"
->
+        side={side}
+        align={align}
+        onClick={(e) => e.stopPropagation()}
+        className="w-[300px] p-0 rounded-2xl border border-zinc-800 bg-black text-zinc-100 shadow-2xl shadow-black/80 overflow-hidden font-mono tracking-tight antialiased"
+      >
         {header && (
           <div className="px-4 pt-3.5 pb-3 border-b border-zinc-800/80 text-xs font-mono leading-normal text-zinc-300">
             {header}

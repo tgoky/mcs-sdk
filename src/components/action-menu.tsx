@@ -8,17 +8,6 @@ const PANEL_WIDTH = 300;
 const EST_PANEL_HEIGHT = 340;
 const VIEWPORT_MARGIN = 8;
 
-/**
- * Floating action-menu panel — the "click a trigger, get a small anchored
- * card with grouped actions" pattern (product "what's new" popovers, GitHub's
- * repo settings menu, etc). Portal-rendered so it isn't clipped by any
- * overflow:hidden ancestor (tables, cards), positioned off the trigger's
- * own bounding rect the same way HoverPreview positions itself, and closes
- * on outside click, Escape, or scroll/resize.
- *
- * `children` can be a plain node or a render-prop taking `close` — most
- * items want to dismiss the menu after firing their action.
- */
 export function ActionMenu({
   trigger,
   children,
@@ -106,11 +95,12 @@ export function ActionMenu({
               coords.flipped ? "motion-safe:origin-bottom-right" : "motion-safe:origin-top-right"
             }`}
           >
-          <div
-  ref={panelRef}
-  role="menu"
-  className="rounded-2xl border border-zinc-800 bg-black/95 backdrop-blur-md text-zinc-100 shadow-2xl shadow-black/80 py-1.5 max-h-[70vh] overflow-y-auto"
->
+            {/* Added font-mono, tracking-tight, and antialiased to match the app's typography */}
+            <div
+              ref={panelRef}
+              role="menu"
+              className="rounded-2xl border border-zinc-800 bg-black text-zinc-100 shadow-2xl shadow-black/80 py-1.5 max-h-[70vh] overflow-y-auto font-mono tracking-tight antialiased"
+            >
               {typeof children === "function" ? children(close) : children}
             </div>
           </div>,
@@ -172,11 +162,11 @@ export function ActionMenuItem({
 
   const content = (
     <>
-      {Icon && <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${iconClass}`} />}
+      {Icon && <Icon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${iconClass}`} />}
       <span className="flex-1 min-w-0">
-        <span className="block text-[13px] font-medium leading-tight">{label}</span>
+        <span className="block text-xs font-mono font-semibold leading-tight">{label}</span>
         {description && (
-          <span className="block text-[11px] text-zinc-400 font-mono leading-snug mt-0.5">
+          <span className="block text-[10px] text-zinc-400 font-mono leading-snug mt-0.5">
             {description}
           </span>
         )}
