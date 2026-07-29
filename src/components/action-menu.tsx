@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { LucideIcon } from "lucide-react";
+import { ExternalLink, type LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const PANEL_WIDTH = 300;
 const EST_PANEL_HEIGHT = 340;
@@ -95,11 +96,11 @@ export function ActionMenu({
               coords.flipped ? "motion-safe:origin-bottom-right" : "motion-safe:origin-top-right"
             }`}
           >
-            {/* Translucent metallic dark surface with subtle rim border */}
+            {/* Raycast/Linear Frosted Dark Glass Container */}
             <div
               ref={panelRef}
               role="menu"
-              className="rounded-2xl border border-white/10 bg-[#222225]/90 backdrop-blur-2xl text-zinc-100 shadow-2xl shadow-black/80 p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased"
+              className="rounded-[20px] border border-white/15 bg-gradient-to-b from-[#2b2b2f]/95 via-[#212124]/95 to-[#1a1a1d]/95 backdrop-blur-2xl text-zinc-100 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_20px_50px_rgba(0,0,0,0.7)] p-2 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5"
             >
               {typeof children === "function" ? children(close) : children}
             </div>
@@ -114,7 +115,7 @@ export function ActionMenuSection({ label, children }: { label?: string; childre
   return (
     <div className="space-y-0.5">
       {label && (
-        <p className="px-2.5 pt-2 pb-1 text-[10px] font-sans font-semibold text-zinc-400/80 uppercase tracking-wider truncate select-none">
+        <p className="px-3 pt-2 pb-1 text-[10px] font-sans font-bold text-zinc-400/90 uppercase tracking-wider truncate select-none">
           {label}
         </p>
       )}
@@ -124,13 +125,15 @@ export function ActionMenuSection({ label, children }: { label?: string; childre
 }
 
 export function ActionMenuDivider() {
-  return <div className="my-1.5 border-t border-white/[0.06]" />;
+  return <div className="my-1.5 border-t border-white/10" />;
 }
 
 export function ActionMenuItem({
   icon: Icon,
   label,
   description,
+  active = false,
+  external = false,
   onClick,
   href,
   tone = "default",
@@ -140,25 +143,28 @@ export function ActionMenuItem({
   icon?: LucideIcon;
   label: string;
   description?: string;
+  active?: boolean;
+  external?: boolean;
   onClick?: () => void;
   href?: string;
   tone?: "default" | "danger" | "accent";
   disabled?: boolean;
   trailing?: ReactNode;
 }) {
-  const toneClass =
-    tone === "danger"
-      ? "text-rose-400 hover:bg-rose-500/15 hover:text-rose-300"
-      : tone === "accent"
-      ? "text-amber-400 hover:bg-amber-400/15 hover:text-amber-300"
-      : "text-zinc-200 hover:bg-white/[0.08] hover:text-white";
+  const toneClass = active
+    ? "bg-white/12 text-white shadow-xs border border-white/10"
+    : tone === "danger"
+    ? "text-rose-400 hover:bg-rose-500/15 hover:text-rose-300"
+    : tone === "accent"
+    ? "text-amber-400 hover:bg-amber-400/15 hover:text-amber-300"
+    : "text-zinc-200 hover:bg-white/10 hover:text-white";
 
   const iconClass =
     tone === "danger"
       ? "text-rose-400"
       : tone === "accent"
       ? "text-amber-400"
-      : "text-zinc-400 group-hover:text-zinc-200";
+      : "text-zinc-300 group-hover:text-white";
 
   const content = (
     <>
@@ -171,13 +177,17 @@ export function ActionMenuItem({
           </span>
         )}
       </span>
+      {external && (
+        <ExternalLink size={14} className="shrink-0 text-zinc-400/70 group-hover:text-white transition-colors" />
+      )}
       {trailing}
     </>
   );
 
-  const cls = `group w-full flex items-start gap-3 px-2.5 py-2 rounded-xl text-left transition-all duration-150 select-none ${
-    disabled ? "opacity-40 cursor-not-allowed" : `cursor-pointer ${toneClass}`
-  }`;
+  const cls = cn(
+    "group w-full flex items-start gap-3 px-3 py-2 rounded-xl text-left transition-all duration-100 select-none cursor-pointer active:scale-[0.98]",
+    disabled ? "opacity-40 cursor-not-allowed active:scale-100" : toneClass
+  );
 
   if (href && !disabled) {
     return (
