@@ -96,11 +96,11 @@ export function ActionMenu({
               coords.flipped ? "motion-safe:origin-bottom-right" : "motion-safe:origin-top-right"
             }`}
           >
-            {/* Pure Solid Black Card */}
+            {/* Responsive Card Container for Light & Dark Mode */}
             <div
               ref={panelRef}
               role="menu"
-              className="rounded-2xl border border-zinc-800 bg-black text-zinc-100 shadow-2xl shadow-black p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5"
+              className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 shadow-xl dark:shadow-2xl dark:shadow-black p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5"
             >
               {typeof children === "function" ? children(close) : children}
             </div>
@@ -115,7 +115,7 @@ export function ActionMenuSection({ label, children }: { label?: string; childre
   return (
     <div className="space-y-0.5">
       {label && (
-        <p className="px-2.5 pt-2 pb-1 text-[10px] font-sans font-bold text-zinc-400 uppercase tracking-wider truncate select-none">
+        <p className="px-2.5 pt-2 pb-1 text-[10px] font-sans font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider truncate select-none">
           {label}
         </p>
       )}
@@ -125,7 +125,7 @@ export function ActionMenuSection({ label, children }: { label?: string; childre
 }
 
 export function ActionMenuDivider() {
-  return <div className="my-1.5 border-t border-zinc-800" />;
+  return <div className="my-1.5 border-t border-zinc-100 dark:border-zinc-800/80" />;
 }
 
 export function ActionMenuItem({
@@ -152,19 +152,19 @@ export function ActionMenuItem({
   trailing?: ReactNode;
 }) {
   const toneClass = active
-    ? "bg-zinc-800 text-white font-medium"
+    ? "bg-zinc-100 dark:bg-zinc-800/80 text-zinc-900 dark:text-white font-medium"
     : tone === "danger"
-    ? "text-rose-400 hover:bg-rose-500/15"
+    ? "text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/15"
     : tone === "accent"
-    ? "text-amber-400 hover:bg-amber-400/15"
-    : "text-zinc-200 hover:bg-zinc-800/80 hover:text-white";
+    ? "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-400/15"
+    : "text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 hover:text-zinc-900 dark:hover:text-white";
 
   const iconClass =
     tone === "danger"
-      ? "text-rose-400"
+      ? "text-rose-500 dark:text-rose-400"
       : tone === "accent"
-      ? "text-amber-400"
-      : "text-zinc-400 group-hover:text-zinc-200";
+      ? "text-amber-500 dark:text-amber-400"
+      : "text-zinc-400 dark:text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200";
 
   const content = (
     <>
@@ -172,20 +172,20 @@ export function ActionMenuItem({
       <span className="flex-1 min-w-0">
         <span className="block text-[13px] font-sans font-medium leading-snug">{label}</span>
         {description && (
-          <span className="block text-[11px] font-sans font-normal text-zinc-400 leading-normal mt-0.5">
+          <span className="block text-[11px] font-sans font-normal text-zinc-500 dark:text-zinc-400 leading-normal mt-0.5">
             {description}
           </span>
         )}
       </span>
       {external && (
-        <ExternalLink size={14} className="shrink-0 text-zinc-500 group-hover:text-white transition-colors" />
+        <ExternalLink size={14} className="shrink-0 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-white transition-colors" />
       )}
-      {trailing}
+      {trailing && <span className="shrink-0 ml-auto flex items-center text-xs text-zinc-400 dark:text-zinc-500">{trailing}</span>}
     </>
   );
 
   const cls = cn(
-    "group w-full flex items-start gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors select-none cursor-pointer",
+    "group w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors select-none cursor-pointer",
     disabled ? "opacity-40 cursor-not-allowed" : toneClass
   );
 
