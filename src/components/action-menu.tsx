@@ -96,11 +96,11 @@ export function ActionMenu({
               coords.flipped ? "motion-safe:origin-bottom-right" : "motion-safe:origin-top-right"
             }`}
           >
-            {/* Raycast/Linear Frosted Dark Glass Container */}
+            {/* Pure Solid Black Card */}
             <div
               ref={panelRef}
               role="menu"
-              className="rounded-[20px] border border-white/15 bg-gradient-to-b from-[#2b2b2f]/95 via-[#212124]/95 to-[#1a1a1d]/95 backdrop-blur-2xl text-zinc-100 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_20px_50px_rgba(0,0,0,0.7)] p-2 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5"
+              className="rounded-2xl border border-zinc-800 bg-black text-zinc-100 shadow-2xl shadow-black p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5"
             >
               {typeof children === "function" ? children(close) : children}
             </div>
@@ -115,7 +115,7 @@ export function ActionMenuSection({ label, children }: { label?: string; childre
   return (
     <div className="space-y-0.5">
       {label && (
-        <p className="px-3 pt-2 pb-1 text-[10px] font-sans font-bold text-zinc-400/90 uppercase tracking-wider truncate select-none">
+        <p className="px-2.5 pt-2 pb-1 text-[10px] font-sans font-bold text-zinc-400 uppercase tracking-wider truncate select-none">
           {label}
         </p>
       )}
@@ -125,7 +125,7 @@ export function ActionMenuSection({ label, children }: { label?: string; childre
 }
 
 export function ActionMenuDivider() {
-  return <div className="my-1.5 border-t border-white/10" />;
+  return <div className="my-1.5 border-t border-zinc-800" />;
 }
 
 export function ActionMenuItem({
@@ -152,19 +152,19 @@ export function ActionMenuItem({
   trailing?: ReactNode;
 }) {
   const toneClass = active
-    ? "bg-white/12 text-white shadow-xs border border-white/10"
+    ? "bg-zinc-800 text-white font-medium"
     : tone === "danger"
-    ? "text-rose-400 hover:bg-rose-500/15 hover:text-rose-300"
+    ? "text-rose-400 hover:bg-rose-500/15"
     : tone === "accent"
-    ? "text-amber-400 hover:bg-amber-400/15 hover:text-amber-300"
-    : "text-zinc-200 hover:bg-white/10 hover:text-white";
+    ? "text-amber-400 hover:bg-amber-400/15"
+    : "text-zinc-200 hover:bg-zinc-800/80 hover:text-white";
 
   const iconClass =
     tone === "danger"
       ? "text-rose-400"
       : tone === "accent"
       ? "text-amber-400"
-      : "text-zinc-300 group-hover:text-white";
+      : "text-zinc-400 group-hover:text-zinc-200";
 
   const content = (
     <>
@@ -172,21 +172,21 @@ export function ActionMenuItem({
       <span className="flex-1 min-w-0">
         <span className="block text-[13px] font-sans font-medium leading-snug">{label}</span>
         {description && (
-          <span className="block text-[11px] font-sans font-normal text-zinc-400/80 leading-normal mt-0.5">
+          <span className="block text-[11px] font-sans font-normal text-zinc-400 leading-normal mt-0.5">
             {description}
           </span>
         )}
       </span>
       {external && (
-        <ExternalLink size={14} className="shrink-0 text-zinc-400/70 group-hover:text-white transition-colors" />
+        <ExternalLink size={14} className="shrink-0 text-zinc-500 group-hover:text-white transition-colors" />
       )}
       {trailing}
     </>
   );
 
   const cls = cn(
-    "group w-full flex items-start gap-3 px-3 py-2 rounded-xl text-left transition-all duration-100 select-none cursor-pointer active:scale-[0.98]",
-    disabled ? "opacity-40 cursor-not-allowed active:scale-100" : toneClass
+    "group w-full flex items-start gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors select-none cursor-pointer",
+    disabled ? "opacity-40 cursor-not-allowed" : toneClass
   );
 
   if (href && !disabled) {

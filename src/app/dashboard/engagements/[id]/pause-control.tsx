@@ -2,15 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PauseCircle, PlayCircle } from "lucide-react";
+import { PauseCircle, PlayCircle, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /**
  * Engagement-level pause/resume. Distinct from the per-run cancel button on
  * /dashboard/runs/[id] — that stops a run currently in flight; this stops
- * every future cron-triggered run (nightly briefs, leak map, dynamic
- * brief, booking poll, win-back sweep, weekly metrics, credential health)
- * from picking this engagement up at all, until resumed. Doesn't touch
- * stored credentials or delete anything.
+ * every future cron-triggered run from picking this engagement up at all,
+ * until resumed. Doesn't touch stored credentials or delete anything.
  */
 export function EngagementPauseControl({
   engagementId,
@@ -71,61 +70,90 @@ export function EngagementPauseControl({
     }
   }
 
+  // 1. Paused State Pill
   if (pausedAt) {
     return (
-      <div className="flex items-center gap-2">
-     <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 px-2 py-1 rounded-sm">
-          <PauseCircle className="w-3 h-3" /> Paused — no new runs will start
-        </span>
+      <div className="inline-flex items-center gap-2 p-1 bg-black/40 backdrop-blur-md rounded-2xl border border-amber-500/20 shadow-xs">
+        <div className="flex items-center gap-2 px-3 py-1 text-xs font-sans font-medium text-amber-300 bg-amber-500/10 rounded-xl select-none">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+          </span>
+          <span>Paused</span>
+          {initialPausedReason && (
+            <span className="text-[11px] text-amber-400/70 truncate max-w-[120px]" title={initialPausedReason}>
+              ({initialPausedReason})
+            </span>
+          )}
+        </div>
+
         <button
+          type="button"
           onClick={resume}
           disabled={busy}
-          className="text-[11px] font-mono font-bold px-2 py-1 rounded-sm border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-50 transition-all cursor-pointer inline-flex items-center gap-1"
+          className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-sans font-semibold text-zinc-200 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 hover:border-white/10 transition-all duration-150 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <PlayCircle className="w-3 h-3" /> {busy ? "Resuming…" : "Resume"}
+          {busy ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
+          ) : (
+            <PlayCircle className="w-3.5 h-3.5 text-emerald-400" />
+          )}
+          <span>{busy ? "Resuming…" : "Resume"}</span>
         </button>
-        {error && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">{error}</span>}
+
+        {error && <span className="text-xs font-sans text-rose-400 px-2">{error}</span>}
       </div>
     );
   }
 
+  // 2. Reason Input Prompt
   if (showReasonInput) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="inline-flex items-center gap-2 p-1 bg-[#222225]/90 backdrop-blur-2xl rounded-2xl border border-white/15 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
         <input
           autoFocus
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Why? (optional)"
-        className="text-[11px] font-mono px-2 py-1 rounded-sm border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 w-40"
+          placeholder="Reason for pausing? (optional)"
+          className="text-xs font-sans px-3 py-1.5 rounded-xl border border-white/10 bg-black/40 text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-amber-500/50 w-48 sm:w-56 transition-all"
           onKeyDown={(e) => e.key === "Enter" && pause()}
         />
+
         <button
+          type="button"
           onClick={pause}
           disabled={busy}
-       className="text-[11px] font-mono font-bold px-2 py-1 rounded-sm border border-amber-300 dark:border-amber-900/60 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 disabled:opacity-50 transition-all cursor-pointer"          
+          className="inline-flex items-center justify-center text-xs font-sans font-semibold px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black shadow-xs transition-all duration-150 active:scale-95 cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {busy ? "Pausing…" : "Confirm pause"}
+          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm"}
         </button>
+
         <button
+          type="button"
           onClick={() => setShowReasonInput(false)}
-          className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors cursor-pointer"
+          className="text-xs font-sans text-zinc-400 hover:text-zinc-200 px-2 py-1.5 transition-colors cursor-pointer select-none"
         >
           Cancel
         </button>
+
+        {error && <span className="text-xs font-sans text-rose-400 px-2">{error}</span>}
       </div>
     );
   }
 
+  // 3. Default Active State Button
   return (
-    <div className="flex items-center gap-2">
+    <div className="inline-flex items-center gap-2">
       <button
+        type="button"
         onClick={() => setShowReasonInput(true)}
-   className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-1 rounded-sm border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-amber-300 dark:hover:border-amber-900/60 hover:text-amber-700 dark:hover:text-amber-400 transition-all cursor-pointer"
+        className="group inline-flex items-center gap-2 text-xs font-sans font-medium px-3.5 py-1.5 rounded-xl border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-amber-300 hover:border-amber-500/30 hover:bg-amber-500/10 shadow-xs transition-all duration-150 active:scale-95 cursor-pointer"
       >
-        <PauseCircle className="w-3 h-3" /> Pause automation
+        <PauseCircle className="w-4 h-4 text-zinc-400 group-hover:text-amber-400 transition-colors" />
+        <span>Pause automation</span>
       </button>
-      {error && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">{error}</span>}
+
+      {error && <span className="text-xs font-sans text-rose-400">{error}</span>}
     </div>
   );
 }
