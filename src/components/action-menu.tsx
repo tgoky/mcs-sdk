@@ -106,11 +106,11 @@ export function ActionMenu({
               coords.flipped ? "motion-safe:origin-bottom-right" : "motion-safe:origin-top-right"
             }`}
           >
-            <div
-              ref={panelRef}
-              role="menu"
-              className="rounded-2xl border border-zinc-800 bg-zinc-900/95 backdrop-blur-md text-zinc-100 shadow-2xl shadow-black/80 py-1.5 max-h-[70vh] overflow-y-auto"
-            >
+          <div
+  ref={panelRef}
+  role="menu"
+  className="rounded-2xl border border-zinc-800 bg-black/95 backdrop-blur-md text-zinc-100 shadow-2xl shadow-black/80 py-1.5 max-h-[70vh] overflow-y-auto"
+>
               {typeof children === "function" ? children(close) : children}
             </div>
           </div>,

@@ -129,11 +129,11 @@ export function ActionPanel({
       </PopoverTrigger>
 
       <PopoverContent
-        side={side}
-        align={align}
-        onClick={(e) => e.stopPropagation()}
-        className="w-[300px] p-0 rounded-2xl border border-zinc-800 bg-zinc-900 text-zinc-100 shadow-2xl shadow-black/80 overflow-hidden"
-      >
+  side={side}
+  align={align}
+  onClick={(e) => e.stopPropagation()}
+  className="w-[300px] p-0 rounded-2xl border border-zinc-800 bg-black text-zinc-100 shadow-2xl shadow-black/80 overflow-hidden"
+>
         {header && (
           <div className="px-4 pt-3.5 pb-3 border-b border-zinc-800/80 text-xs font-mono leading-normal text-zinc-300">
             {header}

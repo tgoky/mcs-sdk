@@ -377,7 +377,7 @@ export function EditStackSettings({
   }
 
   return (
-    <div className={embedded ? "space-y-4" : "rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-4 shadow-sm"}>
+<div className={embedded ? "space-y-4" : "rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-black p-4 space-y-4 shadow-sm"}>
       {!embedded && (
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
