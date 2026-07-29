@@ -59,6 +59,7 @@ export async function GET(request: Request) {
         completedAt: skillRuns.completedAt,
         engagementId: skillRuns.engagementId,
         buyerName: engagements.buyer,
+        engagementPausedAt: engagements.pausedAt,
         errorMessage: skillRuns.errorMessage,
         steps: skillRuns.steps,
         // jsonb_array_length returns NULL when the column is NULL, so coalesce to 0

@@ -2,9 +2,22 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Check, X, ArrowUpRight, ShieldAlert, CircleAlert, Info, ClipboardCheck } from "lucide-react";
+import {
+  Check,
+  X,
+  ArrowUpRight,
+  ShieldAlert,
+  CircleAlert,
+  Info,
+  ClipboardCheck,
+  PauseCircle,
+  PlayCircle,
+  Waves,
+  Copy,
+} from "lucide-react";
 import { QUEUE_COPY as copy } from "@/lib/copy";
-import { HoverPreview, useHoverPreview } from "@/components/hover-preview";
+import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
+import { pauseEngagement, resumeEngagement, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
 
 export interface QueueItemDTO {
   id: string;
@@ -18,6 +31,8 @@ export interface QueueItemDTO {
   createdAt: string;
   fixHref?: string;
   skillName?: string;
+  /** ISO timestamp if this item's client currently has automations paused, else null/undefined. */
+  engagementPausedAt?: string | null;
 }
 
 const POLL_MS = 8_000;
@@ -68,6 +83,75 @@ function QueueItemPreview({ item }: { item: QueueItemDTO }) {
   );
 }
 
+/**
+ * Quick-action list for one queue item — beyond the primary approve/reject
+ * style buttons already inline on the row, this surfaces navigation
+ * shortcuts and the same client-level automation controls (generate a
+ * Leak Map, pause/resume) available from Live Executions, without having
+ * to open the engagement page first.
+ */
+function buildQueueSections(
+  item: QueueItemDTO,
+  dispatch: ReturnType<typeof useQuickActions>["run"],
+  closePanel: () => void,
+  onDone: () => void
+): ActionPanelSection[] {
+  const isPaused = !!item.engagementPausedAt;
+
+  const nav: ActionPanelSection["items"] = [];
+  if (item.runId) {
+    nav.push({ key: "open-run", icon: ArrowUpRight, label: "Open run", href: `/dashboard/runs/${item.runId}` });
+  }
+  if (item.engagementId) {
+    nav.push({
+      key: "open-engagement",
+      icon: ArrowUpRight,
+      label: "Open client engagement",
+      href: `/dashboard/engagements/${item.engagementId}`,
+    });
+  }
+
+  const automation: ActionPanelSection["items"] = [];
+  if (item.engagementId) {
+    if (item.skillName !== "leak-map") {
+      automation.push({
+        key: "leak-map",
+        icon: Waves,
+        label: "Generate Leak Map for this client",
+        onSelect: () =>
+          dispatch("leak-map", () => triggerSkillRun(item.engagementId as string, "leak-map"), () => { onDone(); closePanel(); }),
+      });
+    }
+    automation.push(
+      isPaused
+        ? {
+            key: "resume",
+            icon: PlayCircle,
+            label: "Resume automations for this client",
+            onSelect: () =>
+              dispatch("resume", () => resumeEngagement(item.engagementId as string), () => { onDone(); closePanel(); }),
+          }
+        : {
+            key: "pause",
+            icon: PauseCircle,
+            label: "Pause automations for this client",
+            onSelect: () =>
+              dispatch("pause", () => pauseEngagement(item.engagementId as string), () => { onDone(); closePanel(); }),
+          }
+    );
+  }
+
+  const utility: ActionPanelSection["items"] = [
+    { key: "copy", icon: Copy, label: "Copy item ID", onSelect: () => dispatch("copy", () => copyToClipboard(item.id)) },
+  ];
+
+  const sections: ActionPanelSection[] = [];
+  if (nav.length > 0) sections.push({ label: "Go to", items: nav });
+  if (automation.length > 0) sections.push({ label: "Client automations", items: automation });
+  sections.push({ label: "Utility", items: utility });
+  return sections;
+}
+
 function QueueRow({
   item,
   isBusy,
@@ -78,6 +162,7 @@ function QueueRow({
   onDismissRunFailure,
   onRunMutation,
   onLinkNavigate,
+  onActionComplete,
 }: {
   item: QueueItemDTO;
   isBusy: boolean;
@@ -88,17 +173,14 @@ function QueueRow({
   onDismissRunFailure: () => void;
   onRunMutation: (url: string) => void;
   onLinkNavigate: () => void;
+  onActionComplete: () => void;
 }) {
-  const { ref, hovering, onMouseEnter, onMouseLeave } = useHoverPreview<HTMLDivElement>();
+  const [panelOpen, setPanelOpen] = useState(false);
+  const { busyKey, error, run: dispatch } = useQuickActions();
 
   return (
     <>
-      <div
-        ref={ref}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-        className="flex items-center gap-3 py-3 first:pt-2"
-      >
+      <div className="group flex items-center gap-3 py-3 first:pt-2">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <CategoryBadge category={item.category} />
@@ -216,9 +298,18 @@ function QueueRow({
               </button>
             </>
           )}
+
+          <ActionPanel
+            open={panelOpen}
+            onOpenChange={setPanelOpen}
+            header={<QueueItemPreview item={item} />}
+            sections={buildQueueSections(item, dispatch, () => setPanelOpen(false), onActionComplete)}
+            errorText={error}
+            busyKey={busyKey}
+            triggerLabel={`Quick actions for ${item.title}`}
+          />
         </div>
       </div>
-      <HoverPreview anchorRef={ref} hovering={hovering} preview={<QueueItemPreview item={item} />} />
     </>
   );
 }
@@ -256,6 +347,12 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
       clearInterval(interval);
       controller.abort();
     };
+  }, [load]);
+
+  /** Fires a one-off refresh right after a quick action succeeds (pause/resume/generate leak map), instead of waiting for the next poll tick. */
+  const refreshNow = useCallback(() => {
+    const controller = new AbortController();
+    load(controller.signal);
   }, [load]);
 
   useEffect(() => () => {
@@ -351,6 +448,7 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
             onDismissRunFailure={() => dismissRunFailure(item)}
             onRunMutation={(url) => runMutation(item, url)}
             onLinkNavigate={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
+            onActionComplete={refreshNow}
           />
         ))}
       </div>

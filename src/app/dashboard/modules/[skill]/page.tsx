@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { SKILLS, SKILL_INFO, type SkillName } from "@/lib/copy";
 import { LiveExecutionFeed } from "../../live-execution-feed";
+import { ModuleRowActions } from "./module-row-actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -201,7 +202,7 @@ export default async function ModulePage({
                   <th className="px-4 py-2 font-normal">Status</th>
                   <th className="px-4 py-2 font-normal">Runs</th>
                   <th className="px-4 py-2 font-normal">Last run</th>
-                  <th className="w-8 px-2" />
+                  <th className="w-16 px-2 font-normal text-right">Edit</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/30">
@@ -231,7 +232,17 @@ export default async function ModulePage({
                       <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{c.totalRuns}</td>
                       <td className="px-4 py-2.5 font-mono text-xs text-zinc-400 dark:text-zinc-600">{formatAge(c.lastRunAt)}</td>
                       <td className="pr-3 text-right">
-                        <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700" />
+                        <div className="flex items-center justify-end gap-1">
+                          <ModuleRowActions
+                            engagementId={c.engagementId}
+                            buyerName={c.buyerName}
+                            skillId={skill}
+                            skillLabel={info.name}
+                            skillEnabled={c.skillEnabled}
+                            pausedAt={c.pausedAt}
+                          />
+                          <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700" />
+                        </div>
                       </td>
                     </tr>
                   );

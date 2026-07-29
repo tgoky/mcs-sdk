@@ -50,6 +50,8 @@ export interface QueueItem {
   fixHref?: string;
   /** Only set for source "run_failure" — the raw skill id (e.g. "pre-call-read"), needed by the dismiss-run-failure endpoint. */
   skillName?: string;
+  /** ISO timestamp if this item's engagement currently has automations paused, else null. Absent (not just null) when the item has no engagementId. */
+  engagementPausedAt?: string | null;
 }
 
 const CATEGORY_PRIORITY: Record<QueueCategory, number> = {
@@ -219,10 +221,19 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
       .limit(50),
 
     db
-      .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, stack: engagements.stack })
+      .select({
+        engagementId: engagements.engagementId,
+        buyer: engagements.buyer,
+        stack: engagements.stack,
+        pausedAt: engagements.pausedAt,
+      })
       .from(engagements)
       .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
   ]);
+
+  const pausedByEngagement = new Map(
+    engagementStackRows.map((r) => [r.engagementId, r.pausedAt ? r.pausedAt.toISOString() : null])
+  );
 
   const failureItems = await failedRunQueueItems(engagementStackRows);
 
@@ -262,7 +273,10 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
     })),
     ...syncSetupQueueItems(engagementStackRows),
     ...failureItems,
-  ];
+  ].map((item) => ({
+    ...item,
+    engagementPausedAt: item.engagementId ? pausedByEngagement.get(item.engagementId) ?? null : null,
+  }));
 
   items.sort((x, y) => {
     const p = CATEGORY_PRIORITY[x.category] - CATEGORY_PRIORITY[y.category];

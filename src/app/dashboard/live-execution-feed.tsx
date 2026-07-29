@@ -3,9 +3,25 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, XCircle, Loader2, AlertCircle, Hash, ArrowRight, Clock, Ban } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  AlertCircle,
+  Hash,
+  ArrowRight,
+  ArrowUpRight,
+  Clock,
+  Ban,
+  PauseCircle,
+  PlayCircle,
+  RotateCcw,
+  Waves,
+  Copy,
+} from "lucide-react";
 import { skillName, phaseLabel, SKILL_INFO, type SkillName } from "@/lib/copy";
-import { HoverPreview, useHoverPreview } from "@/components/hover-preview";
+import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
+import { cancelSkillRun, pauseEngagement, resumeEngagement, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
 
 interface SkillRun {
   id: string;
@@ -20,6 +36,8 @@ interface SkillRun {
   stepCount?: number;
   /** e.g. "Sarah Jenkins <sarah@acme.com>" — the prospect this run is about, when known. */
   subjectLabel?: string | null;
+  /** ISO timestamp if this run's client currently has automations paused, else null/undefined. */
+  engagementPausedAt?: string | null;
 }
 
 interface LiveExecutionFeedProps {
@@ -113,10 +131,10 @@ function RunPreview({ run }: { run: SkillRun }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{displayName}</span>
+        <span className="font-semibold text-foreground truncate">{displayName}</span>
         <RelativeTime isoString={run.startedAt} />
       </div>
-      <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+      <div className="flex items-center gap-1.5 text-muted-foreground">
         <span className="font-mono font-bold uppercase tracking-wide text-[11px]">{skillName(run.skillName)}</span>
         <span>·</span>
         <div className="flex items-center gap-1">
@@ -124,25 +142,114 @@ function RunPreview({ run }: { run: SkillRun }) {
           <StatusLabel status={run.status} />
         </div>
       </div>
-      <p className="text-zinc-600 dark:text-zinc-400 leading-snug">{actionSummary(run)}</p>
-      {run.subjectLabel && (
-        <p className="font-mono text-zinc-400 dark:text-zinc-600 truncate">{run.subjectLabel}</p>
-      )}
-      <p className="text-zinc-400 dark:text-zinc-600 italic">Click for the full run detail</p>
+      <p className="text-muted-foreground leading-snug">{actionSummary(run)}</p>
+      {run.subjectLabel && <p className="font-mono text-muted-foreground/70 truncate">{run.subjectLabel}</p>}
     </div>
   );
 }
 
-function RunRow({ run, onOpen }: { run: SkillRun; onOpen: () => void }) {
+/**
+ * Builds the contextual quick-action list for one run — what's offered
+ * depends on whether the run is still in flight, which skill it is, and
+ * whether we know the client's automations are currently paused. Every
+ * entry maps to a real endpoint in src/lib/quick-actions.ts; nothing here
+ * is decorative.
+ */
+function buildRunSections(
+  run: SkillRun,
+  dispatch: ReturnType<typeof useQuickActions>["run"],
+  closePanel: () => void,
+  onDone: () => void
+): ActionPanelSection[] {
+  const isRunning = run.status.toLowerCase() === "running";
+  const skill = run.skillName as SkillName;
+  const isPaused = !!run.engagementPausedAt;
+  const canManualTrigger = skill === "pre-call-read" || skill === "leak-map";
+
+  const primary: ActionPanelSection["items"] = [
+    { key: "view", icon: ArrowUpRight, label: "View full run detail", href: `/dashboard/runs/${run.id}` },
+  ];
+
+  if (run.engagementId && run.buyerName) {
+    primary.push({
+      key: "open-engagement",
+      icon: ArrowUpRight,
+      label: "Open client engagement",
+      href: `/dashboard/engagements/${run.engagementId}`,
+    });
+  }
+
+  const runControl: ActionPanelSection["items"] = [];
+
+  if (isRunning) {
+    runControl.push({
+      key: "cancel",
+      icon: Ban,
+      label: "Cancel this run",
+      tone: "danger",
+      onSelect: () => dispatch("cancel", () => cancelSkillRun(run.id), () => { onDone(); closePanel(); }),
+    });
+  } else if (canManualTrigger) {
+    runControl.push({
+      key: "retrigger",
+      icon: skill === "leak-map" ? Waves : RotateCcw,
+      label: skill === "leak-map" ? "Generate a fresh Leak Map" : "Run again",
+      disabled: !run.engagementId,
+      onSelect: () =>
+        run.engagementId &&
+        dispatch("retrigger", () => triggerSkillRun(run.engagementId as string, skill), () => { onDone(); closePanel(); }),
+    });
+  }
+
+  if (run.engagementId && skill !== "leak-map" && !isRunning) {
+    runControl.push({
+      key: "leak-map",
+      icon: Waves,
+      label: "Generate Leak Map for this client",
+      onSelect: () =>
+        run.engagementId &&
+        dispatch("leak-map", () => triggerSkillRun(run.engagementId as string, "leak-map"), () => { onDone(); closePanel(); }),
+    });
+  }
+
+  if (run.engagementId) {
+    runControl.push(
+      isPaused
+        ? {
+            key: "resume",
+            icon: PlayCircle,
+            label: "Resume automations for this client",
+            onSelect: () =>
+              dispatch("resume", () => resumeEngagement(run.engagementId as string), () => { onDone(); closePanel(); }),
+          }
+        : {
+            key: "pause",
+            icon: PauseCircle,
+            label: "Pause automations for this client",
+            onSelect: () =>
+              dispatch("pause", () => pauseEngagement(run.engagementId as string), () => { onDone(); closePanel(); }),
+          }
+    );
+  }
+
+  const utility: ActionPanelSection["items"] = [
+    { key: "copy", icon: Copy, label: "Copy run ID", onSelect: () => dispatch("copy", () => copyToClipboard(run.id)) },
+  ];
+
+  const sections: ActionPanelSection[] = [{ label: "Actions", items: primary }];
+  if (runControl.length > 0) sections.push({ label: "Run control", items: runControl });
+  sections.push({ label: "Utility", items: utility });
+  return sections;
+}
+
+function RunRow({ run, onOpen, onActionComplete }: { run: SkillRun; onOpen: () => void; onActionComplete: () => void }) {
   const isRunning = run.status.toLowerCase() === "running";
   const isFailed = run.status.toLowerCase() === "failed" || run.status.toLowerCase() === "timed_out";
-  const { ref, hovering, onMouseEnter, onMouseLeave } = useHoverPreview<HTMLTableRowElement>();
+  const [panelOpen, setPanelOpen] = useState(false);
+  const { busyKey, error, run: dispatch } = useQuickActions();
 
   return (
     <tr
-      ref={ref}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
       className={`group bg-zinc-50/40 dark:bg-zinc-900/40 hover:bg-zinc-100 dark:hover:bg-zinc-900/80 transition-colors cursor-pointer relative ${
         isRunning ? "bg-zinc-100/60 dark:bg-zinc-900/70" : ""
       }`}
@@ -194,9 +301,19 @@ function RunRow({ run, onOpen }: { run: SkillRun; onOpen: () => void }) {
         <RelativeTime isoString={run.startedAt} />
       </td>
 
-      <td className="pr-3 text-right">
-        <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-2px] group-hover:translate-x-0 duration-150" />
-        <HoverPreview anchorRef={ref} hovering={hovering} preview={<RunPreview run={run} />} />
+      <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1">
+          <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-2px] group-hover:translate-x-0 duration-150" />
+          <ActionPanel
+            open={panelOpen}
+            onOpenChange={setPanelOpen}
+            header={<RunPreview run={run} />}
+            sections={buildRunSections(run, dispatch, () => setPanelOpen(false), onActionComplete)}
+            errorText={error}
+            busyKey={busyKey}
+            triggerLabel={`Quick actions for ${run.buyerName ?? "this run"}`}
+          />
+        </div>
       </td>
     </tr>
   );
@@ -245,6 +362,12 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
       controller.abort();
     };
   }, [page, pageSize, polling, refresh]);
+
+  /** Fires a one-off refresh right after a quick action succeeds, so cancel/pause/resume/retrigger reflect immediately instead of waiting for the next poll tick. */
+  const refreshNow = useCallback(() => {
+    const controller = new AbortController();
+    refresh(controller.signal);
+  }, [refresh]);
 
   function goToPage(next: number) {
     const clamped = Math.max(0, next);
@@ -319,7 +442,12 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title }: LiveExecutionF
           </thead>
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/30">
             {runs.map((run) => (
-              <RunRow key={run.id} run={run} onOpen={() => router.push(`/dashboard/runs/${run.id}`)} />
+              <RunRow
+                key={run.id}
+                run={run}
+                onOpen={() => router.push(`/dashboard/runs/${run.id}`)}
+                onActionComplete={refreshNow}
+              />
             ))}
           </tbody>
         </table>
