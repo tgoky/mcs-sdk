@@ -95,11 +95,11 @@ export function ActionMenu({
               coords.flipped ? "motion-safe:origin-bottom-right" : "motion-safe:origin-top-right"
             }`}
           >
-            {/* Added font-mono, tracking-tight, and antialiased to match the app's typography */}
+            {/* Translucent metallic dark surface with subtle rim border */}
             <div
               ref={panelRef}
               role="menu"
-              className="rounded-2xl border border-zinc-800 bg-black text-zinc-100 shadow-2xl shadow-black/80 py-1.5 max-h-[70vh] overflow-y-auto font-mono tracking-tight antialiased"
+              className="rounded-2xl border border-white/10 bg-[#222225]/90 backdrop-blur-2xl text-zinc-100 shadow-2xl shadow-black/80 p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased"
             >
               {typeof children === "function" ? children(close) : children}
             </div>
@@ -112,9 +112,9 @@ export function ActionMenu({
 
 export function ActionMenuSection({ label, children }: { label?: string; children: ReactNode }) {
   return (
-    <div className="px-1.5 py-1">
+    <div className="space-y-0.5">
       {label && (
-        <p className="px-2.5 pb-1 pt-1 text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider truncate">
+        <p className="px-2.5 pt-2 pb-1 text-[10px] font-sans font-semibold text-zinc-400/80 uppercase tracking-wider truncate select-none">
           {label}
         </p>
       )}
@@ -124,7 +124,7 @@ export function ActionMenuSection({ label, children }: { label?: string; childre
 }
 
 export function ActionMenuDivider() {
-  return <div className="my-1 border-t border-zinc-800/80" />;
+  return <div className="my-1.5 border-t border-white/[0.06]" />;
 }
 
 export function ActionMenuItem({
@@ -148,25 +148,25 @@ export function ActionMenuItem({
 }) {
   const toneClass =
     tone === "danger"
-      ? "text-rose-400 hover:bg-rose-500/15"
+      ? "text-rose-400 hover:bg-rose-500/15 hover:text-rose-300"
       : tone === "accent"
-      ? "text-amber-400 hover:bg-amber-400/10"
-      : "text-zinc-200 hover:bg-zinc-800/80";
+      ? "text-amber-400 hover:bg-amber-400/15 hover:text-amber-300"
+      : "text-zinc-200 hover:bg-white/[0.08] hover:text-white";
 
   const iconClass =
     tone === "danger"
       ? "text-rose-400"
       : tone === "accent"
       ? "text-amber-400"
-      : "text-zinc-400";
+      : "text-zinc-400 group-hover:text-zinc-200";
 
   const content = (
     <>
-      {Icon && <Icon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${iconClass}`} />}
+      {Icon && <Icon className={`w-4 h-4 shrink-0 mt-0.5 transition-colors ${iconClass}`} />}
       <span className="flex-1 min-w-0">
-        <span className="block text-xs font-mono font-semibold leading-tight">{label}</span>
+        <span className="block text-[13px] font-sans font-medium leading-snug">{label}</span>
         {description && (
-          <span className="block text-[10px] text-zinc-400 font-mono leading-snug mt-0.5">
+          <span className="block text-[11px] font-sans font-normal text-zinc-400/80 leading-normal mt-0.5">
             {description}
           </span>
         )}
@@ -175,7 +175,7 @@ export function ActionMenuItem({
     </>
   );
 
-  const cls = `w-full flex items-start gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
+  const cls = `group w-full flex items-start gap-3 px-2.5 py-2 rounded-xl text-left transition-all duration-150 select-none ${
     disabled ? "opacity-40 cursor-not-allowed" : `cursor-pointer ${toneClass}`
   }`;
 
