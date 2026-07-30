@@ -25,7 +25,7 @@ import { pendingActions, humanBlockers, notifications, engagements, skillRuns, t
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { ACTION_TYPE_LABELS, BLOCKER_TYPE_LABELS, bookingPlatformLabel, skillName as skillDisplayName } from "@/lib/copy";
 import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
-import { classifyRunError } from "@/lib/error-classification";
+import { classifyRunError, type StackSection } from "@/lib/error-classification";
 
 export type QueueCategory = "approve" | "action_needed" | "alert" | "fyi";
 export type QueueSource = "action" | "blocker" | "notification" | "sync_setup" | "run_failure";
@@ -52,6 +52,10 @@ export interface QueueItem {
   skillName?: string;
   /** ISO timestamp if this item's engagement currently has automations paused, else null. Absent (not just null) when the item has no engagementId. */
   engagementPausedAt?: string | null;
+  /** Only set for source "run_failure" — true when classifyRunError() determined this was a 401/403, i.e. the fix is re-entering a credential rather than a stack-settings field. Powers the "Credential issues" toolbar chip. */
+  isCredentialIssue?: boolean;
+  /** Only set for source "run_failure" — which "Edit stack settings" section the failure belongs to (booking/email/sms/hosting/ad_data). Powers the "Platform area" toolbar chip group. */
+  diagnosisSection?: StackSection;
 }
 
 const CATEGORY_PRIORITY: Record<QueueCategory, number> = {
@@ -179,6 +183,8 @@ async function failedRunQueueItems(
         ? `/dashboard/engagements/${run.engagementId}?fixCredential=1#update-credentials`
         : `/dashboard/engagements/${run.engagementId}?fixSection=${diagnosis.section}#stack-settings`,
       skillName: run.skillName,
+      isCredentialIssue: diagnosis.isCredentialIssue,
+      diagnosisSection: diagnosis.section,
     });
   }
 

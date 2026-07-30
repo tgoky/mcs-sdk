@@ -256,6 +256,58 @@ export const QUEUE_COPY = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Table toolbar copy — shared across every list view that gets the
+// tabs + search + time range + customize treatment (Queue, Live
+// Executions, and anything added later). Keep this generic; put
+// view-specific words (tab names, chip labels) in that view's own block
+// below instead.
+// ---------------------------------------------------------------------------
+
+export const TABLE_TOOLBAR_COPY = {
+  customizeMenuTitle: "Add to this view",
+  filtersSectionLabel: "Filters",
+  statsSectionLabel: "Stats",
+  noResultsTitle: "Nothing matches your filters",
+  noResultsSubtitle: "Try a different tab, time range, or clear your search.",
+  clearFiltersButton: "Clear filters",
+  pageSizeLabel: (n: number) => `${n}/page`,
+};
+
+export const QUEUE_TOOLBAR_COPY = {
+  tabs: {
+    all: "All",
+    approve: "Needs approval",
+    action_needed: "Action needed",
+    alerts: "Alerts",
+  } as Record<string, string>,
+  searchPlaceholder: "Search by client, title, or module...",
+  chips: {
+    needsAttention: "Needs attention",
+    priorityHigh: "High priority",
+    priorityMedium: "Medium priority",
+    priorityLow: "Low priority",
+    credentialIssues: "Credential issues",
+    autoDiagnosed: "Auto-diagnosed",
+    pausedClients: "Paused clients",
+    fyiOnly: "FYI only",
+  },
+  chipSections: {
+    priority: "Priority",
+    diagnosis: "Diagnosis",
+    platform: "Platform area",
+    account: "Account",
+  },
+  /** Section categories from src/lib/error-classification.ts's StackSection — not individual platform names (see BOOKING_PLATFORM_LABELS etc. above for those). */
+  platformAreaLabels: {
+    booking: "Booking",
+    email: "Email / CRM",
+    sms: "SMS",
+    hosting: "Hosting",
+    ad_data: "Ad data",
+  } as Record<string, string>,
+};
+
 /** Friendly booking-platform name, with a safe fallback. */
 export function bookingPlatformLabel(raw: string | null | undefined): string {
   if (!raw) return "Not connected yet";
@@ -424,4 +476,31 @@ export const ACTIVITY_FEED_COPY = {
   columnStep: "Current Step",
   columnStatus: "Status",
   columnTime: "Time",
+};
+
+export const EXECUTIONS_TOOLBAR_COPY = {
+  title: "Live Executions",
+  allExecutionsTitle: "All Executions",
+  tabs: {
+    all: "All",
+    running: "Running",
+    needs_attention: "Needs attention",
+    completed: "Completed",
+  } as Record<string, string>,
+  searchPlaceholder: "Search by client, module, or detail...",
+  chips: {
+    cancelled: "Cancelled runs",
+    pausedClients: "Paused clients",
+    longRunning: "Long-running (10m+)",
+  },
+  chipSections: {
+    module: "Module",
+    status: "Status",
+    account: "Account",
+  },
+  stats: {
+    showSuccessRate: "Show success rate",
+    showModuleBreakdown: "Show breakdown by module",
+  },
+  successRateSuffix: (n: number) => `success · last ${n} finished`,
 };

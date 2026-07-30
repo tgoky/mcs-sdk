@@ -3,8 +3,8 @@ import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getQueueItems } from "@/lib/queue";
 import { eq, desc, sql } from "drizzle-orm";
-import { LiveExecutionFeed } from "../live-execution-feed";
-import { latestStepLabel } from "@/lib/run-display";
+import { LiveExecutionFeed } from "../../live-execution-feed";
+import { latestStepLabel } from "../../../../lib/run-display";
 import { EXECUTIONS_TOOLBAR_COPY as copy } from "@/lib/copy";
 import Link from "next/link";
 
