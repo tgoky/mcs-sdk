@@ -1,33 +1,17 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { skillRuns, engagements, type RunStep } from "@/models/schema";
+import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { and, eq, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { SKILL_IDS } from "@/lib/skill-manifest";
+import { latestStepLabel } from "@/lib/run-display";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 200;
-
-/**
- * Pulls the most specific human-readable detail out of a run's step log —
- * e.g. "Sarah Jenkins <sarah@acme.com>", which src/features/pile-on/server/
- * enrollment-service.ts already writes via logStep() for every booking, but
- * which nothing has surfaced in the UI until now. Scans from the most
- * recent step backward so an in-progress run shows its latest known detail,
- * not whatever the very first step happened to say.
- */
-function latestStepLabel(steps: RunStep[] | null | undefined): string | null {
-  if (!steps || steps.length === 0) return null;
-  for (let i = steps.length - 1; i >= 0; i--) {
-    const label = steps[i]?.label?.trim();
-    if (label) return label;
-  }
-  return null;
-}
 
 export async function GET(request: Request) {
   try {

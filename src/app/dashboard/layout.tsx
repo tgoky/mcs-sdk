@@ -33,6 +33,7 @@ export default async function DashboardLayout({
     { href: "/dashboard", label: "Dashboard" },
     { href: "/dashboard/engagements", label: "Engagements" },
     { href: "/dashboard/queue", label: "Queue" },
+    { href: "/dashboard/runs", label: "Executions" },
     { href: "/dashboard/analytics", label: "Analytics" },
     { href: "/dashboard/library", label: "Library" },
     { href: "/dashboard/settings", label: "Settings" },

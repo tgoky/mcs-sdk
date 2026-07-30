@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
-import { engagements, credentialsRefs } from "@/models/schema";
+import { engagements, credentialsRefs, skillRuns } from "@/models/schema";
 import { getQueueActionableCount } from "@/lib/queue";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 
 const DASHBOARD_ICON = (
@@ -51,6 +51,12 @@ const QUEUE_ICON = (
   </svg>
 );
 
+const EXECUTIONS_ICON = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M9 2L4 9H7.5L6.5 14L12 7H8.5L9 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
 /**
  * The sidebar's primary nav. Pulled out of DashboardLayout (same reasoning
  * as SidebarSkills below it): the counts each need a DB round trip, and
@@ -62,7 +68,7 @@ const QUEUE_ICON = (
  * either — this is the missing nav entry.
  */
 export async function SidebarNav({ whopUserId }: { whopUserId: string }) {
-  const [engagementRows, credentialRows, queueCount] = await Promise.all([
+  const [engagementRows, credentialRows, queueCount, runningCountResult] = await Promise.all([
     db
       .select({ engagementId: engagements.engagementId })
       .from(engagements)
@@ -75,12 +81,21 @@ export async function SidebarNav({ whopUserId }: { whopUserId: string }) {
       .where(eq(engagements.whopUserId, whopUserId)),
 
     getQueueActionableCount(whopUserId),
+
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(skillRuns)
+      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+      .where(and(eq(engagements.whopUserId, whopUserId), eq(skillRuns.status, "running"))),
   ]);
+
+  const runningCount = Number(runningCountResult[0]?.count ?? 0);
 
   const links: NavLinkItem[] = [
     { href: "/dashboard", label: "Dashboard", icon: DASHBOARD_ICON },
     { href: "/dashboard/engagements", label: "Engagements", icon: ENGAGEMENTS_ICON, count: engagementRows.length },
     { href: "/dashboard/queue", label: "Queue", icon: QUEUE_ICON, count: queueCount },
+    { href: "/dashboard/runs", label: "Executions", icon: EXECUTIONS_ICON, count: runningCount },
     { href: "/dashboard/analytics", label: "Analytics", icon: ANALYTICS_ICON },
     { href: "/dashboard/library", label: "Library", icon: LIBRARY_ICON },
     { href: "/dashboard/settings", label: "Settings", icon: SETTINGS_ICON, count: credentialRows.length },
@@ -95,6 +110,7 @@ export function SidebarNavSkeleton() {
     { label: "Dashboard", icon: DASHBOARD_ICON },
     { label: "Engagements", icon: ENGAGEMENTS_ICON },
     { label: "Queue", icon: QUEUE_ICON },
+    { label: "Executions", icon: EXECUTIONS_ICON },
     { label: "Analytics", icon: ANALYTICS_ICON },
     { label: "Library", icon: LIBRARY_ICON },
     { label: "Settings", icon: SETTINGS_ICON },

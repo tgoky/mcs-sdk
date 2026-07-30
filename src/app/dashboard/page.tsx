@@ -193,12 +193,22 @@ export default async function DashboardPage() {
 
       {/* Activity feed */}
       <div className="pt-2">
-        <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 mb-3 font-mono tracking-wider uppercase">
-          {copy.activityLogSectionTitle}
-        </p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
+            {copy.activityLogSectionTitle}
+          </p>
+          {recentRuns.length > 0 && (
+            <Link
+              href="/dashboard/runs"
+              className="text-xs font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
+            >
+              View all →
+            </Link>
+          )}
+        </div>
 
         <div className="pt-1 border-t border-zinc-200/60 dark:border-zinc-900/20">
-          <LiveExecutionFeed initialRuns={recentRuns} />
+          <LiveExecutionFeed initialRuns={recentRuns} storageKey="overview" />
         </div>
       </div>
 

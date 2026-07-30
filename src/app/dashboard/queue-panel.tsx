@@ -1,6 +1,4 @@
-"use client";
-
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Check,
@@ -15,9 +13,15 @@ import {
   Waves,
   Copy,
 } from "lucide-react";
-import { QUEUE_COPY as copy } from "@/lib/copy";
+import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, skillName as skillDisplayName } from "@/lib/copy";
+import type { StackSection } from "@/lib/error-classification";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { pauseEngagement, resumeEngagement, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
+import { SegmentedTabs, type SegmentedTabOption } from "@/components/segmented-tabs";
+import { TableSearchInput } from "@/components/table-search-input";
+import { TimeRangeMenu, computeTimeRangeBounds, isWithinTimeRange, type TimeRangeValue } from "@/components/time-range-menu";
+import { ViewCustomizer, FilterChipBar, type CustomizerSection } from "@/components/view-customizer";
+import { useLocalViewState } from "@/lib/use-local-view-state";
 
 export interface QueueItemDTO {
   id: string;
@@ -33,9 +37,67 @@ export interface QueueItemDTO {
   skillName?: string;
   /** ISO timestamp if this item's client currently has automations paused, else null/undefined. */
   engagementPausedAt?: string | null;
+  /** Only set for source "run_failure" — true for a 401/403, i.e. the fix is re-entering a credential. */
+  isCredentialIssue?: boolean;
+  /** Only set for source "run_failure" — which stack-settings area the failure belongs to. */
+  diagnosisSection?: StackSection;
 }
 
 const POLL_MS = 8_000;
+
+type QueueTab = "all" | "approve" | "action_needed" | "alerts";
+type QueuePriority = "high" | "medium" | "low";
+
+function computeQueuePriority(item: QueueItemDTO): QueuePriority {
+  const hoursWaiting = (Date.now() - new Date(item.createdAt).getTime()) / 3_600_000;
+  if (item.category === "alert") return "high";
+  if (item.category === "approve") return hoursWaiting > 4 ? "high" : "medium";
+  if (item.category === "action_needed") return hoursWaiting > 24 ? "high" : "medium";
+  return "low"; // fyi
+}
+
+interface QueueChipDef {
+  id: string;
+  label: string;
+  section: string;
+  /** Chips sharing a group OR together; different groups AND together. */
+  group: string;
+  predicate: (item: QueueItemDTO, priority: QueuePriority) => boolean;
+}
+
+const PLATFORM_AREAS = Object.keys(toolbarCopy.platformAreaLabels) as StackSection[];
+
+const QUEUE_CHIP_DEFS: QueueChipDef[] = [
+  { id: "priority-high", label: toolbarCopy.chips.priorityHigh, section: toolbarCopy.chipSections.priority, group: "priority", predicate: (_i, p) => p === "high" },
+  { id: "priority-medium", label: toolbarCopy.chips.priorityMedium, section: toolbarCopy.chipSections.priority, group: "priority", predicate: (_i, p) => p === "medium" },
+  { id: "priority-low", label: toolbarCopy.chips.priorityLow, section: toolbarCopy.chipSections.priority, group: "priority", predicate: (_i, p) => p === "low" },
+  { id: "needs-attention", label: toolbarCopy.chips.needsAttention, section: toolbarCopy.chipSections.diagnosis, group: "needs-attention", predicate: (i) => i.source === "run_failure" || i.source === "sync_setup" || !!i.engagementPausedAt },
+  { id: "credential-issues", label: toolbarCopy.chips.credentialIssues, section: toolbarCopy.chipSections.diagnosis, group: "credential-issues", predicate: (i) => !!i.isCredentialIssue },
+  { id: "auto-diagnosed", label: toolbarCopy.chips.autoDiagnosed, section: toolbarCopy.chipSections.diagnosis, group: "auto-diagnosed", predicate: (i) => i.source === "run_failure" },
+  ...PLATFORM_AREAS.map((section) => ({
+    id: `platform-${section}`,
+    label: toolbarCopy.platformAreaLabels[section],
+    section: toolbarCopy.chipSections.platform,
+    group: "platform-area",
+    predicate: (i: QueueItemDTO) => i.diagnosisSection === section,
+  })),
+  { id: "paused-clients", label: toolbarCopy.chips.pausedClients, section: toolbarCopy.chipSections.account, group: "paused-clients", predicate: (i) => !!i.engagementPausedAt },
+  { id: "fyi-only", label: toolbarCopy.chips.fyiOnly, section: toolbarCopy.chipSections.account, group: "fyi-only", predicate: (i) => i.category === "fyi" },
+];
+
+const QUEUE_CHIP_SECTION_ORDER = [
+  toolbarCopy.chipSections.priority,
+  toolbarCopy.chipSections.diagnosis,
+  toolbarCopy.chipSections.platform,
+  toolbarCopy.chipSections.account,
+];
+
+interface QueueViewState {
+  pinnedChipIds: string[];
+  pageSize: 10 | 25 | 50;
+}
+
+const DEFAULT_QUEUE_VIEW: QueueViewState = { pinnedChipIds: [], pageSize: 10 };
 
 function relativeTime(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -83,13 +145,6 @@ function QueueItemPreview({ item }: { item: QueueItemDTO }) {
   );
 }
 
-/**
- * Quick-action list for one queue item — beyond the primary approve/reject
- * style buttons already inline on the row, this surfaces navigation
- * shortcuts and the same client-level automation controls (generate a
- * Leak Map, pause/resume) available from Live Executions, without having
- * to open the engagement page first.
- */
 function buildQueueSections(
   item: QueueItemDTO,
   dispatch: ReturnType<typeof useQuickActions>["run"],
@@ -321,12 +376,171 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
   const [errorText, setErrorText] = useState<string>(copy.errors.generic);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [savedView, setSavedView] = useLocalViewState<QueueViewState>("mcs:queue:view", DEFAULT_QUEUE_VIEW);
+  const [tab, setTab] = useState<QueueTab>("all");
+  const [search, setSearch] = useState("");
+  const [timeRange, setTimeRange] = useState<TimeRangeValue>("all");
+  const [activeChipIds, setActiveChipIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState<5 | 10>(10);
-  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
-  const clampedPage = Math.min(page, pageCount - 1);
 
-  const pagedItems = items.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
+  const pinnedChipIds = new Set(savedView.pinnedChipIds);
+  const pageSize = savedView.pageSize;
+
+  const priorityById = useMemo(() => {
+    const map = new Map<string, QueuePriority>();
+    for (const item of items) map.set(item.id, computeQueuePriority(item));
+    return map;
+  }, [items]);
+
+  const tabCounts = useMemo(() => {
+    const counts: Record<QueueTab, number> = { all: items.length, approve: 0, action_needed: 0, alerts: 0 };
+    for (const item of items) {
+      if (item.category === "approve") counts.approve++;
+      else if (item.category === "action_needed") counts.action_needed++;
+      else counts.alerts++;
+    }
+    return counts;
+  }, [items]);
+
+  const tabFiltered = useMemo(() => {
+    if (tab === "all") return items;
+    if (tab === "alerts") return items.filter((i) => i.category === "alert" || i.category === "fyi");
+    return items.filter((i) => i.category === tab);
+  }, [items, tab]);
+
+  const rangeFiltered = useMemo(() => {
+    if (timeRange === "all") return tabFiltered;
+    const bounds = computeTimeRangeBounds(timeRange);
+    return tabFiltered.filter((i) => isWithinTimeRange(i.createdAt, bounds));
+  }, [tabFiltered, timeRange]);
+
+  const searchFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rangeFiltered;
+    return rangeFiltered.filter((i) => {
+      const skillLabel = i.skillName ? skillDisplayName(i.skillName).toLowerCase() : "";
+      return (
+        i.title.toLowerCase().includes(q) ||
+        i.subtitle.toLowerCase().includes(q) ||
+        (i.buyer ?? "").toLowerCase().includes(q) ||
+        skillLabel.includes(q)
+      );
+    });
+  }, [rangeFiltered, search]);
+
+  const chipCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const def of QUEUE_CHIP_DEFS) {
+      let n = 0;
+      for (const item of searchFiltered) {
+        if (def.predicate(item, priorityById.get(item.id) ?? "low")) n++;
+      }
+      counts.set(def.id, n);
+    }
+    return counts;
+  }, [searchFiltered, priorityById]);
+
+  const visibleItems = useMemo(() => {
+    if (activeChipIds.size === 0) return searchFiltered;
+    const activeDefs = QUEUE_CHIP_DEFS.filter((d) => activeChipIds.has(d.id));
+    const groups = new Map<string, QueueChipDef[]>();
+    for (const def of activeDefs) {
+      const bucket = groups.get(def.group) ?? [];
+      bucket.push(def);
+      groups.set(def.group, bucket);
+    }
+    return searchFiltered.filter((item) => {
+      const priority = priorityById.get(item.id) ?? "low";
+      for (const defs of groups.values()) {
+        if (!defs.some((d) => d.predicate(item, priority))) return false;
+      }
+      return true;
+    });
+  }, [searchFiltered, activeChipIds, priorityById]);
+
+  const pageCount = Math.max(1, Math.ceil(visibleItems.length / pageSize));
+  const clampedPage = Math.min(page, pageCount - 1);
+  const pagedItems = visibleItems.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
+
+  function handleTabChange(nextTab: QueueTab) {
+    setTab(nextTab);
+    setPage(0);
+  }
+
+  function handleSearchChange(nextSearch: string) {
+    setSearch(nextSearch);
+    setPage(0);
+  }
+
+  function handleTimeRangeChange(nextRange: TimeRangeValue) {
+    setTimeRange(nextRange);
+    setPage(0);
+  }
+
+  function togglePinnedChip(id: string) {
+    setPage(0);
+    setSavedView((prev) => {
+      const next = new Set(prev.pinnedChipIds);
+      if (next.has(id)) {
+        next.delete(id);
+        setActiveChipIds((prevActive) => {
+          const nextActive = new Set(prevActive);
+          nextActive.delete(id);
+          return nextActive;
+        });
+      } else {
+        next.add(id);
+      }
+      return { ...prev, pinnedChipIds: Array.from(next) };
+    });
+  }
+
+  function toggleActiveChip(id: string) {
+    setPage(0);
+    setActiveChipIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function changePageSize(size: 10 | 25 | 50) {
+    setPage(0);
+    setSavedView((prev) => ({ ...prev, pageSize: size }));
+  }
+
+  function clearFilters() {
+    setTab("all");
+    setSearch("");
+    setTimeRange("all");
+    setActiveChipIds(new Set());
+    setPage(0);
+  }
+
+  const hasActiveFilters = tab !== "all" || search.trim() !== "" || timeRange !== "all" || activeChipIds.size > 0;
+
+  const tabOptions: SegmentedTabOption<QueueTab>[] = [
+    { key: "all", label: toolbarCopy.tabs.all, count: tabCounts.all },
+    { key: "approve", label: toolbarCopy.tabs.approve, count: tabCounts.approve },
+    { key: "action_needed", label: toolbarCopy.tabs.action_needed, count: tabCounts.action_needed },
+    { key: "alerts", label: toolbarCopy.tabs.alerts, count: tabCounts.alerts },
+  ];
+
+  const customizerSections: CustomizerSection[] = QUEUE_CHIP_SECTION_ORDER.map((sectionLabel) => ({
+    label: sectionLabel,
+    options: QUEUE_CHIP_DEFS.filter((d) => d.section === sectionLabel).map((d) => ({
+      id: d.id,
+      label: d.label,
+      count: chipCounts.get(d.id) ?? 0,
+    })),
+  })).filter((s) => s.options.length > 0);
+
+  const pinnedChips = QUEUE_CHIP_DEFS.filter((d) => pinnedChipIds.has(d.id)).map((d) => ({
+    id: d.id,
+    label: d.label,
+    count: chipCounts.get(d.id) ?? 0,
+  }));
 
   const load = useCallback(async (signal: AbortSignal) => {
     try {
@@ -349,7 +563,6 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     };
   }, [load]);
 
-  /** Fires a one-off refresh right after a quick action succeeds (pause/resume/generate leak map), instead of waiting for the next poll tick. */
   const refreshNow = useCallback(() => {
     const controller = new AbortController();
     load(controller.signal);
@@ -434,39 +647,75 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
   }
 
   return (
-    <div className="pt-1 border-t border-border/60">
-      <div className="divide-y divide-border/60">
-        {pagedItems.map((item) => (
-          <QueueRow
-            key={item.id}
-            item={item}
-            isBusy={busyId === item.id}
-            errorText={errorId === item.id ? errorText : null}
-            href={openHref(item)}
-            onDecide={(decision) => decide(item, decision)}
-            onDismissSyncSetup={() => dismissSyncSetup(item)}
-            onDismissRunFailure={() => dismissRunFailure(item)}
-            onRunMutation={(url) => runMutation(item, url)}
-            onLinkNavigate={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
-            onActionComplete={refreshNow}
+    <div className="pt-1 border-t border-border/60 space-y-2.5">
+      <div className="flex items-center gap-2 flex-wrap px-1">
+        <SegmentedTabs options={tabOptions} value={tab} onChange={handleTabChange} />
+        <TableSearchInput value={search} onChange={handleSearchChange} placeholder={toolbarCopy.searchPlaceholder} className="w-[200px]" />
+        <TimeRangeMenu value={timeRange} onChange={handleTimeRangeChange} />
+        <div className="ml-auto flex items-center gap-1.5">
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              {sharedToolbarCopy.clearFiltersButton}
+            </button>
+          )}
+          <ViewCustomizer
+            sections={customizerSections}
+            enabledIds={pinnedChipIds}
+            onToggle={togglePinnedChip}
+            menuTitle={sharedToolbarCopy.customizeMenuTitle}
           />
-        ))}
+        </div>
       </div>
 
-      {items.length > 5 && (
+      {pinnedChips.length > 0 && (
+        <div className="px-1">
+          <FilterChipBar chips={pinnedChips} activeIds={activeChipIds} onToggle={toggleActiveChip} />
+        </div>
+      )}
+
+      {visibleItems.length === 0 ? (
+        <div className="py-10 text-center space-y-1">
+          <p className="text-sm font-medium text-muted-foreground">{sharedToolbarCopy.noResultsTitle}</p>
+          <p className="text-xs text-muted-foreground/70 font-mono max-w-sm mx-auto">{sharedToolbarCopy.noResultsSubtitle}</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-border/60">
+          {pagedItems.map((item) => (
+            <QueueRow
+              key={item.id}
+              item={item}
+              isBusy={busyId === item.id}
+              errorText={errorId === item.id ? errorText : null}
+              href={openHref(item)}
+              onDecide={(decision) => decide(item, decision)}
+              onDismissSyncSetup={() => dismissSyncSetup(item)}
+              onDismissRunFailure={() => dismissRunFailure(item)}
+              onRunMutation={(url) => runMutation(item, url)}
+              onLinkNavigate={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
+              onActionComplete={refreshNow}
+            />
+          ))}
+        </div>
+      )}
+
+      {visibleItems.length > 10 && (
         <div className="flex items-center justify-between px-1 py-2 border-t border-border/60">
           <div className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
-            {([5, 10] as const).map((size) => (
+            {([10, 25, 50] as const).map((size) => (
               <button
                 key={size}
-                onClick={() => { setPageSize(size); setPage(0); }}
+                onClick={() => changePageSize(size)}
                 className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
                   pageSize === size
                     ? "border-zinc-400 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300"
                     : "border-transparent hover:text-foreground"
                 }`}
               >
-                {size}/page
+                {sharedToolbarCopy.pageSizeLabel(size)}
               </button>
             ))}
           </div>

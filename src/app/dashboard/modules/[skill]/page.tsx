@@ -268,6 +268,8 @@ export default async function ModulePage({
         initialRuns={recentRuns}
         apiUrl={`/api/skill-runs/recent?skill=${skill}`}
         title={`${info.name} history`}
+        lockedSkill={skill}
+        storageKey={skill}
       />
     </div>
   );
