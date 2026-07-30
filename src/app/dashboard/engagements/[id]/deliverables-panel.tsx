@@ -1,21 +1,4 @@
 // src/app/dashboard/engagements/[id]/deliverables-panel.tsx
-//
-// Pin-Down generates real deliverables during onboarding — ad creative
-// briefs, a video script pack, a brand voice profile, and a record of what
-// its crawler found on the buyer's site — and saves every one of them to
-// Postgres (engagements.adCreativeBriefs, .pinDownScriptPack,
-// .brandVoiceProfile, .voiceScrapeArtifacts, .discoveryPrefill,
-// .pinDownPageAudit). Until now nothing in the UI rendered any of it: the
-// run detail page only ever showed the 5-field summary and the step
-// timeline, so the only way to see a generated brief was to query the
-// database directly. This panel is that missing surface, rendered
-// server-side straight from the same `engagement` row the rest of this
-// page already fetches — no new API route needed.
-//
-// Every field here is optional and possibly malformed (voice extraction
-// falls back to `{ source_path: "default" }` on a parse failure — see
-// extractVoiceProfile in onboarding-service.ts), so this renders
-// defensively throughout rather than assuming the shape is complete.
 
 const PILLAR_LABELS: Record<string, string> = {
   common_questions: "Common Questions",
@@ -24,11 +7,6 @@ const PILLAR_LABELS: Record<string, string> = {
   objections: "Objections",
 };
 
-// Each tone key from onboarding-service.ts (e.g. "formal_casual") encodes a
-// spectrum's two poles. Was previously rendered as `key.replace(/_/g, " → ")`
-// — literal db-key stringification, e.g. "warm → neutral" — with no real
-// design behind it. This is the human-readable version of the same three
-// axes onboarding-service.ts's extractVoiceProfile always produces.
 const TONE_AXIS_LABELS: Record<string, { left: string; right: string }> = {
   formal_casual: { left: "Formal", right: "Casual" },
   technical_plain: { left: "Technical", right: "Plain-spoken" },
@@ -37,8 +15,11 @@ const TONE_AXIS_LABELS: Record<string, { left: string; right: string }> = {
 
 const SOURCE_KIND_LABELS: Record<string, string> = {
   marketing_site: "Marketing site",
+  about_page: "About / story page",
   sales_page: "Sales page",
   pricing_page: "Pricing page",
+  proof_page: "Case studies / proof",
+  supporting_page: "Supporting page",
   esp_broadcast: "Email broadcast",
 };
 
@@ -61,9 +42,7 @@ type VoiceScrapeArtifacts = {
 
 export type BrandVoiceProfile = {
   source_path?: "default" | "ai_extracted" | string;
-  /** Why this is a placeholder rather than real analysis — absent when source_path is "ai_extracted". */
   fallback_reason?: "corpus_too_short" | "extraction_parse_failed" | string;
-  /** Word count of whatever corpus was actually fed into extraction (scraped + pasted, combined). */
   corpus_word_count?: number;
   tone?: Record<string, { score: number; note: string }>;
   vocabulary?: { signature?: string[]; brand_terms?: string[] };
@@ -118,10 +97,10 @@ type PinDownPageAudit = {
 
 function SectionHeader({ title, count }: { title: string; count?: number }) {
   return (
-    <h3 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
+    <h3 className="text-xs font-bold text-zinc-400 dark:text-zinc-400 uppercase tracking-widest font-mono flex items-center gap-2">
       {title}
       {typeof count === "number" && (
-        <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 bg-zinc-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-200/60 dark:border-zinc-800/40">
+        <span className="text-[10px] font-mono text-zinc-300 dark:text-zinc-400 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full font-bold">
           {count}
         </span>
       )}
@@ -131,45 +110,43 @@ function SectionHeader({ title, count }: { title: string; count?: number }) {
 
 function ToneSpectrum({ axisKey, score, note }: { axisKey: string; score: number; note: string }) {
   const clamped = Math.max(1, Math.min(5, score));
-  const pct = ((clamped - 1) / 4) * 100; // 1 → 0%, 5 → 100%
+  const pct = ((clamped - 1) / 4) * 100;
   const axis = TONE_AXIS_LABELS[axisKey];
   const leaning = clamped < 2.5 ? "left" : clamped > 3.5 ? "right" : "center";
 
   if (!axis) {
-    // Unknown axis key from a future prompt version — fall back gracefully
-    // rather than rendering nothing or a raw db key.
     return (
       <div className="space-y-1">
-        <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500 capitalize">{axisKey.replace(/_/g, " / ")}</p>
-        <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono">{note}</p>
+        <p className="text-[11px] font-mono text-zinc-400 capitalize">{axisKey.replace(/_/g, " / ")}</p>
+        <p className="text-xs text-zinc-300">{note}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-2">
-        <span className={`text-[11px] font-semibold w-24 text-right shrink-0 ${leaning === "left" ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400 dark:text-zinc-600"}`}>
+    <div className="space-y-2 bg-zinc-900/60 p-3 rounded-xl border border-zinc-800/80">
+      <div className="flex items-center justify-between text-xs font-semibold">
+        <span className={`w-28 ${leaning === "left" ? "text-amber-400 font-bold" : "text-zinc-400"}`}>
           {axis.left}
         </span>
-        <div className="relative flex-1 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 min-w-[64px]">
+        <div className="relative flex-1 mx-3 h-2 rounded-full bg-zinc-800 border border-zinc-700">
           <div
-            className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-gold border-2 border-white dark:border-zinc-950 shadow-sm"
-            style={{ left: `calc(${pct}% - 5px)` }}
+            className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-zinc-950 shadow-md shadow-amber-500/20"
+            style={{ left: `calc(${pct}% - 7px)` }}
           />
         </div>
-        <span className={`text-[11px] font-semibold w-24 shrink-0 ${leaning === "right" ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400 dark:text-zinc-600"}`}>
+        <span className={`w-28 text-right ${leaning === "right" ? "text-amber-400 font-bold" : "text-zinc-400"}`}>
           {axis.right}
         </span>
       </div>
-      <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono text-center">{note}</p>
+      <p className="text-xs text-zinc-300 font-sans leading-relaxed">{note}</p>
     </div>
   );
 }
 
 function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/60 px-2 py-0.5 rounded">
+    <span className="text-xs font-medium text-zinc-200 bg-zinc-800/90 border border-zinc-700/80 px-2.5 py-1 rounded-md shadow-sm">
       {children}
     </span>
   );
@@ -202,8 +179,8 @@ export function DeliverablesPanel({
     return (
       <div className="space-y-2">
         <SectionHeader title="Deliverables & Assets" />
-        <div className="h-24 border border-dashed border-zinc-200 dark:border-zinc-900 bg-zinc-50/50 dark:bg-transparent rounded-lg flex items-center justify-center">
-          <p className="text-xs text-zinc-400 dark:text-zinc-600 font-mono">
+        <div className="h-24 border border-dashed border-zinc-800 bg-zinc-950/40 rounded-xl flex items-center justify-center">
+          <p className="text-xs text-zinc-500 font-mono">
             Nothing generated yet — run Pin-Down to produce these.
           </p>
         </div>
@@ -215,13 +192,6 @@ export function DeliverablesPanel({
   const toneEntries = Object.entries(tone);
   const isAiExtracted = brandVoiceProfile?.source_path === "ai_extracted";
 
-  // Everything below only matters when the profile is NOT ai_extracted —
-  // it explains, in the buyer's own deliverables panel rather than buried
-  // in a run log, exactly why they're looking at a placeholder instead of
-  // a real read of this client's site. Previously the only signal was a
-  // small "Neutral default tone" badge next to tone/vocabulary chips that
-  // looked identical either way, which is indistinguishable from a real
-  // result unless you already knew to be suspicious of it.
   const scrapedWordCount = voiceScrapeArtifacts?.totalWordCount ?? 0;
   const scrapedSourceCount = voiceScrapeArtifacts?.sources?.length ?? 0;
   const corpusWordCount = brandVoiceProfile?.corpus_word_count ?? scrapedWordCount;
@@ -233,24 +203,24 @@ export function DeliverablesPanel({
       : "Couldn't pull any usable content from this client's site";
   const fallbackDetail =
     brandVoiceProfile?.fallback_reason === "extraction_parse_failed"
-      ? "This corpus was long enough — the model's response just didn't come back as valid JSON that run. Worth trying again; if it keeps happening, that's a real bug, not a content problem."
+      ? "This corpus was long enough — the model's response just didn't come back as valid JSON that run. Worth trying again."
       : scrapedSourceCount > 0
-      ? `Checked ${scrapedSourceCount} page${scrapedSourceCount === 1 ? "" : "s"} on ${discoveryPrefill?.domain ?? "the domain on file"} (see Site & voice crawl above) and came up short. Often means the site is JS-rendered and needs a real headless crawl, or the sales/pricing pages live at URLs we didn't guess.`
-      : `No domain-based crawl produced anything (see Site & voice crawl above if one ran), and there's no operator-pasted sample either. There's nothing yet to base a real voice profile on for ${discoveryPrefill?.domain ?? "this client"}.`;
+      ? `Checked ${scrapedSourceCount} page${scrapedSourceCount === 1 ? "" : "s"} on ${discoveryPrefill?.domain ?? "the domain on file"} and came up short.`
+      : `No domain-based crawl produced anything, and there's no operator-pasted sample either.`;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8 font-sans">
       <SectionHeader title="Deliverables & Assets" />
 
-      {/* Website discovery + voice crawl — "what got extracted from the website" */}
+      {/* Website discovery + voice crawl */}
       {(discoveryPrefill || voiceScrapeArtifacts) && (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-3 shadow-sm">
-          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Site &amp; voice crawl</p>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-5 space-y-4 shadow-sm">
+          <p className="text-sm font-bold text-zinc-200 uppercase tracking-wider">Site &amp; Voice Crawl</p>
 
           {discoveryPrefill && (
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">
-                Crawled {discoveryPrefill.domain} on{" "}
+            <div className="space-y-2">
+              <p className="text-xs font-mono text-zinc-400">
+                Crawled <span className="text-zinc-200 font-bold">{discoveryPrefill.domain}</span> on{" "}
                 {new Date(discoveryPrefill.crawledAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
               </p>
               <div className="flex flex-wrap gap-2">
@@ -259,31 +229,22 @@ export function DeliverablesPanel({
                 {discoveryPrefill.suggestedIcp && <Chip>ICP: {discoveryPrefill.suggestedIcp}</Chip>}
                 {discoveryPrefill.detectedBookingPlatform && <Chip>Booking: {discoveryPrefill.detectedBookingPlatform}</Chip>}
               </div>
-              {discoveryPrefill.notes.length > 0 && (
-                <ul className="space-y-0.5 pt-1">
-                  {discoveryPrefill.notes.map((note, i) => (
-                    <li key={i} className="text-[11px] text-zinc-500 dark:text-zinc-500 font-mono leading-relaxed">
-                      · {note}
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
           )}
 
           {voiceScrapeArtifacts && (
-            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-900/50 space-y-1.5">
-              <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">
-                {voiceScrapeArtifacts.totalWordCount.toLocaleString()} words pulled from {voiceScrapeArtifacts.sources.length} source
-                {voiceScrapeArtifacts.sources.length === 1 ? "" : "s"} for voice extraction
+            <div className="pt-3 border-t border-zinc-800/80 space-y-2">
+              <p className="text-xs font-mono text-zinc-400">
+                <span className="text-amber-400 font-bold">{voiceScrapeArtifacts.totalWordCount.toLocaleString()}</span> words pulled from {voiceScrapeArtifacts.sources.length} source
+                {voiceScrapeArtifacts.sources.length === 1 ? "" : "s"}
               </p>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {voiceScrapeArtifacts.sources.map((s, i) => (
-                  <div key={i} className="flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-zinc-600 dark:text-zinc-400 truncate max-w-[70%]" title={s.url}>
-                      {SOURCE_KIND_LABELS[s.kind] ?? s.kind}{s.url ? ` — ${s.url}` : ""}
+                  <div key={i} className="flex items-center justify-between text-xs font-mono bg-zinc-900/50 px-3 py-1.5 rounded-lg border border-zinc-800/60">
+                    <span className="text-zinc-300 truncate max-w-[75%]" title={s.url}>
+                      <strong className="text-zinc-100">{SOURCE_KIND_LABELS[s.kind] ?? s.kind}</strong>{s.url ? ` — ${s.url}` : ""}
                     </span>
-                    <span className="text-zinc-400 dark:text-zinc-600">{s.wordCount.toLocaleString()}w</span>
+                    <span className="text-zinc-400 font-semibold">{s.wordCount.toLocaleString()} words</span>
                   </div>
                 ))}
               </div>
@@ -294,26 +255,24 @@ export function DeliverablesPanel({
 
       {/* Brand voice profile */}
       {brandVoiceProfile && (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-3 shadow-sm">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Brand voice profile</p>
-            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${isAiExtracted ? "text-gold-hover dark:text-gold bg-gold/10 border-gold/30" : "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40"}`}>
-              {isAiExtracted ? "AI-extracted from corpus" : "Placeholder — not from this client"}
+            <p className="text-sm font-bold text-zinc-200 uppercase tracking-wider">Brand Voice Profile</p>
+            <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-md border ${isAiExtracted ? "text-amber-400 bg-amber-400/10 border-amber-400/30" : "text-amber-400 bg-amber-950/30 border-amber-900/50"}`}>
+              {isAiExtracted ? "AI-Extracted from Corpus" : "Placeholder — Neutral Default"}
             </span>
           </div>
 
           {!isAiExtracted && (
-            <div className="rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-1.5">
-              <p className="text-xs font-semibold text-amber-800 dark:text-amber-400">{fallbackHeadline}</p>
-              <p className="text-[11px] text-amber-700/90 dark:text-amber-400/80 leading-relaxed">{fallbackDetail}</p>
-              <p className="text-[11px] text-amber-700/90 dark:text-amber-400/80 leading-relaxed">
-                To fix: make sure the site&apos;s key pages are reachable (or paste a writing sample during onboarding), then click <span className="font-semibold">Run Pin Down</span> in Modules above to try again.
-              </p>
+            <div className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4 space-y-2">
+              <p className="text-sm font-bold text-amber-400">{fallbackHeadline}</p>
+              <p className="text-xs text-amber-300/80 leading-relaxed">{fallbackDetail}</p>
             </div>
           )}
 
           {isAiExtracted && toneEntries.length > 0 && (
             <div className="space-y-3">
+              <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Tone Spectrum</p>
               {toneEntries.map(([key, val]) => (
                 <ToneSpectrum key={key} axisKey={key} score={val.score} note={val.note} />
               ))}
@@ -321,28 +280,32 @@ export function DeliverablesPanel({
           )}
 
           {isAiExtracted && (brandVoiceProfile.vocabulary?.signature?.length || brandVoiceProfile.vocabulary?.brand_terms?.length) ? (
-            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-900/50 space-y-1.5">
+            <div className="pt-3 border-t border-zinc-800/80 space-y-3">
               {!!brandVoiceProfile.vocabulary?.signature?.length && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">Signature words:</span>
-                  {brandVoiceProfile.vocabulary!.signature!.map((w, i) => <Chip key={i}>{w}</Chip>)}
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block">Signature Words &amp; Vocabulary</span>
+                  <div className="flex flex-wrap gap-2">
+                    {brandVoiceProfile.vocabulary!.signature!.map((w, i) => <Chip key={i}>{w}</Chip>)}
+                  </div>
                 </div>
               )}
               {!!brandVoiceProfile.vocabulary?.brand_terms?.length && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">Brand terms:</span>
-                  {brandVoiceProfile.vocabulary!.brand_terms!.map((w, i) => <Chip key={i}>{w}</Chip>)}
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block">Brand-Specific Terms</span>
+                  <div className="flex flex-wrap gap-2">
+                    {brandVoiceProfile.vocabulary!.brand_terms!.map((w, i) => <Chip key={i}>{w}</Chip>)}
+                  </div>
                 </div>
               )}
             </div>
           ) : null}
 
           {isAiExtracted && !!brandVoiceProfile.banned_phrases?.length && (
-            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-900/50">
-              <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 block mb-1">Avoid using:</span>
-              <div className="flex flex-wrap gap-1.5">
+            <div className="pt-3 border-t border-zinc-800/80 space-y-1.5">
+              <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block">Banned Phrases (Avoid)</span>
+              <div className="flex flex-wrap gap-2">
                 {brandVoiceProfile.banned_phrases.map((b, i) => (
-                  <span key={i} className="text-[11px] font-mono text-rose-600 dark:text-rose-400/80 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 px-2 py-0.5 rounded line-through">
+                  <span key={i} className="text-xs font-mono font-medium text-rose-400 bg-rose-950/40 border border-rose-900/60 px-2.5 py-1 rounded-md line-through">
                     {b.phrase}
                   </span>
                 ))}
@@ -352,136 +315,136 @@ export function DeliverablesPanel({
         </div>
       )}
 
-      {/* Ad creative briefs */}
+      {/* Ad Creative Briefs */}
       {(adCreativeBriefs?.briefs?.length ?? 0) > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 px-0.5">
-            Ad creative briefs <span className="text-zinc-400 dark:text-zinc-600 font-mono font-normal">({adCreativeBriefs!.briefs.length} pillars)</span>
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-zinc-200 uppercase tracking-wider">
+              Ad Creative Briefs
+            </p>
+            <span className="text-xs font-mono text-zinc-400 font-semibold bg-zinc-900 px-2.5 py-1 rounded-md border border-zinc-800">
+              {adCreativeBriefs!.briefs.length} Pillars
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {adCreativeBriefs!.briefs.map((b) => (
-              <div key={b.id} className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-2 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-mono font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
-                    {PILLAR_LABELS[b.pillar] ?? b.pillar}
-                  </span>
-                  <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 bg-zinc-100 dark:bg-zinc-900/40 px-1.5 py-0.5 rounded">
-                    {b.suggestedFormat}
-                  </span>
+              <div key={b.id} className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-5 space-y-4 shadow-md flex flex-col justify-between">
+                <div className="space-y-3">
+                  {/* Header: Pillar Title & Format Badge */}
+                  <div className="flex flex-wrap items-start justify-between gap-2 pb-3 border-b border-zinc-800/80">
+                    <span className="text-xs font-black font-mono text-amber-400 uppercase tracking-wider">
+                      {PILLAR_LABELS[b.pillar] ?? b.pillar}
+                    </span>
+                    <span className="text-[11px] font-sans font-semibold text-zinc-200 bg-zinc-800 border border-zinc-700/80 px-2.5 py-1 rounded-md">
+                      {b.suggestedFormat}
+                    </span>
+                  </div>
+
+                  {/* Scroll-Stopper Hook */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold font-mono text-zinc-500 uppercase tracking-wider">
+                      Scroll-Stopper Hook (First 3s)
+                    </span>
+                    <p className="text-sm font-bold text-zinc-100 bg-zinc-900/90 p-3 rounded-lg border border-zinc-800/80 leading-snug">
+                      &ldquo;{b.hook}&rdquo;
+                    </p>
+                  </div>
+
+                  {/* Strategic Angle */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold font-mono text-zinc-500 uppercase tracking-wider">
+                      Strategic Angle &amp; Framing
+                    </span>
+                    <p className="text-xs text-zinc-300 leading-relaxed font-sans">
+                      {b.angle}
+                    </p>
+                  </div>
+
+                  {/* Script Beats / Talking Points */}
+                  {b.talkingPoints.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-[10px] font-bold font-mono text-zinc-500 uppercase tracking-wider">
+                        Script Beats / Talking Points
+                      </span>
+                      <ul className="space-y-1 bg-zinc-900/40 p-3 rounded-lg border border-zinc-800/50">
+                        {b.talkingPoints.map((tp, i) => (
+                          <li key={i} className="text-xs text-zinc-300 font-sans leading-relaxed flex items-start gap-2">
+                            <span className="text-amber-400 font-bold select-none">•</span>
+                            <span>{tp}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 leading-snug">{b.hook}</p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-500 leading-relaxed">{b.angle}</p>
-                {b.talkingPoints.length > 0 && (
-                  <ul className="space-y-0.5 pt-1">
-                    {b.talkingPoints.map((tp, i) => (
-                      <li key={i} className="text-[11px] text-zinc-500 dark:text-zinc-500 font-mono leading-relaxed">· {tp}</li>
-                    ))}
-                  </ul>
-                )}
-                <p className="text-[11px] font-mono font-semibold text-gold-hover dark:text-gold pt-1 border-t border-zinc-100 dark:border-zinc-900/40">
-                  CTA: {b.cta}
-                </p>
+
+                {/* Call to Action */}
+                <div className="pt-3 border-t border-zinc-800/80 space-y-1">
+                  <span className="text-[10px] font-bold font-mono text-amber-400/90 uppercase tracking-wider block">
+                    Call To Action (CTA)
+                  </span>
+                  <p className="text-xs font-bold text-zinc-100 font-mono bg-amber-400/10 border border-amber-400/20 px-3 py-2 rounded-lg">
+                    {b.cta}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Video script pack */}
+      {/* Video Script Pack */}
       {pinDownScriptPack && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 px-0.5">Video script pack</p>
+        <div className="space-y-4">
+          <p className="text-sm font-bold text-zinc-200 uppercase tracking-wider">Video Script Pack</p>
 
           {pinDownScriptPack.heroScript && (
-            <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-2 shadow-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{pinDownScriptPack.heroScript.title}</span>
-                <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-5 space-y-3 shadow-md">
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                <span className="text-sm font-bold text-zinc-100">{pinDownScriptPack.heroScript.title}</span>
+                <span className="text-xs font-mono font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2.5 py-1 rounded-md">
                   ~{Math.round(pinDownScriptPack.heroScript.targetLengthSeconds / 60)} min
                 </span>
               </div>
-              <div className="space-y-2 pt-1">
+              <div className="space-y-3 pt-1">
                 {pinDownScriptPack.heroScript.chapters.map((c, i) => (
-                  <div key={i} className="flex gap-3">
-                    <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 shrink-0 w-14">{c.timestampLabel}</span>
-                    <div className="space-y-0.5">
-                      <p className="text-[11px] font-mono font-semibold text-zinc-500 dark:text-zinc-500 uppercase tracking-wide">{c.beat}</p>
-                      <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">{c.script}</p>
+                  <div key={i} className="flex gap-3 bg-zinc-900/40 p-3 rounded-lg border border-zinc-800/50">
+                    <span className="text-xs font-mono font-bold text-amber-400 shrink-0 w-16">{c.timestampLabel}</span>
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-zinc-200 uppercase tracking-wide">{c.beat}</p>
+                      <p className="text-xs text-zinc-300 leading-relaxed font-sans">{c.script}</p>
                     </div>
                   </div>
                 ))}
               </div>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono pt-2 border-t border-zinc-100 dark:border-zinc-900/40 leading-relaxed">
-                {pinDownScriptPack.heroScript.recordingPrompt}
+              <p className="text-xs text-zinc-400 font-mono pt-2 border-t border-zinc-800 leading-relaxed">
+                <strong className="text-zinc-200">Recording Prompt:</strong> {pinDownScriptPack.heroScript.recordingPrompt}
               </p>
             </div>
           )}
 
           {!!pinDownScriptPack.breakoutScripts?.length && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {pinDownScriptPack.breakoutScripts.map((s) => (
-                <div key={s.id} className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-2 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{s.title}</span>
-                    <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">
+                <div key={s.id} className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-5 space-y-3 shadow-md">
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                    <span className="text-sm font-bold text-zinc-100">{s.title}</span>
+                    <span className="text-xs font-mono font-semibold text-zinc-300 bg-zinc-800 px-2 py-0.5 rounded">
                       ~{s.targetLengthSeconds}s
                     </span>
                   </div>
                   {s.sourceQuestion && (
-                    <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 italic">From: &quot;{s.sourceQuestion}&quot;</p>
+                    <p className="text-xs font-mono text-amber-400/90 italic">From: &quot;{s.sourceQuestion}&quot;</p>
                   )}
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">{s.script}</p>
-                  <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono pt-1 border-t border-zinc-100 dark:border-zinc-900/40">
-                    {s.recordingPrompt}
+                  <p className="text-xs text-zinc-300 leading-relaxed font-sans">{s.script}</p>
+                  <p className="text-xs text-zinc-400 font-mono pt-2 border-t border-zinc-800">
+                    <strong className="text-zinc-200">Prompt:</strong> {s.recordingPrompt}
                   </p>
                 </div>
               ))}
             </div>
           )}
-
-          {pinDownScriptPack.recordingChecklist && (
-            <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 shadow-sm">
-              {[
-                { label: "Equipment", items: pinDownScriptPack.recordingChecklist.equipment },
-                { label: "Environment", items: pinDownScriptPack.recordingChecklist.environment },
-                { label: "Wardrobe & framing", items: pinDownScriptPack.recordingChecklist.wardrobeAndFraming },
-              ].map(({ label, items }) => (
-                <div key={label} className="space-y-1">
-                  <p className="text-[11px] font-mono font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">{label}</p>
-                  <ul className="space-y-0.5">
-                    {items.map((it, i) => (
-                      <li key={i} className="text-[11px] text-zinc-500 dark:text-zinc-500 font-mono leading-relaxed">· {it}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Existing confirmation page audit, when discovery found one already live */}
-      {pinDownPageAudit && (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-2 shadow-sm">
-          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-            Existing page audit <span className="text-zinc-400 dark:text-zinc-600 font-mono font-normal">— {pinDownPageAudit.auditedUrl}</span>
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-            {[
-              { label: "Strengths", items: pinDownPageAudit.existingPageStrengths, tone: "text-gold-hover dark:text-gold" },
-              { label: "Weaknesses", items: pinDownPageAudit.existingPageWeaknesses, tone: "text-rose-600 dark:text-rose-400" },
-              { label: "v1 improvements", items: pinDownPageAudit.v1Improvements, tone: "text-zinc-500 dark:text-zinc-400" },
-            ].map(({ label, items, tone }) => (
-              <div key={label} className="space-y-1">
-                <p className={`text-[11px] font-mono font-bold uppercase tracking-wide ${tone}`}>{label}</p>
-                <ul className="space-y-0.5">
-                  {items.map((it, i) => (
-                    <li key={i} className="text-[11px] text-zinc-500 dark:text-zinc-500 font-mono leading-relaxed">· {it}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>
