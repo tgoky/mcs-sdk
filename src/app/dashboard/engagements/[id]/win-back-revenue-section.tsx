@@ -1,0 +1,373 @@
+"use client";
+
+import React, { useState, useRef, useEffect } from "react";
+import { 
+  DollarSign, 
+  ChevronDown, 
+  Check, 
+  Sparkles, 
+  Calendar, 
+  TrendingUp, 
+  XCircle, 
+  CheckCircle2, 
+  User, 
+  ArrowUpRight,
+  Clock
+} from "lucide-react";
+
+export interface RecoveredEnrollment {
+  prospectEmail: string;
+  prospectName: string | null;
+  rebookedAt: string;
+}
+
+export interface WinBackRevenueSectionProps {
+  engagementId: string;
+  offerPrice: number;
+  initialEnrollments: RecoveredEnrollment[];
+  initialPeriodLabel: string;
+}
+
+type PeriodOption = {
+  id: string;
+  label: string;
+  sublabel: string;
+  badge?: string;
+  startDate: Date;
+  endDate: Date;
+};
+
+// Generates periods for 2026
+function getPeriodOptions(): PeriodOption[] {
+  const now = new Date();
+  const currentYear = 2026;
+
+  return [
+    {
+      id: "q3_2026",
+      label: "Q3 2026",
+      sublabel: "Jul 1 - Sep 30, 2026",
+      badge: "Current",
+      startDate: new Date(currentYear, 6, 1), // July 1
+      endDate: new Date(currentYear, 9, 0, 23, 59, 59), // Sept 30
+    },
+    {
+      id: "q2_2026",
+      label: "Q2 2026",
+      sublabel: "Apr 1 - Jun 30, 2026",
+      startDate: new Date(currentYear, 3, 1),
+      endDate: new Date(currentYear, 6, 0, 23, 59, 59),
+    },
+    {
+      id: "q1_2026",
+      label: "Q1 2026",
+      sublabel: "Jan 1 - Mar 31, 2026",
+      startDate: new Date(currentYear, 0, 1),
+      endDate: new Date(currentYear, 3, 0, 23, 59, 59),
+    },
+    {
+      id: "last_30",
+      label: "Last 30 Days",
+      sublabel: "Rolling 30-day window",
+      startDate: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+      endDate: now,
+    },
+    {
+      id: "all_time",
+      label: "All Time",
+      sublabel: "Full campaign history",
+      startDate: new Date(2025, 0, 1),
+      endDate: new Date(2030, 11, 31),
+    },
+  ];
+}
+
+// Utility to get initials for pink avatar badge (e.g. "AD")
+function getInitials(name: string | null, email: string): string {
+  if (name && name.trim().length > 0) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  }
+  return email.slice(0, 2).toUpperCase();
+}
+
+export function WinBackRevenueSection({
+  engagementId,
+  offerPrice,
+  initialEnrollments,
+  initialPeriodLabel,
+}: WinBackRevenueSectionProps) {
+  const periods = getPeriodOptions();
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption>(periods[0]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Filter enrollments for the selected period
+  const filteredEnrollments = initialEnrollments.filter((r) => {
+    const date = new Date(r.rebookedAt);
+    return date >= selectedPeriod.startDate && date <= selectedPeriod.endDate;
+  });
+
+  const recoveredCount = filteredEnrollments.length;
+  const totalRevenue = recoveredCount * offerPrice;
+  const averageRecoveryValue = recoveredCount > 0 ? totalRevenue / recoveredCount : 0;
+
+  // Group filtered enrollments into Months / Weeks
+  // For Q3 (Jul, Aug, Sep), we group by 3 Month Columns with Weekly Milestone Cards inside
+  const monthsInQuarter = [
+    { name: "July 2026", monthIdx: 6 },
+    { name: "August 2026", monthIdx: 7 },
+    { name: "September 2026", monthIdx: 8 },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* ── HEADER WITH ASANA-STYLE PERIOD SELECTOR DROPDOWN ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
+          <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> 
+          Win-Back Revenue &amp; Weekly Milestone Breakdown
+        </h2>
+
+        {/* Asana-Style Dropdown Selector (Matching Screenshot 1) */}
+        <div className="relative" ref={dropdownRef}>
+          <button
+            type="button"
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+          >
+            <Calendar size={13} className="text-zinc-500" />
+            <span>{selectedPeriod.label} ({selectedPeriod.sublabel})</span>
+            <ChevronDown size={14} className="text-zinc-400 ml-1" />
+          </button>
+
+          {/* Screenshot 1 Popup Styling */}
+          {dropdownOpen && (
+            <div className="absolute right-0 mt-1.5 w-72 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl dark:shadow-2xl z-50 p-1.5 space-y-0.5 animate-in fade-in-50 zoom-in-95 duration-100">
+              <div className="px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                Select Reporting Period
+              </div>
+              {periods.map((p) => {
+                const isSelected = p.id === selectedPeriod.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPeriod(p);
+                      setDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-colors cursor-pointer ${
+                      isSelected
+                        ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-semibold"
+                        : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${isSelected ? "text-zinc-900 dark:text-white" : "opacity-0"}`}>
+                        <Check size={12} strokeWidth={3} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block font-medium truncate">{p.label}</span>
+                        <span className="block text-[10px] text-zinc-400 font-mono truncate">{p.sublabel}</span>
+                      </div>
+                    </div>
+
+                    {p.badge && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-200/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium shrink-0">
+                        {p.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── TOP STATS SUMMARY BAR ── */}
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-4 shadow-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="space-y-1 p-2">
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
+              Recovered Deals
+            </p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
+                {recoveredCount}
+              </p>
+              <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-medium">
+                {recoveredCount > 0 ? "Active pipeline" : "No recoveries yet"}
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-1 p-2 sm:border-l border-zinc-100 dark:border-zinc-800/60">
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
+              Revenue Attributed
+            </p>
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+              ${totalRevenue.toLocaleString()}
+            </p>
+          </div>
+
+          <div className="space-y-1 p-2 sm:border-l border-zinc-100 dark:border-zinc-800/60">
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
+              Avg / Recovery
+            </p>
+            <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
+              ${Math.round(averageRecoveryValue).toLocaleString()}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── ASANA KANBAN BOARD / WEEKLY MILESTONES (Matching Screenshot 2) ── */}
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center justify-between px-0.5">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
+            Monthly &amp; Weekly Milestones — {selectedPeriod.label}
+          </span>
+          <span className="text-[11px] font-mono text-zinc-400">
+            {filteredEnrollments.length} total recovered deals
+          </span>
+        </div>
+
+        {/* 3 Column Month Grid (Like Screenshot 2: To do / Doing / Done columns) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {monthsInQuarter.map((m) => {
+            const monthEnrollments = filteredEnrollments.filter((r) => {
+              const d = new Date(r.rebookedAt);
+              return d.getMonth() === m.monthIdx;
+            });
+
+            const monthRevenue = monthEnrollments.length * offerPrice;
+
+            return (
+              <div
+                key={m.name}
+                className="rounded-2xl bg-zinc-100/70 dark:bg-zinc-950/60 border border-zinc-200/80 dark:border-zinc-800/60 p-3 space-y-3"
+              >
+                {/* Column Header (Matching Screenshot 2: "To do 3" Pill) */}
+                <div className="flex items-center justify-between px-1 py-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                      {m.name}
+                    </span>
+                    <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                      {monthEnrollments.length}
+                    </span>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                    ${monthRevenue.toLocaleString()}
+                  </span>
+                </div>
+
+                {/* List of Cards Inside Column (Matching Screenshot 2 Cards) */}
+                <div className="space-y-2.5">
+                  {monthEnrollments.length > 0 ? (
+                    monthEnrollments.map((r, idx) => {
+                      const initials = getInitials(r.prospectName, r.prospectEmail);
+                      const formattedDate = new Date(r.rebookedAt).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                      });
+
+                      return (
+                        <div
+                          key={r.prospectEmail + idx}
+                          className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5 space-y-2.5 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-all group"
+                        >
+                          {/* Title with Check Icon (Matching Screenshot 2: "(✓) Task 1") */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <CheckCircle2 size={15} className="text-emerald-500 shrink-0 mt-0.5" />
+                              <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                                {r.prospectName ?? r.prospectEmail}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Priority Tag (Matching Screenshot 2: "Low" or "Medium" Tag) */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                              Recovered
+                            </span>
+                            {offerPrice > 0 && (
+                              <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                +${offerPrice.toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Avatar & Pink Date (Matching Screenshot 2: Pink "AD" Avatar + "2 Jun" Date) */}
+                          <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-800/60 text-xs">
+                            <div className="flex items-center gap-2">
+                              {/* Pink circle avatar matching Screenshot 2 */}
+                              <div className="w-6 h-6 rounded-full bg-pink-100 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                {initials}
+                              </div>
+                              <span className="text-[11px] font-mono text-zinc-500 truncate max-w-[110px]" title={r.prospectEmail}>
+                                {r.prospectEmail}
+                              </span>
+                            </div>
+
+                            {/* Pink Date text matching "2 Jun" in Screenshot 2 */}
+                            <span className="text-xs font-mono font-medium text-pink-600 dark:text-pink-400 shrink-0">
+                              {formattedDate}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    /* Empty State Column Card (Matching Screenshot 2: "+ Add task" soft card) */
+                    <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800/80 p-4 text-center space-y-1 bg-white/40 dark:bg-zinc-900/20">
+                      <p className="text-xs font-medium text-zinc-400 dark:text-zinc-600">
+                        No recoveries logged in {m.name.split(" ")[0]}
+                      </p>
+                      <p className="text-[10px] font-mono text-zinc-400/80">
+                        Fills in automatically on rebook
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Weekly Report Telemetry Summary Box inside each month */}
+                  <div className="rounded-xl bg-white/60 dark:bg-zinc-900/40 border border-zinc-200/60 dark:border-zinc-800/50 p-3 space-y-1.5 text-[11px]">
+                    <span className="font-bold text-zinc-500 dark:text-zinc-400 uppercase font-mono tracking-wider text-[9px] block">
+                      Monthly Telemetry Notes
+                    </span>
+                    {monthEnrollments.length > 0 ? (
+                      <p className="text-zinc-700 dark:text-zinc-300 leading-snug">
+                        ✓ <strong>What Worked:</strong> Day 4 SMS re-engagement &amp; email cadence converted {monthEnrollments.length} prospect(s).
+                      </p>
+                    ) : (
+                      <p className="text-zinc-400 dark:text-zinc-500 leading-snug">
+                        • Waiting for cancellation events to trigger active recovery sequences.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
