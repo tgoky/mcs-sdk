@@ -165,7 +165,7 @@ function DeliverableRow({
     <div
       className={
         isOpen
-          ? "bg-[#f7fcfe] text-white rounded-2xl shadow-xl my-2 border border-[#f7fcfe] transition-all duration-200"
+          ? "bg-[#f7fcfe] text-zinc-900 rounded-2xl shadow-xl my-3 border border-zinc-200/80 transition-all duration-200"
           : "border-b border-zinc-800/60 last:border-b-0 transition-all duration-200"
       }
     >
@@ -179,14 +179,8 @@ function DeliverableRow({
         }
       >
         <div className="flex items-center gap-3.5 min-w-0">
-          {/* Whop-style pastel squircle badge - Inverts to white when active */}
-          <div
-            className={
-              isOpen
-                ? "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm bg-white text-[#f7fcfe]"
-                : `w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${squircleClass}`
-            }
-          >
+          {/* Whop-style pastel squircle badge */}
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${squircleClass}`}>
             <Icon size={20} strokeWidth={2.2} />
           </div>
 
@@ -195,7 +189,7 @@ function DeliverableRow({
               <span
                 className={
                   isOpen
-                    ? "text-sm font-bold text-white truncate"
+                    ? "text-sm font-bold text-zinc-950 truncate"
                     : "text-sm font-semibold text-zinc-100 group-hover:text-zinc-300 transition-colors truncate"
                 }
               >
@@ -205,7 +199,7 @@ function DeliverableRow({
                 <span
                   className={
                     isOpen
-                      ? "text-[10px] font-mono font-medium px-2 py-0.5 rounded-md bg-black/20 text-white border border-white/30 shrink-0 hidden sm:inline-block"
+                      ? "text-[10px] font-mono font-medium px-2 py-0.5 rounded-md bg-zinc-200/80 text-zinc-800 border border-zinc-300/80 shrink-0 hidden sm:inline-block"
                       : "text-[10px] font-mono font-medium px-2 py-0.5 rounded-md bg-zinc-900 text-zinc-400 border border-zinc-800 shrink-0 hidden sm:inline-block"
                   }
                 >
@@ -213,19 +207,19 @@ function DeliverableRow({
                 </span>
               )}
             </div>
-            <p className={isOpen ? "text-xs text-white/90 truncate font-medium" : "text-xs text-zinc-400 truncate"}>
+            <p className={isOpen ? "text-xs text-zinc-600 truncate font-medium" : "text-xs text-zinc-400 truncate"}>
               {subtitle}
             </p>
           </div>
         </div>
 
-        <div className={isOpen ? "text-white pl-3 shrink-0" : "text-zinc-500 group-hover:text-zinc-300 transition-colors pl-3 shrink-0"}>
+        <div className={isOpen ? "text-zinc-800 pl-3 shrink-0" : "text-zinc-500 group-hover:text-zinc-300 transition-colors pl-3 shrink-0"}>
           {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
         </div>
       </button>
 
       {isOpen && (
-        <div className="px-3.5 pt-2 pb-6 space-y-4 animate-in fade-in-50 duration-150 border-t border-white/20 mt-1">
+        <div className="px-3.5 pt-2 pb-6 space-y-4 animate-in fade-in-50 duration-150 border-t border-zinc-200/80 mt-1">
           {children}
         </div>
       )}
@@ -342,13 +336,13 @@ export function DeliverablesPanel({
               : "Neutral default tone profile applied"
           }
         >
-          <div className="space-y-4 pt-1 text-xs text-white">
+          <div className="space-y-4 pt-1 text-xs text-zinc-900">
             {/* Fallback Warning Box when !isAiExtracted */}
             {!isAiExtracted && (
-              <div className="rounded-xl border border-white/30 bg-black/20 p-3.5 space-y-1.5">
-                <p className="text-xs font-bold text-white">{fallbackHeadline}</p>
-                <p className="text-[11px] text-white/90 leading-relaxed">{fallbackDetail}</p>
-                <p className="text-[11px] text-white/80 leading-relaxed">
+              <div className="rounded-xl border border-amber-300 bg-amber-100/80 p-3.5 space-y-1.5">
+                <p className="text-xs font-bold text-amber-900">{fallbackHeadline}</p>
+                <p className="text-[11px] text-amber-800 leading-relaxed">{fallbackDetail}</p>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
                   To fix: make sure key pages are reachable or paste a writing sample during onboarding, then re-run setup.
                 </p>
               </div>
@@ -357,27 +351,27 @@ export function DeliverablesPanel({
             {/* Discovery Prefill Details (Chips + Notes) */}
             {discoveryPrefill && (
               <div className="space-y-2">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-white/80 font-bold block">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                   Domain Discovery ({discoveryPrefill.domain})
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {discoveryPrefill.suggestedBuyerName && (
-                    <span className="text-xs font-medium text-white bg-black/20 border border-white/20 px-2.5 py-1 rounded-md">
+                    <span className="text-xs font-medium text-zinc-900 bg-white border border-zinc-200 px-2.5 py-1 rounded-md">
                       Name: {discoveryPrefill.suggestedBuyerName}
                     </span>
                   )}
                   {discoveryPrefill.suggestedOfferName && (
-                    <span className="text-xs font-medium text-white bg-black/20 border border-white/20 px-2.5 py-1 rounded-md">
+                    <span className="text-xs font-medium text-zinc-900 bg-white border border-zinc-200 px-2.5 py-1 rounded-md">
                       Offer: {discoveryPrefill.suggestedOfferName}
                     </span>
                   )}
                   {discoveryPrefill.suggestedIcp && (
-                    <span className="text-xs font-medium text-white bg-black/20 border border-white/20 px-2.5 py-1 rounded-md">
+                    <span className="text-xs font-medium text-zinc-900 bg-white border border-zinc-200 px-2.5 py-1 rounded-md">
                       ICP: {discoveryPrefill.suggestedIcp}
                     </span>
                   )}
                   {discoveryPrefill.detectedBookingPlatform && (
-                    <span className="text-xs font-medium text-white bg-black/20 border border-white/20 px-2.5 py-1 rounded-md">
+                    <span className="text-xs font-medium text-zinc-900 bg-white border border-zinc-200 px-2.5 py-1 rounded-md">
                       Booking: {discoveryPrefill.detectedBookingPlatform}
                     </span>
                   )}
@@ -386,8 +380,8 @@ export function DeliverablesPanel({
                 {discoveryPrefill.notes.length > 0 && (
                   <ul className="space-y-1 pt-1 pl-1">
                     {discoveryPrefill.notes.map((note, i) => (
-                      <li key={i} className="text-white/90 font-mono text-[11px] leading-relaxed flex items-start gap-1.5">
-                        <span className="text-white/60">•</span>
+                      <li key={i} className="text-zinc-700 font-mono text-[11px] leading-relaxed flex items-start gap-1.5">
+                        <span className="text-zinc-400">•</span>
                         <span>{note}</span>
                       </li>
                     ))}
@@ -398,8 +392,8 @@ export function DeliverablesPanel({
 
             {/* Tone Spectrum Grid */}
             {isAiExtracted && brandVoiceProfile?.tone && (
-              <div className="space-y-2 pt-2 border-t border-white/20">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-white/80 font-bold block">
+              <div className="space-y-2 pt-2 border-t border-zinc-200">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                   Tone Spectrum
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -408,19 +402,19 @@ export function DeliverablesPanel({
                     const clamped = Math.max(1, Math.min(5, val.score));
                     const pct = ((clamped - 1) / 4) * 100;
                     return (
-                      <div key={key} className="p-3 rounded-lg bg-black/20 border border-white/20 space-y-2">
-                        <div className="flex justify-between text-[11px] font-medium text-white/90">
+                      <div key={key} className="p-3 rounded-lg bg-white border border-zinc-200 space-y-2">
+                        <div className="flex justify-between text-[11px] font-medium text-zinc-600">
                           <span>{axis?.left ?? key}</span>
-                          <span className="text-white font-semibold">{val.score}/5</span>
+                          <span className="text-zinc-900 font-bold">{val.score}/5</span>
                           <span>{axis?.right ?? ""}</span>
                         </div>
-                        <div className="relative h-1.5 rounded-full bg-black/30">
+                        <div className="relative h-1.5 rounded-full bg-zinc-200">
                           <div
-                            className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white shadow-sm"
+                            className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-zinc-900 shadow-sm"
                             style={{ left: `calc(${pct}% - 5px)` }}
                           />
                         </div>
-                        <p className="text-[11px] text-white/80 leading-tight">{val.note}</p>
+                        <p className="text-[11px] text-zinc-600 leading-tight">{val.note}</p>
                       </div>
                     );
                   })}
@@ -434,15 +428,15 @@ export function DeliverablesPanel({
               brandVoiceProfile?.vocabulary?.brand_terms?.length || 
               brandVoiceProfile?.banned_phrases?.length
             ) ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-white/20">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-zinc-200">
                 {!!brandVoiceProfile?.vocabulary?.signature?.length && (
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-white/80 font-bold block">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                       Signature Vocabulary
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {brandVoiceProfile.vocabulary!.signature!.map((w, i) => (
-                        <span key={i} className="text-xs font-medium text-white bg-black/20 border border-white/20 px-2 py-0.5 rounded-md">
+                        <span key={i} className="text-xs font-medium text-zinc-900 bg-white border border-zinc-200 px-2 py-0.5 rounded-md">
                           {w}
                         </span>
                       ))}
@@ -452,12 +446,12 @@ export function DeliverablesPanel({
 
                 {!!brandVoiceProfile?.vocabulary?.brand_terms?.length && (
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-white/80 font-bold block">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                       Brand Terms
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {brandVoiceProfile.vocabulary!.brand_terms!.map((w, i) => (
-                        <span key={i} className="text-xs font-medium text-white bg-black/20 border border-white/20 px-2 py-0.5 rounded-md">
+                        <span key={i} className="text-xs font-medium text-zinc-900 bg-white border border-zinc-200 px-2 py-0.5 rounded-md">
                           {w}
                         </span>
                       ))}
@@ -467,12 +461,12 @@ export function DeliverablesPanel({
 
                 {!!brandVoiceProfile?.banned_phrases?.length && (
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-white/80 font-bold block">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                       Banned Phrases
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {brandVoiceProfile.banned_phrases.map((b, i) => (
-                        <span key={i} className="text-xs font-medium text-white/90 bg-black/30 border border-white/20 px-2 py-0.5 rounded-md line-through">
+                        <span key={i} className="text-xs font-medium text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md line-through">
                           {b.phrase}
                         </span>
                       ))}
@@ -484,18 +478,18 @@ export function DeliverablesPanel({
 
             {/* Crawled Sources */}
             {voiceScrapeArtifacts?.sources && (
-              <div className="space-y-2 pt-3 border-t border-white/20">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-white/80 font-bold block">
+              <div className="space-y-2 pt-3 border-t border-zinc-200">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                   Crawled Sources ({voiceScrapeArtifacts.sources.length})
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {voiceScrapeArtifacts.sources.map((s, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-black/20 border border-white/20 text-xs">
-                      <span className="text-white truncate max-w-[80%]" title={s.url}>
+                    <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-zinc-200 text-xs">
+                      <span className="text-zinc-800 truncate max-w-[80%]" title={s.url}>
                         <strong className="font-semibold">{SOURCE_KIND_LABELS[s.kind] ?? s.kind}</strong>
                         {s.url ? ` — ${s.url}` : ""}
                       </span>
-                      <span className="text-white/70 font-mono text-[11px]">{s.wordCount}w</span>
+                      <span className="text-zinc-500 font-mono text-[11px]">{s.wordCount}w</span>
                     </div>
                   ))}
                 </div>
@@ -524,35 +518,35 @@ export function DeliverablesPanel({
               subtitle={`Hook: "${b.hook}"`}
               formatBadge={b.suggestedFormat}
             >
-              <div className="space-y-4 text-xs text-white font-sans pt-1">
+              <div className="space-y-4 text-xs text-zinc-900 font-sans pt-1">
                 {/* Scroll-Stopper Hook */}
                 <div className="space-y-1">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/80 block">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
                     Scroll-Stopper Hook (First 3 Seconds)
                   </span>
-                  <div className="text-sm font-semibold text-white bg-black/25 p-3 rounded-lg border border-white/25 leading-snug">
+                  <div className="text-sm font-semibold text-zinc-900 bg-white p-3 rounded-lg border border-zinc-200 shadow-xs leading-snug">
                     &ldquo;{b.hook}&rdquo;
                   </div>
                 </div>
 
                 {/* Strategic Angle */}
                 <div className="space-y-1">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/80 block">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
                     Strategic Angle &amp; Framing
                   </span>
-                  <p className="text-white/90 leading-relaxed">{b.angle}</p>
+                  <p className="text-zinc-700 leading-relaxed">{b.angle}</p>
                 </div>
 
                 {/* Script Beats */}
                 {b.talkingPoints?.length > 0 && (
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/80 block">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
                       Script Beats / Talking Points
                     </span>
                     <ul className="space-y-1 pl-1">
                       {b.talkingPoints.map((tp, i) => (
-                        <li key={i} className="flex items-start gap-2 text-white/90">
-                          <span className="text-white font-bold">•</span>
+                        <li key={i} className="flex items-start gap-2 text-zinc-800">
+                          <span className="text-zinc-900 font-bold">•</span>
                           <span>{tp}</span>
                         </li>
                       ))}
@@ -561,9 +555,9 @@ export function DeliverablesPanel({
                 )}
 
                 {/* Call to Action */}
-                <div className="pt-2 flex items-center justify-between border-t border-white/20">
-                  <span className="text-[11px] font-mono text-white/80">Call to Action (CTA):</span>
-                  <span className="text-xs font-semibold text-white font-mono bg-black/30 border border-white/30 px-3 py-1.5 rounded-lg">
+                <div className="pt-2 flex items-center justify-between border-t border-zinc-200">
+                  <span className="text-[11px] font-mono text-zinc-500 font-medium">Call to Action (CTA):</span>
+                  <span className="text-xs font-semibold text-zinc-900 font-mono bg-white border border-zinc-300 px-3 py-1.5 rounded-lg shadow-xs">
                     {b.cta}
                   </span>
                 </div>
@@ -587,49 +581,49 @@ export function DeliverablesPanel({
                 : "Confirmation video scripts ready"
             }
           >
-            <div className="space-y-5 pt-2 text-xs text-white">
+            <div className="space-y-5 pt-2 text-xs text-zinc-900">
               {/* Hero Script */}
               {pinDownScriptPack.heroScript && (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between pb-1 border-b border-white/20">
-                    <span className="font-bold text-white text-sm">{pinDownScriptPack.heroScript.title}</span>
-                    <span className="text-white/80 font-mono text-[11px]">~{Math.round(pinDownScriptPack.heroScript.targetLengthSeconds / 60)} min</span>
+                  <div className="flex items-center justify-between pb-1 border-b border-zinc-200">
+                    <span className="font-bold text-zinc-900 text-sm">{pinDownScriptPack.heroScript.title}</span>
+                    <span className="text-zinc-600 font-mono text-[11px]">~{Math.round(pinDownScriptPack.heroScript.targetLengthSeconds / 60)} min</span>
                   </div>
                   <div className="space-y-2">
                     {pinDownScriptPack.heroScript.chapters.map((c, i) => (
-                      <div key={i} className="p-3 rounded-lg bg-black/20 border border-white/20 space-y-1">
+                      <div key={i} className="p-3 rounded-lg bg-white border border-zinc-200 space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-white/80 font-mono font-bold text-[11px]">{c.timestampLabel}</span>
-                          <span className="text-white font-semibold">{c.beat}</span>
+                          <span className="text-zinc-700 font-mono font-bold text-[11px]">{c.timestampLabel}</span>
+                          <span className="text-zinc-900 font-semibold">{c.beat}</span>
                         </div>
-                        <p className="text-white/90 leading-relaxed">{c.script}</p>
+                        <p className="text-zinc-700 leading-relaxed">{c.script}</p>
                       </div>
                     ))}
                   </div>
-                  <p className="text-[11px] text-white/80 font-mono pt-1">
-                    <strong className="text-white">Recording Prompt:</strong> {pinDownScriptPack.heroScript.recordingPrompt}
+                  <p className="text-[11px] text-zinc-600 font-mono pt-1">
+                    <strong className="text-zinc-900">Recording Prompt:</strong> {pinDownScriptPack.heroScript.recordingPrompt}
                   </p>
                 </div>
               )}
 
               {/* Breakout Scripts Grid */}
               {!!pinDownScriptPack.breakoutScripts?.length && (
-                <div className="space-y-2 pt-3 border-t border-white/20">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-white/80 font-bold block">
+                <div className="space-y-2 pt-3 border-t border-zinc-200">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                     Breakout Q&amp;A Scripts ({pinDownScriptPack.breakoutScripts.length})
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {pinDownScriptPack.breakoutScripts.map((s) => (
-                      <div key={s.id} className="p-3 rounded-lg bg-black/20 border border-white/20 space-y-2">
+                      <div key={s.id} className="p-3 rounded-lg bg-white border border-zinc-200 space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="font-semibold text-white">{s.title}</span>
-                          <span className="text-[11px] font-mono text-white/70">~{s.targetLengthSeconds}s</span>
+                          <span className="font-semibold text-zinc-900">{s.title}</span>
+                          <span className="text-[11px] font-mono text-zinc-500">~{s.targetLengthSeconds}s</span>
                         </div>
                         {s.sourceQuestion && (
-                          <p className="text-[11px] font-mono text-white/80 italic">From: &quot;{s.sourceQuestion}&quot;</p>
+                          <p className="text-[11px] font-mono text-zinc-600 italic">From: &quot;{s.sourceQuestion}&quot;</p>
                         )}
-                        <p className="text-white/90 leading-relaxed">{s.script}</p>
-                        <p className="text-[11px] text-white/80 font-mono pt-1 border-t border-white/20">
+                        <p className="text-zinc-700 leading-relaxed">{s.script}</p>
+                        <p className="text-[11px] text-zinc-600 font-mono pt-1 border-t border-zinc-100">
                           <strong>Prompt:</strong> {s.recordingPrompt}
                         </p>
                       </div>
@@ -640,40 +634,40 @@ export function DeliverablesPanel({
 
               {/* Recording Logistics Checklist */}
               {pinDownScriptPack.recordingChecklist && (
-                <div className="space-y-2 pt-3 border-t border-white/20">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-white/80 font-bold block">
+                <div className="space-y-2 pt-3 border-t border-zinc-200">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                     Recording Logistics Checklist
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3 rounded-lg bg-black/20 border border-white/20 space-y-1.5">
-                      <span className="text-white font-semibold flex items-center gap-1.5">
-                        <Wrench size={13} className="text-white/80" /> Equipment
+                    <div className="p-3 rounded-lg bg-white border border-zinc-200 space-y-1.5">
+                      <span className="text-zinc-900 font-semibold flex items-center gap-1.5">
+                        <Wrench size={13} className="text-zinc-600" /> Equipment
                       </span>
                       <ul className="space-y-1">
                         {pinDownScriptPack.recordingChecklist.equipment.map((it, i) => (
-                          <li key={i} className="text-white/80 font-mono text-[11px]">· {it}</li>
+                          <li key={i} className="text-zinc-700 font-mono text-[11px]">· {it}</li>
                         ))}
                       </ul>
                     </div>
 
-                    <div className="p-3 rounded-lg bg-black/20 border border-white/20 space-y-1.5">
-                      <span className="text-white font-semibold flex items-center gap-1.5">
-                        <Camera size={13} className="text-white/80" /> Environment
+                    <div className="p-3 rounded-lg bg-white border border-zinc-200 space-y-1.5">
+                      <span className="text-zinc-900 font-semibold flex items-center gap-1.5">
+                        <Camera size={13} className="text-zinc-600" /> Environment
                       </span>
                       <ul className="space-y-1">
                         {pinDownScriptPack.recordingChecklist.environment.map((it, i) => (
-                          <li key={i} className="text-white/80 font-mono text-[11px]">· {it}</li>
+                          <li key={i} className="text-zinc-700 font-mono text-[11px]">· {it}</li>
                         ))}
                       </ul>
                     </div>
 
-                    <div className="p-3 rounded-lg bg-black/20 border border-white/20 space-y-1.5">
-                      <span className="text-white font-semibold flex items-center gap-1.5">
-                        <Shirt size={13} className="text-white/80" /> Wardrobe &amp; Framing
+                    <div className="p-3 rounded-lg bg-white border border-zinc-200 space-y-1.5">
+                      <span className="text-zinc-900 font-semibold flex items-center gap-1.5">
+                        <Shirt size={13} className="text-zinc-600" /> Wardrobe &amp; Framing
                       </span>
                       <ul className="space-y-1">
                         {pinDownScriptPack.recordingChecklist.wardrobeAndFraming.map((it, i) => (
-                          <li key={i} className="text-white/80 font-mono text-[11px]">· {it}</li>
+                          <li key={i} className="text-zinc-700 font-mono text-[11px]">· {it}</li>
                         ))}
                       </ul>
                     </div>
@@ -695,36 +689,36 @@ export function DeliverablesPanel({
             title="Existing Confirmation Page Audit"
             subtitle={`Audited ${pinDownPageAudit.auditedUrl}`}
           >
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs text-white">
-              <div className="space-y-1.5 p-3 rounded-lg bg-black/20 border border-white/20">
-                <span className="font-bold text-white uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
-                  <CheckCircle2 size={12} className="text-emerald-300" /> Strengths
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs text-zinc-900">
+              <div className="space-y-1.5 p-3 rounded-lg bg-white border border-zinc-200">
+                <span className="font-bold text-zinc-900 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
+                  <CheckCircle2 size={12} className="text-emerald-600" /> Strengths
                 </span>
                 <ul className="space-y-1">
                   {pinDownPageAudit.existingPageStrengths.map((s, i) => (
-                    <li key={i} className="text-white/90">✓ {s}</li>
+                    <li key={i} className="text-zinc-700">✓ {s}</li>
                   ))}
                 </ul>
               </div>
 
-              <div className="space-y-1.5 p-3 rounded-lg bg-black/20 border border-white/20">
-                <span className="font-bold text-white uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
-                  <AlertCircle size={12} className="text-rose-300" /> Weaknesses
+              <div className="space-y-1.5 p-3 rounded-lg bg-white border border-zinc-200">
+                <span className="font-bold text-zinc-900 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
+                  <AlertCircle size={12} className="text-rose-600" /> Weaknesses
                 </span>
                 <ul className="space-y-1">
                   {pinDownPageAudit.existingPageWeaknesses.map((w, i) => (
-                    <li key={i} className="text-white/90">✗ {w}</li>
+                    <li key={i} className="text-zinc-700">✗ {w}</li>
                   ))}
                 </ul>
               </div>
 
-              <div className="space-y-1.5 p-3 rounded-lg bg-black/20 border border-white/20">
-                <span className="font-bold text-white uppercase text-[10px] font-mono tracking-wider block">
+              <div className="space-y-1.5 p-3 rounded-lg bg-white border border-zinc-200">
+                <span className="font-bold text-zinc-900 uppercase text-[10px] font-mono tracking-wider block">
                   v1 Improvements
                 </span>
                 <ul className="space-y-1">
                   {pinDownPageAudit.v1Improvements.map((imp, i) => (
-                    <li key={i} className="text-white/90">→ {imp}</li>
+                    <li key={i} className="text-zinc-700">→ {imp}</li>
                   ))}
                 </ul>
               </div>
