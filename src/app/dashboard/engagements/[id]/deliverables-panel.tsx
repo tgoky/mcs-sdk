@@ -139,7 +139,7 @@ export type ConversationIntelligenceState = {
   lastProcessedAt?: string;
 } | null;
 
-// Reusable Top-Level Item Row with #f15153 Highlight in Open View
+// Reusable Top-Level Item Row with #f7fcfe Highlight in Open View
 function DeliverableRow({
   id,
   isOpen,
@@ -165,7 +165,7 @@ function DeliverableRow({
     <div
       className={
         isOpen
-          ? "bg-[#f15153] text-white rounded-2xl shadow-xl my-2 border border-[#f15153] transition-all duration-200"
+          ? "bg-[#f7fcfe] text-white rounded-2xl shadow-xl my-2 border border-[#f7fcfe] transition-all duration-200"
           : "border-b border-zinc-800/60 last:border-b-0 transition-all duration-200"
       }
     >
@@ -183,7 +183,7 @@ function DeliverableRow({
           <div
             className={
               isOpen
-                ? "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm bg-white text-[#f15153]"
+                ? "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm bg-white text-[#f7fcfe]"
                 : `w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${squircleClass}`
             }
           >
