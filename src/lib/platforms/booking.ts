@@ -1263,7 +1263,7 @@ export async function fetchBookingOptions(
       }
       const res = await fetchWithTimeout(
         `https://services.leadconnectorhq.com/calendars/?locationId=${encodeURIComponent(locationId.trim())}`,
-        { headers: { Authorization: `Bearer ${cleanKey}`, Version: "2021-07-28" } }
+        { headers: { Authorization: `Bearer ${cleanKey}`, Version: "2021-04-15" } }
       );
       if (!res.ok) {
         const body = await res.text().catch(() => "");
