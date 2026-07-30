@@ -18,30 +18,22 @@ import { bookingPlatformLabel } from "@/lib/copy";
 
 const HEALTH_STYLES: Record<
   BookingSyncStatus["health"],
-  { text: string; bg: string; border: string; Icon: typeof CheckCircle2 }
+  { text: string; Icon: typeof CheckCircle2 }
 > = {
   healthy: {
-    text: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-50/50 dark:bg-black",
-    border: "border-emerald-200 dark:border-emerald-900/40",
+    text: "text-emerald-600 dark:text-emerald-400",
     Icon: CheckCircle2,
   },
   warning: {
-    text: "text-amber-700 dark:text-amber-400",
-    bg: "bg-amber-50/50 dark:bg-black",
-    border: "border-amber-200 dark:border-amber-900/40",
+    text: "text-amber-600 dark:text-amber-400",
     Icon: AlertTriangle,
   },
   error: {
-    text: "text-rose-700 dark:text-rose-400",
-    bg: "bg-rose-50/50 dark:bg-black",
-    border: "border-rose-200 dark:border-rose-900/40",
+    text: "text-rose-600 dark:text-rose-400",
     Icon: AlertCircle,
   },
   unconfigured: {
-    text: "text-zinc-500 dark:text-zinc-400",
-    bg: "bg-zinc-50 dark:bg-black",
-    border: "border-zinc-200 dark:border-zinc-800",
+    text: "text-zinc-400 dark:text-zinc-600",
     Icon: AlertCircle,
   },
 };
@@ -60,9 +52,11 @@ function relativeTime(iso: string | null): string {
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-black px-3 py-2">
-      <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{label}</p>
-      <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 mt-0.5 truncate">{value}</p>
+    <div className="rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1.5 space-y-0.5">
+      <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">
+        {label}
+      </p>
+      <p className="text-xs font-mono text-zinc-700 dark:text-zinc-300 truncate">{value}</p>
     </div>
   );
 }
@@ -82,17 +76,19 @@ function CopyField({ label, value, mask }: { label: string; value: string; mask?
   }
 
   return (
-    <div className="space-y-1">
-      <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">{label}</p>
+    <div className="space-y-1 block">
+      <span className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">
+        {label}
+      </span>
       <div className="flex items-center gap-1.5">
-        <code className="flex-1 min-w-0 truncate text-xs font-mono px-2 py-1.5 rounded-lg bg-zinc-100 dark:bg-black border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300">
+        <code className="flex-1 min-w-0 truncate text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300">
           {revealed ? value : "•".repeat(Math.min(value.length, 40))}
         </code>
         {mask && (
           <button
             type="button"
             onClick={() => setRevealed((r) => !r)}
-            className="shrink-0 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+            className="shrink-0 p-1.5 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
             title={revealed ? "Hide" : "Reveal"}
           >
             {revealed ? <EyeOff size={13} /> : <Eye size={13} />}
@@ -101,7 +97,7 @@ function CopyField({ label, value, mask }: { label: string; value: string; mask?
         <button
           type="button"
           onClick={copy}
-          className="shrink-0 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+          className="shrink-0 p-1.5 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
           title="Copy"
         >
           {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
@@ -138,7 +134,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
   const [busy, setBusy] = useState<"webhook" | "polling" | "dismiss" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync state cleanly during render if prop changes from parent dropdowns (no useEffect needed)
+  // Sync state cleanly during render if prop changes from parent dropdowns
   if (initial !== prevInitial) {
     setPrevInitial(initial);
     setStatus(initial);
@@ -150,7 +146,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
   const Icon = styles.Icon;
   const setupSteps = SETUP_STEPS[status.platform] ?? [];
   const platformLabel = bookingPlatformLabel(status.platform);
-  
+
   const supportsAutoWebhook = platformSupportsAutoWebhook(status.platform);
 
   const secretDisplayValue = secretInput
@@ -192,66 +188,84 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black overflow-hidden">
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-black p-3 space-y-3 font-mono">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-transparent">
+      <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-900/50">
         <div className="flex items-center gap-2 min-w-0">
-          <Icon size={16} className={`${styles.text} shrink-0`} />
+          <Icon size={14} className={`${styles.text} shrink-0`} />
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">{status.headline}</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-500 truncate">{status.detail}</p>
+            <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300 truncate">{status.headline}</p>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-600 truncate">{status.detail}</p>
           </div>
         </div>
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <StatTile label="Platform" value={platformLabel} />
         <StatTile
           label="Mode"
-          value={status.mode === "webhook" ? "Direct webhook" : status.mode === "polling" ? `Polling · ${status.pollIntervalMinutes ?? 5}m` : "Not set"}
+          value={
+            status.mode === "webhook"
+              ? "Direct webhook"
+              : status.mode === "polling"
+              ? `Polling · ${status.pollIntervalMinutes ?? 5}m`
+              : "Not set"
+          }
         />
         <StatTile
-          label={status.lastActivityKind === "webhook" ? "Last delivery" : status.lastActivityKind === "poll" ? "Last checked" : "Last activity"}
+          label={
+            status.lastActivityKind === "webhook"
+              ? "Last delivery"
+              : status.lastActivityKind === "poll"
+              ? "Last checked"
+              : "Last activity"
+          }
           value={relativeTime(status.lastActivityAt)}
         />
         <StatTile
           label={status.mode === "polling" ? "Next check" : "Health"}
-          value={status.mode === "polling" ? relativeTime(status.nextPollDueAt).replace("ago", "") || "Due now" : status.health === "healthy" ? "Healthy" : status.health === "warning" ? "Attention" : status.health === "error" ? "Error" : "Unconfigured"}
+          value={
+            status.mode === "polling"
+              ? relativeTime(status.nextPollDueAt).replace("ago", "") || "Due now"
+              : status.health === "healthy"
+              ? "Healthy"
+              : status.health === "warning"
+              ? "Attention"
+              : status.health === "error"
+              ? "Error"
+              : "Unconfigured"
+          }
         />
       </div>
 
       {/* Manual Setup & Webhook Controls for GHL Calendar & OnceHub */}
       {!supportsAutoWebhook && (
-        <div className="mx-4 mb-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-black p-4 space-y-3">
+        <div className="rounded border border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/50 p-3 space-y-3">
           <div className="flex items-start gap-2">
-            <Zap size={15} className="text-amber-500 dark:text-amber-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+            <Zap size={14} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <div className="space-y-0.5">
+              <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
                 Webhook Setup · {platformLabel}
               </p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-600 leading-relaxed">
                 {platformLabel} requires manual webhook endpoint setup. Copy the receiver URL and signing secret below into {platformLabel}.
               </p>
             </div>
           </div>
 
           <CopyField label="Webhook Receiver URL" value={status.webhookUrl} />
-          <CopyField
-            label="Signing Secret"
-            value={secretDisplayValue}
-            mask
-          />
+          <CopyField label="Signing Secret" value={secretDisplayValue} mask />
 
           {setupSteps.length > 0 && (
-            <ol className="space-y-1.5 pl-4 list-decimal text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            <ol className="space-y-1 pl-4 list-decimal text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
               {setupSteps.map((step, i) => (
                 <li key={i}>{step}</li>
               ))}
             </ol>
           )}
 
-          {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+          {error && <p className="text-[11px] text-rose-600 dark:text-rose-400">{error}</p>}
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800/80">
             {status.mode !== "webhook" ? (
@@ -259,23 +273,23 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
                 type="button"
                 disabled={busy !== null}
                 onClick={() => patch({ mode: "webhook" }, "webhook")}
-                className="px-3 py-1.5 text-xs font-mono font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover disabled:opacity-50 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-3 py-1.5 rounded bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-white disabled:opacity-50 transition-all cursor-pointer"
               >
-                {busy === "webhook" ? "Switching..." : "I've added it · switch to Direct Webhook"}
+                {busy === "webhook" ? "Switching…" : "I've added it · switch to Direct Webhook"}
               </button>
             ) : (
               <div className="flex items-center justify-between w-full">
-                <span className="text-xs text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1.5">
+                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5">
                   <CheckCircle2 size={13} /> Direct Webhook Active
                 </span>
                 <button
                   type="button"
                   disabled={busy !== null}
                   onClick={() => patch({ mode: "polling" }, "polling")}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono rounded-lg border border-zinc-300 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-1 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all cursor-pointer"
                 >
                   <RefreshCw size={11} className={busy === "polling" ? "animate-spin" : ""} />
-                  {busy === "polling" ? "Switching..." : "Switch to auto-polling"}
+                  {busy === "polling" ? "Switching…" : "Switch to auto-polling"}
                 </button>
               </div>
             )}
@@ -284,7 +298,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
       )}
 
       {status.lastError && (
-        <div className="mx-4 mb-4 flex items-start gap-2 text-xs text-rose-600 dark:text-rose-400">
+        <div className="flex items-start gap-2 text-[11px] text-rose-600 dark:text-rose-400">
           <Clock size={13} className="mt-0.5 shrink-0" />
           <span>{status.lastError}</span>
         </div>
