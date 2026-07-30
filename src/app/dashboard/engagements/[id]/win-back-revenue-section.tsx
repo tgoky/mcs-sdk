@@ -5,14 +5,11 @@ import {
   DollarSign, 
   ChevronDown, 
   Check, 
-  Sparkles, 
   Calendar, 
-  TrendingUp, 
-  XCircle, 
   CheckCircle2, 
-  User, 
-  ArrowUpRight,
-  Clock
+  XCircle,
+  TrendingUp,
+  Sparkles
 } from "lucide-react";
 
 export interface RecoveredEnrollment {
@@ -33,51 +30,52 @@ type PeriodOption = {
   label: string;
   sublabel: string;
   badge?: string;
-  startDate: Date;
-  endDate: Date;
+  months: { name: string; year: number; monthIdx: number }[];
 };
 
-// Generates periods for 2026
+// Generates periods (Quarters) for 2026
 function getPeriodOptions(): PeriodOption[] {
-  const now = new Date();
-  const currentYear = 2026;
-
   return [
     {
       id: "q3_2026",
       label: "Q3 2026",
       sublabel: "Jul 1 - Sep 30, 2026",
       badge: "Current",
-      startDate: new Date(currentYear, 6, 1), // July 1
-      endDate: new Date(currentYear, 9, 0, 23, 59, 59), // Sept 30
+      months: [
+        { name: "July 2026", year: 2026, monthIdx: 6 },
+        { name: "August 2026", year: 2026, monthIdx: 7 },
+        { name: "September 2026", year: 2026, monthIdx: 8 },
+      ],
     },
     {
       id: "q2_2026",
       label: "Q2 2026",
       sublabel: "Apr 1 - Jun 30, 2026",
-      startDate: new Date(currentYear, 3, 1),
-      endDate: new Date(currentYear, 6, 0, 23, 59, 59),
+      months: [
+        { name: "April 2026", year: 2026, monthIdx: 3 },
+        { name: "May 2026", year: 2026, monthIdx: 4 },
+        { name: "June 2026", year: 2026, monthIdx: 5 },
+      ],
     },
     {
       id: "q1_2026",
       label: "Q1 2026",
       sublabel: "Jan 1 - Mar 31, 2026",
-      startDate: new Date(currentYear, 0, 1),
-      endDate: new Date(currentYear, 3, 0, 23, 59, 59),
+      months: [
+        { name: "January 2026", year: 2026, monthIdx: 0 },
+        { name: "February 2026", year: 2026, monthIdx: 1 },
+        { name: "March 2026", year: 2026, monthIdx: 2 },
+      ],
     },
     {
-      id: "last_30",
-      label: "Last 30 Days",
-      sublabel: "Rolling 30-day window",
-      startDate: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
-      endDate: now,
-    },
-    {
-      id: "all_time",
-      label: "All Time",
-      sublabel: "Full campaign history",
-      startDate: new Date(2025, 0, 1),
-      endDate: new Date(2030, 11, 31),
+      id: "q4_2026",
+      label: "Q4 2026",
+      sublabel: "Oct 1 - Dec 31, 2026",
+      months: [
+        { name: "October 2026", year: 2026, monthIdx: 9 },
+        { name: "November 2026", year: 2026, monthIdx: 10 },
+        { name: "December 2026", year: 2026, monthIdx: 11 },
+      ],
     },
   ];
 }
@@ -93,6 +91,14 @@ function getInitials(name: string | null, email: string): string {
   }
   return email.slice(0, 2).toUpperCase();
 }
+
+// Define 4 distinct weeks for any month
+const WEEKS_IN_MONTH = [
+  { weekNum: 1, label: "Week 1", dayStart: 1, dayEnd: 7 },
+  { weekNum: 2, label: "Week 2", dayStart: 8, dayEnd: 14 },
+  { weekNum: 3, label: "Week 3", dayStart: 15, dayEnd: 21 },
+  { weekNum: 4, label: "Week 4", dayStart: 22, dayEnd: 31 },
+];
 
 export function WinBackRevenueSection({
   engagementId,
@@ -116,23 +122,17 @@ export function WinBackRevenueSection({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Filter enrollments for the selected period
-  const filteredEnrollments = initialEnrollments.filter((r) => {
-    const date = new Date(r.rebookedAt);
-    return date >= selectedPeriod.startDate && date <= selectedPeriod.endDate;
+  // Total enrollments in current quarter
+  const totalQuarterEnrollments = initialEnrollments.filter((r) => {
+    const d = new Date(r.rebookedAt);
+    return selectedPeriod.months.some(
+      (m) => d.getFullYear() === m.year && d.getMonth() === m.monthIdx
+    );
   });
 
-  const recoveredCount = filteredEnrollments.length;
+  const recoveredCount = totalQuarterEnrollments.length;
   const totalRevenue = recoveredCount * offerPrice;
   const averageRecoveryValue = recoveredCount > 0 ? totalRevenue / recoveredCount : 0;
-
-  // Group filtered enrollments into Months / Weeks
-  // For Q3 (Jul, Aug, Sep), we group by 3 Month Columns with Weekly Milestone Cards inside
-  const monthsInQuarter = [
-    { name: "July 2026", monthIdx: 6 },
-    { name: "August 2026", monthIdx: 7 },
-    { name: "September 2026", monthIdx: 8 },
-  ];
 
   return (
     <div className="space-y-4">
@@ -140,7 +140,7 @@ export function WinBackRevenueSection({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
           <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> 
-          Win-Back Revenue &amp; Weekly Milestone Breakdown
+          Win-Back Revenue &amp; Milestone Breakdown
         </h2>
 
         {/* Asana-Style Dropdown Selector (Matching Screenshot 1) */}
@@ -237,33 +237,35 @@ export function WinBackRevenueSection({
         </div>
       </div>
 
-      {/* ── ASANA KANBAN BOARD / WEEKLY MILESTONES (Matching Screenshot 2) ── */}
+      {/* ── 3 MONTH HOUSING COLUMNS (CONTAINERS) ── */}
       <div className="space-y-2 pt-1">
         <div className="flex items-center justify-between px-0.5">
           <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
-            Monthly &amp; Weekly Milestones — {selectedPeriod.label}
+            Quarterly Roadmap — {selectedPeriod.label}
           </span>
           <span className="text-[11px] font-mono text-zinc-400">
-            {filteredEnrollments.length} total recovered deals
+            4 Weekly Milestone Cards per Month
           </span>
         </div>
 
-        {/* 3 Column Month Grid (Like Screenshot 2: To do / Doing / Done columns) */}
+        {/* 3 Columns Grid: Month 1 | Month 2 | Month 3 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {monthsInQuarter.map((m) => {
-            const monthEnrollments = filteredEnrollments.filter((r) => {
+          {selectedPeriod.months.map((m) => {
+            // Filter all enrollments for this specific month
+            const monthEnrollments = initialEnrollments.filter((r) => {
               const d = new Date(r.rebookedAt);
-              return d.getMonth() === m.monthIdx;
+              return d.getFullYear() === m.year && d.getMonth() === m.monthIdx;
             });
 
             const monthRevenue = monthEnrollments.length * offerPrice;
 
             return (
+              /* MONTH HOUSING CARD (Matching Screenshot 2 Column Container "To do 3") */
               <div
                 key={m.name}
                 className="rounded-2xl bg-zinc-100/70 dark:bg-zinc-950/60 border border-zinc-200/80 dark:border-zinc-800/60 p-3 space-y-3"
               >
-                {/* Column Header (Matching Screenshot 2: "To do 3" Pill) */}
+                {/* Column Header Pill (Matching Screenshot 2: "To do 3") */}
                 <div className="flex items-center justify-between px-1 py-0.5">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
@@ -278,90 +280,103 @@ export function WinBackRevenueSection({
                   </span>
                 </div>
 
-                {/* List of Cards Inside Column (Matching Screenshot 2 Cards) */}
+                {/* ── 4 WEEKLY CARDS (Matching Screenshot 2: Task 1, Task 2, Task 3, Task 4) ── */}
                 <div className="space-y-2.5">
-                  {monthEnrollments.length > 0 ? (
-                    monthEnrollments.map((r, idx) => {
-                      const initials = getInitials(r.prospectName, r.prospectEmail);
-                      const formattedDate = new Date(r.rebookedAt).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                      });
+                  {WEEKS_IN_MONTH.map((w) => {
+                    // Filter deals for this exact week (e.g. Days 1-7)
+                    const weekDeals = monthEnrollments.filter((r) => {
+                      const day = new Date(r.rebookedAt).getDate();
+                      return day >= w.dayStart && day <= w.dayEnd;
+                    });
 
-                      return (
-                        <div
-                          key={r.prospectEmail + idx}
-                          className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5 space-y-2.5 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-all group"
-                        >
-                          {/* Title with Check Icon (Matching Screenshot 2: "(✓) Task 1") */}
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
+                    const weekRevenue = weekDeals.length * offerPrice;
+                    const latestDeal = weekDeals[0] ?? null;
+                    const initials = latestDeal ? getInitials(latestDeal.prospectName, latestDeal.prospectEmail) : "WB";
+
+                    // Format date string for bottom right (e.g. "2 Jul" matching "2 Jun" in Screenshot 2)
+                    const shortMonthName = m.name.split(" ")[0].slice(0, 3);
+                    const weekDateTag = `${w.dayEnd} ${shortMonthName}`;
+
+                    return (
+                      /* WEEKLY RECTANGLE CARD (Matching Screenshot 2: White "Task 1" Card) */
+                      <div
+                        key={w.weekNum}
+                        className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5 space-y-2.5 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-all group"
+                      >
+                        {/* Title Row with Check Icon (Matching Screenshot 2: "(✓) Task 1") */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {weekDeals.length > 0 ? (
                               <CheckCircle2 size={15} className="text-emerald-500 shrink-0 mt-0.5" />
-                              <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                                {r.prospectName ?? r.prospectEmail}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Priority Tag (Matching Screenshot 2: "Low" or "Medium" Tag) */}
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                              Recovered
-                            </span>
-                            {offerPrice > 0 && (
-                              <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                                +${offerPrice.toLocaleString()}
-                              </span>
+                            ) : (
+                              <div className="w-3.5 h-3.5 rounded-full border border-zinc-300 dark:border-zinc-700 shrink-0 mt-0.5" />
                             )}
-                          </div>
-
-                          {/* Avatar & Pink Date (Matching Screenshot 2: Pink "AD" Avatar + "2 Jun" Date) */}
-                          <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-800/60 text-xs">
-                            <div className="flex items-center gap-2">
-                              {/* Pink circle avatar matching Screenshot 2 */}
-                              <div className="w-6 h-6 rounded-full bg-pink-100 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 text-[10px] font-bold flex items-center justify-center shrink-0">
-                                {initials}
-                              </div>
-                              <span className="text-[11px] font-mono text-zinc-500 truncate max-w-[110px]" title={r.prospectEmail}>
-                                {r.prospectEmail}
-                              </span>
-                            </div>
-
-                            {/* Pink Date text matching "2 Jun" in Screenshot 2 */}
-                            <span className="text-xs font-mono font-medium text-pink-600 dark:text-pink-400 shrink-0">
-                              {formattedDate}
+                            <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                              {w.label} <span className="text-[10px] font-mono text-zinc-400 font-normal">({w.dayStart}-{w.dayEnd} {shortMonthName})</span>
                             </span>
                           </div>
                         </div>
-                      );
-                    })
-                  ) : (
-                    /* Empty State Column Card (Matching Screenshot 2: "+ Add task" soft card) */
-                    <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800/80 p-4 text-center space-y-1 bg-white/40 dark:bg-zinc-900/20">
-                      <p className="text-xs font-medium text-zinc-400 dark:text-zinc-600">
-                        No recoveries logged in {m.name.split(" ")[0]}
-                      </p>
-                      <p className="text-[10px] font-mono text-zinc-400/80">
-                        Fills in automatically on rebook
-                      </p>
-                    </div>
-                  )}
 
-                  {/* Weekly Report Telemetry Summary Box inside each month */}
-                  <div className="rounded-xl bg-white/60 dark:bg-zinc-900/40 border border-zinc-200/60 dark:border-zinc-800/50 p-3 space-y-1.5 text-[11px]">
-                    <span className="font-bold text-zinc-500 dark:text-zinc-400 uppercase font-mono tracking-wider text-[9px] block">
-                      Monthly Telemetry Notes
-                    </span>
-                    {monthEnrollments.length > 0 ? (
-                      <p className="text-zinc-700 dark:text-zinc-300 leading-snug">
-                        ✓ <strong>What Worked:</strong> Day 4 SMS re-engagement &amp; email cadence converted {monthEnrollments.length} prospect(s).
-                      </p>
-                    ) : (
-                      <p className="text-zinc-400 dark:text-zinc-500 leading-snug">
-                        • Waiting for cancellation events to trigger active recovery sequences.
-                      </p>
-                    )}
-                  </div>
+                        {/* Priority / Performance Tag (Matching Screenshot 2: "Low" or "Medium" Tag) */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {weekDeals.length > 0 ? (
+                            <>
+                              <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                                {weekDeals.length} Recovered
+                              </span>
+                              {offerPrice > 0 && (
+                                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                  +${weekRevenue.toLocaleString()}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                              No Recoveries
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Deals / Telemetry Breakdown inside the Weekly Card */}
+                        {weekDeals.length > 0 ? (
+                          <div className="space-y-1 text-[11px] pt-0.5">
+                            {weekDeals.map((d, dIdx) => (
+                              <div key={d.prospectEmail + dIdx} className="text-zinc-700 dark:text-zinc-300 leading-snug flex items-center justify-between">
+                                <span className="truncate max-w-[130px]" title={d.prospectEmail}>
+                                  • {d.prospectName ?? d.prospectEmail}
+                                </span>
+                                <span className="text-[10px] font-mono text-zinc-400">
+                                  {new Date(d.rebookedAt).getDate()} {shortMonthName}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-snug">
+                            Waiting for rebook triggers.
+                          </p>
+                        )}
+
+                        {/* Avatar & Pink Date (Matching Screenshot 2: Pink "AD" Avatar + "2 Jun" Date) */}
+                        <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-800/60 text-xs">
+                          <div className="flex items-center gap-2">
+                            {/* Pink circle avatar matching Screenshot 2 "AD" */}
+                            <div className="w-6 h-6 rounded-full bg-pink-100 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                              {initials}
+                            </div>
+                            <span className="text-[11px] font-mono text-zinc-500 truncate max-w-[110px]">
+                              {latestDeal ? latestDeal.prospectEmail : "Win-Back"}
+                            </span>
+                          </div>
+
+                          {/* Pink Date text matching "2 Jun" in Screenshot 2 */}
+                          <span className="text-xs font-mono font-medium text-pink-600 dark:text-pink-400 shrink-0">
+                            {weekDateTag}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
