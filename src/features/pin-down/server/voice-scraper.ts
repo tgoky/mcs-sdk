@@ -1,82 +1,119 @@
-/**
- * Pin-Down recovery gap 2 — site + brand-resource crawl for voice
- * extraction.
- *
- * The OG SKILL.md's default voice-extraction path crawled the buyer's
- * marketing site, sales page, and pricing page, and pulled their last
- * three ESP broadcast emails — only falling back to "ask the buyer to
- * paste something" when that returned under 1,000 words. UTP dropped the
- * crawl entirely: rawVoiceCorpus is 100% operator-pasted text with no
- * scrape path at all, which is a narrower and more manual input surface
- * than the original.
- *
- * This module restores the scrape path as an ALTERNATIVE/ADDITIVE input
- * to rawVoiceCorpus, not a replacement — onboarding-service.ts merges
- * whatever this returns with any operator-pasted corpus before calling
- * extractVoiceProfile(), and records what it actually pulled in
- * voiceScrapeArtifacts so the result is auditable (the operator can see
- * exactly which pages/sources fed the voice profile, same transparency
- * principle as pinDownPageAudit).
- */
-
-
 import { fetchWithTimeout } from "@/lib/http";
+import { callClaudeWithRetry, MODEL } from "@/lib/llm";
+
 interface ScrapedSource {
-  kind: "marketing_site" | "sales_page" | "pricing_page";
+  kind: "marketing_site" | "about_page" | "sales_page" | "pricing_page" | "proof_page" | "supporting_page";
   url: string;
   wordCount: number;
   text: string;
 }
 
+interface DiscoveredLink {
+  url: string;
+  title?: string;
+  description?: string;
+}
+
+interface RankedCandidate {
+  url: string;
+  kind: "about_page" | "sales_page" | "pricing_page" | "proof_page" | "supporting_page";
+  priority: number; // 1 = highest value for voice extraction, 3 = lowest
+}
+
+interface FirecrawlBudget {
+  used: number;
+  max: number;
+}
+
 const CRAWL_TIMEOUT_MS = 8000;
-const FIRECRAWL_TIMEOUT_MS = 15000; // JS-rendered scrapes are slower than a raw fetch
-const MAX_CHARS_PER_PAGE = 12000; // keep the LLM prompt bounded
+const FIRECRAWL_TIMEOUT_MS = 15000; // JS-rendered scrapes are slower
+const FIRECRAWL_MAP_TIMEOUT_MS = 6000;
+const MAX_CHARS_PER_PAGE = 12000;
 const USER_AGENT = "ShowtimePinDownVoiceCrawler/1.0 (+https://mcs-abra.vercel.app)";
-const THIN_PAGE_WORD_THRESHOLD = 20; // below this, treat a raw fetch as "effectively empty" and fall back
+const THIN_PAGE_WORD_THRESHOLD = 20;
 
 /**
- * Hard wall-clock ceiling for the ENTIRE scrapeVoiceCorpus() call, not
- * just each individual fetch. This exists because the two callers of
- * scrapeVoiceCorpus have very different tolerances:
- *   - onboarding-service.ts runs inside the Inngest worker (via
- *     inngest.send in setup/route.ts, which returns immediately) — no
- *     request-lifetime ceiling to worry about there.
- *   - discovery-prefill.ts runs synchronously inside
- *     /api/pin-down/discovery-prefill/route.ts, which has
- *     `maxDuration = 30` AND still has to run a Claude inference call
- *     *after* this returns. Without a shared budget, worst case is up to
- *     8 attempted paths (1 homepage + 4 sales + 3 pricing) each eating up
- *     to CRAWL_TIMEOUT_MS + FIRECRAWL_TIMEOUT_MS (23s) sequentially if a
- *     site is fully Cloudflare-protected — a ~180s theoretical ceiling
- *     against a 30s route limit. This budget makes that structurally
- *     impossible regardless of how many pages need the Firecrawl
- *     fallback: once the budget is spent, remaining path attempts are
- *     skipped outright (treated as "not found," same as any other soft
- *     failure) rather than still being attempted and cut off mid-fetch.
+ * Stop walking ranked candidate pages once the combined corpus hits this word target.
+ */
+const WORD_BUDGET_TARGET = 5000;
+
+/**
+ * Hard ceiling on total pages fetched per crawl (homepage included).
+ */
+const MAX_PAGES_PER_CRAWL = 8;
+
+/**
+ * Hard ceiling on Firecrawl /v2/scrape (Tier 2) calls per crawl to prevent credit burn.
+ */
+const MAX_FIRECRAWL_SCRAPE_CALLS = 4;
+
+/**
+ * Number of candidate pages fetched concurrently in parallel.
+ */
+const FETCH_BATCH_SIZE = 3;
+
+/**
+ * Hard wall-clock ceiling for the ENTIRE scrapeVoiceCorpus() execution.
  */
 const CRAWL_BUDGET_MS = 20000;
 
+// Static fallback paths used only when Firecrawl /v2/map or AI classification is unavailable
+const SALES_STATIC_PATHS = ["/sales", "/sale", "/offer", "/work-with-us", "/apply", "/get-started"];
+const ABOUT_STATIC_PATHS = ["/about", "/about-us", "/our-story", "/story", "/mission", "/manifesto"];
+const PROOF_STATIC_PATHS = ["/case-studies", "/results", "/testimonials", "/success-stories"];
+const PRICING_STATIC_PATHS = ["/pricing", "/plans", "/packages"];
+
+// ── HTML Cleaning & Parsing ─────────────────────────────────────────────
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|section|li|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&#\d+;/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function normalizeDomain(domain: string): string {
+  let d = domain.trim().replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(d)) d = `https://${d}`;
+  return d;
+}
+
+async function fetchPageText(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CRAWL_TIMEOUT_MS);
+    const res = await fetchWithTimeout(url, {
+      headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+      signal: controller.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.includes("text/html")) return null;
+    const html = await res.text();
+    return htmlToText(html).slice(0, MAX_CHARS_PER_PAGE);
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Tier 2 of the crawl: Firecrawl's /v2/scrape endpoint. Only reached when
- * the raw fetch in fetchPageText() came back null (network error, non-200,
- * non-HTML content-type) or came back "thin" (a JS-rendered SPA shell with
- * no server-side content, which raw fetch cannot execute — there's no
- * headless browser behind htmlToText's regex parser). This is a
- * deliberate two-tier design, not a wholesale replacement of the raw
- * fetch: most marketing/sales/pricing pages are still plain server-rendered
- * HTML, and paying a Firecrawl credit for those would be pure waste when a
- * free fetch already gets the full page. Firecrawl is billed per call, so
- * it's reserved for the specific case a static fetch structurally cannot
- * solve.
- *
- * Returns null (never throws) on missing key, non-2xx, or empty body —
- * same soft-fail contract as fetchPageText, so a Firecrawl outage or an
- * unset FIRECRAWL_API_KEY degrades this source to "unavailable," not a
- * broken onboarding run.
+ * Tier 2: Firecrawl's /v2/scrape endpoint for JS-heavy apps or Cloudflare-protected pages.
  */
-async function fetchPageTextViaFirecrawl(url: string): Promise<string | null> {
+async function fetchPageTextViaFirecrawl(url: string, budget: FirecrawlBudget): Promise<string | null> {
   const apiKey = process.env.FIRECRAWL_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey || budget.used >= budget.max) return null;
+  budget.used += 1; // Synchronously reserved before await
 
   try {
     const res = await fetchWithTimeout(
@@ -105,18 +142,11 @@ async function fetchPageTextViaFirecrawl(url: string): Promise<string | null> {
   }
 }
 
-/**
- * Runs the free raw-fetch tier first, and only spends a Firecrawl credit
- * if that tier came back empty or too thin to be useful. `deadline` is a
- * shared Date.now()-comparable timestamp threaded through every call in a
- * single scrapeVoiceCorpus() run — once it's passed, this skips BOTH tiers
- * and returns null immediately rather than starting a fetch it can't let
- * finish. This is checked at the top, not raced against the remaining
- * budget, so a page is either fully attempted within budget or not
- * attempted at all — never started-then-abandoned, which would waste the
- * time spent without producing anything usable.
- */
-async function fetchPageTextWithFallback(url: string, deadline: number): Promise<string | null> {
+async function fetchPageTextWithFallback(
+  url: string,
+  deadline: number,
+  firecrawlBudget: FirecrawlBudget
+): Promise<string | null> {
   if (Date.now() >= deadline) return null;
 
   const direct = await fetchPageText(url);
@@ -125,109 +155,95 @@ async function fetchPageTextWithFallback(url: string, deadline: number): Promise
   }
 
   if (Date.now() >= deadline) return null;
-  return fetchPageTextViaFirecrawl(url);
+  return fetchPageTextViaFirecrawl(url, firecrawlBudget);
 }
+
+// ── AI Link Classification Engine ──────────────────────────────────────────
 
 /**
- * Strips tags/scripts/styles down to visible text. Deliberately simple
- * (regex-based, not a full HTML parser) — this text is only ever fed to
- * Claude for tone/vocabulary extraction, not rendered or re-published, so
- * perfect fidelity isn't required, just "readable prose."
+ * Uses Claude (Haiku / fast LLM) to analyze the raw link inventory returned by Firecrawl /v2/map.
+ * Replaces dumb keyword matching with semantic intent classification.
  */
-function htmlToText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|section|li|h[1-6])>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&#\d+;/g, " ")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
+async function classifySiteLinksWithAI(
+  links: DiscoveredLink[],
+  runId?: string
+): Promise<RankedCandidate[]> {
+  if (links.length === 0) return [];
 
-async function fetchPageText(url: string): Promise<string | null> {
+  const linkPayload = links.slice(0, 100).map((l) => ({
+    url: l.url,
+    title: l.title || "",
+    description: l.description || "",
+  }));
+
+  const system = `You are an expert Web Crawling Agent for brand voice analysis. 
+Analyze the provided website links and identify up to 8 pages that carry the highest concentration of the founder's authentic voice, core offer positioning, philosophy, and customer proof.
+
+Categories to assign:
+- "sales_page": Primary sales page, main VSL, core offer, work-with-us, application
+- "about_page": Founder story, manifesto, mission, philosophy, origin story, who we are
+- "proof_page": Case studies, client results, testimonials, reviews
+- "pricing_page": Pricing plans, packages, tiers
+- "supporting_page": Services breakdown, how it works, FAQs
+- "ignore": Privacy policy, terms, login, cart, generic blog posts, author archives
+
+Return ONLY a JSON array of objects:
+[
+  { "url": "string", "kind": "sales_page|about_page|proof_page|pricing_page|supporting_page", "priority": 1-3 }
+]`;
+
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), CRAWL_TIMEOUT_MS);
-    const res = await fetchWithTimeout(url, {
-      headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
-      signal: controller.signal,
-      redirect: "follow",
+    const res = await callClaudeWithRetry({
+      model: MODEL.SYNTHESIS,
+      system,
+      userMessage: `Categorize these links:\n${JSON.stringify(linkPayload)}`,
+      maxTokens: 1200,
+      runId,
     });
-    clearTimeout(timeout);
-    if (!res.ok) return null;
-    const contentType = res.headers.get("content-type") ?? "";
-    if (!contentType.includes("text/html")) return null;
-    const html = await res.text();
-    return htmlToText(html).slice(0, MAX_CHARS_PER_PAGE);
+
+    const cleaned = res.text.replace(/^```json\s*|\s*```$/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter(
+        (item: any) =>
+          item.url &&
+          item.kind &&
+          item.kind !== "ignore" &&
+          ["sales_page", "about_page", "proof_page", "pricing_page", "supporting_page"].includes(item.kind)
+      )
+      .map((item: any) => ({
+        url: item.url,
+        kind: item.kind,
+        priority: typeof item.priority === "number" ? item.priority : 2,
+      }));
   } catch {
-    return null;
+    return []; // Soft-fail back to static path guesses on parse failure
   }
 }
 
-function normalizeDomain(domain: string): string {
-  let d = domain.trim().replace(/\/+$/, "");
-  if (!/^https?:\/\//i.test(d)) d = `https://${d}`;
-  return d;
+function staticFallbackCandidates(base: string): RankedCandidate[] {
+  const make = (paths: string[], kind: RankedCandidate["kind"], priority: number): RankedCandidate[] =>
+    paths.map((p) => ({ url: `${base}${p}`, kind, priority }));
+
+  return [
+    ...make(SALES_STATIC_PATHS, "sales_page", 1),
+    ...make(ABOUT_STATIC_PATHS, "about_page", 1),
+    ...make(PROOF_STATIC_PATHS, "proof_page", 2),
+    ...make(PRICING_STATIC_PATHS, "pricing_page", 2),
+  ];
 }
 
-const FIRECRAWL_MAP_TIMEOUT_MS = 6000;
-
-interface DiscoveredLink {
-  url: string;
-  title?: string;
-  description?: string;
-}
-
-// Matched against the full discovered URL string (not just the path) plus
-// Firecrawl's title/description for that link, so a page found via /map
-// still matches even when the slug itself is opaque (e.g. /p/6k2a) but the
-// title says "Apply for coaching".
-const IGNORE_URL_KEYWORDS = [
-  "privacy", "terms", "legal", "cookie", "login", "signin", "signup",
-  "cart", "checkout", "account", "wp-content", "wp-admin", "/tag/",
-  "/category/", "/author/", "sitemap.xml", "/feed", ".pdf", ".png",
-  ".jpg", ".jpeg", ".svg", ".gif", "#",
-];
-const SALES_KEYWORDS = [
-  "offer", "apply", "work-with", "get-started", "getstarted", "enroll",
-  "join", "program", "coaching", "consult", "service", "membership",
-  "mastermind", "book-a-call", "schedule",
-];
-const PRICING_KEYWORDS = ["pricing", "plans", "package", "invest", "cost", "tier", "rate"];
-
-/**
- * Tier 0 of sales/pricing discovery: asks Firecrawl's /v2/map endpoint —
- * a link-inventory call, not a per-page render, so it's a small fraction
- * of the cost/time of fetchPageTextViaFirecrawl — for the domain's actual
- * URL list, then locally matches it against SALES_KEYWORDS /
- * PRICING_KEYWORDS on the URL plus the title/description Firecrawl
- * returns per link. This is what lets a buyer who names their offer page
- * /mastermind-application or /our-framework still get found: the static
- * salesPaths/pricingPaths guesses below have no way to hit either of
- * those, since they only try slugs this codebase happened to guess in
- * advance.
- *
- * Shares the same `deadline` as the rest of the crawl and refuses to
- * start with less than 2s of budget left, so a slow or absent map call
- * degrades to the static guess-list tier rather than eating the time
- * budget the actual page fetches need — this can never make a crawl slower
- * than it already was, only sometimes more accurate. Never throws (same
- * soft-fail contract as the rest of this module): missing API key, a
- * non-2xx response, or a malformed body all just return {}.
- */
 async function discoverCandidateUrls(
   base: string,
-  deadline: number
-): Promise<{ salesUrl?: string; pricingUrl?: string }> {
+  deadline: number,
+  runId?: string
+): Promise<RankedCandidate[]> {
   const apiKey = process.env.FIRECRAWL_API_KEY;
   const remaining = deadline - Date.now();
-  if (!apiKey || remaining < 2000) return {};
+  if (!apiKey || remaining < 2000) return staticFallbackCandidates(base);
 
   try {
     const res = await fetchWithTimeout(
@@ -238,86 +254,81 @@ async function discoverCandidateUrls(
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({ url: base, limit: 200 }),
+        body: JSON.stringify({ url: base, limit: 150 }),
       },
       Math.min(FIRECRAWL_MAP_TIMEOUT_MS, remaining - 1000)
     );
-    if (!res.ok) return {};
+    if (!res.ok) return staticFallbackCandidates(base);
     const data = await res.json();
     const links: DiscoveredLink[] = data?.links ?? [];
-    if (links.length === 0) return {};
+    if (links.length === 0) return staticFallbackCandidates(base);
 
-    const matchFirst = (keywords: string[]): string | undefined => {
-      const candidates = links.filter((l) => {
-        const url = l.url.toLowerCase();
-        if (IGNORE_URL_KEYWORDS.some((kw) => url.includes(kw))) return false;
-        const haystack = `${url} ${l.title ?? ""} ${l.description ?? ""}`.toLowerCase();
-        return keywords.some((kw) => haystack.includes(kw));
-      });
-      // Among genuinely keyword-matched candidates, prefer the shorter/
-      // shallower URL — it's more likely to be the primary sales or
-      // pricing page than, say, a blog post that happens to mention price.
-      candidates.sort((a, b) => a.url.length - b.url.length);
-      return candidates[0]?.url;
-    };
+    // AI Semantic Pass: Claude classifies Firecrawl's indexed links
+    const aiRanked = await classifySiteLinksWithAI(links, runId);
+    if (aiRanked.length > 0) return aiRanked;
 
-    return { salesUrl: matchFirst(SALES_KEYWORDS), pricingUrl: matchFirst(PRICING_KEYWORDS) };
+    return staticFallbackCandidates(base);
   } catch {
-    return {};
+    return staticFallbackCandidates(base);
   }
 }
 
-/**
- * Rate-limited, best-effort crawl of the buyer's marketing site, sales
- * page, and pricing page. Rate-limiting here is deliberately conservative
- * (sequential fetches, one buyer domain at a time, no concurrent fan-out)
- * — this hits a domain we don't operate maybe 3-4 times ever per
- * onboarding, so a simple sequential pass respects the target site
- * without needing a real crawl-delay/robots.txt parser.
- *
- * Sales/pricing URLs come from discoverCandidateUrls() (Firecrawl /map +
- * keyword match) when available, and fall back to the static
- * salesPaths/pricingPaths guesses when Firecrawl is unconfigured, the map
- * call fails, or nothing in the map matched — so a buyer with a
- * non-standard slug gets found via discovery, and a buyer who happens to
- * use one of the common slugs still gets found even if discovery comes up
- * empty (e.g. a JS-only nav Firecrawl's map couldn't resolve in time).
- * Either way this stays a heuristic, not a full sitemap crawl, with a
- * buyer-provided corpus as the documented alternative when both come up
- * short.
- */
-export async function scrapeVoiceCorpus(domain: string): Promise<{
+// ── Main Web Scraper Function ───────────────────────────────────────────
+
+export async function scrapeVoiceCorpus(
+  domain: string,
+  runId?: string
+): Promise<{
   corpus: string;
   sources: ScrapedSource[];
 }> {
   const base = normalizeDomain(domain);
   const sources: ScrapedSource[] = [];
   const deadline = Date.now() + CRAWL_BUDGET_MS;
+  const firecrawlBudget: FirecrawlBudget = { used: 0, max: MAX_FIRECRAWL_SCRAPE_CALLS };
+  let totalWords = 0;
 
-  const homepageText = await fetchPageTextWithFallback(base, deadline);
-  if (homepageText && homepageText.split(/\s+/).length > 20) {
-    sources.push({ kind: "marketing_site", url: base, wordCount: homepageText.split(/\s+/).length, text: homepageText });
-  }
-
-  const discovered = await discoverCandidateUrls(base, deadline);
-
-  const salesPaths = ["/offer", "/work-with-us", "/apply", "/get-started"];
-  const salesCandidates = discovered.salesUrl ? [discovered.salesUrl] : salesPaths.map((p) => `${base}${p}`);
-  for (const url of salesCandidates) {
-    const text = await fetchPageTextWithFallback(url, deadline);
-    if (text && text.split(/\s+/).length > 40) {
-      sources.push({ kind: "sales_page", url, wordCount: text.split(/\s+/).length, text });
-      break; // one sales page is enough — first real hit wins
+  // 1. Fetch Homepage
+  const homepageText = await fetchPageTextWithFallback(base, deadline, firecrawlBudget);
+  if (homepageText) {
+    const wc = homepageText.split(/\s+/).length;
+    if (wc > 20) {
+      sources.push({ kind: "marketing_site", url: base, wordCount: wc, text: homepageText });
+      totalWords += wc;
     }
   }
 
-  const pricingPaths = ["/pricing", "/plans", "/packages"];
-  const pricingCandidates = discovered.pricingUrl ? [discovered.pricingUrl] : pricingPaths.map((p) => `${base}${p}`);
-  for (const url of pricingCandidates) {
-    const text = await fetchPageTextWithFallback(url, deadline);
-    if (text && text.split(/\s+/).length > 20) {
-      sources.push({ kind: "pricing_page", url, wordCount: text.split(/\s+/).length, text });
+  // 2. Discover & Classify Candidates with AI
+  const discovered = await discoverCandidateUrls(base, deadline, runId);
+  const rankedCandidates = discovered
+    .filter((c) => c.url !== base)
+    .sort((a, b) => a.priority - b.priority || a.url.length - b.url.length);
+
+  const usedUrls = new Set<string>([base]);
+
+  // 3. Batched Parallel Crawl Walk
+  for (let i = 0; i < rankedCandidates.length; i += FETCH_BATCH_SIZE) {
+    if (sources.length >= MAX_PAGES_PER_CRAWL || totalWords >= WORD_BUDGET_TARGET || Date.now() >= deadline) {
       break;
+    }
+
+    const batch = rankedCandidates.slice(i, i + FETCH_BATCH_SIZE).filter((c) => !usedUrls.has(c.url));
+    if (batch.length === 0) continue;
+    batch.forEach((c) => usedUrls.add(c.url));
+
+    const results = await Promise.allSettled(
+      batch.map(async (c): Promise<ScrapedSource | null> => {
+        const text = await fetchPageTextWithFallback(c.url, deadline, firecrawlBudget);
+        const wc = text ? text.split(/\s+/).length : 0;
+        return wc > 30 ? { kind: c.kind, url: c.url, wordCount: wc, text: text! } : null;
+      })
+    );
+
+    for (const r of results) {
+      if (r.status === "fulfilled" && r.value) {
+        sources.push(r.value);
+        totalWords += r.value.wordCount;
+      }
     }
   }
 
@@ -325,60 +336,159 @@ export async function scrapeVoiceCorpus(domain: string): Promise<{
   return { corpus, sources };
 }
 
-/**
- * ESP broadcast pull — the third leg of the OG SKILL.md's default scrape
- * path ("pull last three broadcast emails through the ESP API when
- * connected"). Only wired for Klaviyo today since it's the only email
- * platform with a documented, stable "list campaigns" + "get campaign
- * message" pair in email.ts's existing client set; the other platforms'
- * campaign/broadcast history APIs are either not implemented there yet or
- * not exposed on the plan tiers Pin-Down buyers are likely to be on.
- * Returns [] (never throws) so a missing/unsupported ESP never blocks
- * onboarding — this is additive to the site crawl, not required.
- */
+// ── Multi-ESP Broadcast Scraper ─────────────────────────────────────────
+
+async function scrapeKlaviyoBroadcasts(apiKey: string): Promise<{ text: string; wordCount: number }[]> {
+  const listRes = await fetchWithTimeout(
+    "https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,'email')&sort=-created_at&page[size]=3",
+    {
+      headers: {
+        Authorization: `Klaviyo-API-Key ${apiKey}`,
+        revision: "2024-10-15",
+        accept: "application/json",
+      },
+    }
+  );
+  if (!listRes.ok) return [];
+  const listData = await listRes.json();
+  const campaignIds: string[] = (listData.data ?? []).slice(0, 3).map((c: any) => c.id);
+
+  const results: { text: string; wordCount: number }[] = [];
+  for (const id of campaignIds) {
+    const msgRes = await fetchWithTimeout(`https://a.klaviyo.com/api/campaigns/${id}/campaign-messages/`, {
+      headers: {
+        Authorization: `Klaviyo-API-Key ${apiKey}`,
+        revision: "2024-10-15",
+        accept: "application/json",
+      },
+    });
+    if (!msgRes.ok) continue;
+    const msgData = await msgRes.json();
+    const html: string | undefined = msgData.data?.[0]?.attributes?.content?.body;
+    if (html) {
+      const text = htmlToText(html).slice(0, MAX_CHARS_PER_PAGE);
+      if (text.split(/\s+/).length > 20) results.push({ text, wordCount: text.split(/\s+/).length });
+    }
+  }
+  return results;
+}
+
+async function scrapeMailchimpBroadcasts(apiKey: string): Promise<{ text: string; wordCount: number }[]> {
+  const dc = apiKey.includes("-") ? apiKey.slice(apiKey.lastIndexOf("-") + 1) : "";
+  if (!dc) return [];
+  const authHeader = `Basic ${Buffer.from(`anystring:${apiKey}`).toString("base64")}`;
+
+  const listRes = await fetchWithTimeout(
+    `https://${dc}.api.mailchimp.com/3.0/campaigns?type=regular&status=sent&sort_field=send_time&sort_dir=DESC&count=3`,
+    { headers: { Authorization: authHeader } }
+  );
+  if (!listRes.ok) return [];
+  const listData = await listRes.json();
+  const campaignIds: string[] = (listData.campaigns ?? []).slice(0, 3).map((c: any) => c.id).filter(Boolean);
+
+  const results: { text: string; wordCount: number }[] = [];
+  for (const id of campaignIds) {
+    const contentRes = await fetchWithTimeout(`https://${dc}.api.mailchimp.com/3.0/campaigns/${id}/content`, {
+      headers: { Authorization: authHeader },
+    });
+    if (!contentRes.ok) continue;
+    const contentData = await contentRes.json();
+    const html: string | undefined = contentData.html || contentData.plain_text;
+    if (html) {
+      const text = htmlToText(html).slice(0, MAX_CHARS_PER_PAGE);
+      if (text.split(/\s+/).length > 20) results.push({ text, wordCount: text.split(/\s+/).length });
+    }
+  }
+  return results;
+}
+
+async function scrapeActiveCampaignBroadcasts(
+  baseUrl: string,
+  apiKey: string
+): Promise<{ text: string; wordCount: number }[]> {
+  const headers = { "Api-Token": apiKey, "Content-Type": "application/json" };
+
+  const listRes = await fetchWithTimeout(`${baseUrl}/campaigns?orders[sdate]=DESC&limit=3`, { headers });
+  if (!listRes.ok) return [];
+  const listData = await listRes.json();
+  const campaignIds: string[] = (listData.campaigns ?? []).slice(0, 3).map((c: any) => c.id).filter(Boolean);
+
+  const results: { text: string; wordCount: number }[] = [];
+  for (const id of campaignIds) {
+    const msgRes = await fetchWithTimeout(`${baseUrl}/campaigns/${id}/messages`, { headers });
+    if (!msgRes.ok) continue;
+    const msgData = await msgRes.json();
+    const first = (msgData.campaignMessages ?? msgData.messages ?? [])[0];
+    const html: string | undefined = first?.message?.html ?? first?.html;
+    if (html) {
+      const text = htmlToText(html).slice(0, MAX_CHARS_PER_PAGE);
+      if (text.split(/\s+/).length > 20) results.push({ text, wordCount: text.split(/\s+/).length });
+    }
+  }
+  return results;
+}
+
+async function scrapeGhlBroadcasts(
+  locationId: string,
+  apiKey: string
+): Promise<{ text: string; wordCount: number }[]> {
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    Version: "2021-07-28",
+    Accept: "application/json",
+  };
+
+  const listRes = await fetchWithTimeout(
+    `https://services.leadconnectorhq.com/emails/public/v2/locations/${locationId}/campaigns/emails?limit=3`,
+    { headers }
+  );
+  if (!listRes.ok) return [];
+  const listData = await listRes.json();
+  const campaigns: any[] = listData.campaigns ?? listData.data ?? [];
+
+  const results: { text: string; wordCount: number }[] = [];
+  for (const campaign of campaigns.slice(0, 3)) {
+    const id = campaign.id ?? campaign._id;
+    if (!id) continue;
+    const detailRes = await fetchWithTimeout(
+      `https://services.leadconnectorhq.com/emails/public/v2/locations/${locationId}/campaigns/emails/${id}`,
+      { headers }
+    );
+    if (!detailRes.ok) continue;
+    const detail = await detailRes.json();
+    const html: string | undefined = detail.html ?? detail.body ?? detail.campaign?.html;
+    if (html) {
+      const text = htmlToText(html).slice(0, MAX_CHARS_PER_PAGE);
+      if (text.split(/\s+/).length > 20) results.push({ text, wordCount: text.split(/\s+/).length });
+    }
+  }
+  return results;
+}
+
 export async function scrapeEspBroadcasts(
   emailPlatform: string | undefined,
-  apiKey: string | undefined
+  apiKey: string | undefined,
+  meta?: { activecampaignBaseUrl?: string; ghlLocationId?: string }
 ): Promise<{ text: string; wordCount: number }[]> {
-  if (emailPlatform !== "klaviyo" || !apiKey) return [];
+  if (!emailPlatform || !apiKey) return [];
 
   try {
-    const listRes = await fetchWithTimeout(
-      "https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,'email')&sort=-created_at&page[size]=3",
-      {
-        headers: {
-          Authorization: `Klaviyo-API-Key ${apiKey}`,
-          revision: "2024-10-15",
-          accept: "application/json",
-        },
-      }
-    );
-    if (!listRes.ok) return [];
-    const listData = await listRes.json();
-    const campaignIds: string[] = (listData.data ?? []).slice(0, 3).map((c: any) => c.id);
-
-    const results: { text: string; wordCount: number }[] = [];
-    for (const id of campaignIds) {
-      const msgRes = await fetchWithTimeout(`https://a.klaviyo.com/api/campaigns/${id}/campaign-messages/`, {
-        headers: {
-          Authorization: `Klaviyo-API-Key ${apiKey}`,
-          revision: "2024-10-15",
-          accept: "application/json",
-        },
-      });
-      if (!msgRes.ok) continue;
-      const msgData = await msgRes.json();
-      const html: string | undefined = msgData.data?.[0]?.attributes?.content?.body;
-      if (html) {
-        const text = htmlToText(html).slice(0, MAX_CHARS_PER_PAGE);
-        if (text.split(/\s+/).length > 20) {
-          results.push({ text, wordCount: text.split(/\s+/).length });
-        }
-      }
+    switch (emailPlatform) {
+      case "klaviyo":
+        return await scrapeKlaviyoBroadcasts(apiKey);
+      case "mailchimp":
+        return await scrapeMailchimpBroadcasts(apiKey);
+      case "activecampaign":
+        if (!meta?.activecampaignBaseUrl) return [];
+        return await scrapeActiveCampaignBroadcasts(meta.activecampaignBaseUrl, apiKey);
+      case "ghl":
+        if (!meta?.ghlLocationId) return [];
+        return await scrapeGhlBroadcasts(meta.ghlLocationId, apiKey);
+      default:
+        return [];
     }
-    return results;
   } catch (e: any) {
-    console.warn("[voice-scraper] ESP broadcast pull failed (non-fatal):", e.message);
+    console.warn(`[voice-scraper] ESP broadcast pull failed for ${emailPlatform} (non-fatal):`, e.message);
     return [];
   }
 }

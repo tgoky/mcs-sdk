@@ -276,11 +276,20 @@ export async function runPinDownOnboarding(
       const scrapeResult = await run("voice-scrape", async () => {
         await logStep(runId, { phase: "voice_scrape", status: "running" });
         try {
-          const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(finalStack.buyer_domain!);
+const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
+  finalStack.buyer_domain!,
+  runId // 👈 Pass runId here
+);
           let espSources: Array<{ text: string; wordCount: number }> = [];
           if (finalStack.email_platform) {
             const emailCred = await resolveCredential(engagementId, finalStack.email_platform).catch(() => null);
-            espSources = await scrapeEspBroadcasts(finalStack.email_platform, emailCred ?? undefined);
+            espSources = await scrapeEspBroadcasts(finalStack.email_platform, emailCred ?? undefined, {
+              activecampaignBaseUrl: finalStack.activecampaign_base_url,
+              // Same location_id already used for GHL Calendar bookings —
+              // one GHL sub-account, reused across booking and email, same
+              // as the sending client in lib/platforms/email.ts does.
+              ghlLocationId: finalStack.booking_platform_meta?.location_id,
+            });
           }
           const allText = [scrapedCorpus, ...espSources.map((s) => s.text)].filter(Boolean).join("\n\n---\n\n");
           
