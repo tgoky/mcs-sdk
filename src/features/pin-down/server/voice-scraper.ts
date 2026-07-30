@@ -201,8 +201,10 @@ Return ONLY a JSON array of objects:
       runId,
     });
 
-    const cleaned = res.text.replace(/^```json\s*|\s*```$/g, "").trim();
-    const parsed = JSON.parse(cleaned);
+    // Extract JSON array window defensively to prevent markdown preamble breaks
+    const jsonMatch = res.text.match(/\[[\s\S]*\]/);
+    const rawJson = jsonMatch ? jsonMatch[0] : res.text.replace(/^```json\s*|\s*```$/g, "").trim();
+    const parsed = JSON.parse(rawJson);
 
     if (!Array.isArray(parsed)) return [];
 
@@ -260,7 +262,14 @@ async function discoverCandidateUrls(
     );
     if (!res.ok) return staticFallbackCandidates(base);
     const data = await res.json();
-    const links: DiscoveredLink[] = data?.links ?? [];
+    const rawLinks: any[] = data?.links ?? [];
+    if (rawLinks.length === 0) return staticFallbackCandidates(base);
+
+    // Normalize Firecrawl map output (handles both string[] and { url: string }[] payloads)
+    const links: DiscoveredLink[] = rawLinks
+      .map((l) => (typeof l === "string" ? { url: l } : { url: l?.url, title: l?.title, description: l?.description }))
+      .filter((l): l is DiscoveredLink => Boolean(l.url));
+
     if (links.length === 0) return staticFallbackCandidates(base);
 
     // AI Semantic Pass: Claude classifies Firecrawl's indexed links
@@ -406,16 +415,17 @@ async function scrapeActiveCampaignBroadcasts(
   baseUrl: string,
   apiKey: string
 ): Promise<{ text: string; wordCount: number }[]> {
+  const cleanBase = baseUrl.trim().replace(/\/+$/, "");
   const headers = { "Api-Token": apiKey, "Content-Type": "application/json" };
 
-  const listRes = await fetchWithTimeout(`${baseUrl}/campaigns?orders[sdate]=DESC&limit=3`, { headers });
+  const listRes = await fetchWithTimeout(`${cleanBase}/campaigns?orders[sdate]=DESC&limit=3`, { headers });
   if (!listRes.ok) return [];
   const listData = await listRes.json();
   const campaignIds: string[] = (listData.campaigns ?? []).slice(0, 3).map((c: any) => c.id).filter(Boolean);
 
   const results: { text: string; wordCount: number }[] = [];
   for (const id of campaignIds) {
-    const msgRes = await fetchWithTimeout(`${baseUrl}/campaigns/${id}/messages`, { headers });
+    const msgRes = await fetchWithTimeout(`${cleanBase}/campaigns/${id}/messages`, { headers });
     if (!msgRes.ok) continue;
     const msgData = await msgRes.json();
     const first = (msgData.campaignMessages ?? msgData.messages ?? [])[0];

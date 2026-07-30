@@ -616,9 +616,13 @@ export const engagements = pgTable("engagements", {
   // Auditable record of what the crawler actually pulled in, alongside
   // (not instead of) rawVoiceCorpus — see
   // src/features/pin-down/server/voice-scraper.ts.
-  voiceScrapeArtifacts: jsonb("voice_scrape_artifacts").$type<{
+voiceScrapeArtifacts: jsonb("voice_scrape_artifacts").$type<{
     scrapedAt: string;
-    sources: Array<{ kind: "marketing_site" | "sales_page" | "pricing_page" | "esp_broadcast"; url?: string; wordCount: number }>;
+    sources: Array<{
+      kind: "marketing_site" | "about_page" | "sales_page" | "pricing_page" | "proof_page" | "supporting_page" | "esp_broadcast";
+      url?: string;
+      wordCount: number;
+    }>;
     totalWordCount: number;
   }>(),
 
