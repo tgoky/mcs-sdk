@@ -13,7 +13,7 @@ import {
   Zap,
   RefreshCw,
 } from "lucide-react";
-import type { BookingSyncStatus } from "@/lib/booking-sync-status";
+import { platformSupportsAutoWebhook, type BookingSyncStatus } from "@/lib/booking-sync-status";
 import { bookingPlatformLabel } from "@/lib/copy";
 
 const HEALTH_STYLES: Record<
@@ -28,7 +28,7 @@ const HEALTH_STYLES: Record<
     Icon: CheckCircle2,
   },
   warning: {
- dot: "bg-sky-500",
+    dot: "bg-sky-500",
     text: "text-sky-700 dark:text-sky-400",
     bg: "bg-sky-50 dark:bg-sky-950/20",
     border: "border-sky-200 dark:border-sky-900/40",
@@ -81,7 +81,7 @@ function CopyField({ label, value, mask }: { label: string; value: string; mask?
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // clipboard API unavailable — no-op, the field is still selectable text
+      // Clipboard fallback
     }
   }
 
@@ -89,14 +89,14 @@ function CopyField({ label, value, mask }: { label: string; value: string; mask?
     <div className="space-y-1">
       <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500">{label}</p>
       <div className="flex items-center gap-1.5">
-      <code className="flex-1 min-w-0 truncate text-xs font-mono px-2 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300">
+        <code className="flex-1 min-w-0 truncate text-xs font-mono px-2 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300">
           {revealed ? value : "•".repeat(Math.min(value.length, 40))}
         </code>
         {mask && (
           <button
             type="button"
             onClick={() => setRevealed((r) => !r)}
-    className="shrink-0 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+            className="shrink-0 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
             title={revealed ? "Hide" : "Reveal"}
           >
             {revealed ? <EyeOff size={13} /> : <Eye size={13} />}
@@ -105,7 +105,7 @@ function CopyField({ label, value, mask }: { label: string; value: string; mask?
         <button
           type="button"
           onClick={copy}
-        className="shrink-0 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+          className="shrink-0 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
           title="Copy"
         >
           {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
@@ -117,15 +117,15 @@ function CopyField({ label, value, mask }: { label: string; value: string; mask?
 
 const SETUP_STEPS: Record<string, string[]> = {
   ghl_calendar: [
-    "In GoHighLevel, go to Automation → Workflows and open (or create) the workflow that fires on Appointment Status Changed.",
+    "In GoHighLevel, go to Automation -> Workflows and open (or create) the workflow that fires on Appointment Status Changed.",
     'Add a "Custom Webhook" action, set the method to POST, and paste the Webhook URL below into the URL field.',
-    'Add a custom header named X-Webhook-Signature and paste the Signing Secret below as its value exactly as shown — GHL can only send a static header value, so this has to match verbatim.',
-    "Save and publish the workflow, then click \"I've added it\" below to switch this engagement to instant delivery.",
+    "Add a custom header named X-Webhook-Signature and paste the Signing Secret below as its value.",
+    "Save and publish the workflow, then click \"I've added it\" below.",
   ],
   oncehub: [
-    "In OnceHub, go to your account-level Webhooks setup (Admin → Integrations → Webhooks) and add a new webhook.",
-    "Paste the Webhook URL below as the destination and select the booking-created and booking-cancelled event triggers.",
-    "OnceHub will generate its own signing secret when you save — copy that value and paste it into the Signing Secret field below (overwriting the pre-filled one), since OnceHub computes its own signature rather than using a static header.",
+    "In OnceHub, go to account-level Webhooks setup (Admin -> Integrations -> Webhooks) and add a new webhook.",
+    "Paste the Webhook URL below as the destination and select booking-created and booking-cancelled triggers.",
+    "Paste OnceHub's generated signing secret into the Signing Secret field below.",
     "Click \"I've added it\" below once saved.",
   ],
 };
@@ -141,8 +141,15 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
   const [busy, setBusy] = useState<"webhook" | "polling" | "dismiss" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  if (!status.platform) return null;
+
   const styles = HEALTH_STYLES[status.health];
   const Icon = styles.Icon;
+  const setupSteps = SETUP_STEPS[status.platform] ?? [];
+  const platformLabel = bookingPlatformLabel(status.platform);
+  
+  // Gate manual sync options exclusively for manual-setup platforms (GHL Calendar, OnceHub)
+  const supportsAutoWebhook = platformSupportsAutoWebhook(status.platform);
 
   async function patch(payload: Record<string, unknown>, kind: "webhook" | "polling" | "dismiss") {
     setBusy(kind);
@@ -166,7 +173,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
         dismissed: Boolean(data.dismissed),
         actionNeeded: data.mode === "webhook" ? false : s.actionNeeded && !data.dismissed,
         health: data.mode === "webhook" ? "warning" : s.health,
-        headline: data.mode === "webhook" ? "Direct webhook — awaiting first delivery" : s.headline,
+        headline: data.mode === "webhook" ? "Direct webhook · awaiting first delivery" : s.headline,
       }));
       if (data.signingSecret) setSecretInput(data.signingSecret);
     } catch {
@@ -175,11 +182,6 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
       setBusy(null);
     }
   }
-
-  if (!status.platform) return null;
-
-  const setupSteps = SETUP_STEPS[status.platform] ?? [];
-  const platformLabel = bookingPlatformLabel(status.platform);
 
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-900/40 overflow-hidden">
@@ -195,7 +197,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
         <Icon size={16} className={`${styles.text} shrink-0 ml-2`} />
       </div>
 
-      {/* Stat grid — deep "under the hood" status, not just a timestamp */}
+      {/* Metrics Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-4">
         <StatTile label="Platform" value={platformLabel} />
         <StatTile
@@ -208,80 +210,84 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
         />
         <StatTile
           label={status.mode === "polling" ? "Next check" : "Health"}
-          value={status.mode === "polling" ? relativeTime(status.nextPollDueAt).replace("ago", "") || "Due now" : status.health === "healthy" ? "Healthy" : status.health === "warning" ? "Attention" : status.health === "error" ? "Error" : "—"}
+          value={status.mode === "polling" ? relativeTime(status.nextPollDueAt).replace("ago", "") || "Due now" : status.health === "healthy" ? "Healthy" : status.health === "warning" ? "Attention" : status.health === "error" ? "Error" : "Unconfigured"}
         />
       </div>
 
-      {/* Action banner */}
-      {status.actionNeeded && (
-             <div className="mx-4 mb-4 rounded-lg border border-sky-200 dark:border-sky-900/40 bg-sky-50 dark:bg-sky-950/20 p-4 space-y-3">
-          <div className="flex items-start gap-2">
+      {/* Manual Setup Nudge & Controls (Rendered ONLY if !supportsAutoWebhook) */}
+      {!supportsAutoWebhook && (
+        <>
+          {status.actionNeeded && (
+            <div className="mx-4 mb-4 rounded-lg border border-sky-200 dark:border-sky-900/40 bg-sky-50 dark:bg-sky-950/20 p-4 space-y-3">
+              <div className="flex items-start gap-2">
                 <Zap size={15} className="text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" />
-            <div>
-                 <p className="text-sm font-semibold text-sky-800 dark:text-sky-300">
-                Action needed — add your webhook to {platformLabel}
-              </p>
+                <div>
+                  <p className="text-sm font-semibold text-sky-800 dark:text-sky-300">
+                    Action needed · add your webhook to {platformLabel}
+                  </p>
                   <p className="text-xs text-sky-700/80 dark:text-sky-400/80 mt-0.5">
-                {platformLabel} can&apos;t register this automatically. Auto-polling is covering you every{" "}
-                {status.pollIntervalMinutes ?? 5} minutes in the meantime, but a direct webhook fires instantly.
-              </p>
+                    {platformLabel} requires manual endpoint configuration. Auto-polling checks every{" "}
+                    {status.pollIntervalMinutes ?? 5} minutes in the meantime.
+                  </p>
+                </div>
+              </div>
+
+              <CopyField label="Webhook Receiver URL" value={status.webhookUrl} />
+              <CopyField
+                label="Signing Secret"
+                value={secretInput || "(generated upon direct webhook activation)"}
+                mask
+              />
+
+              {setupSteps.length > 0 && (
+                <ol className="space-y-1.5 pl-4 list-decimal text-xs text-sky-800/90 dark:text-sky-300/90 leading-relaxed">
+                  {setupSteps.map((step, i) => (
+                    <li key={i}>{step}</li>
+                  ))}
+                </ol>
+              )}
+
+              {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => patch({ mode: "webhook" }, "webhook")}
+                  className="px-3 py-1.5 text-xs font-mono font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover disabled:opacity-50 transition-colors"
+                >
+                  {busy === "webhook" ? "Switching..." : "I've added it · switch to Direct Webhook"}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => patch({ dismissSetupNudge: true }, "dismiss")}
+                  className="px-3 py-1.5 text-xs font-mono font-medium rounded-lg border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50 transition-colors"
+                >
+                  {busy === "dismiss" ? "Saving..." : "Keep auto-polling for now"}
+                </button>
+              </div>
             </div>
-          </div>
-
-          <CopyField label="Webhook URL" value={status.webhookUrl} />
-          <CopyField
-            label="Signing secret"
-            value={secretInput || "(will be generated when you switch to webhook mode)"}
-            mask
-          />
-
-          {setupSteps.length > 0 && (
-   <ol className="space-y-1.5 pl-4 list-decimal text-xs text-sky-800/90 dark:text-sky-300/90 leading-relaxed">
-              {setupSteps.map((step, i) => (
-                <li key={i}>{step}</li>
-              ))}
-            </ol>
           )}
 
-          {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
-
-          <div className="flex flex-wrap gap-2 pt-1">
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => patch({ mode: "webhook" }, "webhook")}
-    className="px-3 py-1.5 text-xs font-mono font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover disabled:opacity-50 transition-colors"         
-            >
-              {busy === "webhook" ? "Switching…" : "I've added it — switch to Direct Webhook"}
-            </button>
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => patch({ dismissSetupNudge: true }, "dismiss")}
-    className="px-3 py-1.5 text-xs font-mono font-medium rounded-lg border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50 transition-colors"
-            >
-              {busy === "dismiss" ? "Saving…" : "Keep auto-polling for now"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Switch-back control for engagements already on webhook mode — keeps the choice reversible */}
-      {status.mode === "webhook" && (
-        <div className="mx-4 mb-4 flex items-center justify-between">
-          <p className="text-[11px] text-zinc-400 dark:text-zinc-600">
-            Prefer auto-polling instead? You can switch back any time.
-          </p>
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => patch({ mode: "polling" }, "polling")}
-    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono rounded-lg border border-zinc-300 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50 transition-colors"
-          >
-            <RefreshCw size={11} className={busy === "polling" ? "animate-spin" : ""} />
-            {busy === "polling" ? "Switching…" : "Switch to auto-polling"}
-          </button>
-        </div>
+          {/* Reversible mode toggle for manual platforms */}
+          {status.mode === "webhook" && (
+            <div className="mx-4 mb-4 flex items-center justify-between">
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-600">
+                Prefer auto-polling instead? You can switch back any time.
+              </p>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => patch({ mode: "polling" }, "polling")}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono rounded-lg border border-zinc-300 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw size={11} className={busy === "polling" ? "animate-spin" : ""} />
+                {busy === "polling" ? "Switching..." : "Switch to auto-polling"}
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {status.lastError && !status.actionNeeded && (

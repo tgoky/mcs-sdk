@@ -10,17 +10,10 @@ import {
   SMS_PLATFORM_LABELS,
   AD_DATA_PLATFORM_LABELS,
 } from "@/lib/copy";
-import { platformSupportsAutoWebhook } from "@/lib/booking-sync-status";
+import { computeBookingSyncStatus, platformSupportsAutoWebhook } from "@/lib/booking-sync-status";
+import { BookingSyncStatusCard } from "@/components/booking-sync-status-card";
 import type { EngagementStack } from "@/models/schema";
 
-// Every one of these option lists is kept in lockstep with the PATCH
-// route's own allow-list (src/app/api/engagements/[id]/route.ts) — a
-// value the route would reject shouldn't be offered as a dropdown option
-// here. Sourced from the same central label maps in lib/copy.ts rather
-// than a separately hand-typed array, specifically because a hand-typed
-// EMAIL_PLATFORM_OPTIONS list is what let "ghl" (a real, labeled,
-// onboarding-writable email platform — see submit-payload.ts) silently
-// fall out of this form's dropdown before.
 const BOOKING_PLATFORM_OPTIONS = Object.keys(BOOKING_PLATFORM_LABELS) as Array<keyof typeof BOOKING_PLATFORM_LABELS>;
 const EMAIL_PLATFORM_OPTIONS = Object.keys(EMAIL_PLATFORM_LABELS) as Array<keyof typeof EMAIL_PLATFORM_LABELS>;
 const HOSTING_PLATFORM_OPTIONS = Object.keys(HOSTING_PLATFORM_LABELS) as Array<keyof typeof HOSTING_PLATFORM_LABELS>;
@@ -72,7 +65,6 @@ function hostingMetaFieldsFor(platform: string | undefined): MetaField[] {
         { key: "vercel_team_id", label: "Vercel team ID (optional)" },
       ];
     default:
-      // ghl, plain_html, lovable, discover_from_docs — nothing to configure here.
       return [];
   }
 }
@@ -108,10 +100,6 @@ function adDataMetaFieldsFor(platform: string | undefined): MetaField[] {
   }
 }
 
-// The flat (non-nested) ESP structural IDs enrollment code reads directly
-// off the stack — see src/lib/platforms/email.ts. Not part of any *_meta
-// object, so tracked and saved separately from the meta-field sections
-// above, but shown inline in the same "Email / CRM automation" group.
 function emailStructureFieldsFor(platform: string | undefined): MetaField[] {
   switch (platform) {
     case "klaviyo":
@@ -143,12 +131,10 @@ function emailStructureFieldsFor(platform: string | undefined): MetaField[] {
         { key: "recovery_workflow_id", label: "Win-Back workflow ID" },
       ];
     default:
-      // smtp — direct-send, no list/workflow concept.
       return [];
   }
 }
 
-/** All meta-field keys this form can possibly render, across every category — used to seed initial state from initialStack. No key collides across categories. */
 function allMetaKeys(): string[] {
   const platforms = {
     booking: ["ghl_calendar", "calendly", "cal_com", "oncehub"],
@@ -209,27 +195,15 @@ export function EditStackSettings({
 }: {
   engagementId: string;
   initialStack: EngagementStack | null;
-  /** Rendered inside the Edit action menu's Modal — parent already owns visibility, so skip the collapsed trigger button and the bordered card chrome. */
   embedded?: boolean;
-  /** Called (in addition to the internal Close button) so the wrapping Modal can dismiss itself too. */
   onRequestClose?: () => void;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Set by the Queue's "Fix now" link on a classified run failure (see
-  // src/lib/error-classification.ts + queue.ts's failedRunQueueItems) —
-  // opens straight to, and scrolls/highlights, the section that likely has
-  // the wrong value, instead of landing on a collapsed panel the buyer has
-  // to know to open and then hunt through five sections themselves.
   const fixSection = searchParams.get("fixSection");
   const [open, setOpen] = useState(() => Boolean(fixSection) || embedded);
   const [highlightSection, setHighlightSection] = useState<string | null>(fixSection);
-  // Five fixed, individually-declared refs rather than a dynamic
-  // Record<string, ref> built from a per-render factory function — the
-  // latter reads .current through a freshly-created closure on every
-  // render, which is exactly the unsafe-ref-access-during-render pattern
-  // eslint's react-hooks/refs rule (React Compiler's ref-safety check)
-  // flags. These are stable ref objects instead.
+
   const bookingSectionRef = useRef<HTMLDivElement>(null);
   const hostingSectionRef = useRef<HTMLDivElement>(null);
   const emailSectionRef = useRef<HTMLDivElement>(null);
@@ -245,9 +219,6 @@ export function EditStackSettings({
 
   useEffect(() => {
     if (!fixSection) return;
-    // Wait a tick for the panel's own open-state render to commit before
-    // measuring scroll position — scrollIntoView on a not-yet-laid-out
-    // element scrolls to the wrong place.
     const t = setTimeout(() => {
       sectionRefs[fixSection]?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
@@ -265,15 +236,8 @@ export function EditStackSettings({
   const [smsPlatform, setSmsPlatform] = useState(initialStack?.sms_platform ?? "");
   const [adDataPlatform, setAdDataPlatform] = useState(initialStack?.ad_data_platform ?? "");
 
-  // Was defaulting to "webhook" whenever nothing had been saved yet, which
-  // silently pre-selected an option the buyer never chose and made an
-  // unconfigured engagement look configured. Reflect the real stored value
-  // (including "unset") instead — see the "— not set —" option below.
   const [webhookMode, setWebhookMode] = useState(initialStack?.webhook_receiver_mode ?? "");
 
-  // One flat map for every category's meta fields plus the flat ESP
-  // structural IDs — no key collides across booking/hosting/sms/ad-data/
-  // email, so this stays simple instead of five parallel state objects.
   const [meta, setMeta] = useState<Record<string, string>>(() => {
     const seeded: Record<string, string> = {};
     for (const key of allMetaKeys()) seeded[key] = "";
@@ -377,7 +341,7 @@ export function EditStackSettings({
   }
 
   return (
-<div className={embedded ? "space-y-4" : "rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-black p-4 space-y-4 shadow-sm"}>
+    <div className={embedded ? "space-y-4" : "rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-black p-4 space-y-4 shadow-sm"}>
       {!embedded && (
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
@@ -440,12 +404,22 @@ export function EditStackSettings({
             </select>
             {!platformSupportsAutoWebhook(bookingPlatform) && bookingPlatform && (
               <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
-                {BOOKING_PLATFORM_LABELS[bookingPlatform as keyof typeof BOOKING_PLATFORM_LABELS] ?? "This platform"} can&apos;t register a webhook by itself — polling covers you every 5 min until you paste one in (see the sync status card above).
+                {BOOKING_PLATFORM_LABELS[bookingPlatform as keyof typeof BOOKING_PLATFORM_LABELS] ?? "This platform"} can&apos;t register a webhook by itself — polling covers you every 5 min until you paste one in (see the sync status card below).
               </p>
             )}
           </label>
 
           <MetaFieldInputs fields={bookingMetaFields} values={meta} onChange={setMetaField} />
+
+          {/* Interactive Booking Sync Card placed inside Modify settings */}
+          {bookingPlatform && (
+            <div className="sm:col-span-2 pt-2">
+              <BookingSyncStatusCard
+                engagementId={engagementId}
+                status={computeBookingSyncStatus(engagementId, initialStack)}
+              />
+            </div>
+          )}
         </div>
 
         {/* Confirmation page hosting */}
