@@ -80,6 +80,24 @@ export async function POST(request: Request) {
 
     finalStack.slack_webhook_url = credentials?.slack_webhook_url ?? finalStack.slack_webhook_url;
 
+    // ── Default booking sync to polling, never leave it unset ──────────
+    // Previously webhook_receiver_mode only got set later, inside
+    // onboarding-service.ts's webhook-registration step, and only if
+    // resolveCredential() happened to succeed at that exact moment. Any
+    // failure there (or the buyer never getting to /api/pin-down/launch at
+    // all) left the field permanently null — which findEngagementsDueForPoll
+    // (booking-poller.ts) treats as "never poll this engagement," not
+    // "poll it anyway." Setting a safe default the instant the row exists
+    // means every booking platform is covered from minute one; GHL/OnceHub
+    // stay on polling forever (they have no programmatic webhook
+    // registration at all), and Calendly/Cal.com get upgraded to "webhook"
+    // moments later once onboarding actually confirms a live subscription.
+    if (!finalStack.webhook_receiver_mode && finalStack.booking_platform) {
+      finalStack.webhook_receiver_mode = "polling";
+      finalStack.webhook_poll_interval_minutes = finalStack.webhook_poll_interval_minutes ?? 5;
+      finalStack.webhook_receiver_last_polled_at = new Date().toISOString();
+    }
+
     // ── Step 1: Ensure engagement row exists ──
     // CRITICAL: must target engagementId's unique constraint explicitly.
     // Without a target, onConflictDoNothing() falls back to the PRIMARY KEY

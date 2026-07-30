@@ -179,6 +179,82 @@ function MetaFieldInputs({
   );
 }
 
+function GhlCalendarPicker({
+  engagementId,
+  locationId,
+  value,
+  onChange,
+}: {
+  engagementId: string;
+  locationId: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [options, setOptions] = useState<{ id: string; name: string; link: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const trimmed = locationId?.trim();
+    if (!trimmed) {
+      setOptions([]);
+      setError(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      fetch(`/api/engagements/${engagementId}/booking-calendars?locationId=${encodeURIComponent(trimmed)}`)
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || `Request failed [${res.status}]`);
+          return data;
+        })
+        .then((data) => {
+          if (data.success) setOptions(data.options ?? []);
+          else throw new Error(data.error ?? "Failed to load calendars.");
+        })
+        .catch((e: unknown) => {
+          setError(e instanceof Error ? e.message : "Could not load calendars from GoHighLevel.");
+          setOptions([]);
+        })
+        .finally(() => setLoading(false));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [engagementId, locationId]);
+
+  return (
+    <label className="space-y-1 block">
+      <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">Calendar</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={loading || options.length === 0}
+        className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 disabled:opacity-50"
+      >
+        <option value="">
+          {loading
+            ? "Loading calendars…"
+            : !locationId?.trim()
+            ? "-- Enter a Location ID above first --"
+            : options.length === 0
+            ? "-- No calendars found --"
+            : "-- Choose a calendar --"}
+        </option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>{o.name}</option>
+        ))}
+      </select>
+      {error && <p className="text-[10px] font-mono text-rose-600 dark:text-rose-400 leading-relaxed">⚠ {error}</p>}
+      {!error && !loading && options.length > 0 && (
+        <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
+          Picking the wrong calendar here is exactly what causes GHL 422 errors — select the one bookings actually land in.
+        </p>
+      )}
+    </label>
+  );
+}
+
 function GroupHeading({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-wider pt-2 first:pt-0">
@@ -295,7 +371,6 @@ export function EditStackSettings({
       const adDataMetaPayload = pickMeta(adDataMetaFields);
       const flatPayload = pickMeta(emailStructureFields);
 
-      // Default manual setup platforms to "polling" if webhookMode is left empty
       const effectiveWebhookMode =
         webhookMode || (!platformSupportsAutoWebhook(bookingPlatform) ? "polling" : "");
 
@@ -413,7 +488,19 @@ export function EditStackSettings({
             )}
           </label>
 
-          <MetaFieldInputs fields={bookingMetaFields} values={meta} onChange={setMetaField} />
+          <MetaFieldInputs
+            fields={bookingPlatform === "ghl_calendar" ? bookingMetaFields.filter((f) => f.key !== "calendar_id") : bookingMetaFields}
+            values={meta}
+            onChange={setMetaField}
+          />
+          {bookingPlatform === "ghl_calendar" && (
+            <GhlCalendarPicker
+              engagementId={engagementId}
+              locationId={meta.location_id ?? ""}
+              value={meta.calendar_id ?? ""}
+              onChange={(v) => setMetaField("calendar_id", v)}
+            />
+          )}
 
           {/* Interactive Booking Sync Card placed inside Modify settings */}
           {bookingPlatform && (

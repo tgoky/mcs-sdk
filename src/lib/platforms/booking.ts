@@ -1192,6 +1192,110 @@ export async function registerWebhookForTenant(
 
 
 
+// ── Live option discovery (calendar/event-type pickers) ────────────────────
+//
+// Shared by two callers that must never drift apart:
+//   1. /api/integrations/booking/events — the new-engagement wizard, which
+//      only has a raw, unsaved API key sitting in the browser.
+//   2. /api/engagements/[id]/booking-calendars — Edit Stack Settings, which
+//      resolves the already-stored, encrypted credential server-side so a
+//      buyer fixing a misconfigured calendar never re-pastes a secret.
+//
+// This is the fix for the GHL 422 class of bug at its root: instead of a
+// buyer hand-typing a raw calendar ID into an "(optional)" text field (and
+// resolveCalendarId() silently guessing "first active calendar" when they
+// don't), both onboarding and later edits present the buyer's *real*
+// calendars by name and write back a verified ID.
+export interface BookingOptionResult {
+  id: string;
+  name: string;
+  link: string;
+}
+
+export async function fetchBookingOptions(
+  bookingPlatform: string,
+  apiKey: string,
+  locationId?: string
+): Promise<BookingOptionResult[]> {
+  const cleanKey = apiKey.trim();
+
+  switch (bookingPlatform) {
+    case "calendly": {
+      const client = new CalendlyClient(cleanKey);
+      const orgUri = await client.getCurrentOrganization();
+
+      const res = await fetchWithTimeout(
+        `https://api.calendly.com/event_types?organization=${encodeURIComponent(orgUri)}&active=true`,
+        { headers: { Authorization: `Bearer ${cleanKey}` } }
+      );
+      if (!res.ok) throw new Error(`Calendly event fetch failed [${res.status}]`);
+
+      const data = (await res.json()) as { collection?: { uri: string; name: string; landing_page_url?: string }[] };
+      return (data.collection ?? []).map((e) => ({
+        id: e.uri.split("/").pop()!,
+        name: e.name,
+        link: e.landing_page_url ?? "",
+      }));
+    }
+
+    case "cal_com": {
+      const res = await fetchWithTimeout("https://api.cal.com/v2/event-types", {
+        headers: { "cal-api-v2-key": cleanKey, "cal-api-version": "2024-08-13" },
+      });
+      if (!res.ok) throw new Error(`Cal.com event fetch failed [${res.status}]`);
+
+      const data = (await res.json()) as {
+        data?:
+          | { eventTypes?: { id: string | number; slug?: string; title?: string; owner?: { username?: string } }[] }
+          | { id: string | number; slug?: string; title?: string; owner?: { username?: string } }[];
+      };
+      const list = Array.isArray(data.data) ? data.data : (data.data?.eventTypes ?? []);
+      return list.map((e) => ({
+        id: String(e.id),
+        name: e.title || e.slug || String(e.id),
+        link: `https://cal.com/${e.owner?.username || "user"}/${e.slug ?? ""}`,
+      }));
+    }
+
+    case "ghl_calendar": {
+      if (!locationId?.trim()) {
+        throw new Error("A GoHighLevel Location ID is required before calendars can be listed.");
+      }
+      const res = await fetchWithTimeout(
+        `https://services.leadconnectorhq.com/calendars/?locationId=${encodeURIComponent(locationId.trim())}`,
+        { headers: { Authorization: `Bearer ${cleanKey}`, Version: "2021-07-28" } }
+      );
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`GHL calendar fetch failed [${res.status}]: ${body.slice(0, 300)}`);
+      }
+      const data = (await res.json()) as { calendars?: { id: string; name?: string; widgetUrl?: string }[] };
+      return (data.calendars ?? []).map((c) => ({
+        id: c.id,
+        name: c.name ?? c.id,
+        link: c.widgetUrl ?? `https://api.leadconnectorhq.com/widget/booking/${c.id}`,
+      }));
+    }
+
+    case "oncehub": {
+      const res = await fetchWithTimeout("https://api.oncehub.com/v2/booking-pages?limit=100", {
+        headers: { "API-Key": cleanKey },
+      });
+      if (!res.ok) throw new Error(`OnceHub booking pages fetch failed [${res.status}]`);
+
+      const data = (await res.json()) as { data?: { id: string; name?: string; public_url?: string }[] };
+      return (data.data ?? []).map((p) => ({
+        id: p.id,
+        name: p.name ?? p.id,
+        link: p.public_url ?? "",
+      }));
+    }
+
+    default:
+      return [];
+  }
+}
+
 export async function getAvailableSlotsForTenant(
   bookingPlatform: string,
   apiKey: string,

@@ -34,6 +34,21 @@ export function getValidationErrors(form: FormData): ValidationError[] {
   if ((form.bookingPlatform === "calendly" || form.bookingPlatform === "cal_com") && !form.bookingStandingLink.trim()) {
     errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "Standing booking page link is required" });
   }
+  // Hard gate on the live calendar dropdown, not just the API key — this
+  // is what actually prevents the GHL 422 bug: without a verified
+  // calendar_id, resolveCalendarId() falls back to guessing "first active
+  // calendar," which can silently be a group/round-robin calendar the
+  // events endpoint rejects.
+  if (
+    form.bookingPlatform === "ghl_calendar" &&
+    !(form.bookingCalendarId || form.ghlCalendarId || form.calendarId || "").trim()
+  ) {
+    errors.push({
+      step: "credentials",
+      stepLabel: "Account Keys",
+      issue: "GoHighLevel Calendar selection is required — choose one from the dropdown once your token and Location ID are verified",
+    });
+  }
   if (!form.emailPlatform) {
     errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "Email Platform selection is required" });
   }
