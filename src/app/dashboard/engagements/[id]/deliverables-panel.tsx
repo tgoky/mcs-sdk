@@ -166,7 +166,7 @@ function DeliverableRow({
       className={
         isOpen
           ? "bg-[#f7fcfe] text-zinc-900 rounded-2xl shadow-xl my-3 border border-zinc-200/80 transition-all duration-200"
-          : "border-b border-zinc-700/50 last:border-b-0 transition-all duration-200"
+          : "border-b border-zinc-800/60 last:border-b-0 transition-all duration-200"
       }
     >
       <button
@@ -175,7 +175,7 @@ function DeliverableRow({
         className={
           isOpen
             ? "w-full flex items-center justify-between py-4 px-3.5 text-left cursor-pointer select-none"
-            : "w-full flex items-center justify-between py-4 px-3 hover:bg-white/5 rounded-xl transition-all text-left cursor-pointer select-none"
+            : "w-full flex items-center justify-between py-4 px-3 hover:bg-zinc-900/30 rounded-xl transition-all text-left cursor-pointer select-none"
         }
       >
         <div className="flex items-center gap-3.5 min-w-0">
@@ -200,7 +200,7 @@ function DeliverableRow({
                   className={
                     isOpen
                       ? "text-[10px] font-mono font-medium px-2 py-0.5 rounded-md bg-zinc-200/80 text-zinc-800 border border-zinc-300/80 shrink-0 hidden sm:inline-block"
-                      : "text-[10px] font-mono font-medium px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700 shrink-0 hidden sm:inline-block"
+                      : "text-[10px] font-mono font-medium px-2 py-0.5 rounded-md bg-zinc-900 text-zinc-400 border border-zinc-800 shrink-0 hidden sm:inline-block"
                   }
                 >
                   {formatBadge}
@@ -213,7 +213,7 @@ function DeliverableRow({
           </div>
         </div>
 
-        <div className={isOpen ? "text-zinc-800 pl-3 shrink-0" : "text-zinc-400 group-hover:text-zinc-200 transition-colors pl-3 shrink-0"}>
+        <div className={isOpen ? "text-zinc-800 pl-3 shrink-0" : "text-zinc-500 group-hover:text-zinc-300 transition-colors pl-3 shrink-0"}>
           {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
         </div>
       </button>
@@ -277,7 +277,7 @@ export function DeliverablesPanel({
     <div className="w-full space-y-6 font-sans">
       {/* ── CALL INTELLIGENCE STATUS HEADER ── */}
       {conversationIntelligence?.enabled ? (
-        <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-700/60 bg-[#202020] text-xs">
+        <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-800 bg-zinc-950/60 text-xs">
           <div className="flex items-center gap-3">
             <Radio size={16} className="text-emerald-400 animate-pulse shrink-0" />
             <div>
@@ -296,9 +296,9 @@ export function DeliverablesPanel({
           </span>
         </div>
       ) : (
-        <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-700/60 bg-[#202020] text-xs">
+        <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-800 bg-zinc-950/60 text-xs">
           <div className="flex items-center gap-3">
-            <div className="p-1.5 rounded-lg bg-zinc-800 text-zinc-400 border border-zinc-700 shrink-0">
+            <div className="p-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 shrink-0">
               <Radio size={16} />
             </div>
             <div>
@@ -312,15 +312,15 @@ export function DeliverablesPanel({
           </div>
           <a
             href="#stack-settings"
-            className="text-[11px] font-mono font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg transition-colors shrink-0"
+            className="text-[11px] font-mono font-medium text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-1.5 rounded-lg transition-colors shrink-0"
           >
             Connect Provider
           </a>
         </div>
       )}
 
-      {/* ── MAIN DELIVERABLES CONTAINER (#202020 BACKGROUND) ── */}
-      <div className="w-full bg-[#202020] border border-zinc-700/60 rounded-2xl p-2 sm:p-4 divide-y divide-zinc-700/50 shadow-lg">
+      {/* ── MAIN DELIVERABLES CONTAINER ── */}
+      <div className="w-full bg-zinc-950 border border-zinc-800/80 rounded-2xl p-2 sm:p-4 divide-y divide-zinc-800/60 shadow-lg">
         
         {/* BRAND VOICE & SITE INTELLIGENCE ROW */}
         <DeliverableRow
