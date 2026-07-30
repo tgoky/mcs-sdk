@@ -450,7 +450,7 @@ export const processSingleProspectBrief = inngest.createFunction(
   {
     id: "process-single-prospect-brief",
     triggers: [prospectBriefDispatch],
-    concurrency: { limit: 15 },
+    concurrency: { limit: 5 },
   },
   async ({ event, step }) => {
     const { runId, engagementId, call: callData } = event.data;
