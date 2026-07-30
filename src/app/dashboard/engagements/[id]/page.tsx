@@ -26,6 +26,7 @@ import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
 import { BookingSyncChip } from "@/components/booking-sync-chip";
 import { BackLink } from "@/components/back-link";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
+import { EditableOfferPrice } from "./editable-offer-price";
 import {
   SKILL_INFO,
   SKILLS,
@@ -208,45 +209,43 @@ export default async function EngagementDetailPage({
           </div>
         </div>
 
-        {/* Offer Details */}
-        {offerDetails && (
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-5 shadow-xs overflow-hidden">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
-              <div className="flex-1 space-y-4 min-w-0">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
-                    Offer
-                  </p>
-                  <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
-                    {offerName}
-                  </h2>
-                </div>
+      {/* Offer Details */}
+{offerDetails && (
+  <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-5 shadow-xs overflow-hidden">
+    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
+      
+      {/* Left Column: Offer Title & Targeting */}
+      <div className="flex-1 space-y-4 min-w-0">
+        <div className="space-y-1">
+          <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
+            Offer
+          </p>
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
+            {offerName}
+          </h2>
+        </div>
 
-                {offerIcp && (
-                  <div className="space-y-1 pt-1.5 border-t border-zinc-100 dark:border-zinc-800/60">
-                    <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
-                      Targeting
-                    </p>
-                    <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed">
-                      {offerIcp}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="shrink-0 self-start">
-                <div className="flex flex-col items-center justify-center px-5 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/40 min-w-[100px]">
-                  <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
-                    Price
-                  </span>
-                  <span className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tabular-nums mt-0.5">
-                    {offerPrice ? `$${offerPrice}` : "—"}
-                  </span>
-                </div>
-              </div>
-            </div>
+        {offerIcp && (
+          <div className="space-y-1 pt-1.5 border-t border-zinc-100 dark:border-zinc-800/60">
+            <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
+              Targeting
+            </p>
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed">
+              {offerIcp}
+            </p>
           </div>
         )}
+      </div>
+
+      {/* Right Column: Seamless, Borderless Editable Price */}
+      <EditableOfferPrice
+        engagementId={engagement.engagementId}
+        initialPrice={offerPrice}
+        offerDetails={offerDetails}
+      />
+    </div>
+  </div>
+)}
       </div>
 
       <SkillsPanel engagementId={engagement.engagementId} initialStates={skillStates} />
