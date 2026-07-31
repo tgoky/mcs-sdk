@@ -8,6 +8,7 @@ import { QueuePanel } from "./queue-panel";
 import { QUEUE_COPY } from "@/lib/copy";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import Link from "next/link";
+import { Settings, FolderKanban, Plus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -31,7 +32,10 @@ export default async function DashboardPage() {
     recentRunsRaw,
     queueItems,
   ] = await Promise.all([
-    db.select().from(engagements).where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
+    db
+      .select()
+      .from(engagements)
+      .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
 
     db
       .select()
@@ -98,36 +102,49 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-5 w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200">
 
-      {/* Header */}
-      <div className="flex flex-col space-y-3 lg:flex-row lg:justify-between lg:items-center lg:space-y-0 border-b border-zinc-200 dark:border-zinc-900 pb-3">
+      {/* Premium Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200/80 dark:border-zinc-800/80 pb-4">
         <div className="space-y-1">
-          <h1 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 tracking-tight">
+          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
             {copy.pageTitle}
           </h1>
-          <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
+          <p className="text-sm font-normal text-zinc-500 dark:text-zinc-400">
             {copy.pageSubtitle}
           </p>
         </div>
 
-        {/* Quick links */}
-        <div className="flex items-center space-x-1.5 self-start lg:self-auto text-sm">
+        {/* Action Toolbar */}
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {/* Accounts Link */}
           <Link
             href="/dashboard/engagements"
-            className="px-2 py-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors text-xs font-mono"
+            title={copy.accountsLink || "Accounts"}
+            className="p-2 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200/60 dark:border-zinc-800/80 rounded-md transition-all shadow-2xs active:scale-95"
           >
-            {copy.accountsLink}
+            <FolderKanban className="w-4 h-4" />
+            <span className="sr-only">{copy.accountsLink || "Accounts"}</span>
           </Link>
+
+          {/* Settings Link */}
           <Link
             href="/dashboard/settings"
-            className="px-2 py-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors text-xs font-mono"
+            title="Settings"
+            className="p-2 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200/60 dark:border-zinc-800/80 rounded-md transition-all shadow-2xs active:scale-95"
           >
-            Settings
+            <Settings className="w-4 h-4" />
+            <span className="sr-only">Settings</span>
           </Link>
+
+          {/* Vertical Separator */}
+          <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-1" />
+
+          {/* Primary Action Button */}
           <Link
             href="/dashboard/engagements/new"
-          className="ml-2 inline-flex items-center px-3 py-1 text-xs border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-sm hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-mono"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-[#f7fcfe] dark:bg-sky-950/50 text-sky-900 dark:text-sky-200 border border-sky-200 dark:border-sky-800/80 rounded-md shadow-2xs hover:bg-sky-100/80 dark:hover:bg-sky-900/80 hover:border-sky-300 dark:hover:border-sky-700 hover:text-sky-950 dark:hover:text-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:focus:ring-sky-400/20 active:scale-[0.98] transition-all font-mono"
           >
-            {copy.newClientButton}
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>{copy.newClientButton}</span>
           </Link>
         </div>
       </div>
