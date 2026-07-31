@@ -204,7 +204,7 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                     {/* Solid Gold/Amber Upgrade Button (Icon Removed, Text Renamed) */}
                     <button
                       type="button"
-                      className="w-full mt-1.5 flex items-center justify-center px-3 py-2 text-xs font-semibold bg-[#e3a869] hover:bg-[#d89a58] text-zinc-950 dark:bg-[#e3a869] dark:hover:bg-[#d89a58] rounded-md transition-colors shadow-sm cursor-pointer"
+                      className="w-full mt-1.5 flex items-center justify-center px-3 py-2 text-xs font-semibold bg-[#ece9e6] hover:bg-[#c7b5a1] text-zinc-950 dark:bg-[#e3a869] dark:hover:bg-[#d89a58] rounded-md transition-colors shadow-sm cursor-pointer"
                     >
                       <span>Upgrade Account</span>
                     </button>
