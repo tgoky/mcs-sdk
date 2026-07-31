@@ -92,12 +92,13 @@ export default async function EngagementsPage() {
         </div>
 
         <div className="flex items-center self-start lg:self-auto">
-          <Link
-            href="/dashboard/engagements/new"
-       className="inline-flex items-center px-3 py-1.5 text-xs font-medium border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-sm hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-mono"
-          >
-            + Add a New Client
-          </Link>
+       <Link
+  href="/dashboard/engagements/new"
+  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-[#f7fcfe] text-sky-900 border border-sky-200 rounded-md shadow-sm hover:bg-sky-100 hover:border-sky-300 hover:text-sky-950 focus:outline-none focus:ring-2 focus:ring-sky-500/20 active:scale-[0.98] transition-all font-mono"
+>
+  <span className="text-sm font-bold leading-none">+</span>
+  <span>Add a New Client</span>
+</Link>
         </div>
       </div>
 
