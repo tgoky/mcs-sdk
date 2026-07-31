@@ -31,7 +31,8 @@ export type NotificationType =
   | "credential_invalid"
   | "credential_check_error"
   | "lost_deal_swept"
-  | "weekly_metrics";
+  | "weekly_metrics"
+  | "conversation_intelligence_objection_found";
 
 export type NotificationSeverity = "info" | "warning" | "critical";
 

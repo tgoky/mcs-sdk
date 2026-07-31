@@ -532,11 +532,15 @@ export const engagements = pgTable("engagements", {
   pileOnSequenceAssetMap: jsonb("pile_on_sequence_asset_map"),
   // 3-5 structured ad creative script briefs (not finished ad copy — a
   // brief a copywriter/editor works from), one per content pillar. See
-  // src/features/pile-on/server/ad-creative-briefs.ts. Generated once
-  // during pin-down onboarding, engagement-level like the recovery
-  // cadence and long-term nurture content.
+  // src/features/pile-on/server/ad-creative-briefs.ts. The full set is
+  // generated once during pin-down onboarding; the "objections" entry
+  // alone can be regenerated later by src/inngest/conversation-intelligence.ts
+  // when a live call surfaces a genuinely new objection — see
+  // objectionsLastRegeneratedAt below, which is only set when that's
+  // happened at least once.
   adCreativeBriefs: jsonb("ad_creative_briefs").$type<{
     generatedAt: string;
+    objectionsLastRegeneratedAt?: string;
     briefs: Array<{
       id: string;
       pillar: "common_questions" | "deeper_questions" | "success_proof" | "objections";

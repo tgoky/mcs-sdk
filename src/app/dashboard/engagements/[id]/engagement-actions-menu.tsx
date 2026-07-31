@@ -6,6 +6,7 @@ import { SquarePen, Settings2, KeyRound, Trash2 } from "lucide-react";
 import { ActionMenu, ActionMenuSection, ActionMenuDivider, ActionMenuItem } from "@/components/action-menu";
 import { Modal } from "@/components/modal";
 import { ApprovalModeToggle } from "./approval-mode/approval-mode-toggle";
+import { CallIntelligenceToggle } from "./call-intelligence-toggle";
 import { EditStackSettings } from "./edit-stack-settings";
 import { UpdateCredentialsForm } from "./update-credentials-form";
 import { DeleteClientSection } from "./delete-client-section";
@@ -15,7 +16,7 @@ type ActiveModal = "stack" | "credentials" | "delete" | null;
 
 /**
  * Single "Modify" entry point for client configuration: automation mode,
- * stack settings, credentials, and client deletion.
+ * stack settings, credentials, call intelligence, and client deletion.
  */
 export function EngagementActionsMenu({
   engagementId,
@@ -42,8 +43,20 @@ export function EngagementActionsMenu({
     if (searchParams.get("fixSection")) return "stack";
     return null;
   });
+  // Set right before opening the stack modal from something already
+  // mounted on this page (the Call Intelligence toggle's "Connect"/
+  // "Manage" actions) — see EditStackSettings' initialHighlightSection
+  // prop for why this can't just reuse the ?fixSection= URL param for
+  // same-page opens.
+  const [stackHighlightSection, setStackHighlightSection] = useState<string | null>(null);
 
-  const hasCredentialsForm = Boolean(bookingPlatform || emailPlatform);
+  const conversationIntelligenceProvider = initialStack?.conversation_intelligence_provider ?? null;
+  const hasCredentialsForm = Boolean(bookingPlatform || emailPlatform || conversationIntelligenceProvider === "recall_ai");
+
+  function openStackSettings(highlightSection?: string) {
+    setStackHighlightSection(highlightSection ?? null);
+    setActiveModal("stack");
+  }
 
   return (
     <>
@@ -71,13 +84,26 @@ export function EngagementActionsMenu({
 
             <ActionMenuDivider />
 
+            <ActionMenuSection label="Call intelligence">
+              <CallIntelligenceToggle
+                engagementId={engagementId}
+                initialProvider={conversationIntelligenceProvider}
+                onManage={() => {
+                  openStackSettings("conversation_intelligence");
+                  close();
+                }}
+              />
+            </ActionMenuSection>
+
+            <ActionMenuDivider />
+
             <ActionMenuSection label="Client management">
               <ActionMenuItem
                 icon={Settings2}
                 label="Edit stack settings"
                 description="Booking, hosting, email, SMS, ad-data"
                 onClick={() => {
-                  setActiveModal("stack");
+                  openStackSettings();
                   close();
                 }}
               />
@@ -114,6 +140,7 @@ export function EngagementActionsMenu({
             initialStack={initialStack}
             embedded
             onRequestClose={() => setActiveModal(null)}
+            initialHighlightSection={stackHighlightSection}
           />
         </Modal>
       )}
@@ -124,6 +151,7 @@ export function EngagementActionsMenu({
             engagementId={engagementId}
             bookingPlatform={bookingPlatform}
             emailPlatform={emailPlatform}
+            conversationIntelligenceProvider={conversationIntelligenceProvider}
             vaultLinksByProvider={vaultLinksByProvider}
             embedded
             onRequestClose={() => setActiveModal(null)}

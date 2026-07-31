@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { engagements, skillRuns, artifacts, credentialsRefs, type EngagementStack } from "@/models/schema";
+import { engagements, skillRuns, artifacts, credentialsRefs, conversationIntelligenceSessions, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { eq, and, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -9,10 +9,10 @@ import { TriggerSkillButton } from "./trigger-skill-button";
 import { EngagementPauseControl } from "./pause-control";
 import { SkillsPanel } from "./skills-panel";
 import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
+import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
 import { RunRowActions } from "./run-row-actions";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
-import { WinBackRevenueSection } from "./win-back-revenue-section";
 import { 
   CheckCircle2, 
   XCircle, 
@@ -27,7 +27,6 @@ import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
 import { BookingSyncChip } from "@/components/booking-sync-chip";
 import { BackLink } from "@/components/back-link";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
-import { EditableOfferPrice } from "./editable-offer-price";
 import {
   SKILL_INFO,
   SKILLS,
@@ -135,6 +134,25 @@ export default async function EngagementDetailPage({
     .where(eq(artifacts.engagementId, id))
     .orderBy(desc(artifacts.createdAt));
 
+  // Recent Recall.ai bot sessions for this engagement — the actual log
+  // behind the Call Intelligence status header and the panel below it.
+  // Capped at 20: this is a recent-activity view, not a full export: a
+  // client running calls daily would otherwise load an ever-growing
+  // history on every page view for a panel meant to answer "is this
+  // working, and what came out of the last few calls," not archive
+  // browsing.
+  const conversationIntelligenceSessionRows = await db
+    .select()
+    .from(conversationIntelligenceSessions)
+    .where(eq(conversationIntelligenceSessions.engagementId, id))
+    .orderBy(desc(conversationIntelligenceSessions.createdAt))
+    .limit(20);
+
+  const conversationIntelligenceState = {
+    enabled: (engagement.stack as EngagementStack | null)?.conversation_intelligence_provider === "recall_ai",
+    lastProcessedAt: conversationIntelligenceSessionRows.find((s) => s.completedAt)?.completedAt?.toISOString(),
+  };
+
   const ARTIFACT_TYPE_LABELS: Record<string, string> = {
     recovery_cadence: "Win-Back recovery cadence",
     long_term_nurture: "Win-Back long-term nurture",
@@ -210,43 +228,45 @@ export default async function EngagementDetailPage({
           </div>
         </div>
 
-      {/* Offer Details */}
-{offerDetails && (
-  <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-5 shadow-xs overflow-hidden">
-    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
-      
-      {/* Left Column: Offer Title & Targeting */}
-      <div className="flex-1 space-y-4 min-w-0">
-        <div className="space-y-1">
-          <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
-            Offer
-          </p>
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
-            {offerName}
-          </h2>
-        </div>
+        {/* Offer Details */}
+        {offerDetails && (
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-5 shadow-xs overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
+              <div className="flex-1 space-y-4 min-w-0">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
+                    Offer
+                  </p>
+                  <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
+                    {offerName}
+                  </h2>
+                </div>
 
-        {offerIcp && (
-          <div className="space-y-1 pt-1.5 border-t border-zinc-100 dark:border-zinc-800/60">
-            <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
-              Targeting
-            </p>
-            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed">
-              {offerIcp}
-            </p>
+                {offerIcp && (
+                  <div className="space-y-1 pt-1.5 border-t border-zinc-100 dark:border-zinc-800/60">
+                    <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
+                      Targeting
+                    </p>
+                    <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                      {offerIcp}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="shrink-0 self-start">
+                <div className="flex flex-col items-center justify-center px-5 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/40 min-w-[100px]">
+                  <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
+                    Price
+                  </span>
+                  <span className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tabular-nums mt-0.5">
+                    {offerPrice ? `$${offerPrice}` : "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
-      </div>
-
-      {/* Right Column: Seamless, Borderless Editable Price */}
-      <EditableOfferPrice
-        engagementId={engagement.engagementId}
-        initialPrice={offerPrice}
-        offerDetails={offerDetails}
-      />
-    </div>
-  </div>
-)}
       </div>
 
       <SkillsPanel engagementId={engagement.engagementId} initialStates={skillStates} />
@@ -330,24 +350,65 @@ export default async function EngagementDetailPage({
       </div>
 
       <DeliverablesPanel
+        engagementId={id}
         discoveryPrefill={engagement.discoveryPrefill}
         voiceScrapeArtifacts={engagement.voiceScrapeArtifacts}
         brandVoiceProfile={engagement.brandVoiceProfile as BrandVoiceProfile}
         adCreativeBriefs={engagement.adCreativeBriefs}
         pinDownScriptPack={engagement.pinDownScriptPack}
         pinDownPageAudit={engagement.pinDownPageAudit}
+        conversationIntelligence={conversationIntelligenceState}
       />
+
+      {(conversationIntelligenceState.enabled || conversationIntelligenceSessionRows.length > 0) && (
+        <CallIntelligenceLog sessions={conversationIntelligenceSessionRows} />
+      )}
 
       {/* Win-Back Revenue Recovered */}
-     {/* Win-Back Revenue & Milestone Breakdown Section */}
-      <WinBackRevenueSection
-        engagementId={engagement.engagementId}
-        offerPrice={revenueAttribution.offerPrice}
-        initialEnrollments={revenueAttribution.recoveredEnrollments}
-        initialPeriodLabel={revenueAttribution.periodLabel}
-      />
+      <div className="space-y-2">
+        <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
+          <DollarSign className="w-3.5 h-3.5" /> Win-Back Revenue Recovered — {revenueAttribution.periodLabel}
+        </h2>
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-4 shadow-xs">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">Recovered</p>
+              <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
+                {revenueAttribution.recoveredCount}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">Revenue</p>
+              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                ${revenueAttribution.totalRevenue.toLocaleString()}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">Avg / recovery</p>
+              <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
+                ${Math.round(revenueAttribution.averageRecoveryValue).toLocaleString()}
+              </p>
+            </div>
+          </div>
+          {revenueAttribution.recoveredEnrollments.length > 0 ? (
+            <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/50 divide-y divide-zinc-100 dark:divide-zinc-800/40">
+              {revenueAttribution.recoveredEnrollments.slice(0, 10).map((r) => (
+                <div key={r.prospectEmail} className="flex items-center justify-between py-1.5 text-xs">
+                  <span className="text-zinc-700 dark:text-zinc-300 font-medium">{r.prospectName ?? r.prospectEmail}</span>
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
+                    {new Date(r.rebookedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/50 text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
+              No recoveries attributed yet this period — this fills in automatically as Win-Back rebooks prospects.
+            </p>
+          )}
+        </div>
+      </div>
 
-      
       {/* Runtime Ownership */}
       {artifactRows.length > 0 && (
         <div className="space-y-2">

@@ -9,6 +9,7 @@ import {
   HOSTING_PLATFORM_LABELS,
   SMS_PLATFORM_LABELS,
   AD_DATA_PLATFORM_LABELS,
+  CONVERSATION_INTELLIGENCE_PROVIDER_LABELS,
 } from "@/lib/copy";
 import type { EngagementStack } from "@/models/schema";
 import { BookingSyncStatusCard } from "@/components/booking-sync-status-card";
@@ -19,6 +20,17 @@ const EMAIL_PLATFORM_OPTIONS = Object.keys(EMAIL_PLATFORM_LABELS) as Array<keyof
 const HOSTING_PLATFORM_OPTIONS = Object.keys(HOSTING_PLATFORM_LABELS) as Array<keyof typeof HOSTING_PLATFORM_LABELS>;
 const SMS_PLATFORM_OPTIONS = Object.keys(SMS_PLATFORM_LABELS) as Array<keyof typeof SMS_PLATFORM_LABELS>;
 const AD_DATA_PLATFORM_OPTIONS = Object.keys(AD_DATA_PLATFORM_LABELS) as Array<keyof typeof AD_DATA_PLATFORM_LABELS>;
+const CONVERSATION_INTELLIGENCE_PROVIDER_OPTIONS = Object.keys(
+  CONVERSATION_INTELLIGENCE_PROVIDER_LABELS
+) as Array<keyof typeof CONVERSATION_INTELLIGENCE_PROVIDER_LABELS>;
+
+const RECALL_REGION_LABELS: Record<string, string> = {
+  "us-east-1": "US East",
+  "us-west-2": "US West",
+  "eu-central-1": "EU Central",
+  "ap-northeast-1": "Asia Pacific (Northeast)",
+};
+const RECALL_REGION_OPTIONS = Object.keys(RECALL_REGION_LABELS);
 
 type MetaField = { key: string; label: string; placeholder?: string };
 
@@ -268,15 +280,26 @@ export function EditStackSettings({
   initialStack,
   embedded = false,
   onRequestClose,
+  initialHighlightSection,
 }: {
   engagementId: string;
   initialStack: EngagementStack | null;
   embedded?: boolean;
   onRequestClose?: () => void;
+  /**
+   * Same purpose as the ?fixSection= URL param below, for callers already
+   * mounted on this page (e.g. the action menu's Call Intelligence "Manage"
+   * button) — the URL param only takes effect on a fresh page load, since
+   * `open`/`highlightSection` are lazy useState initializers that don't
+   * re-run on a same-page searchParams change. This component only ever
+   * mounts fresh when its parent Modal opens, so a prop set right before
+   * that works where the URL param wouldn't.
+   */
+  initialHighlightSection?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const fixSection = searchParams.get("fixSection");
+  const fixSection = searchParams.get("fixSection") || initialHighlightSection || null;
   const [open, setOpen] = useState(() => Boolean(fixSection) || embedded);
   const [highlightSection, setHighlightSection] = useState<string | null>(fixSection);
 
@@ -285,12 +308,14 @@ export function EditStackSettings({
   const emailSectionRef = useRef<HTMLDivElement>(null);
   const smsSectionRef = useRef<HTMLDivElement>(null);
   const adDataSectionRef = useRef<HTMLDivElement>(null);
+  const conversationIntelligenceSectionRef = useRef<HTMLDivElement>(null);
   const sectionRefs: Record<string, React.RefObject<HTMLDivElement | null>> = {
     booking: bookingSectionRef,
     hosting: hostingSectionRef,
     email: emailSectionRef,
     sms: smsSectionRef,
     ad_data: adDataSectionRef,
+    conversation_intelligence: conversationIntelligenceSectionRef,
   };
 
   useEffect(() => {
@@ -311,8 +336,17 @@ export function EditStackSettings({
   const [hostingPlatform, setHostingPlatform] = useState(initialStack?.hosting_platform ?? "");
   const [smsPlatform, setSmsPlatform] = useState(initialStack?.sms_platform ?? "");
   const [adDataPlatform, setAdDataPlatform] = useState(initialStack?.ad_data_platform ?? "");
+  const [conversationIntelligenceProvider, setConversationIntelligenceProvider] = useState(
+    initialStack?.conversation_intelligence_provider ?? ""
+  );
 
   const [webhookMode, setWebhookMode] = useState(initialStack?.webhook_receiver_mode ?? "");
+
+  const [recallRegion, setRecallRegion] = useState(initialStack?.conversation_intelligence_meta?.recall_region ?? "");
+  const [recallBotName, setRecallBotName] = useState(initialStack?.conversation_intelligence_meta?.recall_bot_name ?? "");
+  const [recallSigningSecret, setRecallSigningSecret] = useState(
+    initialStack?.conversation_intelligence_meta?.recall_webhook_signing_secret ?? ""
+  );
 
   const [meta, setMeta] = useState<Record<string, string>>(() => {
     const seeded: Record<string, string> = {};
@@ -374,6 +408,14 @@ export function EditStackSettings({
       const effectiveWebhookMode =
         webhookMode || (!platformSupportsAutoWebhook(bookingPlatform) ? "polling" : "");
 
+      const conversationIntelligenceMetaPayload = Object.fromEntries(
+        [
+          ["recall_region", recallRegion],
+          ["recall_bot_name", recallBotName.trim()],
+          ["recall_webhook_signing_secret", recallSigningSecret.trim()],
+        ].filter(([, v]) => v !== "")
+      );
+
       const res = await fetch(`/api/engagements/${engagementId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -384,7 +426,11 @@ export function EditStackSettings({
             ...(hostingPlatform ? { hosting_platform: hostingPlatform } : {}),
             ...(smsPlatform ? { sms_platform: smsPlatform } : {}),
             ...(adDataPlatform ? { ad_data_platform: adDataPlatform } : {}),
+            ...(conversationIntelligenceProvider ? { conversation_intelligence_provider: conversationIntelligenceProvider } : {}),
             ...(effectiveWebhookMode ? { webhook_receiver_mode: effectiveWebhookMode } : {}),
+            ...(Object.keys(conversationIntelligenceMetaPayload).length > 0
+              ? { conversation_intelligence_meta: conversationIntelligenceMetaPayload }
+              : {}),
             ...(Object.keys(bookingMetaPayload).length > 0 ? { booking_platform_meta: bookingMetaPayload } : {}),
             ...(Object.keys(hostingMetaPayload).length > 0 ? { hosting_platform_meta: hostingMetaPayload } : {}),
             ...(Object.keys(smsMetaPayload).length > 0 ? { sms_platform_meta: smsMetaPayload } : {}),
@@ -631,6 +677,86 @@ export function EditStackSettings({
             </select>
           </label>
           <MetaFieldInputs fields={adDataMetaFields} values={meta} onChange={setMetaField} />
+        </div>
+
+        {/* Call Intelligence (Recall.ai) */}
+        <div
+          ref={conversationIntelligenceSectionRef}
+          id="stack-section-conversation_intelligence"
+          className={`grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-zinc-100 dark:border-zinc-900/50 pt-3${sectionHighlightClass("conversation_intelligence")}`}
+        >
+          <GroupHeading>Call intelligence</GroupHeading>
+          <div />
+          <label className="space-y-1 block">
+            <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">Call intelligence provider</span>
+            <select
+              value={conversationIntelligenceProvider}
+              onChange={(e) => setConversationIntelligenceProvider(e.target.value as typeof conversationIntelligenceProvider)}
+              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+            >
+              <option value="">— not set —</option>
+              {CONVERSATION_INTELLIGENCE_PROVIDER_OPTIONS.map((p) => (
+                <option key={p} value={p}>{CONVERSATION_INTELLIGENCE_PROVIDER_LABELS[p]}</option>
+              ))}
+            </select>
+          </label>
+          <div />
+
+          {conversationIntelligenceProvider === "recall_ai" && (
+            <>
+              <label className="space-y-1 block">
+                <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">Recall workspace region</span>
+                <select
+                  value={recallRegion}
+                  onChange={(e) => setRecallRegion(e.target.value)}
+                  className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+                >
+                  <option value="">— defaults to US East —</option>
+                  {RECALL_REGION_OPTIONS.map((r) => (
+                    <option key={r} value={r}>{RECALL_REGION_LABELS[r]}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
+                  Must match the region shown in this client&apos;s own Recall.ai dashboard — a mismatch 404s every call.
+                </p>
+              </label>
+
+              <label className="space-y-1 block">
+                <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">Bot display name (optional)</span>
+                <input
+                  value={recallBotName}
+                  onChange={(e) => setRecallBotName(e.target.value)}
+                  placeholder="Notetaker"
+                  className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+                />
+              </label>
+
+              <label className="space-y-1 block sm:col-span-2">
+                <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">Webhook signing secret</span>
+                <input
+                  type="password"
+                  value={recallSigningSecret}
+                  onChange={(e) => setRecallSigningSecret(e.target.value)}
+                  placeholder="whsec_..."
+                  className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+                />
+                <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
+                  From this client&apos;s Recall.ai dashboard → Webhooks. Point that webhook at{" "}
+                  <span
+                    className="text-zinc-600 dark:text-zinc-400"
+                    suppressHydrationWarning
+                  >
+                    {typeof window !== "undefined" ? window.location.origin : ""}/api/recall
+                  </span>{" "}
+                  and paste the signing secret shown there — without it, incoming call events fail signature verification and get rejected.
+                </p>
+              </label>
+
+              <p className="text-[10px] font-mono text-amber-600 dark:text-amber-400 leading-relaxed sm:col-span-2">
+                The Recall.ai API key itself is entered separately under &quot;Update credentials&quot; in the Modify menu, not here — this section only holds the connection settings.
+              </p>
+            </>
+          )}
         </div>
       </div>
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { KeyRound, Link2, Check } from "lucide-react";
-import { bookingPlatformLabel, emailPlatformLabel } from "@/lib/copy";
+import { bookingPlatformLabel, emailPlatformLabel, conversationIntelligenceProviderLabel } from "@/lib/copy";
 
 interface VaultCredential {
   id: string;
@@ -247,6 +247,7 @@ export function UpdateCredentialsForm({
   engagementId,
   bookingPlatform,
   emailPlatform,
+  conversationIntelligenceProvider,
   vaultLinksByProvider,
   embedded = false,
   onRequestClose,
@@ -254,6 +255,8 @@ export function UpdateCredentialsForm({
   engagementId: string;
   bookingPlatform?: string | null;
   emailPlatform?: string | null;
+  /** Only "recall_ai" currently has a credential to enter here; "none"/unset renders nothing for this row. */
+  conversationIntelligenceProvider?: string | null;
   /** provider → the vault credential id it's currently linked to, or null if it stores its own value. Absent entirely = no credential saved yet at all. */
   vaultLinksByProvider?: Record<string, string | null>;
   /** Rendered inside the Edit action menu's Modal — parent already owns visibility. */
@@ -267,7 +270,8 @@ export function UpdateCredentialsForm({
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(() => searchParams.get("fixCredential") === "1" || embedded);
 
-  if (!bookingPlatform && !emailPlatform) return null;
+  const hasRecall = conversationIntelligenceProvider === "recall_ai";
+  if (!bookingPlatform && !emailPlatform && !hasRecall) return null;
 
   if (!open) {
     if (embedded) return null;
@@ -311,6 +315,14 @@ export function UpdateCredentialsForm({
             provider={emailPlatform}
             label={`${emailPlatformLabel(emailPlatform)} key`}
             currentlyLinkedVaultId={vaultLinksByProvider?.[emailPlatform]}
+          />
+        )}
+        {hasRecall && (
+          <CredentialRow
+            engagementId={engagementId}
+            provider="recall_ai"
+            label={`${conversationIntelligenceProviderLabel("recall_ai")} key`}
+            currentlyLinkedVaultId={vaultLinksByProvider?.["recall_ai"]}
           />
         )}
       </div>

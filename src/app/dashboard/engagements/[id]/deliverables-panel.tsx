@@ -228,6 +228,7 @@ function DeliverableRow({
 }
 
 export function DeliverablesPanel({
+  engagementId,
   discoveryPrefill,
   voiceScrapeArtifacts,
   brandVoiceProfile,
@@ -236,6 +237,7 @@ export function DeliverablesPanel({
   pinDownPageAudit,
   conversationIntelligence,
 }: {
+  engagementId: string;
   discoveryPrefill: DiscoveryPrefill;
   voiceScrapeArtifacts: VoiceScrapeArtifacts;
   brandVoiceProfile: BrandVoiceProfile;
@@ -311,7 +313,7 @@ export function DeliverablesPanel({
             </div>
           </div>
           <a
-            href="#stack-settings"
+            href={`/dashboard/engagements/${engagementId}?fixSection=conversation_intelligence`}
             className="text-[11px] font-mono font-medium text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-1.5 rounded-lg transition-colors shrink-0"
           >
             Connect Provider

@@ -112,3 +112,75 @@ Include all 4 pillars, in the order listed above.`;
 
   return { briefs };
 }
+
+/**
+ * Regenerates ONLY the objections brief, using a fresh topObjections list.
+ * Exists for the conversation-intelligence loop: a new objection mined
+ * from a live call should update the Objections brief without touching
+ * the other 3 pillars, which have nothing to do with call transcripts and
+ * would otherwise silently drift (a fresh Claude call reworking all 4
+ * pillars together tends to rephrase things that didn't need to change,
+ * on top of costing 4x the tokens for 1 pillar's worth of new input).
+ *
+ * Callers splice the returned brief into the stored briefs array in place
+ * of the existing "objections" entry — this function only ever produces
+ * that one brief, it never returns or assumes anything about the other 3.
+ */
+export async function regenerateObjectionsBrief(
+  input: AdCreativeBriefsInput,
+  runId?: string
+): Promise<AdCreativeBrief> {
+  const pillar = PILLARS.find((p) => p.id === "objections")!;
+
+  const system = `You are an ad creative strategist writing a single CREATIVE BRIEF (not a
+finished ad script) for ${input.buyer}. A brief tells a copywriter/video
+editor what to make — a hook, an angle, talking points, a suggested
+visual format, and a CTA — not the final word-for-word ad copy itself.
+
+Match the tone described in this brand voice profile as closely as
+possible: ${JSON.stringify(input.brandVoiceProfile ?? {})}
+
+Offer: ${JSON.stringify(input.offerDetails ?? {})}
+Top objections on file, including any just mined from a live sales call:
+${JSON.stringify(input.topObjections ?? [])}
+
+Write ONE brief for this pillar: ${pillar.description}
+Prioritize the most recently-added objection(s) in the list above if
+several are present — that's the freshest signal of what's actually
+costing deals right now.
+
+- hook: the first line/visual beat that stops the scroll — specific, not generic.
+- angle: 1-2 sentences on the core message/emotional angle.
+- talkingPoints: 3-4 concrete points the creative should hit, in order.
+- suggestedFormat: a concrete format suggestion (e.g. "UGC-style testimonial, handheld", "Founder talking-head, direct to camera", "Text-overlay stat hook with voiceover", "Before/after split-screen").
+- cta: the exact call-to-action line to close on.
+
+Return ONLY a JSON object with this exact shape, no prose, no markdown fences:
+{"hook": "...", "angle": "...", "talkingPoints": ["...", "..."], "suggestedFormat": "...", "cta": "..."}`;
+
+  const result = await callClaudeWithRetry({
+    model: MODEL.SYNTHESIS,
+    system,
+    userMessage: "Generate the objections brief now.",
+    maxTokens: 800,
+    runId,
+  });
+
+  let match: Omit<AdCreativeBrief, "id" | "pillar">;
+  try {
+    const cleaned = result.text.replace(/^```json\s*|\s*```$/g, "").trim();
+    match = JSON.parse(cleaned);
+  } catch {
+    throw new Error(`Objections brief regeneration returned non-JSON output: ${result.text.slice(0, 200)}`);
+  }
+
+  return {
+    id: "brief_objections",
+    pillar: "objections",
+    hook: match.hook,
+    angle: match.angle,
+    talkingPoints: match.talkingPoints ?? [],
+    suggestedFormat: match.suggestedFormat,
+    cta: match.cta,
+  };
+}

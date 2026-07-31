@@ -85,6 +85,10 @@ const EDITABLE_AD_DATA_PLATFORMS = ["hyros", "native_crm", "google_sheets", "non
 
 const EDITABLE_WEBHOOK_MODES = ["webhook", "polling", "none"] as const;
 
+const EDITABLE_CONVERSATION_INTELLIGENCE_PROVIDERS = ["recall_ai", "none"] as const;
+
+const EDITABLE_RECALL_REGIONS = ["us-east-1", "us-west-2", "eu-central-1", "ap-northeast-1"] as const;
+
 // Flat (non-nested) structural IDs a buyer's account might change or that
 // might get fat-fingered during onboarding — Klaviyo/Mailchimp/ConvertKit
 // list IDs, HubSpot/GHL workflow IDs, ActiveCampaign automation ID + base
@@ -202,6 +206,31 @@ export async function PATCH(
     ) {
       return NextResponse.json({ error: `Invalid webhook_receiver_mode: ${incoming.webhook_receiver_mode}` }, { status: 400 });
     }
+    if (
+      incoming.conversation_intelligence_provider !== undefined &&
+      incoming.conversation_intelligence_provider !== null &&
+      !EDITABLE_CONVERSATION_INTELLIGENCE_PROVIDERS.includes(incoming.conversation_intelligence_provider)
+    ) {
+      return NextResponse.json(
+        { error: `Invalid conversation_intelligence_provider: ${incoming.conversation_intelligence_provider}` },
+        { status: 400 }
+      );
+    }
+    if (incoming.conversation_intelligence_meta !== undefined) {
+      if (typeof incoming.conversation_intelligence_meta !== "object" || incoming.conversation_intelligence_meta === null) {
+        return NextResponse.json({ error: "conversation_intelligence_meta must be an object." }, { status: 400 });
+      }
+      const recallRegion = incoming.conversation_intelligence_meta.recall_region;
+      if (recallRegion !== undefined && recallRegion !== "" && !EDITABLE_RECALL_REGIONS.includes(recallRegion)) {
+        return NextResponse.json({ error: `Invalid recall_region: ${recallRegion}` }, { status: 400 });
+      }
+      for (const key of ["recall_bot_name", "recall_webhook_signing_secret"] as const) {
+        const v = incoming.conversation_intelligence_meta[key];
+        if (v !== undefined && typeof v !== "string") {
+          return NextResponse.json({ error: `${key} must be a string.` }, { status: 400 });
+        }
+      }
+    }
     if (incoming.booking_platform_meta !== undefined && typeof incoming.booking_platform_meta !== "object") {
       return NextResponse.json({ error: "booking_platform_meta must be an object." }, { status: 400 });
     }
@@ -229,6 +258,12 @@ export async function PATCH(
       ...(incoming.sms_platform !== undefined ? { sms_platform: incoming.sms_platform } : {}),
       ...(incoming.ad_data_platform !== undefined ? { ad_data_platform: incoming.ad_data_platform } : {}),
       ...(incoming.webhook_receiver_mode !== undefined ? { webhook_receiver_mode: incoming.webhook_receiver_mode } : {}),
+      ...(incoming.conversation_intelligence_provider !== undefined
+        ? { conversation_intelligence_provider: incoming.conversation_intelligence_provider }
+        : {}),
+      ...(incoming.conversation_intelligence_meta !== undefined
+        ? { conversation_intelligence_meta: { ...currentStack.conversation_intelligence_meta, ...incoming.conversation_intelligence_meta } }
+        : {}),
       ...(incoming.booking_platform_meta !== undefined
         ? { booking_platform_meta: { ...currentStack.booking_platform_meta, ...incoming.booking_platform_meta } }
         : {}),

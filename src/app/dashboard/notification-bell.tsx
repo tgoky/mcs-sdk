@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Bell, AlertTriangle, XCircle, Clock, KeyRound, RotateCcw, BarChart3 } from "lucide-react";
+import { Bell, AlertTriangle, XCircle, Clock, KeyRound, RotateCcw, BarChart3, Radio } from "lucide-react";
 
 interface NotificationRow {
   id: string;
@@ -25,6 +25,8 @@ function iconFor(type: string) {
     return <KeyRound size={14} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />;
   if (type === "lost_deal_swept") return <RotateCcw size={14} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />;
   if (type === "weekly_metrics") return <BarChart3 size={14} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />;
+  if (type === "conversation_intelligence_objection_found")
+    return <Radio size={14} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />;
   return <AlertTriangle size={14} className="text-zinc-500 dark:text-zinc-400 shrink-0 mt-0.5" />;
 }
 
