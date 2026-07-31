@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -27,6 +27,8 @@ import { TableSearchInput } from "@/components/table-search-input";
 import { TimeRangeMenu, computeTimeRangeBounds, isWithinTimeRange, type TimeRangeValue } from "@/components/time-range-menu";
 import { ViewCustomizer, FilterChipBar, type CustomizerSection } from "@/components/view-customizer";
 import { useLocalViewState } from "@/lib/use-local-view-state";
+import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
+import { GroupCountToggle } from "@/components/group-toggle";
 
 interface SkillRun {
   id: string;
@@ -120,13 +122,29 @@ const STATUS_ACCOUNT_CHIP_DEFS: ExecutionsChipDef[] = [
 const STAT_TOGGLE_IDS = {
   successRate: "stat:success-rate",
   moduleBreakdown: "stat:module-breakdown",
+  groupRepeats: "stat:group-repeats",
 } as const;
+
+/**
+ * Two runs "are the same thing happening again" when they're for the same
+ * client, the same skill, ended the same way, AND carry the same message —
+ * e.g. a broken Klaviyo credential failing Pile-On for Acme every night
+ * with the identical error text. Runs with no error/subject text at all
+ * (nothing to compare) never collapse into each other — an empty
+ * signature tail would otherwise group unrelated bare-status runs.
+ */
+function runSignature(run: SkillRun): string {
+  const detail = normalizeForSignature(run.errorMessage ?? run.subjectLabel);
+  if (!detail) return `solo:${run.id}`; // nothing to compare against — never merges with anything else
+  return [run.engagementId ?? "no-engagement", run.skillName, run.status.toLowerCase(), detail].join("|");
+}
 
 interface ExecutionsViewState {
   pinnedChipIds: string[];
   pageSize: 10 | 25 | 50;
   showSuccessRate: boolean;
   showModuleBreakdown: boolean;
+  groupRepeats: boolean;
 }
 
 const DEFAULT_EXECUTIONS_VIEW: ExecutionsViewState = {
@@ -134,6 +152,7 @@ const DEFAULT_EXECUTIONS_VIEW: ExecutionsViewState = {
   pageSize: 10,
   showSuccessRate: false,
   showModuleBreakdown: false,
+  groupRepeats: true,
 };
 
 const TERMINAL_STATUSES = new Set(["success", "completed", "failed", "error", "timed_out"]);
@@ -336,7 +355,25 @@ function buildRunSections(
   return sections;
 }
 
-function RunRow({ run, onOpen, onActionComplete }: { run: SkillRun; onOpen: () => void; onActionComplete: () => void }) {
+function RunRow({
+  run,
+  onOpen,
+  onActionComplete,
+  groupCount = 1,
+  groupExpanded = false,
+  onToggleGroup,
+  nested = false,
+}: {
+  run: SkillRun;
+  onOpen: () => void;
+  onActionComplete: () => void;
+  /** >1 means this row is standing in for that many identical (same client/module/status/message) runs — see runSignature() below. */
+  groupCount?: number;
+  groupExpanded?: boolean;
+  onToggleGroup?: () => void;
+  /** True for the older repeats revealed underneath a group's header row when expanded — dims and indents slightly so they read as "part of the group above," not new top-level rows. */
+  nested?: boolean;
+}) {
   const isRunning = run.status.toLowerCase() === "running";
   const isFailed = run.status.toLowerCase() === "failed" || run.status.toLowerCase() === "timed_out";
   const [panelOpen, setPanelOpen] = useState(false);
@@ -346,10 +383,10 @@ function RunRow({ run, onOpen, onActionComplete }: { run: SkillRun; onOpen: () =
     <tr
       className={`group bg-zinc-50/40 dark:bg-zinc-900/40 hover:bg-zinc-100 dark:hover:bg-zinc-900/80 transition-colors cursor-pointer relative ${
         isRunning ? "bg-zinc-100/60 dark:bg-zinc-900/70" : ""
-      }`}
+      } ${nested ? "bg-zinc-50/70 dark:bg-zinc-950/50 border-l-2 border-l-zinc-200 dark:border-l-zinc-800" : ""}`}
       onClick={onOpen}
     >
-      <td className="px-4 py-2.5 max-w-[180px]" onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
+      <td className={`px-4 py-2.5 max-w-[180px] ${nested ? "pl-7" : ""}`} onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
         {run.buyerName && run.engagementId ? (
           <Link href={`/dashboard/engagements/${run.engagementId}`} onClick={(e) => e.stopPropagation()} className="hover:text-zinc-900 dark:hover:text-white transition-colors relative z-20">
             <ClientCell run={run} />
@@ -388,6 +425,9 @@ function RunRow({ run, onOpen, onActionComplete }: { run: SkillRun; onOpen: () =
         <div className="flex items-center gap-2">
           <RunStatusIcon status={run.status} />
           <StatusLabel status={run.status} />
+          {onToggleGroup && (
+            <GroupCountToggle count={groupCount} expanded={groupExpanded} onToggle={onToggleGroup} />
+          )}
         </div>
       </td>
 
@@ -554,13 +594,34 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   }, [searchFiltered, savedView.showModuleBreakdown, lockedSkill]);
 
-  const pageCount = Math.max(1, Math.ceil(visibleRuns.length / pageSize));
+  // Collapse repeats *after* every filter has already narrowed visibleRuns
+  // down, so tab/chip counts above stay honest (they count real runs, not
+  // groups) while what actually renders collapses identical repeats.
+  const runGroups = useMemo(() => {
+    if (!savedView.groupRepeats) {
+      return visibleRuns.map((r) => ({ signature: r.id, items: [r], latest: r, count: 1 }));
+    }
+    return groupBySignature(visibleRuns, runSignature, (r) => r.startedAt);
+  }, [visibleRuns, savedView.groupRepeats]);
+
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  function toggleGroupExpanded(signature: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(signature)) next.delete(signature);
+      else next.add(signature);
+      return next;
+    });
+  }
+
+  const pageCount = Math.max(1, Math.ceil(runGroups.length / pageSize));
   const clampedPage = Math.min(page, pageCount - 1);
-  const pagedRuns = visibleRuns.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
+  const pagedGroups = runGroups.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
 
   useEffect(() => {
     setPage(0);
-  }, [tab, search, timeRange, savedView.pinnedChipIds, activeChipIds, pageSize]);
+  }, [tab, search, timeRange, savedView.pinnedChipIds, activeChipIds, pageSize, savedView.groupRepeats]);
 
   function handleCustomizeToggle(id: string) {
     if (id === STAT_TOGGLE_IDS.successRate) {
@@ -569,6 +630,10 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
     }
     if (id === STAT_TOGGLE_IDS.moduleBreakdown) {
       setSavedView((prev) => ({ ...prev, showModuleBreakdown: !prev.showModuleBreakdown }));
+      return;
+    }
+    if (id === STAT_TOGGLE_IDS.groupRepeats) {
+      setSavedView((prev) => ({ ...prev, groupRepeats: !prev.groupRepeats }));
       return;
     }
     setSavedView((prev) => {
@@ -643,6 +708,10 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
       }))
       .filter((s) => s.options.length > 0),
     {
+      label: sharedToolbarCopy.displaySectionLabel,
+      options: [{ id: STAT_TOGGLE_IDS.groupRepeats, label: sharedToolbarCopy.groupRepeatsLabel }],
+    },
+    {
       label: sharedToolbarCopy.statsSectionLabel,
       options: lockedSkill
         ? [{ id: STAT_TOGGLE_IDS.successRate, label: toolbarCopy.stats.showSuccessRate }]
@@ -656,6 +725,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
   const customizerEnabledIds = new Set(savedView.pinnedChipIds);
   if (savedView.showSuccessRate) customizerEnabledIds.add(STAT_TOGGLE_IDS.successRate);
   if (savedView.showModuleBreakdown) customizerEnabledIds.add(STAT_TOGGLE_IDS.moduleBreakdown);
+  if (savedView.groupRepeats) customizerEnabledIds.add(STAT_TOGGLE_IDS.groupRepeats);
 
   const pinnedChips = chipDefs
     .filter((d) => pinnedChipIds.has(d.id))
@@ -745,14 +815,31 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/30">
-              {pagedRuns.map((run) => (
-                <RunRow
-                  key={run.id}
-                  run={run}
-                  onOpen={() => router.push(`/dashboard/runs/${run.id}`)}
-                  onActionComplete={refreshNow}
-                />
-              ))}
+              {pagedGroups.map((group) => {
+                const expanded = expandedGroups.has(group.signature);
+                return (
+                  <Fragment key={group.signature}>
+                    <RunRow
+                      run={group.latest}
+                      onOpen={() => router.push(`/dashboard/runs/${group.latest.id}`)}
+                      onActionComplete={refreshNow}
+                      groupCount={group.count}
+                      groupExpanded={expanded}
+                      onToggleGroup={group.count > 1 ? () => toggleGroupExpanded(group.signature) : undefined}
+                    />
+                    {expanded &&
+                      group.items.slice(1).map((run) => (
+                        <RunRow
+                          key={run.id}
+                          run={run}
+                          onOpen={() => router.push(`/dashboard/runs/${run.id}`)}
+                          onActionComplete={refreshNow}
+                          nested
+                        />
+                      ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

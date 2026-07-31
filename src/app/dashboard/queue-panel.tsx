@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Fragment } from "react";
 import Link from "next/link";
 import {
   Check,
@@ -25,12 +24,12 @@ import { TableSearchInput } from "@/components/table-search-input";
 import { TimeRangeMenu, computeTimeRangeBounds, isWithinTimeRange, type TimeRangeValue } from "@/components/time-range-menu";
 import { ViewCustomizer, FilterChipBar, type CustomizerSection } from "@/components/view-customizer";
 import { useLocalViewState } from "@/lib/use-local-view-state";
+import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
+import { GroupCountToggle } from "@/components/group-toggle";
 
 export interface QueueItemDTO {
   id: string;
-  source: "action" | "blocker" | "notification" | "sync_setup" | "run_failure"
-  
-  //try
+  source: "action" | "blocker" | "notification" | "sync_setup" | "run_failure";
   category: "approve" | "action_needed" | "alert" | "fyi";
   title: string;
   subtitle: string;
@@ -100,9 +99,32 @@ const QUEUE_CHIP_SECTION_ORDER = [
 interface QueueViewState {
   pinnedChipIds: string[];
   pageSize: 10 | 25 | 50;
+  groupRepeats: boolean;
 }
 
-const DEFAULT_QUEUE_VIEW: QueueViewState = { pinnedChipIds: [], pageSize: 10 };
+const DEFAULT_QUEUE_VIEW: QueueViewState = { pinnedChipIds: [], pageSize: 10, groupRepeats: true };
+
+const DISPLAY_TOGGLE_IDS = {
+  groupRepeats: "display:group-repeats",
+} as const;
+
+/**
+ * Two queue items "are the same thing recurring" when they're the same
+ * kind of item (source + category), for the same client, with the same
+ * title and detail text — e.g. the identical "Klaviyo sync failed" alert
+ * firing every night for the same engagement. Title/subtitle are
+ * normalized (case/whitespace only) before comparing, so this stays an
+ * exact-match on content, never a fuzzy one.
+ */
+function queueSignature(item: QueueItemDTO): string {
+  return [
+    item.source,
+    item.category,
+    item.engagementId ?? "no-engagement",
+    normalizeForSignature(item.title),
+    normalizeForSignature(item.subtitle),
+  ].join("|");
+}
 
 function relativeTime(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -223,6 +245,10 @@ function QueueRow({
   onRunMutation,
   onLinkNavigate,
   onActionComplete,
+  groupCount = 1,
+  groupExpanded = false,
+  onToggleGroup,
+  nested = false,
 }: {
   item: QueueItemDTO;
   isBusy: boolean;
@@ -234,17 +260,26 @@ function QueueRow({
   onRunMutation: (url: string) => void;
   onLinkNavigate: () => void;
   onActionComplete: () => void;
+  /** >1 means this row is standing in for that many identical (same source/category/client/title/detail) items — see queueSignature() below. */
+  groupCount?: number;
+  groupExpanded?: boolean;
+  onToggleGroup?: () => void;
+  /** True for the older repeats revealed underneath a group's header row when expanded. */
+  nested?: boolean;
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const { busyKey, error, run: dispatch } = useQuickActions();
 
   return (
     <>
-      <div className="group flex items-center gap-3 py-3 first:pt-2">
+      <div className={`group flex items-center gap-3 py-3 first:pt-2 ${nested ? "pl-5 border-l-2 border-l-border/60 bg-muted/20" : ""}`}>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <CategoryBadge category={item.category} />
             <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
+            {onToggleGroup && (
+              <GroupCountToggle count={groupCount} expanded={groupExpanded} onToggle={onToggleGroup} />
+            )}
           </div>
           <p className="text-xs text-muted-foreground truncate">
             {item.buyer ? `${item.buyer} · ` : ""}
@@ -463,9 +498,30 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     });
   }, [searchFiltered, activeChipIds, priorityById]);
 
-  const pageCount = Math.max(1, Math.ceil(visibleItems.length / pageSize));
+  // Collapse repeats *after* every filter has already narrowed visibleItems
+  // down, so tab/chip counts stay honest (they count real items) while
+  // what actually renders collapses identical repeats.
+  const queueGroups = useMemo(() => {
+    if (!savedView.groupRepeats) {
+      return visibleItems.map((it) => ({ signature: it.id, items: [it], latest: it, count: 1 }));
+    }
+    return groupBySignature(visibleItems, queueSignature, (it) => it.createdAt);
+  }, [visibleItems, savedView.groupRepeats]);
+
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  function toggleGroupExpanded(signature: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(signature)) next.delete(signature);
+      else next.add(signature);
+      return next;
+    });
+  }
+
+  const pageCount = Math.max(1, Math.ceil(queueGroups.length / pageSize));
   const clampedPage = Math.min(page, pageCount - 1);
-  const pagedItems = visibleItems.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
+  const pagedGroups = queueGroups.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
 
   function handleTabChange(nextTab: QueueTab) {
     setTab(nextTab);
@@ -500,6 +556,11 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     });
   }
 
+  function toggleGroupRepeats() {
+    setPage(0);
+    setSavedView((prev) => ({ ...prev, groupRepeats: !prev.groupRepeats }));
+  }
+
   function toggleActiveChip(id: string) {
     setPage(0);
     setActiveChipIds((prev) => {
@@ -532,14 +593,31 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     { key: "alerts", label: toolbarCopy.tabs.alerts, count: tabCounts.alerts },
   ];
 
-  const customizerSections: CustomizerSection[] = QUEUE_CHIP_SECTION_ORDER.map((sectionLabel) => ({
-    label: sectionLabel,
-    options: QUEUE_CHIP_DEFS.filter((d) => d.section === sectionLabel).map((d) => ({
-      id: d.id,
-      label: d.label,
-      count: chipCounts.get(d.id) ?? 0,
-    })),
-  })).filter((s) => s.options.length > 0);
+  const customizerSections: CustomizerSection[] = [
+    ...QUEUE_CHIP_SECTION_ORDER.map((sectionLabel) => ({
+      label: sectionLabel,
+      options: QUEUE_CHIP_DEFS.filter((d) => d.section === sectionLabel).map((d) => ({
+        id: d.id,
+        label: d.label,
+        count: chipCounts.get(d.id) ?? 0,
+      })),
+    })).filter((s) => s.options.length > 0),
+    {
+      label: sharedToolbarCopy.displaySectionLabel,
+      options: [{ id: DISPLAY_TOGGLE_IDS.groupRepeats, label: sharedToolbarCopy.groupRepeatsLabel }],
+    },
+  ];
+
+  const customizerEnabledIds = new Set(pinnedChipIds);
+  if (savedView.groupRepeats) customizerEnabledIds.add(DISPLAY_TOGGLE_IDS.groupRepeats);
+
+  function handleCustomizeToggle(id: string) {
+    if (id === DISPLAY_TOGGLE_IDS.groupRepeats) {
+      toggleGroupRepeats();
+      return;
+    }
+    togglePinnedChip(id);
+  }
 
   const pinnedChips = QUEUE_CHIP_DEFS.filter((d) => pinnedChipIds.has(d.id)).map((d) => ({
     id: d.id,
@@ -641,6 +719,28 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
   const openHref = (item: QueueItemDTO) =>
     item.fixHref ?? (item.runId ? `/dashboard/runs/${item.runId}` : item.engagementId ? `/dashboard/engagements/${item.engagementId}` : null);
 
+  function renderQueueRow(
+    item: QueueItemDTO,
+    extra: { groupCount?: number; groupExpanded?: boolean; onToggleGroup?: () => void; nested?: boolean } = {}
+  ) {
+    return (
+      <QueueRow
+        key={item.id}
+        item={item}
+        isBusy={busyId === item.id}
+        errorText={errorId === item.id ? errorText : null}
+        href={openHref(item)}
+        onDecide={(decision) => decide(item, decision)}
+        onDismissSyncSetup={() => dismissSyncSetup(item)}
+        onDismissRunFailure={() => dismissRunFailure(item)}
+        onRunMutation={(url) => runMutation(item, url)}
+        onLinkNavigate={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
+        onActionComplete={refreshNow}
+        {...extra}
+      />
+    );
+  }
+
   if (items.length === 0) {
     return (
       <div className="pt-1 border-t border-border/60">
@@ -669,8 +769,8 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
           )}
           <ViewCustomizer
             sections={customizerSections}
-            enabledIds={pinnedChipIds}
-            onToggle={togglePinnedChip}
+            enabledIds={customizerEnabledIds}
+            onToggle={handleCustomizeToggle}
             menuTitle={sharedToolbarCopy.customizeMenuTitle}
           />
         </div>
@@ -689,25 +789,23 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
         </div>
       ) : (
         <div className="divide-y divide-border/60">
-          {pagedItems.map((item) => (
-            <QueueRow
-              key={item.id}
-              item={item}
-              isBusy={busyId === item.id}
-              errorText={errorId === item.id ? errorText : null}
-              href={openHref(item)}
-              onDecide={(decision) => decide(item, decision)}
-              onDismissSyncSetup={() => dismissSyncSetup(item)}
-              onDismissRunFailure={() => dismissRunFailure(item)}
-              onRunMutation={(url) => runMutation(item, url)}
-              onLinkNavigate={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
-              onActionComplete={refreshNow}
-            />
-          ))}
+          {pagedGroups.map((group) => {
+            const expanded = expandedGroups.has(group.signature);
+            return (
+              <Fragment key={group.signature}>
+                {renderQueueRow(group.latest, {
+                  groupCount: group.count,
+                  groupExpanded: expanded,
+                  onToggleGroup: group.count > 1 ? () => toggleGroupExpanded(group.signature) : undefined,
+                })}
+                {expanded && group.items.slice(1).map((it) => renderQueueRow(it, { nested: true }))}
+              </Fragment>
+            );
+          })}
         </div>
       )}
 
-      {visibleItems.length > 10 && (
+      {queueGroups.length > 10 && (
         <div className="flex items-center justify-between px-1 py-2 border-t border-border/60">
           <div className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
             {([10, 25, 50] as const).map((size) => (

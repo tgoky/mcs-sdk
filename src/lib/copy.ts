@@ -268,6 +268,8 @@ export const TABLE_TOOLBAR_COPY = {
   customizeMenuTitle: "Add to this view",
   filtersSectionLabel: "Filters",
   statsSectionLabel: "Stats",
+  displaySectionLabel: "Display",
+  groupRepeatsLabel: "Group repeated items",
   noResultsTitle: "Nothing matches your filters",
   noResultsSubtitle: "Try a different tab, time range, or clear your search.",
   clearFiltersButton: "Clear filters",
