@@ -15,8 +15,7 @@ import {
   Calendar,
   Sliders,
   Plus,
-  UserPlus,
-  Sparkles
+  UserPlus
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -97,27 +96,30 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
             {/* Backdrop for outside clicks */}
             <div className="fixed inset-0 z-40" onClick={() => setPopoverOpen(false)} />
 
-            {/* Floating Popover: Sharp rectangular container (no border-radius), wider dimensions */}
-            <div className="absolute left-full bottom-0 ml-2 z-50 w-[560px] sm:w-[580px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+            {/* Floating Popover: Sharp rectangular container with expanded left-pane width */}
+            <div className="absolute left-full bottom-0 ml-2 z-50 w-[600px] sm:w-[620px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
               <div className="flex min-h-[360px] divide-x divide-zinc-200 dark:divide-zinc-800">
                 
-                {/* LEFT PANE: Account switcher & Logout */}
-                <div className="w-60 p-4 bg-zinc-50 dark:bg-zinc-950/90 flex flex-col justify-between shrink-0">
-                  <div className="space-y-4">
+                {/* LEFT PANE: Account switcher & Logout (Wider w-72 to prevent text clipping) */}
+                <div className="w-72 p-4 bg-zinc-50 dark:bg-zinc-950/90 flex flex-col justify-between shrink-0 min-w-0">
+                  <div className="space-y-4 min-w-0">
                     <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                       Account
                     </h3>
                     
-                    {/* Active Account Row - Pure text & icon, no background box/border */}
-                    <div className="flex items-center gap-2.5 py-1 px-1">
-                      <div className="w-6 h-6 rounded-full bg-purple-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
+                    {/* Active Account Row - Styled cleanly like Asana with gold avatar */}
+                    <div className="flex items-center gap-2.5 py-1 px-1 min-w-0">
+                      <div className="w-6 h-6 rounded-full bg-gold text-gold-foreground font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
                         {initials}
                       </div>
-                      <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
+                      <span 
+                        className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate flex-1 min-w-0" 
+                        title={userEmail || displayName}
+                      >
                         {userEmail || displayName}
                       </span>
-                      <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0 ml-1" />
-                      <Check className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 shrink-0 ml-auto" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0 ml-1" />
+                      <Check className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0 ml-1" />
                     </div>
                   </div>
 
@@ -141,11 +143,11 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                 </div>
 
                 {/* RIGHT PANE: Full Asana User Content */}
-                <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900">
-                  <div className="space-y-3">
-                    {/* Large User Info Header */}
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-full bg-purple-600 text-white font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-sm">
+                <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900 min-w-0">
+                  <div className="space-y-3 min-w-0">
+                    {/* Large User Info Header with Gold Avatar */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 rounded-full bg-gold text-gold-foreground font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-sm">
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -199,13 +201,12 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                       </Link>
                     </div>
 
-                    {/* Gold Highlighted Upgrade Button */}
+                    {/* Solid Gold/Amber Upgrade Button (Icon Removed, Text Renamed) */}
                     <button
                       type="button"
-                      className="w-full mt-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold bg-amber-200/80 hover:bg-amber-300/80 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 text-amber-950 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700/50 rounded-md transition-colors"
+                      className="w-full mt-1.5 flex items-center justify-center px-3 py-2 text-xs font-semibold bg-[#e3a869] hover:bg-[#d89a58] text-zinc-950 dark:bg-[#e3a869] dark:hover:bg-[#d89a58] rounded-md transition-colors shadow-sm cursor-pointer"
                     >
-                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                      <span>Upgrade to Pro</span>
+                      <span>Upgrade Account</span>
                     </button>
 
                     <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2" />
