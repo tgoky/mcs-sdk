@@ -8,7 +8,7 @@ import { QueuePanel } from "./queue-panel";
 import { QUEUE_COPY } from "@/lib/copy";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import Link from "next/link";
-import { Settings, FolderKanban, Plus } from "lucide-react";
+import { Settings, FolderKanban } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -141,9 +141,8 @@ export default async function DashboardPage() {
           {/* Primary Action Button */}
           <Link
             href="/dashboard/engagements/new"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-[#f7fcfe] dark:bg-sky-950/50 text-sky-900 dark:text-sky-200 border border-sky-200 dark:border-sky-800/80 rounded-md shadow-2xs hover:bg-sky-100/80 dark:hover:bg-sky-900/80 hover:border-sky-300 dark:hover:border-sky-700 hover:text-sky-950 dark:hover:text-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:focus:ring-sky-400/20 active:scale-[0.98] transition-all font-mono"
+            className="inline-flex items-center px-3.5 py-1.5 text-xs font-semibold bg-[#f7fcfe] dark:bg-sky-950/50 text-sky-900 dark:text-sky-200 border border-sky-200 dark:border-sky-800/80 rounded-md shadow-2xs hover:bg-sky-100/80 dark:hover:bg-sky-900/80 hover:border-sky-300 dark:hover:border-sky-700 hover:text-sky-950 dark:hover:text-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:focus:ring-sky-400/20 active:scale-[0.98] transition-all font-mono"
           >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>{copy.newClientButton}</span>
           </Link>
         </div>
