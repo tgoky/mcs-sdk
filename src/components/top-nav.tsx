@@ -54,11 +54,11 @@ export function TopNav({ onToggleSidebar, displayName }: TopNavProps) {
         </div>
 
         {/* Global + Create Omni Dropdown Button */}
-        <div className="relative">
+        <div className="relative flex items-center">
           <button
             type="button"
             onClick={() => setCreateOpen((prev) => !prev)}
-className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#f15153] hover:bg-[#e0484a] text-white rounded-full transition-all shadow-sm active:scale-95 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#f15153] hover:bg-[#e0484a] text-white rounded-full transition-all shadow-sm active:scale-95 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Create</span>
@@ -69,51 +69,51 @@ className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg
               {/* Outside Click Backdrop */}
               <div className="fixed inset-0 z-40" onClick={() => setCreateOpen(false)} />
 
-              {/* Asana-Style Sharp Rectangular Dropdown Card */}
-              <div className="absolute left-12 mt-1.5 w-52 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md shadow-lg z-50 py-1 text-zinc-900 dark:text-zinc-100 font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+              {/* Asana-Style Sharp Rectangular Dropdown Card - Positioned RIGHT on the same line */}
+              <div className="absolute left-full top-0 ml-2 w-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-sm shadow-xl z-50 py-1 text-zinc-900 dark:text-zinc-100 font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
                 <div className="space-y-0.5">
                   <Link
                     href="/dashboard/engagements/new"
                     onClick={() => setCreateOpen(false)}
-                    className="group flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                    className="group flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   >
-                    <Building2 className="w-4 h-4 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
+                    <Building2 className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
                     <span className="truncate">Client Engagement</span>
                   </Link>
 
                   <Link
                     href="/dashboard/runs"
                     onClick={() => setCreateOpen(false)}
-                    className="group flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                    className="group flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   >
-                    <Play className="w-4 h-4 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
+                    <Play className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
                     <span className="truncate">Trigger Skill Run</span>
                   </Link>
 
                   <Link
                     href="/dashboard/queue"
                     onClick={() => setCreateOpen(false)}
-                    className="group flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                    className="group flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   >
-                    <CheckCircle2 className="w-4 h-4 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
                     <span className="truncate">Queue Task</span>
                   </Link>
 
                   <Link
                     href="/dashboard/modules/leak-map"
                     onClick={() => setCreateOpen(false)}
-                    className="group flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                    className="group flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   >
-                    <BarChart3 className="w-4 h-4 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
+                    <BarChart3 className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
                     <span className="truncate">Run Funnel Audit</span>
                   </Link>
 
                   <Link
                     href="/dashboard/settings"
                     onClick={() => setCreateOpen(false)}
-                    className="group flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                    className="group flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   >
-                    <KeyRound className="w-4 h-4 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
+                    <KeyRound className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
                     <span className="truncate">API Credential</span>
                   </Link>
                 </div>
@@ -124,9 +124,9 @@ className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg
                   <Link
                     href="/dashboard/settings"
                     onClick={() => setCreateOpen(false)}
-                    className="group flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                    className="group flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   >
-                    <UserPlus className="w-4 h-4 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
+                    <UserPlus className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
                     <span className="truncate">Invite Teammate</span>
                   </Link>
                 </div>
