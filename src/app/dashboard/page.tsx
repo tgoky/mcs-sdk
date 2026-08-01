@@ -8,7 +8,7 @@ import { QueuePanel } from "./queue-panel";
 import { QUEUE_COPY } from "@/lib/copy";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import Link from "next/link";
-import { Settings, FolderKanban, UserPlus , Maximize2} from "lucide-react";
+import { Settings, FolderKanban, UserPlus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -212,13 +212,12 @@ export default async function DashboardPage() {
             {copy.activityLogSectionTitle}
           </p>
           {recentRuns.length > 0 && (
-        <Link
-  href="/dashboard/runs"
-  className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
-  aria-label="View all runs"
->
-  <Maximize2 className="w-3.5 h-3.5" />
-</Link>
+            <Link
+              href="/dashboard/runs"
+              className="text-xs font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
+            >
+              View all →
+            </Link>
           )}
         </div>
 

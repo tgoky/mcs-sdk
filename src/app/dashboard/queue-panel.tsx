@@ -774,12 +774,13 @@ export function QueuePanel({
             {title}
           </p>
           {viewAllHref && items.length > 0 && (
-            <Link
-              href={viewAllHref}
-              className="text-xs font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
-            >
-              View all →
-            </Link>
+       <Link
+  href={viewAllHref}
+  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-zinc-400 hover:text-zinc-100 bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800 transition-all duration-150 shadow-2xs group"
+>
+  <span>View all</span>
+  <ArrowUpRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-200 transition-colors" />
+</Link>
           )}
         </div>
       </div>
