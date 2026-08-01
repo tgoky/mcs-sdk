@@ -20,10 +20,8 @@ import {
   GripVertical,
   Layers,
   List,
-  Clock,
-  AlertTriangle,
-  KeyRound,
-  SlidersHorizontal,
+  Tag as TagIcon,
+  Trash2,
 } from "lucide-react";
 import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, skillName as skillDisplayName } from "@/lib/copy";
 import type { StackSection } from "@/lib/error-classification";
@@ -62,6 +60,37 @@ export interface ClientOption {
 }
 
 export type RailGroupingMode = "platform" | "module" | "task_type" | "preset";
+
+export interface CustomTag {
+  id: string;
+  name: string;
+  colorHex: string;
+  isDarkCheck?: boolean;
+  targetSkill?: string;
+  targetCategory?: string;
+}
+
+// 12 Exact Colors from Screenshot (2 rows x 6 columns)
+const TAG_SWATCHES = [
+  { hex: "#5e0d39", label: "Plum" },
+  { hex: "#e59a2f", label: "Amber" },
+  { hex: "#a0d646", label: "Lime" },
+  { hex: "#235e4b", label: "Forest" },
+  { hex: "#2cb2b4", label: "Turquoise" },
+  { hex: "#a2e2e0", label: "Ice Blue" },
+  { hex: "#3b71e8", label: "Royal Blue" },
+  { hex: "#8580f0", label: "Periwinkle" },
+  { hex: "#b06ed6", label: "Purple" },
+  { hex: "#f897a6", label: "Coral Pink" },
+  { hex: "#e0e0e0", label: "Light Gray", darkCheck: true },
+  { hex: "#1c1c1c", label: "Dark Charcoal", hasBorder: true },
+];
+
+const DEFAULT_TAGS: CustomTag[] = [
+  { id: "tag-lime-alerts", name: "Lime Alerts", colorHex: "#a0d646", targetCategory: "alert" },
+  { id: "tag-pindown", name: "Pin-Down Tasks", colorHex: "#3b71e8", targetSkill: "pin-down" },
+  { id: "tag-urgent", name: "Urgent Actions", colorHex: "#f897a6", targetCategory: "action_needed" },
+];
 
 const POLL_MS = 8_000;
 type QueueTab = "all" | "approve" | "action_needed" | "alerts";
@@ -252,6 +281,7 @@ function QueueRow({
   groupExpanded = false,
   onToggleGroup,
   nested = false,
+  matchedTag,
 }: {
   item: QueueItemDTO;
   isBusy: boolean;
@@ -267,6 +297,7 @@ function QueueRow({
   groupExpanded?: boolean;
   onToggleGroup?: () => void;
   nested?: boolean;
+  matchedTag?: CustomTag | null;
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const { busyKey, error, run: dispatch } = useQuickActions();
@@ -276,6 +307,14 @@ function QueueRow({
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <CategoryBadge category={item.category} />
+          {matchedTag && (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-zinc-950 shrink-0"
+              style={{ backgroundColor: matchedTag.colorHex }}
+            >
+              {matchedTag.name}
+            </span>
+          )}
           <p className="text-xs font-bold text-zinc-100 truncate">{item.title}</p>
           {onToggleGroup && (
             <GroupCountToggle count={groupCount} expanded={groupExpanded} onToggle={onToggleGroup} />
@@ -427,8 +466,18 @@ export function QueuePanel({
   // Rail Scope State
   const [railView, setRailView] = useState<ClientScopeView>("all");
   const [groupingMode, setGroupingMode] = useState<RailGroupingMode>("platform");
+  const [isGroupingPopoverOpen, setIsGroupingPopoverOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+
+  // Tags State
+  const [tags, setTags] = useLocalViewState<CustomTag[]>("mcs:queue:tags", DEFAULT_TAGS);
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
+  const [isAddTagOpen, setIsAddTagOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState(TAG_SWATCHES[2].hex); // Lime default
+  const [newTagTargetSkill, setNewTagTargetSkill] = useState<string>("all");
+  const [newTagTargetCategory, setNewTagTargetCategory] = useState<string>("all");
 
   // Table State
   const [savedView, setSavedView] = useLocalViewState<QueueViewState>("mcs:queue:view", DEFAULT_QUEUE_VIEW);
@@ -441,27 +490,7 @@ export function QueuePanel({
   const pinnedChipIds = new Set(savedView.pinnedChipIds);
   const pageSize = savedView.pageSize ?? 5;
 
-  // Calculate SLA & Health Card Numbers
-  const oldestWaitingAgo = useMemo(() => {
-    if (items.length === 0) return "None";
-    const oldestMs = Math.max(...items.map((i) => Date.now() - new Date(i.createdAt).getTime()));
-    const hours = Math.floor(oldestMs / 3_600_000);
-    if (hours < 1) return "<1h ago";
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
-  }, [items]);
-
-  const activeHoldClientsCount = useMemo(() => {
-    const ids = new Set<string>();
-    for (const item of items) {
-      if (item.source === "blocker" && item.engagementId) {
-        ids.add(item.engagementId);
-      }
-    }
-    return ids.size;
-  }, [items]);
-
-  // Non-duplicative Rail Sub-list Categories
+  // Rail Categories (Platforms/CRMs/Modules)
   const categories = useMemo(() => {
     const counts: Record<string, { label: string; count: number }> = {};
 
@@ -521,9 +550,39 @@ export function QueuePanel({
     return map;
   }, [items]);
 
-  // 1. Rail-level Filtered Set
+  // Helper to match item to a tag
+  const itemMatchesTag = useCallback((item: QueueItemDTO, tag: CustomTag) => {
+    if (tag.targetSkill && tag.targetSkill !== "all") {
+      if (item.skillName !== tag.targetSkill) return false;
+    }
+    if (tag.targetCategory && tag.targetCategory !== "all") {
+      if (item.category !== tag.targetCategory) return false;
+    }
+    if (!tag.targetSkill && !tag.targetCategory) {
+      const q = tag.name.toLowerCase();
+      return item.title.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q);
+    }
+    return true;
+  }, []);
+
+  // Tag Counts
+  const tagCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const tag of tags) {
+      map[tag.id] = items.filter((item) => itemMatchesTag(item, tag)).length;
+    }
+    return map;
+  }, [items, tags, itemMatchesTag]);
+
+  // 1. Rail & Tag level Filtered Set
   const railFilteredItems = useMemo(() => {
     return items.filter((item) => {
+      // Filter by selected tag if active
+      if (selectedTagId) {
+        const activeTag = tags.find((t) => t.id === selectedTagId);
+        if (activeTag && !itemMatchesTag(item, activeTag)) return false;
+      }
+
       if (railView === "clients" && selectedClientId) {
         if (item.engagementId !== selectedClientId) return false;
       }
@@ -549,7 +608,7 @@ export function QueuePanel({
       }
       return true;
     });
-  }, [items, railView, selectedClientId, selectedCategory, categories, groupingMode]);
+  }, [items, railView, selectedClientId, selectedCategory, categories, groupingMode, selectedTagId, tags, itemMatchesTag]);
 
   // Tab Counts based on current Rail scope
   const tabCounts = useMemo(() => {
@@ -646,6 +705,29 @@ export function QueuePanel({
   const clampedPage = Math.min(page, pageCount - 1);
   const pagedGroups = queueGroups.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
 
+  // Add Tag Handler
+  function handleCreateTag() {
+    if (!newTagName.trim()) return;
+    const swatch = TAG_SWATCHES.find((s) => s.hex === newTagColor);
+    const created: CustomTag = {
+      id: `tag-${Date.now()}`,
+      name: newTagName.trim(),
+      colorHex: newTagColor,
+      isDarkCheck: swatch?.darkCheck,
+      targetSkill: newTagTargetSkill !== "all" ? newTagTargetSkill : undefined,
+      targetCategory: newTagTargetCategory !== "all" ? newTagTargetCategory : undefined,
+    };
+
+    setTags((prev) => [...prev, created]);
+    setNewTagName("");
+    setIsAddTagOpen(false);
+  }
+
+  function handleDeleteTag(id: string) {
+    setTags((prev) => prev.filter((t) => t.id !== id));
+    if (selectedTagId === id) setSelectedTagId(null);
+  }
+
   // Auto-refresh polling
   const load = useCallback(async (signal: AbortSignal) => {
     try {
@@ -722,6 +804,7 @@ export function QueuePanel({
     item: QueueItemDTO,
     extra: { groupCount?: number; groupExpanded?: boolean; onToggleGroup?: () => void; nested?: boolean } = {}
   ) {
+    const matchedTag = tags.find((t) => itemMatchesTag(item, t));
     return (
       <QueueRow
         key={item.id}
@@ -735,6 +818,7 @@ export function QueuePanel({
         onRunMutation={(url) => runMutation(item, url)}
         onLinkNavigate={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
         onActionComplete={refreshNow}
+        matchedTag={matchedTag}
         {...extra}
       />
     );
@@ -778,10 +862,17 @@ export function QueuePanel({
     return clientRailItems.filter((c) => c.buyer.toLowerCase().includes(railSearch.toLowerCase()));
   }, [clientRailItems, railSearch]);
 
+  const groupingModeLabels: Record<RailGroupingMode, string> = {
+    platform: "By CRM / Platform",
+    module: "By Automation Module",
+    task_type: "By Task Type",
+    preset: "By Smart Presets",
+  };
+
   return (
     <div className="space-y-3 w-full font-sans antialiased text-zinc-300 select-none">
       {/* ----------------------------------------------------------------- */}
-      {/* TOP ROW (NORTH): [ All | Clients ] Toggle on Left | Bold Title & Icon on Right */}
+      {/* TOP ROW (NORTH): [ All | Clients ] Toggle on Left | Title on Right */}
       {/* ----------------------------------------------------------------- */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-3">
         {/* Left Side: [ All | Clients ] Toggle */}
@@ -856,20 +947,50 @@ export function QueuePanel({
             </span>
           </div>
 
-          {/* LIST GROUPING MODE DROPDOWN */}
+          {/* CUSTOM HIGH-END MODE SELECTOR DROPDOWN */}
           {railView === "all" && (
             <div className="relative">
-              <select
-                value={groupingMode}
-                onChange={(e) => { setGroupingMode(e.target.value as RailGroupingMode); setSelectedCategory(null); setPage(0); }}
-                className="w-full appearance-none px-2.5 py-1.5 rounded-lg bg-zinc-900/80 border border-zinc-800 text-xs text-zinc-300 font-medium focus:outline-none cursor-pointer pr-7"
+              <button
+                type="button"
+                onClick={() => setIsGroupingPopoverOpen((p) => !p)}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-900/80 hover:bg-zinc-800/80 border border-zinc-800 text-xs text-zinc-200 font-medium transition-colors cursor-pointer"
               >
-                <option value="platform">By CRM / Platform</option>
-                <option value="module">By Automation Module</option>
-                <option value="task_type">By Task Type</option>
-                <option value="preset">By Smart Presets</option>
-              </select>
-              <ChevronDown size={13} className="text-zinc-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <div className="flex items-center gap-2 truncate">
+                  <GripVertical size={13} className="text-zinc-500 shrink-0" />
+                  <span className="truncate">{groupingModeLabels[groupingMode]}</span>
+                </div>
+                <ChevronDown size={13} className="text-zinc-500 shrink-0" />
+              </button>
+
+              {/* Custom Dropdown Popover */}
+              {isGroupingPopoverOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setIsGroupingPopoverOpen(false)} />
+                  <div className="absolute top-full left-0 mt-1 w-full z-40 p-1 rounded-xl bg-zinc-900 border border-zinc-800 shadow-xl space-y-0.5 text-xs">
+                    {(Object.keys(groupingModeLabels) as RailGroupingMode[]).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => {
+                          setGroupingMode(mode);
+                          setSelectedCategory(null);
+                          setPage(0);
+                          setIsGroupingPopoverOpen(false);
+                        }}
+                        className={cn(
+                          "w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors cursor-pointer",
+                          groupingMode === mode
+                            ? "bg-zinc-800 text-white font-semibold"
+                            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                        )}
+                      >
+                        <span>{groupingModeLabels[mode]}</span>
+                        {groupingMode === mode && <Check size={12} className="text-emerald-400" />}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -911,7 +1032,7 @@ export function QueuePanel({
           </div>
 
           {/* SUB-LIST ITEMS */}
-          <div className="flex-1 overflow-y-auto space-y-0.5 pt-1 max-h-[300px] [scrollbar-width:none]">
+          <div className="overflow-y-auto space-y-0.5 pt-1 max-h-[220px] [scrollbar-width:none]">
             {railView === "all" ? (
               <>
                 <button
@@ -919,7 +1040,7 @@ export function QueuePanel({
                   onClick={() => { setSelectedCategory(null); setPage(0); }}
                   className={cn(
                     "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
-                    selectedCategory === null
+                    selectedCategory === null && !selectedTagId
                       ? "bg-[#3f3f42] text-white font-semibold"
                       : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                   )}
@@ -937,10 +1058,10 @@ export function QueuePanel({
                   <button
                     key={cat.id}
                     type="button"
-                    onClick={() => { setSelectedCategory(cat.id); setPage(0); }}
+                    onClick={() => { setSelectedCategory(cat.id); setSelectedTagId(null); setPage(0); }}
                     className={cn(
                       "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
-                      selectedCategory === cat.id
+                      selectedCategory === cat.id && !selectedTagId
                         ? "bg-[#3f3f42] text-white font-semibold"
                         : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                     )}
@@ -1007,21 +1128,165 @@ export function QueuePanel({
             )}
           </div>
 
-          {/* QUEUE HEALTH & SLA MICRO-CARD */}
-          <div className="pt-2 border-t border-sidebar-border/60">
-            <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-2 text-xs">
-              <div className="flex items-center justify-between text-zinc-400">
-                <span className="flex items-center gap-1">
-                  <Clock size={12} className="text-zinc-500" /> Oldest item
-                </span>
-                <span className="font-mono text-amber-400 font-bold">{oldestWaitingAgo}</span>
+          {/* ----------------------------------------------------------------- */}
+          {/* TAGS SECTION (Placed right after lists)                            */}
+          {/* ----------------------------------------------------------------- */}
+          <div className="pt-2 border-t border-sidebar-border/60 space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold text-zinc-300 tracking-tight flex items-center gap-1.5">
+                <TagIcon size={12} className="text-zinc-400" />
+                Tags
+              </span>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsAddTagOpen((p) => !p)}
+                  className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                  title="Create tag"
+                >
+                  <Plus size={13} />
+                </button>
+
+                {/* 12-COLOR TAG CREATOR POPOVER */}
+                {isAddTagOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setIsAddTagOpen(false)} />
+                    <div className="absolute left-0 bottom-full mb-2 w-64 z-50 p-3 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl text-xs space-y-3 font-sans">
+                      <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                        <span className="font-bold text-zinc-100">Create New Tag</span>
+                        <button type="button" onClick={() => setIsAddTagOpen(false)} className="text-zinc-500 hover:text-zinc-200">
+                          <X size={13} />
+                        </button>
+                      </div>
+
+                      {/* Tag Name Input */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono text-zinc-400 uppercase">Tag Name</label>
+                        <input
+                          type="text"
+                          value={newTagName}
+                          onChange={(e) => setNewTagName(e.target.value)}
+                          placeholder="e.g. Lime Alerts"
+                          className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700"
+                        />
+                      </div>
+
+                      {/* Target Module / Category (Optional Rule) */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-mono text-zinc-400 uppercase">Skill Target</label>
+                          <select
+                            value={newTagTargetSkill}
+                            onChange={(e) => setNewTagTargetSkill(e.target.value)}
+                            className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-300 text-[11px]"
+                          >
+                            <option value="all">Any Skill</option>
+                            <option value="pin-down">Pin-Down</option>
+                            <option value="pile-on">Pile-On</option>
+                            <option value="pre-call-read">Pre-Call Read</option>
+                            <option value="win-back">Win-Back</option>
+                            <option value="leak-map">Leak-Map</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-mono text-zinc-400 uppercase">Category</label>
+                          <select
+                            value={newTagTargetCategory}
+                            onChange={(e) => setNewTagTargetCategory(e.target.value)}
+                            className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-300 text-[11px]"
+                          >
+                            <option value="all">Any Category</option>
+                            <option value="approve">Approve</option>
+                            <option value="action_needed">Action Needed</option>
+                            <option value="alert">Alert</option>
+                            <option value="fyi">FYI</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* 12 Color Swatches Grid (2 rows x 6 cols matching screenshot) */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono text-zinc-400 uppercase">Select Color</label>
+                        <div className="grid grid-cols-6 gap-2 pt-1 justify-items-center">
+                          {TAG_SWATCHES.map((swatch) => {
+                            const selected = newTagColor === swatch.hex;
+                            return (
+                              <button
+                                key={swatch.hex}
+                                type="button"
+                                onClick={() => setNewTagColor(swatch.hex)}
+                                className={cn(
+                                  "w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110 cursor-pointer relative",
+                                  swatch.hasBorder ? "border border-zinc-700" : ""
+                                )}
+                                style={{ backgroundColor: swatch.hex }}
+                                title={swatch.label}
+                              >
+                                {selected && (
+                                  <Check
+                                    size={14}
+                                    className={swatch.darkCheck ? "text-zinc-950 font-bold" : "text-white font-bold"}
+                                  />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Save Action Button */}
+                      <button
+                        type="button"
+                        onClick={handleCreateTag}
+                        disabled={!newTagName.trim()}
+                        className="w-full py-1.5 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white disabled:opacity-40 cursor-pointer transition-colors"
+                      >
+                        Create Tag
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="flex items-center justify-between text-zinc-400">
-                <span className="flex items-center gap-1">
-                  <AlertTriangle size={12} className="text-zinc-500" /> Active holds
-                </span>
-                <span className="font-mono text-zinc-200 font-bold">{activeHoldClientsCount} clients</span>
-              </div>
+            </div>
+
+            {/* List of Created Tags */}
+            <div className="space-y-0.5 max-h-[160px] overflow-y-auto [scrollbar-width:none]">
+              {tags.map((tag) => {
+                const active = selectedTagId === tag.id;
+                const count = tagCounts[tag.id] ?? 0;
+                return (
+                  <div key={tag.id} className="group relative flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedTagId(active ? null : tag.id);
+                        setSelectedCategory(null);
+                        setPage(0);
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between px-2.5 py-1.5 rounded-[10px] text-xs font-medium transition-colors cursor-pointer pr-6",
+                        active ? "bg-[#3f3f42] text-white font-semibold" : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tag.colorHex }} />
+                        <span className="truncate">{tag.name}</span>
+                      </div>
+                      <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                        {count}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTag(tag.id)}
+                      className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-rose-400 transition-opacity"
+                      title="Delete tag"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1034,10 +1299,10 @@ export function QueuePanel({
             <TableSearchInput value={search} onChange={(s) => { setSearch(s); setPage(0); }} placeholder={toolbarCopy.searchPlaceholder} className="w-[180px]" />
             <TimeRangeMenu value={timeRange} onChange={(r) => { setTimeRange(r); setPage(0); }} />
             <div className="ml-auto flex items-center gap-1.5">
-              {tab !== "all" || search || timeRange !== "all" || activeChipIds.size > 0 ? (
+              {tab !== "all" || search || timeRange !== "all" || activeChipIds.size > 0 || selectedTagId ? (
                 <button
                   type="button"
-                  onClick={() => { setTab("all"); setSearch(""); setTimeRange("all"); setActiveChipIds(new Set()); setPage(0); }}
+                  onClick={() => { setTab("all"); setSearch(""); setTimeRange("all"); setActiveChipIds(new Set()); setSelectedTagId(null); setPage(0); }}
                   className="text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
                 >
                   {sharedToolbarCopy.clearFiltersButton}
