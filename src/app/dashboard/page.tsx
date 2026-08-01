@@ -214,7 +214,7 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        <QueuePanel initialItems={queueItems} clients={clients} />
+        <QueuePanel initialItems={queueItems}  />
       </div>
 
       {/* Activity feed */}
@@ -234,7 +234,7 @@ export default async function DashboardPage() {
         </div>
 
         <div className="pt-1 border-t border-zinc-200/60 dark:border-zinc-900/20">
-          <LiveExecutionFeed initialRuns={recentRuns} storageKey="overview" clients={clients} />
+          <LiveExecutionFeed initialRuns={recentRuns} storageKey="overview" />
         </div>
       </div>
 

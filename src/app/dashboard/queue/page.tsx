@@ -48,7 +48,7 @@ export default async function QueuePage() {
         </p>
       </div>
 
-      <QueuePanel initialItems={items} clients={clients} />
+      <QueuePanel initialItems={items}  />
     </div>
   );
 }
