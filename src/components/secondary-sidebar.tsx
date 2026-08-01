@@ -90,8 +90,8 @@ export function SecondarySidebar({
     meetings,
   };
 
-  // Explicitly typed items ensuring every item has a valid LucideIcon
-  const workNavItems: WorkNavItem[] = [
+  // Group 1: Home & Inbox
+  const group1NavItems: WorkNavItem[] = [
     {
       href: "/dashboard",
       label: "Home",
@@ -101,9 +101,13 @@ export function SecondarySidebar({
     {
       href: "/dashboard/inbox",
       label: "Inbox",
-      icon: Inbox, // Added missing icon
+      icon: Inbox,
       badge: unreadInboxCount,
     },
+  ];
+
+  // Group 2: Queue, Executions, Projects
+  const group2NavItems: WorkNavItem[] = [
     {
       href: "/dashboard/queue",
       label: "Queue",
@@ -131,10 +135,10 @@ export function SecondarySidebar({
 
       {/* WORK SECTION CONTENT */}
       {section === "work" ? (
-        <div className="flex-1 space-y-4">
-          {/* MAIN NAVIGATION GROUP */}
+        <div className="flex-1 space-y-3">
+          {/* GROUP 1: HOME & INBOX */}
           <nav className="space-y-0.5">
-            {workNavItems.map((item) => {
+            {group1NavItems.map((item) => {
               const Icon = item.icon;
               const isActive = item.exact
                 ? pathname === item.href
@@ -173,6 +177,51 @@ export function SecondarySidebar({
             })}
           </nav>
 
+          {/* DIVIDER BETWEEN GROUP 1 & GROUP 2 */}
+          <div className="h-px bg-zinc-800/80 my-2 mx-1" />
+
+          {/* GROUP 2: QUEUE, EXECUTIONS, PROJECTS */}
+          <nav className="space-y-0.5">
+            {group2NavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = item.exact
+                ? pathname === item.href
+                : pathname.startsWith(item.href);
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "group flex items-center justify-between px-3 py-2 rounded-[10px] text-[13px] font-medium transition-colors duration-100",
+                    isActive
+                      ? "bg-[#3f3f42] text-white font-semibold shadow-xs"
+                      : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                  )}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-white" : "text-zinc-400 group-hover:text-zinc-200")} />
+                    <span className="truncate">{item.label}</span>
+                  </div>
+
+                  {item.badge !== undefined && item.badge > 0 && (
+                    <span
+                      className={cn(
+                        "text-[11px] font-mono px-1.5 py-0.2 rounded-full font-medium",
+                        isActive
+                          ? "bg-zinc-700 text-white"
+                          : "bg-zinc-800 text-zinc-400 group-hover:text-zinc-200"
+                      )}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* DIVIDER BEFORE CLIENTS */}
           <div className="h-px bg-zinc-800/80 my-2 mx-1" />
 
           {/* CLIENTS SECTION */}
@@ -192,38 +241,42 @@ export function SecondarySidebar({
               </Link>
             </div>
 
-            {/* Client items with Teal Squircle icon */}
+            {/* CLIENTS LIST RENDERING */}
             <div className="space-y-0.5">
-              {clients.map((client) => {
-                const clientHref = `/dashboard/engagements/${client.engagementId}`;
-                const isClientActive = pathname.startsWith(clientHref);
+              {clients.length > 0 ? (
+                clients.map((client) => {
+                  const clientHref = `/dashboard/engagements/${client.engagementId}`;
+                  const isClientActive = pathname.startsWith(clientHref);
 
-                return (
-                  <Link
-                    key={client.engagementId}
-                    href={clientHref}
-                    className={cn(
-                      "flex items-center gap-3 px-2.5 py-2 rounded-[10px] text-[13px] font-medium transition-colors duration-100",
-                      isClientActive
-                        ? "bg-[#3f3f42] text-white font-semibold"
-                        : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
-                    )}
-                  >
-                    <div className="w-6 h-6 rounded-[7px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
-                      <List className="w-3.5 h-3.5 stroke-[2.5]" />
-                    </div>
-                    <span className="truncate">{client.buyer}</span>
-                  </Link>
-                );
-              })}
+                  return (
+                    <Link
+                      key={client.engagementId}
+                      href={clientHref}
+                      className={cn(
+                        "flex items-center gap-3 px-2.5 py-2 rounded-[10px] text-[13px] font-medium transition-colors duration-100",
+                        isClientActive
+                          ? "bg-[#3f3f42] text-white font-semibold"
+                          : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                      )}
+                    >
+                      {/* Teal Squircle Icon matching your screenshot */}
+                      <div className="w-6 h-6 rounded-[7px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                        <List className="w-3.5 h-3.5 stroke-[2.5]" />
+                      </div>
+                      <span className="truncate">{client.buyer}</span>
+                    </Link>
+                  );
+                })
+              ) : (
+                /* Server-side parallel route slot fallback */
+                <div className="space-y-0.5">{work}</div>
+              )}
             </div>
           </div>
         </div>
       ) : (
         /* OTHER SECTION SLOTS */
-        <div className="flex-1">
-          {content[section]}
-        </div>
+        <div className="flex-1">{content[section]}</div>
       )}
 
       {/* SKILLS SLOT (Rendered directly underneath Clients) */}
