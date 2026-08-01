@@ -68,7 +68,6 @@ interface WorkNavItem {
 }
 
 export function SecondarySidebar({
-  work,
   engagements,
   analytics,
   strategy,
@@ -82,7 +81,7 @@ export function SecondarySidebar({
   const section = activeSection(pathname);
 
   const content: Record<SectionKey, ReactNode> = {
-    work,
+    work: null, // Bypassed so old server sidebar layout doesn't duplicate nav
     engagements,
     analytics,
     strategy,
@@ -241,36 +240,31 @@ export function SecondarySidebar({
               </Link>
             </div>
 
-            {/* CLIENTS LIST RENDERING */}
+            {/* CLIENTS LIST - STRICTLY TEAL SQUIRCLE ICON ONLY */}
             <div className="space-y-0.5">
-              {clients.length > 0 ? (
-                clients.map((client) => {
-                  const clientHref = `/dashboard/engagements/${client.engagementId}`;
-                  const isClientActive = pathname.startsWith(clientHref);
+              {clients.map((client) => {
+                const clientHref = `/dashboard/engagements/${client.engagementId}`;
+                const isClientActive = pathname.startsWith(clientHref);
 
-                  return (
-                    <Link
-                      key={client.engagementId}
-                      href={clientHref}
-                      className={cn(
-                        "flex items-center gap-3 px-2.5 py-2 rounded-[10px] text-[13px] font-medium transition-colors duration-100",
-                        isClientActive
-                          ? "bg-[#3f3f42] text-white font-semibold"
-                          : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
-                      )}
-                    >
-                      {/* Teal Squircle Icon matching your screenshot */}
-                      <div className="w-6 h-6 rounded-[7px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
-                        <List className="w-3.5 h-3.5 stroke-[2.5]" />
-                      </div>
-                      <span className="truncate">{client.buyer}</span>
-                    </Link>
-                  );
-                })
-              ) : (
-                /* Server-side parallel route slot fallback */
-                <div className="space-y-0.5">{work}</div>
-              )}
+                return (
+                  <Link
+                    key={client.engagementId}
+                    href={clientHref}
+                    className={cn(
+                      "flex items-center gap-3 px-2.5 py-2 rounded-[10px] text-[13px] font-medium transition-colors duration-100",
+                      isClientActive
+                        ? "bg-[#3f3f42] text-white font-semibold"
+                        : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                    )}
+                  >
+                    {/* Exact Teal Squircle Icon */}
+                    <div className="w-6 h-6 rounded-[7px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                      <List className="w-3.5 h-3.5 stroke-[2.5]" />
+                    </div>
+                    <span className="truncate">{client.buyer}</span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </div>
