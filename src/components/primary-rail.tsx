@@ -10,7 +10,7 @@ import {
   Target,
   BookOpen,
   CalendarClock,
-  Scale,
+  ShieldCheck,
   LogOut,
   User,
   Settings,
@@ -31,22 +31,23 @@ interface PrimaryRailProps {
 }
 
 /**
- * Main rail sections.
+ * Main rail navigation items.
  */
 const RAIL_SECTIONS: Array<{ href: string; title: string; icon: LucideIcon }> = [
   { href: "/dashboard", title: "Work", icon: LayoutGrid },
   { href: "/dashboard/engagements", title: "Engagements", icon: Building2 },
   { href: "/dashboard/analytics", title: "Analytics", icon: BarChart3 },
-  { href: "/dashboard/strategy", title: "Strategy", icon: Target },
+  // { href: "/dashboard/strategy", title: "Strategy", icon: Target }, // Commented out for future use
+  { href: "/dashboard/settings", title: "Settings", icon: Settings },
   { href: "/dashboard/library", title: "Library", icon: BookOpen },
   { href: "/dashboard/meetings", title: "Meetings", icon: CalendarClock },
 ];
 
 /**
- * Product suite section (separated by a visual divider).
+ * Product suite section (segmented below main nav).
  */
 const PRODUCT_SECTIONS: Array<{ href: string; title: string; icon: LucideIcon }> = [
-  { href: "/counter-claim", title: "Counter Claim", icon: Scale },
+  { href: "/counter-claim", title: "Counter Claim", icon: ShieldCheck },
 ];
 
 function activeSectionHref(pathname: string): string {
@@ -69,11 +70,11 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
-    <aside className="w-[76px] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1 shrink-0 select-none z-20 transition-colors duration-200">
-      {/* Top Section: Primary Navigation & Products */}
+    <aside className="w-[76px] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1.5 shrink-0 select-none z-20 transition-colors duration-200">
+      {/* Top Section: Primary Navigation & Secondary Product Segment */}
       <div className="flex flex-col items-center gap-1.5 w-full">
-        {/* Primary Sections (Starts directly with Work at the top) */}
-        <nav className="flex flex-col items-center gap-1.5 w-full">
+        {/* Main Rail Links */}
+        <nav className="flex flex-col items-center gap-1 w-full">
           {RAIL_SECTIONS.map((section) => {
             const isActive = section.href === activeHref;
             const Icon = section.icon;
@@ -85,12 +86,12 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                 aria-current={isActive ? "page" : undefined}
                 className={
                   isActive
-                    ? "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all"
-                    : "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/80 dark:hover:bg-zinc-900/60 rounded-xl border border-transparent transition-all"
+                    ? "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all shadow-xs"
+                    : "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
                 }
               >
                 <Icon className="w-4 h-4 shrink-0" />
-                <span className="text-[9.5px] font-medium leading-tight text-center truncate max-w-full px-0.5 py-0.5">
+                <span className="text-[9.5px] font-medium leading-normal text-center truncate max-w-full px-0.5 pt-0.5 pb-1">
                   {section.title}
                 </span>
               </Link>
@@ -98,14 +99,11 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
           })}
         </nav>
 
-        {/* Divider Separating Main Navigation from Product Suite */}
-        <div className="w-8 h-px bg-zinc-200 dark:bg-zinc-800 my-1.5 shrink-0" />
+        {/* Subtle Architectural Divider */}
+        <div className="w-7 h-[1px] bg-zinc-200 dark:bg-zinc-800/80 my-2 shrink-0" />
 
-        {/* Product Suite Segment */}
-        <div className="flex flex-col items-center gap-1.5 w-full">
-          <span className="text-[8.5px] font-mono font-semibold tracking-wider text-zinc-400 dark:text-zinc-600 uppercase">
-            Products
-          </span>
+        {/* Product Suite Section */}
+        <nav className="flex flex-col items-center gap-1 w-full">
           {PRODUCT_SECTIONS.map((product) => {
             const isActive = product.href === activeHref;
             const Icon = product.icon;
@@ -117,29 +115,29 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                 aria-current={isActive ? "page" : undefined}
                 className={
                   isActive
-                    ? "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all"
-                    : "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/80 dark:hover:bg-zinc-900/60 rounded-xl border border-transparent transition-all"
+                    ? "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all shadow-xs"
+                    : "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
                 }
               >
                 <Icon className="w-4 h-4 shrink-0 text-amber-500 dark:text-amber-400" />
-                <span className="text-[9.5px] font-medium leading-tight text-center truncate max-w-full px-0.5 py-0.5">
+                <span className="text-[9.5px] font-medium leading-normal text-center truncate max-w-full px-0.5 pt-0.5 pb-1">
                   {product.title}
                 </span>
               </Link>
             );
           })}
-        </div>
+        </nav>
       </div>
 
       {/* Bottom Section: Back to Home & Profile Avatar Popover */}
-      <div className="flex flex-col items-center gap-2.5 w-full relative">
+      <div className="flex flex-col items-center gap-2 w-full relative">
         <a
           href="/home"
           title="Back to account"
-          className="w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-colors"
+          className="w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-colors"
         >
           <Home className="w-4 h-4 shrink-0" />
-          <span className="text-[9.5px] font-medium leading-tight py-0.5">Home</span>
+          <span className="text-[9.5px] font-medium leading-normal pt-0.5 pb-1">Home</span>
         </a>
 
         {/* User Profile Avatar Trigger */}
@@ -151,7 +149,7 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
           {initials}
         </button>
 
-        {/* Dual-Pane Profile Popover */}
+        {/* Profile Popover */}
         {popoverOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setPopoverOpen(false)} />
