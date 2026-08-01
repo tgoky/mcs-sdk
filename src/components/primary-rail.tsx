@@ -8,7 +8,6 @@ import {
   Building2,
   BarChart3,
   Target,
-  Zap,
   CalendarClock,
   LogOut,
   User,
@@ -30,38 +29,17 @@ interface PrimaryRailProps {
 }
 
 /**
- * The six top-level sections. Each owns its own href *prefix* — matching
- * on prefix (not exact path) is what makes e.g. /dashboard/engagements/abc123
- * still light up "Engagements" here. "Work" is deliberately matched last
- * and via exact-or-bare-/dashboard-child logic below, since every other
- * section's href also starts with "/dashboard" and would otherwise always
- * win the prefix match.
+ * The top-level sections (Skills removed as it now lives in the secondary sidebar).
  */
 const RAIL_SECTIONS: Array<{ href: string; title: string; icon: LucideIcon }> = [
   { href: "/dashboard", title: "Work", icon: LayoutGrid },
   { href: "/dashboard/engagements", title: "Engagements", icon: Building2 },
   { href: "/dashboard/analytics", title: "Analytics", icon: BarChart3 },
   { href: "/dashboard/strategy", title: "Strategy", icon: Target },
-  { href: "/dashboard/skills", title: "Skills", icon: Zap },
   { href: "/dashboard/meetings", title: "Meetings", icon: CalendarClock },
 ];
 
-/**
- * Which section is "active" for a given pathname. Previously this rail
- * hardcoded Work's className as permanently active with no pathname check
- * at all, so every other section (Executions, Queue, Engagements) rendered
- * unselected even when you were on their page. Fixed here the same way
- * SidebarNavLinks already handles it: exact match for the bare /dashboard
- * root, longest-prefix match for everything else so a section's own
- * sub-routes (e.g. /dashboard/engagements/abc123) still resolve correctly
- * even though they also start with "/dashboard".
- */
 function activeSectionHref(pathname: string): string {
-  // If viewing a skill module detail page, keep Skills active on the primary rail
-  if (pathname.startsWith("/dashboard/modules")) {
-    return "/dashboard/skills";
-  }
-
   const nonRootMatches = RAIL_SECTIONS.filter(
     (s) => s.href !== "/dashboard" && (pathname === s.href || pathname.startsWith(`${s.href}/`))
   );
@@ -73,7 +51,6 @@ function activeSectionHref(pathname: string): string {
   return "/dashboard";
 }
 
-
 export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const pathname = usePathname();
@@ -81,47 +58,53 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
-    <aside className="w-14 bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 shrink-0 select-none z-20 transition-colors duration-200">
-      {/* Top Section: Gold Brand Mark + Rail Category Icons */}
-      <div className="flex flex-col items-center gap-3.5">
+    <aside className="w-[72px] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1 shrink-0 select-none z-20 transition-colors duration-200">
+      {/* Top Section: Gold Brand Mark + Rail Category Icons with Labels */}
+      <div className="flex flex-col items-center gap-3 w-full">
         <Link
           href="/dashboard"
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-gold text-[13px] font-black text-gold-foreground shadow-sm hover:scale-105 transition-all"
+          className="flex h-7 w-7 items-center justify-center rounded-lg bg-gold text-[13px] font-black text-gold-foreground shadow-sm hover:scale-105 transition-all mb-1"
         >
           S
         </Link>
 
         <div className="w-8 h-px bg-zinc-200 dark:bg-zinc-900 my-0.5" />
 
-        {RAIL_SECTIONS.map((section) => {
-          const isActive = section.href === activeHref;
-          const Icon = section.icon;
-          return (
-            <Link
-              key={section.href}
-              href={section.href}
-              title={section.title}
-              aria-current={isActive ? "page" : undefined}
-              className={
-                isActive
-                  ? "p-2 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg transition-colors"
-                  : "p-2 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg border border-transparent transition-colors"
-              }
-            >
-              <Icon className="w-4 h-4" />
-            </Link>
-          );
-        })}
+        <nav className="flex flex-col items-center gap-2 w-full">
+          {RAIL_SECTIONS.map((section) => {
+            const isActive = section.href === activeHref;
+            const Icon = section.icon;
+            return (
+              <Link
+                key={section.href}
+                href={section.href}
+                title={section.title}
+                aria-current={isActive ? "page" : undefined}
+                className={
+                  isActive
+                    ? "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all"
+                    : "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/80 dark:hover:bg-zinc-900/60 rounded-xl border border-transparent transition-all"
+                }
+              >
+                <Icon className="w-4 h-4 shrink-0" />
+                <span className="text-[9px] font-medium leading-none text-center truncate max-w-full">
+                  {section.title}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
       </div>
 
       {/* Bottom Section: Back to Home & Profile Avatar Popover */}
-      <div className="flex flex-col items-center gap-3 relative">
+      <div className="flex flex-col items-center gap-2.5 w-full relative">
         <a
           href="/home"
           title="Back to account"
-          className="p-2 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors"
+          className="w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-colors"
         >
-          <Home className="w-4 h-4" />
+          <Home className="w-4 h-4 shrink-0" />
+          <span className="text-[9px] font-medium leading-none">Home</span>
         </a>
 
         {/* User Profile Avatar Trigger */}
@@ -139,7 +122,7 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
             {/* Backdrop for outside clicks */}
             <div className="fixed inset-0 z-40" onClick={() => setPopoverOpen(false)} />
 
-            {/* Floating Popover: Sharp rectangular container (no border-radius), wider dimensions */}
+            {/* Floating Popover */}
             <div className="absolute left-full bottom-0 ml-2 z-50 w-[560px] sm:w-[580px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
               <div className="flex min-h-[360px] divide-x divide-zinc-200 dark:divide-zinc-800">
                 
@@ -150,7 +133,6 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                       Account
                     </h3>
                     
-                    {/* Active Account Row - Pure text & icon, no background box/border */}
                     <div className="flex items-center gap-2.5 py-1 px-1">
                       <div className="w-6 h-6 rounded-full bg-purple-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
                         {initials}
@@ -182,10 +164,9 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                   </div>
                 </div>
 
-                {/* RIGHT PANE: Full Asana User Content */}
+                {/* RIGHT PANE: User Content */}
                 <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900">
                   <div className="space-y-3">
-                    {/* Large User Info Header */}
                     <div className="flex items-center gap-3">
                       <div className="w-11 h-11 rounded-full bg-purple-600 text-white font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-sm">
                         {initials}
@@ -200,7 +181,6 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                       </div>
                     </div>
 
-                    {/* Set Out of Office Button */}
                     <button
                       type="button"
                       className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md transition-colors"
@@ -211,7 +191,6 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
 
                     <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2" />
 
-                    {/* Workspace Actions */}
                     <div className="space-y-1">
                       <Link
                         href="/dashboard/settings"
@@ -241,7 +220,6 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                       </Link>
                     </div>
 
-                    {/* Gold Highlighted Upgrade Button */}
                     <button
                       type="button"
                       className="w-full mt-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold bg-amber-200/80 hover:bg-amber-300/80 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 text-amber-950 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700/50 rounded-md transition-colors"
@@ -252,7 +230,6 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
 
                     <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2" />
 
-                    {/* Account Settings Options */}
                     <div className="space-y-1">
                       <Link
                         href="/dashboard/settings"
