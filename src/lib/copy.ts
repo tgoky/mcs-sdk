@@ -82,7 +82,7 @@ export const RUN_STATUS_LABELS: Record<string, string> = {
   success: "Done",
   failed: "Failed",
   running: "In progress",
-  cancelled: "Cancelled",
+   cancelled: "Cancelled",
   timed_out: "Timed out",
 };
 
@@ -106,40 +106,15 @@ export function runStatusColor(status: string | null | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
-// Call intelligence session status (conversationIntelligenceSessions.status —
-// mirrors Recall.ai's own bot.status_change vocabulary loosely; see the
-// mapping in src/app/api/recall/route.ts)
-// ---------------------------------------------------------------------------
-
-export const CALL_SESSION_STATUS_LABELS: Record<string, string> = {
-  scheduled: "Bot scheduled",
-  joining: "Bot joining",
-  in_call: "In call",
-  done: "Processed",
-  failed: "Failed",
-};
-
-export const CALL_SESSION_STATUS_COLORS: Record<string, string> = {
-  scheduled: "text-zinc-400 dark:text-zinc-500",
-  joining: "text-sky-600 dark:text-sky-400 italic",
-  in_call: "text-sky-600 dark:text-sky-400 italic",
-  done: "text-gold-hover dark:text-gold",
-  failed: "text-rose-400",
-};
-
-/** Friendly call-intelligence-session-status word, with a safe fallback. */
-export function callSessionStatusLabel(status: string | null | undefined): string {
-  if (!status) return "Scheduled";
-  return CALL_SESSION_STATUS_LABELS[status] ?? status;
-}
-
-export function callSessionStatusColor(status: string | null | undefined): string {
-  if (!status) return CALL_SESSION_STATUS_COLORS.scheduled;
-  return CALL_SESSION_STATUS_COLORS[status] ?? CALL_SESSION_STATUS_COLORS.scheduled;
-}
-
-// ---------------------------------------------------------------------------
 // Phase labels
+//
+// Internal step names get stored in the database exactly as engineers wrote
+// them (e.g. "stage_5_report", "hybrid_synthesis"). These should NEVER be
+// shown to a user raw. Always run them through `phaseLabel()` below.
+//
+// If a new phase gets added to the backend and someone forgets to add it
+// here, it falls back to a generic "In progress" instead of leaking an
+// internal codename onto the screen.
 // ---------------------------------------------------------------------------
 
 export const PHASE_LABELS: Record<string, string> = {
@@ -183,7 +158,9 @@ export function phaseLabel(phase: string | null | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
-// Platform Codenames
+// Friendly names for the platform codenames stored on each client account.
+// Used in the setup wizard, the engagements list, and the engagement detail
+// page. Edit a name here and it updates everywhere.
 // ---------------------------------------------------------------------------
 
 export const BOOKING_PLATFORM_LABELS: Record<string, string> = {
@@ -232,13 +209,11 @@ export const BRIEF_DESTINATION_LABELS: Record<string, string> = {
   crm_note: "Note in your CRM",
 };
 
-export const CONVERSATION_INTELLIGENCE_PROVIDER_LABELS: Record<string, string> = {
-  recall_ai: "Recall.ai",
-  none: "Not connected",
-};
-
 // ---------------------------------------------------------------------------
-// Queue copy
+// Queue copy — see src/lib/queue.ts. These translate the raw
+// pending_actions.action_type and human_blockers.blocker_type enum values
+// (see the comments above those columns in src/models/schema.ts) into what
+// a human should actually read on the queue panel and sidebar badge.
 // ---------------------------------------------------------------------------
 
 export const ACTION_TYPE_LABELS: Record<string, string> = {
@@ -282,7 +257,11 @@ export const QUEUE_COPY = {
 };
 
 // ---------------------------------------------------------------------------
-// Table toolbar copy
+// Table toolbar copy — shared across every list view that gets the
+// tabs + search + time range + customize treatment (Queue, Live
+// Executions, and anything added later). Keep this generic; put
+// view-specific words (tab names, chip labels) in that view's own block
+// below instead.
 // ---------------------------------------------------------------------------
 
 export const TABLE_TOOLBAR_COPY = {
@@ -321,6 +300,7 @@ export const QUEUE_TOOLBAR_COPY = {
     platform: "Platform area",
     account: "Account",
   },
+  /** Section categories from src/lib/error-classification.ts's StackSection — not individual platform names (see BOOKING_PLATFORM_LABELS etc. above for those). */
   platformAreaLabels: {
     booking: "Booking",
     email: "Email / CRM",
@@ -328,28 +308,6 @@ export const QUEUE_TOOLBAR_COPY = {
     hosting: "Hosting",
     ad_data: "Ad data",
   } as Record<string, string>,
-};
-
-// ---------------------------------------------------------------------------
-// Client rail — the "All / Clients" scope switch that sits to the left of
-// the Queue and Live Executions tables (see components/client-rail.tsx).
-// "All" is the existing flat, unfiltered list. "Clients" reveals a
-// searchable roster; picking one scopes the table to that client alone.
-// ---------------------------------------------------------------------------
-
-export const CLIENT_RAIL_COPY = {
-  scopeTabs: {
-    all: "All",
-    clients: "Clients",
-  },
-  allClientsRow: "All clients",
-  searchPlaceholder: "Search clients...",
-  addClientLabel: "Add a client",
-  emptyState: "No clients yet.",
-  noMatches: "No clients match your search.",
-  pausedBadge: "Paused",
-  backToAllClients: "All clients",
-  allModeBlurb: (n: number) => `Showing every item across all ${n} client${n === 1 ? "" : "s"}. Switch to Clients to focus on one.`,
 };
 
 /** Friendly booking-platform name, with a safe fallback. */
@@ -380,12 +338,6 @@ export function smsPlatformLabel(raw: string | null | undefined): string {
 export function adDataPlatformLabel(raw: string | null | undefined): string {
   if (!raw) return "Not connected yet";
   return AD_DATA_PLATFORM_LABELS[raw] ?? raw;
-}
-
-/** Friendly conversation-intelligence-provider name, with a safe fallback. */
-export function conversationIntelligenceProviderLabel(raw: string | null | undefined): string {
-  if (!raw || raw === "none") return "Not connected";
-  return CONVERSATION_INTELLIGENCE_PROVIDER_LABELS[raw] ?? raw;
 }
 
 // ---------------------------------------------------------------------------
@@ -425,7 +377,11 @@ export const DASHBOARD_COPY = {
 };
 
 // ---------------------------------------------------------------------------
-// Home / workspace hub copy
+// Home / workspace hub copy (src/app/home/page.tsx)
+//
+// This is the landing page every authenticated buyer sees before picking a
+// product. Keep the voice identical to DASHBOARD_COPY above — plain,
+// second-person, no internal codenames or system-status jargon.
 // ---------------------------------------------------------------------------
 
 export type WorkspaceStatus = "available" | "coming_soon";
@@ -452,6 +408,10 @@ export const HOME_COPY = {
   comingSoonLabel: "Coming soon",
 };
 
+/**
+ * Every product the workspace hub can link to. Add an object here to add
+ * a new tile — nothing else in the page needs to change.
+ */
 export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
   {
     id: "showtime",
@@ -472,7 +432,13 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Run detail page copy
+// Run detail page copy (src/app/dashboard/runs/[id]/page.tsx)
+//
+// The previous labels here ("Task Execution History Tree", "Phase Log
+// Compaction Summary", "Telemetry Audit", "Fatal Pipeline Exception") read
+// like raw AI-generated systems jargon instead of the plain, second-person
+// voice the rest of the app uses (see PHASE_LABELS above) — renamed to
+// match.
 // ---------------------------------------------------------------------------
 
 export const RUN_DETAIL_COPY = {
@@ -538,5 +504,5 @@ export const EXECUTIONS_TOOLBAR_COPY = {
     showSuccessRate: "Show success rate",
     showModuleBreakdown: "Show breakdown by module",
   },
-  successRateSuffix: (n: number) => `success   last ${n} finished`,
+  successRateSuffix: (n: number) => `success · last ${n} finished`,
 };

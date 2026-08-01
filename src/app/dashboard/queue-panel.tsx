@@ -15,7 +15,7 @@ import {
   Waves,
   Copy,
 } from "lucide-react";
-import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, CLIENT_RAIL_COPY as railCopy, skillName as skillDisplayName } from "@/lib/copy";
+import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, skillName as skillDisplayName } from "@/lib/copy";
 import type { StackSection } from "@/lib/error-classification";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { pauseEngagement, resumeEngagement, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
@@ -26,21 +26,6 @@ import { ViewCustomizer, FilterChipBar, type CustomizerSection } from "@/compone
 import { useLocalViewState } from "@/lib/use-local-view-state";
 import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
-import {
-  ClientRail,
-  ClientRosterTable,
-  type ClientScopeView,
-  type ClientRailEntry,
-  type ClientRosterRow,
-} from "@/components/client-rail";
-import { ChevronLeft } from "lucide-react";
-
-/** One row of the tenant's client roster — passed down from the server page/layout that already has the engagement list. Optional: omit entirely to keep a QueuePanel exactly as it behaved before this rail existed. */
-export interface QueueClientRosterInput {
-  engagementId: string;
-  buyer: string;
-  pausedAt?: string | null;
-}
 
 export interface QueueItemDTO {
   id: string;
@@ -424,7 +409,7 @@ function QueueRow({
   );
 }
 
-export function QueuePanel({ initialItems, clients }: { initialItems: QueueItemDTO[]; clients?: QueueClientRosterInput[] }) {
+export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
   const [items, setItems] = useState<QueueItemDTO[]>(initialItems);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<string | null>(null);
@@ -438,13 +423,6 @@ export function QueuePanel({ initialItems, clients }: { initialItems: QueueItemD
   const [activeChipIds, setActiveChipIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
 
-  // "All / Clients" scope — see components/client-rail.tsx. Undefined
-  // `clients` prop means the caller opted out (e.g. an earlier, simpler
-  // usage) — everything below stays exactly the old, unscoped behavior.
-  const hasClientScope = clients !== undefined;
-  const [view, setView] = useState<ClientScopeView>("all");
-  const [selectedEngagementId, setSelectedEngagementId] = useState<string | null>(null);
-
   const pinnedChipIds = new Set(savedView.pinnedChipIds);
   const pageSize = savedView.pageSize;
 
@@ -454,96 +432,21 @@ export function QueuePanel({ initialItems, clients }: { initialItems: QueueItemD
     return map;
   }, [items]);
 
-  // Per-client rollup used by both the rail's badges and the "Clients"
-  // roster table — always computed off the full, unscoped `items`, since
-  // it needs every client's numbers regardless of what's currently picked.
-  const perClientAgg = useMemo(() => {
-    const map = new Map<string, { approve: number; actionNeeded: number; alerts: number; fyi: number; lastActivity: string | null }>();
-    for (const item of items) {
-      if (!item.engagementId) continue;
-      const bucket = map.get(item.engagementId) ?? { approve: 0, actionNeeded: 0, alerts: 0, fyi: 0, lastActivity: null };
-      if (item.category === "approve") bucket.approve++;
-      else if (item.category === "action_needed") bucket.actionNeeded++;
-      else if (item.category === "alert") bucket.alerts++;
-      else bucket.fyi++;
-      if (!bucket.lastActivity || item.createdAt > bucket.lastActivity) bucket.lastActivity = item.createdAt;
-      map.set(item.engagementId, bucket);
-    }
-    return map;
-  }, [items]);
-
-  const globalCounts = useMemo(() => {
-    let approve = 0;
-    let actionNeeded = 0;
-    for (const item of items) {
-      if (item.category === "approve") approve++;
-      else if (item.category === "action_needed") actionNeeded++;
-    }
-    return { approve, actionNeeded };
-  }, [items]);
-
-  const railClients: ClientRailEntry[] = useMemo(() => {
-    return (clients ?? []).map((c) => {
-      const agg = perClientAgg.get(c.engagementId);
-      const needsAttention = (agg?.approve ?? 0) + (agg?.actionNeeded ?? 0);
-      const count = needsAttention > 0 ? needsAttention : agg?.alerts ?? 0;
-      const tone: ClientRailEntry["tone"] =
-        (agg?.approve ?? 0) > 0 ? "danger" : needsAttention > 0 || (agg?.alerts ?? 0) > 0 ? "attention" : "muted";
-      return { engagementId: c.engagementId, buyer: c.buyer, count, tone, paused: !!c.pausedAt };
-    });
-  }, [clients, perClientAgg]);
-
-  const rosterRows: ClientRosterRow[] = useMemo(() => {
-    return (clients ?? [])
-      .map((c) => {
-        const agg = perClientAgg.get(c.engagementId) ?? { approve: 0, actionNeeded: 0, alerts: 0, fyi: 0, lastActivity: null };
-        return {
-          engagementId: c.engagementId,
-          buyer: c.buyer,
-          paused: !!c.pausedAt,
-          lastActivity: agg.lastActivity,
-          columns: [
-            { key: "approve", label: "Needs approval", value: agg.approve, tone: "danger" as const },
-            { key: "action_needed", label: "Action needed", value: agg.actionNeeded, tone: "attention" as const },
-            { key: "alerts", label: "Alerts", value: agg.alerts, tone: "attention" as const },
-          ],
-        };
-      })
-      .sort((a, b) => {
-        const score = (r: (typeof a)) => r.columns.reduce((s, col) => s + col.value, 0);
-        const diff = score(b) - score(a);
-        return diff !== 0 ? diff : a.buyer.localeCompare(b.buyer);
-      });
-  }, [clients, perClientAgg]);
-
-  const selectedClientName = useMemo(() => {
-    if (!selectedEngagementId) return null;
-    return (clients ?? []).find((c) => c.engagementId === selectedEngagementId)?.buyer ?? null;
-  }, [clients, selectedEngagementId]);
-
-  // Scope to the picked client (if any) before any other filter runs, so
-  // tab counts, search, and chips all operate within that client's items
-  // — exactly like switching a whole different Queue was loaded.
-  const clientScopedItems = useMemo(() => {
-    if (view !== "clients" || !selectedEngagementId) return items;
-    return items.filter((i) => i.engagementId === selectedEngagementId);
-  }, [items, view, selectedEngagementId]);
-
   const tabCounts = useMemo(() => {
-    const counts: Record<QueueTab, number> = { all: clientScopedItems.length, approve: 0, action_needed: 0, alerts: 0 };
-    for (const item of clientScopedItems) {
+    const counts: Record<QueueTab, number> = { all: items.length, approve: 0, action_needed: 0, alerts: 0 };
+    for (const item of items) {
       if (item.category === "approve") counts.approve++;
       else if (item.category === "action_needed") counts.action_needed++;
       else counts.alerts++;
     }
     return counts;
-  }, [clientScopedItems]);
+  }, [items]);
 
   const tabFiltered = useMemo(() => {
-    if (tab === "all") return clientScopedItems;
-    if (tab === "alerts") return clientScopedItems.filter((i) => i.category === "alert" || i.category === "fyi");
-    return clientScopedItems.filter((i) => i.category === tab);
-  }, [clientScopedItems, tab]);
+    if (tab === "all") return items;
+    if (tab === "alerts") return items.filter((i) => i.category === "alert" || i.category === "fyi");
+    return items.filter((i) => i.category === tab);
+  }, [items, tab]);
 
   const rangeFiltered = useMemo(() => {
     if (timeRange === "all") return tabFiltered;
@@ -622,16 +525,6 @@ export function QueuePanel({ initialItems, clients }: { initialItems: QueueItemD
 
   function handleTabChange(nextTab: QueueTab) {
     setTab(nextTab);
-    setPage(0);
-  }
-
-  function handleViewChange(nextView: ClientScopeView) {
-    setView(nextView);
-    setPage(0);
-  }
-
-  function handleSelectClient(nextEngagementId: string | null) {
-    setSelectedEngagementId(nextEngagementId);
     setPage(0);
   }
 
@@ -848,25 +741,17 @@ export function QueuePanel({ initialItems, clients }: { initialItems: QueueItemD
     );
   }
 
-  // "Clients" scope with no client picked yet → the roster grain (one row
-  // per client) instead of the item grain. This is what keeps the toggle
-  // from being redundant with "All": different aggregation, not the same
-  // rows with a filter applied. See client-rail.tsx's top comment.
-  const showRoster = hasClientScope && view === "clients" && !selectedEngagementId && rosterRows.length > 0;
+  if (items.length === 0) {
+    return (
+      <div className="pt-1 border-t border-border/60">
+        <p className="text-xs font-mono font-medium text-muted-foreground/80 py-6 text-center">
+          {copy.emptyState}
+        </p>
+      </div>
+    );
+  }
 
-  const content = showRoster ? (
-    <ClientRosterTable
-      rows={rosterRows}
-      onSelectClient={handleSelectClient}
-      emptyTitle={railCopy.emptyState}
-    />
-  ) : clientScopedItems.length === 0 ? (
-    <div className="pt-1 border-t border-border/60">
-      <p className="text-xs font-mono font-medium text-muted-foreground/80 py-6 text-center">
-        {selectedClientName ? `Nothing waiting on you for ${selectedClientName} right now.` : copy.emptyState}
-      </p>
-    </div>
-  ) : (
+  return (
     <div className="pt-1 border-t border-border/60 space-y-2.5">
       <div className="flex items-center gap-2 flex-wrap px-1">
         <SegmentedTabs options={tabOptions} value={tab} onChange={handleTabChange} />
@@ -956,40 +841,6 @@ export function QueuePanel({ initialItems, clients }: { initialItems: QueueItemD
           </div>
         </div>
       )}
-    </div>
-  );
-
-  if (!hasClientScope) {
-    return content;
-  }
-
-  return (
-    <div className="flex gap-4 items-start">
-      <ClientRail
-        view={view}
-        onViewChange={handleViewChange}
-        clients={railClients}
-        selectedEngagementId={selectedEngagementId}
-        onSelectClient={handleSelectClient}
-        totalCount={items.length}
-        allModeStats={[
-          { label: "Needs approval", value: globalCounts.approve },
-          { label: "Action needed", value: globalCounts.actionNeeded },
-        ]}
-      />
-      <div className="flex-1 min-w-0 space-y-2">
-        {view === "clients" && selectedEngagementId && (
-          <button
-            type="button"
-            onClick={() => handleSelectClient(null)}
-            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-          >
-            <ChevronLeft size={13} /> {railCopy.backToAllClients}
-            {selectedClientName && <span className="text-foreground font-semibold">— {selectedClientName}</span>}
-          </button>
-        )}
-        {content}
-      </div>
     </div>
   );
 }

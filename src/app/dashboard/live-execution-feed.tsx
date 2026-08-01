@@ -19,7 +19,7 @@ import {
   Waves,
   Copy,
 } from "lucide-react";
-import { skillName, phaseLabel, SKILL_INFO, SKILLS, EXECUTIONS_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, CLIENT_RAIL_COPY as railCopy, type SkillName } from "@/lib/copy";
+import { skillName, phaseLabel, SKILL_INFO, SKILLS, EXECUTIONS_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, type SkillName } from "@/lib/copy";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { cancelSkillRun, pauseEngagement, resumeEngagement, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
 import { SegmentedTabs, type SegmentedTabOption } from "@/components/segmented-tabs";
@@ -29,13 +29,6 @@ import { ViewCustomizer, FilterChipBar, type CustomizerSection } from "@/compone
 import { useLocalViewState } from "@/lib/use-local-view-state";
 import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
-import {
-  ClientRail,
-  ClientRosterTable,
-  type ClientScopeView,
-  type ClientRailEntry,
-  type ClientRosterRow,
-} from "@/components/client-rail";
 
 interface SkillRun {
   id: string;
@@ -54,13 +47,6 @@ interface SkillRun {
   engagementPausedAt?: string | null;
 }
 
-/** One row of the tenant's client roster — passed down from the server page that already has the engagement list. Optional: omit to keep a LiveExecutionFeed exactly as it behaved before this rail existed (e.g. the locked-skill per-module history). */
-export interface ExecutionsClientRosterInput {
-  engagementId: string;
-  buyer: string;
-  pausedAt?: string | null;
-}
-
 interface LiveExecutionFeedProps {
   initialRuns: SkillRun[];
   /** Defaults to "/api/skill-runs/recent". Pass e.g. "/api/skill-runs/recent?skill=pre-call-read" to scope the live poll to one module. */
@@ -71,8 +57,6 @@ interface LiveExecutionFeedProps {
   lockedSkill?: SkillName;
   /** Scopes the persisted view-customization (pinned chips, page size, stat toggles) to this instance, so e.g. the dashboard-overview widget and a single module's history don't share one saved view. Defaults to "default". */
   storageKey?: string;
-  /** The tenant's client roster — passing this turns on the "All / Clients" rail (see client-rail.tsx). Omit to leave a usage unscoped, unchanged. */
-  clients?: ExecutionsClientRosterInput[];
 }
 
 // ---------------------------------------------------------------------------
@@ -469,7 +453,7 @@ function RunRow({
   );
 }
 
-export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, storageKey, clients }: LiveExecutionFeedProps) {
+export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, storageKey }: LiveExecutionFeedProps) {
   const router = useRouter();
   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
   const [polling, setPolling] = useState(true);
@@ -484,102 +468,8 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
   const [activeChipIds, setActiveChipIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
 
-  // "All / Clients" scope — see components/client-rail.tsx. Undefined
-  // `clients` prop (the locked-skill per-module history, for instance)
-  // means everything below behaves exactly as it did before this existed.
-  const hasClientScope = clients !== undefined;
-  const [view, setView] = useState<ClientScopeView>("all");
-  const [selectedEngagementId, setSelectedEngagementId] = useState<string | null>(null);
-
   const pinnedChipIds = new Set(savedView.pinnedChipIds);
   const pageSize = savedView.pageSize;
-
-  // Per-client rollup for the rail's badges and the "Clients" roster table —
-  // computed off the full, unscoped `runs`, since it needs every client's
-  // numbers regardless of what's currently picked.
-  const perClientAgg = useMemo(() => {
-    const map = new Map<string, { running: number; failed: number; completed: number; lastActivity: string | null }>();
-    for (const run of runs) {
-      if (!run.engagementId) continue;
-      const bucket = map.get(run.engagementId) ?? { running: 0, failed: 0, completed: 0, lastActivity: null };
-      const t = tabOfStatus(run.status);
-      if (t === "running") bucket.running++;
-      else if (t === "needs_attention") bucket.failed++;
-      else if (t === "completed") bucket.completed++;
-      if (!bucket.lastActivity || run.startedAt > bucket.lastActivity) bucket.lastActivity = run.startedAt;
-      map.set(run.engagementId, bucket);
-    }
-    return map;
-  }, [runs]);
-
-  const globalCounts = useMemo(() => {
-    let running = 0;
-    let failed = 0;
-    for (const run of runs) {
-      const t = tabOfStatus(run.status);
-      if (t === "running") running++;
-      else if (t === "needs_attention") failed++;
-    }
-    return { running, failed };
-  }, [runs]);
-
-  const railClients: ClientRailEntry[] = useMemo(() => {
-    return (clients ?? []).map((c) => {
-      const agg = perClientAgg.get(c.engagementId);
-      return {
-        engagementId: c.engagementId,
-        buyer: c.buyer,
-        count: agg?.failed ?? 0,
-        tone: "danger" as const,
-        isLive: (agg?.running ?? 0) > 0,
-        paused: !!c.pausedAt,
-      };
-    });
-  }, [clients, perClientAgg]);
-
-  const rosterRows: ClientRosterRow[] = useMemo(() => {
-    return (clients ?? [])
-      .map((c) => {
-        const agg = perClientAgg.get(c.engagementId) ?? { running: 0, failed: 0, completed: 0, lastActivity: null };
-        return {
-          engagementId: c.engagementId,
-          buyer: c.buyer,
-          paused: !!c.pausedAt,
-          isLive: agg.running > 0,
-          lastActivity: agg.lastActivity,
-          columns: [
-            { key: "running", label: "Running", value: agg.running, tone: "muted" as const },
-            { key: "failed", label: "Failed", value: agg.failed, tone: "danger" as const },
-            { key: "completed", label: "Completed", value: agg.completed, tone: "muted" as const },
-          ],
-        };
-      })
-      .sort((a, b) => {
-        // Live-right-now clients first, then most failures, then alphabetical.
-        if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
-        const failedDiff = (b.columns[1].value ?? 0) - (a.columns[1].value ?? 0);
-        return failedDiff !== 0 ? failedDiff : a.buyer.localeCompare(b.buyer);
-      });
-  }, [clients, perClientAgg]);
-
-  const selectedClientName = useMemo(() => {
-    if (!selectedEngagementId) return null;
-    return (clients ?? []).find((c) => c.engagementId === selectedEngagementId)?.buyer ?? null;
-  }, [clients, selectedEngagementId]);
-
-  // Scope to the picked client (if any) before any other filter runs.
-  const clientScopedRuns = useMemo(() => {
-    if (view !== "clients" || !selectedEngagementId) return runs;
-    return runs.filter((r) => r.engagementId === selectedEngagementId);
-  }, [runs, view, selectedEngagementId]);
-
-  function handleViewChange(nextView: ClientScopeView) {
-    setView(nextView);
-  }
-
-  function handleSelectClient(nextEngagementId: string | null) {
-    setSelectedEngagementId(nextEngagementId);
-  }
 
   const buildUrl = useCallback(() => {
     const url = new URL(apiUrl ?? "/api/skill-runs/recent", window.location.origin);
@@ -629,17 +519,17 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
   );
 
   const tabCounts = useMemo(() => {
-    const counts: Record<ExecutionsTab, number> = { all: clientScopedRuns.length, running: 0, needs_attention: 0, completed: 0 };
-    for (const r of clientScopedRuns) {
+    const counts: Record<ExecutionsTab, number> = { all: runs.length, running: 0, needs_attention: 0, completed: 0 };
+    for (const r of runs) {
       const t = tabOfStatus(r.status);
       if (t) counts[t]++;
     }
     return counts;
-  }, [clientScopedRuns]);
+  }, [runs]);
 
   const tabFiltered = useMemo(
-    () => (tab === "all" ? clientScopedRuns : clientScopedRuns.filter((r) => tabOfStatus(r.status) === tab)),
-    [clientScopedRuns, tab]
+    () => (tab === "all" ? runs : runs.filter((r) => tabOfStatus(r.status) === tab)),
+    [runs, tab]
   );
 
   const rangeFiltered = useMemo(() => {
@@ -731,7 +621,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
 
   useEffect(() => {
     setPage(0);
-  }, [tab, search, timeRange, savedView.pinnedChipIds, activeChipIds, pageSize, savedView.groupRepeats, view, selectedEngagementId]);
+  }, [tab, search, timeRange, savedView.pinnedChipIds, activeChipIds, pageSize, savedView.groupRepeats]);
 
   function handleCustomizeToggle(id: string) {
     if (id === STAT_TOGGLE_IDS.successRate) {
@@ -784,7 +674,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
 
   const hasActiveFilters = tab !== "all" || search.trim() !== "" || timeRange !== "all" || activeChipIds.size > 0;
 
-  if (!hasClientScope && runs.length === 0) {
+  if (runs.length === 0) {
     return (
       <div className="h-32 flex items-center justify-center border border-dashed border-zinc-300 dark:border-zinc-800 rounded-lg bg-zinc-50/50 dark:bg-zinc-950/50 transition-colors">
         <div className="text-center space-y-1">
@@ -796,10 +686,6 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
       </div>
     );
   }
-
-  // "Clients" scope with no client picked yet → the roster grain (one row
-  // per client, aggregated) instead of the run grain — see client-rail.tsx.
-  const showRoster = hasClientScope && view === "clients" && !selectedEngagementId && rosterRows.length > 0;
 
   const tabOptions: SegmentedTabOption<ExecutionsTab>[] = [
     { key: "all", label: toolbarCopy.tabs.all, count: tabCounts.all },
@@ -845,22 +731,22 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
     .filter((d) => pinnedChipIds.has(d.id))
     .map((d) => ({ id: d.id, label: d.label, count: chipCounts.get(d.id) ?? 0 }));
 
-  const card = (
-    <div className="flex-1 min-w-0 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white/60 dark:bg-zinc-900/50 backdrop-blur-md overflow-hidden shadow-sm transition-colors duration-200">
+  return (
+    <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white/60 dark:bg-zinc-900/50 backdrop-blur-md overflow-hidden shadow-sm transition-colors duration-200">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <h3 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider font-mono shrink-0">
             {title ?? toolbarCopy.title}
           </h3>
           <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 bg-zinc-200/60 dark:bg-zinc-900 px-1.5 py-0.5 rounded-sm border border-zinc-300/40 dark:border-zinc-800/40 shrink-0">
-            {showRoster ? rosterRows.length : visibleRuns.length}
+            {visibleRuns.length}
           </span>
-          {!showRoster && successRateInfo && (
+          {successRateInfo && (
             <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 truncate">
               {successRateInfo.rate}% {toolbarCopy.successRateSuffix(successRateInfo.total)}
             </span>
           )}
-          {!showRoster && moduleBreakdown && moduleBreakdown.length > 0 && (
+          {moduleBreakdown && moduleBreakdown.length > 0 && (
             <div className="hidden md:flex items-center gap-1 min-w-0 overflow-hidden">
               {moduleBreakdown.map(([skill, count]) => (
                 <span
@@ -872,16 +758,6 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
               ))}
             </div>
           )}
-          {view === "clients" && selectedEngagementId && (
-            <button
-              type="button"
-              onClick={() => handleSelectClient(null)}
-              className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer truncate"
-            >
-              ← {railCopy.backToAllClients}
-              {selectedClientName && <span className="text-zinc-700 dark:text-zinc-300 font-semibold">— {selectedClientName}</span>}
-            </button>
-          )}
         </div>
         <button
           onClick={() => setPolling((p) => !p)}
@@ -891,161 +767,120 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
         </button>
       </div>
 
-      {showRoster ? (
-        <div className="p-3">
-          <ClientRosterTable rows={rosterRows} onSelectClient={handleSelectClient} emptyTitle={railCopy.emptyState} />
+      <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800/60">
+        <SegmentedTabs options={tabOptions} value={tab} onChange={setTab} />
+        <TableSearchInput value={search} onChange={setSearch} placeholder={toolbarCopy.searchPlaceholder} className="w-[190px]" />
+        <TimeRangeMenu value={timeRange} onChange={setTimeRange} />
+        <div className="ml-auto flex items-center gap-1.5">
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+            >
+              {sharedToolbarCopy.clearFiltersButton}
+            </button>
+          )}
+          <ViewCustomizer
+            sections={customizerSections}
+            enabledIds={customizerEnabledIds}
+            onToggle={handleCustomizeToggle}
+            menuTitle={sharedToolbarCopy.customizeMenuTitle}
+          />
         </div>
-      ) : clientScopedRuns.length === 0 ? (
-        <div className="h-32 flex items-center justify-center">
-          <div className="text-center space-y-1">
-            <p className="text-sm font-medium text-zinc-500">
-              {selectedClientName ? `No executions yet for ${selectedClientName}` : "No executions yet"}
-            </p>
-            <p className="text-xs text-zinc-400 dark:text-zinc-600 max-w-sm font-mono">
-              Skill runs will appear here once triggered for a client engagement
-            </p>
-          </div>
+      </div>
+
+      {pinnedChips.length > 0 && (
+        <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-800/60">
+          <FilterChipBar chips={pinnedChips} activeIds={activeChipIds} onToggle={toggleActiveChip} />
+        </div>
+      )}
+
+      {visibleRuns.length === 0 ? (
+        <div className="py-10 text-center space-y-1">
+          <p className="text-sm font-medium text-zinc-500">{sharedToolbarCopy.noResultsTitle}</p>
+          <p className="text-xs text-zinc-400 dark:text-zinc-600 font-mono max-w-sm mx-auto">{sharedToolbarCopy.noResultsSubtitle}</p>
         </div>
       ) : (
-        <>
-          <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800/60">
-            <SegmentedTabs options={tabOptions} value={tab} onChange={setTab} />
-            <TableSearchInput value={search} onChange={setSearch} placeholder={toolbarCopy.searchPlaceholder} className="w-[190px]" />
-            <TimeRangeMenu value={timeRange} onChange={setTimeRange} />
-            <div className="ml-auto flex items-center gap-1.5">
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
-                >
-                  {sharedToolbarCopy.clearFiltersButton}
-                </button>
-              )}
-              <ViewCustomizer
-                sections={customizerSections}
-                enabledIds={customizerEnabledIds}
-                onToggle={handleCustomizeToggle}
-                menuTitle={sharedToolbarCopy.customizeMenuTitle}
-              />
-            </div>
-          </div>
-
-          {pinnedChips.length > 0 && (
-            <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-800/60">
-              <FilterChipBar chips={pinnedChips} activeIds={activeChipIds} onToggle={toggleActiveChip} />
-            </div>
-          )}
-
-          {visibleRuns.length === 0 ? (
-            <div className="py-10 text-center space-y-1">
-              <p className="text-sm font-medium text-zinc-500">{sharedToolbarCopy.noResultsTitle}</p>
-              <p className="text-xs text-zinc-400 dark:text-zinc-600 font-mono max-w-sm mx-auto">{sharedToolbarCopy.noResultsSubtitle}</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] text-left border-collapse text-xs font-sans tracking-tight">
-                <thead>
-                  <tr className="border-b border-zinc-200 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-transparent text-zinc-400 dark:text-zinc-600 uppercase tracking-wider font-mono text-[10px] select-none">
-                    <th className="px-4 py-2 w-[180px] font-normal">Client</th>
-                    <th className="px-4 py-2 font-normal">Module</th>
-                    <th className="px-4 py-2 font-normal">Action</th>
-                    <th className="px-4 py-2 w-24 font-normal">Status</th>
-                    <th className="px-4 py-2 text-right w-12 font-normal">Age</th>
-                    <th className="w-8 px-2" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/30">
-                  {pagedGroups.map((group) => {
-                    const expanded = expandedGroups.has(group.signature);
-                    return (
-                      <Fragment key={group.signature}>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] text-left border-collapse text-xs font-sans tracking-tight">
+            <thead>
+              <tr className="border-b border-zinc-200 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-transparent text-zinc-400 dark:text-zinc-600 uppercase tracking-wider font-mono text-[10px] select-none">
+                <th className="px-4 py-2 w-[180px] font-normal">Client</th>
+                <th className="px-4 py-2 font-normal">Module</th>
+                <th className="px-4 py-2 font-normal">Action</th>
+                <th className="px-4 py-2 w-24 font-normal">Status</th>
+                <th className="px-4 py-2 text-right w-12 font-normal">Age</th>
+                <th className="w-8 px-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/30">
+              {pagedGroups.map((group) => {
+                const expanded = expandedGroups.has(group.signature);
+                return (
+                  <Fragment key={group.signature}>
+                    <RunRow
+                      run={group.latest}
+                      onOpen={() => router.push(`/dashboard/runs/${group.latest.id}`)}
+                      onActionComplete={refreshNow}
+                      groupCount={group.count}
+                      groupExpanded={expanded}
+                      onToggleGroup={group.count > 1 ? () => toggleGroupExpanded(group.signature) : undefined}
+                    />
+                    {expanded &&
+                      group.items.slice(1).map((run) => (
                         <RunRow
-                          run={group.latest}
-                          onOpen={() => router.push(`/dashboard/runs/${group.latest.id}`)}
+                          key={run.id}
+                          run={run}
+                          onOpen={() => router.push(`/dashboard/runs/${run.id}`)}
                           onActionComplete={refreshNow}
-                          groupCount={group.count}
-                          groupExpanded={expanded}
-                          onToggleGroup={group.count > 1 ? () => toggleGroupExpanded(group.signature) : undefined}
+                          nested
                         />
-                        {expanded &&
-                          group.items.slice(1).map((run) => (
-                            <RunRow
-                              key={run.id}
-                              run={run}
-                              onOpen={() => router.push(`/dashboard/runs/${run.id}`)}
-                              onActionComplete={refreshNow}
-                              nested
-                            />
-                          ))}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-transparent">
-            <div className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
-              {([10, 25, 50] as const).map((size) => (
-                <button
-                  key={size}
-                  onClick={() => changePageSize(size)}
-                  className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
-                    pageSize === size
-                      ? "border-zinc-400 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300"
-                      : "border-transparent hover:text-zinc-700 dark:hover:text-zinc-300"
-                  }`}
-                >
-                  {sharedToolbarCopy.pageSizeLabel(size)}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">Page {clampedPage + 1} of {pageCount}</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage(Math.max(0, clampedPage - 1))}
-                  disabled={clampedPage === 0}
-                  className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                >
-                  ← Prev
-                </button>
-                <button
-                  onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}
-                  disabled={clampedPage >= pageCount - 1}
-                  className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                >
-                  Next →
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
+                      ))}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
-    </div>
-  );
 
-  if (!hasClientScope) {
-    return card;
-  }
-
-  return (
-    <div className="flex gap-4 items-start">
-      <ClientRail
-        view={view}
-        onViewChange={handleViewChange}
-        clients={railClients}
-        selectedEngagementId={selectedEngagementId}
-        onSelectClient={handleSelectClient}
-        totalCount={globalCounts.running}
-        allModeStats={[
-          { label: "Running now", value: globalCounts.running },
-          { label: "Failed", value: globalCounts.failed },
-        ]}
-      />
-      {card}
+      <div className="flex items-center justify-between px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-transparent">
+        <div className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
+          {([10, 25, 50] as const).map((size) => (
+            <button
+              key={size}
+              onClick={() => changePageSize(size)}
+              className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                pageSize === size
+                  ? "border-zinc-400 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300"
+                  : "border-transparent hover:text-zinc-700 dark:hover:text-zinc-300"
+              }`}
+            >
+              {sharedToolbarCopy.pageSizeLabel(size)}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">Page {clampedPage + 1} of {pageCount}</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(Math.max(0, clampedPage - 1))}
+              disabled={clampedPage === 0}
+              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              ← Prev
+            </button>
+            <button
+              onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}
+              disabled={clampedPage >= pageCount - 1}
+              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
