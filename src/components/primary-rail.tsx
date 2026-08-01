@@ -8,7 +8,9 @@ import {
   Building2,
   BarChart3,
   Target,
+  BookOpen,
   CalendarClock,
+  Scale,
   LogOut,
   User,
   Settings,
@@ -29,18 +31,27 @@ interface PrimaryRailProps {
 }
 
 /**
- * The top-level sections (Skills removed as it now lives in the secondary sidebar).
+ * Main rail sections.
  */
 const RAIL_SECTIONS: Array<{ href: string; title: string; icon: LucideIcon }> = [
   { href: "/dashboard", title: "Work", icon: LayoutGrid },
   { href: "/dashboard/engagements", title: "Engagements", icon: Building2 },
   { href: "/dashboard/analytics", title: "Analytics", icon: BarChart3 },
   { href: "/dashboard/strategy", title: "Strategy", icon: Target },
+  { href: "/dashboard/library", title: "Library", icon: BookOpen },
   { href: "/dashboard/meetings", title: "Meetings", icon: CalendarClock },
 ];
 
+/**
+ * Product suite section (separated by a visual divider).
+ */
+const PRODUCT_SECTIONS: Array<{ href: string; title: string; icon: LucideIcon }> = [
+  { href: "/counter-claim", title: "Counter Claim", icon: Scale },
+];
+
 function activeSectionHref(pathname: string): string {
-  const nonRootMatches = RAIL_SECTIONS.filter(
+  const allSections = [...RAIL_SECTIONS, ...PRODUCT_SECTIONS];
+  const nonRootMatches = allSections.filter(
     (s) => s.href !== "/dashboard" && (pathname === s.href || pathname.startsWith(`${s.href}/`))
   );
 
@@ -58,19 +69,11 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
-    <aside className="w-[72px] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1 shrink-0 select-none z-20 transition-colors duration-200">
-      {/* Top Section: Gold Brand Mark + Rail Category Icons with Labels */}
-      <div className="flex flex-col items-center gap-3 w-full">
-        <Link
-          href="/dashboard"
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-gold text-[13px] font-black text-gold-foreground shadow-sm hover:scale-105 transition-all mb-1"
-        >
-          S
-        </Link>
-
-        <div className="w-8 h-px bg-zinc-200 dark:bg-zinc-900 my-0.5" />
-
-        <nav className="flex flex-col items-center gap-2 w-full">
+    <aside className="w-[76px] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1 shrink-0 select-none z-20 transition-colors duration-200">
+      {/* Top Section: Primary Navigation & Products */}
+      <div className="flex flex-col items-center gap-1.5 w-full">
+        {/* Primary Sections (Starts directly with Work at the top) */}
+        <nav className="flex flex-col items-center gap-1.5 w-full">
           {RAIL_SECTIONS.map((section) => {
             const isActive = section.href === activeHref;
             const Icon = section.icon;
@@ -82,18 +85,50 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                 aria-current={isActive ? "page" : undefined}
                 className={
                   isActive
-                    ? "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all"
-                    : "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/80 dark:hover:bg-zinc-900/60 rounded-xl border border-transparent transition-all"
+                    ? "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all"
+                    : "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/80 dark:hover:bg-zinc-900/60 rounded-xl border border-transparent transition-all"
                 }
               >
                 <Icon className="w-4 h-4 shrink-0" />
-                <span className="text-[9px] font-medium leading-none text-center truncate max-w-full">
+                <span className="text-[9.5px] font-medium leading-tight text-center truncate max-w-full px-0.5 py-0.5">
                   {section.title}
                 </span>
               </Link>
             );
           })}
         </nav>
+
+        {/* Divider Separating Main Navigation from Product Suite */}
+        <div className="w-8 h-px bg-zinc-200 dark:bg-zinc-800 my-1.5 shrink-0" />
+
+        {/* Product Suite Segment */}
+        <div className="flex flex-col items-center gap-1.5 w-full">
+          <span className="text-[8.5px] font-mono font-semibold tracking-wider text-zinc-400 dark:text-zinc-600 uppercase">
+            Products
+          </span>
+          {PRODUCT_SECTIONS.map((product) => {
+            const isActive = product.href === activeHref;
+            const Icon = product.icon;
+            return (
+              <Link
+                key={product.href}
+                href={product.href}
+                title={product.title}
+                aria-current={isActive ? "page" : undefined}
+                className={
+                  isActive
+                    ? "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all"
+                    : "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/80 dark:hover:bg-zinc-900/60 rounded-xl border border-transparent transition-all"
+                }
+              >
+                <Icon className="w-4 h-4 shrink-0 text-amber-500 dark:text-amber-400" />
+                <span className="text-[9.5px] font-medium leading-tight text-center truncate max-w-full px-0.5 py-0.5">
+                  {product.title}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       {/* Bottom Section: Back to Home & Profile Avatar Popover */}
@@ -104,7 +139,7 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
           className="w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-colors"
         >
           <Home className="w-4 h-4 shrink-0" />
-          <span className="text-[9px] font-medium leading-none">Home</span>
+          <span className="text-[9.5px] font-medium leading-tight py-0.5">Home</span>
         </a>
 
         {/* User Profile Avatar Trigger */}
@@ -116,17 +151,14 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
           {initials}
         </button>
 
-        {/* Asana Dual-Pane Profile Popover */}
+        {/* Dual-Pane Profile Popover */}
         {popoverOpen && (
           <>
-            {/* Backdrop for outside clicks */}
             <div className="fixed inset-0 z-40" onClick={() => setPopoverOpen(false)} />
 
-            {/* Floating Popover */}
             <div className="absolute left-full bottom-0 ml-2 z-50 w-[560px] sm:w-[580px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
               <div className="flex min-h-[360px] divide-x divide-zinc-200 dark:divide-zinc-800">
-                
-                {/* LEFT PANE: Account switcher & Logout */}
+                {/* LEFT PANE */}
                 <div className="w-60 p-4 bg-zinc-50 dark:bg-zinc-950/90 flex flex-col justify-between shrink-0">
                   <div className="space-y-4">
                     <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -145,7 +177,6 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                     </div>
                   </div>
 
-                  {/* Bottom Controls */}
                   <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
                     <div className="flex items-center justify-between px-1">
                       <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Theme</span>
@@ -164,7 +195,7 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                   </div>
                 </div>
 
-                {/* RIGHT PANE: User Content */}
+                {/* RIGHT PANE */}
                 <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900">
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
