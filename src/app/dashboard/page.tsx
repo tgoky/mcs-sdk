@@ -200,19 +200,7 @@ export default async function DashboardPage() {
       {/* Queue — what's waiting on a human, ranked above the feed of what's
           already running unattended */}
       <div className="pt-2">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
-            {QUEUE_COPY.sectionTitle}
-          </p>
-          {queueItems.length > 0 && (
-            <Link
-              href="/dashboard/queue"
-              className="text-xs font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
-            >
-              View all →
-            </Link>
-          )}
-        </div>
+       
 
      <QueuePanel initialItems={queueItems} clients={clients} title="QUEUE" viewAllHref="/dashboard/queue" />
       </div>
