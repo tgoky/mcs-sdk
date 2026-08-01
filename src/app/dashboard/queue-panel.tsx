@@ -86,11 +86,8 @@ const TAG_SWATCHES = [
   { hex: "#1c1c1c", label: "Dark Charcoal", hasBorder: true },
 ];
 
-const DEFAULT_TAGS: CustomTag[] = [
-  { id: "tag-lime-alerts", name: "Lime Alerts", colorHex: "#a0d646", targetCategory: "alert" },
-  { id: "tag-pindown", name: "Pin-Down Tasks", colorHex: "#3b71e8", targetSkill: "pin-down" },
-  { id: "tag-urgent", name: "Urgent Actions", colorHex: "#f897a6", targetCategory: "action_needed" },
-];
+// No default tags applied — user creates tags explicitly
+const DEFAULT_TAGS: CustomTag[] = [];
 
 const POLL_MS = 8_000;
 type QueueTab = "all" | "approve" | "action_needed" | "alerts";
@@ -309,7 +306,7 @@ function QueueRow({
           <CategoryBadge category={item.category} />
           {matchedTag && (
             <span
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-zinc-950 shrink-0"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-zinc-950 shrink-0 shadow-xs"
               style={{ backgroundColor: matchedTag.colorHex }}
             >
               {matchedTag.name}
@@ -577,7 +574,6 @@ export function QueuePanel({
   // 1. Rail & Tag level Filtered Set
   const railFilteredItems = useMemo(() => {
     return items.filter((item) => {
-      // Filter by selected tag if active
       if (selectedTagId) {
         const activeTag = tags.find((t) => t.id === selectedTagId);
         if (activeTag && !itemMatchesTag(item, activeTag)) return false;
@@ -936,7 +932,7 @@ export function QueuePanel({
       {/* ----------------------------------------------------------------- */}
       {/* MAIN CONTAINER FRAME (Integrated Rail + Table)                    */}
       {/* ----------------------------------------------------------------- */}
-      <div className="border border-sidebar-border rounded-2xl bg-sidebar overflow-hidden flex flex-col md:flex-row min-h-[400px] w-full">
+      <div className="border border-sidebar-border rounded-2xl bg-sidebar overflow-visible flex flex-col md:flex-row min-h-[400px] w-full">
         {/* 1. SEAMLESS INTEGRATED LEFT RAIL */}
         <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-sidebar-border bg-sidebar p-3 flex flex-col shrink-0 space-y-3 select-none">
           {/* GREY SCOPE CARD */}
@@ -1129,7 +1125,7 @@ export function QueuePanel({
           </div>
 
           {/* ----------------------------------------------------------------- */}
-          {/* TAGS SECTION (Placed right after lists)                            */}
+          {/* TAGS SECTION (Placed right after lists)                           */}
           {/* ----------------------------------------------------------------- */}
           <div className="pt-2 border-t border-sidebar-border/60 space-y-2">
             <div className="flex items-center justify-between px-1">
@@ -1147,11 +1143,11 @@ export function QueuePanel({
                   <Plus size={13} />
                 </button>
 
-                {/* 12-COLOR TAG CREATOR POPOVER */}
+                {/* 12-COLOR TAG CREATOR POPOVER - Positioned Downward to Avoid Cut-off */}
                 {isAddTagOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsAddTagOpen(false)} />
-                    <div className="absolute left-0 bottom-full mb-2 w-64 z-50 p-3 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl text-xs space-y-3 font-sans">
+                    <div className="absolute left-0 top-full mt-1 w-64 z-50 p-3 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl text-xs space-y-3 font-sans">
                       <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
                         <span className="font-bold text-zinc-100">Create New Tag</span>
                         <button type="button" onClick={() => setIsAddTagOpen(false)} className="text-zinc-500 hover:text-zinc-200">
@@ -1250,44 +1246,52 @@ export function QueuePanel({
             </div>
 
             {/* List of Created Tags */}
-            <div className="space-y-0.5 max-h-[160px] overflow-y-auto [scrollbar-width:none]">
-              {tags.map((tag) => {
-                const active = selectedTagId === tag.id;
-                const count = tagCounts[tag.id] ?? 0;
-                return (
-                  <div key={tag.id} className="group relative flex items-center">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedTagId(active ? null : tag.id);
-                        setSelectedCategory(null);
-                        setPage(0);
-                      }}
-                      className={cn(
-                        "w-full flex items-center justify-between px-2.5 py-1.5 rounded-[10px] text-xs font-medium transition-colors cursor-pointer pr-6",
-                        active ? "bg-[#3f3f42] text-white font-semibold" : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
-                      )}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tag.colorHex }} />
-                        <span className="truncate">{tag.name}</span>
-                      </div>
-                      <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
-                        {count}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteTag(tag.id)}
-                      className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-rose-400 transition-opacity"
-                      title="Delete tag"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+            {tags.length === 0 ? (
+              <p className="text-[11px] text-zinc-500 italic px-1 font-sans">No custom tags created yet.</p>
+            ) : (
+              <div className="space-y-1 max-h-[160px] overflow-y-auto [scrollbar-width:none]">
+                {tags.map((tag) => {
+                  const active = selectedTagId === tag.id;
+                  const count = tagCounts[tag.id] ?? 0;
+                  return (
+                    <div key={tag.id} className="group relative flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedTagId(active ? null : tag.id);
+                          setSelectedCategory(null);
+                          setPage(0);
+                        }}
+                        className={cn(
+                          "w-full flex items-center justify-between px-2.5 py-1.5 rounded-[10px] text-xs font-medium transition-colors cursor-pointer pr-6",
+                          active ? "bg-[#3f3f42] text-white font-semibold" : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                        )}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {/* Larger, Prominent 14px Badge Pill Indicator */}
+                          <span
+                            className="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs border border-white/20"
+                            style={{ backgroundColor: tag.colorHex }}
+                          />
+                          <span className="truncate font-semibold">{tag.name}</span>
+                        </div>
+                        <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                          {count}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTag(tag.id)}
+                        className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-rose-400 transition-opacity"
+                        title="Delete tag"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
