@@ -20,6 +20,10 @@ import {
   GripVertical,
   Layers,
   List,
+  Clock,
+  AlertTriangle,
+  KeyRound,
+  SlidersHorizontal,
 } from "lucide-react";
 import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, skillName as skillDisplayName } from "@/lib/copy";
 import type { StackSection } from "@/lib/error-classification";
@@ -57,8 +61,9 @@ export interface ClientOption {
   pausedAt?: string | null;
 }
 
-const POLL_MS = 8_000;
+export type RailGroupingMode = "platform" | "module" | "task_type" | "preset";
 
+const POLL_MS = 8_000;
 type QueueTab = "all" | "approve" | "action_needed" | "alerts";
 type QueuePriority = "high" | "medium" | "low";
 export type ClientScopeView = "all" | "clients";
@@ -406,7 +411,7 @@ function QueueRow({
 export function QueuePanel({
   initialItems,
   clients = [],
-  title = "QUEUE",
+  title = "Queue",
   viewAllHref,
 }: {
   initialItems: QueueItemDTO[];
@@ -421,6 +426,7 @@ export function QueuePanel({
 
   // Rail Scope State
   const [railView, setRailView] = useState<ClientScopeView>("all");
+  const [groupingMode, setGroupingMode] = useState<RailGroupingMode>("platform");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
@@ -435,26 +441,62 @@ export function QueuePanel({
   const pinnedChipIds = new Set(savedView.pinnedChipIds);
   const pageSize = savedView.pageSize ?? 5;
 
-  // Rail Categories (Platforms/CRMs)
+  // Calculate SLA & Health Card Numbers
+  const oldestWaitingAgo = useMemo(() => {
+    if (items.length === 0) return "None";
+    const oldestMs = Math.max(...items.map((i) => Date.now() - new Date(i.createdAt).getTime()));
+    const hours = Math.floor(oldestMs / 3_600_000);
+    if (hours < 1) return "<1h ago";
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  }, [items]);
+
+  const activeHoldClientsCount = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of items) {
+      if (item.source === "blocker" && item.engagementId) {
+        ids.add(item.engagementId);
+      }
+    }
+    return ids.size;
+  }, [items]);
+
+  // Non-duplicative Rail Sub-list Categories
   const categories = useMemo(() => {
-    const platformCounts: Record<string, { label: string; count: number }> = {};
+    const counts: Record<string, { label: string; count: number }> = {};
 
     for (const item of items) {
+      let key = "other";
       let label = "Other";
-      const str = (item.title + " " + item.subtitle).toLowerCase();
-      if (str.includes("gohighlevel") || str.includes("ghl")) label = "GoHighLevel";
-      else if (str.includes("calendly")) label = "Calendly";
-      else if (str.includes("klaviyo")) label = "Klaviyo";
-      else if (str.includes("twilio")) label = "Twilio";
-      else if (str.includes("activecampaign")) label = "ActiveCampaign";
 
-      const key = label.toLowerCase().replace(/\s+/g, "_");
-      if (!platformCounts[key]) platformCounts[key] = { label, count: 0 };
-      platformCounts[key].count++;
+      if (groupingMode === "platform") {
+        const str = (item.title + " " + item.subtitle).toLowerCase();
+        if (str.includes("gohighlevel") || str.includes("ghl")) { label = "GoHighLevel"; key = "ghl"; }
+        else if (str.includes("calendly")) { label = "Calendly"; key = "calendly"; }
+        else if (str.includes("klaviyo")) { label = "Klaviyo"; key = "klaviyo"; }
+        else if (str.includes("twilio")) { label = "Twilio"; key = "twilio"; }
+        else if (str.includes("activecampaign")) { label = "ActiveCampaign"; key = "activecampaign"; }
+      } else if (groupingMode === "module") {
+        label = item.skillName ? skillDisplayName(item.skillName) : "General";
+        key = item.skillName ?? "general";
+      } else if (groupingMode === "task_type") {
+        if (item.source === "action") { label = "Approvals Needed"; key = "action"; }
+        else if (item.source === "blocker") { label = "Human Holds"; key = "blocker"; }
+        else if (item.source === "run_failure") { label = "Fix-It Cards"; key = "run_failure"; }
+        else if (item.source === "sync_setup") { label = "Sync Setup Nudges"; key = "sync_setup"; }
+        else { label = "System Alerts & FYIs"; key = "notification"; }
+      } else if (groupingMode === "preset") {
+        if (item.isCredentialIssue) { label = "Broken Credentials"; key = "broken_keys"; }
+        else if (item.source === "blocker") { label = "Human Holds"; key = "human_holds"; }
+        else if (item.source === "sync_setup") { label = "Polling Fallbacks"; key = "polling_fallbacks"; }
+      }
+
+      if (!counts[key]) counts[key] = { label, count: 0 };
+      counts[key].count++;
     }
 
-    return Object.entries(platformCounts).map(([id, { label, count }]) => ({ id, label, count }));
-  }, [items]);
+    return Object.entries(counts).map(([id, { label, count }]) => ({ id, label, count }));
+  }, [items, groupingMode]);
 
   // Rail Clients
   const clientRailItems = useMemo(() => {
@@ -486,13 +528,28 @@ export function QueuePanel({
         if (item.engagementId !== selectedClientId) return false;
       }
       if (railView === "all" && selectedCategory) {
+        if (groupingMode === "module") {
+          return item.skillName === selectedCategory;
+        }
+        if (groupingMode === "task_type") {
+          if (selectedCategory === "action") return item.source === "action";
+          if (selectedCategory === "blocker") return item.source === "blocker";
+          if (selectedCategory === "run_failure") return item.source === "run_failure";
+          if (selectedCategory === "sync_setup") return item.source === "sync_setup";
+          return item.source === "notification";
+        }
+        if (groupingMode === "preset") {
+          if (selectedCategory === "broken_keys") return !!item.isCredentialIssue;
+          if (selectedCategory === "human_holds") return item.source === "blocker";
+          if (selectedCategory === "polling_fallbacks") return item.source === "sync_setup";
+        }
         const itemPlatform = (item.title + " " + item.subtitle).toLowerCase();
         const catLabel = categories.find((c) => c.id === selectedCategory)?.label.toLowerCase() ?? "";
         if (!itemPlatform.includes(catLabel)) return false;
       }
       return true;
     });
-  }, [items, railView, selectedClientId, selectedCategory, categories]);
+  }, [items, railView, selectedClientId, selectedCategory, categories, groupingMode]);
 
   // Tab Counts based on current Rail scope
   const tabCounts = useMemo(() => {
@@ -799,6 +856,23 @@ export function QueuePanel({
             </span>
           </div>
 
+          {/* LIST GROUPING MODE DROPDOWN */}
+          {railView === "all" && (
+            <div className="relative">
+              <select
+                value={groupingMode}
+                onChange={(e) => { setGroupingMode(e.target.value as RailGroupingMode); setSelectedCategory(null); setPage(0); }}
+                className="w-full appearance-none px-2.5 py-1.5 rounded-lg bg-zinc-900/80 border border-zinc-800 text-xs text-zinc-300 font-medium focus:outline-none cursor-pointer pr-7"
+              >
+                <option value="platform">By CRM / Platform</option>
+                <option value="module">By Automation Module</option>
+                <option value="task_type">By Task Type</option>
+                <option value="preset">By Smart Presets</option>
+              </select>
+              <ChevronDown size={13} className="text-zinc-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          )}
+
           {/* LISTS / CLIENTS HEADER */}
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between px-1">
@@ -829,26 +903,15 @@ export function QueuePanel({
                 type="text"
                 value={railSearch}
                 onChange={(e) => setRailSearch(e.target.value)}
-                placeholder={railView === "all" ? "Search platforms..." : "Search clients..."}
+                placeholder={railView === "all" ? "Search lists..." : "Search clients..."}
                 className="w-full px-2.5 py-1 text-xs bg-zinc-900 border border-zinc-800 rounded-md text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-700"
                 autoFocus
               />
             )}
-
-            {/* BY CRM / BY CLIENT NAME PILL */}
-            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-900/80 border border-zinc-800 text-xs text-zinc-300 font-medium">
-              <div className="flex items-center gap-2">
-                <GripVertical size={13} className="text-zinc-500 shrink-0" />
-                <span className="truncate">
-                  {railView === "all" ? "By CRM / Platform" : "By Client Name"}
-                </span>
-              </div>
-              <ChevronDown size={13} className="text-zinc-500 shrink-0" />
-            </div>
           </div>
 
           {/* SUB-LIST ITEMS */}
-          <div className="flex-1 overflow-y-auto space-y-0.5 pt-1 max-h-[360px] [scrollbar-width:none]">
+          <div className="flex-1 overflow-y-auto space-y-0.5 pt-1 max-h-[300px] [scrollbar-width:none]">
             {railView === "all" ? (
               <>
                 <button
@@ -863,7 +926,7 @@ export function QueuePanel({
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Layers size={14} className="text-zinc-400 shrink-0" />
-                    <span className="truncate">Every platform</span>
+                    <span className="truncate">Every item</span>
                   </div>
                   <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
                     {items.length}
@@ -942,6 +1005,24 @@ export function QueuePanel({
                 ))}
               </>
             )}
+          </div>
+
+          {/* QUEUE HEALTH & SLA MICRO-CARD */}
+          <div className="pt-2 border-t border-sidebar-border/60">
+            <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-2 text-xs">
+              <div className="flex items-center justify-between text-zinc-400">
+                <span className="flex items-center gap-1">
+                  <Clock size={12} className="text-zinc-500" /> Oldest item
+                </span>
+                <span className="font-mono text-amber-400 font-bold">{oldestWaitingAgo}</span>
+              </div>
+              <div className="flex items-center justify-between text-zinc-400">
+                <span className="flex items-center gap-1">
+                  <AlertTriangle size={12} className="text-zinc-500" /> Active holds
+                </span>
+                <span className="font-mono text-zinc-200 font-bold">{activeHoldClientsCount} clients</span>
+              </div>
+            </div>
           </div>
         </div>
 

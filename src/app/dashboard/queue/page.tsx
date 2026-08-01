@@ -28,7 +28,7 @@ export default async function QueuePage() {
 
   return (
     <div className="space-y-5 w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200">
-      <QueuePanel initialItems={items} clients={clients} title="QUEUE" />
+      <QueuePanel initialItems={items} clients={clients} title="Queue" />
     </div>
   );
 }
