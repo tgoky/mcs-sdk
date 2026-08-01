@@ -86,8 +86,12 @@ const TAG_SWATCHES = [
   { hex: "#1c1c1c", label: "Dark Charcoal", hasBorder: true },
 ];
 
-// No default tags applied — user creates tags explicitly
-const DEFAULT_TAGS: CustomTag[] = [];
+// Preset Tags available in rail list (Not applied to table rows by default)
+const DEFAULT_TAGS: CustomTag[] = [
+  { id: "tag-lime-alerts", name: "Lime Alerts", colorHex: "#a0d646", targetCategory: "alert" },
+  { id: "tag-pindown", name: "Pin-Down Tasks", colorHex: "#3b71e8", targetSkill: "pin-down" },
+  { id: "tag-urgent", name: "Urgent Actions", colorHex: "#f897a6", targetCategory: "action_needed" },
+];
 
 const POLL_MS = 8_000;
 type QueueTab = "all" | "approve" | "action_needed" | "alerts";
@@ -476,6 +480,10 @@ export function QueuePanel({
   const [newTagTargetSkill, setNewTagTargetSkill] = useState<string>("all");
   const [newTagTargetCategory, setNewTagTargetCategory] = useState<string>("all");
 
+  // Custom Dropdown Open States for Tag Creator Rules
+  const [isSkillDropdownOpen, setIsSkillDropdownOpen] = useState(false);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+
   // Table State
   const [savedView, setSavedView] = useLocalViewState<QueueViewState>("mcs:queue:view", DEFAULT_QUEUE_VIEW);
   const [tab, setTab] = useState<QueueTab>("all");
@@ -800,7 +808,8 @@ export function QueuePanel({
     item: QueueItemDTO,
     extra: { groupCount?: number; groupExpanded?: boolean; onToggleGroup?: () => void; nested?: boolean } = {}
   ) {
-    const matchedTag = tags.find((t) => itemMatchesTag(item, t));
+    // Only render tag badge on row when that tag is currently selected/applied by user
+    const matchedTag = selectedTagId ? tags.find((t) => t.id === selectedTagId && itemMatchesTag(item, t)) : null;
     return (
       <QueueRow
         key={item.id}
@@ -863,6 +872,23 @@ export function QueuePanel({
     module: "By Automation Module",
     task_type: "By Task Type",
     preset: "By Smart Presets",
+  };
+
+  const skillTargetLabels: Record<string, string> = {
+    all: "Any Skill",
+    "pin-down": "Pin-Down",
+    "pile-on": "Pile-On",
+    "pre-call-read": "Pre-Call Read",
+    "win-back": "Win-Back",
+    "leak-map": "Leak-Map",
+  };
+
+  const categoryTargetLabels: Record<string, string> = {
+    all: "Any Category",
+    approve: "Approve",
+    action_needed: "Action Needed",
+    alert: "Alert",
+    fyi: "FYI",
   };
 
   return (
@@ -1143,11 +1169,11 @@ export function QueuePanel({
                   <Plus size={13} />
                 </button>
 
-                {/* 12-COLOR TAG CREATOR POPOVER - Positioned Downward to Avoid Cut-off */}
+                {/* 12-COLOR TAG CREATOR POPOVER - Aligned side-by-side to avoid cut-off */}
                 {isAddTagOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsAddTagOpen(false)} />
-                    <div className="absolute left-0 top-full mt-1 w-64 z-50 p-3 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl text-xs space-y-3 font-sans">
+                    <div className="absolute left-full top-0 ml-2 w-72 z-50 p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl text-xs space-y-3 font-sans">
                       <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
                         <span className="font-bold text-zinc-100">Create New Tag</span>
                         <button type="button" onClick={() => setIsAddTagOpen(false)} className="text-zinc-500 hover:text-zinc-200">
@@ -1163,44 +1189,70 @@ export function QueuePanel({
                           value={newTagName}
                           onChange={(e) => setNewTagName(e.target.value)}
                           placeholder="e.g. Lime Alerts"
-                          className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700"
+                          className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700"
                         />
                       </div>
 
-                      {/* Target Module / Category (Optional Rule) */}
+                      {/* Custom Styled Dropdowns for Rules */}
                       <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
+                        {/* Skill Selector */}
+                        <div className="space-y-1 relative">
                           <label className="text-[10px] font-mono text-zinc-400 uppercase">Skill Target</label>
-                          <select
-                            value={newTagTargetSkill}
-                            onChange={(e) => setNewTagTargetSkill(e.target.value)}
-                            className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-300 text-[11px]"
+                          <button
+                            type="button"
+                            onClick={() => { setIsSkillDropdownOpen((p) => !p); setIsCategoryDropdownOpen(false); }}
+                            className="w-full flex items-center justify-between px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-300 text-[11px] hover:bg-zinc-800/80 cursor-pointer"
                           >
-                            <option value="all">Any Skill</option>
-                            <option value="pin-down">Pin-Down</option>
-                            <option value="pile-on">Pile-On</option>
-                            <option value="pre-call-read">Pre-Call Read</option>
-                            <option value="win-back">Win-Back</option>
-                            <option value="leak-map">Leak-Map</option>
-                          </select>
+                            <span className="truncate">{skillTargetLabels[newTagTargetSkill]}</span>
+                            <ChevronDown size={11} className="text-zinc-500 shrink-0" />
+                          </button>
+
+                          {isSkillDropdownOpen && (
+                            <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 rounded-xl bg-zinc-900 border border-zinc-800 shadow-xl space-y-0.5">
+                              {Object.entries(skillTargetLabels).map(([k, label]) => (
+                                <button
+                                  key={k}
+                                  type="button"
+                                  onClick={() => { setNewTagTargetSkill(k); setIsSkillDropdownOpen(false); }}
+                                  className={cn("w-full text-left px-2 py-1 rounded-lg text-[11px]", newTagTargetSkill === k ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-zinc-200")}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <div className="space-y-1">
+
+                        {/* Category Selector */}
+                        <div className="space-y-1 relative">
                           <label className="text-[10px] font-mono text-zinc-400 uppercase">Category</label>
-                          <select
-                            value={newTagTargetCategory}
-                            onChange={(e) => setNewTagTargetCategory(e.target.value)}
-                            className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-300 text-[11px]"
+                          <button
+                            type="button"
+                            onClick={() => { setIsCategoryDropdownOpen((p) => !p); setIsSkillDropdownOpen(false); }}
+                            className="w-full flex items-center justify-between px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-300 text-[11px] hover:bg-zinc-800/80 cursor-pointer"
                           >
-                            <option value="all">Any Category</option>
-                            <option value="approve">Approve</option>
-                            <option value="action_needed">Action Needed</option>
-                            <option value="alert">Alert</option>
-                            <option value="fyi">FYI</option>
-                          </select>
+                            <span className="truncate">{categoryTargetLabels[newTagTargetCategory]}</span>
+                            <ChevronDown size={11} className="text-zinc-500 shrink-0" />
+                          </button>
+
+                          {isCategoryDropdownOpen && (
+                            <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 rounded-xl bg-zinc-900 border border-zinc-800 shadow-xl space-y-0.5">
+                              {Object.entries(categoryTargetLabels).map(([k, label]) => (
+                                <button
+                                  key={k}
+                                  type="button"
+                                  onClick={() => { setNewTagTargetCategory(k); setIsCategoryDropdownOpen(false); }}
+                                  className={cn("w-full text-left px-2 py-1 rounded-lg text-[11px]", newTagTargetCategory === k ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-zinc-200")}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      {/* 12 Color Swatches Grid (2 rows x 6 cols matching screenshot) */}
+                      {/* 12 Color Swatches Grid (2 rows x 6 cols) */}
                       <div className="space-y-1">
                         <label className="text-[10px] font-mono text-zinc-400 uppercase">Select Color</label>
                         <div className="grid grid-cols-6 gap-2 pt-1 justify-items-center">
@@ -1235,7 +1287,7 @@ export function QueuePanel({
                         type="button"
                         onClick={handleCreateTag}
                         disabled={!newTagName.trim()}
-                        className="w-full py-1.5 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white disabled:opacity-40 cursor-pointer transition-colors"
+                        className="w-full py-1.5 text-xs font-semibold rounded-xl bg-zinc-100 text-zinc-950 hover:bg-white disabled:opacity-40 cursor-pointer transition-colors"
                       >
                         Create Tag
                       </button>
@@ -1282,7 +1334,7 @@ export function QueuePanel({
                       <button
                         type="button"
                         onClick={() => handleDeleteTag(tag.id)}
-                        className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-rose-400 transition-opacity"
+                        className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-rose-400 transition-opacity cursor-pointer"
                         title="Delete tag"
                       >
                         <Trash2 size={11} />
