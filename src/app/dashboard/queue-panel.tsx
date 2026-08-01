@@ -22,6 +22,8 @@ import {
   List,
   Tag as TagIcon,
   Trash2,
+  SlidersHorizontal,
+  FolderPlus,
 } from "lucide-react";
 import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, skillName as skillDisplayName } from "@/lib/copy";
 import type { StackSection } from "@/lib/error-classification";
@@ -70,6 +72,13 @@ export interface CustomTag {
   targetCategory?: string;
 }
 
+export interface CustomListFilter {
+  id: string;
+  name: string;
+  description: string;
+  selectedSkills: string[];
+}
+
 // 12 Exact Colors from Screenshot (2 rows x 6 columns)
 const TAG_SWATCHES = [
   { hex: "#5e0d39", label: "Plum" },
@@ -86,11 +95,15 @@ const TAG_SWATCHES = [
   { hex: "#1c1c1c", label: "Dark Charcoal", hasBorder: true },
 ];
 
-// Preset Tags available in rail list (Not applied to table rows by default)
-const DEFAULT_TAGS: CustomTag[] = [
-  { id: "tag-lime-alerts", name: "Lime Alerts", colorHex: "#a0d646", targetCategory: "alert" },
-  { id: "tag-pindown", name: "Pin-Down Tasks", colorHex: "#3b71e8", targetSkill: "pin-down" },
-  { id: "tag-urgent", name: "Urgent Actions", colorHex: "#f897a6", targetCategory: "action_needed" },
+const DEFAULT_TAGS: CustomTag[] = [];
+const DEFAULT_CUSTOM_LISTS: CustomListFilter[] = [];
+
+const AVAILABLE_SKILLS = [
+  { id: "pin-down", label: "Pin-Down" },
+  { id: "pile-on", label: "Pile-On" },
+  { id: "pre-call-read", label: "Pre-Call Read" },
+  { id: "win-back", label: "Win-Back" },
+  { id: "leak-map", label: "Leak-Map" },
 ];
 
 const POLL_MS = 8_000;
@@ -471,6 +484,14 @@ export function QueuePanel({
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
+  // Custom Lists State
+  const [customLists, setCustomLists] = useLocalViewState<CustomListFilter[]>("mcs:queue:custom-lists", DEFAULT_CUSTOM_LISTS);
+  const [selectedCustomListId, setSelectedCustomListId] = useState<string | null>(null);
+  const [isAddListOpen, setIsAddListOpen] = useState(false);
+  const [newListName, setNewListName] = useState("");
+  const [newListDesc, setNewListDesc] = useState("");
+  const [newListSelectedSkills, setNewListSelectedSkills] = useState<string[]>([]);
+
   // Tags State
   const [tags, setTags] = useLocalViewState<CustomTag[]>("mcs:queue:tags", DEFAULT_TAGS);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
@@ -579,9 +600,27 @@ export function QueuePanel({
     return map;
   }, [items, tags, itemMatchesTag]);
 
-  // 1. Rail & Tag level Filtered Set
+  // Custom Lists Counts
+  const customListCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const list of customLists) {
+      map[list.id] = items.filter((item) => item.skillName && list.selectedSkills.includes(item.skillName)).length;
+    }
+    return map;
+  }, [items, customLists]);
+
+  // 1. Rail & Tag & Custom List level Filtered Set
   const railFilteredItems = useMemo(() => {
     return items.filter((item) => {
+      // Filter by custom list if active
+      if (selectedCustomListId) {
+        const activeList = customLists.find((l) => l.id === selectedCustomListId);
+        if (activeList) {
+          if (!item.skillName || !activeList.selectedSkills.includes(item.skillName)) return false;
+        }
+      }
+
+      // Filter by selected tag if active
       if (selectedTagId) {
         const activeTag = tags.find((t) => t.id === selectedTagId);
         if (activeTag && !itemMatchesTag(item, activeTag)) return false;
@@ -590,7 +629,7 @@ export function QueuePanel({
       if (railView === "clients" && selectedClientId) {
         if (item.engagementId !== selectedClientId) return false;
       }
-      if (railView === "all" && selectedCategory) {
+      if (railView === "all" && selectedCategory && !selectedCustomListId) {
         if (groupingMode === "module") {
           return item.skillName === selectedCategory;
         }
@@ -612,7 +651,7 @@ export function QueuePanel({
       }
       return true;
     });
-  }, [items, railView, selectedClientId, selectedCategory, categories, groupingMode, selectedTagId, tags, itemMatchesTag]);
+  }, [items, railView, selectedClientId, selectedCategory, categories, groupingMode, selectedTagId, tags, itemMatchesTag, selectedCustomListId, customLists]);
 
   // Tab Counts based on current Rail scope
   const tabCounts = useMemo(() => {
@@ -732,6 +771,34 @@ export function QueuePanel({
     if (selectedTagId === id) setSelectedTagId(null);
   }
 
+  // Create Custom List Handler
+  function handleCreateCustomList() {
+    if (!newListName.trim()) return;
+    const createdList: CustomListFilter = {
+      id: `list-${Date.now()}`,
+      name: newListName.trim(),
+      description: newListDesc.trim(),
+      selectedSkills: newListSelectedSkills.length > 0 ? newListSelectedSkills : AVAILABLE_SKILLS.map((s) => s.id),
+    };
+
+    setCustomLists((prev) => [...prev, createdList]);
+    setNewListName("");
+    setNewListDesc("");
+    setNewListSelectedSkills([]);
+    setIsAddListOpen(false);
+  }
+
+  function handleDeleteCustomList(id: string) {
+    setCustomLists((prev) => prev.filter((l) => l.id !== id));
+    if (selectedCustomListId === id) setSelectedCustomListId(null);
+  }
+
+  function toggleSkillSelection(skillId: string) {
+    setNewListSelectedSkills((prev) =>
+      prev.includes(skillId) ? prev.filter((s) => s !== skillId) : [...prev, skillId]
+    );
+  }
+
   // Auto-refresh polling
   const load = useCallback(async (signal: AbortSignal) => {
     try {
@@ -808,7 +875,7 @@ export function QueuePanel({
     item: QueueItemDTO,
     extra: { groupCount?: number; groupExpanded?: boolean; onToggleGroup?: () => void; nested?: boolean } = {}
   ) {
-    // Only render tag badge on row when that tag is currently selected/applied by user
+    // Only render tag badge on row when that tag is explicitly selected/applied by user
     const matchedTag = selectedTagId ? tags.find((t) => t.id === selectedTagId && itemMatchesTag(item, t)) : null;
     return (
       <QueueRow
@@ -906,6 +973,7 @@ export function QueuePanel({
                 setRailView("all");
                 setSelectedCategory(null);
                 setSelectedClientId(null);
+                setSelectedCustomListId(null);
                 setPage(0);
               }}
               className={cn(
@@ -923,6 +991,7 @@ export function QueuePanel({
                 setRailView("clients");
                 setSelectedCategory(null);
                 setSelectedClientId(null);
+                setSelectedCustomListId(null);
                 setPage(0);
               }}
               className={cn(
@@ -996,6 +1065,7 @@ export function QueuePanel({
                         onClick={() => {
                           setGroupingMode(mode);
                           setSelectedCategory(null);
+                          setSelectedCustomListId(null);
                           setPage(0);
                           setIsGroupingPopoverOpen(false);
                         }}
@@ -1016,7 +1086,7 @@ export function QueuePanel({
             </div>
           )}
 
-          {/* LISTS / CLIENTS HEADER */}
+          {/* LISTS / CLIENTS HEADER WITH CUSTOM LIST CREATOR PLUS ICON */}
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-bold text-zinc-300 tracking-tight">
@@ -1031,13 +1101,104 @@ export function QueuePanel({
                 >
                   <Search size={13} />
                 </button>
-                <Link
-                  href="/dashboard/engagements/new"
-                  className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-                  title="Add client"
-                >
-                  <Plus size={13} />
-                </Link>
+
+                {railView === "all" ? (
+                  <div className="relative">
+                    {/* Plus Button to Open Rectangular Custom List Popover */}
+                    <button
+                      type="button"
+                      onClick={() => setIsAddListOpen((p) => !p)}
+                      className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                      title="Create custom list"
+                    >
+                      <Plus size={13} />
+                    </button>
+
+                    {/* RECTANGULAR CUSTOM LIST CREATOR POPOVER (rounded-none) */}
+                    {isAddListOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setIsAddListOpen(false)} />
+                        <div className="absolute left-0 top-full mt-1 w-72 z-50 p-3.5 rounded-none bg-zinc-950 border border-zinc-800 shadow-2xl text-xs space-y-3 font-sans">
+                          <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                            <span className="font-bold text-zinc-100 flex items-center gap-1.5">
+                              <FolderPlus size={14} className="text-zinc-400" />
+                              Create Custom List
+                            </span>
+                            <button type="button" onClick={() => setIsAddListOpen(false)} className="text-zinc-500 hover:text-zinc-200">
+                              <X size={13} />
+                            </button>
+                          </div>
+
+                          {/* List Name */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-mono text-zinc-400 uppercase">List Name</label>
+                            <input
+                              type="text"
+                              value={newListName}
+                              onChange={(e) => setNewListName(e.target.value)}
+                              placeholder="e.g. Pre-Call Review Backlog"
+                              className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-none text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700"
+                            />
+                          </div>
+
+                          {/* Description */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-mono text-zinc-400 uppercase">Description</label>
+                            <input
+                              type="text"
+                              value={newListDesc}
+                              onChange={(e) => setNewListDesc(e.target.value)}
+                              placeholder="e.g. Focus on tomorrow's briefings and holds"
+                              className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-none text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700"
+                            />
+                          </div>
+
+                          {/* Select Modules / Skills Checklist */}
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono text-zinc-400 uppercase">Select Modules / Skills</label>
+                            <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                              {AVAILABLE_SKILLS.map((skill) => {
+                                const isChecked = newListSelectedSkills.includes(skill.id);
+                                return (
+                                  <button
+                                    key={skill.id}
+                                    type="button"
+                                    onClick={() => toggleSkillSelection(skill.id)}
+                                    className={cn(
+                                      "w-full flex items-center justify-between px-2 py-1 rounded-none text-[11px] text-left transition-colors cursor-pointer",
+                                      isChecked ? "bg-zinc-800 text-white font-medium" : "bg-zinc-900/60 text-zinc-400 hover:text-zinc-200"
+                                    )}
+                                  >
+                                    <span>{skill.label}</span>
+                                    {isChecked && <Check size={12} className="text-emerald-400" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Create Action Button */}
+                          <button
+                            type="button"
+                            onClick={handleCreateCustomList}
+                            disabled={!newListName.trim()}
+                            className="w-full py-1.5 text-xs font-semibold rounded-none bg-zinc-100 text-zinc-950 hover:bg-white disabled:opacity-40 cursor-pointer transition-colors"
+                          >
+                            Create List
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <Link
+                    href="/dashboard/engagements/new"
+                    className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                    title="Add client"
+                  >
+                    <Plus size={13} />
+                  </Link>
+                )}
               </div>
             </div>
 
@@ -1054,15 +1215,15 @@ export function QueuePanel({
           </div>
 
           {/* SUB-LIST ITEMS */}
-          <div className="overflow-y-auto space-y-0.5 pt-1 max-h-[220px] [scrollbar-width:none]">
+          <div className="overflow-y-auto space-y-0.5 pt-1 max-h-[200px] [scrollbar-width:none]">
             {railView === "all" ? (
               <>
                 <button
                   type="button"
-                  onClick={() => { setSelectedCategory(null); setPage(0); }}
+                  onClick={() => { setSelectedCategory(null); setSelectedCustomListId(null); setPage(0); }}
                   className={cn(
                     "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
-                    selectedCategory === null && !selectedTagId
+                    selectedCategory === null && !selectedTagId && !selectedCustomListId
                       ? "bg-[#3f3f42] text-white font-semibold"
                       : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                   )}
@@ -1080,10 +1241,10 @@ export function QueuePanel({
                   <button
                     key={cat.id}
                     type="button"
-                    onClick={() => { setSelectedCategory(cat.id); setSelectedTagId(null); setPage(0); }}
+                    onClick={() => { setSelectedCategory(cat.id); setSelectedTagId(null); setSelectedCustomListId(null); setPage(0); }}
                     className={cn(
                       "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
-                      selectedCategory === cat.id && !selectedTagId
+                      selectedCategory === cat.id && !selectedTagId && !selectedCustomListId
                         ? "bg-[#3f3f42] text-white font-semibold"
                         : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                     )}
@@ -1097,6 +1258,46 @@ export function QueuePanel({
                     </span>
                   </button>
                 ))}
+
+                {/* User Created Custom Lists */}
+                {customLists.map((list) => {
+                  const active = selectedCustomListId === list.id;
+                  const count = customListCounts[list.id] ?? 0;
+                  return (
+                    <div key={list.id} className="group relative flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCustomListId(active ? null : list.id);
+                          setSelectedCategory(null);
+                          setSelectedTagId(null);
+                          setPage(0);
+                        }}
+                        className={cn(
+                          "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer pr-6",
+                          active ? "bg-[#3f3f42] text-white font-semibold" : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                        )}
+                        title={list.description}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <List size={14} className="text-zinc-400 shrink-0" />
+                          <span className="truncate">{list.name}</span>
+                        </div>
+                        <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                          {count}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCustomList(list.id)}
+                        className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-rose-400 transition-opacity cursor-pointer"
+                        title="Delete custom list"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  );
+                })}
               </>
             ) : (
               <>
@@ -1169,11 +1370,11 @@ export function QueuePanel({
                   <Plus size={13} />
                 </button>
 
-                {/* 12-COLOR TAG CREATOR POPOVER - Aligned side-by-side to avoid cut-off */}
+                {/* RECTANGULAR TAG CREATOR POPOVER (rounded-none) */}
                 {isAddTagOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsAddTagOpen(false)} />
-                    <div className="absolute left-full top-0 ml-2 w-72 z-50 p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl text-xs space-y-3 font-sans">
+                    <div className="absolute left-0 top-full mt-1 w-72 z-50 p-3.5 rounded-none bg-zinc-950 border border-zinc-800 shadow-2xl text-xs space-y-3 font-sans">
                       <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
                         <span className="font-bold text-zinc-100">Create New Tag</span>
                         <button type="button" onClick={() => setIsAddTagOpen(false)} className="text-zinc-500 hover:text-zinc-200">
@@ -1189,7 +1390,7 @@ export function QueuePanel({
                           value={newTagName}
                           onChange={(e) => setNewTagName(e.target.value)}
                           placeholder="e.g. Lime Alerts"
-                          className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700"
+                          className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-none text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700"
                         />
                       </div>
 
@@ -1201,20 +1402,20 @@ export function QueuePanel({
                           <button
                             type="button"
                             onClick={() => { setIsSkillDropdownOpen((p) => !p); setIsCategoryDropdownOpen(false); }}
-                            className="w-full flex items-center justify-between px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-300 text-[11px] hover:bg-zinc-800/80 cursor-pointer"
+                            className="w-full flex items-center justify-between px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-none text-zinc-300 text-[11px] hover:bg-zinc-800/80 cursor-pointer"
                           >
                             <span className="truncate">{skillTargetLabels[newTagTargetSkill]}</span>
                             <ChevronDown size={11} className="text-zinc-500 shrink-0" />
                           </button>
 
                           {isSkillDropdownOpen && (
-                            <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 rounded-xl bg-zinc-900 border border-zinc-800 shadow-xl space-y-0.5">
+                            <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 rounded-none bg-zinc-900 border border-zinc-800 shadow-xl space-y-0.5">
                               {Object.entries(skillTargetLabels).map(([k, label]) => (
                                 <button
                                   key={k}
                                   type="button"
                                   onClick={() => { setNewTagTargetSkill(k); setIsSkillDropdownOpen(false); }}
-                                  className={cn("w-full text-left px-2 py-1 rounded-lg text-[11px]", newTagTargetSkill === k ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-zinc-200")}
+                                  className={cn("w-full text-left px-2 py-1 rounded-none text-[11px]", newTagTargetSkill === k ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-zinc-200")}
                                 >
                                   {label}
                                 </button>
@@ -1229,20 +1430,20 @@ export function QueuePanel({
                           <button
                             type="button"
                             onClick={() => { setIsCategoryDropdownOpen((p) => !p); setIsSkillDropdownOpen(false); }}
-                            className="w-full flex items-center justify-between px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-300 text-[11px] hover:bg-zinc-800/80 cursor-pointer"
+                            className="w-full flex items-center justify-between px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded-none text-zinc-300 text-[11px] hover:bg-zinc-800/80 cursor-pointer"
                           >
                             <span className="truncate">{categoryTargetLabels[newTagTargetCategory]}</span>
                             <ChevronDown size={11} className="text-zinc-500 shrink-0" />
                           </button>
 
                           {isCategoryDropdownOpen && (
-                            <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 rounded-xl bg-zinc-900 border border-zinc-800 shadow-xl space-y-0.5">
+                            <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 rounded-none bg-zinc-900 border border-zinc-800 shadow-xl space-y-0.5">
                               {Object.entries(categoryTargetLabels).map(([k, label]) => (
                                 <button
                                   key={k}
                                   type="button"
                                   onClick={() => { setNewTagTargetCategory(k); setIsCategoryDropdownOpen(false); }}
-                                  className={cn("w-full text-left px-2 py-1 rounded-lg text-[11px]", newTagTargetCategory === k ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-zinc-200")}
+                                  className={cn("w-full text-left px-2 py-1 rounded-none text-[11px]", newTagTargetCategory === k ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-zinc-200")}
                                 >
                                   {label}
                                 </button>
@@ -1287,7 +1488,7 @@ export function QueuePanel({
                         type="button"
                         onClick={handleCreateTag}
                         disabled={!newTagName.trim()}
-                        className="w-full py-1.5 text-xs font-semibold rounded-xl bg-zinc-100 text-zinc-950 hover:bg-white disabled:opacity-40 cursor-pointer transition-colors"
+                        className="w-full py-1.5 text-xs font-semibold rounded-none bg-zinc-100 text-zinc-950 hover:bg-white disabled:opacity-40 cursor-pointer transition-colors"
                       >
                         Create Tag
                       </button>
@@ -1312,6 +1513,7 @@ export function QueuePanel({
                         onClick={() => {
                           setSelectedTagId(active ? null : tag.id);
                           setSelectedCategory(null);
+                          setSelectedCustomListId(null);
                           setPage(0);
                         }}
                         className={cn(
@@ -1355,10 +1557,10 @@ export function QueuePanel({
             <TableSearchInput value={search} onChange={(s) => { setSearch(s); setPage(0); }} placeholder={toolbarCopy.searchPlaceholder} className="w-[180px]" />
             <TimeRangeMenu value={timeRange} onChange={(r) => { setTimeRange(r); setPage(0); }} />
             <div className="ml-auto flex items-center gap-1.5">
-              {tab !== "all" || search || timeRange !== "all" || activeChipIds.size > 0 || selectedTagId ? (
+              {tab !== "all" || search || timeRange !== "all" || activeChipIds.size > 0 || selectedTagId || selectedCustomListId ? (
                 <button
                   type="button"
-                  onClick={() => { setTab("all"); setSearch(""); setTimeRange("all"); setActiveChipIds(new Set()); setSelectedTagId(null); setPage(0); }}
+                  onClick={() => { setTab("all"); setSearch(""); setTimeRange("all"); setActiveChipIds(new Set()); setSelectedTagId(null); setSelectedCustomListId(null); setPage(0); }}
                   className="text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
                 >
                   {sharedToolbarCopy.clearFiltersButton}
