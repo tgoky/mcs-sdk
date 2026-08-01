@@ -78,6 +78,13 @@
       "when": 1785241332459,
       "tag": "0010_optimal_fabian_cortez",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785581881311,
+      "tag": "0011_graceful_kronos",
+      "breakpoints": true
     }
   ]
 }
