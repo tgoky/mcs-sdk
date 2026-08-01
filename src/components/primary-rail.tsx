@@ -2,20 +2,25 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { 
-  LayoutGrid, 
-  Bot, 
-  Workflow, 
-  FolderKanban, 
-  LogOut, 
-  User, 
-  Settings, 
-  Home, 
+import { usePathname } from "next/navigation";
+import {
+  LayoutGrid,
+  Building2,
+  BarChart3,
+  Target,
+  Zap,
+  CalendarClock,
+  LogOut,
+  User,
+  Settings,
+  Home,
   Check,
   Calendar,
   Sliders,
   Plus,
-  UserPlus
+  UserPlus,
+  Sparkles,
+  type LucideIcon,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -24,8 +29,48 @@ interface PrimaryRailProps {
   userEmail: string;
 }
 
+/**
+ * The six top-level sections. Each owns its own href *prefix* — matching
+ * on prefix (not exact path) is what makes e.g. /dashboard/engagements/abc123
+ * still light up "Engagements" here. "Work" is deliberately matched last
+ * and via exact-or-bare-/dashboard-child logic below, since every other
+ * section's href also starts with "/dashboard" and would otherwise always
+ * win the prefix match.
+ */
+const RAIL_SECTIONS: Array<{ href: string; title: string; icon: LucideIcon }> = [
+  { href: "/dashboard", title: "Work", icon: LayoutGrid },
+  { href: "/dashboard/engagements", title: "Engagements", icon: Building2 },
+  { href: "/dashboard/analytics", title: "Analytics", icon: BarChart3 },
+  { href: "/dashboard/strategy", title: "Strategy", icon: Target },
+  { href: "/dashboard/skills", title: "Skills", icon: Zap },
+  { href: "/dashboard/meetings", title: "Meetings", icon: CalendarClock },
+];
+
+/**
+ * Which section is "active" for a given pathname. Previously this rail
+ * hardcoded Work's className as permanently active with no pathname check
+ * at all, so every other section (Executions, Queue, Engagements) rendered
+ * unselected even when you were on their page. Fixed here the same way
+ * SidebarNavLinks already handles it: exact match for the bare /dashboard
+ * root, longest-prefix match for everything else so a section's own
+ * sub-routes (e.g. /dashboard/engagements/abc123) still resolve correctly
+ * even though they also start with "/dashboard".
+ */
+function activeSectionHref(pathname: string): string {
+  const nonRootMatches = RAIL_SECTIONS.filter(
+    (s) => s.href !== "/dashboard" && (pathname === s.href || pathname.startsWith(`${s.href}/`))
+  );
+  if (nonRootMatches.length > 0) {
+    // Longest href wins if more than one prefix matches.
+    return nonRootMatches.sort((a, b) => b.href.length - a.href.length)[0].href;
+  }
+  return "/dashboard";
+}
+
 export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const pathname = usePathname();
+  const activeHref = activeSectionHref(pathname);
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
@@ -41,34 +86,25 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
 
         <div className="w-8 h-px bg-zinc-200 dark:bg-zinc-900 my-0.5" />
 
-        <Link 
-          href="/dashboard" 
-          title="Work" 
-          className="p-2 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg transition-colors"
-        >
-          <LayoutGrid className="w-4 h-4" />
-        </Link>
-        <Link 
-          href="/dashboard/runs" 
-          title="Executions" 
-          className="p-2 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors"
-        >
-          <Bot className="w-4 h-4" />
-        </Link>
-        <Link 
-          href="/dashboard/queue" 
-          title="Queue" 
-          className="p-2 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors"
-        >
-          <Workflow className="w-4 h-4" />
-        </Link>
-        <Link 
-          href="/dashboard/engagements" 
-          title="Engagements" 
-          className="p-2 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors"
-        >
-          <FolderKanban className="w-4 h-4" />
-        </Link>
+        {RAIL_SECTIONS.map((section) => {
+          const isActive = section.href === activeHref;
+          const Icon = section.icon;
+          return (
+            <Link
+              key={section.href}
+              href={section.href}
+              title={section.title}
+              aria-current={isActive ? "page" : undefined}
+              className={
+                isActive
+                  ? "p-2 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg transition-colors"
+                  : "p-2 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg border border-transparent transition-colors"
+              }
+            >
+              <Icon className="w-4 h-4" />
+            </Link>
+          );
+        })}
       </div>
 
       {/* Bottom Section: Back to Home & Profile Avatar Popover */}
@@ -96,30 +132,27 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
             {/* Backdrop for outside clicks */}
             <div className="fixed inset-0 z-40" onClick={() => setPopoverOpen(false)} />
 
-            {/* Floating Popover: Sharp rectangular container with expanded left-pane width */}
-            <div className="absolute left-full bottom-0 ml-2 z-50 w-[600px] sm:w-[620px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+            {/* Floating Popover: Sharp rectangular container (no border-radius), wider dimensions */}
+            <div className="absolute left-full bottom-0 ml-2 z-50 w-[560px] sm:w-[580px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
               <div className="flex min-h-[360px] divide-x divide-zinc-200 dark:divide-zinc-800">
                 
-                {/* LEFT PANE: Account switcher & Logout (Wider w-72 to prevent text clipping) */}
-                <div className="w-72 p-4 bg-zinc-50 dark:bg-zinc-950/90 flex flex-col justify-between shrink-0 min-w-0">
-                  <div className="space-y-4 min-w-0">
+                {/* LEFT PANE: Account switcher & Logout */}
+                <div className="w-60 p-4 bg-zinc-50 dark:bg-zinc-950/90 flex flex-col justify-between shrink-0">
+                  <div className="space-y-4">
                     <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                       Account
                     </h3>
                     
-                    {/* Active Account Row - Styled cleanly like Asana with gold avatar */}
-                    <div className="flex items-center gap-2.5 py-1 px-1 min-w-0">
-                      <div className="w-6 h-6 rounded-full bg-gold text-gold-foreground font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
+                    {/* Active Account Row - Pure text & icon, no background box/border */}
+                    <div className="flex items-center gap-2.5 py-1 px-1">
+                      <div className="w-6 h-6 rounded-full bg-purple-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
                         {initials}
                       </div>
-                      <span 
-                        className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate flex-1 min-w-0" 
-                        title={userEmail || displayName}
-                      >
+                      <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
                         {userEmail || displayName}
                       </span>
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0 ml-1" />
-                      <Check className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0 ml-1" />
+                      <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0 ml-1" />
+                      <Check className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 shrink-0 ml-auto" />
                     </div>
                   </div>
 
@@ -143,11 +176,11 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                 </div>
 
                 {/* RIGHT PANE: Full Asana User Content */}
-                <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900 min-w-0">
-                  <div className="space-y-3 min-w-0">
-                    {/* Large User Info Header with Gold Avatar */}
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-11 h-11 rounded-full bg-gold text-gold-foreground font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-sm">
+                <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900">
+                  <div className="space-y-3">
+                    {/* Large User Info Header */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-full bg-purple-600 text-white font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-sm">
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -201,12 +234,13 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                       </Link>
                     </div>
 
-                    {/* Solid Gold/Amber Upgrade Button (Icon Removed, Text Renamed) */}
+                    {/* Gold Highlighted Upgrade Button */}
                     <button
                       type="button"
-                      className="w-full mt-1.5 flex items-center justify-center px-3 py-2 text-xs font-semibold bg-[#547d76] hover:bg-[#c7b5a1] text-zinc-950 dark:bg-[#e0d9d9] dark:hover:bg-[#e3c3a0] rounded-md transition-colors shadow-sm cursor-pointer"
+                      className="w-full mt-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold bg-amber-200/80 hover:bg-amber-300/80 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 text-amber-950 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700/50 rounded-md transition-colors"
                     >
-                      <span>Upgrade Account</span>
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                      <span>Upgrade to Pro</span>
                     </button>
 
                     <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2" />

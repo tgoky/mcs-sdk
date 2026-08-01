@@ -129,10 +129,10 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
   const failedCount = Object.values(skillStatuses).filter((s) => s === "failed").length;
 
   return (
-    <div className="pt-4 border-t border-zinc-200 dark:border-zinc-900">
+    <div>
       <div className="px-1 mb-2 flex items-center justify-between">
         <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-          Executions
+          Skill Status
         </p>
         <span className="text-[10px] font-mono text-zinc-500">
           <span className="text-zinc-600 dark:text-zinc-400">{activeCount} active</span>
@@ -180,10 +180,10 @@ export async function SidebarSkills({ whopUserId }: { whopUserId: string }) {
 
 export function SidebarSkillsSkeleton() {
   return (
-    <div className="pt-4 border-t border-zinc-200 dark:border-zinc-900">
+    <div>
       <div className="px-1 mb-2 space-y-1">
         <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-          Executions
+          Skill Status
         </p>
       </div>
       <div className="bg-white/60 backdrop-blur-md dark:bg-zinc-900/50 border border-white/70 dark:border-zinc-900 rounded-lg overflow-hidden divide-y divide-zinc-200 dark:divide-zinc-900">

@@ -23,11 +23,16 @@ interface TopNavProps {
 }
 
 const NAV_LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/engagements", label: "Engagements" },
+  { href: "/dashboard", label: "Work" },
+  { href: "/dashboard/inbox", label: "Inbox" },
   { href: "/dashboard/queue", label: "Queue" },
   { href: "/dashboard/runs", label: "Executions" },
+  { href: "/dashboard/projects", label: "Projects" },
+  { href: "/dashboard/engagements", label: "Engagements" },
   { href: "/dashboard/analytics", label: "Analytics" },
+  { href: "/dashboard/strategy", label: "Strategy" },
+  { href: "/dashboard/skills", label: "Skills" },
+  { href: "/dashboard/meetings", label: "Meetings" },
   { href: "/dashboard/library", label: "Library" },
   { href: "/dashboard/settings", label: "Settings" },
 ];
@@ -36,7 +41,7 @@ export function TopNav({ onToggleSidebar, displayName }: TopNavProps) {
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
-    <header className="h-12 w-full bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800/80 px-3 flex items-center justify-between shrink-0 select-none z-30 gap-3 transition-colors duration-200">
+    <header className="relative h-12 w-full bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800/80 px-3 flex items-center justify-between shrink-0 select-none z-30 gap-3 transition-colors duration-200">
       {/* Left: Sidebar Toggle + Mobile Nav + Global + Create Button */}
       <div className="flex items-center gap-2 sm:gap-3">
         <button
@@ -136,22 +141,29 @@ export function TopNav({ onToggleSidebar, displayName }: TopNavProps) {
         </div>
       </div>
 
-      {/* Middle: Breadcrumbs */}
-      <div className="hidden md:flex min-w-0 flex-1">
+      {/* Middle-left: Breadcrumbs. Capped instead of flex-1 so a long
+          engagement/project name truncates rather than running underneath
+          the now-centered search bar. */}
+      <div className="hidden md:flex min-w-0 flex-1 max-w-[38%]">
         <Breadcrumbs />
       </div>
 
-      {/* Right: Search & Real Notification Bell */}
-      <div className="flex items-center gap-2 ml-auto shrink-0">
+      {/* True center: Search — pulled out of the right-hand group and
+          absolutely centered on the header so it reads as its own element
+          instead of sitting flush against the notification bell. */}
+      <div className="hidden sm:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
         <button
           type="button"
-          className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-800 rounded-md transition-colors w-40 md:w-52 cursor-pointer"
+          className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-800 rounded-md transition-colors w-52 md:w-72 cursor-pointer"
         >
-          <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
+          <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
           <span className="flex-1 text-left truncate">Search...</span>
-          <kbd className="text-[10px] font-mono bg-white dark:bg-zinc-950 px-1 rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500">⌘K</kbd>
+          <kbd className="text-[10px] font-mono bg-white dark:bg-zinc-950 px-1 rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 shrink-0">⌘K</kbd>
         </button>
+      </div>
 
+      {/* Right: Notification bell, now on its own */}
+      <div className="flex items-center gap-2 ml-auto shrink-0">
         <NotificationBell />
       </div>
     </header>

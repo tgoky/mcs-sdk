@@ -1227,6 +1227,51 @@ export const pendingActions = pgTable("pending_actions", {
 // pair means enabled — this table only ever needs to hold explicit
 // disables, so every existing engagement (all skills on) needs zero rows
 // and nothing changes for them until someone actually flips a toggle.
+// ── Projects (client groupings with a default skill policy) ───────────────
+// New for the Work/Engagements/Projects nav restructure. A project is a
+// named group of engagements (clients) that share which skills should run
+// for them by default — e.g. "just Leak Map + Win-Back, no Pre-Call Read"
+// for a batch of clients that only want funnel monitoring. `enabledSkills`
+// is the policy; membership is `projectEngagements` below. Adding an
+// engagement to a project doesn't touch its data — it just writes explicit
+// disabled rows into `engagementSkills` for whichever of the five skills
+// aren't in the project's enabledSkills list (see src/lib/projects.ts),
+// reusing the per-engagement enable/disable mechanism that already existed
+// rather than adding a second, competing one. Soft-deleted the same way
+// engagements are (deletedAt), for the same reason: history/audit trail
+// (past runs, artifacts) referencing a project's members shouldn't vanish
+// just because the grouping itself was removed.
+export const projects = pgTable("projects", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  whopUserId: text("whop_user_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  // Subset of SKILLS ("pin-down" | "pile-on" | "pre-call-read" | "win-back"
+  // | "leak-map"). Empty array is valid — a project with no default skills
+  // enabled yet, configured per-client instead.
+  enabledSkills: jsonb("enabled_skills").$type<string[]>().notNull().default([]),
+  deletedAt: timestamp("deleted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const projectEngagements = pgTable(
+  "project_engagements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    addedAt: timestamp("added_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    projectEngagementUnique: uniqueIndex("project_engagement_unique").on(table.projectId, table.engagementId),
+  })
+);
+
 export const engagementSkills = pgTable(
   "engagement_skills",
   {
