@@ -330,6 +330,28 @@ export const QUEUE_TOOLBAR_COPY = {
   } as Record<string, string>,
 };
 
+// ---------------------------------------------------------------------------
+// Client rail — the "All / Clients" scope switch that sits to the left of
+// the Queue and Live Executions tables (see components/client-rail.tsx).
+// "All" is the existing flat, unfiltered list. "Clients" reveals a
+// searchable roster; picking one scopes the table to that client alone.
+// ---------------------------------------------------------------------------
+
+export const CLIENT_RAIL_COPY = {
+  scopeTabs: {
+    all: "All",
+    clients: "Clients",
+  },
+  allClientsRow: "All clients",
+  searchPlaceholder: "Search clients...",
+  addClientLabel: "Add a client",
+  emptyState: "No clients yet.",
+  noMatches: "No clients match your search.",
+  pausedBadge: "Paused",
+  backToAllClients: "All clients",
+  allModeBlurb: (n: number) => `Showing every item across all ${n} client${n === 1 ? "" : "s"}. Switch to Clients to focus on one.`,
+};
+
 /** Friendly booking-platform name, with a safe fallback. */
 export function bookingPlatformLabel(raw: string | null | undefined): string {
   if (!raw) return "Not connected yet";

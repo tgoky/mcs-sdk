@@ -90,6 +90,15 @@ export default async function DashboardPage() {
   const completedActions = totalRunsResult[0]?.count ?? 0;
   const runningCount = Number(runningCountResult[0]?.count ?? 0);
 
+  // Same roster shape the full /dashboard/queue and /dashboard/runs pages
+  // pass down — reused here so the two overview widgets get the same
+  // All/Clients rail instead of a stripped-down version of it.
+  const clients = userEngagements.map((e) => ({
+    engagementId: e.engagementId,
+    buyer: e.buyer,
+    pausedAt: e.pausedAt ? e.pausedAt.toISOString() : null,
+  }));
+
   // LiveExecutionFeed (client component) expects startedAt as an ISO
   // string. Drizzle returns a native Date for the timestamp column —
   // convert at the server/client boundary instead of relying on whatever
@@ -205,7 +214,7 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        <QueuePanel initialItems={queueItems} />
+        <QueuePanel initialItems={queueItems} clients={clients} />
       </div>
 
       {/* Activity feed */}
@@ -225,7 +234,7 @@ export default async function DashboardPage() {
         </div>
 
         <div className="pt-1 border-t border-zinc-200/60 dark:border-zinc-900/20">
-          <LiveExecutionFeed initialRuns={recentRuns} storageKey="overview" />
+          <LiveExecutionFeed initialRuns={recentRuns} storageKey="overview" clients={clients} />
         </div>
       </div>
 

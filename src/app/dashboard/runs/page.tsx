@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getQueueItems } from "@/lib/queue";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and, isNull } from "drizzle-orm";
 import { LiveExecutionFeed } from "../live-execution-feed";
 import { latestStepLabel } from "@/lib/run-display";
 import { EXECUTIONS_TOOLBAR_COPY as copy } from "@/lib/copy";
@@ -23,26 +23,41 @@ export default async function RunsPage() {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
 
-  const rows = await db
-    .select({
-      id: skillRuns.id,
-      skillName: skillRuns.skillName,
-      status: skillRuns.status,
-      phase: skillRuns.phase,
-      startedAt: skillRuns.startedAt,
-      completedAt: skillRuns.completedAt,
-      engagementId: skillRuns.engagementId,
-      buyerName: engagements.buyer,
-      engagementPausedAt: engagements.pausedAt,
-      errorMessage: skillRuns.errorMessage,
-      steps: skillRuns.steps,
-      stepCount: sql<number>`coalesce(jsonb_array_length(${skillRuns.steps}), 0)`,
-    })
-    .from(skillRuns)
-    .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-    .where(eq(engagements.whopUserId, whopUserId))
-    .orderBy(desc(skillRuns.startedAt))
-    .limit(150);
+  const [rows, queueItems, clientRows] = await Promise.all([
+    db
+      .select({
+        id: skillRuns.id,
+        skillName: skillRuns.skillName,
+        status: skillRuns.status,
+        phase: skillRuns.phase,
+        startedAt: skillRuns.startedAt,
+        completedAt: skillRuns.completedAt,
+        engagementId: skillRuns.engagementId,
+        buyerName: engagements.buyer,
+        engagementPausedAt: engagements.pausedAt,
+        errorMessage: skillRuns.errorMessage,
+        steps: skillRuns.steps,
+        stepCount: sql<number>`coalesce(jsonb_array_length(${skillRuns.steps}), 0)`,
+      })
+      .from(skillRuns)
+      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+      .where(eq(engagements.whopUserId, whopUserId))
+      .orderBy(desc(skillRuns.startedAt))
+      .limit(150),
+
+    // Cheap, real "how busy is this right now" signal for the header — not
+    // reusing getQueueItems' counts since Queue and Executions measure
+    // different things (what's waiting on a human vs. what's running).
+    getQueueItems(whopUserId),
+
+    // Full client roster (not just clients with a run in the 150-row
+    // live window) — the "Clients" rail and roster table list every
+    // client, so one with zero runs shows as a confirmed zero, not a gap.
+    db
+      .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, pausedAt: engagements.pausedAt })
+      .from(engagements)
+      .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
+  ]);
 
   const runs = rows.map(({ steps, startedAt, completedAt, ...rest }) => ({
     ...rest,
@@ -52,10 +67,11 @@ export default async function RunsPage() {
     subjectLabel: latestStepLabel(steps),
   }));
 
-  // Cheap, real "how busy is this right now" signal for the header — not
-  // reusing getQueueItems' counts since Queue and Executions measure
-  // different things (what's waiting on a human vs. what's running).
-  const queueItems = await getQueueItems(whopUserId);
+  const clients = clientRows.map((c) => ({
+    engagementId: c.engagementId,
+    buyer: c.buyer,
+    pausedAt: c.pausedAt ? c.pausedAt.toISOString() : null,
+  }));
 
   return (
     <div className="space-y-5 w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200">
@@ -68,7 +84,7 @@ export default async function RunsPage() {
         </p>
       </div>
 
-      <LiveExecutionFeed initialRuns={runs} title={copy.allExecutionsTitle} storageKey="all" />
+      <LiveExecutionFeed initialRuns={runs} title={copy.allExecutionsTitle} storageKey="all" clients={clients} />
 
       {queueItems.length > 0 && (
         <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600 pt-1">
