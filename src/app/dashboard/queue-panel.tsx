@@ -14,6 +14,12 @@ import {
   PlayCircle,
   Waves,
   Copy,
+  Search,
+  Plus,
+  ChevronDown,
+  GripVertical,
+  Layers,
+  List,
 } from "lucide-react";
 import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, skillName as skillDisplayName } from "@/lib/copy";
 import type { StackSection } from "@/lib/error-classification";
@@ -26,6 +32,7 @@ import { ViewCustomizer, FilterChipBar, type CustomizerSection } from "@/compone
 import { useLocalViewState } from "@/lib/use-local-view-state";
 import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
+import { cn } from "@/lib/utils";
 
 export interface QueueItemDTO {
   id: string;
@@ -39,32 +46,35 @@ export interface QueueItemDTO {
   createdAt: string;
   fixHref?: string;
   skillName?: string;
-  /** ISO timestamp if this item's client currently has automations paused, else null/undefined. */
   engagementPausedAt?: string | null;
-  /** Only set for source "run_failure" — true for a 401/403, i.e. the fix is re-entering a credential. */
   isCredentialIssue?: boolean;
-  /** Only set for source "run_failure" — which stack-settings area the failure belongs to. */
   diagnosisSection?: StackSection;
+}
+
+export interface ClientOption {
+  engagementId: string;
+  buyer: string;
+  pausedAt?: string | null;
 }
 
 const POLL_MS = 8_000;
 
 type QueueTab = "all" | "approve" | "action_needed" | "alerts";
 type QueuePriority = "high" | "medium" | "low";
+export type ClientScopeView = "all" | "clients";
 
 function computeQueuePriority(item: QueueItemDTO): QueuePriority {
   const hoursWaiting = (Date.now() - new Date(item.createdAt).getTime()) / 3_600_000;
   if (item.category === "alert") return "high";
   if (item.category === "approve") return hoursWaiting > 4 ? "high" : "medium";
   if (item.category === "action_needed") return hoursWaiting > 24 ? "high" : "medium";
-  return "low"; // fyi
+  return "low";
 }
 
 interface QueueChipDef {
   id: string;
   label: string;
   section: string;
-  /** Chips sharing a group OR together; different groups AND together. */
   group: string;
   predicate: (item: QueueItemDTO, priority: QueuePriority) => boolean;
 }
@@ -104,18 +114,6 @@ interface QueueViewState {
 
 const DEFAULT_QUEUE_VIEW: QueueViewState = { pinnedChipIds: [], pageSize: 10, groupRepeats: true };
 
-const DISPLAY_TOGGLE_IDS = {
-  groupRepeats: "display:group-repeats",
-} as const;
-
-/**
- * Two queue items "are the same thing recurring" when they're the same
- * kind of item (source + category), for the same client, with the same
- * title and detail text — e.g. the identical "Klaviyo sync failed" alert
- * firing every night for the same engagement. Title/subtitle are
- * normalized (case/whitespace only) before comparing, so this stays an
- * exact-match on content, never a fuzzy one.
- */
 function queueSignature(item: QueueItemDTO): string {
   return [
     item.source,
@@ -260,162 +258,170 @@ function QueueRow({
   onRunMutation: (url: string) => void;
   onLinkNavigate: () => void;
   onActionComplete: () => void;
-  /** >1 means this row is standing in for that many identical (same source/category/client/title/detail) items — see queueSignature() below. */
   groupCount?: number;
   groupExpanded?: boolean;
   onToggleGroup?: () => void;
-  /** True for the older repeats revealed underneath a group's header row when expanded. */
   nested?: boolean;
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const { busyKey, error, run: dispatch } = useQuickActions();
 
   return (
-    <>
-      <div className={`group flex items-center gap-3 py-3 first:pt-2 ${nested ? "pl-5 border-l-2 border-l-border/60 bg-muted/20" : ""}`}>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <CategoryBadge category={item.category} />
-            <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
-            {onToggleGroup && (
-              <GroupCountToggle count={groupCount} expanded={groupExpanded} onToggle={onToggleGroup} />
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground truncate">
-            {item.buyer ? `${item.buyer} · ` : ""}
-            {item.subtitle}
-            {" · "}
-            {relativeTime(item.createdAt)}
-          </p>
-          {errorText && (
-            <p className="text-[14px] text-destructive font-mono">{errorText}</p>
+    <div className={`group flex items-center gap-3 py-3 px-3 border-b border-zinc-800/60 last:border-b-0 hover:bg-zinc-900/40 transition-colors ${nested ? "pl-6 bg-zinc-900/20" : ""}`}>
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <CategoryBadge category={item.category} />
+          <p className="text-xs font-bold text-zinc-100 truncate">{item.title}</p>
+          {onToggleGroup && (
+            <GroupCountToggle count={groupCount} expanded={groupExpanded} onToggle={onToggleGroup} />
           )}
         </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          {item.category === "approve" && (
-            <>
-              <button
-                disabled={isBusy}
-                onClick={() => onDecide("approved")}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <Check size={13} /> {copy.actions.approve}
-              </button>
-              <button
-                disabled={isBusy}
-                onClick={() => onDecide("rejected")}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <X size={13} /> {copy.actions.reject}
-              </button>
-            </>
-          )}
-
-          {item.category === "action_needed" && item.source === "sync_setup" && (
-            <>
-              {href ? (
-                <Link
-                  href={href}
-                  onClick={onLinkNavigate}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
-                >
-                  <ArrowUpRight size={13} /> Review
-                </Link>
-              ) : null}
-              <button
-                disabled={isBusy}
-                onClick={onDismissSyncSetup}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <X size={13} /> Not now
-              </button>
-            </>
-          )}
-
-          {item.category === "action_needed" && item.source === "run_failure" && (
-            <>
-              {href ? (
-                <Link
-                  href={href}
-                  onClick={onLinkNavigate}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
-                >
-                  <ArrowUpRight size={13} /> Fix now
-                </Link>
-              ) : null}
-              <button
-                disabled={isBusy}
-                onClick={onDismissRunFailure}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <X size={13} /> Not now
-              </button>
-            </>
-          )}
-
-          {item.category === "action_needed" && item.source !== "sync_setup" && item.source !== "run_failure" && (
-            <>
-              <button
-                disabled={isBusy}
-                onClick={() => onDecide("resolved")}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <Check size={13} /> {copy.actions.resolve}
-              </button>
-              <button
-                disabled={isBusy}
-                onClick={() => onDecide("abandoned")}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <X size={13} /> {copy.actions.dismiss}
-              </button>
-            </>
-          )}
-
-          {(item.category === "alert" || item.category === "fyi") && (
-            <>
-              {href ? (
-                <Link
-                  href={href}
-                  onClick={onLinkNavigate}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gold text-gold-foreground hover:bg-gold-hover transition-colors"
-                >
-                  <ArrowUpRight size={13} /> {copy.actions.open}
-                </Link>
-              ) : null}
-              <button
-                disabled={isBusy}
-                onClick={() => onRunMutation(`/api/notifications/${item.id}/read`)}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <X size={13} /> {copy.actions.dismiss}
-              </button>
-            </>
-          )}
-
-          <ActionPanel
-            open={panelOpen}
-            onOpenChange={setPanelOpen}
-            header={<QueueItemPreview item={item} />}
-            sections={buildQueueSections(item, dispatch, () => setPanelOpen(false), onActionComplete)}
-            errorText={error}
-            busyKey={busyKey}
-            triggerLabel={`Quick actions for ${item.title}`}
-          />
-        </div>
+        <p className="text-xs text-zinc-400 truncate">
+          {item.buyer ? `${item.buyer} · ` : ""}
+          {item.subtitle}
+          {" · "}
+          {relativeTime(item.createdAt)}
+        </p>
+        {errorText && (
+          <p className="text-xs text-rose-400 font-mono">{errorText}</p>
+        )}
       </div>
-    </>
+
+      <div className="flex items-center gap-1.5 shrink-0">
+        {item.category === "approve" && (
+          <>
+            <button
+              disabled={isBusy}
+              onClick={() => onDecide("approved")}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-500 text-zinc-950 hover:bg-emerald-400 transition-colors cursor-pointer"
+            >
+              <Check size={12} /> {copy.actions.approve}
+            </button>
+            <button
+              disabled={isBusy}
+              onClick={() => onDecide("rejected")}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+            >
+              <X size={12} /> {copy.actions.reject}
+            </button>
+          </>
+        )}
+
+        {item.category === "action_needed" && item.source === "sync_setup" && (
+          <>
+            {href ? (
+              <Link
+                href={href}
+                onClick={onLinkNavigate}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors"
+              >
+                <ArrowUpRight size={12} /> Review
+              </Link>
+            ) : null}
+            <button
+              disabled={isBusy}
+              onClick={onDismissSyncSetup}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+            >
+              <X size={12} /> Not now
+            </button>
+          </>
+        )}
+
+        {item.category === "action_needed" && item.source === "run_failure" && (
+          <>
+            {href ? (
+              <Link
+                href={href}
+                onClick={onLinkNavigate}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors"
+              >
+                <ArrowUpRight size={12} /> Fix now
+              </Link>
+            ) : null}
+            <button
+              disabled={isBusy}
+              onClick={onDismissRunFailure}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+            >
+              <X size={12} /> Not now
+            </button>
+          </>
+        )}
+
+        {item.category === "action_needed" && item.source !== "sync_setup" && item.source !== "run_failure" && (
+          <>
+            <button
+              disabled={isBusy}
+              onClick={() => onDecide("resolved")}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-500 text-zinc-950 hover:bg-emerald-400 transition-colors cursor-pointer"
+            >
+              <Check size={12} /> {copy.actions.resolve}
+            </button>
+            <button
+              disabled={isBusy}
+              onClick={() => onDecide("abandoned")}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+            >
+              <X size={12} /> {copy.actions.dismiss}
+            </button>
+          </>
+        )}
+
+        {(item.category === "alert" || item.category === "fyi") && (
+          <>
+            {href ? (
+              <Link
+                href={href}
+                onClick={onLinkNavigate}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors"
+              >
+                <ArrowUpRight size={12} /> {copy.actions.open}
+              </Link>
+            ) : null}
+            <button
+              disabled={isBusy}
+              onClick={() => onRunMutation(`/api/notifications/${item.id}/read`)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+            >
+              <X size={12} /> {copy.actions.dismiss}
+            </button>
+          </>
+        )}
+
+        <ActionPanel
+          open={panelOpen}
+          onOpenChange={setPanelOpen}
+          header={<QueueItemPreview item={item} />}
+          sections={buildQueueSections(item, dispatch, () => setPanelOpen(false), onActionComplete)}
+          errorText={error}
+          busyKey={busyKey}
+          triggerLabel={`Quick actions for ${item.title}`}
+        />
+      </div>
+    </div>
   );
 }
 
-export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
+export function QueuePanel({
+  initialItems,
+  clients = [],
+}: {
+  initialItems: QueueItemDTO[];
+  clients?: ClientOption[];
+}) {
   const [items, setItems] = useState<QueueItemDTO[]>(initialItems);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string>(copy.errors.generic);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Rail Scope State
+  const [railView, setRailView] = useState<ClientScopeView>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+
+  // Table State
   const [savedView, setSavedView] = useLocalViewState<QueueViewState>("mcs:queue:view", DEFAULT_QUEUE_VIEW);
   const [tab, setTab] = useState<QueueTab>("all");
   const [search, setSearch] = useState("");
@@ -426,34 +432,91 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
   const pinnedChipIds = new Set(savedView.pinnedChipIds);
   const pageSize = savedView.pageSize;
 
+  // Rail Categories (Platforms/CRMs)
+  const categories = useMemo(() => {
+    const platformCounts: Record<string, { label: string; count: number }> = {};
+
+    for (const item of items) {
+      let label = "Other";
+      const str = (item.title + " " + item.subtitle).toLowerCase();
+      if (str.includes("gohighlevel") || str.includes("ghl")) label = "GoHighLevel";
+      else if (str.includes("calendly")) label = "Calendly";
+      else if (str.includes("klaviyo")) label = "Klaviyo";
+      else if (str.includes("twilio")) label = "Twilio";
+      else if (str.includes("activecampaign")) label = "ActiveCampaign";
+
+      const key = label.toLowerCase().replace(/\s+/g, "_");
+      if (!platformCounts[key]) platformCounts[key] = { label, count: 0 };
+      platformCounts[key].count++;
+    }
+
+    return Object.entries(platformCounts).map(([id, { label, count }]) => ({ id, label, count }));
+  }, [items]);
+
+  // Rail Clients
+  const clientRailItems = useMemo(() => {
+    const countsByClient: Record<string, number> = {};
+    for (const item of items) {
+      if (item.engagementId) {
+        countsByClient[item.engagementId] = (countsByClient[item.engagementId] ?? 0) + 1;
+      }
+    }
+    return clients.map((c) => ({
+      engagementId: c.engagementId,
+      buyer: c.buyer,
+      count: countsByClient[c.engagementId] ?? 0,
+      pausedAt: c.pausedAt,
+    }));
+  }, [items, clients]);
+
+  // Compute Priorities
   const priorityById = useMemo(() => {
     const map = new Map<string, QueuePriority>();
     for (const item of items) map.set(item.id, computeQueuePriority(item));
     return map;
   }, [items]);
 
+  // 1. Rail-level Filtered Set
+  const railFilteredItems = useMemo(() => {
+    return items.filter((item) => {
+      if (railView === "clients" && selectedClientId) {
+        if (item.engagementId !== selectedClientId) return false;
+      }
+      if (railView === "all" && selectedCategory) {
+        const itemPlatform = (item.title + " " + item.subtitle).toLowerCase();
+        const catLabel = categories.find((c) => c.id === selectedCategory)?.label.toLowerCase() ?? "";
+        if (!itemPlatform.includes(catLabel)) return false;
+      }
+      return true;
+    });
+  }, [items, railView, selectedClientId, selectedCategory, categories]);
+
+  // Tab Counts based on current Rail scope
   const tabCounts = useMemo(() => {
-    const counts: Record<QueueTab, number> = { all: items.length, approve: 0, action_needed: 0, alerts: 0 };
-    for (const item of items) {
+    const counts: Record<QueueTab, number> = { all: railFilteredItems.length, approve: 0, action_needed: 0, alerts: 0 };
+    for (const item of railFilteredItems) {
       if (item.category === "approve") counts.approve++;
       else if (item.category === "action_needed") counts.action_needed++;
       else counts.alerts++;
     }
     return counts;
-  }, [items]);
+  }, [railFilteredItems]);
 
+  // 2. Tab Filtered Set
   const tabFiltered = useMemo(() => {
-    if (tab === "all") return items;
-    if (tab === "alerts") return items.filter((i) => i.category === "alert" || i.category === "fyi");
-    return items.filter((i) => i.category === tab);
-  }, [items, tab]);
+    if (tab === "all") return railFilteredItems;
+    if (tab === "alerts") return railFilteredItems.filter((i) => i.category === "alert" || i.category === "fyi");
+    return railFilteredItems.filter((i) => i.category === tab);
+  }, [railFilteredItems, tab]);
 
+  // 3. Time Range Filtered
   const rangeFiltered = useMemo(() => {
     if (timeRange === "all") return tabFiltered;
     const bounds = computeTimeRangeBounds(timeRange);
     return tabFiltered.filter((i) => isWithinTimeRange(i.createdAt, bounds));
   }, [tabFiltered, timeRange]);
 
+  // 4. Search Filtered
   const searchFiltered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rangeFiltered;
@@ -468,6 +531,7 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     });
   }, [rangeFiltered, search]);
 
+  // Chip Counts
   const chipCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const def of QUEUE_CHIP_DEFS) {
@@ -480,6 +544,7 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     return counts;
   }, [searchFiltered, priorityById]);
 
+  // 5. Chips Filtered
   const visibleItems = useMemo(() => {
     if (activeChipIds.size === 0) return searchFiltered;
     const activeDefs = QUEUE_CHIP_DEFS.filter((d) => activeChipIds.has(d.id));
@@ -498,9 +563,7 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     });
   }, [searchFiltered, activeChipIds, priorityById]);
 
-  // Collapse repeats *after* every filter has already narrowed visibleItems
-  // down, so tab/chip counts stay honest (they count real items) while
-  // what actually renders collapses identical repeats.
+  // 6. Grouped Repeats
   const queueGroups = useMemo(() => {
     if (!savedView.groupRepeats) {
       return visibleItems.map((it) => ({ signature: it.id, items: [it], latest: it, count: 1 }));
@@ -523,108 +586,7 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
   const clampedPage = Math.min(page, pageCount - 1);
   const pagedGroups = queueGroups.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
 
-  function handleTabChange(nextTab: QueueTab) {
-    setTab(nextTab);
-    setPage(0);
-  }
-
-  function handleSearchChange(nextSearch: string) {
-    setSearch(nextSearch);
-    setPage(0);
-  }
-
-  function handleTimeRangeChange(nextRange: TimeRangeValue) {
-    setTimeRange(nextRange);
-    setPage(0);
-  }
-
-  function togglePinnedChip(id: string) {
-    setPage(0);
-    setSavedView((prev) => {
-      const next = new Set(prev.pinnedChipIds);
-      if (next.has(id)) {
-        next.delete(id);
-        setActiveChipIds((prevActive) => {
-          const nextActive = new Set(prevActive);
-          nextActive.delete(id);
-          return nextActive;
-        });
-      } else {
-        next.add(id);
-      }
-      return { ...prev, pinnedChipIds: Array.from(next) };
-    });
-  }
-
-  function toggleGroupRepeats() {
-    setPage(0);
-    setSavedView((prev) => ({ ...prev, groupRepeats: !prev.groupRepeats }));
-  }
-
-  function toggleActiveChip(id: string) {
-    setPage(0);
-    setActiveChipIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function changePageSize(size: 10 | 25 | 50) {
-    setPage(0);
-    setSavedView((prev) => ({ ...prev, pageSize: size }));
-  }
-
-  function clearFilters() {
-    setTab("all");
-    setSearch("");
-    setTimeRange("all");
-    setActiveChipIds(new Set());
-    setPage(0);
-  }
-
-  const hasActiveFilters = tab !== "all" || search.trim() !== "" || timeRange !== "all" || activeChipIds.size > 0;
-
-  const tabOptions: SegmentedTabOption<QueueTab>[] = [
-    { key: "all", label: toolbarCopy.tabs.all, count: tabCounts.all },
-    { key: "approve", label: toolbarCopy.tabs.approve, count: tabCounts.approve },
-    { key: "action_needed", label: toolbarCopy.tabs.action_needed, count: tabCounts.action_needed },
-    { key: "alerts", label: toolbarCopy.tabs.alerts, count: tabCounts.alerts },
-  ];
-
-  const customizerSections: CustomizerSection[] = [
-    ...QUEUE_CHIP_SECTION_ORDER.map((sectionLabel) => ({
-      label: sectionLabel,
-      options: QUEUE_CHIP_DEFS.filter((d) => d.section === sectionLabel).map((d) => ({
-        id: d.id,
-        label: d.label,
-        count: chipCounts.get(d.id) ?? 0,
-      })),
-    })).filter((s) => s.options.length > 0),
-    {
-      label: sharedToolbarCopy.displaySectionLabel,
-      options: [{ id: DISPLAY_TOGGLE_IDS.groupRepeats, label: sharedToolbarCopy.groupRepeatsLabel }],
-    },
-  ];
-
-  const customizerEnabledIds = new Set(pinnedChipIds);
-  if (savedView.groupRepeats) customizerEnabledIds.add(DISPLAY_TOGGLE_IDS.groupRepeats);
-
-  function handleCustomizeToggle(id: string) {
-    if (id === DISPLAY_TOGGLE_IDS.groupRepeats) {
-      toggleGroupRepeats();
-      return;
-    }
-    togglePinnedChip(id);
-  }
-
-  const pinnedChips = QUEUE_CHIP_DEFS.filter((d) => pinnedChipIds.has(d.id)).map((d) => ({
-    id: d.id,
-    label: d.label,
-    count: chipCounts.get(d.id) ?? 0,
-  }));
-
+  // Auto-refresh polling
   const load = useCallback(async (signal: AbortSignal) => {
     try {
       const res = await fetch("/api/queue", { cache: "no-store", signal });
@@ -651,17 +613,6 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     load(controller.signal);
   }, [load]);
 
-  useEffect(() => () => {
-    if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
-  }, []);
-
-  function flashError(id: string, text: string) {
-    setErrorId(id);
-    setErrorText(text);
-    if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
-    errorTimeoutRef.current = setTimeout(() => setErrorId(null), 4000);
-  }
-
   async function runMutation(item: QueueItemDTO, url: string, body?: object, method: "POST" | "PATCH" = "POST") {
     setBusyId(item.id);
     setErrorId(null);
@@ -675,45 +626,33 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
         const message = res.status === 403
           ? copy.errors.adminOnly
           : await res.json().then((d) => d?.error).catch(() => null) || copy.errors.generic;
-        flashError(item.id, message);
+        setErrorId(item.id);
+        setErrorText(message);
         return;
       }
       setItems((prev) => prev.filter((i) => i.id !== item.id));
     } catch {
-      flashError(item.id, copy.errors.generic);
+      setErrorId(item.id);
+      setErrorText(copy.errors.generic);
     } finally {
       setBusyId(null);
     }
   }
 
   function decide(item: QueueItemDTO, decision: string) {
-    if (item.source === "action") {
-      return runMutation(item, `/api/actions/${item.id}/review`, { decision });
-    }
-    if (item.source === "blocker") {
-      return runMutation(item, `/api/blockers/${item.id}/resolve`, { decision });
-    }
+    if (item.source === "action") return runMutation(item, `/api/actions/${item.id}/review`, { decision });
+    if (item.source === "blocker") return runMutation(item, `/api/blockers/${item.id}/resolve`, { decision });
     return runMutation(item, `/api/notifications/${item.id}/read`);
   }
 
   function dismissSyncSetup(item: QueueItemDTO) {
     if (!item.engagementId) return;
-    return runMutation(
-      item,
-      `/api/engagements/${item.engagementId}/sync-mode`,
-      { dismissSetupNudge: true },
-      "PATCH"
-    );
+    return runMutation(item, `/api/engagements/${item.engagementId}/sync-mode`, { dismissSetupNudge: true }, "PATCH");
   }
 
   function dismissRunFailure(item: QueueItemDTO) {
     if (!item.engagementId || !item.skillName) return;
-    return runMutation(
-      item,
-      `/api/engagements/${item.engagementId}/dismiss-run-failure`,
-      { skillName: item.skillName },
-      "PATCH"
-    );
+    return runMutation(item, `/api/engagements/${item.engagementId}/dismiss-run-failure`, { skillName: item.skillName }, "PATCH");
   }
 
   const openHref = (item: QueueItemDTO) =>
@@ -741,106 +680,355 @@ export function QueuePanel({ initialItems }: { initialItems: QueueItemDTO[] }) {
     );
   }
 
-  if (items.length === 0) {
-    return (
-      <div className="pt-1 border-t border-border/60">
-        <p className="text-xs font-mono font-medium text-muted-foreground/80 py-6 text-center">
-          {copy.emptyState}
-        </p>
-      </div>
-    );
-  }
+  const tabOptions: SegmentedTabOption<QueueTab>[] = [
+    { key: "all", label: toolbarCopy.tabs.all, count: tabCounts.all },
+    { key: "approve", label: toolbarCopy.tabs.approve, count: tabCounts.approve },
+    { key: "action_needed", label: toolbarCopy.tabs.action_needed, count: tabCounts.action_needed },
+    { key: "alerts", label: toolbarCopy.tabs.alerts, count: tabCounts.alerts },
+  ];
+
+  const customizerSections: CustomizerSection[] = [
+    ...QUEUE_CHIP_SECTION_ORDER.map((sectionLabel) => ({
+      label: sectionLabel,
+      options: QUEUE_CHIP_DEFS.filter((d) => d.section === sectionLabel).map((d) => ({
+        id: d.id,
+        label: d.label,
+        count: chipCounts.get(d.id) ?? 0,
+      })),
+    })).filter((s) => s.options.length > 0),
+  ];
+
+  const pinnedChips = QUEUE_CHIP_DEFS.filter((d) => pinnedChipIds.has(d.id)).map((d) => ({
+    id: d.id,
+    label: d.label,
+    count: chipCounts.get(d.id) ?? 0,
+  }));
+
+  // Rail Search
+  const [railSearch, setRailSearch] = useState("");
+  const [isRailSearchOpen, setIsRailSearchOpen] = useState(false);
+
+  const filteredRailCategories = useMemo(() => {
+    if (!railSearch.trim()) return categories;
+    return categories.filter((c) => c.label.toLowerCase().includes(railSearch.toLowerCase()));
+  }, [categories, railSearch]);
+
+  const filteredRailClients = useMemo(() => {
+    if (!railSearch.trim()) return clientRailItems;
+    return clientRailItems.filter((c) => c.buyer.toLowerCase().includes(railSearch.toLowerCase()));
+  }, [clientRailItems, railSearch]);
 
   return (
-    <div className="pt-1 border-t border-border/60 space-y-2.5">
-      <div className="flex items-center gap-2 flex-wrap px-1">
-        <SegmentedTabs options={tabOptions} value={tab} onChange={handleTabChange} />
-        <TableSearchInput value={search} onChange={handleSearchChange} placeholder={toolbarCopy.searchPlaceholder} className="w-[200px]" />
-        <TimeRangeMenu value={timeRange} onChange={handleTimeRangeChange} />
-        <div className="ml-auto flex items-center gap-1.5">
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            >
-              {sharedToolbarCopy.clearFiltersButton}
-            </button>
+    <div className="border border-zinc-800 rounded-2xl bg-[#121315] overflow-hidden flex flex-col md:flex-row min-h-[500px] w-full font-sans antialiased text-zinc-300">
+      {/* ----------------------------------------------------------------- */}
+      {/* 1. SEAMLESS INTEGRATED LEFT RAIL                                  */}
+      {/* ----------------------------------------------------------------- */}
+      <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-zinc-800 bg-[#18191b] p-3 flex flex-col shrink-0 space-y-3 select-none">
+        {/* TOP TOGGLE SWITCH: [ All | Clients ] */}
+        <div className="grid grid-cols-2 p-1 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-medium">
+          <button
+            type="button"
+            onClick={() => {
+              setRailView("all");
+              setSelectedCategory(null);
+              setSelectedClientId(null);
+              setPage(0);
+            }}
+            className={cn(
+              "py-1.5 rounded-lg text-center transition-all cursor-pointer",
+              railView === "all"
+                ? "bg-[#3f3f42] text-white font-semibold shadow-xs"
+                : "text-zinc-400 hover:text-zinc-200"
+            )}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRailView("clients");
+              setSelectedCategory(null);
+              setSelectedClientId(null);
+              setPage(0);
+            }}
+            className={cn(
+              "py-1.5 rounded-lg text-center transition-all cursor-pointer",
+              railView === "clients"
+                ? "bg-[#3f3f42] text-white font-semibold shadow-xs"
+                : "text-zinc-400 hover:text-zinc-200"
+            )}
+          >
+            Clients
+          </button>
+        </div>
+
+        {/* GREY SCOPE CARD */}
+        <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-[#2b2c2e] border border-zinc-700/50 text-xs font-semibold text-zinc-100 shadow-xs">
+          <span>{railView === "all" ? "All queues" : "All clients"}</span>
+          <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-700/80 text-zinc-200 font-bold tabular-nums">
+            {railView === "all" ? items.length : clients.length}
+          </span>
+        </div>
+
+        {/* LISTS / CLIENTS HEADER */}
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-bold text-zinc-300 tracking-tight">
+              {railView === "all" ? "Lists" : "Clients"}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setIsRailSearchOpen((p) => !p)}
+                className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                title="Search"
+              >
+                <Search size={13} />
+              </button>
+              <Link
+                href="/dashboard/engagements/new"
+                className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                title="Add client"
+              >
+                <Plus size={13} />
+              </Link>
+            </div>
+          </div>
+
+          {isRailSearchOpen && (
+            <input
+              type="text"
+              value={railSearch}
+              onChange={(e) => setRailSearch(e.target.value)}
+              placeholder={railView === "all" ? "Search platforms..." : "Search clients..."}
+              className="w-full px-2.5 py-1 text-xs bg-zinc-900 border border-zinc-800 rounded-md text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-700"
+              autoFocus
+            />
           )}
-          <ViewCustomizer
-            sections={customizerSections}
-            enabledIds={customizerEnabledIds}
-            onToggle={handleCustomizeToggle}
-            menuTitle={sharedToolbarCopy.customizeMenuTitle}
-          />
+
+          {/* BY CRM / BY CLIENT NAME PILL */}
+          <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-900/80 border border-zinc-800 text-xs text-zinc-300 font-medium">
+            <div className="flex items-center gap-2">
+              <GripVertical size={13} className="text-zinc-500 shrink-0" />
+              <span className="truncate">
+                {railView === "all" ? "By CRM / Platform" : "By Client Name"}
+              </span>
+            </div>
+            <ChevronDown size={13} className="text-zinc-500 shrink-0" />
+          </div>
+        </div>
+
+        {/* SUB-LIST ITEMS */}
+        <div className="flex-1 overflow-y-auto space-y-0.5 pt-1 max-h-[360px] [scrollbar-width:none]">
+          {railView === "all" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => { setSelectedCategory(null); setPage(0); }}
+                className={cn(
+                  "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
+                  selectedCategory === null
+                    ? "bg-[#3f3f42] text-white font-semibold"
+                    : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                )}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Layers size={14} className="text-zinc-400 shrink-0" />
+                  <span className="truncate">Every platform</span>
+                </div>
+                <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                  {items.length}
+                </span>
+              </button>
+
+              {filteredRailCategories.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => { setSelectedCategory(cat.id); setPage(0); }}
+                  className={cn(
+                    "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
+                    selectedCategory === cat.id
+                      ? "bg-[#3f3f42] text-white font-semibold"
+                      : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                  )}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Layers size={14} className="text-zinc-400 shrink-0" />
+                    <span className="truncate">{cat.label}</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                    {cat.count}
+                  </span>
+                </button>
+              ))}
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => { setSelectedClientId(null); setPage(0); }}
+                className={cn(
+                  "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
+                  selectedClientId === null
+                    ? "bg-[#3f3f42] text-white font-semibold"
+                    : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                )}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-5 h-5 rounded-[5px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0">
+                    <List className="w-3 h-3 stroke-[2.5]" />
+                  </div>
+                  <span className="truncate">All clients</span>
+                </div>
+                <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                  {clients.length}
+                </span>
+              </button>
+
+              {filteredRailClients.map((client) => (
+                <button
+                  key={client.engagementId}
+                  type="button"
+                  onClick={() => { setSelectedClientId(client.engagementId); setPage(0); }}
+                  className={cn(
+                    "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
+                    selectedClientId === client.engagementId
+                      ? "bg-[#3f3f42] text-white font-semibold"
+                      : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                  )}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-5 h-5 rounded-[5px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                      <List className="w-3 h-3 stroke-[2.5]" />
+                    </div>
+                    <span className="truncate">{client.buyer}</span>
+                  </div>
+                  {client.count !== undefined && client.count > 0 && (
+                    <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                      {client.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </>
+          )}
         </div>
       </div>
 
-      {pinnedChips.length > 0 && (
-        <div className="px-1">
-          <FilterChipBar chips={pinnedChips} activeIds={activeChipIds} onToggle={toggleActiveChip} />
-        </div>
-      )}
-
-      {visibleItems.length === 0 ? (
-        <div className="py-10 text-center space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">{sharedToolbarCopy.noResultsTitle}</p>
-          <p className="text-xs text-muted-foreground/70 font-mono max-w-sm mx-auto">{sharedToolbarCopy.noResultsSubtitle}</p>
-        </div>
-      ) : (
-        <div className="divide-y divide-border/60">
-          {pagedGroups.map((group) => {
-            const expanded = expandedGroups.has(group.signature);
-            return (
-              <Fragment key={group.signature}>
-                {renderQueueRow(group.latest, {
-                  groupCount: group.count,
-                  groupExpanded: expanded,
-                  onToggleGroup: group.count > 1 ? () => toggleGroupExpanded(group.signature) : undefined,
-                })}
-                {expanded && group.items.slice(1).map((it) => renderQueueRow(it, { nested: true }))}
-              </Fragment>
-            );
-          })}
-        </div>
-      )}
-
-      {queueGroups.length > 10 && (
-        <div className="flex items-center justify-between px-1 py-2 border-t border-border/60">
-          <div className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
-            {([10, 25, 50] as const).map((size) => (
+      {/* ----------------------------------------------------------------- */}
+      {/* 2. FULL TABLE AREA (WITH TOOLBAR, TABS, ACTIONS & PAGINATION)     */}
+      {/* ----------------------------------------------------------------- */}
+      <div className="flex-1 flex flex-col min-w-0 bg-[#121315] p-3 space-y-3">
+        {/* TABLE TOOLBAR */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <SegmentedTabs options={tabOptions} value={tab} onChange={(t) => { setTab(t); setPage(0); }} />
+          <TableSearchInput value={search} onChange={(s) => { setSearch(s); setPage(0); }} placeholder={toolbarCopy.searchPlaceholder} className="w-[180px]" />
+          <TimeRangeMenu value={timeRange} onChange={(r) => { setTimeRange(r); setPage(0); }} />
+          <div className="ml-auto flex items-center gap-1.5">
+            {tab !== "all" || search || timeRange !== "all" || activeChipIds.size > 0 ? (
               <button
-                key={size}
-                onClick={() => changePageSize(size)}
-                className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
-                  pageSize === size
-                    ? "border-zinc-400 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300"
-                    : "border-transparent hover:text-foreground"
-                }`}
+                type="button"
+                onClick={() => { setTab("all"); setSearch(""); setTimeRange("all"); setActiveChipIds(new Set()); setPage(0); }}
+                className="text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
               >
-                {sharedToolbarCopy.pageSizeLabel(size)}
+                {sharedToolbarCopy.clearFiltersButton}
               </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono text-muted-foreground">Page {clampedPage + 1} of {pageCount}</span>
-            <button
-              onClick={() => setPage(Math.max(0, clampedPage - 1))}
-              disabled={clampedPage === 0}
-              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            >
-              ← Prev
-            </button>
-            <button
-              onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}
-              disabled={clampedPage >= pageCount - 1}
-              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            >
-              Next →
-            </button>
+            ) : null}
+            <ViewCustomizer
+              sections={customizerSections}
+              enabledIds={pinnedChipIds}
+              onToggle={(id) => {
+                setPage(0);
+                setSavedView((p) => {
+                  const s = new Set(p.pinnedChipIds);
+                  if (s.has(id)) s.delete(id); else s.add(id);
+                  return { ...p, pinnedChipIds: Array.from(s) };
+                });
+              }}
+              menuTitle={sharedToolbarCopy.customizeMenuTitle}
+            />
           </div>
         </div>
-      )}
+
+        {pinnedChips.length > 0 && (
+          <FilterChipBar
+            chips={pinnedChips}
+            activeIds={activeChipIds}
+            onToggle={(id) => {
+              setPage(0);
+              setActiveChipIds((prev) => {
+                const s = new Set(prev);
+                if (s.has(id)) s.delete(id); else s.add(id);
+                return s;
+              });
+            }}
+          />
+        )}
+
+        {/* ROWS */}
+        {visibleItems.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-16 text-center text-zinc-500 space-y-1">
+            <p className="text-sm font-medium">{sharedToolbarCopy.noResultsTitle}</p>
+            <p className="text-xs font-mono text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>
+          </div>
+        ) : (
+          <div className="flex-1 divide-y divide-zinc-800/60 border border-zinc-800/80 rounded-xl overflow-hidden bg-zinc-900/30">
+            {pagedGroups.map((group) => {
+              const expanded = expandedGroups.has(group.signature);
+              return (
+                <Fragment key={group.signature}>
+                  {renderQueueRow(group.latest, {
+                    groupCount: group.count,
+                    groupExpanded: expanded,
+                    onToggleGroup: group.count > 1 ? () => toggleGroupExpanded(group.signature) : undefined,
+                  })}
+                  {expanded && group.items.slice(1).map((it) => renderQueueRow(it, { nested: true }))}
+                </Fragment>
+              );
+            })}
+          </div>
+        )}
+
+        {/* PAGINATION */}
+        {queueGroups.length > pageSize && (
+          <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-xs text-zinc-400">
+            <div className="flex items-center gap-1 font-mono text-[10px]">
+              {([10, 25, 50] as const).map((size) => (
+                <button
+                  key={size}
+                  onClick={() => { setPage(0); setSavedView((p) => ({ ...p, pageSize: size })); }}
+                  className={cn(
+                    "px-1.5 py-0.5 rounded border transition-colors cursor-pointer",
+                    pageSize === size
+                      ? "border-zinc-600 bg-zinc-800 text-zinc-200"
+                      : "border-transparent hover:text-white"
+                  )}
+                >
+                  {sharedToolbarCopy.pageSizeLabel(size)}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 font-mono text-[11px]">
+              <span>Page {clampedPage + 1} of {pageCount}</span>
+              <button
+                onClick={() => setPage(Math.max(0, clampedPage - 1))}
+                disabled={clampedPage === 0}
+                className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
+              >
+                ← Prev
+              </button>
+              <button
+                onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}
+                disabled={clampedPage >= pageCount - 1}
+                className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
