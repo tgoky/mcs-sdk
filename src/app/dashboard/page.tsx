@@ -214,7 +214,7 @@ export default async function DashboardPage() {
           )}
         </div>
 
-      <QueuePanel initialItems={queueItems} clients={clients} />
+     <QueuePanel initialItems={queueItems} clients={clients} title="QUEUE" viewAllHref="/dashboard/queue" />
       </div>
 
       {/* Activity feed */}

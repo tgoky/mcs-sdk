@@ -108,11 +108,12 @@ const QUEUE_CHIP_SECTION_ORDER = [
 
 interface QueueViewState {
   pinnedChipIds: string[];
-  pageSize: 10 | 25 | 50;
+  pageSize: 5 | 10 | 25 | 50;
   groupRepeats: boolean;
 }
 
-const DEFAULT_QUEUE_VIEW: QueueViewState = { pinnedChipIds: [], pageSize: 10, groupRepeats: true };
+// Default page size changed to 5 rows
+const DEFAULT_QUEUE_VIEW: QueueViewState = { pinnedChipIds: [], pageSize: 5, groupRepeats: true };
 
 function queueSignature(item: QueueItemDTO): string {
   return [
@@ -406,15 +407,18 @@ function QueueRow({
 export function QueuePanel({
   initialItems,
   clients = [],
+  title = "QUEUE",
+  viewAllHref,
 }: {
   initialItems: QueueItemDTO[];
   clients?: ClientOption[];
+  title?: string;
+  viewAllHref?: string;
 }) {
   const [items, setItems] = useState<QueueItemDTO[]>(initialItems);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string>(copy.errors.generic);
-  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Rail Scope State
   const [railView, setRailView] = useState<ClientScopeView>("all");
@@ -719,315 +723,349 @@ export function QueuePanel({
   }, [clientRailItems, railSearch]);
 
   return (
-    <div className="border border-sidebar-border rounded-2xl bg-sidebar overflow-hidden flex flex-col md:flex-row min-h-[500px] w-full font-sans antialiased text-zinc-300">
+    <div className="space-y-3 w-full font-sans antialiased text-zinc-300 select-none">
       {/* ----------------------------------------------------------------- */}
-      {/* 1. SEAMLESS INTEGRATED LEFT RAIL                                  */}
+      {/* TOP ROW (NORTH): [ All | Clients ] Toggle on Left | Title on Right */}
       {/* ----------------------------------------------------------------- */}
-      <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-sidebar-border bg-sidebar p-3 flex flex-col shrink-0 space-y-3 select-none">
-        {/* TOP TOGGLE SWITCH: [ All | Clients ] */}
-        <div className="grid grid-cols-2 p-1 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-medium">
-          <button
-            type="button"
-            onClick={() => {
-              setRailView("all");
-              setSelectedCategory(null);
-              setSelectedClientId(null);
-              setPage(0);
-            }}
-            className={cn(
-              "py-1.5 rounded-lg text-center transition-all cursor-pointer",
-              railView === "all"
-                ? "bg-[#3f3f42] text-white font-semibold shadow-xs"
-                : "text-zinc-400 hover:text-zinc-200"
-            )}
-          >
-            All
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setRailView("clients");
-              setSelectedCategory(null);
-              setSelectedClientId(null);
-              setPage(0);
-            }}
-            className={cn(
-              "py-1.5 rounded-lg text-center transition-all cursor-pointer",
-              railView === "clients"
-                ? "bg-[#3f3f42] text-white font-semibold shadow-xs"
-                : "text-zinc-400 hover:text-zinc-200"
-            )}
-          >
-            Clients
-          </button>
-        </div>
-
-        {/* GREY SCOPE CARD */}
-        <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700/50 text-xs font-semibold text-zinc-100 shadow-xs">
-          <span>{railView === "all" ? "All queues" : "All clients"}</span>
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-700/80 text-zinc-200 font-bold tabular-nums">
-            {railView === "all" ? items.length : clients.length}
-          </span>
-        </div>
-
-        {/* LISTS / CLIENTS HEADER */}
-        <div className="space-y-2 pt-1">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-xs font-bold text-zinc-300 tracking-tight">
-              {railView === "all" ? "Lists" : "Clients"}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setIsRailSearchOpen((p) => !p)}
-                className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-                title="Search"
-              >
-                <Search size={13} />
-              </button>
-              <Link
-                href="/dashboard/engagements/new"
-                className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-                title="Add client"
-              >
-                <Plus size={13} />
-              </Link>
-            </div>
+      <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+        {/* Left Side: [ All | Clients ] Toggle */}
+        <div className="w-full md:w-64 shrink-0">
+          <div className="grid grid-cols-2 p-1 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => {
+                setRailView("all");
+                setSelectedCategory(null);
+                setSelectedClientId(null);
+                setPage(0);
+              }}
+              className={cn(
+                "py-1.5 rounded-lg text-center transition-all cursor-pointer",
+                railView === "all"
+                  ? "bg-[#3f3f42] text-white font-semibold shadow-xs"
+                  : "text-zinc-400 hover:text-zinc-200"
+              )}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRailView("clients");
+                setSelectedCategory(null);
+                setSelectedClientId(null);
+                setPage(0);
+              }}
+              className={cn(
+                "py-1.5 rounded-lg text-center transition-all cursor-pointer",
+                railView === "clients"
+                  ? "bg-[#3f3f42] text-white font-semibold shadow-xs"
+                  : "text-zinc-400 hover:text-zinc-200"
+              )}
+            >
+              Clients
+            </button>
           </div>
+        </div>
 
-          {isRailSearchOpen && (
-            <input
-              type="text"
-              value={railSearch}
-              onChange={(e) => setRailSearch(e.target.value)}
-              placeholder={railView === "all" ? "Search platforms..." : "Search clients..."}
-              className="w-full px-2.5 py-1 text-xs bg-zinc-900 border border-zinc-800 rounded-md text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-700"
-              autoFocus
-            />
+        {/* Right Side: Title & View All */}
+        <div className="flex-1 flex items-center justify-between w-full min-w-0">
+          <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
+            {title}
+          </p>
+          {viewAllHref && items.length > 0 && (
+            <Link
+              href={viewAllHref}
+              className="text-xs font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
+            >
+              View all →
+            </Link>
           )}
-
-          {/* BY CRM / BY CLIENT NAME PILL */}
-          <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-900/80 border border-zinc-800 text-xs text-zinc-300 font-medium">
-            <div className="flex items-center gap-2">
-              <GripVertical size={13} className="text-zinc-500 shrink-0" />
-              <span className="truncate">
-                {railView === "all" ? "By CRM / Platform" : "By Client Name"}
-              </span>
-            </div>
-            <ChevronDown size={13} className="text-zinc-500 shrink-0" />
-          </div>
         </div>
+      </div>
 
-        {/* SUB-LIST ITEMS */}
-        <div className="flex-1 overflow-y-auto space-y-0.5 pt-1 max-h-[360px] [scrollbar-width:none]">
-          {railView === "all" ? (
-            <>
-              <button
-                type="button"
-                onClick={() => { setSelectedCategory(null); setPage(0); }}
-                className={cn(
-                  "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
-                  selectedCategory === null
-                    ? "bg-[#3f3f42] text-white font-semibold"
-                    : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
-                )}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <Layers size={14} className="text-zinc-400 shrink-0" />
-                  <span className="truncate">Every platform</span>
-                </div>
-                <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
-                  {items.length}
-                </span>
-              </button>
+      {/* ----------------------------------------------------------------- */}
+      {/* MAIN CONTAINER FRAME (Integrated Rail + Table)                    */}
+      {/* ----------------------------------------------------------------- */}
+      <div className="border border-sidebar-border rounded-2xl bg-sidebar overflow-hidden flex flex-col md:flex-row min-h-[400px] w-full">
+        {/* 1. SEAMLESS INTEGRATED LEFT RAIL */}
+        <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-sidebar-border bg-sidebar p-3 flex flex-col shrink-0 space-y-3 select-none">
+          {/* GREY SCOPE CARD (Row 2 Aligned) */}
+          <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700/50 text-xs font-semibold text-zinc-100 shadow-xs">
+            <span>{railView === "all" ? "All queues" : "All clients"}</span>
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-700/80 text-zinc-200 font-bold tabular-nums">
+              {railView === "all" ? items.length : clients.length}
+            </span>
+          </div>
 
-              {filteredRailCategories.map((cat) => (
+          {/* LISTS / CLIENTS HEADER */}
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold text-zinc-300 tracking-tight">
+                {railView === "all" ? "Lists" : "Clients"}
+              </span>
+              <div className="flex items-center gap-1">
                 <button
-                  key={cat.id}
                   type="button"
-                  onClick={() => { setSelectedCategory(cat.id); setPage(0); }}
+                  onClick={() => setIsRailSearchOpen((p) => !p)}
+                  className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                  title="Search"
+                >
+                  <Search size={13} />
+                </button>
+                <Link
+                  href="/dashboard/engagements/new"
+                  className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  title="Add client"
+                >
+                  <Plus size={13} />
+                </Link>
+              </div>
+            </div>
+
+            {isRailSearchOpen && (
+              <input
+                type="text"
+                value={railSearch}
+                onChange={(e) => setRailSearch(e.target.value)}
+                placeholder={railView === "all" ? "Search platforms..." : "Search clients..."}
+                className="w-full px-2.5 py-1 text-xs bg-zinc-900 border border-zinc-800 rounded-md text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-700"
+                autoFocus
+              />
+            )}
+
+            {/* BY CRM / BY CLIENT NAME PILL */}
+            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-900/80 border border-zinc-800 text-xs text-zinc-300 font-medium">
+              <div className="flex items-center gap-2">
+                <GripVertical size={13} className="text-zinc-500 shrink-0" />
+                <span className="truncate">
+                  {railView === "all" ? "By CRM / Platform" : "By Client Name"}
+                </span>
+              </div>
+              <ChevronDown size={13} className="text-zinc-500 shrink-0" />
+            </div>
+          </div>
+
+          {/* SUB-LIST ITEMS */}
+          <div className="flex-1 overflow-y-auto space-y-0.5 pt-1 max-h-[360px] [scrollbar-width:none]">
+            {railView === "all" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedCategory(null); setPage(0); }}
                   className={cn(
                     "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
-                    selectedCategory === cat.id
+                    selectedCategory === null
                       ? "bg-[#3f3f42] text-white font-semibold"
                       : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                   )}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Layers size={14} className="text-zinc-400 shrink-0" />
-                    <span className="truncate">{cat.label}</span>
+                    <span className="truncate">Every platform</span>
                   </div>
                   <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
-                    {cat.count}
+                    {items.length}
                   </span>
                 </button>
-              ))}
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => { setSelectedClientId(null); setPage(0); }}
-                className={cn(
-                  "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
-                  selectedClientId === null
-                    ? "bg-[#3f3f42] text-white font-semibold"
-                    : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
-                )}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-5 h-5 rounded-[5px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0">
-                    <List className="w-3 h-3 stroke-[2.5]" />
-                  </div>
-                  <span className="truncate">All clients</span>
-                </div>
-                <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
-                  {clients.length}
-                </span>
-              </button>
 
-              {filteredRailClients.map((client) => (
+                {filteredRailCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => { setSelectedCategory(cat.id); setPage(0); }}
+                    className={cn(
+                      "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
+                      selectedCategory === cat.id
+                        ? "bg-[#3f3f42] text-white font-semibold"
+                        : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Layers size={14} className="text-zinc-400 shrink-0" />
+                      <span className="truncate">{cat.label}</span>
+                    </div>
+                    <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                      {cat.count}
+                    </span>
+                  </button>
+                ))}
+              </>
+            ) : (
+              <>
                 <button
-                  key={client.engagementId}
                   type="button"
-                  onClick={() => { setSelectedClientId(client.engagementId); setPage(0); }}
+                  onClick={() => { setSelectedClientId(null); setPage(0); }}
                   className={cn(
                     "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
-                    selectedClientId === client.engagementId
+                    selectedClientId === null
                       ? "bg-[#3f3f42] text-white font-semibold"
                       : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                   )}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-5 h-5 rounded-[5px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                    <div className="w-5 h-5 rounded-[5px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0">
                       <List className="w-3 h-3 stroke-[2.5]" />
                     </div>
-                    <span className="truncate">{client.buyer}</span>
+                    <span className="truncate">All clients</span>
                   </div>
-                  {client.count !== undefined && client.count > 0 && (
-                    <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
-                      {client.count}
-                    </span>
-                  )}
+                  <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                    {clients.length}
+                  </span>
                 </button>
-              ))}
-            </>
-          )}
-        </div>
-      </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* 2. FULL TABLE AREA (WITH TOOLBAR, TABS, ACTIONS & PAGINATION)     */}
-      {/* ----------------------------------------------------------------- */}
-      <div className="flex-1 flex flex-col min-w-0 bg-sidebar p-3 space-y-3">
-        {/* TABLE TOOLBAR */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <SegmentedTabs options={tabOptions} value={tab} onChange={(t) => { setTab(t); setPage(0); }} />
-          <TableSearchInput value={search} onChange={(s) => { setSearch(s); setPage(0); }} placeholder={toolbarCopy.searchPlaceholder} className="w-[180px]" />
-          <TimeRangeMenu value={timeRange} onChange={(r) => { setTimeRange(r); setPage(0); }} />
-          <div className="ml-auto flex items-center gap-1.5">
-            {tab !== "all" || search || timeRange !== "all" || activeChipIds.size > 0 ? (
-              <button
-                type="button"
-                onClick={() => { setTab("all"); setSearch(""); setTimeRange("all"); setActiveChipIds(new Set()); setPage(0); }}
-                className="text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
-              >
-                {sharedToolbarCopy.clearFiltersButton}
-              </button>
-            ) : null}
-            <ViewCustomizer
-              sections={customizerSections}
-              enabledIds={pinnedChipIds}
+                {filteredRailClients.map((client) => (
+                  <button
+                    key={client.engagementId}
+                    type="button"
+                    onClick={() => { setSelectedClientId(client.engagementId); setPage(0); }}
+                    className={cn(
+                      "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
+                      selectedClientId === client.engagementId
+                        ? "bg-[#3f3f42] text-white font-semibold"
+                        : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-5 h-5 rounded-[5px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                        <List className="w-3 h-3 stroke-[2.5]" />
+                      </div>
+                      <span className="truncate">{client.buyer}</span>
+                    </div>
+                    {client.count !== undefined && client.count > 0 && (
+                      <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                        {client.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* 2. FULL TABLE AREA */}
+        <div className="flex-1 flex flex-col min-w-0 bg-sidebar p-3 space-y-3">
+          {/* TABLE TOOLBAR */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <SegmentedTabs options={tabOptions} value={tab} onChange={(t) => { setTab(t); setPage(0); }} />
+            <TableSearchInput value={search} onChange={(s) => { setSearch(s); setPage(0); }} placeholder={toolbarCopy.searchPlaceholder} className="w-[180px]" />
+            <TimeRangeMenu value={timeRange} onChange={(r) => { setTimeRange(r); setPage(0); }} />
+            <div className="ml-auto flex items-center gap-1.5">
+              {tab !== "all" || search || timeRange !== "all" || activeChipIds.size > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => { setTab("all"); setSearch(""); setTimeRange("all"); setActiveChipIds(new Set()); setPage(0); }}
+                  className="text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  {sharedToolbarCopy.clearFiltersButton}
+                </button>
+              ) : null}
+              <ViewCustomizer
+                sections={customizerSections}
+                enabledIds={pinnedChipIds}
+                onToggle={(id) => {
+                  setPage(0);
+                  setSavedView((p) => {
+                    const s = new Set(p.pinnedChipIds);
+                    if (s.has(id)) s.delete(id); else s.add(id);
+                    return { ...p, pinnedChipIds: Array.from(s) };
+                  });
+                }}
+                menuTitle={sharedToolbarCopy.customizeMenuTitle}
+              />
+            </div>
+          </div>
+
+          {pinnedChips.length > 0 && (
+            <FilterChipBar
+              chips={pinnedChips}
+              activeIds={activeChipIds}
               onToggle={(id) => {
                 setPage(0);
-                setSavedView((p) => {
-                  const s = new Set(p.pinnedChipIds);
+                setActiveChipIds((prev) => {
+                  const s = new Set(prev);
                   if (s.has(id)) s.delete(id); else s.add(id);
-                  return { ...p, pinnedChipIds: Array.from(s) };
+                  return s;
                 });
               }}
-              menuTitle={sharedToolbarCopy.customizeMenuTitle}
             />
+          )}
+
+          {/* ROWS */}
+          {visibleItems.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-zinc-500 space-y-1">
+              <p className="text-sm font-medium">{sharedToolbarCopy.noResultsTitle}</p>
+              <p className="text-xs font-mono text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>
+            </div>
+          ) : (
+            <div className="flex-1 divide-y divide-sidebar-border border border-sidebar-border rounded-xl overflow-hidden bg-zinc-900/30">
+              {pagedGroups.map((group) => {
+                const expanded = expandedGroups.has(group.signature);
+                return (
+                  <Fragment key={group.signature}>
+                    {renderQueueRow(group.latest, {
+                      groupCount: group.count,
+                      groupExpanded: expanded,
+                      onToggleGroup: group.count > 1 ? () => toggleGroupExpanded(group.signature) : undefined,
+                    })}
+                    {expanded && group.items.slice(1).map((it) => renderQueueRow(it, { nested: true }))}
+                  </Fragment>
+                );
+              })}
+            </div>
+          )}
+
+          {/* PAGINATION / EXPAND VIEW MORE */}
+          <div className="flex items-center justify-between pt-2 border-t border-sidebar-border text-xs text-zinc-400">
+            {pageSize === 5 && queueGroups.length > 5 ? (
+              <button
+                type="button"
+                onClick={() => setSavedView((p) => ({ ...p, pageSize: 10 }))}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-sidebar-border text-zinc-300 hover:text-white hover:bg-zinc-800/60 transition-colors cursor-pointer"
+              >
+                View more ({queueGroups.length - 5} remaining)
+              </button>
+            ) : (
+              <div className="flex items-center gap-1 font-mono text-[10px]">
+                {([5, 10, 25, 50] as const).map((size) => (
+                  <button
+                    key={size}
+                    onClick={() => { setPage(0); setSavedView((p) => ({ ...p, pageSize: size })); }}
+                    className={cn(
+                      "px-1.5 py-0.5 rounded border transition-colors cursor-pointer",
+                      pageSize === size
+                        ? "border-zinc-600 bg-zinc-800 text-zinc-200"
+                        : "border-transparent hover:text-white"
+                    )}
+                  >
+                    {sharedToolbarCopy.pageSizeLabel(size)}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {queueGroups.length > pageSize && (
+              <div className="flex items-center gap-2 font-mono text-[11px] ml-auto">
+                <span>Page {clampedPage + 1} of {pageCount}</span>
+                <button
+                  onClick={() => setPage(Math.max(0, clampedPage - 1))}
+                  disabled={clampedPage === 0}
+                  className="px-2 py-1 rounded border border-sidebar-border text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                >
+                  ← Prev
+                </button>
+                <button
+                  onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}
+                  disabled={clampedPage >= pageCount - 1}
+                  className="px-2 py-1 rounded border border-sidebar-border text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
           </div>
         </div>
-
-        {pinnedChips.length > 0 && (
-          <FilterChipBar
-            chips={pinnedChips}
-            activeIds={activeChipIds}
-            onToggle={(id) => {
-              setPage(0);
-              setActiveChipIds((prev) => {
-                const s = new Set(prev);
-                if (s.has(id)) s.delete(id); else s.add(id);
-                return s;
-              });
-            }}
-          />
-        )}
-
-        {/* ROWS */}
-        {visibleItems.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center py-16 text-center text-zinc-500 space-y-1">
-            <p className="text-sm font-medium">{sharedToolbarCopy.noResultsTitle}</p>
-            <p className="text-xs font-mono text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>
-          </div>
-        ) : (
-          <div className="flex-1 divide-y divide-sidebar-border border border-sidebar-border rounded-xl overflow-hidden bg-zinc-900/30">
-            {pagedGroups.map((group) => {
-              const expanded = expandedGroups.has(group.signature);
-              return (
-                <Fragment key={group.signature}>
-                  {renderQueueRow(group.latest, {
-                    groupCount: group.count,
-                    groupExpanded: expanded,
-                    onToggleGroup: group.count > 1 ? () => toggleGroupExpanded(group.signature) : undefined,
-                  })}
-                  {expanded && group.items.slice(1).map((it) => renderQueueRow(it, { nested: true }))}
-                </Fragment>
-              );
-            })}
-          </div>
-        )}
-
-        {/* PAGINATION */}
-        {queueGroups.length > pageSize && (
-          <div className="flex items-center justify-between pt-2 border-t border-sidebar-border text-xs text-zinc-400">
-            <div className="flex items-center gap-1 font-mono text-[10px]">
-              {([10, 25, 50] as const).map((size) => (
-                <button
-                  key={size}
-                  onClick={() => { setPage(0); setSavedView((p) => ({ ...p, pageSize: size })); }}
-                  className={cn(
-                    "px-1.5 py-0.5 rounded border transition-colors cursor-pointer",
-                    pageSize === size
-                      ? "border-zinc-600 bg-zinc-800 text-zinc-200"
-                      : "border-transparent hover:text-white"
-                  )}
-                >
-                  {sharedToolbarCopy.pageSizeLabel(size)}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2 font-mono text-[11px]">
-              <span>Page {clampedPage + 1} of {pageCount}</span>
-              <button
-                onClick={() => setPage(Math.max(0, clampedPage - 1))}
-                disabled={clampedPage === 0}
-                className="px-2 py-1 rounded border border-sidebar-border text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
-              >
-                ← Prev
-              </button>
-              <button
-                onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}
-                disabled={clampedPage >= pageCount - 1}
-                className="px-2 py-1 rounded border border-sidebar-border text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
-              >
-                Next →
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
