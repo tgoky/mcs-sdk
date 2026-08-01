@@ -57,15 +57,22 @@ const RAIL_SECTIONS: Array<{ href: string; title: string; icon: LucideIcon }> = 
  * even though they also start with "/dashboard".
  */
 function activeSectionHref(pathname: string): string {
+  // If viewing a skill module detail page, keep Skills active on the primary rail
+  if (pathname.startsWith("/dashboard/modules")) {
+    return "/dashboard/skills";
+  }
+
   const nonRootMatches = RAIL_SECTIONS.filter(
     (s) => s.href !== "/dashboard" && (pathname === s.href || pathname.startsWith(`${s.href}/`))
   );
+
   if (nonRootMatches.length > 0) {
-    // Longest href wins if more than one prefix matches.
     return nonRootMatches.sort((a, b) => b.href.length - a.href.length)[0].href;
   }
+
   return "/dashboard";
 }
+
 
 export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);

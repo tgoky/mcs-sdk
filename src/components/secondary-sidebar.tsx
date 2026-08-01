@@ -19,6 +19,7 @@ const SECTION_PREFIXES: Array<{ key: SectionKey; prefix: string }> = [
   { key: "analytics", prefix: "/dashboard/analytics" },
   { key: "strategy", prefix: "/dashboard/strategy" },
   { key: "skills", prefix: "/dashboard/skills" },
+  { key: "skills", prefix: "/dashboard/modules" }, // 👈 Map /dashboard/modules to the Skills section
   { key: "meetings", prefix: "/dashboard/meetings" },
 ];
 
