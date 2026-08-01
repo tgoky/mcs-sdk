@@ -719,11 +719,11 @@ export function QueuePanel({
   }, [clientRailItems, railSearch]);
 
   return (
-    <div className="border border-zinc-800 rounded-2xl bg-[#121315] overflow-hidden flex flex-col md:flex-row min-h-[500px] w-full font-sans antialiased text-zinc-300">
+<div className="border border-sidebar-border rounded-2xl bg-sidebar overflow-hidden flex flex-col md:flex-row min-h-[500px] w-full font-sans antialiased text-zinc-300">
       {/* ----------------------------------------------------------------- */}
       {/* 1. SEAMLESS INTEGRATED LEFT RAIL                                  */}
       {/* ----------------------------------------------------------------- */}
-      <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-zinc-800 bg-[#18191b] p-3 flex flex-col shrink-0 space-y-3 select-none">
+      <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-sidebar-border bg-sidebar p-3 flex flex-col shrink-0 space-y-3 select-none">
         {/* TOP TOGGLE SWITCH: [ All | Clients ] */}
         <div className="grid grid-cols-2 p-1 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-medium">
           <button

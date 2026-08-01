@@ -71,7 +71,7 @@ export function IntegratedRail({
   }, [clients, searchQuery]);
 
   return (
-    <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-zinc-800 bg-[#18191b] p-3 flex flex-col shrink-0 space-y-3 select-none text-zinc-300">
+   <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-sidebar-border bg-sidebar p-3 flex flex-col shrink-0 space-y-3 select-none text-zinc-300">
       {/* 1. TOP TOGGLE SWITCH: [ All | Clients ] */}
       <div className="grid grid-cols-2 p-1 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-medium">
         <button
