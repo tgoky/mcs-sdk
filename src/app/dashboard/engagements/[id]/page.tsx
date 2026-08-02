@@ -13,7 +13,7 @@ import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
 import { RunRowActions } from "./run-row-actions";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
-import { WinBackRevenueSection } from "./win-back-revenue-section";
+// import { WinBackRevenueSection } from "./win-back-revenue-section";
 import { 
   CheckCircle2, 
   XCircle, 
@@ -366,12 +366,12 @@ export default async function EngagementDetailPage({
       )}
 
       {/* Win-Back Revenue Recovered */}
- <WinBackRevenueSection
+ {/* <WinBackRevenueSection
         engagementId={engagement.engagementId}
         offerPrice={revenueAttribution.offerPrice}
         initialEnrollments={revenueAttribution.recoveredEnrollments}
         initialPeriodLabel={revenueAttribution.periodLabel}
-      />
+      /> */}
 
       {/* Runtime Ownership */}
       {artifactRows.length > 0 && (
