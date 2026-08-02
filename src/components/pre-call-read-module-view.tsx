@@ -321,13 +321,13 @@ export function PreCallReadModuleView({
 
         {/* Live Controls + List/Board View Switcher */}
         <div className="flex items-center gap-2.5">
-          <button
+          {/* <button
             type="button"
             onClick={() => setPolling((p) => !p)}
             className="text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
           >
             {polling ? "● Live" : "Paused"}
-          </button>
+          </button> */}
 
           <button
             type="button"
