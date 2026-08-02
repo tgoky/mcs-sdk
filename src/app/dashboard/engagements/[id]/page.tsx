@@ -13,7 +13,6 @@ import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
 import { RunRowActions } from "./run-row-actions";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
-// import { WinBackRevenueSection } from "./win-back-revenue-section";
 import { 
   CheckCircle2, 
   XCircle, 
@@ -21,7 +20,11 @@ import {
   AlertCircle, 
   ArrowRight, 
   Server, 
-  DollarSign,
+  MapPin,
+  Layers,
+  FileText,
+  RotateCcw,
+  Filter,
 } from "lucide-react";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
@@ -44,13 +47,42 @@ import {
 
 export const revalidate = 0;
 
-const SKILL_BADGES: Record<string, { label: string; bgClass: string }> = {
-  "pin-down": { label: "PD", bgClass: "bg-[#fcd34d]" },
-  "pile-on": { label: "PO", bgClass: "bg-[#c084fc]" },
-  "pre-call-read": { label: "PR", bgClass: "bg-[#f2a8e4]" },
-  "win-back": { label: "WB", bgClass: "bg-[#fb7185]" },
-  "leak-map": { label: "LM", bgClass: "bg-[#38bdf8]" },
+// ---------------------------------------------------------------------------
+// Squishy Badge Icon Hack Configuration
+// ---------------------------------------------------------------------------
+const SKILL_SQUISHY_CONFIG: Record<
+  string,
+  { label: string; bgClass: string; icon: React.ElementType }
+> = {
+  "pin-down": { label: "PD", bgClass: "bg-[#fcd34d]", icon: MapPin },
+  "pile-on": { label: "PO", bgClass: "bg-[#c084fc]", icon: Layers },
+  "pre-call-read": { label: "PR", bgClass: "bg-[#f2a8e4]", icon: FileText },
+  "win-back": { label: "WB", bgClass: "bg-[#fb7185]", icon: RotateCcw },
+  "leak-map": { label: "LM", bgClass: "bg-[#38bdf8]", icon: Filter },
 };
+
+function SquishySkillBadge({ skill, size = 36 }: { skill: string; size?: number }) {
+  const config = SKILL_SQUISHY_CONFIG[skill];
+  if (!config) return null;
+
+  const Icon = config.icon;
+  const iconSize = Math.round(size * 0.54);
+
+  return (
+    <div
+      className={`flex items-center justify-center rounded-full ${config.bgClass} shadow-xs shrink-0 select-none`}
+      style={{ width: size, height: size }}
+      title={skillName(skill)}
+    >
+      <Icon
+        size={iconSize}
+        className="text-zinc-950 stroke-[2.3px] fill-white"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </div>
+  );
+}
 
 function deriveModuleStatus(runs: { status: string }[]): ModuleStatus {
   if (runs.length === 0) return "not_run";
@@ -165,7 +197,7 @@ export default async function EngagementDetailPage({
     buyer: "Exported to buyer's infra",
   };
 
-  const revenueAttribution = await computeWinBackRevenueAttribution(id);
+  await computeWinBackRevenueAttribution(id);
 
   // Cleaned Offer Metadata values
   const offerName = String(offerDetails?.name || "").trim() || "Unspecified Offer";
@@ -281,7 +313,7 @@ export default async function EngagementDetailPage({
         </div>
       )}
 
-      {/* Modules Selector Grid */}
+      {/* Modules Selector Grid with Squishy Badges */}
       <div className="space-y-2">
         <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">Modules</h2>
 
@@ -294,13 +326,16 @@ export default async function EngagementDetailPage({
 
             return (
               <div key={skill} className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-4 flex flex-col justify-between min-h-[190px] shadow-xs">
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-0.5 min-w-0">
-                      <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">{info.name}</p>
-                      <p className="text-[11px] font-normal text-zinc-500 dark:text-zinc-400 leading-snug">{info.description}</p>
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <SquishySkillBadge skill={skill} size={38} />
+                      <div className="space-y-0.5 min-w-0">
+                        <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">{info.name}</p>
+                        <p className="text-[11px] font-normal text-zinc-500 dark:text-zinc-400 leading-snug line-clamp-2">{info.description}</p>
+                      </div>
                     </div>
-                    <span className={`text-[11px] font-mono font-bold shrink-0 px-2 py-0.5 bg-zinc-100 dark:bg-zinc-900 rounded-md border border-zinc-200 dark:border-zinc-800 ml-2 ${MODULE_STATUS_COLORS[status]}`}>
+                    <span className={`text-[10px] font-mono font-bold shrink-0 px-2 py-0.5 bg-zinc-100 dark:bg-zinc-900 rounded-md border border-zinc-200 dark:border-zinc-800 ${MODULE_STATUS_COLORS[status]}`}>
                       {MODULE_STATUS_LABELS[status]}
                     </span>
                   </div>
@@ -398,7 +433,7 @@ export default async function EngagementDetailPage({
         </div>
       )}
 
-      {/* Run History */}
+      {/* Run History with Squishy Skill Badges */}
       {runs.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -412,7 +447,6 @@ export default async function EngagementDetailPage({
             <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
               {runs.slice(0, 20).map((run) => {
                 const isFailed = run.status.toLowerCase() === "failed";
-                const badge = SKILL_BADGES[run.skillName];
 
                 return (
                   <li key={run.id} className="group relative">
@@ -442,18 +476,12 @@ export default async function EngagementDetailPage({
                             </div>
                           )}
                         </div>
+
                         <div
                           className="shrink-0 flex items-center gap-2 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 pt-0.5"
                           title={new Date(run.startedAt).toLocaleString()}
                         >
-                          {badge && (
-                            <span
-                              className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[9px] font-bold text-zinc-950 ${badge.bgClass} shadow-xs shrink-0`}
-                              title={skillName(run.skillName)}
-                            >
-                              {badge.label}
-                            </span>
-                          )}
+                          <SquishySkillBadge skill={run.skillName} size={22} />
                           <span>{relativeTime(String(run.startedAt))}</span>
                           <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
                           <RunRowActions
