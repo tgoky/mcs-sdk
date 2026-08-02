@@ -382,7 +382,7 @@ export function PileOnModuleView({
             <thead>
               <tr className="border-b border-zinc-800/80 text-[11px] text-zinc-400">
                 <th className="px-4 py-3 font-normal">Name & Diagnostic Action</th>
-                <th className="px-4 py-3 font-normal text-center w-24">Members</th>
+                <th className="px-4 py-3 font-normal text-center w-24">Skill</th>
                 <th className="px-4 py-3 font-normal text-right">Status</th>
                 <th className="w-10 px-2" />
               </tr>
