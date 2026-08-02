@@ -65,8 +65,8 @@ export default async function ModulePage({
   const manifest = SKILL_MANIFEST[skill];
 
   return (
-    /* Removed p-6 top padding and max-w restriction so it spans cleanly and sits right at the top */
-    <div className="w-full pt-1 px-4 sm:px-6 pb-6 space-y-4 font-sans antialiased text-zinc-100">
+    /* -mt-6 -mx-6 pulls the view past the dashboard layout's top padding and centered margins */
+    <div className="w-full max-w-none -mt-6 -mx-2 sm:-mx-6 pt-0 px-2 sm:px-6 pb-6 font-sans antialiased text-zinc-100">
       {skill === "pin-down" && (
         <PinDownModuleView summaries={clientSummaries} manifest={manifest} />
       )}
