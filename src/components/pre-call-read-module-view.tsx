@@ -9,7 +9,7 @@ import {
   TrendingUp,
   AlertCircle,
   Edit2,
-  ChevronRight,
+  List,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "@/app/dashboard/runs/[id]/_shared/view-switcher";
@@ -39,20 +39,19 @@ export function PreCallReadModuleView({
   summaries: ModuleClientSummary[];
   manifest: SkillManifestEntry;
 }) {
-  // 1. Drop calendar view — List is now default
   const [mode, setMode] = useState<RunViewMode>("list");
   const [filterText, setFilterText] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
   const [selectedClient, setSelectedClient] = useState<ModuleClientSummary | null>(null);
 
   // ---------------------------------------------------------------------------
-  // 2. COMPUTED METRICS (4 THIN CARDS)
+  // 1. COMPUTED METRICS
   // ---------------------------------------------------------------------------
   const metrics = useMemo(() => {
     const totalAccounts = summaries.length;
     const activeAccounts = summaries.filter((s) => s.skillEnabled && !s.pausedAt).length;
-    const totalAttempts = summaries.reduce((acc, s) => a + s.totalRuns, 0);
-    const totalFailures = summaries.reduce((acc, s) => a + s.consecutiveFailures, 0);
+    const totalAttempts = summaries.reduce((acc, s) => acc + s.totalRuns, 0);
+    const totalFailures = summaries.reduce((acc, s) => acc + s.consecutiveFailures, 0);
     const briefsDelivered = Math.max(0, totalAttempts - totalFailures);
     const failingCount = summaries.filter((s) => s.consecutiveFailures > 0).length;
     const deliveryRate = totalAttempts > 0 ? Math.round((briefsDelivered / totalAttempts) * 100) : 100;
@@ -67,7 +66,7 @@ export function PreCallReadModuleView({
   }, [summaries]);
 
   // ---------------------------------------------------------------------------
-  // 3. FILTERED CLIENTS
+  // 2. FILTERED CLIENTS
   // ---------------------------------------------------------------------------
   const filtered = useMemo(() => {
     return summaries.filter((s) => {
@@ -86,18 +85,16 @@ export function PreCallReadModuleView({
   return (
     <div className="space-y-5 font-sans antialiased text-zinc-100">
       {/* Module Title Header */}
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+      <div className="flex items-center justify-between border-b border-zinc-800/80 pb-4">
         <div>
           <h1 className="text-xl font-bold text-white tracking-tight">{manifest.name} Module</h1>
           <p className="text-xs text-zinc-400 mt-0.5">{manifest.description}</p>
         </div>
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* 4 THIN METRIC CARDS                                              */}
-      {/* ----------------------------------------------------------------- */}
+      {/* 4 Thin Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-800 bg-zinc-950 shadow-sm">
+        <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-800/80 bg-[#18191b] shadow-xs">
           <div>
             <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Active Accounts</p>
             <p className="text-base font-bold text-white mt-0.5">
@@ -107,7 +104,7 @@ export function PreCallReadModuleView({
           <Building2 size={16} className="text-zinc-500 shrink-0" />
         </div>
 
-        <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-800 bg-zinc-950 shadow-sm">
+        <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-800/80 bg-[#18191b] shadow-xs">
           <div>
             <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Briefs Delivered</p>
             <p className="text-base font-bold text-emerald-400 mt-0.5">{metrics.briefsDelivered}</p>
@@ -115,7 +112,7 @@ export function PreCallReadModuleView({
           <FileText size={16} className="text-emerald-500/70 shrink-0" />
         </div>
 
-        <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-800 bg-zinc-950 shadow-sm">
+        <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-800/80 bg-[#18191b] shadow-xs">
           <div>
             <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Delivery Rate</p>
             <p className="text-base font-bold text-white mt-0.5">{metrics.deliveryRate}%</p>
@@ -123,7 +120,7 @@ export function PreCallReadModuleView({
           <TrendingUp size={16} className="text-sky-500/70 shrink-0" />
         </div>
 
-        <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-800 bg-zinc-950 shadow-sm">
+        <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-800/80 bg-[#18191b] shadow-xs">
           <div>
             <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Needs Attention</p>
             <p className={cn("text-base font-bold mt-0.5", metrics.failingCount > 0 ? "text-rose-400" : "text-zinc-400")}>
@@ -135,23 +132,23 @@ export function PreCallReadModuleView({
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* ASANA-STYLE TOOLBAR: SEARCH + STATUS PILLS                       */}
+      {/* ASANA TOOLBAR: PILL SEARCH + PILL STATUSES                        */}
       {/* ----------------------------------------------------------------- */}
-      <div className="space-y-2.5">
-        {/* Full-width Search Input */}
+      <div className="space-y-3">
+        {/* Full-width Pill Search Input (Matching screenshot) */}
         <div className="relative w-full">
-          <Search size={14} className="absolute left-3.5 top-3 text-zinc-500" />
+          <Search size={15} className="absolute left-3.5 top-3 text-zinc-400" />
           <input
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
-            placeholder="Find a client..."
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2.5 pl-10 pr-4 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none transition-colors"
+            placeholder="Find a project or client..."
+            className="w-full rounded-full border border-zinc-800 bg-[#18191b] py-2.5 pl-10 pr-4 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none transition-colors"
           />
         </div>
 
-        {/* Filter Pills + Mode Switcher */}
+        {/* Filter Pills + View Switcher */}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+          <div className="flex items-center gap-2 overflow-x-auto py-0.5">
             {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
               const isActive = statusFilter === tab;
               const labels: Record<FilterStatus, string> = {
@@ -167,10 +164,10 @@ export function PreCallReadModuleView({
                   type="button"
                   onClick={() => setStatusFilter(tab)}
                   className={cn(
-                    "px-3 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap",
+                    "px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap",
                     isActive
                       ? "bg-zinc-800 border-zinc-700 text-white font-semibold"
-                      : "bg-zinc-950/60 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700"
+                      : "bg-[#18191b] border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700"
                   )}
                 >
                   {labels[tab]}
@@ -184,19 +181,19 @@ export function PreCallReadModuleView({
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* ASANA-STYLE CURATED LIST VIEW                                    */}
+      {/* ASANA-STYLE CURATED LIST VIEW (MATCHING SCREENSHOT)               */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl font-sans">
+        <div className="overflow-hidden rounded-xl border-t border-b border-zinc-800/80 bg-[#18191b] font-sans">
           <table className="w-full text-left text-xs font-sans">
             <thead>
-              <tr className="border-b border-zinc-800/80 text-[10px] uppercase tracking-wider text-zinc-500 bg-zinc-900/40">
-                <th className="px-4 py-3 font-semibold">Name</th>
-                <th className="px-4 py-3 font-semibold text-center w-24">Members</th>
-                <th className="px-4 py-3 font-semibold text-right">Status</th>
+              <tr className="border-b border-zinc-800/80 text-[11px] text-zinc-400">
+                <th className="px-4 py-3 font-normal">Name</th>
+                <th className="px-4 py-3 font-normal text-center w-28">Members</th>
+                <th className="px-4 py-3 font-normal text-right">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-900">
+            <tbody className="divide-y divide-zinc-800/50">
               {filtered.map((c) => {
                 const isFailing = c.consecutiveFailures > 0;
                 const tone = isFailing ? "danger" : c.lastStatus === "success" ? "success" : "neutral";
@@ -206,44 +203,44 @@ export function PreCallReadModuleView({
                   <tr
                     key={c.engagementId}
                     onClick={() => setSelectedClient(c)}
-                    className="group hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                    className="group hover:bg-zinc-800/40 transition-colors cursor-pointer"
                   >
-                    {/* Name Column */}
-                    <td className="px-4 py-3">
+                    {/* Name Column with Teal List Badge + Green Status Subtext */}
+                    <td className="px-4 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 group-hover:border-zinc-700 group-hover:text-amber-400 transition-colors shrink-0">
-                          <Building2 size={14} />
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-950/60 border border-teal-800/50 text-teal-400 shrink-0">
+                          <List size={15} />
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-white group-hover:text-amber-300 transition-colors truncate">
                             {c.buyerName}
                           </p>
-                          <p className="text-[10.5px] font-mono text-zinc-500 truncate mt-0.5">
-                            Last run {formatRelativeTime(c.lastRunAt)} · {c.totalRuns} briefs total
+                          <p className="text-[11px] font-sans text-emerald-400 font-medium truncate mt-0.5">
+                            {isFailing ? `Failing (${c.consecutiveFailures} nights)` : `Active · Last run ${formatRelativeTime(c.lastRunAt)}`}
                           </p>
                         </div>
                       </div>
                     </td>
 
-                    {/* Members Column (Pink "PR" Skill Avatar Badge) */}
-                    <td className="px-4 py-3 text-center">
+                    {/* Members Column (Solid Pink Circle Avatar with Dark Text) */}
+                    <td className="px-4 py-3.5 text-center">
                       <span
-                        className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold font-mono text-pink-200 bg-pink-950/80 border border-pink-700/60 shadow-xs"
+                        className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-pink-300 shadow-xs"
                         title="Pre-Call Read Module"
                       >
                         PR
                       </span>
                     </td>
 
-                    {/* Status & Action Link Column */}
-                    <td className="px-4 py-3 text-right">
+                    {/* Status & Edit Link Column */}
+                    <td className="px-4 py-3.5 text-right">
                       <div className="inline-flex items-center gap-2">
                         <StatusPill tone={tone}>{statusLabel}</StatusPill>
 
                         <Link
                           href={`/dashboard/engagements/${c.engagementId}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="p-1 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                          className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
                           title="Open Client Settings"
                         >
                           <Edit2 size={13} />
