@@ -98,7 +98,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
         ]
       : [];
 
-    // 3. Creative Assets (UNROLLED: Every brief and script is its OWN individual card)
+    // 3. Creative Assets
     const creativeCards: InspectableCard[] = [];
 
     briefs.forEach((b) => {
@@ -190,7 +190,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Search briefs, scripts, or terms..."
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs font-sans text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
           />
         </div>
 
@@ -205,7 +205,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
           {/* Hero Deployment Banner */}
           <div
             className={cn(
-              "flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 shadow-xl transition-all",
+              "flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 shadow-xl transition-all font-sans",
               isLive && "border-emerald-900/50 bg-emerald-950/10",
               isPasteReady && "border-sky-900/50 bg-sky-950/10",
               isPending && "border-orange-900/50 bg-orange-950/10",
@@ -225,7 +225,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                 <Globe size={16} />
               </div>
               <div>
-                <p className="text-sm font-bold text-white">
+                <p className="text-sm font-bold text-white font-sans">
                   {isLive && "Published Live on Buyer Stack"}
                   {isPasteReady && "Paste-Ready Code Generated"}
                   {isPending && "Pending Manual Approval"}
@@ -245,7 +245,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                 href={run.confirmationPageUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-zinc-950 hover:bg-emerald-400 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-zinc-950 hover:bg-emerald-400 transition-colors font-sans"
               >
                 Open live page <ExternalLink size={12} />
               </a>
@@ -253,7 +253,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
           </div>
 
           {/* 2x2 Deliverables Grid */}
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 font-sans">
             <PrimaryOutputCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
             <BrandVoiceCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
             <PlatformSyncCard run={run} />
@@ -268,10 +268,10 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
       {/* 3. DENSE LIST VIEW                                                */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
-          <table className="w-full text-left text-xs">
+        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 font-sans">
+          <table className="w-full text-left text-xs font-sans">
             <thead>
-              <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500 bg-zinc-900/50">
+              <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500 bg-zinc-900/50 font-sans">
                 <th className="px-4 py-2 font-semibold">Deliverable Type</th>
                 <th className="px-4 py-2 font-semibold">Asset Details</th>
                 <th className="px-4 py-2 font-semibold">Status / Target</th>
@@ -283,10 +283,10 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                 col.cards.map((card) => (
                   <tr
                     key={card.id}
-                    className="border-b border-zinc-900 last:border-b-0 hover:bg-zinc-900/40 cursor-pointer transition-colors"
+                    className="border-b border-zinc-900 last:border-b-0 hover:bg-zinc-900/40 cursor-pointer transition-colors font-sans"
                     onClick={() => setActiveDrawerCard(card)}
                   >
-                    <td className="px-4 py-2.5 font-medium text-white flex items-center gap-2">
+                    <td className="px-4 py-2.5 font-medium text-white flex items-center gap-2 font-sans">
                       {card.type === "brief" && <Megaphone size={12} className="text-amber-400" />}
                       {card.type === "script" && <Film size={12} className="text-sky-400" />}
                       {card.type === "deployment" && <Code2 size={12} className="text-emerald-400" />}
@@ -301,14 +301,14 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                     <td className="px-4 py-2.5 font-mono text-zinc-400">
                       {card.badge && <StatusPill tone={card.tone ?? "neutral"}>{card.badge}</StatusPill>}
                     </td>
-                    <td className="px-4 py-2.5 text-right">
+                    <td className="px-4 py-2.5 text-right font-sans">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveDrawerCard(card);
                         }}
-                        className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer"
+                        className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer font-sans"
                       >
                         Inspect
                       </button>
@@ -325,11 +325,11 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
       {/* 4. ASANA KANBAN BOARD VIEW (UNROLLED CARDS + DRAWER TRIGGER)      */}
       {/* ----------------------------------------------------------------- */}
       {mode === "board" && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 font-sans">
           {boardColumns.map((col) => (
-            <div key={col.id} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 flex flex-col gap-2">
-              <div className="flex items-center justify-between px-1 mb-1">
-                <span className="text-xs font-bold text-zinc-300">{col.title}</span>
+            <div key={col.id} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 flex flex-col gap-2 font-sans">
+              <div className="flex items-center justify-between px-1 mb-1 font-sans">
+                <span className="text-xs font-bold text-zinc-300 font-sans">{col.title}</span>
                 <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
                   {col.cards.length}
                 </span>
@@ -341,17 +341,17 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                     key={card.id}
                     type="button"
                     onClick={() => setActiveDrawerCard(card)}
-                    className="w-full text-left rounded-xl border border-zinc-800 bg-zinc-900/90 hover:border-zinc-700 p-3 transition-all cursor-pointer group shadow-sm flex flex-col gap-1.5"
+                    className="w-full text-left rounded-xl border border-zinc-800 bg-zinc-900/90 hover:border-zinc-700 p-3 transition-all cursor-pointer group shadow-sm flex flex-col gap-1.5 font-sans"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors flex items-center gap-1.5">
+                      <p className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors flex items-center gap-1.5 font-sans">
                         {card.type === "brief" && <Megaphone size={12} className="text-amber-400 shrink-0" />}
                         {card.type === "script" && <Film size={12} className="text-sky-400 shrink-0" />}
                         {card.type === "deployment" && <Globe size={12} className="text-emerald-400 shrink-0" />}
                         {card.type === "voice" && <Palette size={12} className="text-amber-400 shrink-0" />}
                         {card.type === "stack" && <Webhook size={12} className="text-emerald-400 shrink-0" />}
                         {card.type === "audit" && <ScanSearch size={12} className="text-sky-400 shrink-0" />}
-                        <span className="truncate">{card.title}</span>
+                        <span className="truncate font-sans">{card.title}</span>
                       </p>
                       <Maximize2 size={12} className="text-zinc-600 group-hover:text-zinc-300 shrink-0 mt-0.5" />
                     </div>
@@ -373,7 +373,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                 ))}
 
                 {col.cards.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-zinc-900 p-4 text-center text-[10px] text-zinc-600">
+                  <div className="rounded-xl border border-dashed border-zinc-900 p-4 text-center text-[10px] text-zinc-600 font-sans">
                     No items in this stage
                   </div>
                 )}
@@ -397,7 +397,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
 }
 
 // ---------------------------------------------------------------------------
-// ASANA TASK DETAIL DRAWER (SLIDE-OVER SHEET)
+// ASANA TASK DETAIL DRAWER (STRICT FONT PERSISTENCE ON PORTAL ROOT)
 // ---------------------------------------------------------------------------
 function PinDownDetailDrawer({
   card,
@@ -412,12 +412,13 @@ function PinDownDetailDrawer({
 }) {
   return (
     <Sheet open={!!card} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent widthClassName="w-full sm:max-w-xl">
+      {/* Explicit font-sans antialiased text-zinc-100 on the portal root prevents font mismatch */}
+      <SheetContent widthClassName="w-full sm:max-w-xl font-sans antialiased text-zinc-100">
         {card && (
-          <>
-            <SheetHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-amber-400">
+          <div className="flex flex-col h-full font-sans antialiased">
+            <SheetHeader className="font-sans">
+              <div className="flex items-center justify-between font-sans">
+                <div className="flex items-center gap-2 text-amber-400 font-sans">
                   <Sliders size={15} />
                   <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
                     Pin-Down Deliverable
@@ -426,17 +427,17 @@ function PinDownDetailDrawer({
                 {card.badge && <StatusPill tone={card.tone ?? "neutral"}>{card.badge}</StatusPill>}
               </div>
 
-              <SheetTitle className="mt-2 text-lg font-bold text-white">{card.title}</SheetTitle>
+              <SheetTitle className="mt-2 text-lg font-bold text-white font-sans">{card.title}</SheetTitle>
               {card.subtitle && (
                 <SheetDescription className="text-xs text-zinc-400 font-sans">{card.subtitle}</SheetDescription>
               )}
             </SheetHeader>
 
-            <SheetBody className="space-y-4 pt-2">
+            <SheetBody className="space-y-4 pt-2 font-sans">
               {/* Brief Content */}
               {card.type === "brief" && (
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
+                <div className="space-y-3 font-sans">
+                  <div className="flex justify-between items-center font-sans">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">Ad Creative Copy</span>
                     <button
                       type="button"
@@ -452,20 +453,20 @@ function PinDownDetailDrawer({
                       <span>{copiedKey === "drawer-brief" ? "Copied" : "Copy Brief"}</span>
                     </button>
                   </div>
-                  <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/80 p-4 text-xs text-zinc-200">
-                    <p><strong className="text-zinc-400">Pillar:</strong> {PILLAR_LABEL[card.payload.pillar] ?? card.payload.pillar}</p>
-                    <p><strong className="text-zinc-400">Hook:</strong> {card.payload.hook}</p>
-                    <p><strong className="text-zinc-400">Angle:</strong> {card.payload.angle}</p>
-                    <p><strong className="text-zinc-400">Format:</strong> {card.payload.suggestedFormat}</p>
-                    <p><strong className="text-zinc-400">CTA:</strong> {card.payload.cta}</p>
+                  <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/80 p-4 text-xs text-zinc-200 font-sans">
+                    <p><strong className="text-zinc-400 font-sans">Pillar:</strong> {PILLAR_LABEL[card.payload.pillar] ?? card.payload.pillar}</p>
+                    <p><strong className="text-zinc-400 font-sans">Hook:</strong> {card.payload.hook}</p>
+                    <p><strong className="text-zinc-400 font-sans">Angle:</strong> {card.payload.angle}</p>
+                    <p><strong className="text-zinc-400 font-sans">Format:</strong> {card.payload.suggestedFormat}</p>
+                    <p><strong className="text-zinc-400 font-sans">CTA:</strong> {card.payload.cta}</p>
                   </div>
                 </div>
               )}
 
               {/* Script Content */}
               {card.type === "script" && (
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
+                <div className="space-y-3 font-sans">
+                  <div className="flex justify-between items-center font-sans">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">Full Video Script</span>
                     <button
                       type="button"
@@ -485,16 +486,16 @@ function PinDownDetailDrawer({
                   </div>
 
                   {"chapters" in card.payload ? (
-                    <div className="space-y-2">
+                    <div className="space-y-2 font-sans">
                       {card.payload.chapters.map((chap: any, idx: number) => (
-                        <div key={idx} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-300">
-                          <p className="font-bold text-amber-400 mb-1">{chap.title}</p>
-                          <p className="whitespace-pre-wrap leading-relaxed">{chap.script}</p>
+                        <div key={idx} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-300 font-sans">
+                          <p className="font-bold text-amber-400 mb-1 font-sans">{chap.title}</p>
+                          <p className="whitespace-pre-wrap leading-relaxed font-sans">{chap.script}</p>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-300 whitespace-pre-wrap">
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-300 font-sans whitespace-pre-wrap">
                       {card.payload.script}
                     </div>
                   )}
@@ -503,8 +504,8 @@ function PinDownDetailDrawer({
 
               {/* Deployment / HTML */}
               {card.type === "deployment" && (
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
+                <div className="space-y-3 font-sans">
+                  <div className="flex justify-between items-center font-sans">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">Page Code / Target</span>
                     {card.payload.html && (
                       <button
@@ -523,9 +524,9 @@ function PinDownDetailDrawer({
                       href={card.payload.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-between p-3 rounded-xl border border-emerald-900/50 bg-emerald-950/20 text-xs font-bold text-emerald-400 hover:bg-emerald-950/40 transition-colors"
+                      className="flex items-center justify-between p-3 rounded-xl border border-emerald-900/50 bg-emerald-950/20 text-xs font-bold text-emerald-400 hover:bg-emerald-950/40 transition-colors font-sans"
                     >
-                      <span>Open Live Deployed Page</span>
+                      <span className="font-sans">Open Live Deployed Page</span>
                       <ExternalLink size={13} />
                     </a>
                   )}
@@ -537,7 +538,7 @@ function PinDownDetailDrawer({
                   )}
 
                   {card.payload.instructions && (
-                    <p className="text-xs text-zinc-400 leading-relaxed bg-zinc-900/80 border border-zinc-800 p-3 rounded-xl">
+                    <p className="text-xs text-zinc-400 leading-relaxed bg-zinc-900/80 border border-zinc-800 p-3 rounded-xl font-sans">
                       {card.payload.instructions}
                     </p>
                   )}
@@ -546,14 +547,14 @@ function PinDownDetailDrawer({
 
               {/* Voice Profile */}
               {card.type === "voice" && (
-                <div className="space-y-3 text-xs text-zinc-300">
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3.5 space-y-2">
-                    <p><strong className="text-zinc-400">Formal/Casual:</strong> {card.payload.tone.formal_casual.score}/5 ({card.payload.tone.formal_casual.note})</p>
-                    <p><strong className="text-zinc-400">Technical/Plain:</strong> {card.payload.tone.technical_plain.score}/5 ({card.payload.tone.technical_plain.note})</p>
-                    <p><strong className="text-zinc-400">Warm/Neutral:</strong> {card.payload.tone.warm_neutral.score}/5 ({card.payload.tone.warm_neutral.note})</p>
+                <div className="space-y-3 text-xs text-zinc-300 font-sans">
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3.5 space-y-2 font-sans">
+                    <p><strong className="text-zinc-400 font-sans">Formal/Casual:</strong> {card.payload.tone.formal_casual.score}/5 ({card.payload.tone.formal_casual.note})</p>
+                    <p><strong className="text-zinc-400 font-sans">Technical/Plain:</strong> {card.payload.tone.technical_plain.score}/5 ({card.payload.tone.technical_plain.note})</p>
+                    <p><strong className="text-zinc-400 font-sans">Warm/Neutral:</strong> {card.payload.tone.warm_neutral.score}/5 ({card.payload.tone.warm_neutral.note})</p>
                   </div>
 
-                  <div>
+                  <div className="font-sans">
                     <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1.5">Signature Tokens</span>
                     <div className="flex flex-wrap gap-1">
                       {card.payload.vocabulary.signature.map((token: string) => (
@@ -569,35 +570,35 @@ function PinDownDetailDrawer({
               {/* Stack Sync */}
               {card.type === "stack" && (
                 <div className="space-y-2 text-xs text-zinc-300 rounded-xl border border-zinc-800 bg-zinc-900/80 p-3.5 font-mono">
-                  <p><strong className="text-zinc-500">Booking Platform:</strong> {bookingPlatformLabel(card.payload?.booking_platform)}</p>
-                  <p><strong className="text-zinc-500">Hosting Platform:</strong> {hostingPlatformLabel(card.payload?.hosting_platform)}</p>
-                  <p><strong className="text-zinc-500">Webhook Receiver Mode:</strong> {card.payload?.webhook_receiver_mode ?? "none"}</p>
+                  <p><strong className="text-zinc-500 font-mono">Booking Platform:</strong> {bookingPlatformLabel(card.payload?.booking_platform)}</p>
+                  <p><strong className="text-zinc-500 font-mono">Hosting Platform:</strong> {hostingPlatformLabel(card.payload?.hosting_platform)}</p>
+                  <p><strong className="text-zinc-500 font-mono">Webhook Receiver Mode:</strong> {card.payload?.webhook_receiver_mode ?? "none"}</p>
                 </div>
               )}
 
               {/* Audit */}
               {card.type === "audit" && (
-                <div className="space-y-3 text-xs">
+                <div className="space-y-3 text-xs font-sans">
                   <div>
                     <span className="block text-[10px] font-mono uppercase text-emerald-400 mb-1">Strengths</span>
-                    <ul className="space-y-1 text-zinc-300">
+                    <ul className="space-y-1 text-zinc-300 font-sans">
                       {card.payload.existingPageStrengths.map((s: string, i: number) => (
-                        <li key={i}>✓ {s}</li>
+                        <li key={i} className="font-sans">✓ {s}</li>
                       ))}
                     </ul>
                   </div>
                   <div>
                     <span className="block text-[10px] font-mono uppercase text-rose-400 mb-1">Weaknesses</span>
-                    <ul className="space-y-1 text-zinc-300">
+                    <ul className="space-y-1 text-zinc-300 font-sans">
                       {card.payload.existingPageWeaknesses.map((w: string, i: number) => (
-                        <li key={i}>✕ {w}</li>
+                        <li key={i} className="font-sans">✕ {w}</li>
                       ))}
                     </ul>
                   </div>
                 </div>
               )}
             </SheetBody>
-          </>
+          </div>
         )}
       </SheetContent>
     </Sheet>
@@ -609,10 +610,10 @@ function PinDownDetailDrawer({
 // ---------------------------------------------------------------------------
 function Card({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col rounded-2xl border border-zinc-800 bg-zinc-950 p-4 shadow-md">
+    <div className="flex flex-col rounded-2xl border border-zinc-800 bg-zinc-950 p-4 shadow-md font-sans">
       <div className="mb-3 flex items-center gap-2 border-b border-zinc-900 pb-2">
         <Icon size={14} className="text-zinc-400" />
-        <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-300">{title}</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-300 font-sans">{title}</h3>
       </div>
       {children}
     </div>
@@ -642,13 +643,13 @@ function PrimaryOutputCard({
           <button
             type="button"
             onClick={() => onCopy(run.pasteReadyHtml!, "html")}
-            className="mt-2.5 flex w-fit items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer transition-colors"
+            className="mt-2.5 flex w-fit items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer transition-colors font-sans"
           >
             {copiedKey === "html" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
             <span>{copiedKey === "html" ? "Copied HTML" : "Copy HTML Code"}</span>
           </button>
           {run.pasteReadyInstructions && (
-            <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">{run.pasteReadyInstructions}</p>
+            <p className="mt-2 text-[11px] leading-relaxed text-zinc-500 font-sans">{run.pasteReadyInstructions}</p>
           )}
         </>
       ) : run.confirmationPageUrl ? (
@@ -700,7 +701,7 @@ function BrandVoiceCard({
 
   return (
     <Card title="Brand Voice & Positioning" icon={Palette}>
-      <div className="space-y-2.5">
+      <div className="space-y-2.5 font-sans">
         {tones.map(([label, t]) => (
           <div key={label}>
             <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-500 font-mono">
@@ -713,19 +714,19 @@ function BrandVoiceCard({
                 style={{ width: `${(t.score / 5) * 100}%` }}
               />
             </div>
-            <p className="mt-0.5 text-[10px] text-zinc-500">{t.note}</p>
+            <p className="mt-0.5 text-[10px] text-zinc-500 font-sans">{t.note}</p>
           </div>
         ))}
       </div>
 
       {v.vocabulary.signature.length > 0 && (
-        <div className="mt-3 border-t border-zinc-900 pt-2">
+        <div className="mt-3 border-t border-zinc-900 pt-2 font-sans">
           <div className="mb-1 flex items-center justify-between">
             <span className="text-[10px] uppercase text-zinc-500 font-mono">Signature Vocabulary</span>
             <button
               type="button"
               onClick={() => onCopy(v.vocabulary.signature.join(", "), "vocab")}
-              className="text-[10px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              className="text-[10px] text-zinc-400 hover:text-white transition-colors cursor-pointer font-sans"
             >
               {copiedKey === "vocab" ? "Copied" : "Copy Tokens"}
             </button>
@@ -741,7 +742,7 @@ function BrandVoiceCard({
       )}
 
       {v.banned_phrases.length > 0 && (
-        <div className="mt-2.5">
+        <div className="mt-2.5 font-sans">
           <p className="mb-1 flex items-center gap-1 text-[10px] uppercase text-zinc-500 font-mono">
             <AlertCircle size={10} /> Banned Phrases
           </p>
@@ -773,11 +774,11 @@ function PlatformSyncCard({ run }: { run: PinDownDetail["run"] }) {
 
   return (
     <Card title="Platform Sync" icon={Webhook}>
-      <div className="space-y-2 text-xs">
+      <div className="space-y-2 text-xs font-sans">
         <Row label="Booking Platform" value={bookingPlatformLabel(stack.booking_platform)} />
         <Row label="Hosting Platform" value={hostingPlatformLabel(stack.hosting_platform)} />
-        <div className="flex items-center justify-between border-t border-zinc-900 pt-2">
-          <span className="text-zinc-500">Webhook Receiver Mode</span>
+        <div className="flex items-center justify-between border-t border-zinc-900 pt-2 font-sans">
+          <span className="text-zinc-500 font-sans">Webhook Receiver Mode</span>
           <StatusPill tone={stack.webhook_receiver_mode === "webhook" ? "success" : stack.webhook_receiver_mode === "polling" ? "info" : "neutral"}>
             {stack.webhook_receiver_mode ?? "none"}
           </StatusPill>
@@ -797,9 +798,9 @@ function PlatformSyncCard({ run }: { run: PinDownDetail["run"] }) {
 
 function Row({ label, value, icon: Icon }: { label: string; value: string; icon?: React.ElementType }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-zinc-500">{label}</span>
-      <span className="flex items-center gap-1 font-medium text-zinc-200">
+    <div className="flex items-center justify-between font-sans">
+      <span className="text-zinc-500 font-sans">{label}</span>
+      <span className="flex items-center gap-1 font-medium text-zinc-200 font-sans">
         {Icon && <Icon size={11} className="text-zinc-500" />}
         {value}
       </span>
@@ -840,12 +841,12 @@ function CreativeAssetsCard({
   return (
     <Card title="Generated Creative Assets" icon={Film}>
       {briefs.length > 0 && (
-        <div className="mb-3">
-          <div className="mb-1.5 flex items-center justify-between">
+        <div className="mb-3 font-sans">
+          <div className="mb-1.5 flex items-center justify-between font-sans">
             <span className="flex items-center gap-1 text-[10px] uppercase text-zinc-500 font-mono">
               <Megaphone size={10} /> Ad Creative Brief
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 font-sans">
               <Dropdown
                 variant="field"
                 items={briefs.map((b) => ({ key: b.id, label: PILLAR_LABEL[b.pillar] ?? b.pillar }))}
@@ -870,21 +871,21 @@ function CreativeAssetsCard({
             </div>
           </div>
           {activeBrief && (
-            <div className="space-y-1.5 rounded-xl border border-zinc-800 bg-zinc-900/60 p-2.5 text-[11px] text-zinc-300">
-              <p><span className="text-zinc-500">Hook:</span> {activeBrief.hook}</p>
-              <p><span className="text-zinc-500">Angle:</span> {activeBrief.angle}</p>
-              <p><span className="text-zinc-500">Format:</span> {activeBrief.suggestedFormat}</p>
-              <p><span className="text-zinc-500">CTA:</span> {activeBrief.cta}</p>
+            <div className="space-y-1.5 rounded-xl border border-zinc-800 bg-zinc-900/60 p-2.5 text-[11px] text-zinc-300 font-sans">
+              <p className="font-sans"><span className="text-zinc-500 font-sans">Hook:</span> {activeBrief.hook}</p>
+              <p className="font-sans"><span className="text-zinc-500 font-sans">Angle:</span> {activeBrief.angle}</p>
+              <p className="font-sans"><span className="text-zinc-500 font-sans">Format:</span> {activeBrief.suggestedFormat}</p>
+              <p className="font-sans"><span className="text-zinc-500 font-sans">CTA:</span> {activeBrief.cta}</p>
             </div>
           )}
         </div>
       )}
 
       {scriptPack && (
-        <div>
-          <div className="mb-1.5 flex items-center justify-between">
+        <div className="font-sans">
+          <div className="mb-1.5 flex items-center justify-between font-sans">
             <span className="text-[10px] uppercase text-zinc-500 font-mono">Video Script Pack</span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 font-sans">
               <Dropdown
                 variant="field"
                 items={[
@@ -914,11 +915,11 @@ function CreativeAssetsCard({
             </div>
           </div>
           {activeScript && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-2.5 text-[11px] text-zinc-400">
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-2.5 text-[11px] text-zinc-400 font-sans">
               <p className="text-zinc-300 font-mono text-[10px]">
                 {"targetLengthSeconds" in activeScript ? `${activeScript.targetLengthSeconds}s target length` : ""}
               </p>
-              <p className="mt-1 line-clamp-3">
+              <p className="mt-1 line-clamp-3 font-sans">
                 {"chapters" in activeScript ? activeScript.chapters[0]?.script : activeScript.script}
               </p>
             </div>
@@ -932,7 +933,7 @@ function CreativeAssetsCard({
 function ExistingPageAuditCard({ audit }: { audit: NonNullable<PinDownDetail["run"]["pinDownPageAudit"]> }) {
   return (
     <Card title={`Existing Page Audit — ${audit.auditedUrl}`} icon={ScanSearch}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 font-sans">
         <AuditList label="Strengths" tone="success" items={audit.existingPageStrengths} />
         <AuditList label="Weaknesses" tone="danger" items={audit.existingPageWeaknesses} />
         <AuditList label="v1 Improvements" tone="info" items={audit.v1Improvements} />
@@ -944,11 +945,11 @@ function ExistingPageAuditCard({ audit }: { audit: NonNullable<PinDownDetail["ru
 function AuditList({ label, tone, items }: { label: string; tone: "success" | "danger" | "info"; items: string[] }) {
   const dot = { success: "bg-emerald-400", danger: "bg-rose-400", info: "bg-sky-400" }[tone];
   return (
-    <div>
+    <div className="font-sans">
       <p className="mb-1.5 text-[10px] uppercase text-zinc-500 font-mono">{label}</p>
-      <ul className="space-y-1.5">
+      <ul className="space-y-1.5 font-sans">
         {items.map((item, i) => (
-          <li key={i} className="flex gap-1.5 text-[11px] leading-snug text-zinc-400">
+          <li key={i} className="flex gap-1.5 text-[11px] leading-snug text-zinc-400 font-sans">
             <span className={cn("mt-1.5 h-1 w-1 shrink-0 rounded-full", dot)} />
             {item}
           </li>

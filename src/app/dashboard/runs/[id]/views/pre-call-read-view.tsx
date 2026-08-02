@@ -8,7 +8,6 @@ import {
   Search,
   Sparkles,
   Building2,
-  FileText,
   StickyNote,
   CalendarCheck,
   MessageSquare,
@@ -18,6 +17,7 @@ import {
   UserCheck,
   UserX,
   CalendarX,
+  Maximize2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
@@ -79,7 +79,9 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
   const filteredCalls = useMemo(() => {
     if (!filterText.trim()) return calls;
     const q = filterText.toLowerCase();
-    return calls.filter((c) => (c.prospectName ?? "").toLowerCase().includes(q));
+    return calls.filter((c) =>
+      (c.prospectName ?? "").toLowerCase().includes(q)
+    );
   }, [calls, filterText]);
 
   const callsByDate = useMemo(() => {
@@ -123,8 +125,8 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
           <input
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
-            placeholder="Search prospect or company..."
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
+            placeholder="Search prospect name..."
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
           />
         </div>
 
@@ -132,10 +134,10 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 2. CALENDAR VIEW                                                  */}
+      {/* 2. CALENDAR / OVERVIEW VIEW                                       */}
       {/* ----------------------------------------------------------------- */}
       {mode === "calendar" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl">
+        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl font-sans">
           <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-4 py-2.5">
             <div className="flex items-center gap-2">
               <button
@@ -153,14 +155,14 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
                 <ChevronRight size={15} />
               </button>
 
-              <h3 className="text-sm font-bold text-white min-w-[120px]">
+              <h3 className="text-sm font-bold text-white min-w-[120px] font-sans">
                 {monthName} {year}
               </h3>
 
               <button
                 type="button"
                 onClick={() => setCurrentDate(new Date())}
-                className="rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700 cursor-pointer"
+                className="rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700 cursor-pointer font-sans"
               >
                 Today
               </button>
@@ -171,7 +173,7 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-7 border-b border-zinc-800 bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+          <div className="grid grid-cols-7 border-b border-zinc-800 bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-800/60 py-2 last:border-r-0">
                 {d}
@@ -179,7 +181,7 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
             ))}
           </div>
 
-          <div className="grid grid-cols-7 auto-rows-fr bg-zinc-950">
+          <div className="grid grid-cols-7 auto-rows-fr bg-zinc-950 font-sans">
             {gridDays.map(({ date, isCurrentMonth }, idx) => {
               const k = dateKey(date);
               const dayCalls = callsByDate[k] ?? [];
@@ -189,7 +191,7 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
                 <div
                   key={idx}
                   className={cn(
-                    "flex min-h-[95px] flex-col border-b border-r border-zinc-800/60 p-1.5 transition-colors",
+                    "flex min-h-[95px] flex-col border-b border-r border-zinc-800/60 p-1.5 transition-colors font-sans",
                     !isCurrentMonth && "bg-zinc-900/20 text-zinc-600",
                     isCurrentMonth && "hover:bg-zinc-900/30"
                   )}
@@ -217,11 +219,15 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
                           key={call.id}
                           type="button"
                           onClick={() => setSelected(call)}
-                          className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] hover:border-zinc-700 cursor-pointer transition-all"
+                          className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] font-sans hover:border-zinc-700 cursor-pointer transition-all"
                         >
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="truncate font-bold text-white">{call.prospectName ?? "Unnamed prospect"}</span>
-                            <span className="shrink-0 font-mono text-[9.5px] text-zinc-400">{timeStr(call.callTime)}</span>
+                          <div className="flex items-center justify-between gap-1 font-sans">
+                            <span className="truncate font-bold text-white font-sans">
+                              {call.prospectName ?? "Unnamed prospect"}
+                            </span>
+                            <span className="shrink-0 font-mono text-[9.5px] text-zinc-400">
+                              {timeStr(call.callTime)}
+                            </span>
                           </div>
                           <StatusPill tone={STATUS_META[status].tone} className="w-fit">
                             {STATUS_META[status].label}
@@ -241,23 +247,27 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
       {/* 3. DENSE LIST VIEW                                                */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
+        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 font-sans">
           {callsByDay.length === 0 ? (
-            <div className="p-8 text-center text-xs text-zinc-500 italic">
+            <div className="p-8 text-center text-xs text-zinc-500 italic font-sans">
               No sales calls scheduled in this briefing window.
             </div>
           ) : (
             callsByDay.map(([day, dayCalls]) => (
               <div key={day}>
-                <div className="border-b border-t border-zinc-800 bg-zinc-900/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400">
-                  {new Date(day + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+                <div className="border-b border-t border-zinc-800 bg-zinc-900/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400 font-sans">
+                  {new Date(day + "T00:00:00").toLocaleDateString(undefined, {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                  })}
                 </div>
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs font-sans">
                   <thead>
-                    <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500">
+                    <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500 font-sans">
                       <th className="px-4 py-2 font-semibold">Prospect</th>
-                      <th className="px-4 py-2 font-semibold">Call time</th>
-                      <th className="px-4 py-2 font-semibold">Match score</th>
+                      <th className="px-4 py-2 font-semibold">Call Time</th>
+                      <th className="px-4 py-2 font-semibold">Match Score</th>
                       <th className="px-4 py-2 font-semibold">Status</th>
                       <th className="px-4 py-2 font-semibold" />
                     </tr>
@@ -266,16 +276,22 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
                     {dayCalls.map((call) => {
                       const status = deriveStatus(call);
                       return (
-                        <tr key={call.id} className="border-b border-zinc-900 last:border-b-0 hover:bg-zinc-900/40">
-                          <td className="px-4 py-2.5 font-medium text-white">{call.prospectName ?? "Unnamed prospect"}</td>
+                        <tr key={call.id} className="border-b border-zinc-900 last:border-b-0 hover:bg-zinc-900/40 font-sans">
+                          <td className="px-4 py-2.5 font-medium text-white font-sans">
+                            {call.prospectName ?? "Unnamed prospect"}
+                          </td>
                           <td className="px-4 py-2.5 font-mono text-zinc-400">{timeStr(call.callTime)}</td>
-                          <td className="px-4 py-2.5 text-zinc-400">{call.personMatchScore != null ? `${call.personMatchScore}` : "—"}</td>
-                          <td className="px-4 py-2.5"><StatusPill tone={STATUS_META[status].tone}>{STATUS_META[status].label}</StatusPill></td>
-                          <td className="px-4 py-2.5 text-right">
+                          <td className="px-4 py-2.5 text-zinc-400 font-mono">
+                            {call.personMatchScore != null ? `${call.personMatchScore}/100` : "—"}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <StatusPill tone={STATUS_META[status].tone}>{STATUS_META[status].label}</StatusPill>
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-sans">
                             <button
                               type="button"
                               onClick={() => setSelected(call)}
-                              className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer"
+                              className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer font-sans"
                             >
                               Open brief
                             </button>
@@ -292,35 +308,71 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
       )}
 
       {/* ----------------------------------------------------------------- */}
-      {/* 4. KANBAN BOARD VIEW                                              */}
+      {/* 4. ASANA-GRADE KANBAN BOARD VIEW                                  */}
       {/* ----------------------------------------------------------------- */}
       {mode === "board" && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 font-sans">
           {(Object.keys(board) as CallStatus[]).map((status) => (
-            <div key={status} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3">
-              <div className="mb-2.5 flex items-center justify-between px-1">
-                <span className="text-xs font-bold text-zinc-300">{STATUS_META[status].label}</span>
+            <div key={status} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 flex flex-col gap-2 font-sans">
+              <div className="mb-1 flex items-center justify-between px-1">
+                <span className="text-xs font-bold text-zinc-300 font-sans">{STATUS_META[status].label}</span>
                 <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
                   {board[status].length}
                 </span>
               </div>
 
-              <div className="space-y-2">
-                {board[status].map((call) => (
-                  <button
-                    key={call.id}
-                    type="button"
-                    onClick={() => setSelected(call)}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 p-2.5 text-left text-xs hover:border-zinc-700 cursor-pointer transition-all"
-                  >
-                    <p className="font-semibold text-white">{call.prospectName ?? "Unnamed prospect"}</p>
-                    <p className="mt-1 flex items-center gap-1 text-[10px] text-zinc-400">
-                      <Clock size={10} /> {timeStr(call.callTime)}
-                    </p>
-                  </button>
-                ))}
+              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-0.5">
+                {board[status].map((call) => {
+                  const DestIcon = (call && DESTINATION_ICON[call.destinationDelivered ?? ""]) || MessageSquare;
+                  const initials = (call.prospectName ?? "UN").slice(0, 2).toUpperCase();
+
+                  return (
+                    <button
+                      key={call.id}
+                      type="button"
+                      onClick={() => setSelected(call)}
+                      className="w-full text-left rounded-xl border border-zinc-800 bg-zinc-900/90 hover:border-zinc-700 p-3 transition-all cursor-pointer group shadow-sm flex flex-col gap-2 font-sans"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-[10px] font-bold font-mono text-zinc-300 shrink-0">
+                            {initials}
+                          </div>
+                          <div className="min-w-0 font-sans">
+                            <p className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors truncate font-sans">
+                              {call.prospectName ?? "Unnamed prospect"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <Maximize2 size={12} className="text-zinc-600 group-hover:text-zinc-300 shrink-0 mt-0.5" />
+                      </div>
+
+                      <div className="flex items-center gap-1 text-[10.5px] text-zinc-400 font-mono">
+                        <Clock size={11} className="text-zinc-500 shrink-0" />
+                        <span>{timeStr(call.callTime)}</span>
+                        <span className="text-zinc-600">·</span>
+                        <span>{new Date(call.callTime).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-zinc-800/80">
+                        {call.personMatchScore != null && (
+                          <span className="inline-flex items-center rounded-md bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[9.5px] font-mono font-bold text-emerald-400">
+                            {call.personMatchScore}/100 Match
+                          </span>
+                        )}
+
+                        <span className="inline-flex items-center gap-1 rounded-md bg-zinc-800 px-1.5 py-0.5 text-[9.5px] font-mono text-zinc-300">
+                          <DestIcon size={10} className="text-zinc-400" />
+                          {call.destinationDelivered ?? run.stack?.brief_landing_destination ?? "Slack"}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+
                 {board[status].length === 0 && (
-                  <div className="rounded-xl border border-dashed border-zinc-900 p-4 text-center text-[10px] text-zinc-600">
+                  <div className="rounded-xl border border-dashed border-zinc-900 p-4 text-center text-[10px] text-zinc-600 font-sans">
                     No calls in this stage
                   </div>
                 )}
@@ -343,7 +395,7 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
 }
 
 // ---------------------------------------------------------------------------
-// FULLY INTERACTIVE BRIEF DRAWER (EDITABLE, RE-SENDABLE, OUTCOME LOGGER)
+// FULLY INTERACTIVE BRIEF DRAWER (STRICT FONT PERSISTENCE)
 // ---------------------------------------------------------------------------
 function BriefDrawer({
   call,
@@ -357,15 +409,15 @@ function BriefDrawer({
   const [prevCallId, setPrevCallId] = useState<string | null>(null);
   const [editableText, setEditableText] = useState("");
   const [isEditing, setIsEditing] = useState(false);
-  const [isDelivering, setIsDelivered] = useState(false);
+  const [isDelivering, setIsDelivering] = useState(false);
   const [copied, setCopied] = useState(false);
   const [loggedOutcome, setLoggedOutcome] = useState<"showed" | "no_show" | "rescheduled" | null>(null);
 
-  // Synchronize state DURING render when prop changes (React recommended pattern)
   if (call?.id !== prevCallId) {
     setPrevCallId(call?.id ?? null);
     setEditableText(call?.briefText ?? "");
     setIsEditing(false);
+    setIsDelivering(false);
     setLoggedOutcome(null);
   }
 
@@ -377,54 +429,56 @@ function BriefDrawer({
 
   const handleLogOutcome = (outcome: "showed" | "no_show" | "rescheduled") => {
     setLoggedOutcome(outcome);
-    // In production, this fires a POST to /api/webhooks/slack/interactions or logs to briefOutcomeLog
   };
 
   const DestIcon = (call && DESTINATION_ICON[call.destinationDelivered ?? ""]) || MessageSquare;
 
   return (
     <Sheet open={!!call} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent widthClassName="w-full sm:max-w-xl">
+      {/* Explicit font-sans antialiased text-zinc-100 on the portal root prevents font mismatch */}
+      <SheetContent widthClassName="w-full sm:max-w-xl font-sans antialiased text-zinc-100">
         {call && (
-          <>
-            <SheetHeader>
-              <div className="flex items-center justify-between">
+          <div className="flex flex-col h-full font-sans antialiased">
+            <SheetHeader className="font-sans">
+              <div className="flex items-center justify-between font-sans">
                 <div className="flex items-center gap-2 text-amber-400">
                   <Sparkles size={15} />
                   <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
                     Executive Pre-Call Brief
                   </span>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 font-sans">
                   <button
                     type="button"
                     onClick={handleCopyText}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white text-xs cursor-pointer"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white text-xs cursor-pointer transition-colors font-sans"
                   >
                     {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                    <span>{copied ? "Copied" : "Copy Brief"}</span>
+                    <span className="font-sans">{copied ? "Copied" : "Copy Brief"}</span>
                   </button>
                 </div>
               </div>
 
-              <SheetTitle className="mt-2 text-lg font-bold">{call.prospectName ?? "Unnamed prospect"}</SheetTitle>
-              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-400">
+              <SheetTitle className="mt-2 text-lg font-bold font-sans text-white">
+                {call.prospectName ?? "Unnamed prospect"}
+              </SheetTitle>
+              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-400 font-sans">
                 <Building2 size={12} /> Call time: {timeStr(call.callTime)} on {new Date(call.callTime).toLocaleDateString()}
               </SheetDescription>
             </SheetHeader>
 
-            <SheetBody className="space-y-4">
+            <SheetBody className="space-y-4 font-sans pt-2">
               {/* Metadata Cards */}
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="grid grid-cols-2 gap-2 text-xs font-sans">
                 <div className="space-y-0.5 rounded-xl border border-zinc-800 bg-zinc-900 p-2.5">
                   <span className="block text-[10px] font-mono uppercase text-zinc-500">Identity Match</span>
-                  <p className="font-semibold text-zinc-200">
+                  <p className="font-semibold text-zinc-200 font-sans">
                     {call.personMatchScore != null ? `${call.personMatchScore} / 100` : "Not Scored"}
                   </p>
                 </div>
                 <div className="space-y-0.5 rounded-xl border border-zinc-800 bg-zinc-900 p-2.5">
                   <span className="block text-[10px] font-mono uppercase text-zinc-500">Delivery Channel</span>
-                  <p className="flex items-center gap-1 font-semibold text-zinc-200">
+                  <p className="flex items-center gap-1 font-semibold text-zinc-200 font-sans">
                     <DestIcon size={12} className="text-zinc-400" />
                     {call.destinationDelivered ?? destinationLabel ?? "Slack"}
                   </p>
@@ -432,8 +486,8 @@ function BriefDrawer({
               </div>
 
               {/* Editable Brief Document */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
+              <div className="space-y-2 font-sans">
+                <div className="flex items-center justify-between font-sans">
                   <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400">
                     Synthesized Brief Content
                   </span>
@@ -451,7 +505,7 @@ function BriefDrawer({
                     value={editableText}
                     onChange={(e) => setEditableText(e.target.value)}
                     rows={12}
-                    className="w-full p-3.5 rounded-xl border border-zinc-700 bg-zinc-900 text-xs font-sans text-zinc-200 focus:outline-none focus:border-zinc-500 leading-relaxed"
+                    className="w-full p-3.5 rounded-xl border border-zinc-700 bg-zinc-900 text-xs font-sans text-zinc-200 focus:outline-none focus:border-zinc-500 leading-relaxed font-sans"
                   />
                 ) : (
                   <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-300 font-sans whitespace-pre-wrap">
@@ -460,69 +514,71 @@ function BriefDrawer({
                 )}
               </div>
 
-              {/* Log Call Outcome (Interactivity Integration) */}
-              <div className="space-y-2 border-t border-zinc-800 pt-3">
+              {/* Log Call Outcome */}
+              <div className="space-y-2 border-t border-zinc-800 pt-3 font-sans">
                 <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400">
                   Log Sales Call Outcome
                 </span>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-2 font-sans">
                   <button
                     type="button"
                     onClick={() => handleLogOutcome("showed")}
                     className={cn(
-                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans",
                       loggedOutcome === "showed"
                         ? "bg-emerald-500 text-zinc-950 border-emerald-400 font-bold"
                         : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
                     )}
                   >
                     <UserCheck size={13} />
-                    <span>Showed</span>
+                    <span className="font-sans">Showed</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleLogOutcome("no_show")}
                     className={cn(
-                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans",
                       loggedOutcome === "no_show"
                         ? "bg-rose-500 text-white border-rose-400 font-bold"
                         : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
                     )}
                   >
                     <UserX size={13} />
-                    <span>No-Show</span>
+                    <span className="font-sans">No-Show</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleLogOutcome("rescheduled")}
                     className={cn(
-                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans",
                       loggedOutcome === "rescheduled"
                         ? "bg-amber-500 text-zinc-950 border-amber-400 font-bold"
                         : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
                     )}
                   >
                     <CalendarX size={13} />
-                    <span>Rescheduled</span>
+                    <span className="font-sans">Rescheduled</span>
                   </button>
                 </div>
               </div>
 
               {/* Dispatch Action */}
-              <div className="pt-2">
+              <div className="pt-2 font-sans">
                 <button
                   type="button"
-                  onClick={() => setIsDelivered(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-100 text-zinc-950 font-bold text-xs hover:bg-white transition-colors cursor-pointer"
+                  onClick={() => setIsDelivering(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-100 text-zinc-950 font-bold text-xs hover:bg-white transition-colors cursor-pointer font-sans"
                 >
                   <Send size={13} />
-                  <span>{isDelivering ? "Re-delivering Brief to Slack..." : "Re-send Brief to Slack"}</span>
+                  <span className="font-sans">
+                    {isDelivering ? "Re-delivering Brief to Slack..." : "Re-send Brief to Slack"}
+                  </span>
                 </button>
               </div>
             </SheetBody>
-          </>
+          </div>
         )}
       </SheetContent>
     </Sheet>
