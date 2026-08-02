@@ -1,21 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Search,
   List,
-  Edit2,
-  Clock,
-  Maximize2,
   ChevronDown,
   LayoutList,
   Kanban,
+  Clock,
+  Maximize2,
+  ArrowUpRight,
+  Ban,
+  RotateCcw,
+  PauseCircle,
+  PlayCircle,
+  Copy,
+  Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import type { SkillManifestEntry } from "@/lib/skill-manifest";
+import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
+import { cancelSkillRun, pauseEngagement, resumeEngagement, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
+import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
+import { GroupCountToggle } from "@/components/group-toggle";
+import { phaseLabel } from "@/lib/copy";
 
 export interface SkillRun {
   id: string;
@@ -29,20 +40,24 @@ export interface SkillRun {
   errorMessage?: string | null;
   stepCount?: number;
   subjectLabel?: string | null;
+  engagementPausedAt?: string | null;
 }
 
 type FilterStatus = "all" | "running" | "needs_attention" | "completed";
 
-function formatRelativeTime(iso: string | null | undefined): string {
-  if (!iso) return "Just now";
-  const ms = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(ms / 60_000);
-  if (min < 1) return "Just now";
-  if (min < 60) return `${min}m ago`;
-  const hrs = Math.floor(min / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+// ---------------------------------------------------------------------------
+// Action & Diagnostic Summaries (from LiveExecutionFeed)
+// ---------------------------------------------------------------------------
+function actionSummary(run: SkillRun): string {
+  const s = run.status.toLowerCase();
+  if (s === "running" || s === "in_progress") return phaseLabel(run.phase);
+  if (s === "failed" || s === "error") {
+    if (run.errorMessage && run.errorMessage.length < 90) return run.errorMessage;
+    return "Brief failed — click to view diagnostic log";
+  }
+  if (s === "timed_out") return "Timed out — exceeded max execution runtime";
+  if (s === "cancelled") return "Cancelled by operator";
+  return "Call brief synthesized & delivered";
 }
 
 function deriveTone(status: string): "success" | "danger" | "warning" | "neutral" {
@@ -62,20 +77,154 @@ function deriveLabel(status: string): string {
   return "Pending";
 }
 
+function runSignature(run: SkillRun): string {
+  const detail = normalizeForSignature(run.errorMessage ?? run.subjectLabel);
+  if (!detail) return `solo:${run.id}`;
+  return [run.engagementId ?? "no-engagement", run.skillName, run.status.toLowerCase(), detail].join("|");
+}
+
+function RelativeTime({ isoString }: { isoString: string }) {
+  const compute = useCallback(() => {
+    const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  }, [isoString]);
+
+  const [label, setLabel] = useState(compute);
+
+  useEffect(() => {
+    const id = setInterval(() => setLabel(compute()), 1000);
+    return () => clearInterval(id);
+  }, [compute]);
+
+  return <span>{label}</span>;
+}
+
+// ---------------------------------------------------------------------------
+// Quick-Action Builder for Row Panel
+// ---------------------------------------------------------------------------
+function buildRunSections(
+  run: SkillRun,
+  dispatch: ReturnType<typeof useQuickActions>["run"],
+  closePanel: () => void,
+  onDone: () => void
+): ActionPanelSection[] {
+  const isRunning = run.status.toLowerCase() === "running";
+  const isPaused = !!run.engagementPausedAt;
+
+  const primary: ActionPanelSection["items"] = [
+    { key: "view", icon: ArrowUpRight, label: "View full run detail", href: `/dashboard/runs/${run.id}` },
+  ];
+
+  if (run.engagementId && run.buyerName) {
+    primary.push({
+      key: "open-engagement",
+      icon: ArrowUpRight,
+      label: "Open client settings",
+      href: `/dashboard/engagements/${run.engagementId}`,
+    });
+  }
+
+  const runControl: ActionPanelSection["items"] = [];
+
+  if (isRunning) {
+    runControl.push({
+      key: "cancel",
+      icon: Ban,
+      label: "Cancel this brief run",
+      tone: "danger",
+      onSelect: () => dispatch("cancel", () => cancelSkillRun(run.id), () => { onDone(); closePanel(); }),
+    });
+  } else {
+    runControl.push({
+      key: "retrigger",
+      icon: RotateCcw,
+      label: "Re-run Pre-Call Brief",
+      disabled: !run.engagementId,
+      onSelect: () =>
+        run.engagementId &&
+        dispatch("retrigger", () => triggerSkillRun(run.engagementId as string, "pre-call-read"), () => { onDone(); closePanel(); }),
+    });
+  }
+
+  if (run.engagementId) {
+    runControl.push(
+      isPaused
+        ? {
+            key: "resume",
+            icon: PlayCircle,
+            label: "Resume client automations",
+            onSelect: () =>
+              dispatch("resume", () => resumeEngagement(run.engagementId as string), () => { onDone(); closePanel(); }),
+          }
+        : {
+            key: "pause",
+            icon: PauseCircle,
+            label: "Pause client automations",
+            onSelect: () =>
+              dispatch("pause", () => pauseEngagement(run.engagementId as string), () => { onDone(); closePanel(); }),
+          }
+    );
+  }
+
+  const utility: ActionPanelSection["items"] = [
+    { key: "copy", icon: Copy, label: "Copy run ID", onSelect: () => dispatch("copy", () => copyToClipboard(run.id)) },
+  ];
+
+  const sections: ActionPanelSection[] = [{ label: "Actions", items: primary }];
+  if (runControl.length > 0) sections.push({ label: "Run control", items: runControl });
+  sections.push({ label: "Utility", items: utility });
+  return sections;
+}
+
 export function PreCallReadModuleView({
-  runs = [],
+  runs: initialRuns = [],
   manifest,
 }: {
   runs: SkillRun[];
   manifest: SkillManifestEntry;
 }) {
-  const router = useRouter();
+  const router = router = useRouter();
+  const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
+  const [polling, setPolling] = useState(true);
   const [mode, setMode] = useState<"list" | "board">("list");
   const [filterText, setFilterText] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
+  const [groupRepeats, setGroupRepeats] = useState(true);
+  const [pageSize, setPageSize] = useState<10 | 25 | 50>(10);
+  const [page, setPage] = useState(0);
+
+  // Quick action dispatch hook
+  const { busyKey, error, run: dispatch } = useQuickActions();
 
   // ---------------------------------------------------------------------------
-  // Dynamic Real-time Status Counts
+  // Live Background Polling
+  // ---------------------------------------------------------------------------
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const res = await fetch("/api/skill-runs/recent?skill=pre-call-read&limit=100", { cache: "no-store", signal });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.runs) setRuns(data.runs);
+    } catch {
+      // Ignored on unmount
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!polling) return;
+    const controller = new AbortController();
+    const interval = setInterval(() => refresh(controller.signal), 5000);
+    return () => {
+      clearInterval(interval);
+      controller.abort();
+    };
+  }, [polling, refresh]);
+
+  // ---------------------------------------------------------------------------
+  // Dynamic Real-time Counts
   // ---------------------------------------------------------------------------
   const counts = useMemo(() => {
     let running = 0;
@@ -89,16 +238,11 @@ export function PreCallReadModuleView({
       else if (s === "success" || s === "completed") completed++;
     }
 
-    return {
-      all: runs.length,
-      running,
-      needs_attention: needsAttention,
-      completed,
-    };
+    return { all: runs.length, running, needs_attention: needsAttention, completed };
   }, [runs]);
 
   // ---------------------------------------------------------------------------
-  // FILTERED RUN EXECUTIONS
+  // Filtered & Grouped Runs
   // ---------------------------------------------------------------------------
   const filteredRuns = useMemo(() => {
     return runs.filter((r) => {
@@ -107,6 +251,7 @@ export function PreCallReadModuleView({
         !q ||
         (r.buyerName ?? "").toLowerCase().includes(q) ||
         (r.subjectLabel ?? "").toLowerCase().includes(q) ||
+        actionSummary(r).toLowerCase().includes(q) ||
         (r.id ?? "").toLowerCase().includes(q);
 
       const s = r.status.toLowerCase();
@@ -119,13 +264,32 @@ export function PreCallReadModuleView({
     });
   }, [runs, filterText, statusFilter]);
 
-  // Board Mode Grouping
+  // Signature grouping (collapses repeated identical errors/runs)
+  const runGroups = useMemo(() => {
+    if (!groupRepeats) {
+      return filteredRuns.map((r) => ({ signature: r.id, items: [r], latest: r, count: 1 }));
+    }
+    return groupBySignature(filteredRuns, runSignature, (r) => r.startedAt);
+  }, [filteredRuns, groupRepeats]);
+
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  function toggleGroupExpanded(sig: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(sig)) next.delete(sig);
+      else next.add(sig);
+      return next;
+    });
+  }
+
+  // Pagination
+  const pageCount = Math.max(1, Math.ceil(runGroups.length / pageSize));
+  const clampedPage = Math.min(page, pageCount - 1);
+  const pagedGroups = runGroups.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
+
+  // Board Mode
   const board = useMemo(() => {
-    const cols = {
-      running: [] as SkillRun[],
-      needs_attention: [] as SkillRun[],
-      completed: [] as SkillRun[],
-    };
+    const cols = { running: [] as SkillRun[], needs_attention: [] as SkillRun[], completed: [] as SkillRun[] };
     for (const r of filteredRuns) {
       const s = r.status.toLowerCase();
       if (s === "running" || s === "in_progress") cols.running.push(r);
@@ -138,37 +302,42 @@ export function PreCallReadModuleView({
   return (
     <div className="space-y-3 font-sans antialiased text-zinc-100">
       {/* ----------------------------------------------------------------- */}
-      {/* TRANSPARENT ASANA TOOLBAR WITH DYNAMIC COUNTS                      */}
+      {/* TOOLBAR: SEARCH + PILLS + LIVE POLL TOGGLE                       */}
       {/* ----------------------------------------------------------------- */}
       <div className="space-y-3">
-        {/* Full-width Transparent Search Input */}
         <div className="relative w-full">
           <Search size={15} className="absolute left-3.5 top-3 text-zinc-400" />
           <input
             value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
+            onChange={(e) => { setFilterText(e.target.value); setPage(0); }}
             placeholder="Find a project or client..."
-            className="w-full rounded-full border border-zinc-800 bg-transparent py-2.5 pl-10 pr-4 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-600 focus:outline-none transition-colors"
+            className="w-full rounded-full border border-zinc-800 bg-[#161719] py-2.5 pl-10 pr-24 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-600 focus:outline-none transition-colors"
           />
+          <button
+            type="button"
+            onClick={() => setPolling((p) => !p)}
+            className="absolute right-3 top-2.5 text-[10.5px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
+          >
+            {polling ? "● Live" : "Paused"}
+          </button>
         </div>
 
-        {/* Transparent Filter Pills with Dynamic Counts + View Switcher */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 overflow-x-auto py-0.5">
             {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
               const isActive = statusFilter === tab;
               const labels: Record<FilterStatus, string> = {
-                all: `All ${counts.all}`,
-                running: `Running ${counts.running}`,
-                needs_attention: `Needs attention ${counts.needs_attention}`,
-                completed: `Completed ${counts.completed}`,
+                all: `Status: All (${counts.all})`,
+                running: `Status: Running (${counts.running})`,
+                needs_attention: `Status: Needs attention (${counts.needs_attention})`,
+                completed: `Status: Completed (${counts.completed})`,
               };
 
               return (
                 <button
                   key={tab}
                   type="button"
-                  onClick={() => setStatusFilter(tab)}
+                  onClick={() => { setStatusFilter(tab); setPage(0); }}
                   className={cn(
                     "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap bg-transparent",
                     isActive
@@ -183,121 +352,214 @@ export function PreCallReadModuleView({
             })}
           </div>
 
-          {/* Transparent List & Board Capsule */}
-          <div className="flex items-center rounded-full border border-zinc-800/90 bg-transparent p-0.5">
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setMode("list")}
+              onClick={() => setGroupRepeats((g) => !g)}
               className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
-                mode === "list"
-                  ? "text-white font-semibold border border-zinc-600"
-                  : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+                "px-2.5 py-1 rounded-full text-[11px] font-mono border transition-colors cursor-pointer",
+                groupRepeats ? "border-zinc-600 text-zinc-300 bg-zinc-900" : "border-zinc-800 text-zinc-500"
               )}
             >
-              <LayoutList size={13} />
-              <span>List</span>
+              Group Repeats {groupRepeats ? "ON" : "OFF"}
             </button>
 
-            <button
-              type="button"
-              onClick={() => setMode("board")}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
-                mode === "board"
-                  ? "text-white font-semibold border border-zinc-600"
-                  : "text-zinc-400 hover:text-zinc-200 border border-transparent"
-              )}
-            >
-              <Kanban size={13} />
-              <span>Board</span>
-            </button>
+            <div className="flex items-center rounded-full border border-zinc-800/90 bg-transparent p-0.5">
+              <button
+                type="button"
+                onClick={() => setMode("list")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
+                  mode === "list" ? "text-white font-semibold border border-zinc-600" : "text-zinc-400 hover:text-zinc-200"
+                )}
+              >
+                <LayoutList size={13} />
+                <span>List</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMode("board")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
+                  mode === "board" ? "text-white font-semibold border border-zinc-600" : "text-zinc-400 hover:text-zinc-200"
+                )}
+              >
+                <Kanban size={13} />
+                <span>Board</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* TRANSPARENT LIST VIEW                                             */}
+      {/* ASANA-STYLE CURATED LIST VIEW WITH RICH ACTION DIAGNOSTICS         */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
         <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
           <table className="w-full text-left text-xs font-sans">
             <thead>
               <tr className="border-b border-zinc-800/80 text-[11px] text-zinc-400">
-                <th className="px-4 py-3 font-normal">Name</th>
-                <th className="px-4 py-3 font-normal text-center w-28">Members</th>
+                <th className="px-4 py-3 font-normal">Name & Diagnostic Action</th>
+                <th className="px-4 py-3 font-normal text-center w-24">Skill</th>
                 <th className="px-4 py-3 font-normal text-right">Status</th>
+                <th className="w-10 px-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60">
-              {filteredRuns.map((r) => {
+              {pagedGroups.map((group) => {
+                const r = group.latest;
                 const tone = deriveTone(r.status);
                 const statusLabel = deriveLabel(r.status);
-                const title = r.subjectLabel || r.buyerName || "Pre-Call Brief Execution";
+                const isFailed = r.status.toLowerCase() === "failed" || r.status.toLowerCase() === "timed_out";
+                const expanded = expandedGroups.has(group.signature);
 
                 return (
-                  <tr
-                    key={r.id}
-                    onClick={() => router.push(`/dashboard/runs/${r.id}`)}
-                    className="group hover:bg-zinc-800/30 transition-colors cursor-pointer"
-                  >
-                    {/* Name Column: Mint Container + Title + Green Subtext */}
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#82e6d4] text-[#05221d] shrink-0 font-bold">
-                          <List size={15} strokeWidth={2.5} />
+                  <Fragment key={group.signature}>
+                    <tr
+                      onClick={() => router.push(`/dashboard/runs/${r.id}`)}
+                      className="group hover:bg-zinc-800/30 transition-colors cursor-pointer"
+                    >
+                      {/* Name & Diagnostic Action Column */}
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#82e6d4] text-[#05221d] shrink-0 font-bold">
+                            <List size={15} strokeWidth={2.5} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-semibold text-white group-hover:text-amber-300 transition-colors truncate">
+                                {r.buyerName ?? "Client"}
+                              </p>
+                              {r.subjectLabel && (
+                                <span className="text-[11px] font-mono text-zinc-400 truncate">
+                                  ({r.subjectLabel})
+                                </span>
+                              )}
+                            </div>
+                            <p
+                              className={cn(
+                                "text-[11px] font-sans font-medium truncate mt-0.5",
+                                isFailed ? "text-rose-400 font-mono" : "text-emerald-400"
+                              )}
+                            >
+                              {actionSummary(r)} · <RelativeTime isoString={r.startedAt} />
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-white group-hover:text-amber-300 transition-colors truncate">
-                            {title}
-                          </p>
-                          <p className="text-[11px] font-sans text-emerald-400 font-medium truncate mt-0.5">
-                            {r.buyerName ?? "Client"} · Last run {formatRelativeTime(r.startedAt)}
-                          </p>
+                      </td>
+
+                      {/* Skill Member Badge */}
+                      <td className="px-4 py-3.5 text-center">
+                        <span
+                          className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-[#f2a8e4] shadow-xs"
+                          title="Pre-Call Read Module"
+                        >
+                          PR
+                        </span>
+                      </td>
+
+                      {/* Status + Group Count Toggle */}
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="inline-flex items-center justify-end gap-2">
+                          <StatusPill tone={tone}>{statusLabel}</StatusPill>
+                          {group.count > 1 && (
+                            <GroupCountToggle
+                              count={group.count}
+                              expanded={expanded}
+                              onToggle={() => toggleGroupExpanded(group.signature)}
+                            />
+                          )}
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Members Column (Pink PR Circle Avatar) */}
-                    <td className="px-4 py-3.5 text-center">
-                      <span
-                        className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-[#f2a8e4] shadow-xs"
-                        title="Pre-Call Read Module"
-                      >
-                        PR
-                      </span>
-                    </td>
+                      {/* Quick-Action Panel Gear Menu */}
+                      <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <ActionPanel
+                          open={false}
+                          onOpenChange={() => {}}
+                          sections={buildRunSections(r, dispatch, () => {}, refresh)}
+                          errorText={error}
+                          busyKey={busyKey}
+                          triggerLabel={`Quick actions for ${r.buyerName ?? "run"}`}
+                        />
+                      </td>
+                    </tr>
 
-                    {/* Status Column + Client Edit Link */}
-                    <td className="px-4 py-3.5 text-right">
-                      <div className="inline-flex items-center gap-2">
-                        <StatusPill tone={tone}>{statusLabel}</StatusPill>
-
-                        {r.engagementId && (
-                          <Link
-                            href={`/dashboard/engagements/${r.engagementId}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800/50 transition-colors"
-                            title="Open Client Engagements Page"
-                          >
-                            <Edit2 size={13} />
-                          </Link>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                    {/* Expanded Duplicate Group Rows */}
+                    {expanded &&
+                      group.items.slice(1).map((subRun) => (
+                        <tr
+                          key={subRun.id}
+                          onClick={() => router.push(`/dashboard/runs/${subRun.id}`)}
+                          className="group bg-zinc-950/40 hover:bg-zinc-800/30 transition-colors cursor-pointer border-l-2 border-l-pink-400/50"
+                        >
+                          <td className="px-4 py-2.5 pl-12">
+                            <p className="text-[11px] font-mono text-zinc-400 truncate">
+                              {actionSummary(subRun)} · <RelativeTime isoString={subRun.startedAt} />
+                            </p>
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            <span className="text-[10px] font-mono text-zinc-600">repeat</span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            <StatusPill tone={deriveTone(subRun.status)}>{deriveLabel(subRun.status)}</StatusPill>
+                          </td>
+                          <td />
+                        </tr>
+                      ))}
+                  </Fragment>
                 );
               })}
 
-              {filteredRuns.length === 0 && (
+              {pagedGroups.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="p-8 text-center text-xs text-zinc-500 italic">
+                  <td colSpan={4} className="p-8 text-center text-xs text-zinc-500 italic">
                     No run history matches your filter criteria.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+
+          {/* Bottom Pagination Controls */}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800/80">
+            <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500">
+              {([10, 25, 50] as const).map((size) => (
+                <button
+                  key={size}
+                  onClick={() => setPageSize(size)}
+                  className={cn(
+                    "px-2 py-0.5 rounded border transition-colors cursor-pointer",
+                    pageSize === size ? "border-zinc-600 bg-zinc-800 text-white" : "border-transparent text-zinc-500 hover:text-zinc-300"
+                  )}
+                >
+                  {size}/page
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
+              <span>Page {clampedPage + 1} of {pageCount}</span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={clampedPage === 0}
+                  className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  ← Prev
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                  disabled={clampedPage >= pageCount - 1}
+                  className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -307,11 +569,7 @@ export function PreCallReadModuleView({
       {mode === "board" && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 font-sans pt-2">
           {(["running", "needs_attention", "completed"] as const).map((colKey) => {
-            const colTitles = {
-              running: "In Progress",
-              needs_attention: "Needs Attention",
-              completed: "Completed",
-            };
+            const colTitles = { running: "In Progress", needs_attention: "Needs Attention", completed: "Completed" };
 
             return (
               <div key={colKey} className="rounded-2xl border border-zinc-800/80 bg-transparent p-3 flex flex-col gap-2 font-sans">
@@ -345,13 +603,13 @@ export function PreCallReadModuleView({
                       </div>
 
                       <p className="text-xs text-zinc-300 line-clamp-2 leading-relaxed">
-                        {r.subjectLabel || "Pre-Call Brief Execution"}
+                        {actionSummary(r)}
                       </p>
 
                       <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/80 text-[10.5px] text-zinc-400 font-mono">
                         <div className="flex items-center gap-1">
                           <Clock size={11} className="text-zinc-500 shrink-0" />
-                          <span>{formatRelativeTime(r.startedAt)}</span>
+                          <RelativeTime isoString={r.startedAt} />
                         </div>
 
                         <StatusPill tone={deriveTone(r.status)}>{deriveLabel(r.status)}</StatusPill>
