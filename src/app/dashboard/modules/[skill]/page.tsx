@@ -1,5 +1,3 @@
-// src/app/dashboard/modules/[skill]/page.tsx
-
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { getModuleClientSummaries } from "@/lib/module-overview";
@@ -31,7 +29,6 @@ export default async function ModulePage({
   }
 
   const skill = rawSkill as SkillName;
-  const info = SKILL_INFO[skill];
 
   const session = await getSession();
   const whopUserId = session.whopUserId!;
@@ -68,14 +65,14 @@ export default async function ModulePage({
   const manifest = SKILL_MANIFEST[skill];
 
   return (
-    <div className="p-6 space-y-6 max-w-[1600px] mx-auto font-sans antialiased text-zinc-100">
+    /* Removed p-6 top padding and max-w restriction so it spans cleanly and sits right at the top */
+    <div className="w-full pt-1 px-4 sm:px-6 pb-6 space-y-4 font-sans antialiased text-zinc-100">
       {skill === "pin-down" && (
         <PinDownModuleView summaries={clientSummaries} manifest={manifest} />
       )}
       {skill === "pile-on" && (
         <PileOnModuleView summaries={clientSummaries} manifest={manifest} />
       )}
-      {/* Pre-Call Read now takes the live runs directly! */}
       {skill === "pre-call-read" && (
         <PreCallReadModuleView runs={recentRuns} manifest={manifest} />
       )}
