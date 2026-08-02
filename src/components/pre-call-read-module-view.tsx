@@ -70,10 +70,32 @@ export function PreCallReadModuleView({
   manifest: SkillManifestEntry;
 }) {
   const router = useRouter();
-  // Strictly List (default) and Board — Calendar removed completely
   const [mode, setMode] = useState<"list" | "board">("list");
   const [filterText, setFilterText] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
+
+  // ---------------------------------------------------------------------------
+  // Dynamic Real-time Status Counts
+  // ---------------------------------------------------------------------------
+  const counts = useMemo(() => {
+    let running = 0;
+    let needsAttention = 0;
+    let completed = 0;
+
+    for (const r of runs) {
+      const s = r.status.toLowerCase();
+      if (s === "running" || s === "in_progress") running++;
+      else if (s === "failed" || s === "error" || s === "timed_out") needsAttention++;
+      else if (s === "success" || s === "completed") completed++;
+    }
+
+    return {
+      all: runs.length,
+      running,
+      needs_attention: needsAttention,
+      completed,
+    };
+  }, [runs]);
 
   // ---------------------------------------------------------------------------
   // FILTERED RUN EXECUTIONS
@@ -116,30 +138,30 @@ export function PreCallReadModuleView({
   return (
     <div className="space-y-3 font-sans antialiased text-zinc-100">
       {/* ----------------------------------------------------------------- */}
-      {/* ASANA-STYLE TOOLBAR: SEARCH + PILL FILTERS (PUSHED ALL THE WAY UP)  */}
+      {/* TRANSPARENT ASANA TOOLBAR WITH DYNAMIC COUNTS                      */}
       {/* ----------------------------------------------------------------- */}
       <div className="space-y-3">
-        {/* Full-width Seamless Pill Search Input */}
+        {/* Full-width Transparent Search Input */}
         <div className="relative w-full">
           <Search size={15} className="absolute left-3.5 top-3 text-zinc-400" />
           <input
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Find a project or client..."
-            className="w-full rounded-full border border-[#2e3035] bg-[#161719] py-2.5 pl-10 pr-4 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none transition-colors"
+            className="w-full rounded-full border border-zinc-800 bg-transparent py-2.5 pl-10 pr-4 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-600 focus:outline-none transition-colors"
           />
         </div>
 
-        {/* Filter Pills with Chevron Down + List/Board Switcher */}
+        {/* Transparent Filter Pills with Dynamic Counts + View Switcher */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 overflow-x-auto py-0.5">
             {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
               const isActive = statusFilter === tab;
               const labels: Record<FilterStatus, string> = {
-                all: "Status: All",
-                running: "Status: Running",
-                needs_attention: "Status: Needs attention",
-                completed: "Status: Completed",
+                all: `All ${counts.all}`,
+                running: `Running ${counts.running}`,
+                needs_attention: `Needs attention ${counts.needs_attention}`,
+                completed: `Completed ${counts.completed}`,
               };
 
               return (
@@ -148,10 +170,10 @@ export function PreCallReadModuleView({
                   type="button"
                   onClick={() => setStatusFilter(tab)}
                   className={cn(
-                    "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap",
+                    "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap bg-transparent",
                     isActive
-                      ? "bg-[#282a2e] border-zinc-400 text-white font-semibold shadow-xs"
-                      : "bg-[#161719] border-[#2e3035] text-zinc-300 hover:text-white hover:border-zinc-600"
+                      ? "border-zinc-400 text-white font-semibold"
+                      : "border-zinc-800/90 text-zinc-400 hover:text-white hover:border-zinc-600"
                   )}
                 >
                   <span>{labels[tab]}</span>
@@ -161,16 +183,16 @@ export function PreCallReadModuleView({
             })}
           </div>
 
-          {/* List & Board Switcher Capsule */}
-          <div className="flex items-center rounded-full border border-[#2e3035] bg-[#161719] p-0.5">
+          {/* Transparent List & Board Capsule */}
+          <div className="flex items-center rounded-full border border-zinc-800/90 bg-transparent p-0.5">
             <button
               type="button"
               onClick={() => setMode("list")}
               className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer",
+                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
                 mode === "list"
-                  ? "bg-[#282a2e] text-white font-semibold border border-zinc-600"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "text-white font-semibold border border-zinc-600"
+                  : "text-zinc-400 hover:text-zinc-200 border border-transparent"
               )}
             >
               <LayoutList size={13} />
@@ -181,10 +203,10 @@ export function PreCallReadModuleView({
               type="button"
               onClick={() => setMode("board")}
               className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer",
+                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
                 mode === "board"
-                  ? "bg-[#282a2e] text-white font-semibold border border-zinc-600"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "text-white font-semibold border border-zinc-600"
+                  : "text-zinc-400 hover:text-zinc-200 border border-transparent"
               )}
             >
               <Kanban size={13} />
@@ -195,7 +217,7 @@ export function PreCallReadModuleView({
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* ASANA-STYLE CURATED LIST VIEW (TRANSPARENT, NO CARD CONTAINER)     */}
+      {/* TRANSPARENT LIST VIEW                                             */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
         <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
@@ -217,12 +239,11 @@ export function PreCallReadModuleView({
                   <tr
                     key={r.id}
                     onClick={() => router.push(`/dashboard/runs/${r.id}`)}
-                    className="group hover:bg-zinc-800/40 transition-colors cursor-pointer"
+                    className="group hover:bg-zinc-800/30 transition-colors cursor-pointer"
                   >
-                    {/* Name Column: Mint Icon Container + Primary Title + Emerald Subtext */}
+                    {/* Name Column: Mint Container + Title + Green Subtext */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-3">
-                        {/* Bright Mint/Teal Box with Dark List Icon */}
                         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#82e6d4] text-[#05221d] shrink-0 font-bold">
                           <List size={15} strokeWidth={2.5} />
                         </div>
@@ -237,7 +258,7 @@ export function PreCallReadModuleView({
                       </div>
                     </td>
 
-                    {/* Members Column (Solid Pink Circle Avatar) */}
+                    {/* Members Column (Pink PR Circle Avatar) */}
                     <td className="px-4 py-3.5 text-center">
                       <span
                         className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-[#f2a8e4] shadow-xs"
@@ -247,7 +268,7 @@ export function PreCallReadModuleView({
                       </span>
                     </td>
 
-                    {/* Status Column + Quick Link to Client Engagement */}
+                    {/* Status Column + Client Edit Link */}
                     <td className="px-4 py-3.5 text-right">
                       <div className="inline-flex items-center gap-2">
                         <StatusPill tone={tone}>{statusLabel}</StatusPill>
@@ -256,7 +277,7 @@ export function PreCallReadModuleView({
                           <Link
                             href={`/dashboard/engagements/${r.engagementId}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                            className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800/50 transition-colors"
                             title="Open Client Engagements Page"
                           >
                             <Edit2 size={13} />
@@ -293,10 +314,10 @@ export function PreCallReadModuleView({
             };
 
             return (
-              <div key={colKey} className="rounded-2xl border border-zinc-800/80 bg-[#161719] p-3 flex flex-col gap-2 font-sans">
+              <div key={colKey} className="rounded-2xl border border-zinc-800/80 bg-transparent p-3 flex flex-col gap-2 font-sans">
                 <div className="mb-1 flex items-center justify-between px-1">
                   <span className="text-xs font-bold text-zinc-300">{colTitles[colKey]}</span>
-                  <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
+                  <span className="text-[10px] font-mono text-zinc-500 border border-zinc-800 px-2 py-0.5 rounded-md font-bold">
                     {board[colKey].length}
                   </span>
                 </div>
@@ -306,7 +327,7 @@ export function PreCallReadModuleView({
                     <div
                       key={r.id}
                       onClick={() => router.push(`/dashboard/runs/${r.id}`)}
-                      className="w-full text-left rounded-xl border border-zinc-800/80 bg-zinc-900/90 hover:border-zinc-700 p-3 transition-all cursor-pointer group shadow-xs flex flex-col gap-2 font-sans"
+                      className="w-full text-left rounded-xl border border-zinc-800/80 bg-transparent hover:border-zinc-700 p-3 transition-all cursor-pointer group flex flex-col gap-2 font-sans"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
@@ -339,7 +360,7 @@ export function PreCallReadModuleView({
                   ))}
 
                   {board[colKey].length === 0 && (
-                    <div className="rounded-xl border border-dashed border-zinc-900 p-4 text-center text-[10px] text-zinc-600">
+                    <div className="rounded-xl border border-dashed border-zinc-800 p-4 text-center text-[10px] text-zinc-600">
                       No runs in this column
                     </div>
                   )}
