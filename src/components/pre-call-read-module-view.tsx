@@ -16,6 +16,7 @@ import {
   PauseCircle,
   PlayCircle,
   Copy,
+  Play, Pause
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
@@ -321,13 +322,30 @@ export function PreCallReadModuleView({
 
         {/* Live Controls + List/Board View Switcher */}
         <div className="flex items-center gap-2.5">
-          {/* <button
-            type="button"
-            onClick={() => setPolling((p) => !p)}
-            className="text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
-          >
-            {polling ? "● Live" : "Paused"}
-          </button> */}
+      <button
+  type="button"
+  onClick={() => setPolling((p) => !p)}
+  className={cn(
+    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer select-none",
+    polling
+      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+      : "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+  )}
+  title={polling ? "Pause live polling" : "Resume live polling"}
+>
+  {polling ? (
+    <>
+      <Pause size={12} className="fill-current shrink-0" />
+      <span>Live</span>
+    </>
+  ) : (
+    <>
+      <Play size={12} className="fill-current shrink-0 ml-0.5" />
+      <span>Paused</span>
+    </>
+  )}
+</button>
+
 
           <button
             type="button"
