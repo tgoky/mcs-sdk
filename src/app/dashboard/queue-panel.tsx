@@ -88,9 +88,9 @@ const TAG_SWATCHES = [
 
 // Preset Tags available in rail list
 const DEFAULT_TAGS: CustomTag[] = [
-  { id: "tag-lime-alerts", name: "Lime Alerts", colorHex: "#a0d646", targetCategory: "alert" },
-  { id: "tag-pindown", name: "Pin-Down Tasks", colorHex: "#3b71e8", targetSkill: "pin-down" },
-  { id: "tag-urgent", name: "Urgent Actions", colorHex: "#f897a6", targetCategory: "action_needed" },
+  { id: "tag-lime-alerts", name: "alerts", colorHex: "#a0d646", targetCategory: "alert" },
+  { id: "tag-pindown", name: "tasks", colorHex: "#3b71e8", targetSkill: "pin-down" },
+  { id: "tag-urgent", name: "actions", colorHex: "#f897a6", targetCategory: "action_needed" },
 ];
 
 const POLL_MS = 8_000;
@@ -1371,7 +1371,7 @@ export function QueuePanel({
                 type="text"
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
-                placeholder="e.g. Lime Alerts"
+                placeholder="e.g. alerts"
                 className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 text-xs"
                 autoFocus
               />
