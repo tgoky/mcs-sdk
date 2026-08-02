@@ -408,7 +408,7 @@ export default async function EngagementDetailPage({
             )}
           </div>
 
-          <div className="w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 shadow-xs transition-colors">
+          <div className="w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-transparent transition-colors">
             <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
               {runs.slice(0, 20).map((run) => {
                 const isFailed = run.status.toLowerCase() === "failed";
