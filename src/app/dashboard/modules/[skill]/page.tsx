@@ -1,11 +1,10 @@
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { getModuleClientSummaries } from "@/lib/module-overview";
 import { isSkillId, SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { db } from "@/lib/db";
 import { skillRuns, engagements } from "@/models/schema";
 import { and, eq, desc, sql } from "drizzle-orm";
-import { SKILL_INFO, type SkillName } from "@/lib/copy";
+import { type SkillName } from "@/lib/copy";
 
 // Import Portfolio Views
 import { PinDownModuleView } from "@/components/pin-down-module-view";
@@ -33,28 +32,25 @@ export default async function ModulePage({
   const session = await getSession();
   const whopUserId = session.whopUserId!;
 
-  // Fetch client summaries and recent runs
-  const [clientSummaries, recentRunsRaw] = await Promise.all([
-    getModuleClientSummaries(whopUserId, skill),
-    db
-      .select({
-        id: skillRuns.id,
-        skillName: skillRuns.skillName,
-        status: skillRuns.status,
-        phase: skillRuns.phase,
-        startedAt: skillRuns.startedAt,
-        completedAt: skillRuns.completedAt,
-        engagementId: skillRuns.engagementId,
-        buyerName: engagements.buyer,
-        errorMessage: skillRuns.errorMessage,
-        stepCount: sql<number>`coalesce(jsonb_array_length(${skillRuns.steps}), 0)`,
-      })
-      .from(skillRuns)
-      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), eq(skillRuns.skillName, skill)))
-      .orderBy(desc(skillRuns.startedAt))
-      .limit(50),
-  ]);
+  // Fetch recent executions directly for the requested skill
+  const recentRunsRaw = await db
+    .select({
+      id: skillRuns.id,
+      skillName: skillRuns.skillName,
+      status: skillRuns.status,
+      phase: skillRuns.phase,
+      startedAt: skillRuns.startedAt,
+      completedAt: skillRuns.completedAt,
+      engagementId: skillRuns.engagementId,
+      buyerName: engagements.buyer,
+      errorMessage: skillRuns.errorMessage,
+      stepCount: sql<number>`coalesce(jsonb_array_length(${skillRuns.steps}), 0)`,
+    })
+    .from(skillRuns)
+    .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+    .where(and(eq(engagements.whopUserId, whopUserId), eq(skillRuns.skillName, skill)))
+    .orderBy(desc(skillRuns.startedAt))
+    .limit(50);
 
   const recentRuns = recentRunsRaw.map((r) => ({
     ...r,
@@ -67,9 +63,8 @@ export default async function ModulePage({
   return (
     <div className="w-full max-w-none -mt-6 -mx-2 sm:-mx-6 pt-0 px-2 sm:px-6 pb-6 font-sans antialiased text-zinc-100">
       {skill === "pin-down" && (
-        <PinDownModuleView summaries={clientSummaries} manifest={manifest} />
+        <PinDownModuleView runs={recentRuns} manifest={manifest} />
       )}
-      {/* Fixed: Pass runs={recentRuns} instead of summaries */}
       {skill === "pile-on" && (
         <PileOnModuleView runs={recentRuns} manifest={manifest} />
       )}
@@ -77,10 +72,10 @@ export default async function ModulePage({
         <PreCallReadModuleView runs={recentRuns} manifest={manifest} />
       )}
       {skill === "win-back" && (
-        <WinBackModuleView summaries={clientSummaries} manifest={manifest} />
+        <WinBackModuleView runs={recentRuns} manifest={manifest} />
       )}
       {skill === "leak-map" && (
-        <LeakMapModuleView summaries={clientSummaries} manifest={manifest} />
+        <LeakMapModuleView runs={recentRuns} manifest={manifest} />
       )}
     </div>
   );
