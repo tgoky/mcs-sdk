@@ -12,11 +12,12 @@ import {
   StickyNote,
   CalendarCheck,
   MessageSquare,
+  AlertCircle,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
 import { StatusPill } from "../_shared/status-pill";
-import { EmptyState } from "../_shared/empty-state";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { BriefedCall, PreCallReadDetail } from "../_shared/types";
 
@@ -66,7 +67,8 @@ function timeStr(d: string) {
 
 export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
   const { run, calls } = detail;
-  const [mode, setMode] = useState<RunViewMode>(calls.length > 0 ? "calendar" : "list");
+  // Always default to 'calendar' view so user sees the month grid
+  const [mode, setMode] = useState<RunViewMode>("calendar");
   const [selected, setSelected] = useState<BriefedCall | null>(null);
   const [filterText, setFilterText] = useState("");
   const [currentDate, setCurrentDate] = useState(() => (calls[0] ? new Date(calls[0].callTime) : new Date()));
@@ -107,85 +109,123 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
   const gridDays = useMemo(() => getDaysInMonthGrid(year, month), [year, month]);
   const monthName = currentDate.toLocaleString("default", { month: "long" });
 
-  if (calls.length === 0) {
-    return (
-      <EmptyState
-        icon={CalendarCheck}
-        title="No calls recorded for this run yet"
-        description="Either this run hasn't processed a call roster yet, or it ran before per-run correlation was added — check the Steps panel for what it actually did."
-      />
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="relative w-56">
+    <div className="flex flex-col gap-3 font-sans">
+      {/* ----------------------------------------------------------------- */}
+      {/* 1. ASANA TOOLBAR (PERSISTENT SEARCH + VIEW SWITCHER)              */}
+      {/* ----------------------------------------------------------------- */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-950 p-1 border border-zinc-800">
+        <div className="relative w-64">
           <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500" />
           <input
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
-            placeholder="Filter by prospect…"
+            placeholder="Search prospect or company..."
             className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
           />
         </div>
+
         <ViewSwitcher value={mode} onChange={setMode} />
       </div>
 
+      {/* ----------------------------------------------------------------- */}
+      {/* 2. CALENDAR VIEW (MONTH GRID RENDERED REGARDLESS OF CALL COUNT)   */}
+      {/* ----------------------------------------------------------------- */}
       {mode === "calendar" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
+        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl">
+          {/* Calendar Header Controls */}
           <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-4 py-2.5">
             <div className="flex items-center gap-2">
-              <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer">
+              <button
+                type="button"
+                onClick={() => setCurrentDate(new Date(year, month - 1, 1))}
+                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer"
+              >
                 <ChevronLeft size={15} />
               </button>
-              <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer">
+              <button
+                type="button"
+                onClick={() => setCurrentDate(new Date(year, month + 1, 1))}
+                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer"
+              >
                 <ChevronRight size={15} />
               </button>
-              <h3 className="text-sm font-bold text-white">{monthName} {year}</h3>
-              <button onClick={() => setCurrentDate(new Date())} className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700 cursor-pointer">
+
+              <h3 className="text-sm font-bold text-white min-w-[120px]">
+                {monthName} {year}
+              </h3>
+
+              <button
+                type="button"
+                onClick={() => setCurrentDate(new Date())}
+                className="rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700 cursor-pointer"
+              >
                 Today
               </button>
             </div>
+
+            <div className="text-[11px] font-mono text-zinc-500">
+              {calls.length} total call{calls.length === 1 ? "" : "s"}
+            </div>
           </div>
-          <div className="grid grid-cols-7 border-b border-zinc-800 bg-zinc-900/40 text-center text-[10px] font-bold uppercase text-zinc-500">
+
+          {/* Days of Week Row */}
+          <div className="grid grid-cols-7 border-b border-zinc-800 bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-              <div key={d} className="border-r border-zinc-800/60 py-2 last:border-r-0">{d}</div>
+              <div key={d} className="border-r border-zinc-800/60 py-2 last:border-r-0">
+                {d}
+              </div>
             ))}
           </div>
-          <div className="grid grid-cols-7 auto-rows-fr">
+
+          {/* 35/42 Cell Month Grid */}
+          <div className="grid grid-cols-7 auto-rows-fr bg-zinc-950">
             {gridDays.map(({ date, isCurrentMonth }, idx) => {
               const k = dateKey(date);
               const dayCalls = callsByDate[k] ?? [];
               const isToday = dateKey(new Date()) === k;
+
               return (
                 <div
                   key={idx}
                   className={cn(
-                    "flex min-h-[92px] flex-col border-b border-r border-zinc-800/60 p-1.5",
-                    !isCurrentMonth && "bg-zinc-900/20"
+                    "flex min-h-[95px] flex-col border-b border-r border-zinc-800/60 p-1.5 transition-colors",
+                    !isCurrentMonth && "bg-zinc-900/20 text-zinc-600",
+                    isCurrentMonth && "hover:bg-zinc-900/30"
                   )}
                 >
-                  <span className={cn(
-                    "flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold",
-                    isToday ? "bg-gold text-zinc-950" : isCurrentMonth ? "text-zinc-300" : "text-zinc-600"
-                  )}>
-                    {date.getDate()}
-                  </span>
-                  <div className="mt-1 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={cn(
+                        "flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold",
+                        isToday
+                          ? "bg-emerald-500 text-zinc-950 font-bold"
+                          : isCurrentMonth
+                          ? "text-zinc-300"
+                          : "text-zinc-600"
+                      )}
+                    >
+                      {date.getDate()}
+                    </span>
+                  </div>
+
+                  <div className="mt-1 space-y-1 overflow-y-auto max-h-[75px] [scrollbar-width:none]">
                     {dayCalls.map((call) => {
                       const status = deriveStatus(call);
                       return (
                         <button
                           key={call.id}
+                          type="button"
                           onClick={() => setSelected(call)}
-                          className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] hover:border-zinc-700 cursor-pointer"
+                          className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] hover:border-zinc-700 cursor-pointer transition-all"
                         >
                           <div className="flex items-center justify-between gap-1">
                             <span className="truncate font-bold text-white">{call.prospectName ?? "Unnamed prospect"}</span>
                             <span className="shrink-0 font-mono text-[9.5px] text-zinc-400">{timeStr(call.callTime)}</span>
                           </div>
-                          <StatusPill tone={STATUS_META[status].tone} className="w-fit">{STATUS_META[status].label}</StatusPill>
+                          <StatusPill tone={STATUS_META[status].tone} className="w-fit">
+                            {STATUS_META[status].label}
+                          </StatusPill>
                         </button>
                       );
                     })}
@@ -197,75 +237,102 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
         </div>
       )}
 
+      {/* ----------------------------------------------------------------- */}
+      {/* 3. DENSE LIST VIEW                                                */}
+      {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
         <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
-          {callsByDay.map(([day, dayCalls]) => (
-            <div key={day}>
-              <div className="border-b border-t border-zinc-800 bg-zinc-900/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400">
-                {new Date(day + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-              </div>
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500">
-                    <th className="px-4 py-2 font-semibold">Prospect</th>
-                    <th className="px-4 py-2 font-semibold">Call time</th>
-                    <th className="px-4 py-2 font-semibold">Match score</th>
-                    <th className="px-4 py-2 font-semibold">Status</th>
-                    <th className="px-4 py-2 font-semibold" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {dayCalls.map((call) => {
-                    const status = deriveStatus(call);
-                    return (
-                      <tr key={call.id} className="border-b border-zinc-900 last:border-b-0 hover:bg-zinc-900/40">
-                        <td className="px-4 py-2.5 font-medium text-white">{call.prospectName ?? "Unnamed prospect"}</td>
-                        <td className="px-4 py-2.5 font-mono text-zinc-400">{timeStr(call.callTime)}</td>
-                        <td className="px-4 py-2.5 text-zinc-400">{call.personMatchScore != null ? `${call.personMatchScore}` : "—"}</td>
-                        <td className="px-4 py-2.5"><StatusPill tone={STATUS_META[status].tone}>{STATUS_META[status].label}</StatusPill></td>
-                        <td className="px-4 py-2.5 text-right">
-                          <button onClick={() => setSelected(call)} className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer">
-                            View brief
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          {callsByDay.length === 0 ? (
+            <div className="p-8 text-center text-xs text-zinc-500 italic">
+              No sales calls scheduled in this briefing window.
             </div>
-          ))}
+          ) : (
+            callsByDay.map(([day, dayCalls]) => (
+              <div key={day}>
+                <div className="border-b border-t border-zinc-800 bg-zinc-900/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400">
+                  {new Date(day + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+                </div>
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500">
+                      <th className="px-4 py-2 font-semibold">Prospect</th>
+                      <th className="px-4 py-2 font-semibold">Call time</th>
+                      <th className="px-4 py-2 font-semibold">Match score</th>
+                      <th className="px-4 py-2 font-semibold">Status</th>
+                      <th className="px-4 py-2 font-semibold" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dayCalls.map((call) => {
+                      const status = deriveStatus(call);
+                      return (
+                        <tr key={call.id} className="border-b border-zinc-900 last:border-b-0 hover:bg-zinc-900/40">
+                          <td className="px-4 py-2.5 font-medium text-white">{call.prospectName ?? "Unnamed prospect"}</td>
+                          <td className="px-4 py-2.5 font-mono text-zinc-400">{timeStr(call.callTime)}</td>
+                          <td className="px-4 py-2.5 text-zinc-400">{call.personMatchScore != null ? `${call.personMatchScore}` : "—"}</td>
+                          <td className="px-4 py-2.5"><StatusPill tone={STATUS_META[status].tone}>{STATUS_META[status].label}</StatusPill></td>
+                          <td className="px-4 py-2.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setSelected(call)}
+                              className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer"
+                            >
+                              View brief
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ))
+          )}
         </div>
       )}
 
+      {/* ----------------------------------------------------------------- */}
+      {/* 4. STAGE BOARD (KANBAN) VIEW                                      */}
+      {/* ----------------------------------------------------------------- */}
       {mode === "board" && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {(Object.keys(board) as CallStatus[]).map((status) => (
-            <div key={status} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-2.5">
-              <div className="mb-2 flex items-center justify-between px-1">
+            <div key={status} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3">
+              <div className="mb-2.5 flex items-center justify-between px-1">
                 <span className="text-xs font-bold text-zinc-300">{STATUS_META[status].label}</span>
-                <span className="text-[10px] font-mono text-zinc-500">{board[status].length}</span>
+                <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
+                  {board[status].length}
+                </span>
               </div>
+
               <div className="space-y-2">
                 {board[status].map((call) => (
                   <button
                     key={call.id}
+                    type="button"
                     onClick={() => setSelected(call)}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 p-2.5 text-left text-xs hover:border-zinc-700 cursor-pointer"
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 p-2.5 text-left text-xs hover:border-zinc-700 cursor-pointer transition-all"
                   >
                     <p className="font-semibold text-white">{call.prospectName ?? "Unnamed prospect"}</p>
-                    <p className="mt-0.5 flex items-center gap-1 text-[10px] text-zinc-500">
+                    <p className="mt-1 flex items-center gap-1 text-[10px] text-zinc-400">
                       <Clock size={10} /> {timeStr(call.callTime)}
                     </p>
                   </button>
                 ))}
-                {board[status].length === 0 && <p className="px-1 py-3 text-center text-[10px] text-zinc-600">Nothing here</p>}
+                {board[status].length === 0 && (
+                  <div className="rounded-xl border border-dashed border-zinc-900 p-4 text-center text-[10px] text-zinc-600">
+                    No calls in this stage
+                  </div>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
+      {/* ----------------------------------------------------------------- */}
+      {/* 5. SLIDE-OVER DETAIL DRAWER                                       */}
+      {/* ----------------------------------------------------------------- */}
       <BriefDrawer call={selected} onClose={() => setSelected(null)} destinationLabel={run.stack?.brief_landing_destination} />
     </div>
   );
@@ -321,7 +388,7 @@ function BriefDrawer({
                   ) : call.researchStatus === "skipped_low_confidence" ? (
                     <p className="italic text-zinc-500">Skipped — identity match confidence was below the threshold, so no research or brief was generated for this call.</p>
                   ) : (
-                    <p className="italic text-zinc-500">No brief text stored for this call — it likely ran before per-call brief persistence was added.</p>
+                    <p className="italic text-zinc-500">No brief text stored for this call.</p>
                   )}
                 </div>
               </div>
