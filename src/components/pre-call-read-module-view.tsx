@@ -4,7 +4,6 @@ import { useMemo, useState, useEffect, useCallback, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Search,
   List,
   ChevronDown,
   LayoutList,
@@ -17,7 +16,6 @@ import {
   PauseCircle,
   PlayCircle,
   Copy,
-  Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
@@ -46,7 +44,7 @@ export interface SkillRun {
 type FilterStatus = "all" | "running" | "needs_attention" | "completed";
 
 // ---------------------------------------------------------------------------
-// Action & Diagnostic Summaries (from LiveExecutionFeed)
+// Action & Diagnostic Summaries
 // ---------------------------------------------------------------------------
 function actionSummary(run: SkillRun): string {
   const s = run.status.toLowerCase();
@@ -103,7 +101,7 @@ function RelativeTime({ isoString }: { isoString: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Quick-Action Builder for Row Panel
+// Quick-Action Builder
 // ---------------------------------------------------------------------------
 function buildRunSections(
   run: SkillRun,
@@ -186,17 +184,15 @@ export function PreCallReadModuleView({
   runs: SkillRun[];
   manifest: SkillManifestEntry;
 }) {
-  const router =  useRouter();
+  const router = useRouter();
   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
   const [polling, setPolling] = useState(true);
   const [mode, setMode] = useState<"list" | "board">("list");
-  const [filterText, setFilterText] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
   const [groupRepeats, setGroupRepeats] = useState(true);
   const [pageSize, setPageSize] = useState<10 | 25 | 50>(10);
   const [page, setPage] = useState(0);
 
-  // Quick action dispatch hook
   const { busyKey, error, run: dispatch } = useQuickActions();
 
   // ---------------------------------------------------------------------------
@@ -209,7 +205,7 @@ export function PreCallReadModuleView({
       const data = await res.json();
       if (data.runs) setRuns(data.runs);
     } catch {
-      // Ignored on unmount
+      // Ignored
     }
   }, []);
 
@@ -223,9 +219,7 @@ export function PreCallReadModuleView({
     };
   }, [polling, refresh]);
 
-  // ---------------------------------------------------------------------------
-  // Dynamic Real-time Counts
-  // ---------------------------------------------------------------------------
+  // Dynamic Real-time Status Counts
   const counts = useMemo(() => {
     let running = 0;
     let needsAttention = 0;
@@ -241,30 +235,20 @@ export function PreCallReadModuleView({
     return { all: runs.length, running, needs_attention: needsAttention, completed };
   }, [runs]);
 
-  // ---------------------------------------------------------------------------
-  // Filtered & Grouped Runs
-  // ---------------------------------------------------------------------------
+  // Filtered Runs
   const filteredRuns = useMemo(() => {
     return runs.filter((r) => {
-      const q = filterText.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        (r.buyerName ?? "").toLowerCase().includes(q) ||
-        (r.subjectLabel ?? "").toLowerCase().includes(q) ||
-        actionSummary(r).toLowerCase().includes(q) ||
-        (r.id ?? "").toLowerCase().includes(q);
-
       const s = r.status.toLowerCase();
       let matchesStatus = true;
       if (statusFilter === "running") matchesStatus = s === "running" || s === "in_progress";
       if (statusFilter === "needs_attention") matchesStatus = s === "failed" || s === "error" || s === "timed_out";
       if (statusFilter === "completed") matchesStatus = s === "success" || s === "completed";
 
-      return matchesSearch && matchesStatus;
+      return matchesStatus;
     });
-  }, [runs, filterText, statusFilter]);
+  }, [runs, statusFilter]);
 
-  // Signature grouping (collapses repeated identical errors/runs)
+  // Grouping Repeats
   const runGroups = useMemo(() => {
     if (!groupRepeats) {
       return filteredRuns.map((r) => ({ signature: r.id, items: [r], latest: r, count: 1 }));
@@ -302,99 +286,90 @@ export function PreCallReadModuleView({
   return (
     <div className="space-y-3 font-sans antialiased text-zinc-100">
       {/* ----------------------------------------------------------------- */}
-      {/* TOOLBAR: SEARCH + PILLS + LIVE POLL TOGGLE                       */}
+      {/* TOOLBAR: STATUS PILLS + LIVE CONTROLS (SEARCH REMOVED)           */}
       {/* ----------------------------------------------------------------- */}
-      <div className="space-y-3">
-        <div className="relative w-full">
-          <Search size={15} className="absolute left-3.5 top-3 text-zinc-400" />
-          <input
-            value={filterText}
-            onChange={(e) => { setFilterText(e.target.value); setPage(0); }}
-            placeholder="Find a project or client..."
-            className="w-full rounded-full border border-zinc-800 bg-[#161719] py-2.5 pl-10 pr-24 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-600 focus:outline-none transition-colors"
-          />
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        {/* Transparent Filter Pills (Labels simplified to "All 18", "Running 0", etc.) */}
+        <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+          {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
+            const isActive = statusFilter === tab;
+            const labels: Record<FilterStatus, string> = {
+              all: `All ${counts.all}`,
+              running: `Running ${counts.running}`,
+              needs_attention: `Needs attention ${counts.needs_attention}`,
+              completed: `Completed ${counts.completed}`,
+            };
+
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => { setStatusFilter(tab); setPage(0); }}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap bg-transparent",
+                  isActive
+                    ? "border-zinc-400 text-white font-semibold"
+                    : "border-zinc-800/90 text-zinc-400 hover:text-white hover:border-zinc-600"
+                )}
+              >
+                <span>{labels[tab]}</span>
+                <ChevronDown size={13} className="text-zinc-400 shrink-0" />
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Live Controls + List/Board View Switcher */}
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={() => setPolling((p) => !p)}
-            className="absolute right-3 top-2.5 text-[10.5px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            className="text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
           >
             {polling ? "● Live" : "Paused"}
           </button>
-        </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 overflow-x-auto py-0.5">
-            {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
-              const isActive = statusFilter === tab;
-              const labels: Record<FilterStatus, string> = {
-                all: `Status: All (${counts.all})`,
-                running: `Status: Running (${counts.running})`,
-                needs_attention: `Status: Needs attention (${counts.needs_attention})`,
-                completed: `Status: Completed (${counts.completed})`,
-              };
+          <button
+            type="button"
+            onClick={() => setGroupRepeats((g) => !g)}
+            className={cn(
+              "px-2.5 py-1 rounded-full text-[11px] font-mono border transition-colors cursor-pointer bg-transparent",
+              groupRepeats ? "border-zinc-600 text-zinc-300" : "border-zinc-800 text-zinc-500"
+            )}
+          >
+            Group Repeats {groupRepeats ? "ON" : "OFF"}
+          </button>
 
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => { setStatusFilter(tab); setPage(0); }}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap bg-transparent",
-                    isActive
-                      ? "border-zinc-400 text-white font-semibold"
-                      : "border-zinc-800/90 text-zinc-400 hover:text-white hover:border-zinc-600"
-                  )}
-                >
-                  <span>{labels[tab]}</span>
-                  <ChevronDown size={13} className="text-zinc-400 shrink-0" />
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-full border border-zinc-800/90 bg-transparent p-0.5">
             <button
               type="button"
-              onClick={() => setGroupRepeats((g) => !g)}
+              onClick={() => setMode("list")}
               className={cn(
-                "px-2.5 py-1 rounded-full text-[11px] font-mono border transition-colors cursor-pointer",
-                groupRepeats ? "border-zinc-600 text-zinc-300 bg-zinc-900" : "border-zinc-800 text-zinc-500"
+                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
+                mode === "list" ? "text-white font-semibold border border-zinc-600" : "text-zinc-400 hover:text-zinc-200"
               )}
             >
-              Group Repeats {groupRepeats ? "ON" : "OFF"}
+              <LayoutList size={13} />
+              <span>List</span>
             </button>
 
-            <div className="flex items-center rounded-full border border-zinc-800/90 bg-transparent p-0.5">
-              <button
-                type="button"
-                onClick={() => setMode("list")}
-                className={cn(
-                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
-                  mode === "list" ? "text-white font-semibold border border-zinc-600" : "text-zinc-400 hover:text-zinc-200"
-                )}
-              >
-                <LayoutList size={13} />
-                <span>List</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMode("board")}
-                className={cn(
-                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
-                  mode === "board" ? "text-white font-semibold border border-zinc-600" : "text-zinc-400 hover:text-zinc-200"
-                )}
-              >
-                <Kanban size={13} />
-                <span>Board</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setMode("board")}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
+                mode === "board" ? "text-white font-semibold border border-zinc-600" : "text-zinc-400 hover:text-zinc-200"
+              )}
+            >
+              <Kanban size={13} />
+              <span>Board</span>
+            </button>
           </div>
         </div>
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* ASANA-STYLE CURATED LIST VIEW WITH RICH ACTION DIAGNOSTICS         */}
+      {/* TRANSPARENT LIST VIEW                                             */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
         <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
@@ -402,7 +377,7 @@ export function PreCallReadModuleView({
             <thead>
               <tr className="border-b border-zinc-800/80 text-[11px] text-zinc-400">
                 <th className="px-4 py-3 font-normal">Name & Diagnostic Action</th>
-                <th className="px-4 py-3 font-normal text-center w-24">Skill</th>
+                <th className="px-4 py-3 font-normal text-center w-24">Members</th>
                 <th className="px-4 py-3 font-normal text-right">Status</th>
                 <th className="w-10 px-2" />
               </tr>
@@ -474,7 +449,7 @@ export function PreCallReadModuleView({
                         </div>
                       </td>
 
-                      {/* Quick-Action Panel Gear Menu */}
+                      {/* Quick-Action Gear Menu */}
                       <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <ActionPanel
                           open={false}
