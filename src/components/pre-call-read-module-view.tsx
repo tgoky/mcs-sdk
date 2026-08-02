@@ -9,13 +9,11 @@ import {
   Edit2,
   Clock,
   Maximize2,
-  FileText,
-  AlertCircle,
-  Loader2,
-  CheckCircle2,
+  ChevronDown,
+  LayoutList,
+  Kanban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ViewSwitcher, type RunViewMode } from "@/app/dashboard/runs/[id]/_shared/view-switcher";
 import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import type { SkillManifestEntry } from "@/lib/skill-manifest";
 
@@ -72,8 +70,8 @@ export function PreCallReadModuleView({
   manifest: SkillManifestEntry;
 }) {
   const router = useRouter();
-  // 1. Default view is LIST, Calendar removed
-  const [mode, setMode] = useState<RunViewMode>("list");
+  // Only List (default) and Board mode — Calendar removed completely
+  const [mode, setMode] = useState<"list" | "board">("list");
   const [filterText, setFilterText] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
 
@@ -117,39 +115,31 @@ export function PreCallReadModuleView({
 
   return (
     <div className="space-y-4 font-sans antialiased text-zinc-100">
-      {/* Module Title Header */}
-      <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">{manifest.name}</h1>
-          <p className="text-xs text-zinc-400 mt-0.5">{manifest.description}</p>
-        </div>
-      </div>
-
       {/* ----------------------------------------------------------------- */}
-      {/* ASANA TOOLBAR: PILL SEARCH + PILL STATUSES                        */}
+      {/* ASANA-STYLE TOOLBAR: SEARCH + PILL FILTERS WITH DROPDOWN CHEVRONS  */}
       {/* ----------------------------------------------------------------- */}
       <div className="space-y-3">
-        {/* Full-width Pill Search Input (Matching screenshot) */}
+        {/* Transparent Full-width Search Input */}
         <div className="relative w-full">
           <Search size={15} className="absolute left-3.5 top-3 text-zinc-400" />
           <input
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Find a project or client..."
-            className="w-full rounded-full border border-zinc-800 bg-[#18191b] py-2.5 pl-10 pr-4 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none transition-colors"
+            className="w-full rounded-full border border-zinc-800 bg-[#1e1f22]/80 py-2.5 pl-10 pr-4 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none transition-colors"
           />
         </div>
 
-        {/* Filter Pills + View Switcher */}
+        {/* Filter Pills with Chevron Down + List/Board Switcher */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 overflow-x-auto py-0.5">
             {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
               const isActive = statusFilter === tab;
               const labels: Record<FilterStatus, string> = {
-                all: "All",
-                running: "Running",
-                needs_attention: "Needs attention",
-                completed: "Completed",
+                all: "Status: All",
+                running: "Status: Running",
+                needs_attention: "Status: Needs attention",
+                completed: "Status: Completed",
               };
 
               return (
@@ -158,24 +148,54 @@ export function PreCallReadModuleView({
                   type="button"
                   onClick={() => setStatusFilter(tab)}
                   className={cn(
-                    "px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap",
+                    "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap",
                     isActive
-                      ? "bg-zinc-800 border-zinc-700 text-white font-semibold"
-                      : "bg-[#18191b] border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700"
+                      ? "bg-[#2b2d31] border-zinc-600 text-white font-semibold shadow-xs"
+                      : "bg-[#18191b] border-zinc-800/90 text-zinc-300 hover:text-white hover:border-zinc-700"
                   )}
                 >
-                  {labels[tab]}
+                  <span>{labels[tab]}</span>
+                  <ChevronDown size={13} className="text-zinc-400 shrink-0" />
                 </button>
               );
             })}
           </div>
 
-          <ViewSwitcher value={mode} onChange={setMode} />
+          {/* Clean View Switcher (ONLY List & Board) */}
+          <div className="flex items-center rounded-full border border-zinc-800/90 bg-[#18191b] p-0.5">
+            <button
+              type="button"
+              onClick={() => setMode("list")}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer",
+                mode === "list"
+                  ? "bg-[#2b2d31] text-white font-semibold border border-zinc-700/80"
+                  : "text-zinc-400 hover:text-zinc-200"
+              )}
+            >
+              <LayoutList size={13} />
+              <span>List</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMode("board")}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer",
+                mode === "board"
+                  ? "bg-[#2b2d31] text-white font-semibold border border-zinc-700/80"
+                  : "text-zinc-400 hover:text-zinc-200"
+              )}
+            >
+              <Kanban size={13} />
+              <span>Board</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* ASANA-STYLE CURATED LIST VIEW (NO CARD BACKGROUND)                */}
+      {/* ASANA-STYLE CURATED LIST VIEW (TRANSPARENT, NO CARD BACKGROUND)   */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
         <div className="w-full font-sans border-t border-b border-zinc-800/80">
@@ -199,27 +219,28 @@ export function PreCallReadModuleView({
                     onClick={() => router.push(`/dashboard/runs/${r.id}`)}
                     className="group hover:bg-zinc-800/40 transition-colors cursor-pointer"
                   >
-                    {/* Name Column: Icon + Primary Title + Emerald Subtext */}
+                    {/* Name Column: Mint Icon Container (Screenshot 3) + Primary Title + Emerald Subtext */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-950/60 border border-teal-800/50 text-teal-400 shrink-0">
-                          <List size={15} />
+                        {/* Exact Mint Rounded Box with List Icon from Screenshot 3 */}
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#82e6d4] text-[#05221d] shrink-0 font-bold">
+                          <List size={15} strokeWidth={2.5} />
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-white group-hover:text-amber-300 transition-colors truncate">
                             {title}
                           </p>
                           <p className="text-[11px] font-sans text-emerald-400 font-medium truncate mt-0.5">
-                            {r.buyerName ?? "Client"} · {formatRelativeTime(r.startedAt)}
+                            {r.buyerName ?? "Client"} · Last run {formatRelativeTime(r.startedAt)}
                           </p>
                         </div>
                       </div>
                     </td>
 
-                    {/* Members Column (Solid Pink "PR" Avatar Circle) */}
+                    {/* Members Column (Solid Pink "PR" Avatar Circle from Screenshot 2) */}
                     <td className="px-4 py-3.5 text-center">
                       <span
-                        className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-pink-300 shadow-xs"
+                        className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-[#f2a8e4] shadow-xs"
                         title="Pre-Call Read Module"
                       >
                         PR
@@ -263,7 +284,7 @@ export function PreCallReadModuleView({
       {/* KANBAN BOARD VIEW                                                 */}
       {/* ----------------------------------------------------------------- */}
       {mode === "board" && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 font-sans">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 font-sans pt-2">
           {(["running", "needs_attention", "completed"] as const).map((colKey) => {
             const colTitles = {
               running: "In Progress",
@@ -289,7 +310,7 @@ export function PreCallReadModuleView({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-pink-300 shrink-0">
+                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-[#f2a8e4] shrink-0">
                             PR
                           </span>
                           <div className="min-w-0">
