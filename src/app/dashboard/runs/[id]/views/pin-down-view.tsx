@@ -15,7 +15,8 @@ import {
   Clock,
   ScanSearch,
   Search,
-  CheckCircle2,
+  Maximize2,
+  Sliders,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingPlatformLabel, hostingPlatformLabel } from "@/lib/copy";
@@ -23,6 +24,7 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
 import { StatusPill } from "../_shared/status-pill";
 import { EmptyState } from "../_shared/empty-state";
+import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { PinDownDetail } from "../_shared/types";
 
 const PILLAR_LABEL: Record<string, string> = {
@@ -32,11 +34,22 @@ const PILLAR_LABEL: Record<string, string> = {
   objections: "Objections",
 };
 
+interface InspectableCard {
+  id: string;
+  type: "deployment" | "brief" | "script" | "voice" | "stack" | "audit";
+  title: string;
+  subtitle?: string;
+  badge?: string;
+  tone?: "success" | "warning" | "danger" | "info" | "neutral";
+  payload: any;
+}
+
 export function PinDownView({ detail }: { detail: PinDownDetail }) {
   const { run } = detail;
   const [mode, setMode] = useState<RunViewMode>("calendar");
   const [filterText, setFilterText] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [activeDrawerCard, setActiveDrawerCard] = useState<InspectableCard | null>(null);
 
   const deployment = run.confirmationPageDeployment;
   const isLive = deployment?.mode === "live";
@@ -53,18 +66,117 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
   const briefs = run.adCreativeBriefs?.briefs ?? [];
   const scriptPack = run.pinDownScriptPack;
 
-  // Filter deliverables across Search input
-  const filteredBriefs = useMemo(() => {
-    if (!filterText.trim()) return briefs;
-    const q = filterText.toLowerCase();
-    return briefs.filter(
-      (b) =>
-        b.hook.toLowerCase().includes(q) ||
-        b.angle.toLowerCase().includes(q) ||
-        b.pillar.toLowerCase().includes(q) ||
-        b.cta.toLowerCase().includes(q)
-    );
-  }, [briefs, filterText]);
+  // Unroll individual deliverables for Board & List views
+  const boardColumns = useMemo(() => {
+    const q = filterText.toLowerCase().trim();
+
+    // 1. Platform Setup
+    const setupCards: InspectableCard[] = [
+      {
+        id: "stack-sync",
+        type: "stack",
+        title: "Platform Stack Sync",
+        subtitle: `Booking: ${bookingPlatformLabel(run.stack?.booking_platform)} · Hosting: ${hostingPlatformLabel(run.stack?.hosting_platform)}`,
+        badge: run.stack?.webhook_receiver_mode ?? "none",
+        tone: run.stack?.webhook_receiver_mode === "webhook" ? "success" : "info",
+        payload: run.stack,
+      },
+    ];
+
+    // 2. Brand & Voice
+    const voiceCards: InspectableCard[] = run.brandVoiceProfile
+      ? [
+          {
+            id: "voice-profile",
+            type: "voice",
+            title: "Brand Voice & Tone Profile",
+            subtitle: `Formal/Casual: ${run.brandVoiceProfile.tone.formal_casual.score}/5 · ${run.brandVoiceProfile.vocabulary.signature.length} tokens`,
+            badge: run.brandVoiceProfile.source_path === "default" ? "Default Fallback" : "Extracted",
+            tone: run.brandVoiceProfile.source_path === "default" ? "neutral" : "info",
+            payload: run.brandVoiceProfile,
+          },
+        ]
+      : [];
+
+    // 3. Creative Assets (UNROLLED: Every brief and script is its OWN individual card)
+    const creativeCards: InspectableCard[] = [];
+
+    briefs.forEach((b) => {
+      creativeCards.push({
+        id: `brief-${b.id}`,
+        type: "brief",
+        title: `Ad Brief: ${PILLAR_LABEL[b.pillar] ?? b.pillar}`,
+        subtitle: b.hook,
+        badge: b.suggestedFormat,
+        tone: "warning",
+        payload: b,
+      });
+    });
+
+    if (scriptPack?.heroScript) {
+      creativeCards.push({
+        id: "script-hero",
+        type: "script",
+        title: `Hero Script: ${scriptPack.heroScript.title}`,
+        subtitle: `${scriptPack.heroScript.targetLengthSeconds}s target length`,
+        badge: "Hero VSL",
+        tone: "info",
+        payload: scriptPack.heroScript,
+      });
+    }
+
+    (scriptPack?.breakoutScripts ?? []).forEach((s) => {
+      creativeCards.push({
+        id: `script-${s.id}`,
+        type: "script",
+        title: `Breakout Script: ${s.title}`,
+        subtitle: s.script.slice(0, 80) + "...",
+        badge: "Breakout",
+        tone: "neutral",
+        payload: s,
+      });
+    });
+
+    // 4. Deployment & Audit
+    const deployCards: InspectableCard[] = [
+      {
+        id: "confirmation-deploy",
+        type: "deployment",
+        title: "Confirmation Page",
+        subtitle: isLive
+          ? run.confirmationPageUrl ?? "Published live"
+          : isPasteReady
+          ? "Paste-Ready Code Generated"
+          : "Deployment Pending",
+        badge: deployment?.mode ?? "Not Deployed",
+        tone: isLive ? "success" : isPasteReady ? "info" : "neutral",
+        payload: { deployment, url: run.confirmationPageUrl, html: run.pasteReadyHtml, instructions: run.pasteReadyInstructions },
+      },
+    ];
+
+    if (run.pinDownPageAudit) {
+      deployCards.push({
+        id: "page-audit",
+        type: "audit",
+        title: "Existing Page Audit",
+        subtitle: `${run.pinDownPageAudit.existingPageStrengths.length} Strengths · ${run.pinDownPageAudit.existingPageWeaknesses.length} Weaknesses`,
+        badge: "Audited",
+        tone: "info",
+        payload: run.pinDownPageAudit,
+      });
+    }
+
+    // Apply filter
+    const filterFn = (card: InspectableCard) =>
+      !q || card.title.toLowerCase().includes(q) || (card.subtitle ?? "").toLowerCase().includes(q);
+
+    return [
+      { id: "setup", title: "1. Platform Setup", cards: setupCards.filter(filterFn) },
+      { id: "brand", title: "2. Brand & Voice", cards: voiceCards.filter(filterFn) },
+      { id: "creative", title: "3. Creative Assets", cards: creativeCards.filter(filterFn) },
+      { id: "deployment", title: "4. Deployment & Audit", cards: deployCards.filter(filterFn) },
+    ];
+  }, [run, briefs, scriptPack, filterText, isLive, isPasteReady, deployment]);
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
@@ -167,71 +279,42 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
               </tr>
             </thead>
             <tbody>
-              {/* Confirmation Page Row */}
-              <tr className="border-b border-zinc-900 hover:bg-zinc-900/40">
-                <td className="px-4 py-2.5 font-medium text-white flex items-center gap-2">
-                  <Code2 size={12} className="text-zinc-400" />
-                  Confirmation Page
-                </td>
-                <td className="px-4 py-2.5 text-zinc-300">
-                  {isLive ? "Live Deployed Page" : isPasteReady ? "Paste-Ready HTML Code" : "Not Deployed"}
-                </td>
-                <td className="px-4 py-2.5 font-mono text-zinc-400">
-                  {hostingPlatformLabel(run.stack?.hosting_platform)}
-                </td>
-                <td className="px-4 py-2.5 text-right">
-                  {run.pasteReadyHtml && (
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(run.pasteReadyHtml!, "list-html")}
-                      className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer"
-                    >
-                      {copiedKey === "list-html" ? "Copied" : "Copy Code"}
-                    </button>
-                  )}
-                </td>
-              </tr>
-
-              {/* Ad Creative Brief Rows */}
-              {filteredBriefs.map((b) => (
-                <tr key={b.id} className="border-b border-zinc-900 hover:bg-zinc-900/40">
-                  <td className="px-4 py-2.5 font-medium text-white flex items-center gap-2">
-                    <Megaphone size={12} className="text-amber-400" />
-                    Ad Brief ({PILLAR_LABEL[b.pillar] ?? b.pillar})
-                  </td>
-                  <td className="px-4 py-2.5 text-zinc-300 truncate max-w-xs">{b.hook}</td>
-                  <td className="px-4 py-2.5 font-mono text-zinc-400">{b.suggestedFormat}</td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(`Hook: ${b.hook}\nAngle: ${b.angle}\nCTA: ${b.cta}`, `brief-${b.id}`)}
-                      className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer"
-                    >
-                      {copiedKey === `brief-${b.id}` ? "Copied" : "Copy Brief"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-
-              {/* Video Script Row */}
-              {scriptPack && (
-                <tr className="border-b border-zinc-900 hover:bg-zinc-900/40">
-                  <td className="px-4 py-2.5 font-medium text-white flex items-center gap-2">
-                    <Film size={12} className="text-sky-400" />
-                    Hero Video Script
-                  </td>
-                  <td className="px-4 py-2.5 text-zinc-300 truncate max-w-xs">{scriptPack.heroScript.title}</td>
-                  <td className="px-4 py-2.5 font-mono text-zinc-400">{scriptPack.heroScript.targetLengthSeconds}s target</td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(scriptPack.heroScript.chapters.map((c) => c.script).join("\n\n"), "hero-script")}
-                      className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer"
-                    >
-                      {copiedKey === "hero-script" ? "Copied" : "Copy Script"}
-                    </button>
-                  </td>
-                </tr>
+              {boardColumns.flatMap((col) =>
+                col.cards.map((card) => (
+                  <tr
+                    key={card.id}
+                    className="border-b border-zinc-900 last:border-b-0 hover:bg-zinc-900/40 cursor-pointer transition-colors"
+                    onClick={() => setActiveDrawerCard(card)}
+                  >
+                    <td className="px-4 py-2.5 font-medium text-white flex items-center gap-2">
+                      {card.type === "brief" && <Megaphone size={12} className="text-amber-400" />}
+                      {card.type === "script" && <Film size={12} className="text-sky-400" />}
+                      {card.type === "deployment" && <Code2 size={12} className="text-emerald-400" />}
+                      {card.type === "voice" && <Palette size={12} className="text-amber-400" />}
+                      {card.type === "stack" && <Webhook size={12} className="text-emerald-400" />}
+                      {card.type === "audit" && <ScanSearch size={12} className="text-sky-400" />}
+                      {card.title}
+                    </td>
+                    <td className="px-4 py-2.5 text-zinc-300 truncate max-w-xs font-sans">
+                      {card.subtitle}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-zinc-400">
+                      {card.badge && <StatusPill tone={card.tone ?? "neutral"}>{card.badge}</StatusPill>}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveDrawerCard(card);
+                        }}
+                        className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer"
+                      >
+                        Inspect
+                      </button>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -239,97 +322,290 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
       )}
 
       {/* ----------------------------------------------------------------- */}
-      {/* 4. ASANA KANBAN BOARD VIEW                                        */}
+      {/* 4. ASANA KANBAN BOARD VIEW (UNROLLED CARDS + DRAWER TRIGGER)      */}
       {/* ----------------------------------------------------------------- */}
       {mode === "board" && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Stage 1: Platform Setup */}
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3">
-            <div className="mb-2.5 flex items-center justify-between px-1">
-              <span className="text-xs font-bold text-zinc-300">1. Platform Setup</span>
-              <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">1</span>
-            </div>
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 text-xs space-y-1.5">
-              <p className="font-semibold text-white flex items-center gap-1.5">
-                <Webhook size={12} className="text-emerald-400" /> Stack Integration
-              </p>
-              <p className="text-[10px] text-zinc-400">Booking: {bookingPlatformLabel(run.stack?.booking_platform)}</p>
-              <p className="text-[10px] text-zinc-400">Hosting: {hostingPlatformLabel(run.stack?.hosting_platform)}</p>
-            </div>
-          </div>
-
-          {/* Stage 2: Brand & Voice */}
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3">
-            <div className="mb-2.5 flex items-center justify-between px-1">
-              <span className="text-xs font-bold text-zinc-300">2. Brand & Voice</span>
-              <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
-                {run.brandVoiceProfile ? 1 : 0}
-              </span>
-            </div>
-            {run.brandVoiceProfile ? (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 text-xs space-y-1.5">
-                <p className="font-semibold text-white flex items-center gap-1.5">
-                  <Palette size={12} className="text-amber-400" /> Voice Extraction
-                </p>
-                <p className="text-[10px] text-zinc-400">Formal/Casual: {run.brandVoiceProfile.tone.formal_casual.score}/5</p>
-                <p className="text-[10px] text-zinc-400">Vocabulary: {run.brandVoiceProfile.vocabulary.signature.length} tokens</p>
+          {boardColumns.map((col) => (
+            <div key={col.id} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between px-1 mb-1">
+                <span className="text-xs font-bold text-zinc-300">{col.title}</span>
+                <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
+                  {col.cards.length}
+                </span>
               </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-zinc-900 p-4 text-center text-[10px] text-zinc-600">Pending</div>
-            )}
-          </div>
 
-          {/* Stage 3: Creative & Copy */}
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3">
-            <div className="mb-2.5 flex items-center justify-between px-1">
-              <span className="text-xs font-bold text-zinc-300">3. Creative Assets</span>
-              <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
-                {briefs.length + (scriptPack ? 1 : 0)}
-              </span>
-            </div>
-            <div className="space-y-2">
-              {briefs.length > 0 && (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 text-xs space-y-1">
-                  <p className="font-semibold text-white flex items-center gap-1.5">
-                    <Megaphone size={12} className="text-sky-400" /> Ad Briefs ({briefs.length})
-                  </p>
-                  <p className="text-[10px] text-zinc-400 truncate">Hook: {briefs[0].hook}</p>
-                </div>
-              )}
-              {scriptPack && (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 text-xs space-y-1">
-                  <p className="font-semibold text-white flex items-center gap-1.5">
-                    <Film size={12} className="text-emerald-400" /> Video Script Pack
-                  </p>
-                  <p className="text-[10px] text-zinc-400">{scriptPack.heroScript.title}</p>
-                </div>
-              )}
-            </div>
-          </div>
+              <div className="space-y-2">
+                {col.cards.map((card) => (
+                  <button
+                    key={card.id}
+                    type="button"
+                    onClick={() => setActiveDrawerCard(card)}
+                    className="w-full text-left rounded-xl border border-zinc-800 bg-zinc-900/90 hover:border-zinc-700 p-3 transition-all cursor-pointer group shadow-sm flex flex-col gap-1.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors flex items-center gap-1.5">
+                        {card.type === "brief" && <Megaphone size={12} className="text-amber-400 shrink-0" />}
+                        {card.type === "script" && <Film size={12} className="text-sky-400 shrink-0" />}
+                        {card.type === "deployment" && <Globe size={12} className="text-emerald-400 shrink-0" />}
+                        {card.type === "voice" && <Palette size={12} className="text-amber-400 shrink-0" />}
+                        {card.type === "stack" && <Webhook size={12} className="text-emerald-400 shrink-0" />}
+                        {card.type === "audit" && <ScanSearch size={12} className="text-sky-400 shrink-0" />}
+                        <span className="truncate">{card.title}</span>
+                      </p>
+                      <Maximize2 size={12} className="text-zinc-600 group-hover:text-zinc-300 shrink-0 mt-0.5" />
+                    </div>
 
-          {/* Stage 4: Deployment & Audit */}
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3">
-            <div className="mb-2.5 flex items-center justify-between px-1">
-              <span className="text-xs font-bold text-zinc-300">4. Deployment</span>
-              <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">1</span>
+                    {card.subtitle && (
+                      <p className="text-[11px] text-zinc-400 font-sans leading-snug line-clamp-2">
+                        {card.subtitle}
+                      </p>
+                    )}
+
+                    {card.badge && (
+                      <div className="pt-1">
+                        <StatusPill tone={card.tone ?? "neutral"} className="text-[9.5px]">
+                          {card.badge}
+                        </StatusPill>
+                      </div>
+                    )}
+                  </button>
+                ))}
+
+                {col.cards.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-zinc-900 p-4 text-center text-[10px] text-zinc-600">
+                    No items in this stage
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 text-xs space-y-1.5">
-              <p className="font-semibold text-white flex items-center gap-1.5">
-                <Globe size={12} className="text-emerald-400" /> Confirmation Page
-              </p>
-              <StatusPill tone={isLive ? "success" : isPasteReady ? "info" : "neutral"}>
-                {deployment?.mode ?? "Not Deployed"}
-              </StatusPill>
-            </div>
-          </div>
+          ))}
         </div>
       )}
+
+      {/* ----------------------------------------------------------------- */}
+      {/* 5. SLIDE-OVER TASK INSPECTION DRAWER                              */}
+      {/* ----------------------------------------------------------------- */}
+      <PinDownDetailDrawer
+        card={activeDrawerCard}
+        onClose={() => setActiveDrawerCard(null)}
+        onCopy={handleCopy}
+        copiedKey={copiedKey}
+      />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// SUB-COMPONENTS
+// ASANA TASK DETAIL DRAWER (SLIDE-OVER SHEET)
+// ---------------------------------------------------------------------------
+function PinDownDetailDrawer({
+  card,
+  onClose,
+  onCopy,
+  copiedKey,
+}: {
+  card: InspectableCard | null;
+  onClose: () => void;
+  onCopy: (text: string, key: string) => void;
+  copiedKey: string | null;
+}) {
+  return (
+    <Sheet open={!!card} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent widthClassName="w-full sm:max-w-xl">
+        {card && (
+          <>
+            <SheetHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-amber-400">
+                  <Sliders size={15} />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                    Pin-Down Deliverable
+                  </span>
+                </div>
+                {card.badge && <StatusPill tone={card.tone ?? "neutral"}>{card.badge}</StatusPill>}
+              </div>
+
+              <SheetTitle className="mt-2 text-lg font-bold text-white">{card.title}</SheetTitle>
+              {card.subtitle && (
+                <SheetDescription className="text-xs text-zinc-400 font-sans">{card.subtitle}</SheetDescription>
+              )}
+            </SheetHeader>
+
+            <SheetBody className="space-y-4 pt-2">
+              {/* Brief Content */}
+              {card.type === "brief" && (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">Ad Creative Copy</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onCopy(
+                          `Hook: ${card.payload.hook}\nAngle: ${card.payload.angle}\nFormat: ${card.payload.suggestedFormat}\nCTA: ${card.payload.cta}`,
+                          "drawer-brief"
+                        )
+                      }
+                      className="flex items-center gap-1 text-xs font-mono text-zinc-300 hover:text-white cursor-pointer"
+                    >
+                      {copiedKey === "drawer-brief" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                      <span>{copiedKey === "drawer-brief" ? "Copied" : "Copy Brief"}</span>
+                    </button>
+                  </div>
+                  <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/80 p-4 text-xs text-zinc-200">
+                    <p><strong className="text-zinc-400">Pillar:</strong> {PILLAR_LABEL[card.payload.pillar] ?? card.payload.pillar}</p>
+                    <p><strong className="text-zinc-400">Hook:</strong> {card.payload.hook}</p>
+                    <p><strong className="text-zinc-400">Angle:</strong> {card.payload.angle}</p>
+                    <p><strong className="text-zinc-400">Format:</strong> {card.payload.suggestedFormat}</p>
+                    <p><strong className="text-zinc-400">CTA:</strong> {card.payload.cta}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Script Content */}
+              {card.type === "script" && (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">Full Video Script</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onCopy(
+                          "chapters" in card.payload
+                            ? card.payload.chapters.map((c: any) => c.script).join("\n\n")
+                            : card.payload.script,
+                          "drawer-script"
+                        )
+                      }
+                      className="flex items-center gap-1 text-xs font-mono text-zinc-300 hover:text-white cursor-pointer"
+                    >
+                      {copiedKey === "drawer-script" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                      <span>{copiedKey === "drawer-script" ? "Copied" : "Copy Script"}</span>
+                    </button>
+                  </div>
+
+                  {"chapters" in card.payload ? (
+                    <div className="space-y-2">
+                      {card.payload.chapters.map((chap: any, idx: number) => (
+                        <div key={idx} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-300">
+                          <p className="font-bold text-amber-400 mb-1">{chap.title}</p>
+                          <p className="whitespace-pre-wrap leading-relaxed">{chap.script}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-300 whitespace-pre-wrap">
+                      {card.payload.script}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Deployment / HTML */}
+              {card.type === "deployment" && (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">Page Code / Target</span>
+                    {card.payload.html && (
+                      <button
+                        type="button"
+                        onClick={() => onCopy(card.payload.html, "drawer-html")}
+                        className="flex items-center gap-1 text-xs font-mono text-zinc-300 hover:text-white cursor-pointer"
+                      >
+                        {copiedKey === "drawer-html" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                        <span>{copiedKey === "drawer-html" ? "Copied" : "Copy HTML"}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {card.payload.url && (
+                    <a
+                      href={card.payload.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between p-3 rounded-xl border border-emerald-900/50 bg-emerald-950/20 text-xs font-bold text-emerald-400 hover:bg-emerald-950/40 transition-colors"
+                    >
+                      <span>Open Live Deployed Page</span>
+                      <ExternalLink size={13} />
+                    </a>
+                  )}
+
+                  {card.payload.html && (
+                    <div className="max-h-64 overflow-auto rounded-xl border border-zinc-800 bg-black/60 p-3 font-mono text-[10px] text-zinc-400 leading-relaxed">
+                      <pre className="whitespace-pre-wrap break-all">{card.payload.html}</pre>
+                    </div>
+                  )}
+
+                  {card.payload.instructions && (
+                    <p className="text-xs text-zinc-400 leading-relaxed bg-zinc-900/80 border border-zinc-800 p-3 rounded-xl">
+                      {card.payload.instructions}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Voice Profile */}
+              {card.type === "voice" && (
+                <div className="space-y-3 text-xs text-zinc-300">
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3.5 space-y-2">
+                    <p><strong className="text-zinc-400">Formal/Casual:</strong> {card.payload.tone.formal_casual.score}/5 ({card.payload.tone.formal_casual.note})</p>
+                    <p><strong className="text-zinc-400">Technical/Plain:</strong> {card.payload.tone.technical_plain.score}/5 ({card.payload.tone.technical_plain.note})</p>
+                    <p><strong className="text-zinc-400">Warm/Neutral:</strong> {card.payload.tone.warm_neutral.score}/5 ({card.payload.tone.warm_neutral.note})</p>
+                  </div>
+
+                  <div>
+                    <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1.5">Signature Tokens</span>
+                    <div className="flex flex-wrap gap-1">
+                      {card.payload.vocabulary.signature.map((token: string) => (
+                        <span key={token} className="rounded-md bg-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-200">
+                          {token}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Stack Sync */}
+              {card.type === "stack" && (
+                <div className="space-y-2 text-xs text-zinc-300 rounded-xl border border-zinc-800 bg-zinc-900/80 p-3.5 font-mono">
+                  <p><strong className="text-zinc-500">Booking Platform:</strong> {bookingPlatformLabel(card.payload?.booking_platform)}</p>
+                  <p><strong className="text-zinc-500">Hosting Platform:</strong> {hostingPlatformLabel(card.payload?.hosting_platform)}</p>
+                  <p><strong className="text-zinc-500">Webhook Receiver Mode:</strong> {card.payload?.webhook_receiver_mode ?? "none"}</p>
+                </div>
+              )}
+
+              {/* Audit */}
+              {card.type === "audit" && (
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <span className="block text-[10px] font-mono uppercase text-emerald-400 mb-1">Strengths</span>
+                    <ul className="space-y-1 text-zinc-300">
+                      {card.payload.existingPageStrengths.map((s: string, i: number) => (
+                        <li key={i}>✓ {s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-mono uppercase text-rose-400 mb-1">Weaknesses</span>
+                    <ul className="space-y-1 text-zinc-300">
+                      {card.payload.existingPageWeaknesses.map((w: string, i: number) => (
+                        <li key={i}>✕ {w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </SheetBody>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// OVERVIEW SUB-COMPONENTS
 // ---------------------------------------------------------------------------
 function Card({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
