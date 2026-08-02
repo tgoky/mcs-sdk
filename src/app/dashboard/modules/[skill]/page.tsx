@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { getModuleClientSummaries } from "@/lib/module-overview";
 import { isSkillId, SKILL_MANIFEST } from "@/lib/skill-manifest";
-import { ModulePortfolioShell } from "@/components/module-views/module-portfolio-shell";
+import { ModulePortfolioShell } from "@/components/module-views/module-porfolio-shell";
 
 export default async function ModulePage({ params }: { params: { skill: string } }) {
   if (!isSkillId(params.skill)) {
