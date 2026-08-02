@@ -44,6 +44,14 @@ import {
 
 export const revalidate = 0;
 
+const SKILL_BADGES: Record<string, { label: string; bgClass: string }> = {
+  "pin-down": { label: "PD", bgClass: "bg-[#fcd34d]" },
+  "pile-on": { label: "PO", bgClass: "bg-[#c084fc]" },
+  "pre-call-read": { label: "PR", bgClass: "bg-[#f2a8e4]" },
+  "win-back": { label: "WB", bgClass: "bg-[#fb7185]" },
+  "leak-map": { label: "LM", bgClass: "bg-[#38bdf8]" },
+};
+
 function deriveModuleStatus(runs: { status: string }[]): ModuleStatus {
   if (runs.length === 0) return "not_run";
   const s = runs[0].status.toLowerCase();
@@ -135,13 +143,6 @@ export default async function EngagementDetailPage({
     .where(eq(artifacts.engagementId, id))
     .orderBy(desc(artifacts.createdAt));
 
-  // Recent Recall.ai bot sessions for this engagement — the actual log
-  // behind the Call Intelligence status header and the panel below it.
-  // Capped at 20: this is a recent-activity view, not a full export: a
-  // client running calls daily would otherwise load an ever-growing
-  // history on every page view for a panel meant to answer "is this
-  // working, and what came out of the last few calls," not archive
-  // browsing.
   const conversationIntelligenceSessionRows = await db
     .select()
     .from(conversationIntelligenceSessions)
@@ -365,14 +366,6 @@ export default async function EngagementDetailPage({
         <CallIntelligenceLog sessions={conversationIntelligenceSessionRows} />
       )}
 
-      {/* Win-Back Revenue Recovered */}
- {/* <WinBackRevenueSection
-        engagementId={engagement.engagementId}
-        offerPrice={revenueAttribution.offerPrice}
-        initialEnrollments={revenueAttribution.recoveredEnrollments}
-        initialPeriodLabel={revenueAttribution.periodLabel}
-      /> */}
-
       {/* Runtime Ownership */}
       {artifactRows.length > 0 && (
         <div className="space-y-2">
@@ -419,6 +412,7 @@ export default async function EngagementDetailPage({
             <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
               {runs.slice(0, 20).map((run) => {
                 const isFailed = run.status.toLowerCase() === "failed";
+                const badge = SKILL_BADGES[run.skillName];
 
                 return (
                   <li key={run.id} className="group relative">
@@ -449,10 +443,18 @@ export default async function EngagementDetailPage({
                           )}
                         </div>
                         <div
-                          className="shrink-0 flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 pt-0.5"
+                          className="shrink-0 flex items-center gap-2 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 pt-0.5"
                           title={new Date(run.startedAt).toLocaleString()}
                         >
-                          {relativeTime(String(run.startedAt))}
+                          {badge && (
+                            <span
+                              className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[9px] font-bold text-zinc-950 ${badge.bgClass} shadow-xs shrink-0`}
+                              title={skillName(run.skillName)}
+                            >
+                              {badge.label}
+                            </span>
+                          )}
+                          <span>{relativeTime(String(run.startedAt))}</span>
                           <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
                           <RunRowActions
                             runId={run.id}
