@@ -18,11 +18,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { classifyRunError } from "@/lib/error-classification";
-import { ViewSwitcher, type RunViewMode } from "../../app/dashboard/runs/[id]/_shared/view-switcher";
-import { StatusPill } from "../../app/dashboard/runs/[id]/_shared/status-pill";
+import { ViewSwitcher, type RunViewMode } from "@/app/dashboard/runs/[id]/_shared/view-switcher";
+import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { ModuleClientSummary } from "@/lib/module-overview";
 import type { SkillManifestEntry, SkillId } from "@/lib/skill-manifest";
+
+type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 
 export function ModulePortfolioShell({
   skillId,
