@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import {
   AlertCircle,
   Ban,
@@ -12,10 +13,12 @@ import {
   Clock3,
   Coins,
   Cpu,
+  ExternalLink,
   FileText,
   Loader2,
   Terminal,
   XCircle,
+  Wrench,
 } from "lucide-react";
 import { CancelRunButton } from "../../cancel-run-button";
 import { StepTimeline } from "./step-timeline";
@@ -54,173 +57,48 @@ function formatDuration(ms: number | null): string {
   return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
-function formatTokens(usage: RunDetail["tokenUsage"]): string {
-  if (!usage) return "—";
-  return `${(usage.input_tokens + usage.output_tokens).toLocaleString()}`;
-}
-
 function formatCost(cents: number | null): string {
-  if (cents === null) return "—";
+  if (cents === null || cents === 0) return "—";
   return `$${(cents / 100).toFixed(4)}`;
-}
-
-function formatDateTime(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 function RunStatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   const config = {
     success: {
-      icon: <CheckCircle2 className="h-4 w-4" />,
-      className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300",
+      icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+      className: "border-emerald-900/60 bg-emerald-950/30 text-emerald-400",
     },
     completed: {
-      icon: <CheckCircle2 className="h-4 w-4" />,
-      className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300",
+      icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+      className: "border-emerald-900/60 bg-emerald-950/30 text-emerald-400",
     },
     failed: {
-      icon: <XCircle className="h-4 w-4" />,
-      className: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-300",
+      icon: <XCircle className="h-3.5 w-3.5" />,
+      className: "border-rose-900/60 bg-rose-950/30 text-rose-400",
     },
     cancelled: {
-      icon: <Ban className="h-4 w-4" />,
-      className: "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300",
+      icon: <Ban className="h-3.5 w-3.5" />,
+      className: "border-zinc-800 bg-zinc-900 text-zinc-400",
     },
     timed_out: {
-      icon: <Clock3 className="h-4 w-4" />,
-      className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-300",
+      icon: <Clock3 className="h-3.5 w-3.5" />,
+      className: "border-amber-900/60 bg-amber-950/30 text-amber-400",
     },
     running: {
-      icon: <Loader2 className="h-4 w-4 animate-spin" />,
-      className: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/30 dark:text-sky-300",
+      icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
+      className: "border-sky-900/60 bg-sky-950/30 text-sky-400",
     },
   }[normalized] ?? {
-    icon: <AlertCircle className="h-4 w-4" />,
-    className: "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300",
+    icon: <AlertCircle className="h-3.5 w-3.5" />,
+    className: "border-zinc-800 bg-zinc-900 text-zinc-400",
   };
 
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${config.className}`}>
+    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold tracking-wide ${config.className}`}>
       {config.icon}
       {runStatusLabel(status)}
     </span>
-  );
-}
-
-function Metric({
-  icon,
-  label,
-  value,
-  detail,
-  className = "",
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  detail?: string;
-  className?: string;
-}) {
-  return (
-    <div className="min-w-0 px-4 py-4 sm:px-5">
-      <div className="flex items-center gap-1.5 text-zinc-400 dark:text-zinc-500">
-        {icon}
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">{label}</span>
-      </div>
-      <p className={`mt-2 truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100 ${className}`}>{value}</p>
-      {detail && <p className="mt-0.5 truncate text-[11px] text-zinc-400 dark:text-zinc-500">{detail}</p>}
-    </div>
-  );
-}
-
-function SummarySection({ summary }: { summary: RunSummary }) {
-  const fields: { key: keyof RunSummary; label: string; emptyText?: string; tone: string }[] = [
-    { key: "whatWasAttempted", label: "What ran", tone: "text-zinc-500 dark:text-zinc-400" },
-    { key: "whatWorked", label: "What worked", tone: "text-emerald-700 dark:text-emerald-400" },
-    { key: "whatFailed", label: "What needs attention", emptyText: copy.noFailuresNote, tone: "text-rose-700 dark:text-rose-400" },
-    { key: "openItems", label: "Open items", tone: "text-amber-700 dark:text-amber-400" },
-    { key: "decisionsMade", label: "Decisions", tone: "text-sky-700 dark:text-sky-400" },
-  ];
-
-  const visibleFields = fields.filter(({ key }) => (summary[key]?.length ?? 0) > 0 || key === "whatFailed");
-  if (visibleFields.length === 0) return null;
-
-  return (
-    <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/30">
-      <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-4 dark:border-zinc-800/80">
-        <FileText className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{copy.summarySectionTitle}</h2>
-      </div>
-      <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
-        {visibleFields.map(({ key, label, emptyText, tone }) => {
-          const items = summary[key] ?? [];
-          return (
-            <div key={key} className="px-5 py-4">
-              <p className={`text-[11px] font-semibold uppercase tracking-[0.12em] ${tone}`}>{label}</p>
-              {items.length > 0 ? (
-                <ul className="mt-2.5 space-y-2">
-                  {items.map((item, index) => (
-                    <li key={index} className="flex gap-2 text-sm leading-5 text-zinc-600 dark:text-zinc-400">
-                      <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-zinc-300 dark:bg-zinc-600" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-sm text-zinc-400 dark:text-zinc-500">{emptyText}</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function RunMetadata({ run }: { run: RunDetail }) {
-  return (
-    <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/30">
-      <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800/80">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Run details</h2>
-      </div>
-      <dl className="divide-y divide-zinc-100 text-sm dark:divide-zinc-800/80">
-        <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3 px-5 py-3.5">
-          <dt className="text-zinc-400 dark:text-zinc-500">Started</dt>
-          <dd className="text-right font-medium text-zinc-700 dark:text-zinc-300">{formatDateTime(run.startedAt)}</dd>
-        </div>
-        <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3 px-5 py-3.5">
-          <dt className="text-zinc-400 dark:text-zinc-500">Finished</dt>
-          <dd className="text-right font-medium text-zinc-700 dark:text-zinc-300">{formatDateTime(run.completedAt)}</dd>
-        </div>
-        <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3 px-5 py-3.5">
-          <dt className="text-zinc-400 dark:text-zinc-500">Run ID</dt>
-          <dd className="break-all text-right font-mono text-[11px] text-zinc-500 dark:text-zinc-400">{run.id}</dd>
-        </div>
-      </dl>
-    </section>
-  );
-}
-
-function Notice({ type, children }: { type: "failed" | "cancelled" | "timed_out"; children: React.ReactNode }) {
-  const styles = {
-    failed: "border-rose-200 bg-rose-50/70 text-rose-800 dark:border-rose-900/70 dark:bg-rose-950/20 dark:text-rose-200",
-    cancelled: "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300",
-    timed_out: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/20 dark:text-amber-200",
-  }[type];
-  const Icon = type === "failed" ? CircleAlert : type === "cancelled" ? Ban : Clock3;
-
-  return (
-    <div className={`flex gap-3 rounded-xl border px-4 py-3.5 ${styles}`}>
-      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-      <div className="min-w-0 text-sm leading-5">{children}</div>
-    </div>
   );
 }
 
@@ -240,6 +118,50 @@ function SkillView({ detail }: { detail: RunDetailPayload }) {
   }
 }
 
+function SummarySection({ summary }: { summary: RunSummary }) {
+  const fields: { key: keyof RunSummary; label: string; emptyText?: string; tone: string }[] = [
+    { key: "whatWasAttempted", label: "What ran", tone: "text-zinc-400" },
+    { key: "whatWorked", label: "What worked", tone: "text-emerald-400" },
+    { key: "whatFailed", label: "What needs attention", emptyText: copy.noFailuresNote, tone: "text-rose-400" },
+    { key: "openItems", label: "Open items", tone: "text-amber-400" },
+    { key: "decisionsMade", label: "Decisions", tone: "text-sky-400" },
+  ];
+
+  const visibleFields = fields.filter(({ key }) => (summary[key]?.length ?? 0) > 0 || key === "whatFailed");
+  if (visibleFields.length === 0) return null;
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/40">
+      <div className="flex items-center gap-2 border-b border-zinc-800/80 px-4 py-3">
+        <FileText className="h-4 w-4 text-zinc-500" />
+        <h2 className="text-xs font-semibold text-zinc-200">{copy.summarySectionTitle}</h2>
+      </div>
+      <div className="divide-y divide-zinc-800/80">
+        {visibleFields.map(({ key, label, emptyText, tone }) => {
+          const items = summary[key] ?? [];
+          return (
+            <div key={key} className="px-4 py-3">
+              <p className={`text-[10px] font-bold uppercase tracking-wider ${tone}`}>{label}</p>
+              {items.length > 0 ? (
+                <ul className="mt-1.5 space-y-1">
+                  {items.map((item, index) => (
+                    <li key={index} className="flex gap-2 text-xs leading-relaxed text-zinc-300">
+                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-zinc-600" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-xs text-zinc-500">{emptyText}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function RunDetailPage() {
   const params = useParams();
   const runId = params?.id as string;
@@ -257,7 +179,7 @@ export default function RunDetailPage() {
       const data = await response.json();
       setRun(data.run);
     } catch {
-      // A polling failure should not replace a previously loaded run with an error screen.
+      // Polling failure gracefully ignored
     }
   }, [runId]);
 
@@ -297,7 +219,6 @@ export default function RunDetailPage() {
         setDetail(data);
       } catch (cause: unknown) {
         if (cause instanceof Error && cause.name !== "AbortError") {
-          // Non-fatal — the generic run view above still works without this.
           console.error("Failed to load skill-specific run detail:", cause.message);
         }
       } finally {
@@ -321,159 +242,167 @@ export default function RunDetailPage() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+        <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
       </div>
     );
   }
 
   if (error || !run) {
     return (
-      <div className="mx-auto max-w-3xl space-y-5 py-3">
+      <div className="mx-auto max-w-3xl space-y-4 py-3">
         <BackLink href="/dashboard" label="Back to dashboard" />
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-6 py-10 text-center dark:border-rose-900/50 dark:bg-rose-950/20">
+        <div className="rounded-xl border border-rose-900/50 bg-rose-950/20 px-6 py-10 text-center">
           <XCircle className="mx-auto mb-3 h-7 w-7 text-rose-500" />
-          <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">{error ?? "Run trace not found"}</p>
+          <p className="text-sm font-semibold text-rose-300">{error ?? "Run trace not found"}</p>
         </div>
       </div>
     );
   }
 
   const steps = run.steps ?? [];
+  const isFailed = run.status === "failed";
   const isCancelled = run.status === "cancelled";
   const isTimedOut = run.status === "timed_out";
-  const runPhase = isRunning ? phaseLabel(run.phase) : run.status === "success" ? "Completed" : phaseLabel(run.phase);
 
   return (
-    <div className="mx-auto w-full max-w-6xl pb-8 text-zinc-600 dark:text-zinc-400">
+    <div className="mx-auto w-full max-w-6xl space-y-3 pb-8 text-zinc-300 font-sans">
       <SetBreadcrumbLabel label={`${skillName(run.skillName)} run`} />
 
-      <header className="border-b border-zinc-200 pb-6 dark:border-zinc-800">
-        <BackLink
-          href={run.engagementId ? `/dashboard/engagements/${run.engagementId}` : "/dashboard"}
-          label={run.engagementId ? `Back to ${run.buyerName ?? "client"}` : "Back to dashboard"}
-        />
-
-        <div className="mt-5 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400 dark:text-zinc-500">Automation run</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-3xl">
-              {skillName(run.skillName)}
-            </h1>
-            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-              {run.buyerName ?? "Client workspace"}
-              <span className="mx-2 text-zinc-300 dark:text-zinc-700">/</span>
-              {runPhase}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <RunStatusBadge status={run.status} />
-            {isRunning && <span className="text-xs text-zinc-400 dark:text-zinc-500">Live · refreshes every 3s</span>}
-            {isRunning && <CancelRunButton runId={runId} onCancelled={() => fetchRun()} />}
-          </div>
-        </div>
-      </header>
-
-      <section className="mt-5 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50/70 dark:border-zinc-800 dark:bg-zinc-950/30">
-        <div className="grid grid-cols-2 divide-x divide-y divide-zinc-200 dark:divide-zinc-800 sm:grid-cols-4 sm:divide-y-0">
-          <Metric icon={<Cpu className="h-3.5 w-3.5" />} label="Current phase" value={runPhase} />
-          <Metric
-            icon={<Clock3 className="h-3.5 w-3.5" />}
-            label="Duration"
-            value={isRunning ? "In progress" : isCancelled ? "Cancelled" : isTimedOut ? "Timed out" : formatDuration(run.durationMs)}
+      {/* ----------------------------------------------------------------- */}
+      {/* 1. COMPACT 1-LINE HEADER                                          */}
+      {/* ----------------------------------------------------------------- */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-2.5">
+        <div className="flex items-center gap-3 min-w-0">
+          <BackLink
+            href={run.engagementId ? `/dashboard/engagements/${run.engagementId}` : "/dashboard"}
+            label={run.engagementId ? `Back to ${run.buyerName ?? "client"}` : "Back to dashboard"}
           />
-          <Metric icon={<Terminal className="h-3.5 w-3.5" />} label="Tokens" value={formatTokens(run.tokenUsage)} detail={run.tokenUsage ? "input + output" : undefined} />
-          <Metric icon={<Coins className="h-3.5 w-3.5" />} label="Cost" value={formatCost(run.costInCents)} className="tabular-nums" />
+          <span className="text-zinc-700">|</span>
+          <h1 className="text-base font-bold tracking-tight text-white truncate">
+            {skillName(run.skillName)}
+          </h1>
+          <span className="text-xs text-zinc-500 hidden sm:inline">
+            {run.buyerName ? `(${run.buyerName})` : ""}
+          </span>
         </div>
-      </section>
 
-      <div className="mt-5 space-y-3">
-        {run.status === "failed" && run.errorMessage && (
-          <Notice type="failed">
-            <p className="font-semibold">{copy.errorSectionTitle}</p>
-            <p className="mt-1 break-words font-mono text-xs leading-5 opacity-90">{run.errorMessage}</p>
-          </Notice>
-        )}
-        {isCancelled && (
-          <Notice type="cancelled">
-            <p className="font-semibold">Run cancelled</p>
-            <p className="mt-1 text-xs">In-progress work was stopped at your request.</p>
-          </Notice>
-        )}
-        {isTimedOut && (
-          <Notice type="timed_out">
-            <p className="font-semibold">Run timed out</p>
-            <p className="mt-1 text-xs">The run exceeded its allowed runtime. Check the last activity below for the point where it stopped progressing.</p>
-          </Notice>
-        )}
+        <div className="flex items-center gap-3 shrink-0 text-xs text-zinc-400 font-mono">
+          <span>{formatDuration(run.durationMs)}</span>
+          <span className="text-zinc-800">•</span>
+          <span>{formatCost(run.costInCents)}</span>
+          <RunStatusBadge status={run.status} />
+          {isRunning && <CancelRunButton runId={runId} onCancelled={() => fetchRun()} />}
+        </div>
       </div>
 
-      <section className="mt-6 rounded-2xl bg-zinc-950 p-1">
+      {/* ----------------------------------------------------------------- */}
+      {/* 2. ASANA-STYLE COMPACT TOP DIAGNOSTIC BANNER (WHEN FAILED)       */}
+      {/* ----------------------------------------------------------------- */}
+      {isFailed && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-900/60 bg-rose-950/30 px-3.5 py-2 text-xs text-rose-200 shadow-sm">
+          <div className="flex items-center gap-2 min-w-0">
+            <CircleAlert size={15} className="text-rose-400 shrink-0" />
+            <div className="flex items-center gap-2 truncate">
+              <span className="font-bold text-rose-300">Run Failed:</span>
+              <span className="truncate text-rose-200/90 font-mono text-[11px]">
+                {run.errorMessage ?? "An unexpected error occurred during step execution."}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
+            {run.engagementId && (
+              <Link
+                href={`/dashboard/engagements/${run.engagementId}?fixSection=booking#stack-settings`}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition-colors"
+              >
+                <Wrench size={12} />
+                <span>Fix Settings</span>
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isCancelled && (
+        <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-3.5 py-2 text-xs text-zinc-400">
+          <Ban size={14} className="text-zinc-500" />
+          <span>Run was manually cancelled by user.</span>
+        </div>
+      )}
+
+      {isTimedOut && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-900/50 bg-amber-950/20 px-3.5 py-2 text-xs text-amber-300">
+          <Clock3 size={14} className="text-amber-400" />
+          <span>Run timed out after exceeding its maximum runtime ceiling.</span>
+        </div>
+      )}
+
+      {/* ----------------------------------------------------------------- */}
+      {/* 3. MAIN WORKSPACE (SLOT FOR SKILL VIEWS / CALENDAR / BOARD)       */}
+      {/* ----------------------------------------------------------------- */}
+      <main className="w-full">
         {detailLoading && !detail ? (
-          <div className="flex h-40 items-center justify-center">
+          <div className="flex h-40 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950">
             <Loader2 className="h-5 w-5 animate-spin text-zinc-600" />
           </div>
         ) : detail && detail.run.id === run.id ? (
           <SkillView detail={detail} />
         ) : (
           <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 px-6 py-10 text-center text-xs text-zinc-500">
-            Skill-specific detail isn't available for this run — see Technical details below for what it did.
+            Skill-specific detail isn't available for this run.
           </div>
         )}
-      </section>
+      </main>
 
-      <div className="mt-4">
+      {/* ----------------------------------------------------------------- */}
+      {/* 4. COLLAPSIBLE TECHNICAL DETAILS (DEMOTED TO BOTTOM)              */}
+      {/* ----------------------------------------------------------------- */}
+      <div className="pt-2">
         <button
           type="button"
           onClick={() => setShowTechnicalDetails((p) => !p)}
-          className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+          className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 transition-colors hover:text-white cursor-pointer select-none"
         >
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTechnicalDetails ? "rotate-180" : ""}`} />
-          {showTechnicalDetails ? "Hide" : "Show"} technical details
-          <span className="text-zinc-300 dark:text-zinc-700">·</span>
-          <span className="text-zinc-400 dark:text-zinc-600">{steps.length} step{steps.length === 1 ? "" : "s"}, phase timeline &amp; raw metadata</span>
+          <span>{showTechnicalDetails ? "Hide" : "Show"} technical details</span>
+          <span className="text-zinc-600">·</span>
+          <span className="text-zinc-500">{steps.length} step{steps.length === 1 ? "" : "s"}, phase timeline & raw metadata</span>
         </button>
-      </div>
 
-      {showTechnicalDetails && (
-      <div className="mt-4 grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(290px,0.85fr)]">
-        <div className="space-y-6">
-          <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/30">
-            <div className="flex items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4 dark:border-zinc-800/80">
-              <div>
-                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Activity</h2>
-                <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">{steps.length} recorded step{steps.length === 1 ? "" : "s"}</p>
+        {showTechnicalDetails && (
+          <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
+            <section className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
+              <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+                <span className="text-xs font-semibold text-zinc-200">Execution Steps</span>
+                <span className="text-[11px] font-mono text-zinc-500">{steps.length} steps</span>
               </div>
-              {isRunning && <span className="inline-flex items-center gap-1.5 text-xs font-medium text-sky-700 dark:text-sky-300"><span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse" />Live</span>}
-            </div>
-
-            <div className="max-h-[620px] overflow-y-auto px-5 py-4">
-              {steps.length === 0 ? (
-                <div className="flex min-h-36 flex-col items-center justify-center text-center">
-                  <CalendarClock className="mb-2 h-5 w-5 text-zinc-300 dark:text-zinc-700" />
-                  <p className="text-sm text-zinc-400 dark:text-zinc-500">{isRunning ? copy.awaitingFirstStep : copy.noStepsRecorded}</p>
-                </div>
-              ) : (
-                <StepTimeline steps={steps} isRunning={isRunning} runStatus={run.status} />
-              )}
-            </div>
-          </section>
-        </div>
-
-        <aside className="space-y-6">
-          {run.summary ? (
-            <SummarySection summary={run.summary} />
-          ) : !isRunning ? (
-            <section className="rounded-xl border border-dashed border-zinc-200 px-5 py-5 dark:border-zinc-800">
-              <FileText className="mb-2 h-4 w-4 text-zinc-300 dark:text-zinc-700" />
-              <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">No written outcome</h2>
-              <p className="mt-1 text-xs leading-5 text-zinc-400 dark:text-zinc-500">{copy.noSummaryRecorded}</p>
+              <div className="max-h-[500px] overflow-y-auto p-4">
+                {steps.length === 0 ? (
+                  <p className="text-xs text-zinc-500 italic text-center py-6">{copy.noStepsRecorded}</p>
+                ) : (
+                  <StepTimeline steps={steps} isRunning={isRunning} runStatus={run.status} />
+                )}
+              </div>
             </section>
-          ) : null}
-          <RunMetadata run={run} />
-        </aside>
+
+            <aside className="space-y-4">
+              {run.summary && <SummarySection summary={run.summary} />}
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs space-y-2 font-mono">
+                <span className="text-[10px] uppercase text-zinc-500 block font-sans font-bold">Metadata</span>
+                <div className="flex justify-between text-zinc-400">
+                  <span>Started:</span>
+                  <span className="text-zinc-200">{new Date(run.startedAt).toLocaleTimeString()}</span>
+                </div>
+                <div className="flex justify-between text-zinc-400">
+                  <span>Run ID:</span>
+                  <span className="text-zinc-500 text-[10px] truncate max-w-[150px]">{run.id}</span>
+                </div>
+              </div>
+            </aside>
+          </div>
+        )}
       </div>
-      )}
     </div>
   );
 }
