@@ -1,12 +1,21 @@
-import { db } from "@/lib/db";
-import { skillRuns, engagements } from "@/models/schema";
+// src/app/dashboard/modules/[skill]/page.tsx
+
+import { notFound } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { getModuleClientSummaries } from "@/lib/module-overview";
+import { isSkillId, SKILL_MANIFEST } from "@/lib/skill-manifest";
+import { db } from "@/lib/db";
+import { skillRuns, engagements } from "@/models/schema";
 import { and, eq, desc, sql } from "drizzle-orm";
-import { notFound } from "next/navigation";
-import { SKILLS, SKILL_INFO, type SkillName } from "@/lib/copy";
+import { SKILL_INFO, type SkillName } from "@/lib/copy";
 import { LiveExecutionFeed } from "../../live-execution-feed";
-import { ModuleCommandCenter } from "./module-command-center";
+
+// Import Specialized Portfolio Views
+import { PinDownModuleView } from "@/components/pin-down-module-view";
+import { PileOnModuleView } from "@/components/pile-on-module-view";
+import { PreCallReadModuleView } from "@/components/pre-call-reads-module-view";
+import { WinBackModuleView } from "@/components/win-back-module-view";
+import { LeakMapModuleView } from "@/components/leak-map-module-views";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -16,10 +25,10 @@ export default async function ModulePage({
 }: {
   params: Promise<{ skill: string }>;
 }) {
-  // Await params to fix Next.js 15 404 error
+  // 1. Next.js 15: Await async params
   const { skill: rawSkill } = await params;
 
-  if (!rawSkill || !SKILLS.includes(rawSkill as SkillName)) {
+  if (!rawSkill || !isSkillId(rawSkill)) {
     notFound();
   }
 
@@ -29,6 +38,7 @@ export default async function ModulePage({
   const session = await getSession();
   const whopUserId = session.whopUserId!;
 
+  // 2. Fetch both client summaries AND recent executions for this specific skill
   const [clientSummaries, recentRunsRaw] = await Promise.all([
     getModuleClientSummaries(whopUserId, skill),
     db
@@ -57,16 +67,28 @@ export default async function ModulePage({
     completedAt: r.completedAt ? r.completedAt.toISOString() : null,
   }));
 
-  return (
-    <div className="space-y-6 w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200">
-      {/* Asana Agency Command Center */}
-      <ModuleCommandCenter
-        skill={skill}
-        info={info}
-        summaries={clientSummaries}
-      />
+  const manifest = SKILL_MANIFEST[skill];
 
-      {/* Live Activity Feed with Clickable Run IDs */}
+  return (
+    <div className="p-6 space-y-8 max-w-[1600px] mx-auto font-sans antialiased text-zinc-100">
+      {/* Tier 1: Specialized Module Portfolio View */}
+      {skill === "pin-down" && (
+        <PinDownModuleView summaries={clientSummaries} manifest={manifest} />
+      )}
+      {skill === "pile-on" && (
+        <PileOnModuleView summaries={clientSummaries} manifest={manifest} />
+      )}
+      {skill === "pre-call-read" && (
+        <PreCallReadModuleView summaries={clientSummaries} manifest={manifest} />
+      )}
+      {skill === "win-back" && (
+        <WinBackModuleView summaries={clientSummaries} manifest={manifest} />
+      )}
+      {skill === "leak-map" && (
+        <LeakMapModuleView summaries={clientSummaries} manifest={manifest} />
+      )}
+
+      {/* Tier 2: Filtered Live Execution Feed (1-Click Access to runId Receipts) */}
       <LiveExecutionFeed
         initialRuns={recentRuns}
         apiUrl={`/api/skill-runs/recent?skill=${skill}`}
