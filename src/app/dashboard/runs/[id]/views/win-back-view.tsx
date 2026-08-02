@@ -521,9 +521,10 @@ function TouchpointDrawer({
   const [prevTpKey, setPrevTpKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Synchronize state DURING render when prop changes
-  if (touchpoint?.key !== prevTpKey) {
-    setPrevTpKey(touchpoint?.key ?? null);
+  // Normalize undefined to null so (null !== null) is false when drawer is closed
+  const currentTpKey = touchpoint?.key ?? null;
+  if (currentTpKey !== prevTpKey) {
+    setPrevTpKey(currentTpKey);
     setCopied(false);
   }
 

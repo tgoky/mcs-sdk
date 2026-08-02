@@ -413,8 +413,10 @@ function BriefDrawer({
   const [copied, setCopied] = useState(false);
   const [loggedOutcome, setLoggedOutcome] = useState<"showed" | "no_show" | "rescheduled" | null>(null);
 
-  if (call?.id !== prevCallId) {
-    setPrevCallId(call?.id ?? null);
+  // Normalize undefined to null so (null !== null) is false when the drawer is closed
+  const currentCallId = call?.id ?? null;
+  if (currentCallId !== prevCallId) {
+    setPrevCallId(currentCallId);
     setEditableText(call?.briefText ?? "");
     setIsEditing(false);
     setIsDelivering(false);
