@@ -13,7 +13,7 @@ import { LiveExecutionFeed } from "../../live-execution-feed";
 // Import Specialized Portfolio Views
 import { PinDownModuleView } from "@/components/pin-down-module-view";
 import { PileOnModuleView } from "@/components/pile-on-module-view";
-import { PreCallReadModuleView } from "@/components/pre-call-reads-module-view";
+import { PreCallReadModuleView } from "@/components/pre-call-read-module-view";
 import { WinBackModuleView } from "@/components/win-back-module-view";
 import { LeakMapModuleView } from "@/components/leak-map-module-views";
 
