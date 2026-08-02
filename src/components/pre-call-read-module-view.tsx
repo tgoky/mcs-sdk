@@ -70,7 +70,7 @@ export function PreCallReadModuleView({
   manifest: SkillManifestEntry;
 }) {
   const router = useRouter();
-  // Only List (default) and Board mode — Calendar removed completely
+  // Strictly List (default) and Board — Calendar removed completely
   const [mode, setMode] = useState<"list" | "board">("list");
   const [filterText, setFilterText] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
@@ -114,19 +114,19 @@ export function PreCallReadModuleView({
   }, [filteredRuns]);
 
   return (
-    <div className="space-y-4 font-sans antialiased text-zinc-100">
+    <div className="space-y-3 font-sans antialiased text-zinc-100">
       {/* ----------------------------------------------------------------- */}
-      {/* ASANA-STYLE TOOLBAR: SEARCH + PILL FILTERS WITH DROPDOWN CHEVRONS  */}
+      {/* ASANA-STYLE TOOLBAR: SEARCH + PILL FILTERS (PUSHED ALL THE WAY UP)  */}
       {/* ----------------------------------------------------------------- */}
       <div className="space-y-3">
-        {/* Transparent Full-width Search Input */}
+        {/* Full-width Seamless Pill Search Input */}
         <div className="relative w-full">
           <Search size={15} className="absolute left-3.5 top-3 text-zinc-400" />
           <input
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Find a project or client..."
-            className="w-full rounded-full border border-zinc-800 bg-[#1e1f22]/80 py-2.5 pl-10 pr-4 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none transition-colors"
+            className="w-full rounded-full border border-[#2e3035] bg-[#161719] py-2.5 pl-10 pr-4 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none transition-colors"
           />
         </div>
 
@@ -150,8 +150,8 @@ export function PreCallReadModuleView({
                   className={cn(
                     "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap",
                     isActive
-                      ? "bg-[#2b2d31] border-zinc-600 text-white font-semibold shadow-xs"
-                      : "bg-[#18191b] border-zinc-800/90 text-zinc-300 hover:text-white hover:border-zinc-700"
+                      ? "bg-[#282a2e] border-zinc-400 text-white font-semibold shadow-xs"
+                      : "bg-[#161719] border-[#2e3035] text-zinc-300 hover:text-white hover:border-zinc-600"
                   )}
                 >
                   <span>{labels[tab]}</span>
@@ -161,15 +161,15 @@ export function PreCallReadModuleView({
             })}
           </div>
 
-          {/* Clean View Switcher (ONLY List & Board) */}
-          <div className="flex items-center rounded-full border border-zinc-800/90 bg-[#18191b] p-0.5">
+          {/* List & Board Switcher Capsule */}
+          <div className="flex items-center rounded-full border border-[#2e3035] bg-[#161719] p-0.5">
             <button
               type="button"
               onClick={() => setMode("list")}
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer",
                 mode === "list"
-                  ? "bg-[#2b2d31] text-white font-semibold border border-zinc-700/80"
+                  ? "bg-[#282a2e] text-white font-semibold border border-zinc-600"
                   : "text-zinc-400 hover:text-zinc-200"
               )}
             >
@@ -183,7 +183,7 @@ export function PreCallReadModuleView({
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer",
                 mode === "board"
-                  ? "bg-[#2b2d31] text-white font-semibold border border-zinc-700/80"
+                  ? "bg-[#282a2e] text-white font-semibold border border-zinc-600"
                   : "text-zinc-400 hover:text-zinc-200"
               )}
             >
@@ -195,10 +195,10 @@ export function PreCallReadModuleView({
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* ASANA-STYLE CURATED LIST VIEW (TRANSPARENT, NO CARD BACKGROUND)   */}
+      {/* ASANA-STYLE CURATED LIST VIEW (TRANSPARENT, NO CARD CONTAINER)     */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
-        <div className="w-full font-sans border-t border-b border-zinc-800/80">
+        <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
           <table className="w-full text-left text-xs font-sans">
             <thead>
               <tr className="border-b border-zinc-800/80 text-[11px] text-zinc-400">
@@ -219,10 +219,10 @@ export function PreCallReadModuleView({
                     onClick={() => router.push(`/dashboard/runs/${r.id}`)}
                     className="group hover:bg-zinc-800/40 transition-colors cursor-pointer"
                   >
-                    {/* Name Column: Mint Icon Container (Screenshot 3) + Primary Title + Emerald Subtext */}
+                    {/* Name Column: Mint Icon Container + Primary Title + Emerald Subtext */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-3">
-                        {/* Exact Mint Rounded Box with List Icon from Screenshot 3 */}
+                        {/* Bright Mint/Teal Box with Dark List Icon */}
                         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#82e6d4] text-[#05221d] shrink-0 font-bold">
                           <List size={15} strokeWidth={2.5} />
                         </div>
@@ -237,7 +237,7 @@ export function PreCallReadModuleView({
                       </div>
                     </td>
 
-                    {/* Members Column (Solid Pink "PR" Avatar Circle from Screenshot 2) */}
+                    {/* Members Column (Solid Pink Circle Avatar) */}
                     <td className="px-4 py-3.5 text-center">
                       <span
                         className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-[#f2a8e4] shadow-xs"
@@ -293,7 +293,7 @@ export function PreCallReadModuleView({
             };
 
             return (
-              <div key={colKey} className="rounded-2xl border border-zinc-800/80 bg-[#18191b] p-3 flex flex-col gap-2 font-sans">
+              <div key={colKey} className="rounded-2xl border border-zinc-800/80 bg-[#161719] p-3 flex flex-col gap-2 font-sans">
                 <div className="mb-1 flex items-center justify-between px-1">
                   <span className="text-xs font-bold text-zinc-300">{colTitles[colKey]}</span>
                   <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
