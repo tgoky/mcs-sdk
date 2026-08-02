@@ -48,7 +48,7 @@ Write a personalized opening paragraph for the FIRST recovery email to a prospec
     deliver: (text) => deliverPersonalizedIntro(emailPlatform, emailApiKey, prospectEmail, text, emailPlatformMeta ?? {}),
   });
 
-  await logSendOutcome(engagementId, enrollmentId, prospectEmail, result.outcome, result.latencyMs, result.error);
+  await logSendOutcome(engagementId, enrollmentId, prospectEmail, result.outcome, result.latencyMs, result.text, result.error);
   return { sentVia: result.outcome, latencyMs: result.latencyMs, error: result.error };
 }
 
@@ -58,7 +58,8 @@ async function logSendOutcome(
   prospectEmail: string,
   sentVia: "hybrid" | "fallback",
   latencyMs: number,
-  error?: string
+  personalizedOpening: string | undefined,
+  error: string | undefined
 ): Promise<void> {
   try {
     await db.insert(winBackSendLog).values({
@@ -66,6 +67,7 @@ async function logSendOutcome(
       enrollmentId,
       prospectEmail,
       sentVia,
+      personalizedOpening,
       latencyMs,
       error,
     });

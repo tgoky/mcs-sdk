@@ -428,6 +428,7 @@ export async function handleInboundBookingEvent(
         engagementId: tenant.engagementId,
         prospectEmail,
         prospectName,
+        runId,
         recoveryWindowDays: stack.recovery_window_days ?? 30,
         status: "active",
         freshRescheduleLink,

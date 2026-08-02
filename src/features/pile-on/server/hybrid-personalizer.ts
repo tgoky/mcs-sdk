@@ -47,7 +47,7 @@ Write a personalized booking confirmation intro paragraph. Under 70 words. No ge
     deliver: (text) => deliverPersonalizedIntro(emailPlatform, emailApiKey, prospectEmail, text, emailPlatformMeta ?? {}),
   });
 
-  await logSendOutcome(engagementId, bookingId, prospectEmail, result.outcome, result.latencyMs, result.error);
+  await logSendOutcome(engagementId, bookingId, prospectEmail, result.outcome, result.latencyMs, result.text, result.error, runId);
   return { sentVia: result.outcome, latencyMs: result.latencyMs, error: result.error };
 }
 
@@ -57,14 +57,18 @@ async function logSendOutcome(
   prospectEmail: string,
   sentVia: "hybrid" | "fallback",
   latencyMs: number,
-  error?: string
+  personalizedIntro: string | undefined,
+  error: string | undefined,
+  runId: string | undefined
 ): Promise<void> {
   try {
     await db.insert(pileOnSendLog).values({
       engagementId,
       bookingId,
       prospectEmail,
+      runId,
       sentVia,
+      personalizedIntro,
       latencyMs,
       error,
     });

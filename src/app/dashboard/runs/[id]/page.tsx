@@ -7,6 +7,7 @@ import {
   Ban,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   CircleAlert,
   Clock3,
   Coins,
@@ -16,13 +17,18 @@ import {
   Terminal,
   XCircle,
 } from "lucide-react";
-import { PinDownResultCard } from "../../pin-down-result-card";
 import { CancelRunButton } from "../../cancel-run-button";
 import { StepTimeline } from "./step-timeline";
+import { PinDownView } from "./views/pin-down-view";
+import { PileOnView } from "./views/pile-on-view";
+import { PreCallReadView } from "./views/pre-call-read-view";
+import { WinBackView } from "./views/win-back-view";
+import { LeakMapView } from "./views/leak-map-view";
 import { skillName, phaseLabel, runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
 import { BackLink } from "@/components/back-link";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import type { RunStep, RunSummary } from "@/models/schema";
+import type { RunDetailPayload } from "./_shared/types";
 
 interface RunDetail {
   id: string;
@@ -218,12 +224,31 @@ function Notice({ type, children }: { type: "failed" | "cancelled" | "timed_out"
   );
 }
 
+function SkillView({ detail }: { detail: RunDetailPayload }) {
+  switch (detail.run.skillName) {
+    case "pre-call-read":
+      return "calls" in detail ? <PreCallReadView detail={detail} /> : null;
+    case "pile-on":
+      return "send" in detail ? <PileOnView detail={detail} /> : null;
+    case "win-back":
+      return "enrollment" in detail ? <WinBackView detail={detail} /> : null;
+    case "leak-map":
+      return "audit" in detail ? <LeakMapView detail={detail} /> : null;
+    case "pin-down":
+    default:
+      return <PinDownView detail={detail} />;
+  }
+}
+
 export default function RunDetailPage() {
   const params = useParams();
   const runId = params?.id as string;
   const [run, setRun] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<RunDetailPayload | null>(null);
+  const [detailLoading, setDetailLoading] = useState(true);
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
 
   const fetchRun = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -257,6 +282,28 @@ export default function RunDetailPage() {
       }
     })();
 
+    return () => controller.abort();
+  }, [runId]);
+
+  useEffect(() => {
+    if (!runId) return;
+    const controller = new AbortController();
+    setDetailLoading(true);
+    (async () => {
+      try {
+        const response = await fetch(`/api/skill-runs/${runId}/detail`, { cache: "no-store", signal: controller.signal });
+        if (!response.ok) return;
+        const data = await response.json();
+        setDetail(data);
+      } catch (cause: unknown) {
+        if (cause instanceof Error && cause.name !== "AbortError") {
+          // Non-fatal — the generic run view above still works without this.
+          console.error("Failed to load skill-specific run detail:", cause.message);
+        }
+      } finally {
+        if (!controller.signal.aborted) setDetailLoading(false);
+      }
+    })();
     return () => controller.abort();
   }, [runId]);
 
@@ -361,7 +408,35 @@ export default function RunDetailPage() {
         )}
       </div>
 
-      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(290px,0.85fr)]">
+      <section className="mt-6 rounded-2xl bg-zinc-950 p-1">
+        {detailLoading && !detail ? (
+          <div className="flex h-40 items-center justify-center">
+            <Loader2 className="h-5 w-5 animate-spin text-zinc-600" />
+          </div>
+        ) : detail && detail.run.id === run.id ? (
+          <SkillView detail={detail} />
+        ) : (
+          <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 px-6 py-10 text-center text-xs text-zinc-500">
+            Skill-specific detail isn't available for this run — see Technical details below for what it did.
+          </div>
+        )}
+      </section>
+
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={() => setShowTechnicalDetails((p) => !p)}
+          className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+        >
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTechnicalDetails ? "rotate-180" : ""}`} />
+          {showTechnicalDetails ? "Hide" : "Show"} technical details
+          <span className="text-zinc-300 dark:text-zinc-700">·</span>
+          <span className="text-zinc-400 dark:text-zinc-600">{steps.length} step{steps.length === 1 ? "" : "s"}, phase timeline &amp; raw metadata</span>
+        </button>
+      </div>
+
+      {showTechnicalDetails && (
+      <div className="mt-4 grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(290px,0.85fr)]">
         <div className="space-y-6">
           <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/30">
             <div className="flex items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4 dark:border-zinc-800/80">
@@ -383,8 +458,6 @@ export default function RunDetailPage() {
               )}
             </div>
           </section>
-
-          {run.skillName === "pin-down" && run.status === "success" && <PinDownResultCard engagementId={run.engagementId} />}
         </div>
 
         <aside className="space-y-6">
@@ -400,6 +473,7 @@ export default function RunDetailPage() {
           <RunMetadata run={run} />
         </aside>
       </div>
+      )}
     </div>
   );
 }

@@ -292,6 +292,7 @@ Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})
           id: crypto.randomUUID(),
           engagementId: tenant.engagementId,
           runType: type,
+          runId,
           topIssues: metrics.map((m) => ({
             name: m.name,
             current: m.current,
@@ -301,6 +302,7 @@ Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})
           })),
           alertsFired,
           gaps: gaps.length > 0 ? gaps : ["No data gaps detected."],
+          reportMarkdown: report,
           createdAt: new Date(),
         });
       });

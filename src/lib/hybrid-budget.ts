@@ -28,6 +28,8 @@ export interface HybridBudgetResult {
   outcome: "hybrid" | "fallback";
   latencyMs: number;
   error?: string;
+  /** The Claude-generated text that was actually delivered. Only set when outcome === "hybrid" — a "fallback" outcome never produced text worth persisting. */
+  text?: string;
 }
 
 export interface RunHybridWithBudgetOptions {
@@ -79,6 +81,14 @@ export async function runHybridWithBudget(opts: RunHybridWithBudgetOptions): Pro
   // Directly pipeline parent truncation signals down to the child thread
   receiverController.signal.addEventListener("abort", onReceiverAbort);
 
+  // Declared outside the inner IIFE so the generated text survives past
+  // that closure and is available to return to the caller below —
+  // previously this lived only as a local inside attempt() and was thrown
+  // away the moment attempt() resolved, even on a successful "hybrid"
+  // outcome, which is why neither Pile-On's nor Win-Back's send log could
+  // ever persist what Claude actually wrote.
+  let generatedText: string | undefined;
+
   try {
     const attempt = (async (): Promise<void> => {
       const generationTimeout = setTimeout(() => generationController.abort(), generationBudgetMs);
@@ -98,6 +108,7 @@ export async function runHybridWithBudget(opts: RunHybridWithBudgetOptions): Pro
         clearTimeout(generationTimeout);
       }
 
+      generatedText = text;
       await opts.deliver(text);
     })();
 
@@ -110,7 +121,7 @@ export async function runHybridWithBudget(opts: RunHybridWithBudgetOptions): Pro
       }),
     ]);
 
-    return { outcome: "hybrid", latencyMs: Date.now() - startedAt };
+    return { outcome: "hybrid", latencyMs: Date.now() - startedAt, text: generatedText };
   } catch (e: any) {
     // 🌟 THE FIX: Force immediate background fetch tear down if the execution block errors out
     generationController.abort();

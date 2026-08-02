@@ -783,11 +783,23 @@ export const briefedCallsLog = pgTable("briefed_calls_log", {
     .notNull()
     .references(() => engagements.engagementId),
   callId: text("call_id").notNull().unique(), // idempotency key
+  // Which skillRuns row processed this call. A single nightly/dynamic
+  // Pre-Call Read run loops over every eligible call under one runId (see
+  // RunStep's module comment) — this is what lets the run-detail page
+  // pull back "every call this specific run briefed" instead of only the
+  // generic phase timeline. Nullable because rows written before this
+  // column existed have no run to backfill against.
+  runId: uuid("run_id"),
   callTime: timestamp("call_time").notNull(),
   prospectName: text("prospect_name"),
   briefDeliveredAt: timestamp("brief_delivered_at"),
   destinationDelivered: text("destination_delivered"),
   personMatchScore: integer("person_match_score"),
+  // The actual synthesized 7-section brief text (llmResult.text in
+  // brief-service.ts). Previously generated, delivered to Slack/CRM, and
+  // then discarded — never queryable again once the delivery happened.
+  // This is what the Executive Brief drawer on the run-detail page reads.
+  briefText: text("brief_text"),
   // Pre-Call Read recovery gap 6 — the two fields the transfer analysis
   // flagged as missing from this log's schema, cross-consumed by Win-Back
   // (was the brief delivered before the call was missed, i.e. did the rep
@@ -813,6 +825,12 @@ export const winBackEnrollments = pgTable("win_back_enrollments", {
     .references(() => engagements.engagementId),
   prospectEmail: text("prospect_email").notNull(),
   prospectName: text("prospect_name"),
+  // The skillRuns row (cancellation/no-show webhook run) that created this
+  // enrollment — one win-back run always corresponds to exactly one
+  // prospect, so this is a straight 1:1 lookup for the run-detail page.
+  // Nullable because rows written before this column existed have no run
+  // to backfill against.
+  runId: uuid("run_id"),
   enrolledAt: timestamp("enrolled_at").defaultNow().notNull(),
   // Frozen at enrollment time from the engagement's recovery_window_days —
   // if the buyer changes that setting later, prospects already in-flight
@@ -845,9 +863,19 @@ export const auditRunsLog = pgTable("audit_runs_log", {
     .notNull()
     .references(() => engagements.engagementId),
   runType: text("run_type").notNull(),
+  // The skillRuns row this audit came from — one Leak Map run produces
+  // exactly one auditRunsLog row, so this is a straight 1:1 lookup.
+  // Nullable because rows written before this column existed have no run
+  // to backfill against.
+  runId: uuid("run_id"),
   topIssues: jsonb("top_issues"),
   alertsFired: jsonb("alerts_fired"),
   gaps: jsonb("gaps"),
+  // The full Claude-synthesized markdown report (stage-5 output in
+  // audit-engine.ts). Previously generated, delivered via Resend/Slack,
+  // and discarded — never queryable again once delivery happened. This is
+  // what the Executive Report Reader on the run-detail page renders.
+  reportMarkdown: text("report_markdown"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -1003,6 +1031,11 @@ export const winBackSendLog = pgTable("win_back_send_log", {
   prospectEmail: text("prospect_email").notNull(),
   // "hybrid" | "fallback"
   sentVia: text("sent_via").notNull(),
+  // The actual Claude-generated opening paragraph for the first recovery
+  // email (only set when sentVia === "hybrid"). Same fix as
+  // pile_on_send_log.personalized_intro — previously generated, delivered,
+  // and discarded.
+  personalizedOpening: text("personalized_opening"),
   latencyMs: integer("latency_ms"),
   error: text("error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1092,9 +1125,20 @@ export const pileOnSendLog = pgTable("pile_on_send_log", {
     .references(() => engagements.engagementId),
   bookingId: text("booking_id").notNull(),
   prospectEmail: text("prospect_email").notNull(),
+  // The skillRuns row this send came from — one Pile-On run always
+  // corresponds to exactly one booking, so this is a straight 1:1 lookup
+  // for the run-detail page. Nullable because rows written before this
+  // column existed have no run to backfill against.
+  runId: uuid("run_id"),
   // "hybrid" | "fallback" — which path actually produced the Email 1 the
   // prospect received. See hybrid-personalizer.ts.
   sentVia: text("sent_via").notNull(),
+  // The actual Claude-generated intro paragraph delivered to the
+  // prospect's CRM profile (only set when sentVia === "hybrid").
+  // Previously generated, delivered, and discarded — never queryable
+  // again once delivery happened. This is what the AI Personalization
+  // Preview on the run-detail page renders.
+  personalizedIntro: text("personalized_intro"),
   latencyMs: integer("latency_ms"),
   error: text("error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

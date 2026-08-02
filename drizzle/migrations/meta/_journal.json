@@ -85,6 +85,13 @@
       "when": 1785581881311,
       "tag": "0011_graceful_kronos",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785672943364,
+      "tag": "0012_simple_mercury",
+      "breakpoints": true
     }
   ]
 }

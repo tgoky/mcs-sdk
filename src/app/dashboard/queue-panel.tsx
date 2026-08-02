@@ -780,8 +780,7 @@ export function QueuePanel({
     } catch {
       setErrorId(item.id);
       setErrorText(copy.errors.generic);
-    } font
-    finally {
+    } finally {
       setBusyId(null);
     }
   }
