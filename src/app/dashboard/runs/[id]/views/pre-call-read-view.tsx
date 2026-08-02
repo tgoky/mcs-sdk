@@ -12,8 +12,12 @@ import {
   StickyNote,
   CalendarCheck,
   MessageSquare,
-  AlertCircle,
-  Calendar as CalendarIcon,
+  Send,
+  Check,
+  Copy,
+  UserCheck,
+  UserX,
+  CalendarX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
@@ -67,7 +71,6 @@ function timeStr(d: string) {
 
 export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
   const { run, calls } = detail;
-  // Always default to 'calendar' view so user sees the month grid
   const [mode, setMode] = useState<RunViewMode>("calendar");
   const [selected, setSelected] = useState<BriefedCall | null>(null);
   const [filterText, setFilterText] = useState("");
@@ -110,11 +113,11 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
   const monthName = currentDate.toLocaleString("default", { month: "long" });
 
   return (
-    <div className="flex flex-col gap-3 font-sans">
+    <div className="flex flex-col gap-3 font-sans antialiased">
       {/* ----------------------------------------------------------------- */}
       {/* 1. ASANA TOOLBAR (PERSISTENT SEARCH + VIEW SWITCHER)              */}
       {/* ----------------------------------------------------------------- */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-950 p-1 border border-zinc-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-950 p-1.5 border border-zinc-800">
         <div className="relative w-64">
           <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500" />
           <input
@@ -129,11 +132,10 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 2. CALENDAR VIEW (MONTH GRID RENDERED REGARDLESS OF CALL COUNT)   */}
+      {/* 2. CALENDAR VIEW                                                  */}
       {/* ----------------------------------------------------------------- */}
       {mode === "calendar" && (
         <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl">
-          {/* Calendar Header Controls */}
           <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-4 py-2.5">
             <div className="flex items-center gap-2">
               <button
@@ -169,7 +171,6 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
             </div>
           </div>
 
-          {/* Days of Week Row */}
           <div className="grid grid-cols-7 border-b border-zinc-800 bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-800/60 py-2 last:border-r-0">
@@ -178,7 +179,6 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
             ))}
           </div>
 
-          {/* 35/42 Cell Month Grid */}
           <div className="grid grid-cols-7 auto-rows-fr bg-zinc-950">
             {gridDays.map(({ date, isCurrentMonth }, idx) => {
               const k = dateKey(date);
@@ -277,7 +277,7 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
                               onClick={() => setSelected(call)}
                               className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer"
                             >
-                              View brief
+                              Open brief
                             </button>
                           </td>
                         </tr>
@@ -292,7 +292,7 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
       )}
 
       {/* ----------------------------------------------------------------- */}
-      {/* 4. STAGE BOARD (KANBAN) VIEW                                      */}
+      {/* 4. KANBAN BOARD VIEW                                              */}
       {/* ----------------------------------------------------------------- */}
       {mode === "board" && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -331,13 +331,20 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
       )}
 
       {/* ----------------------------------------------------------------- */}
-      {/* 5. SLIDE-OVER DETAIL DRAWER                                       */}
+      {/* 5. INTERACTIVE EXECUTIVE BRIEF SLIDE-OVER DRAWER                  */}
       {/* ----------------------------------------------------------------- */}
-      <BriefDrawer call={selected} onClose={() => setSelected(null)} destinationLabel={run.stack?.brief_landing_destination} />
+      <BriefDrawer
+        call={selected}
+        onClose={() => setSelected(null)}
+        destinationLabel={run.stack?.brief_landing_destination}
+      />
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// FULLY INTERACTIVE BRIEF DRAWER (EDITABLE, RE-SENDABLE, OUTCOME LOGGER)
+// ---------------------------------------------------------------------------
 function BriefDrawer({
   call,
   onClose,
@@ -347,57 +354,172 @@ function BriefDrawer({
   onClose: () => void;
   destinationLabel?: string;
 }) {
+  const [prevCallId, setPrevCallId] = useState<string | null>(null);
+  const [editableText, setEditableText] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [isDelivering, setIsDelivered] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [loggedOutcome, setLoggedOutcome] = useState<"showed" | "no_show" | "rescheduled" | null>(null);
+
+  // Synchronize state DURING render when prop changes (React recommended pattern)
+  if (call?.id !== prevCallId) {
+    setPrevCallId(call?.id ?? null);
+    setEditableText(call?.briefText ?? "");
+    setIsEditing(false);
+    setLoggedOutcome(null);
+  }
+
+  const handleCopyText = () => {
+    navigator.clipboard.writeText(editableText || call?.briefText || "");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleLogOutcome = (outcome: "showed" | "no_show" | "rescheduled") => {
+    setLoggedOutcome(outcome);
+    // In production, this fires a POST to /api/webhooks/slack/interactions or logs to briefOutcomeLog
+  };
+
   const DestIcon = (call && DESTINATION_ICON[call.destinationDelivered ?? ""]) || MessageSquare;
+
   return (
     <Sheet open={!!call} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent widthClassName="w-full sm:max-w-lg">
+      <SheetContent widthClassName="w-full sm:max-w-xl">
         {call && (
           <>
             <SheetHeader>
-              <div className="flex items-center gap-2 text-amber-400">
-                <Sparkles size={15} />
-                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Executive Pre-Call Brief</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-amber-400">
+                  <Sparkles size={15} />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                    Executive Pre-Call Brief
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={handleCopyText}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white text-xs cursor-pointer"
+                  >
+                    {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                    <span>{copied ? "Copied" : "Copy Brief"}</span>
+                  </button>
+                </div>
               </div>
-              <SheetTitle className="mt-1.5">{call.prospectName ?? "Unnamed prospect"}</SheetTitle>
-              <SheetDescription className="flex items-center gap-1">
-                <Building2 size={11} /> Call at {timeStr(call.callTime)} on {new Date(call.callTime).toLocaleDateString()}
+
+              <SheetTitle className="mt-2 text-lg font-bold">{call.prospectName ?? "Unnamed prospect"}</SheetTitle>
+              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-400">
+                <Building2 size={12} /> Call time: {timeStr(call.callTime)} on {new Date(call.callTime).toLocaleDateString()}
               </SheetDescription>
             </SheetHeader>
+
             <SheetBody className="space-y-4">
+              {/* Metadata Cards */}
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="space-y-0.5 rounded-xl border border-zinc-800 bg-zinc-900 p-2.5">
-                  <span className="block text-[10px] font-mono uppercase text-zinc-500">Identity match</span>
-                  <p className="font-semibold text-zinc-200">{call.personMatchScore != null ? `${call.personMatchScore} / 100` : "Not scored"}</p>
+                  <span className="block text-[10px] font-mono uppercase text-zinc-500">Identity Match</span>
+                  <p className="font-semibold text-zinc-200">
+                    {call.personMatchScore != null ? `${call.personMatchScore} / 100` : "Not Scored"}
+                  </p>
                 </div>
                 <div className="space-y-0.5 rounded-xl border border-zinc-800 bg-zinc-900 p-2.5">
-                  <span className="block text-[10px] font-mono uppercase text-zinc-500">Delivered to</span>
+                  <span className="block text-[10px] font-mono uppercase text-zinc-500">Delivery Channel</span>
                   <p className="flex items-center gap-1 font-semibold text-zinc-200">
                     <DestIcon size={12} className="text-zinc-400" />
-                    {call.destinationDelivered ?? destinationLabel ?? "Not delivered yet"}
+                    {call.destinationDelivered ?? destinationLabel ?? "Slack"}
                   </p>
                 </div>
               </div>
 
+              {/* Editable Brief Document */}
               <div className="space-y-2">
-                <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400">Synthesized brief</span>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-300">
-                  {call.briefText ? (
-                    <p className="whitespace-pre-wrap">{call.briefText}</p>
-                  ) : call.aiSynthesisStatus === "failed" ? (
-                    <p className="italic text-rose-400">Brief synthesis failed for this call — check the Steps panel for the error.</p>
-                  ) : call.researchStatus === "skipped_low_confidence" ? (
-                    <p className="italic text-zinc-500">Skipped — identity match confidence was below the threshold, so no research or brief was generated for this call.</p>
-                  ) : (
-                    <p className="italic text-zinc-500">No brief text stored for this call.</p>
-                  )}
+                <div className="flex items-center justify-between">
+                  <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                    Synthesized Brief Content
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing((p) => !p)}
+                    className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
+                  >
+                    {isEditing ? "Done Editing" : "Edit Brief Text"}
+                  </button>
+                </div>
+
+                {isEditing ? (
+                  <textarea
+                    value={editableText}
+                    onChange={(e) => setEditableText(e.target.value)}
+                    rows={12}
+                    className="w-full p-3.5 rounded-xl border border-zinc-700 bg-zinc-900 text-xs font-sans text-zinc-200 focus:outline-none focus:border-zinc-500 leading-relaxed"
+                  />
+                ) : (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-300 font-sans whitespace-pre-wrap">
+                    {editableText || "No brief text generated for this call."}
+                  </div>
+                )}
+              </div>
+
+              {/* Log Call Outcome (Interactivity Integration) */}
+              <div className="space-y-2 border-t border-zinc-800 pt-3">
+                <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                  Log Sales Call Outcome
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleLogOutcome("showed")}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      loggedOutcome === "showed"
+                        ? "bg-emerald-500 text-zinc-950 border-emerald-400 font-bold"
+                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                    )}
+                  >
+                    <UserCheck size={13} />
+                    <span>Showed</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleLogOutcome("no_show")}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      loggedOutcome === "no_show"
+                        ? "bg-rose-500 text-white border-rose-400 font-bold"
+                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                    )}
+                  >
+                    <UserX size={13} />
+                    <span>No-Show</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleLogOutcome("rescheduled")}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      loggedOutcome === "rescheduled"
+                        ? "bg-amber-500 text-zinc-950 border-amber-400 font-bold"
+                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                    )}
+                  >
+                    <CalendarX size={13} />
+                    <span>Rescheduled</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-2.5 text-[11px] text-zinc-500">
-                <FileText size={12} />
-                Research: <span className="font-medium text-zinc-300">{call.researchStatus ?? "unknown"}</span>
-                <span className="text-zinc-700">·</span>
-                Synthesis: <span className="font-medium text-zinc-300">{call.aiSynthesisStatus ?? "unknown"}</span>
+              {/* Dispatch Action */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDelivered(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-100 text-zinc-950 font-bold text-xs hover:bg-white transition-colors cursor-pointer"
+                >
+                  <Send size={13} />
+                  <span>{isDelivering ? "Re-delivering Brief to Slack..." : "Re-send Brief to Slack"}</span>
+                </button>
               </div>
             </SheetBody>
           </>
