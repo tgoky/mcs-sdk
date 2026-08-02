@@ -186,7 +186,7 @@ export function PreCallReadModuleView({
   runs: SkillRun[];
   manifest: SkillManifestEntry;
 }) {
-  const router = router = useRouter();
+  const router =  useRouter();
   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
   const [polling, setPolling] = useState(true);
   const [mode, setMode] = useState<"list" | "board">("list");
