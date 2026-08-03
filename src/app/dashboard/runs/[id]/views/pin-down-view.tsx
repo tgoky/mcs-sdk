@@ -13,14 +13,9 @@ import {
   Film,
   Megaphone,
   AlertCircle,
-  Clock,
-  ScanSearch,
+  MoreHorizontal,
   ClipboardCheck,
-  ChevronDown,
-  ChevronUp,
-  Terminal,
-  CheckCircle2,
-  Sparkles,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingPlatformLabel, hostingPlatformLabel } from "@/lib/copy";
@@ -36,29 +31,24 @@ const PILLAR_LABEL: Record<string, string> = {
 };
 
 /**
- * Subtle Muted Badge Component
+ * Asana-exact Status Pill Component (Static dot + label)
  */
-function MutedBadge({ label }: { label: string }) {
-  const norm = label.toLowerCase();
-
-  let bgClass = "bg-zinc-800/80 text-zinc-300 border-zinc-700/80";
-
-  if (norm.includes("live") || norm.includes("success") || norm.includes("webhook")) {
-    bgClass = "bg-emerald-500/10 text-emerald-400 border-emerald-900/50";
-  } else if (norm.includes("paste") || norm.includes("polling") || norm.includes("sky")) {
-    bgClass = "bg-sky-500/10 text-sky-400 border-sky-900/50";
-  } else if (norm.includes("pending") || norm.includes("review")) {
-    bgClass = "bg-violet-500/10 text-violet-400 border-violet-900/50";
-  }
+function AsanaStatusPill({ status }: { status: "on_track" | "at_risk" | "off_track" }) {
+  const config = {
+    on_track: { label: "On track", color: "text-emerald-400 bg-emerald-950/40 border-emerald-800/60" },
+    at_risk: { label: "At risk", color: "text-amber-400 bg-amber-950/40 border-amber-800/60" },
+    off_track: { label: "Off track", color: "text-rose-400 bg-rose-950/40 border-rose-800/60" },
+  }[status];
 
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-mono font-medium border select-none truncate max-w-full",
-        bgClass
+        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border font-sans select-none shrink-0",
+        config.color
       )}
     >
-      {label}
+      <span className="text-[9px]">●</span>
+      <span>{config.label}</span>
     </span>
   );
 }
@@ -66,7 +56,7 @@ function MutedBadge({ label }: { label: string }) {
 export function PinDownView({ detail }: { detail: PinDownDetail }) {
   const { run } = detail;
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [showBehindTheHood, setShowBehindTheHood] = useState(false);
+  const [activeTab, setActiveTab] = useState<"briefs" | "scripts" | "code" | "voice">("briefs");
 
   const deployment = run.confirmationPageDeployment;
   const isLive = deployment?.mode === "live";
@@ -80,523 +70,487 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const briefsCount = run.adCreativeBriefs?.briefs?.length ?? 0;
-  const breakoutsCount = run.pinDownScriptPack?.breakoutScripts?.length ?? 0;
-
-  return (
-    <div className="flex flex-col gap-4 font-sans antialiased text-zinc-100">
-      {/* ----------------------------------------------------------------- */}
-      {/* 1. ASANA-STYLE COMMAND HERO BANNER                                */}
-      {/* ----------------------------------------------------------------- */}
-      <div
-        className={cn(
-          "rounded-2xl border p-5 shadow-xl transition-all font-sans backdrop-blur-xs relative overflow-hidden",
-          isLive && "border-emerald-900/60 bg-emerald-950/10",
-          isPasteReady && "border-sky-900/60 bg-sky-950/10",
-          isPending && "border-violet-900/60 bg-violet-950/10",
-          !deployment && "border-zinc-800/80 bg-zinc-950/30"
-        )}
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-2">
-            {/* Asana Macro Status Pill */}
-            <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold border uppercase tracking-wider select-none",
-                  isLive && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-                  isPasteReady && "bg-sky-500/10 text-sky-400 border-sky-500/20",
-                  isPending && "bg-violet-500/10 text-violet-400 border-violet-500/20",
-                  !deployment && "bg-zinc-800/80 text-zinc-400 border-zinc-700"
-                )}
-              >
-                <span
-                  className={cn(
-                    "h-2 w-2 rounded-full shrink-0",
-                    isLive && "bg-emerald-400 animate-pulse",
-                    isPasteReady && "bg-sky-400",
-                    isPending && "bg-violet-400",
-                    !deployment && "bg-zinc-500"
-                  )}
-                />
-                {isLive ? "● LIVE & AUTOMATED" : isPasteReady ? "● CODE READY" : isPending ? "● IN QUEUE" : "● PENDING"}
-              </span>
-
-              <span className="text-[11px] font-mono text-zinc-500">
-                Pin-Down Onboarding Skill
-              </span>
-            </div>
-
-            <div>
-              <h1 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-                Client Onboarding Engine
-                {isLive && <Sparkles size={16} className="text-emerald-400" />}
-              </h1>
-              <p className="text-xs text-zinc-400 font-sans mt-0.5">
-                {bookingPlatformLabel(run.stack?.booking_platform)} calendar synced ·{" "}
-                {hostingPlatformLabel(run.stack?.hosting_platform)} VSL page deployed ·{" "}
-                {briefsCount + breakoutsCount + 1} creative assets generated
-              </p>
-            </div>
-          </div>
-
-          {/* Action Toolbar */}
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => setShowBehindTheHood((prev) => !prev)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700/80 bg-zinc-900/60 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all cursor-pointer shadow-2xs"
-            >
-              <Terminal size={13} className="text-teal-400" />
-              <span>Behind the Hood</span>
-              {showBehindTheHood ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            </button>
-
-            {isLive && run.confirmationPageUrl && (
-              <a
-                href={run.confirmationPageUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-1.5 text-xs font-bold text-zinc-950 hover:bg-emerald-400 transition-colors shadow-2xs font-sans"
-              >
-                <span>Open Live Page</span>
-                <ExternalLink size={12} />
-              </a>
-            )}
-
-            {isPending && (
-              <Link
-                href="/dashboard/queue"
-                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-500 px-3.5 py-1.5 text-xs font-bold text-zinc-950 hover:bg-violet-400 transition-colors shadow-2xs font-sans"
-              >
-                <ClipboardCheck size={12} />
-                <span>Review in Queue</span>
-              </Link>
-            )}
-          </div>
-        </div>
-
-        {/* Collapsible Telemetry Checklist ("Behind the Hood") */}
-        {showBehindTheHood && (
-          <div className="mt-4 pt-4 border-t border-zinc-800/80 space-y-2 font-mono text-xs text-zinc-300 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between pb-1">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">
-                AI Onboarding Telemetry Log
-              </span>
-              <span className="text-[10px] text-emerald-400 font-bold">4/4 Steps Completed</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div className="flex items-start gap-2.5 p-2.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60">
-                <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-zinc-100">Step 1: Calendar & Stack Sync</p>
-                  <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
-                    Connected to {bookingPlatformLabel(run.stack?.booking_platform)} via {run.stack?.webhook_receiver_mode ?? "polling"}.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5 p-2.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60">
-                <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-zinc-100">Step 2: Brand Voice Extraction</p>
-                  <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
-                    Extracted tone scores & {run.brandVoiceProfile?.vocabulary?.signature?.length ?? 0} vocabulary tokens.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5 p-2.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60">
-                <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-zinc-100">Step 3: VSL & Script Pack</p>
-                  <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
-                    Generated Hero VSL + {breakoutsCount} breakout scripts + {briefsCount} ad briefs.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5 p-2.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60">
-                <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-zinc-100">Step 4: VSL Deployment</p>
-                  <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
-                    Target: {hostingPlatformLabel(deployment?.deployedVia)} ({deployment?.mode}).
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ----------------------------------------------------------------- */}
-      {/* 2. MODULAR WIDGET GRID (2x2)                                      */}
-      {/* ----------------------------------------------------------------- */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 font-sans">
-        <PrimaryOutputCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
-        <BrandVoiceCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
-        <PlatformSyncCard run={run} />
-        <CreativeAssetsCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
-      </div>
-
-      {/* Existing Page Audit Widget */}
-      {run.pinDownPageAudit && <ExistingPageAuditCard audit={run.pinDownPageAudit} />}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// ASANA-STYLE WIDGET SUB-COMPONENTS
-// ---------------------------------------------------------------------------
-function Card({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col rounded-2xl border border-zinc-800/80 bg-transparent p-4 shadow-2xs font-sans backdrop-blur-xs">
-      <div className="mb-3 flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
-        <div className="flex items-center gap-2">
-          <Icon size={14} className="text-zinc-400" />
-          <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-300 font-sans">{title}</h3>
-        </div>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function PrimaryOutputCard({
-  run,
-  onCopy,
-  copiedKey,
-}: {
-  run: PinDownDetail["run"];
-  onCopy: (text: string, key: string) => void;
-  copiedKey: string | null;
-}) {
-  const isPasteReady = run.confirmationPageDeployment?.mode === "paste_ready";
-
-  return (
-    <Card title="Confirmation Page Deliverable" icon={Code2}>
-      {isPasteReady && run.pasteReadyHtml ? (
-        <>
-          <div className="max-h-48 overflow-auto rounded-xl border border-zinc-800/80 bg-black/40 p-3 font-mono">
-            <pre className="whitespace-pre-wrap break-all text-[10px] leading-relaxed text-zinc-400">
-              {run.pasteReadyHtml}
-            </pre>
-          </div>
-          <button
-            type="button"
-            onClick={() => onCopy(run.pasteReadyHtml!, "html")}
-            className="mt-2.5 flex w-fit items-center gap-1.5 rounded-lg border border-zinc-700/80 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer transition-colors font-sans"
-          >
-            {copiedKey === "html" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-            <span>{copiedKey === "html" ? "Copied HTML" : "Copy HTML Code"}</span>
-          </button>
-          {run.pasteReadyInstructions && (
-            <p className="mt-2 text-[11px] leading-relaxed text-zinc-500 font-sans">{run.pasteReadyInstructions}</p>
-          )}
-        </>
-      ) : run.confirmationPageUrl ? (
-        <div className="overflow-hidden rounded-xl border border-zinc-800/80">
-          <iframe
-            src={run.confirmationPageUrl}
-            className="h-48 w-full bg-white"
-            sandbox="allow-same-origin"
-            title="Confirmation page preview"
-          />
-        </div>
-      ) : (
-        <EmptyState
-          icon={Code2}
-          title="No Page Recorded"
-          description="No confirmation page URL or paste-ready HTML code has been recorded for this engagement."
-        />
-      )}
-    </Card>
-  );
-}
-
-function BrandVoiceCard({
-  run,
-  onCopy,
-  copiedKey,
-}: {
-  run: PinDownDetail["run"];
-  onCopy: (text: string, key: string) => void;
-  copiedKey: string | null;
-}) {
-  const v = run.brandVoiceProfile;
-  if (!v)
-    return (
-      <Card title="Brand Voice & Positioning" icon={Palette}>
-        <EmptyState
-          icon={Palette}
-          title="Voice Profile Pending"
-          description="Brand voice extraction hasn't run for this engagement yet."
-        />
-      </Card>
-    );
-
-  const tones: Array<[string, { score: number; note: string }]> = [
-    ["Formal ↔ Casual", v.tone.formal_casual],
-    ["Technical ↔ Plain", v.tone.technical_plain],
-    ["Warm ↔ Neutral", v.tone.warm_neutral],
-  ];
-
-  return (
-    <Card title="Brand Voice & Positioning" icon={Palette}>
-      <div className="space-y-2.5 font-sans">
-        {tones.map(([label, t]) => (
-          <div key={label}>
-            <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-500 font-mono">
-              <span>{label}</span>
-              <span>{t.score}/5</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800/80">
-              <div
-                className="h-full rounded-full bg-teal-400 transition-all"
-                style={{ width: `${(t.score / 5) * 100}%` }}
-              />
-            </div>
-            <p className="mt-0.5 text-[10px] text-zinc-500 font-sans">{t.note}</p>
-          </div>
-        ))}
-      </div>
-
-      {v.vocabulary.signature.length > 0 && (
-        <div className="mt-3 border-t border-zinc-800/80 pt-2 font-sans">
-          <div className="mb-1 flex items-center justify-between">
-            <span className="text-[10px] uppercase text-zinc-500 font-mono">Signature Vocabulary</span>
-            <button
-              type="button"
-              onClick={() => onCopy(v.vocabulary.signature.join(", "), "vocab")}
-              className="text-[10px] text-zinc-400 hover:text-white transition-colors cursor-pointer font-sans"
-            >
-              {copiedKey === "vocab" ? "Copied" : "Copy Tokens"}
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {v.vocabulary.signature.map((w) => (
-              <span key={w} className="rounded-md bg-zinc-800/80 px-1.5 py-0.5 text-[10px] text-zinc-300 font-mono">
-                {w}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {v.banned_phrases.length > 0 && (
-        <div className="mt-2.5 font-sans">
-          <p className="mb-1 flex items-center gap-1 text-[10px] uppercase text-zinc-500 font-mono">
-            <AlertCircle size={10} /> Banned Phrases
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {v.banned_phrases.map((b) => (
-              <span key={b.phrase} className="rounded-md bg-rose-950/40 px-1.5 py-0.5 text-[10px] text-rose-400 border border-rose-900/30 font-mono">
-                {b.phrase}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function PlatformSyncCard({ run }: { run: PinDownDetail["run"] }) {
-  const stack = run.stack;
-  if (!stack)
-    return (
-      <Card title="Platform Sync" icon={Webhook}>
-        <EmptyState
-          icon={Webhook}
-          title="No Stack Configured"
-          description="This engagement has no platform stack recorded yet."
-        />
-      </Card>
-    );
-
-  return (
-    <Card title="Platform Sync" icon={Webhook}>
-      <div className="space-y-2 text-xs font-sans">
-        <Row label="Booking Platform" value={bookingPlatformLabel(stack.booking_platform)} />
-        <Row label="Hosting Platform" value={hostingPlatformLabel(stack.hosting_platform)} />
-        <div className="flex items-center justify-between border-t border-zinc-800/80 pt-2 font-sans">
-          <span className="text-zinc-500 font-sans">Webhook Receiver Mode</span>
-          <MutedBadge label={stack.webhook_receiver_mode ?? "none"} />
-        </div>
-        {stack.webhook_last_received_at && (
-          <Row label="Last Webhook Received" value={new Date(stack.webhook_last_received_at).toLocaleString()} icon={Clock} />
-        )}
-        {stack.webhook_last_error && (
-          <p className="rounded-lg bg-rose-950/30 border border-rose-900/40 px-2 py-1.5 text-[10px] text-rose-400 font-mono">
-            {stack.webhook_last_error}
-          </p>
-        )}
-      </div>
-    </Card>
-  );
-}
-
-function Row({ label, value, icon: Icon }: { label: string; value: string; icon?: React.ElementType }) {
-  return (
-    <div className="flex items-center justify-between font-sans">
-      <span className="text-zinc-500 font-sans">{label}</span>
-      <span className="flex items-center gap-1 font-medium text-zinc-200 font-sans">
-        {Icon && <Icon size={11} className="text-zinc-500" />}
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function CreativeAssetsCard({
-  run,
-  onCopy,
-  copiedKey,
-}: {
-  run: PinDownDetail["run"];
-  onCopy: (text: string, key: string) => void;
-  copiedKey: string | null;
-}) {
   const briefs = run.adCreativeBriefs?.briefs ?? [];
   const scriptPack = run.pinDownScriptPack;
-  const [briefKey, setBriefKey] = useState(briefs[0]?.id ?? "");
-  const [scriptKey, setScriptKey] = useState<string>("hero");
+  const voice = run.brandVoiceProfile;
+  const stack = run.stack;
+  const buyerName = run.buyerName || "Client";
 
-  const activeBrief = briefs.find((b) => b.id === briefKey) ?? briefs[0];
-  const breakouts = scriptPack?.breakoutScripts ?? [];
-  const activeScript = scriptKey === "hero" ? scriptPack?.heroScript : breakouts.find((s) => s.id === scriptKey);
+  // Derive status states for Asana rows
+  const deploymentStatus: "on_track" | "at_risk" | "off_track" = isLive
+    ? "on_track"
+    : isPasteReady
+    ? "at_risk"
+    : "off_track";
 
-  if (briefs.length === 0 && !scriptPack) {
-    return (
-      <Card title="Generated Creative Assets" icon={Film}>
-        <EmptyState
-          icon={Film}
-          title="No Creative Assets"
-          description="Ad creative briefs and the video script pack haven't been generated for this engagement yet."
-        />
-      </Card>
-    );
-  }
+  const stackStatus: "on_track" | "at_risk" | "off_track" =
+    stack?.booking_platform && stack?.webhook_receiver_mode === "webhook"
+      ? "on_track"
+      : stack?.booking_platform
+      ? "at_risk"
+      : "off_track";
+
+  const voiceStatus: "on_track" | "at_risk" | "off_track" = voice ? "on_track" : "off_track";
+  const creativeStatus: "on_track" | "at_risk" | "off_track" = briefs.length > 0 ? "on_track" : "at_risk";
+
+  // Date String for Asana Header
+  const formattedDate = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  // Conversational Sentence Constructor
+  const buildSentenceSummary = () => {
+    if (isLive) {
+      return `Your automation is live! We've calibrated ${buyerName}'s brand voice with a balanced analytical posture (${voice?.tone?.formal_casual?.score ?? 3}/5 formal/casual), synced ${bookingPlatformLabel(stack?.booking_platform)} to ${hostingPlatformLabel(stack?.hosting_platform)}, and deployed the confirmation page VSL along with ${briefs.length} ad creative briefs.`;
+    }
+
+    if (isPasteReady) {
+      return `Your automation configuration is complete and ready for deployment. Paste-ready HTML code has been generated for ${hostingPlatformLabel(stack?.hosting_platform)}, brand voice tokens (${voice?.vocabulary?.signature?.slice(0, 3).join(", ") ?? "default"}) are extracted, and ${briefs.length} ad creative briefs are prepared.`;
+    }
+
+    if (!stack?.booking_platform) {
+      return `Your automation setup is missing platform API configurations. Please configure your booking platform and hosting stack to enable automated webhook synchronization and live page deployment.`;
+    }
+
+    return `Your automation workflow is configured and awaiting review. ${bookingPlatformLabel(stack?.booking_platform)} is linked, brand voice profile is extracted, and ${briefs.length} ad briefs are staged in the queue.`;
+  };
 
   return (
-    <Card title="Generated Creative Assets" icon={Film}>
-      {briefs.length > 0 && (
-        <div className="mb-3 font-sans">
-          <div className="mb-1.5 flex items-center justify-between font-sans">
-            <span className="flex items-center gap-1 text-[10px] uppercase text-zinc-500 font-mono">
-              <Megaphone size={10} /> Ad Creative Brief
-            </span>
-            <div className="flex items-center gap-2 font-sans">
-              <Dropdown
-                variant="field"
-                items={briefs.map((b) => ({ key: b.id, label: PILLAR_LABEL[b.pillar] ?? b.pillar }))}
-                selectedKey={briefKey || briefs[0]?.id}
-                onSelect={setBriefKey}
-                triggerClassName="w-36 py-1"
-              />
-              {activeBrief && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    onCopy(
-                      `Hook: ${activeBrief.hook}\nAngle: ${activeBrief.angle}\nFormat: ${activeBrief.suggestedFormat}\nCTA: ${activeBrief.cta}`,
-                      "brief"
-                    )
-                  }
-                  className="text-[10px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  {copiedKey === "brief" ? "Copied" : "Copy Brief"}
-                </button>
-              )}
-            </div>
-          </div>
-          {activeBrief && (
-            <div className="space-y-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 text-[11px] text-zinc-300 font-sans">
-              <p className="font-sans"><span className="text-zinc-500 font-sans">Hook:</span> {activeBrief.hook}</p>
-              <p className="font-sans"><span className="text-zinc-500 font-sans">Angle:</span> {activeBrief.angle}</p>
-              <p className="font-sans"><span className="text-zinc-500 font-sans">Format:</span> {activeBrief.suggestedFormat}</p>
-              <p className="font-sans"><span className="text-zinc-500 font-sans">CTA:</span> {activeBrief.cta}</p>
-            </div>
+    <div className="flex flex-col gap-6 font-sans antialiased text-zinc-100 max-w-5xl mx-auto py-2">
+      {/* ----------------------------------------------------------------- */}
+      {/* 1. ASANA TOP GREETING HEADER                                      */}
+      {/* ----------------------------------------------------------------- */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-medium text-zinc-400 font-sans">{formattedDate}</p>
+          <h1 className="text-2xl font-bold text-white tracking-tight mt-0.5 font-sans">
+            Good afternoon, {buyerName}
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {isLive && run.confirmationPageUrl && (
+            <a
+              href={run.confirmationPageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/20 transition-colors font-sans border border-zinc-700"
+            >
+              <span>Live VSL Page</span>
+              <ExternalLink size={12} />
+            </a>
           )}
         </div>
-      )}
-
-      {scriptPack && (
-        <div className="font-sans">
-          <div className="mb-1.5 flex items-center justify-between font-sans">
-            <span className="text-[10px] uppercase text-zinc-500 font-mono">Video Script Pack</span>
-            <div className="flex items-center gap-2 font-sans">
-              <Dropdown
-                variant="field"
-                items={[
-                  { key: "hero", label: scriptPack.heroScript.title },
-                  ...breakouts.map((s) => ({ key: s.id, label: s.title })),
-                ]}
-                selectedKey={scriptKey}
-                onSelect={setScriptKey}
-                triggerClassName="w-36 py-1"
-              />
-              {activeScript && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    onCopy(
-                      "chapters" in activeScript
-                        ? activeScript.chapters.map((c) => c.script).join("\n\n")
-                        : activeScript.script,
-                      "script"
-                    )
-                  }
-                  className="text-[10px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  {copiedKey === "script" ? "Copied" : "Copy Script"}
-                </button>
-              )}
-            </div>
-          </div>
-          {activeScript && (
-            <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 text-[11px] text-zinc-400 font-sans">
-              <p className="text-zinc-300 font-mono text-[10px]">
-                {"targetLengthSeconds" in activeScript ? `${activeScript.targetLengthSeconds}s target length` : ""}
-              </p>
-              <p className="mt-1 line-clamp-3 font-sans">
-                {"chapters" in activeScript ? activeScript.chapters[0]?.script : activeScript.script}
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function ExistingPageAuditCard({ audit }: { audit: NonNullable<PinDownDetail["run"]["pinDownPageAudit"]> }) {
-  return (
-    <Card title={`Existing Page Audit — ${audit.auditedUrl}`} icon={ScanSearch}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 font-sans">
-        <AuditList label="Strengths" tone="success" items={audit.existingPageStrengths} />
-        <AuditList label="Weaknesses" tone="danger" items={audit.existingPageWeaknesses} />
-        <AuditList label="v1 Improvements" tone="info" items={audit.v1Improvements} />
       </div>
-    </Card>
-  );
-}
 
-function AuditList({ label, tone, items }: { label: string; tone: "success" | "danger" | "info"; items: string[] }) {
-  const dot = { success: "bg-emerald-400", danger: "bg-rose-400", info: "bg-sky-400" }[tone];
-  return (
-    <div className="font-sans">
-      <p className="mb-1.5 text-[10px] uppercase text-zinc-500 font-mono">{label}</p>
-      <ul className="space-y-1.5 font-sans">
-        {items.map((item, i) => (
-          <li key={i} className="flex gap-1.5 text-[11px] leading-snug text-zinc-400 font-sans">
-            <span className={cn("mt-1.5 h-1 w-1 shrink-0 rounded-full", dot)} />
-            {item}
-          </li>
-        ))}
-      </ul>
+      {/* ----------------------------------------------------------------- */}
+      {/* 2. CARD 1: STATUS UPDATES (ASANA HOME EXACT STYLE)                */}
+      {/* ----------------------------------------------------------------- */}
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl backdrop-blur-xs font-sans">
+        <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80">
+          <h2 className="text-base font-bold text-white tracking-tight font-sans">Status updates</h2>
+          <button
+            type="button"
+            className="text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer p-1 rounded-md hover:bg-zinc-800"
+          >
+            <MoreHorizontal size={18} />
+          </button>
+        </div>
+
+        {/* Conversational Sentence Summary Banner */}
+        <div className="py-5 border-b border-zinc-800/80">
+          <p className="text-sm text-zinc-300 leading-relaxed font-sans max-w-3xl">
+            {buildSentenceSummary()}
+          </p>
+        </div>
+
+        {/* Asana Status Rows with Right-Aligned Pills */}
+        <div className="divide-y divide-zinc-800/60 font-sans">
+          {/* Row 1: Confirmation Page Deployment */}
+          <div className="flex items-center justify-between py-3.5">
+            <div className="flex items-center gap-3">
+              <Globe size={16} className="text-zinc-400 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-white font-sans">Confirmation Page VSL Deployment</p>
+                <p className="text-[11px] text-zinc-500 font-sans">
+                  {isLive
+                    ? `Published on ${hostingPlatformLabel(deployment?.deployedVia)}`
+                    : isPasteReady
+                    ? "Paste-Ready Code Generated"
+                    : "Deployment Pending Manual Review"}
+                </p>
+              </div>
+            </div>
+            <AsanaStatusPill status={deploymentStatus} />
+          </div>
+
+          {/* Row 2: Platform Stack & Webhook Sync */}
+          <div className="flex items-center justify-between py-3.5">
+            <div className="flex items-center gap-3">
+              <Webhook size={16} className="text-zinc-400 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-white font-sans">Platform Stack & Webhook Sync</p>
+                <p className="text-[11px] text-zinc-500 font-sans">
+                  Booking: {bookingPlatformLabel(stack?.booking_platform)} · Receiver: {stack?.webhook_receiver_mode ?? "None"}
+                </p>
+              </div>
+            </div>
+            <AsanaStatusPill status={stackStatus} />
+          </div>
+
+          {/* Row 3: Brand Voice & Positioning */}
+          <div className="flex items-center justify-between py-3.5">
+            <div className="flex items-center gap-3">
+              <Palette size={16} className="text-zinc-400 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-white font-sans">Brand Voice & Positioning Profile</p>
+                <p className="text-[11px] text-zinc-500 font-sans">
+                  Formal/Casual: {voice?.tone?.formal_casual?.score ?? 3}/5 · Tokens: {voice?.vocabulary?.signature?.slice(0, 3).join(", ") || "None"}
+                </p>
+              </div>
+            </div>
+            <AsanaStatusPill status={voiceStatus} />
+          </div>
+
+          {/* Row 4: Ad Creative Briefs & Video Scripts */}
+          <div className="flex items-center justify-between py-3.5">
+            <div className="flex items-center gap-3">
+              <Megaphone size={16} className="text-zinc-400 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-white font-sans">Ad Creative Briefs & Video Scripts</p>
+                <p className="text-[11px] text-zinc-500 font-sans">
+                  {briefs.length} Ad Briefs · 1 Hero VSL + {scriptPack?.breakoutScripts?.length ?? 0} Breakouts
+                </p>
+              </div>
+            </div>
+            <AsanaStatusPill status={creativeStatus} />
+          </div>
+        </div>
+      </div>
+
+      {/* ----------------------------------------------------------------- */}
+      {/* 3. CARD 2: MY TASKS & DELIVERABLES (ASANA TABBED DETAILS)        */}
+      {/* ----------------------------------------------------------------- */}
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl backdrop-blur-xs font-sans">
+        <div className="flex items-center gap-3 pb-4 border-b border-zinc-800/80">
+          <div className="h-8 w-8 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center font-bold text-xs shrink-0">
+            {buyerName.slice(0, 2).toUpperCase()}
+          </div>
+          <h2 className="text-base font-bold text-white tracking-tight font-sans">
+            Automation Deliverables
+          </h2>
+        </div>
+
+        {/* Asana Sub-Tabs */}
+        <div className="flex items-center gap-6 border-b border-zinc-800/80 pt-3 text-xs font-medium font-sans">
+          <button
+            type="button"
+            onClick={() => setActiveTab("briefs")}
+            className={cn(
+              "pb-2.5 transition-colors cursor-pointer border-b-2 font-sans",
+              activeTab === "briefs"
+                ? "border-white text-white font-bold"
+                : "border-transparent text-zinc-400 hover:text-zinc-200"
+            )}
+          >
+            Ad Briefs ({briefs.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("scripts")}
+            className={cn(
+              "pb-2.5 transition-colors cursor-pointer border-b-2 font-sans",
+              activeTab === "scripts"
+                ? "border-white text-white font-bold"
+                : "border-transparent text-zinc-400 hover:text-zinc-200"
+            )}
+          >
+            Video Scripts
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("code")}
+            className={cn(
+              "pb-2.5 transition-colors cursor-pointer border-b-2 font-sans",
+              activeTab === "code"
+                ? "border-white text-white font-bold"
+                : "border-transparent text-zinc-400 hover:text-zinc-200"
+            )}
+          >
+            Page Code
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("voice")}
+            className={cn(
+              "pb-2.5 transition-colors cursor-pointer border-b-2 font-sans",
+              activeTab === "voice"
+                ? "border-white text-white font-bold"
+                : "border-transparent text-zinc-400 hover:text-zinc-200"
+            )}
+          >
+            Brand Voice
+          </button>
+        </div>
+
+        {/* Tab Content Area */}
+        <div className="pt-4 font-sans">
+          {/* TAB 1: AD BRIEFS */}
+          {activeTab === "briefs" && (
+            <div className="space-y-3">
+              {briefs.map((brief) => (
+                <div
+                  key={brief.id}
+                  className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-2 font-sans"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">
+                      Pillar: {PILLAR_LABEL[brief.pillar] ?? brief.pillar}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCopy(
+                          `Hook: ${brief.hook}\nAngle: ${brief.angle}\nFormat: ${brief.suggestedFormat}\nCTA: ${brief.cta}`,
+                          `brief-${brief.id}`
+                        )
+                      }
+                      className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      {copiedKey === `brief-${brief.id}` ? (
+                        <Check size={12} className="text-emerald-400" />
+                      ) : (
+                        <Copy size={12} />
+                      )}
+                      <span>{copiedKey === `brief-${brief.id}` ? "Copied" : "Copy Brief"}</span>
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-white font-bold font-sans">
+                    Hook: &quot;{brief.hook}&quot;
+                  </p>
+                  <p className="text-xs text-zinc-300 font-sans">
+                    <strong className="text-zinc-400">Angle:</strong> {brief.angle}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1 font-mono text-[10px]">
+                    <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                      Format: {brief.suggestedFormat}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                      CTA: {brief.cta}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {briefs.length === 0 && (
+                <EmptyState
+                  icon={Megaphone}
+                  title="No Ad Briefs Generated"
+                  description="Ad creative briefs haven't been generated for this engagement yet."
+                />
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: VIDEO SCRIPTS */}
+          {activeTab === "scripts" && (
+            <div className="space-y-4">
+              {scriptPack ? (
+                <>
+                  {/* Hero Script */}
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-2 font-sans">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase font-bold text-emerald-400">
+                        Hero VSL Script ({scriptPack.heroScript.targetLengthSeconds}s)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopy(
+                            scriptPack.heroScript.chapters?.map((c) => c.script).join("\n\n") ?? "",
+                            "hero-script"
+                          )
+                        }
+                        className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      >
+                        {copiedKey === "hero-script" ? (
+                          <Check size={12} className="text-emerald-400" />
+                        ) : (
+                          <Copy size={12} />
+                        )}
+                        <span>{copiedKey === "hero-script" ? "Copied" : "Copy Hero Script"}</span>
+                      </button>
+                    </div>
+
+                    <p className="text-xs font-bold text-white">{scriptPack.heroScript.title}</p>
+                    <div className="space-y-2 pt-1">
+                      {scriptPack.heroScript.chapters?.map((chap, i) => (
+                        <div key={i} className="text-xs text-zinc-300 bg-zinc-900/60 p-2.5 rounded-lg border border-zinc-800/80">
+                          <p className="font-bold text-amber-400 text-[11px] mb-1">{chap.title}</p>
+                          <p className="whitespace-pre-wrap leading-relaxed">{chap.script}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Breakout Scripts */}
+                  {scriptPack.breakoutScripts?.map((breakout) => (
+                    <div
+                      key={breakout.id}
+                      className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-2 font-sans"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono uppercase font-bold text-sky-400">
+                          Breakout Script: {breakout.title}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(breakout.script, `breakout-${breakout.id}`)}
+                          className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                        >
+                          {copiedKey === `breakout-${breakout.id}` ? (
+                            <Check size={12} className="text-emerald-400" />
+                          ) : (
+                            <Copy size={12} />
+                          )}
+                          <span>{copiedKey === `breakout-${breakout.id}` ? "Copied" : "Copy Script"}</span>
+                        </button>
+                      </div>
+                      <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                        {breakout.script}
+                      </p>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <EmptyState
+                  icon={Film}
+                  title="No Scripts Generated"
+                  description="Video script pack has not been generated for this engagement yet."
+                />
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: PAGE CODE */}
+          {activeTab === "code" && (
+            <div className="space-y-3 font-sans">
+              {run.pasteReadyHtml ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-zinc-400 font-sans">
+                      Generated Confirmation VSL Code
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(run.pasteReadyHtml!, "page-html")}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 transition-colors cursor-pointer"
+                    >
+                      {copiedKey === "page-html" ? (
+                        <Check size={12} className="text-emerald-400" />
+                      ) : (
+                        <Copy size={12} />
+                      )}
+                      <span>{copiedKey === "page-html" ? "Copied Code" : "Copy HTML Code"}</span>
+                    </button>
+                  </div>
+
+                  <div className="max-h-64 overflow-auto rounded-xl border border-zinc-800 bg-black/60 p-4 font-mono text-[11px] text-zinc-400 leading-relaxed">
+                    <pre className="whitespace-pre-wrap break-all">{run.pasteReadyHtml}</pre>
+                  </div>
+
+                  {run.pasteReadyInstructions && (
+                    <p className="text-xs text-zinc-400 bg-zinc-950/40 border border-zinc-800 p-3 rounded-xl leading-relaxed">
+                      {run.pasteReadyInstructions}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <EmptyState
+                  icon={Code2}
+                  title="No HTML Code Recorded"
+                  description="No paste-ready HTML code has been generated for this engagement yet."
+                />
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: BRAND VOICE */}
+          {activeTab === "voice" && (
+            <div className="space-y-4 font-sans">
+              {voice ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950/40">
+                      <p className="text-[10px] font-mono uppercase text-zinc-500">Formal ↔ Casual</p>
+                      <p className="text-base font-bold text-white mt-0.5">{voice.tone.formal_casual.score}/5</p>
+                      <p className="text-[11px] text-zinc-400 mt-1">{voice.tone.formal_casual.note}</p>
+                    </div>
+
+                    <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950/40">
+                      <p className="text-[10px] font-mono uppercase text-zinc-500">Technical ↔ Plain</p>
+                      <p className="text-base font-bold text-white mt-0.5">{voice.tone.technical_plain.score}/5</p>
+                      <p className="text-[11px] text-zinc-400 mt-1">{voice.tone.technical_plain.note}</p>
+                    </div>
+
+                    <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950/40">
+                      <p className="text-[10px] font-mono uppercase text-zinc-500">Warm ↔ Neutral</p>
+                      <p className="text-base font-bold text-white mt-0.5">{voice.tone.warm_neutral.score}/5</p>
+                      <p className="text-[11px] text-zinc-400 mt-1">{voice.tone.warm_neutral.note}</p>
+                    </div>
+                  </div>
+
+                  {voice.vocabulary.signature.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-zinc-300 mb-2">Signature Vocabulary Tokens</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {voice.vocabulary.signature.map((token) => (
+                          <span
+                            key={token}
+                            className="rounded-md bg-zinc-800/80 px-2 py-1 font-mono text-xs text-zinc-200 border border-zinc-700/60"
+                          >
+                            {token}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {voice.banned_phrases.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-rose-400 mb-2 flex items-center gap-1">
+                        <AlertCircle size={12} /> Banned Phrases
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {voice.banned_phrases.map((b) => (
+                          <span
+                            key={b.phrase}
+                            className="rounded-md bg-rose-950/40 px-2 py-1 font-mono text-xs text-rose-300 border border-rose-900/40"
+                          >
+                            {b.phrase}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <EmptyState
+                  icon={Palette}
+                  title="Voice Profile Pending"
+                  description="Brand voice extraction hasn't run for this engagement yet."
+                />
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
