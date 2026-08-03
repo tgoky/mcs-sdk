@@ -52,33 +52,40 @@ export default async function RunsPage() {
     subjectLabel: latestStepLabel(steps),
   }));
 
-  // Cheap, real "how busy is this right now" signal for the header — not
-  // reusing getQueueItems' counts since Queue and Executions measure
-  // different things (what's waiting on a human vs. what's running).
   const queueItems = await getQueueItems(whopUserId);
 
   return (
-    <div className="space-y-5 w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200">
-      <div className="border-b border-zinc-200 dark:border-zinc-900 pb-3">
-        <h1 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 tracking-tight">
-          {copy.allExecutionsTitle}
-        </h1>
-        <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
-          Every skill run across your engagements — filter by module, status, or client below.
-        </p>
+    <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
+      
+      {/* --- HYPER-MICRO TIGHT DOT GRID (0.5px / 6px grid) --- */}
+      <div 
+        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_0.5px,transparent_0.5px)] dark:bg-[radial-gradient(#3f3f46_0.5px,transparent_0.5px)] [background-size:6px_6px] [mask-image:radial-gradient(ellipse_75%_75%_at_50%_30%,#000_50%,transparent_100%)] opacity-70" 
+        aria-hidden="true"
+      />
+
+      {/* --- PAGE CONTENT --- */}
+      <div className="relative z-10 space-y-5">
+        <div className="border-b border-zinc-200 dark:border-zinc-900 pb-3">
+          <h1 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 tracking-tight">
+            {copy.allExecutionsTitle}
+          </h1>
+          <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
+            Every skill run across your engagements — filter by module, status, or client below.
+          </p>
+        </div>
+
+        <LiveExecutionFeed initialRuns={runs} title={copy.allExecutionsTitle} storageKey="all" />
+
+        {queueItems.length > 0 && (
+          <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600 pt-1">
+            {queueItems.length} item{queueItems.length === 1 ? "" : "s"} waiting in the{" "}
+            <Link href="/dashboard/queue" className="underline hover:text-zinc-600 dark:hover:text-zinc-400">
+              Queue
+            </Link>
+            .
+          </p>
+        )}
       </div>
-
-      <LiveExecutionFeed initialRuns={runs} title={copy.allExecutionsTitle} storageKey="all" />
-
-      {queueItems.length > 0 && (
-        <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600 pt-1">
-          {queueItems.length} item{queueItems.length === 1 ? "" : "s"} waiting in the{" "}
-          <Link href="/dashboard/queue" className="underline hover:text-zinc-600 dark:hover:text-zinc-400">
-            Queue
-          </Link>
-          .
-        </p>
-      )}
     </div>
   );
 }

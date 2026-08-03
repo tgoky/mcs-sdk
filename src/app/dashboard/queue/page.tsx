@@ -27,8 +27,18 @@ export default async function QueuePage() {
   }));
 
   return (
-    <div className="space-y-5 w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200">
-      <QueuePanel initialItems={items} clients={clients} title="Queue" />
+    <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
+      
+      {/* --- HYPER-MICRO TIGHT DOT GRID (0.5px / 6px grid) --- */}
+      <div 
+        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_0.5px,transparent_0.5px)] dark:bg-[radial-gradient(#3f3f46_0.5px,transparent_0.5px)] [background-size:6px_6px] [mask-image:radial-gradient(ellipse_75%_75%_at_50%_30%,#000_50%,transparent_100%)] opacity-70" 
+        aria-hidden="true"
+      />
+
+      {/* --- PAGE CONTENT --- */}
+      <div className="relative z-10 space-y-5">
+        <QueuePanel initialItems={items} clients={clients} title="Queue" />
+      </div>
     </div>
   );
 }

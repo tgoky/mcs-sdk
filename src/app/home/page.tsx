@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { LayoutGrid, Gavel, ArrowRight } from "lucide-react";
+import { LayoutGrid, Gavel } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HOME_COPY, WORKSPACE_PRODUCTS, type WorkspaceProduct } from "@/lib/copy";
 
@@ -79,7 +79,7 @@ function ProductCard({ product }: { product: WorkspaceProduct }) {
         {isAvailable ? (
           <Button className="w-full cursor-pointer bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 font-bold text-xs shadow-xs transition-all">
             <span>{HOME_COPY.openLabel} {product.name}</span>
-            <ArrowRight size={14} className="ml-1.5 transition-transform duration-200 group-hover:translate-x-1" />
+
           </Button>
         ) : (
           <Button variant="outline" disabled className="w-full font-medium text-xs opacity-60">
