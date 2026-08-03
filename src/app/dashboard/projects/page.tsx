@@ -55,13 +55,13 @@ export default async function ProjectsPage() {
               Group clients into shared automation templates. Define which skills run by default across your portfolio engagements.
             </p>
             <div className="pt-2">
-              <Link
+              {/* <Link
                 href="/dashboard/projects/new"
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-lg shadow-xs hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.98] transition-all"
               >
                 <Plus size={14} strokeWidth={2.5} />
                 <span>Create New Project</span>
-              </Link>
+              </Link> */}
             </div>
           </div>
 

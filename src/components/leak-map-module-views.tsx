@@ -28,6 +28,7 @@ import { cancelSkillRun, pauseEngagement, resumeEngagement, triggerSkillRun, cop
 import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
 import { phaseLabel } from "@/lib/copy";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 
 export interface SkillRun {
   id: string;
@@ -444,14 +445,11 @@ export function LeakMapModuleView({
                         </div>
                       </td>
 
-                      {/* Skill Member Badge: LM in Sky Blue */}
+                      {/* Skill Member Badge: SquishySkillBadge for Leak Map */}
                       <td className="px-4 py-3.5 text-center">
-                        <span
-                          className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-[#38bdf8] shadow-xs"
-                          title="Leak Map Module"
-                        >
-                          LM
-                        </span>
+                        <div className="flex justify-center">
+                          <SquishySkillBadge skill="leak-map" size={24} enabled={true} />
+                        </div>
                       </td>
 
                       {/* Status + Group Count Toggle */}
@@ -583,9 +581,7 @@ export function LeakMapModuleView({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-[#38bdf8] shrink-0">
-                            LM
-                          </span>
+                          <SquishySkillBadge skill="leak-map" size={24} enabled={true} />
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors truncate">
                               {r.buyerName ?? "Client"}

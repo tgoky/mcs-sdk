@@ -26,6 +26,7 @@ import { cancelSkillRun, pauseEngagement, resumeEngagement, triggerSkillRun, cop
 import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
 import { phaseLabel } from "@/lib/copy";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 
 export interface SkillRun {
   id: string;
@@ -287,10 +288,10 @@ export function PreCallReadModuleView({
   return (
     <div className="space-y-3 font-sans antialiased text-zinc-100">
       {/* ----------------------------------------------------------------- */}
-      {/* TOOLBAR: STATUS PILLS + LIVE CONTROLS (SEARCH REMOVED)           */}
+      {/* TOOLBAR: STATUS PILLS + LIVE CONTROLS                             */}
       {/* ----------------------------------------------------------------- */}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-        {/* Transparent Filter Pills (Labels simplified to "All 18", "Running 0", etc.) */}
+        {/* Transparent Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
           {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
             const isActive = statusFilter === tab;
@@ -322,30 +323,29 @@ export function PreCallReadModuleView({
 
         {/* Live Controls + List/Board View Switcher */}
         <div className="flex items-center gap-2.5">
-      <button
-  type="button"
-  onClick={() => setPolling((p) => !p)}
-  className={cn(
-    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer select-none",
-    polling
-      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-      : "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
-  )}
-  title={polling ? "Pause live polling" : "Resume live polling"}
->
-  {polling ? (
-    <>
-      <Pause size={12} className="fill-current shrink-0" />
-      <span>Live</span>
-    </>
-  ) : (
-    <>
-      <Play size={12} className="fill-current shrink-0 ml-0.5" />
-      <span>Paused</span>
-    </>
-  )}
-</button>
-
+          <button
+            type="button"
+            onClick={() => setPolling((p) => !p)}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer select-none",
+              polling
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                : "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+            )}
+            title={polling ? "Pause live polling" : "Resume live polling"}
+          >
+            {polling ? (
+              <>
+                <Pause size={12} className="fill-current shrink-0" />
+                <span>Live</span>
+              </>
+            ) : (
+              <>
+                <Play size={12} className="fill-current shrink-0 ml-0.5" />
+                <span>Paused</span>
+              </>
+            )}
+          </button>
 
           <button
             type="button"
@@ -443,14 +443,11 @@ export function PreCallReadModuleView({
                         </div>
                       </td>
 
-                      {/* Skill Member Badge */}
+                      {/* Skill Member Badge: SquishySkillBadge for Pre-Call Read */}
                       <td className="px-4 py-3.5 text-center">
-                        <span
-                          className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-[#f2a8e4] shadow-xs"
-                          title="Pre-Call Read Module"
-                        >
-                          PR
-                        </span>
+                        <div className="flex justify-center">
+                          <SquishySkillBadge skill="pre-call-read" size={24} enabled={true} />
+                        </div>
                       </td>
 
                       {/* Status + Group Count Toggle */}
@@ -582,9 +579,7 @@ export function PreCallReadModuleView({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-[#f2a8e4] shrink-0">
-                            PR
-                          </span>
+                          <SquishySkillBadge skill="pre-call-read" size={24} enabled={true} />
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors truncate">
                               {r.buyerName ?? "Client"}

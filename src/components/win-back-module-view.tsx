@@ -27,6 +27,7 @@ import { cancelSkillRun, pauseEngagement, resumeEngagement, triggerSkillRun, cop
 import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
 import { phaseLabel } from "@/lib/copy";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 
 export interface SkillRun {
   id: string;
@@ -443,14 +444,11 @@ export function WinBackModuleView({
                         </div>
                       </td>
 
-                      {/* Skill Member Badge: WB in Rose/Coral */}
+                      {/* Skill Member Badge: SquishySkillBadge for Win-Back */}
                       <td className="px-4 py-3.5 text-center">
-                        <span
-                          className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-[#fb7185] shadow-xs"
-                          title="Win-Back Module"
-                        >
-                          WB
-                        </span>
+                        <div className="flex justify-center">
+                          <SquishySkillBadge skill="win-back" size={24} enabled={true} />
+                        </div>
                       </td>
 
                       {/* Status + Group Count Toggle */}
@@ -582,9 +580,7 @@ export function WinBackModuleView({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold text-zinc-950 bg-[#fb7185] shrink-0">
-                            WB
-                          </span>
+                          <SquishySkillBadge skill="win-back" size={24} enabled={true} />
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors truncate">
                               {r.buyerName ?? "Client"}
