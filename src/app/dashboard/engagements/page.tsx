@@ -3,15 +3,14 @@ import { engagements, skillRuns, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { eq, desc, inArray, isNull, and } from "drizzle-orm";
 import Link from "next/link";
-import { Zap } from "lucide-react";
+import { Zap, ArrowRight, Plus } from "lucide-react";
 import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import {
-  skillName,
   bookingPlatformLabel,
   emailPlatformLabel,
   SKILL_INFO,
   MODULE_STATUS_LABELS,
-  MODULE_STATUS_COLORS,
   type ModuleStatus,
   type SkillName,
   SKILLS,
@@ -29,28 +28,6 @@ function deriveModuleStatus(
   if (s === "success") return "live";
   if (s === "failed") return "failed";
   return "not_run";
-}
-
-function ModuleStatusPill({
-  skillKey,
-  runs,
-}: {
-  skillKey: SkillName;
-  runs: { skillName: string; status: string; completedAt: Date | null }[];
-}) {
-  const status = deriveModuleStatus(skillKey, runs);
-  const label = MODULE_STATUS_LABELS[status];
-  const color = MODULE_STATUS_COLORS[status];
-
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">
-        {SKILL_INFO[skillKey].name}
-      </span>
-      {/* color maps to semantic classes like text-emerald-400 or text-rose-400 */}
-      <span className={`text-[11px] font-semibold font-mono ${color}`}>{label}</span>
-    </div>
-  );
 }
 
 export default async function EngagementsPage() {
@@ -78,130 +55,148 @@ export default async function EngagementsPage() {
       : [];
 
   return (
-    <div className="space-y-5 w-full mx-auto tracking-tight antialiased select-none px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
-
-      {/* Page header */}
-      <div className="flex flex-col space-y-3 lg:flex-row lg:justify-between lg:items-center lg:space-y-0 border-b border-zinc-200 dark:border-zinc-900 pb-3">
-        <div className="space-y-1">
-          <h1 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 tracking-tight">
-            Your Clients
+    <div className="space-y-4 w-full mx-auto tracking-tight antialiased font-sans px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
+      {/* Asana Header Bar */}
+      <div className="flex flex-col space-y-3 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
+        <div className="space-y-0.5">
+          <h1 className="text-base font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+            Client Portfolio
           </h1>
-          <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
-            Every client you've set up lives here. Click one to see what's running and trigger modules manually.
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Real-time module telemetry across all active client automations.
           </p>
         </div>
 
-        <div className="flex items-center self-start lg:self-auto">
-       <Link
-  href="/dashboard/engagements/new"
-  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-[#f7fcfe] text-sky-900 border border-sky-200 rounded-md shadow-sm hover:bg-sky-100 hover:border-sky-300 hover:text-sky-950 focus:outline-none focus:ring-2 focus:ring-sky-500/20 active:scale-[0.98] transition-all font-mono"
->
-
-  <span>Add a New Client</span>
-</Link>
-        </div>
+        <Link
+          href="/dashboard/engagements/new"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-lg shadow-xs hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.98] transition-all"
+        >
+          <Plus size={14} strokeWidth={2.5} />
+          <span>Add Client</span>
+        </Link>
       </div>
 
-      {/* Empty state view wrapper */}
+      {/* Empty State */}
       {userEngagements.length === 0 ? (
-        <div className="h-40 border border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50/50 dark:bg-transparent rounded-lg flex flex-col items-center justify-center space-y-2 transition-colors">
-          <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
-            No clients set up yet.
+        <div className="h-40 border border-dashed border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-transparent rounded-xl flex flex-col items-center justify-center space-y-2 transition-colors">
+          <p className="text-xs font-normal text-zinc-400 dark:text-zinc-500 font-mono">
+            No active client engagements found.
           </p>
           <Link
             href="/dashboard/engagements/new"
-            className="text-xs font-normal text-zinc-500 dark:text-zinc-400 underline underline-offset-4 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors font-mono"
+            className="text-xs font-semibold text-amber-500 hover:underline transition-colors"
           >
-            Add your first client to get started →
+            Add your first client →
           </Link>
         </div>
       ) : (
-        <div className="space-y-3 w-full">
-          {userEngagements.map((eng) => {
-            const engRuns = allRuns.filter(
-              (r) => r.engagementId === eng.engagementId
-            );
-            const stack = eng.stack as Record<string, string> | null;
+        /* Asana Dense Table View Wrapper */
+        <div className="w-full space-y-1.5">
+          {/* Table Header Labels */}
+          <div className="hidden md:flex items-center justify-between px-3 text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 pb-1">
+            <span className="w-48">Client Name</span>
+            <span className="flex-1 px-4">Connected Stack</span>
+            <span className="w-44 text-center">Module Telemetry</span>
+            <span className="w-24 text-right">Created</span>
+          </div>
 
-            const bookingLabel = bookingPlatformLabel(stack?.booking_platform);
-            const emailLabel = emailPlatformLabel(stack?.email_platform);
-            const syncSetupNeeded = needsWebhookSetupNudge(eng.stack as EngagementStack | null);
+          {/* Slim Client Rows */}
+          <div className="space-y-1.5">
+            {userEngagements.map((eng) => {
+              const engRuns = allRuns.filter((r) => r.engagementId === eng.engagementId);
+              const stack = eng.stack as Record<string, string> | null;
 
-            const smsActive =
-              stack?.sms_platform && stack.sms_platform !== "none";
-            const smsLabel = smsActive
-              ? "Email + SMS sequences"
-              : "Email sequences only";
+              const bookingLabel = bookingPlatformLabel(stack?.booking_platform);
+              const emailLabel = emailPlatformLabel(stack?.email_platform);
+              const syncSetupNeeded = needsWebhookSetupNudge(eng.stack as EngagementStack | null);
+              const smsActive = stack?.sms_platform && stack.sms_platform !== "none";
 
-            return (
-              <Link
-                key={eng.id}
-                href={`/dashboard/engagements/${eng.engagementId}`}
-                className="group block rounded-lg border border-zinc-200 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-950/20 p-4 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900/5 transition-all duration-150 w-full shadow-sm"
-              >
-                {/* Client name + ID + date parameters strip */}
-                <div className="flex items-start justify-between border-b border-zinc-200 dark:border-zinc-900/40 pb-2.5">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 group-hover:text-zinc-950 group-hover:dark:text-zinc-100 transition-colors">
-                      {eng.buyer}
-                    </p>
-                    <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">
-                      {eng.engagementId}
-                    </p>
+              return (
+                <Link
+                  key={eng.id}
+                  href={`/dashboard/engagements/${eng.engagementId}`}
+                  className="group flex flex-col md:flex-row md:items-center justify-between gap-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-3.5 py-2.5 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-all shadow-2xs cursor-pointer"
+                >
+                  {/* Client Info */}
+                  <div className="flex items-center gap-2.5 md:w-48 min-w-0 shrink-0">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-amber-500 dark:group-hover:text-amber-400 transition-colors truncate">
+                          {eng.buyer}
+                        </p>
+                        {syncSetupNeeded && (
+                          <span
+                            title="Direct webhook needed"
+                            className="inline-flex items-center gap-0.5 text-[9px] font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1 py-0.2 rounded border border-amber-200 dark:border-amber-900/40 shrink-0"
+                          >
+                            <Zap size={9} strokeWidth={2.5} />
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 truncate">
+                        {eng.engagementId}
+                      </p>
+                    </div>
                   </div>
-                  <span className="text-xs text-zinc-400 dark:text-zinc-600 font-mono">
-                    {new Date(eng.createdAt).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </span>
-                </div>
 
-                {/* Platform tags + module execution statuses row */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-2.5 gap-3 sm:gap-0">
-
-                  {/* Connected tool tag items */}
-                  <div className="flex flex-wrap gap-2 font-mono">
-                      <span className="text-xs font-normal text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60">
+                  {/* Connected Platform Badges */}
+                  <div className="flex-1 flex flex-wrap items-center gap-1.5 md:px-4 font-mono text-[10.5px]">
+                    <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800">
                       {bookingLabel}
                     </span>
-                    {syncSetupNeeded && (
-                      <span
-                        title="Auto-polling is covering you, but a direct webhook fires instantly — see the engagement page to set it up"
-                          className="inline-flex items-center gap-1 text-xs font-normal text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-sm border border-amber-200 dark:border-amber-900/40"
-                      >
-                        <Zap size={10} /> Webhook needed
-                      </span>
-                    )}
-       <span className="text-xs font-normal text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/40 px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-900/60">
+                    <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800">
                       {emailLabel}
                     </span>
-                    <span
-                    className={`text-xs font-normal px-2 py-0.5 rounded-sm border ${
-                        smsActive
-                          ? "text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-900/60 border-zinc-300 dark:border-zinc-800"
-                          : "text-zinc-400 dark:text-zinc-600 bg-zinc-100/50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-900/40"
-                      }`}
-                    >
-                      {smsLabel}
-                    </span>
+                    {smsActive && (
+                      <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800">
+                        SMS
+                      </span>
+                    )}
                   </div>
 
-                  {/* Module health instrumentation matrix */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-zinc-200 dark:border-zinc-900/20 sm:border-t-0 pt-2.5 sm:pt-0">
-                    {SKILLS.map((skill) => (
-                      <ModuleStatusPill
-                        key={skill}
-                        skillKey={skill}
-                        runs={engRuns}
-                      />
-                    ))}
+                  {/* Squishy Modules Bar (Instant Telemetry) */}
+                  <div className="flex items-center justify-start md:justify-center gap-1.5 md:w-44 shrink-0 py-0.5">
+                    {SKILLS.map((skill) => {
+                      const status = deriveModuleStatus(skill, engRuns);
+                      const isLive = status === "live";
+                      const isFailed = status === "failed";
+
+                      return (
+                        <div
+                          key={skill}
+                          className="relative"
+                          title={`${SKILL_INFO[skill].name}: ${MODULE_STATUS_LABELS[status]}`}
+                        >
+                          <SquishySkillBadge
+                            skill={skill}
+                            size={24}
+                            enabled={isLive || isFailed}
+                          />
+                          {isFailed && (
+                            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-zinc-950 animate-pulse" />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-              </Link>
-            );
-          })}
+
+                  {/* Created Date & Hover Arrow */}
+                  <div className="flex items-center justify-end gap-2 md:w-24 shrink-0 text-right">
+                    <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
+                      {new Date(eng.createdAt).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                    <ArrowRight
+                      size={13}
+                      className="text-zinc-400 group-hover:text-zinc-200 group-hover:translate-x-0.5 transition-all opacity-0 group-hover:opacity-100 shrink-0"
+                    />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

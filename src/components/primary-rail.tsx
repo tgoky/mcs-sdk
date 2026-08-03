@@ -7,10 +7,9 @@ import {
   LayoutGrid,
   Building2,
   BarChart3,
-  Target,
   BookOpen,
   CalendarClock,
-  ShieldCheck,
+  Gavel,
   LogOut,
   User,
   Settings,
@@ -37,17 +36,42 @@ const RAIL_SECTIONS: Array<{ href: string; title: string; icon: LucideIcon }> = 
   { href: "/dashboard", title: "Work", icon: LayoutGrid },
   { href: "/dashboard/engagements", title: "Engagements", icon: Building2 },
   { href: "/dashboard/analytics", title: "Analytics", icon: BarChart3 },
-  // { href: "/dashboard/strategy", title: "Strategy", icon: Target }, // Commented out for future use
+  // { href: "/dashboard/strategy", title: "Strategy", icon: Target },
   { href: "/dashboard/settings", title: "Settings", icon: Settings },
   { href: "/dashboard/library", title: "Library", icon: BookOpen },
   { href: "/dashboard/meetings", title: "Meetings", icon: CalendarClock },
 ];
 
 /**
+ * Custom Squishy Counter Claim Badge (Gavel)
+ */
+function SquishyCounterClaimBadge({ active }: { active: boolean }) {
+  return (
+    <div
+      className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 select-none ${
+        active
+          ? "bg-amber-400 dark:bg-amber-500 shadow-xs scale-105"
+          : "bg-amber-100 dark:bg-amber-950/60 hover:bg-amber-200/80 dark:hover:bg-amber-900/50"
+      }`}
+    >
+      <Gavel
+        className={`w-3.5 h-3.5 stroke-[2.3px] transition-colors ${
+          active
+            ? "text-zinc-950 fill-white"
+            : "text-amber-700 dark:text-amber-400 fill-amber-200/70 dark:fill-amber-900/60"
+        }`}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </div>
+  );
+}
+
+/**
  * Product suite section (segmented below main nav).
  */
-const PRODUCT_SECTIONS: Array<{ href: string; title: string; icon: LucideIcon }> = [
-  { href: "/counter-claim", title: "Counter Claim", icon: ShieldCheck },
+const PRODUCT_SECTIONS = [
+  { href: "/counter-claim", title: "Counter Claim" },
 ];
 
 function activeSectionHref(pathname: string): string {
@@ -99,14 +123,13 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
           })}
         </nav>
 
-        {/* Subtle Architectural Divider */}
-        <div className="w-7 h-[1px] bg-zinc-200 dark:bg-zinc-800/80 my-2 shrink-0" />
+        {/* Full Edge-to-Edge Divider across the 76px rail */}
+        <div className="-mx-1.5 w-[76px] border-t border-zinc-200 dark:border-zinc-800/80 my-2 shrink-0" />
 
-        {/* Product Suite Section */}
+        {/* Product Suite Section with Counter Claim Squishy Badge */}
         <nav className="flex flex-col items-center gap-1 w-full">
           {PRODUCT_SECTIONS.map((product) => {
             const isActive = product.href === activeHref;
-            const Icon = product.icon;
             return (
               <Link
                 key={product.href}
@@ -115,11 +138,11 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                 aria-current={isActive ? "page" : undefined}
                 className={
                   isActive
-                    ? "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all shadow-xs"
-                    : "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
+                    ? "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all shadow-xs"
+                    : "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
                 }
               >
-                <Icon className="w-4 h-4 shrink-0 text-amber-500 dark:text-amber-400" />
+                <SquishyCounterClaimBadge active={isActive} />
                 <span className="text-[9.5px] font-medium leading-normal text-center truncate max-w-full px-0.5 pt-0.5 pb-1">
                   {product.title}
                 </span>
@@ -144,7 +167,7 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
         <button
           type="button"
           onClick={() => setPopoverOpen((prev) => !prev)}
-          className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-hover text-[11px] font-bold text-gold-foreground font-mono flex items-center justify-center hover:ring-2 hover:ring-gold/40 transition-all cursor-pointer"
+          className="w-8 h-8 rounded-full bg-teal-600 dark:bg-teal-500 text-[11px] font-bold text-white font-mono flex items-center justify-center hover:ring-2 hover:ring-teal-500/40 transition-all cursor-pointer shadow-xs"
         >
           {initials}
         </button>
@@ -154,20 +177,23 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
           <>
             <div className="fixed inset-0 z-40" onClick={() => setPopoverOpen(false)} />
 
-            <div className="absolute left-full bottom-0 ml-2 z-50 w-[560px] sm:w-[580px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute left-full bottom-0 ml-2 z-50 w-[640px] sm:w-[680px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
               <div className="flex min-h-[360px] divide-x divide-zinc-200 dark:divide-zinc-800">
                 {/* LEFT PANE */}
-                <div className="w-60 p-4 bg-zinc-50 dark:bg-zinc-950/90 flex flex-col justify-between shrink-0">
+                <div className="w-72 sm:w-80 p-4 bg-white dark:bg-zinc-900 flex flex-col justify-between shrink-0">
                   <div className="space-y-4">
                     <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                       Account
                     </h3>
                     
-                    <div className="flex items-center gap-2.5 py-1 px-1">
-                      <div className="w-6 h-6 rounded-full bg-purple-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
+                    <div className="flex items-center gap-2.5 py-1 px-1 min-w-0">
+                      <div className="w-6 h-6 rounded-full bg-teal-600 dark:bg-teal-500 text-white font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
                         {initials}
                       </div>
-                      <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
+                      <span
+                        className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate min-w-0"
+                        title={userEmail || displayName}
+                      >
                         {userEmail || displayName}
                       </span>
                       <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0 ml-1" />
@@ -197,7 +223,7 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                 <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900">
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-full bg-purple-600 text-white font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-sm">
+                      <div className="w-11 h-11 rounded-full bg-teal-600 dark:bg-teal-500 text-white font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-sm">
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -251,10 +277,10 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
 
                     <button
                       type="button"
-                      className="w-full mt-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold bg-amber-200/80 hover:bg-amber-300/80 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 text-amber-950 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700/50 rounded-md transition-colors"
+                      className="w-full mt-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold bg-teal-500/10 hover:bg-teal-500/20 dark:bg-teal-500/20 dark:hover:bg-teal-500/30 text-teal-800 dark:text-teal-200 border border-teal-500/30 dark:border-teal-500/40 rounded-md transition-colors"
                     >
-                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                      <span>Upgrade to Pro</span>
+                      <Sparkles className="w-3.5 h-3.5 shrink-0 text-teal-600 dark:text-teal-300" />
+                      <span>Upgrade account</span>
                     </button>
 
                     <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2" />
