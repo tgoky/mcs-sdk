@@ -105,6 +105,13 @@ export interface BriefedCall {
   researchStatus: string | null;
   aiSynthesisStatus: string | null;
   createdAt: string;
+  // Latest brief_outcome_log row for this call (keyed by bookingId ===
+  // briefedCallsLog.callId), merged in by the detail route. Can arrive
+  // either from a rep tapping a Slack interactive button
+  // (src/app/api/slack/interactions/route.ts) or from the "Log Sales Call
+  // Outcome" control on this page — both write to the same table, so both
+  // paths converge on the same value here. Null if nobody has logged one.
+  outcome: "showed" | "no_show" | "rescheduled" | null;
 }
 
 export interface PileOnSend {
@@ -128,7 +135,7 @@ export interface WinBackEnrollment {
   runId: string | null;
   enrolledAt: string;
   recoveryWindowDays: number;
-  status: "active" | "rebooked" | "lost" | "reply_exited";
+  status: "active" | "rebooked" | "lost" | "reply_exited" | "manual_override";
   lostAt: string | null;
   freshRescheduleLink: string | null;
   exitReason: string | null;

@@ -28,13 +28,14 @@ import {
   skillRuns,
   engagements,
   briefedCallsLog,
+  briefOutcomeLog,
   pileOnSendLog,
   winBackEnrollments,
   winBackSendLog,
   auditRunsLog,
 } from "@/models/schema";
 import { getSession } from "@/lib/session";
-import { and, eq, asc } from "drizzle-orm";
+import { and, eq, asc, inArray } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -84,7 +85,36 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           .from(briefedCallsLog)
           .where(eq(briefedCallsLog.runId, row.id))
           .orderBy(asc(briefedCallsLog.callTime));
-        return NextResponse.json({ run: row, calls });
+
+        // brief_outcome_log is keyed by bookingId === briefedCallsLog.callId
+        // (not briefedCallsLog.id — see the module comment on that table)
+        // and is append-only, written from either the Slack interactive
+        // buttons (src/app/api/slack/interactions/route.ts) or this run's
+        // own "Log Sales Call Outcome" control
+        // (src/app/api/pre-call-read/calls/[id]/outcome/route.ts). Pull the
+        // latest row per call so both paths converge on one value here.
+        const bookingIds = calls.map((c) => c.callId);
+        const outcomeRows = bookingIds.length
+          ? await db
+              .select({
+                bookingId: briefOutcomeLog.bookingId,
+                outcome: briefOutcomeLog.outcome,
+                loggedAt: briefOutcomeLog.loggedAt,
+              })
+              .from(briefOutcomeLog)
+              .where(and(eq(briefOutcomeLog.engagementId, row.engagementId), inArray(briefOutcomeLog.bookingId, bookingIds)))
+              .orderBy(asc(briefOutcomeLog.loggedAt))
+          : [];
+
+        const latestOutcomeByBookingId = new Map<string, string>();
+        for (const o of outcomeRows) latestOutcomeByBookingId.set(o.bookingId, o.outcome); // later rows win
+
+        const callsWithOutcome = calls.map((c) => ({
+          ...c,
+          outcome: latestOutcomeByBookingId.get(c.callId) ?? null,
+        }));
+
+        return NextResponse.json({ run: row, calls: callsWithOutcome });
       }
 
       case "pile-on": {

@@ -837,7 +837,7 @@ export const winBackEnrollments = pgTable("win_back_enrollments", {
   // should still be judged against the window they were actually enrolled
   // under, not retroactively against a new one.
   recoveryWindowDays: integer("recovery_window_days").notNull(),
-  // "active" | "rebooked" | "lost" | "reply_exited"
+  // "active" | "rebooked" | "lost" | "reply_exited" | "manual_override"
   status: text("status").notNull().default("active"),
   lostAt: timestamp("lost_at"),
   // Win-Back recovery gap 3 — the per-prospect single-use reschedule
@@ -850,7 +850,7 @@ export const winBackEnrollments = pgTable("win_back_enrollments", {
   // `status` because "rebooked" is itself a kind of exit but the two
   // questions (what state is this row in vs. why did it leave "active")
   // are useful to query separately once reply-detection is live.
-  // "rebooked" | "reply_detected" | "window_elapsed" | null (still active)
+  // "rebooked" | "reply_detected" | "window_elapsed" | "manual_override" | null (still active)
   exitReason: text("exit_reason"),
   exitedAt: timestamp("exited_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

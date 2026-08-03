@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   ExternalLink,
   Copy,
@@ -17,6 +18,7 @@ import {
   Search,
   Maximize2,
   Sliders,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingPlatformLabel, hostingPlatformLabel } from "@/lib/copy";
@@ -249,6 +251,14 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
               >
                 Open live page <ExternalLink size={12} />
               </a>
+            )}
+            {isPending && (
+              <Link
+                href="/dashboard/queue"
+                className="flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-zinc-950 hover:bg-orange-400 transition-colors font-sans"
+              >
+                <ClipboardCheck size={12} /> Review in Queue
+              </Link>
             )}
           </div>
 

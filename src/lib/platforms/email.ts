@@ -1247,7 +1247,7 @@ export class MailchimpClient {
    * automation product that would run a recovery cadence) exits contacts
    * off tag add/remove, not a numeric field.
    */
-  async markRebooked(listId: string, email: string, reason: "rebooked" | "reply_exited" = "rebooked"): Promise<void> {
+  async markRebooked(listId: string, email: string, reason: "rebooked" | "reply_exited" | "manual_override" = "rebooked"): Promise<void> {
     const hash = this.subscriberHash(email);
     await fetchWithTimeout(`${this.baseUrl}/lists/${listId}/members/${hash}/tags`, {
       method: "POST",
@@ -1344,7 +1344,7 @@ export class ConvertKitClient {
    * itself, others off a field, and this app has no way to know which
    * without asking during onboarding.
    */
-  async markRebooked(tagId: string | undefined, email: string, reason: "rebooked" | "reply_exited" = "rebooked"): Promise<void> {
+  async markRebooked(tagId: string | undefined, email: string, reason: "rebooked" | "reply_exited" | "manual_override" = "rebooked"): Promise<void> {
     if (tagId) {
       await this.untagSubscriber(email, tagId);
     }
@@ -1615,7 +1615,7 @@ export async function exitWinBackSequence(
   apiKey: string,
   email: string,
   meta: EmailRoutingMeta,
-  reason: "rebooked" | "reply_exited" = "rebooked"
+  reason: "rebooked" | "reply_exited" | "manual_override" = "rebooked"
 ): Promise<void> {
   switch (platform) {
     case "klaviyo":

@@ -69,10 +69,21 @@ function timeStr(d: string) {
   return new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
+export function PreCallReadView({
+  detail,
+  onRefreshDetail,
+}: {
+  detail: PreCallReadDetail;
+  onRefreshDetail: () => void;
+}) {
   const { run, calls } = detail;
   const [mode, setMode] = useState<RunViewMode>("calendar");
-  const [selected, setSelected] = useState<BriefedCall | null>(null);
+  // Tracked by id and re-derived from the live `calls` array (rather than
+  // held as a raw snapshot object) so the drawer picks up fresh data —
+  // outcome, delivery status — after onRefreshDetail() runs following a
+  // mutation made from inside the drawer itself.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = useMemo(() => calls.find((c) => c.id === selectedId) ?? null, [calls, selectedId]);
   const [filterText, setFilterText] = useState("");
   const [currentDate, setCurrentDate] = useState(() => (calls[0] ? new Date(calls[0].callTime) : new Date()));
 
@@ -218,7 +229,7 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
                         <button
                           key={call.id}
                           type="button"
-                          onClick={() => setSelected(call)}
+                          onClick={() => setSelectedId(call.id)}
                           className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] font-sans hover:border-zinc-700 cursor-pointer transition-all"
                         >
                           <div className="flex items-center justify-between gap-1 font-sans">
@@ -290,7 +301,7 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
                           <td className="px-4 py-2.5 text-right font-sans">
                             <button
                               type="button"
-                              onClick={() => setSelected(call)}
+                              onClick={() => setSelectedId(call.id)}
                               className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer font-sans"
                             >
                               Open brief
@@ -330,7 +341,7 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
                     <button
                       key={call.id}
                       type="button"
-                      onClick={() => setSelected(call)}
+                      onClick={() => setSelectedId(call.id)}
                       className="w-full text-left rounded-xl border border-zinc-800 bg-zinc-900/90 hover:border-zinc-700 p-3 transition-all cursor-pointer group shadow-sm flex flex-col gap-2 font-sans"
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -387,8 +398,9 @@ export function PreCallReadView({ detail }: { detail: PreCallReadDetail }) {
       {/* ----------------------------------------------------------------- */}
       <BriefDrawer
         call={selected}
-        onClose={() => setSelected(null)}
+        onClose={() => setSelectedId(null)}
         destinationLabel={run.stack?.brief_landing_destination}
+        onRefreshDetail={onRefreshDetail}
       />
     </div>
   );
@@ -401,17 +413,24 @@ function BriefDrawer({
   call,
   onClose,
   destinationLabel,
+  onRefreshDetail,
 }: {
   call: BriefedCall | null;
   onClose: () => void;
   destinationLabel?: string;
+  onRefreshDetail: () => void;
 }) {
   const [prevCallId, setPrevCallId] = useState<string | null>(null);
   const [editableText, setEditableText] = useState("");
   const [isEditing, setIsEditing] = useState(false);
-  const [isDelivering, setIsDelivering] = useState(false);
   const [copied, setCopied] = useState(false);
+
   const [loggedOutcome, setLoggedOutcome] = useState<"showed" | "no_show" | "rescheduled" | null>(null);
+  const [outcomeSubmitting, setOutcomeSubmitting] = useState<"showed" | "no_show" | "rescheduled" | null>(null);
+  const [outcomeError, setOutcomeError] = useState<string | null>(null);
+
+  const [deliveryState, setDeliveryState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
 
   // Normalize undefined to null so (null !== null) is false when the drawer is closed
   const currentCallId = call?.id ?? null;
@@ -419,8 +438,14 @@ function BriefDrawer({
     setPrevCallId(currentCallId);
     setEditableText(call?.briefText ?? "");
     setIsEditing(false);
-    setIsDelivering(false);
-    setLoggedOutcome(null);
+    // Seed from the server-confirmed value on the fresh call, not always
+    // null — a call reopened after being outcome-logged (from here or
+    // from Slack) should show that outcome, not reset to blank.
+    setLoggedOutcome(call?.outcome ?? null);
+    setOutcomeSubmitting(null);
+    setOutcomeError(null);
+    setDeliveryState("idle");
+    setDeliveryError(null);
   }
 
   const handleCopyText = () => {
@@ -429,8 +454,46 @@ function BriefDrawer({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleLogOutcome = (outcome: "showed" | "no_show" | "rescheduled") => {
-    setLoggedOutcome(outcome);
+  const handleLogOutcome = async (outcome: "showed" | "no_show" | "rescheduled") => {
+    if (!call || outcomeSubmitting) return;
+    setOutcomeSubmitting(outcome);
+    setOutcomeError(null);
+    try {
+      const res = await fetch(`/api/pre-call-read/calls/${call.id}/outcome`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outcome }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to log outcome.");
+      }
+      setLoggedOutcome(outcome);
+      onRefreshDetail();
+    } catch (err) {
+      setOutcomeError(err instanceof Error ? err.message : "Failed to log outcome.");
+    } finally {
+      setOutcomeSubmitting(null);
+    }
+  };
+
+  const handleResendToSlack = async () => {
+    if (!call || deliveryState === "sending") return;
+    setDeliveryState("sending");
+    setDeliveryError(null);
+    try {
+      const res = await fetch(`/api/pre-call-read/calls/${call.id}/resend`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to resend brief to Slack.");
+      }
+      setDeliveryState("sent");
+      onRefreshDetail();
+      setTimeout(() => setDeliveryState("idle"), 2500);
+    } catch (err) {
+      setDeliveryState("error");
+      setDeliveryError(err instanceof Error ? err.message : "Failed to resend brief to Slack.");
+    }
   };
 
   const DestIcon = (call && DESTINATION_ICON[call.destinationDelivered ?? ""]) || MessageSquare;
@@ -525,59 +588,73 @@ function BriefDrawer({
                   <button
                     type="button"
                     onClick={() => handleLogOutcome("showed")}
+                    disabled={outcomeSubmitting !== null}
                     className={cn(
-                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans",
+                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60",
                       loggedOutcome === "showed"
                         ? "bg-emerald-500 text-zinc-950 border-emerald-400 font-bold"
                         : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
                     )}
                   >
                     <UserCheck size={13} />
-                    <span className="font-sans">Showed</span>
+                    <span className="font-sans">{outcomeSubmitting === "showed" ? "Logging…" : "Showed"}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleLogOutcome("no_show")}
+                    disabled={outcomeSubmitting !== null}
                     className={cn(
-                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans",
+                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60",
                       loggedOutcome === "no_show"
                         ? "bg-rose-500 text-white border-rose-400 font-bold"
                         : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
                     )}
                   >
                     <UserX size={13} />
-                    <span className="font-sans">No-Show</span>
+                    <span className="font-sans">{outcomeSubmitting === "no_show" ? "Logging…" : "No-Show"}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleLogOutcome("rescheduled")}
+                    disabled={outcomeSubmitting !== null}
                     className={cn(
-                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans",
+                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60",
                       loggedOutcome === "rescheduled"
                         ? "bg-amber-500 text-zinc-950 border-amber-400 font-bold"
                         : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
                     )}
                   >
                     <CalendarX size={13} />
-                    <span className="font-sans">Rescheduled</span>
+                    <span className="font-sans">{outcomeSubmitting === "rescheduled" ? "Logging…" : "Rescheduled"}</span>
                   </button>
                 </div>
+                {outcomeError && (
+                  <p className="text-[11px] text-rose-400 font-sans">{outcomeError}</p>
+                )}
               </div>
 
               {/* Dispatch Action */}
-              <div className="pt-2 font-sans">
+              <div className="pt-2 font-sans space-y-1.5">
                 <button
                   type="button"
-                  onClick={() => setIsDelivering(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-100 text-zinc-950 font-bold text-xs hover:bg-white transition-colors cursor-pointer font-sans"
+                  onClick={handleResendToSlack}
+                  disabled={deliveryState === "sending"}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-100 text-zinc-950 font-bold text-xs hover:bg-white transition-colors cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <Send size={13} />
+                  {deliveryState === "sent" ? <Check size={13} /> : <Send size={13} />}
                   <span className="font-sans">
-                    {isDelivering ? "Re-delivering Brief to Slack..." : "Re-send Brief to Slack"}
+                    {deliveryState === "sending"
+                      ? "Re-delivering Brief to Slack..."
+                      : deliveryState === "sent"
+                        ? "Sent to Slack"
+                        : "Re-send Brief to Slack"}
                   </span>
                 </button>
+                {deliveryState === "error" && deliveryError && (
+                  <p className="text-[11px] text-rose-400 font-sans text-center">{deliveryError}</p>
+                )}
               </div>
             </SheetBody>
           </div>

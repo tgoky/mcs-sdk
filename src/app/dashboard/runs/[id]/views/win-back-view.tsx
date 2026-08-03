@@ -46,12 +46,15 @@ function dayLabel(offsetDays: number) {
   return offsetDays === 0 ? "Day 1 (immediate)" : `Day ${offsetDays + 1}`;
 }
 
-export function WinBackView({ detail }: { detail: WinBackDetail }) {
+export function WinBackView({ detail, onRefreshDetail }: { detail: WinBackDetail; onRefreshDetail: () => void }) {
   const { run, enrollment, sendLog } = detail;
   const [mode, setMode] = useState<RunViewMode>("calendar");
   const [selected, setSelected] = useState<Touchpoint | null>(null);
   const [filterText, setFilterText] = useState("");
   const [manualExited, setManualExited] = useState<boolean>(false);
+  const [stopping, setStopping] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
+  const [stopWarning, setStopWarning] = useState<string | null>(null);
 
   const assetMap = run.winBackSequenceAssetMap;
 
@@ -119,9 +122,31 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
   const meta = enrollment ? (ENROLLMENT_META[currentStatusKey] ?? ENROLLMENT_META.active) : null;
   const windowEnd = new Date(enrolledAt.getTime() + recoveryWindowDays * 86_400_000);
 
-  const handleManualStopCadence = () => {
-    if (confirm("Stop automated Win-Back sequence for this prospect? (Useful for off-platform or verbal rebooks)")) {
+  const handleManualStopCadence = async () => {
+    if (!enrollment || stopping) return;
+    if (!confirm("Stop automated Win-Back sequence for this prospect? (Useful for off-platform or verbal rebooks)")) {
+      return;
+    }
+    setStopping(true);
+    setStopError(null);
+    setStopWarning(null);
+    try {
+      const res = await fetch(`/api/win-back/enrollments/${enrollment.id}/stop`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error ?? "Failed to stop cadence.");
+      }
       setManualExited(true);
+      if (body.espUnenrolled === false) {
+        setStopWarning(
+          "Stopped in-app — future scheduled sends won't fire. Couldn't confirm the unenroll on the connected email platform, so check there too if this prospect is enrolled in an ESP automation."
+        );
+      }
+      onRefreshDetail();
+    } catch (err) {
+      setStopError(err instanceof Error ? err.message : "Failed to stop cadence.");
+    } finally {
+      setStopping(false);
     }
   };
 
@@ -151,10 +176,11 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
               <button
                 type="button"
                 onClick={handleManualStopCadence}
-                className="flex items-center gap-1.5 rounded-lg border border-rose-900/60 bg-rose-950/30 px-2.5 py-1.5 text-[11px] font-semibold text-rose-300 hover:bg-rose-900/40 cursor-pointer transition-colors font-sans"
+                disabled={stopping}
+                className="flex items-center gap-1.5 rounded-lg border border-rose-900/60 bg-rose-950/30 px-2.5 py-1.5 text-[11px] font-semibold text-rose-300 hover:bg-rose-900/40 cursor-pointer transition-colors font-sans disabled:cursor-not-allowed disabled:opacity-60"
                 title="Stop automated sequence for off-platform rebooks or direct replies"
               >
-                <SquareX size={12} /> Stop Cadence
+                <SquareX size={12} /> {stopping ? "Stopping…" : "Stop Cadence"}
               </button>
             )}
 
@@ -169,6 +195,12 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
               </a>
             )}
           </div>
+
+          {(stopError || stopWarning) && (
+            <p className={cn("w-full text-[11px] font-sans", stopError ? "text-rose-400" : "text-amber-300")}>
+              {stopError ?? stopWarning}
+            </p>
+          )}
         </div>
       ) : (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-900/40 bg-amber-950/10 p-3.5 text-xs text-amber-200 font-sans">
