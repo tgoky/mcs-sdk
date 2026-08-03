@@ -9,7 +9,6 @@ import {
   BarChart3,
   BookOpen,
   CalendarClock,
-  Gavel,
   LogOut,
   User,
   Settings,
@@ -53,7 +52,7 @@ function SquishyCounterClaimBadge({ active }: { active: boolean }) {
           : "bg-amber-100 dark:bg-amber-950/60 hover:bg-amber-200/80 dark:hover:bg-amber-900/50"
       }`}
     >
-      <Gavel
+      <LayoutGrid
         className={`w-3.5 h-3.5 stroke-[2.3px] transition-colors ${
           active
             ? "text-zinc-950 fill-white"
