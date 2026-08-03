@@ -51,22 +51,16 @@ function ProductCard({ product }: { product: WorkspaceProduct }) {
       }`}
     >
       <div className="space-y-5">
-        {/* Card Header: Squishy Icon + Status Chip */}
+        {/* Card Header: Squishy Icon */}
         <div className="flex items-center justify-between gap-3">
           <ProductSquishyBadge productId={product.id} />
 
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[11px] font-bold tracking-tight border ${
-              isAvailable
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300"
-                : "border-zinc-200 bg-zinc-100 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
-            }`}
-          >
-            {isAvailable && (
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            )}
-            {HOME_COPY.statusLabels[product.status]}
-          </span>
+          {/* Status pill shown only when NOT available */}
+          {!isAvailable && (
+            <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[11px] font-bold tracking-tight border border-zinc-200 bg-zinc-100 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500">
+              {HOME_COPY.statusLabels[product.status]}
+            </span>
+          )}
         </div>
 
         {/* Product Details */}
