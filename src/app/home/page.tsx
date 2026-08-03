@@ -115,9 +115,9 @@ export default async function WorkspaceHomePage() {
   return (
     <div className="relative min-h-screen bg-zinc-50/50 font-sans text-zinc-600 antialiased dark:bg-zinc-950 dark:text-zinc-400 transition-colors duration-200 overflow-hidden">
       
-      {/* --- BACKGROUND DOT GRID OVERLAY --- */}
+      {/* --- HIGH-DENSITY TIGHT MICRO DOT GRID OVERLAY --- */}
       <div 
-        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1.2px,transparent_1px)] [background-size:18px_18px] [mask-image:radial-gradient(ellipse_70%_70%_at_50%_30%,#000_60%,transparent_100%)]" 
+        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_0.8px,transparent_0.8px)] dark:bg-[radial-gradient(#27272a_0.8px,transparent_0.8px)] [background-size:10px_10px] [mask-image:radial-gradient(ellipse_75%_75%_at_50%_30%,#000_60%,transparent_100%)] opacity-80" 
         aria-hidden="true"
       />
 
