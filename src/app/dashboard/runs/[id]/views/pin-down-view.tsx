@@ -22,62 +22,49 @@ import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { EmptyState } from "../_shared/empty-state";
 import type { PinDownDetail } from "../_shared/types";
 
-// ---------------------------------------------------------------------------
-// PILLAR CANVAS CONFIGURATION
-// ---------------------------------------------------------------------------
-interface PillarCanvasConfig {
-  key: string;
-  title: string;
-  prompt: string;
-  headerBg: string;
-  headerText: string;
-  noteBg: string;
-  noteBorder: string;
-  accentText: string;
-}
+const PILLAR_LABEL: Record<string, string> = {
+  common_questions: "Common questions",
+  deeper_questions: "Deeper questions",
+  success_proof: "Success proof",
+  objections: "Objections",
+};
 
-const PILLARS_CANVAS: PillarCanvasConfig[] = [
-  {
-    key: "common_questions",
-    title: "Common Questions",
-    prompt: "What are the immediate questions prospects ask before booking?",
-    headerBg: "bg-amber-300",
-    headerText: "text-zinc-950",
-    noteBg: "bg-amber-500/10",
-    noteBorder: "border-amber-500/30",
-    accentText: "text-amber-400",
+const PILLAR_SUBTITLE: Record<string, string> = {
+  common_questions: "What are the immediate questions prospects ask before booking?",
+  deeper_questions: "What core bottleneck or process problem are they trying to solve?",
+  success_proof: "What client outcome or proof point validates this offer?",
+  objections: "What misunderstanding or fear holds them back from taking action?",
+};
+
+const PILLAR_COLOR: Record<
+  string,
+  { noteBg: string; border: string; text: string; label: string }
+> = {
+  common_questions: {
+    noteBg: "bg-blue-500/15",
+    border: "border-blue-500/30",
+    text: "text-blue-400",
+    label: "QA",
   },
-  {
-    key: "deeper_questions",
-    title: "Deeper Questions",
-    prompt: "What core bottleneck or process problem are they trying to solve?",
-    headerBg: "bg-orange-400",
-    headerText: "text-zinc-950",
-    noteBg: "bg-orange-500/10",
-    noteBorder: "border-orange-500/30",
-    accentText: "text-orange-400",
+  deeper_questions: {
+    noteBg: "bg-amber-500/15",
+    border: "border-amber-500/30",
+    text: "text-amber-400",
+    label: "DQ",
   },
-  {
-    key: "success_proof",
-    title: "Expected Outcomes & Proof",
-    prompt: "What client outcome or proof point validates this offer?",
-    headerBg: "bg-teal-300",
-    headerText: "text-zinc-950",
-    noteBg: "bg-teal-500/10",
-    noteBorder: "border-teal-500/30",
-    accentText: "text-teal-400",
+  success_proof: {
+    noteBg: "bg-emerald-500/15",
+    border: "border-emerald-500/30",
+    text: "text-emerald-400",
+    label: "PROOF",
   },
-  {
-    key: "objections",
-    title: "Challenges & Objections",
-    prompt: "What fear or misunderstanding holds them back from taking action?",
-    headerBg: "bg-rose-300",
-    headerText: "text-zinc-950",
-    noteBg: "bg-rose-500/10",
-    noteBorder: "border-rose-500/30",
-    accentText: "text-rose-400",
+  objections: {
+    noteBg: "bg-rose-500/15",
+    border: "border-rose-500/30",
+    text: "text-rose-400",
+    label: "OBJ",
   },
-];
+};
 
 /**
  * Utility to strip double-escaped AI quotes
@@ -92,7 +79,7 @@ function cleanString(str?: string | null): string {
  */
 function SkillOrbitalRing({
   enabledSkills,
-  size = 170,
+  size = 180,
   className = "",
 }: {
   enabledSkills?: SkillName[];
@@ -157,7 +144,7 @@ function SkillOrbitalRing({
 }
 
 /**
- * Asana Static Status Pill Component
+ * Asana-exact Static Status Pill Component
  */
 function AsanaStatusPill({ status }: { status: "on_track" | "at_risk" | "off_track" }) {
   const config = {
@@ -242,7 +229,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
       return `Your automation setup is missing platform API configurations. Please configure your booking platform and hosting stack to enable automated webhook synchronization and live page deployment.`;
     }
 
-    return `Your automation workflow is configured and awaiting review. ${bookingPlatformLabel(stack?.booking_platform)} is linked, brand voice profile is extracted, and ${briefs.length} ad briefs are staged in the queue.`;
+    return `Your automation workflow is configured and awaiting review. ${bookingPlatformLabel(stack?.booking_platform)} is linked, brand voice profile is extracted, and ${briefs.length} ad briefs are prepared.`;
   };
 
   return (
@@ -302,7 +289,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
           </p>
         </div>
 
-        {/* Asana Status Rows */}
+        {/* Asana Status Rows with Right-Aligned Pills */}
         <div className="divide-y divide-zinc-800/60 font-sans">
           {/* Row 1: Deployment */}
           <div className="flex items-center justify-between py-3.5">
@@ -435,108 +422,100 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
         </div>
 
         {/* Tab Content Area */}
-        <div className="pt-6 font-sans">
-          {/* TAB 1: AD BRIEFS (Canvas Sticky Note Columns Layout) */}
+        <div className="pt-5 font-sans">
+          {/* TAB 1: AD BRIEFS (Separated Canvas Grid Layout) */}
           {activeTab === "briefs" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 font-sans">
-              {PILLARS_CANVAS.map((pillarConfig) => {
-                const brief = briefs.find((b) => b.pillar === pillarConfig.key);
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
+              {briefs.map((brief) => {
+                const color = PILLAR_COLOR[brief.pillar] ?? PILLAR_COLOR.common_questions;
+                const pillarTitle = PILLAR_LABEL[brief.pillar] ?? brief.pillar;
+                const subQuestion = PILLAR_SUBTITLE[brief.pillar] ?? "Core angle & positioning strategy";
 
                 return (
-                  <div key={pillarConfig.key} className="flex flex-col gap-3 font-sans">
-                    {/* Header Block (Solid Color Header) */}
-                    <div
-                      className={cn(
-                        "px-3.5 py-2.5 rounded-xl font-mono font-bold text-xs uppercase tracking-wider text-center shadow-xs select-none",
-                        pillarConfig.headerBg,
-                        pillarConfig.headerText
-                      )}
-                    >
-                      {pillarConfig.title}
-                    </div>
-
-                    {/* Outer Container Card (Prompt Question) */}
-                    <div className="rounded-2xl border border-zinc-800/80 bg-transparent p-4 flex flex-col gap-3.5 min-h-[340px] font-sans">
-                      <p className="text-xs font-semibold text-zinc-300 font-sans leading-relaxed">
-                        {pillarConfig.prompt}
-                      </p>
-
-                      {/* Sticky Note Answer Area */}
-                      {brief ? (
-                        <div className="flex flex-col gap-3 flex-1 font-sans">
-                          {/* Sticky Note 1: Hook */}
+                  <div
+                    key={brief.id}
+                    className="flex flex-col justify-between p-5 rounded-2xl border border-zinc-800/80 bg-transparent hover:border-zinc-700/80 transition-colors font-sans space-y-4"
+                  >
+                    {/* Header: Sticky Note Icon + Title & Subtitle + Copy */}
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
+                          {/* Sticky Note Badge */}
                           <div
                             className={cn(
-                              "rounded-xl border p-3.5 space-y-1.5 shadow-2xs font-sans transition-all hover:scale-[1.01]",
-                              pillarConfig.noteBg,
-                              pillarConfig.noteBorder
+                              "w-10 h-10 rounded-xl border flex flex-col items-center justify-center font-mono font-bold text-[9px] shrink-0 shadow-2xs select-none",
+                              color.noteBg,
+                              color.border,
+                              color.text
                             )}
                           >
-                            <div className="flex items-center justify-between">
-                              <span
-                                className={cn("text-[10px] font-mono font-bold uppercase", pillarConfig.accentText)}
-                              >
-                                Hook
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleCopy(
-                                    `Hook: ${cleanString(brief.hook)}\nAngle: ${cleanString(brief.angle)}\nFormat: ${brief.suggestedFormat}\nCTA: ${brief.cta}`,
-                                    `brief-${brief.id}`
-                                  )
-                                }
-                                className="inline-flex items-center gap-1 text-[10px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                              >
-                                {copiedKey === `brief-${brief.id}` ? (
-                                  <Check size={11} className="text-emerald-400" />
-                                ) : (
-                                  <Copy size={11} />
-                                )}
-                                <span>{copiedKey === `brief-${brief.id}` ? "Copied" : "Copy"}</span>
-                              </button>
-                            </div>
-                            <p className="text-xs text-white font-bold font-sans leading-snug">
-                              &quot;{cleanString(brief.hook)}&quot;
+                            <span>{color.label}</span>
+                          </div>
+
+                          <div className="min-w-0">
+                            <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                              {pillarTitle}
+                            </h3>
+                            <p className="text-[11px] text-zinc-400 font-sans mt-0.5 leading-snug">
+                              {subQuestion}
                             </p>
                           </div>
-
-                          {/* Sticky Note 2: Angle & Details */}
-                          <div
-                            className={cn(
-                              "rounded-xl border p-3.5 space-y-2.5 shadow-2xs font-sans flex-1 flex flex-col justify-between transition-all hover:scale-[1.01]",
-                              pillarConfig.noteBg,
-                              pillarConfig.noteBorder
-                            )}
-                          >
-                            <div>
-                              <span className={cn("text-[10px] font-mono font-bold uppercase block mb-1", pillarConfig.accentText)}>
-                                Angle Strategy
-                              </span>
-                              <p className="text-xs text-zinc-300 font-sans leading-relaxed">
-                                {cleanString(brief.angle)}
-                              </p>
-                            </div>
-
-                            <div className="pt-2 border-t border-zinc-800/40 text-[10.5px] font-mono space-y-1 text-zinc-400">
-                              <p>
-                                <span className="text-zinc-300 font-bold">Format:</span> {brief.suggestedFormat}
-                              </p>
-                              <p>
-                                <span className="text-zinc-300 font-bold">CTA:</span> {brief.cta}
-                              </p>
-                            </div>
-                          </div>
                         </div>
-                      ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800/80 p-4 text-center text-xs text-zinc-500 font-sans italic">
-                          Awaiting brief generation for this pillar...
-                        </div>
-                      )}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCopy(
+                              `Hook: ${cleanString(brief.hook)}\nAngle: ${cleanString(brief.angle)}\nFormat: ${brief.suggestedFormat}\nCTA: ${brief.cta}`,
+                              `brief-${brief.id}`
+                            )
+                          }
+                          className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                        >
+                          {copiedKey === `brief-${brief.id}` ? (
+                            <Check size={12} className="text-emerald-400" />
+                          ) : (
+                            <Copy size={12} />
+                          )}
+                          <span>{copiedKey === `brief-${brief.id}` ? "Copied" : "Copy Brief"}</span>
+                        </button>
+                      </div>
+
+                      {/* Hook & Angle Text Body */}
+                      <div className="space-y-2 pt-1 font-sans border-t border-zinc-800/60">
+                        <p className="text-xs font-bold text-zinc-100 leading-relaxed font-sans">
+                          Hook: &quot;{cleanString(brief.hook)}&quot;
+                        </p>
+                        <p className="text-xs text-zinc-400 leading-relaxed font-sans">
+                          <strong className="text-zinc-300 font-sans">Angle:</strong> {cleanString(brief.angle)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Bottom Metadata: Format & CTA */}
+                    <div className="pt-3 border-t border-zinc-800/60 font-sans text-xs text-zinc-400 flex flex-col gap-1">
+                      <p>
+                        <strong className="text-zinc-300 font-mono text-[11px]">Format:</strong>{" "}
+                        <span className="text-zinc-400">{brief.suggestedFormat}</span>
+                      </p>
+                      <p>
+                        <strong className="text-zinc-300 font-mono text-[11px]">CTA:</strong>{" "}
+                        <span className="text-zinc-400">{brief.cta}</span>
+                      </p>
                     </div>
                   </div>
                 );
               })}
+
+              {briefs.length === 0 && (
+                <div className="col-span-full">
+                  <EmptyState
+                    icon={Megaphone}
+                    title="No Ad Briefs Generated"
+                    description="Ad creative briefs haven't been generated for this engagement yet."
+                  />
+                </div>
+              )}
             </div>
           )}
 
