@@ -59,7 +59,6 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
   const deployment = run.confirmationPageDeployment;
   const isLive = deployment?.mode === "live";
   const isPasteReady = deployment?.mode === "paste_ready";
-  const isPending = deployment?.mode === "pending_review";
 
   const handleCopy = (text: string, key: string) => {
     if (!text) return;
@@ -394,7 +393,10 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                     <div className="space-y-2 pt-1">
                       {scriptPack.heroScript.chapters?.map((chap, i) => (
                         <div key={i} className="text-xs text-zinc-300 bg-zinc-900/60 p-2.5 rounded-lg border border-zinc-800/80">
-                          <p className="font-bold text-amber-400 text-[11px] mb-1">{chap.title}</p>
+                          <p className="font-bold text-amber-400 text-[11px] mb-1">
+                            {chap.timestampLabel ? `${chap.timestampLabel} · ` : ""}
+                            {chap.beat || (chap as any).title || `Chapter ${i + 1}`}
+                          </p>
                           <p className="whitespace-pre-wrap leading-relaxed">{chap.script}</p>
                         </div>
                       ))}
