@@ -14,10 +14,11 @@ import {
   Megaphone,
   AlertCircle,
   MoreHorizontal,
-  ClipboardCheck,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { bookingPlatformLabel, hostingPlatformLabel } from "@/lib/copy";
+import { bookingPlatformLabel, hostingPlatformLabel, SKILLS, SKILL_INFO, type SkillName } from "@/lib/copy";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { EmptyState } from "../_shared/empty-state";
 import type { PinDownDetail } from "../_shared/types";
 
@@ -29,13 +30,90 @@ const PILLAR_LABEL: Record<string, string> = {
 };
 
 /**
- * Asana-exact Status Pill Component (Static dot + label)
+ * Utility to strip double-escaped AI quotes
+ */
+function cleanString(str?: string | null): string {
+  if (!str) return "";
+  return str.replace(/^["'\s]+|["'\s]+$/g, "").trim();
+}
+
+/**
+ * Skill Orbital Ring Showcase Component
+ */
+function SkillOrbitalRing({
+  enabledSkills,
+  size = 180,
+  className = "",
+}: {
+  enabledSkills?: SkillName[];
+  size?: number;
+  className?: string;
+}) {
+  const radius = size * 0.36;
+  const badgeSize = Math.round(size * 0.17);
+
+  return (
+    <div
+      className={`relative flex items-center justify-center select-none ${className}`}
+      style={{ width: size, height: size }}
+    >
+      {/* Outer Dashed Orbit Track */}
+      <div
+        className="absolute rounded-full border border-dashed border-zinc-800/80 animate-[spin_60s_linear_infinite]"
+        style={{
+          width: radius * 2 + badgeSize,
+          height: radius * 2 + badgeSize,
+        }}
+      />
+
+      {/* Inner Radar Ring */}
+      <div
+        className="absolute rounded-full border border-teal-500/20 bg-teal-500/5"
+        style={{
+          width: radius * 2,
+          height: radius * 2,
+        }}
+      />
+
+      {/* Center Core Hub */}
+      <div className="z-10 flex flex-col items-center justify-center w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 shadow-md">
+        <Layers className="w-4 h-4 text-teal-400" />
+      </div>
+
+      {/* 5 Orbiting Squishy Skill Badges */}
+      {SKILLS.map((skill, index) => {
+        const angleRad = (index * 72 - 90) * (Math.PI / 180);
+        const x = Math.cos(angleRad) * radius;
+        const y = Math.sin(angleRad) * radius;
+
+        const isEnabled = enabledSkills ? enabledSkills.includes(skill) : true;
+        const info = SKILL_INFO[skill];
+
+        return (
+          <div
+            key={skill}
+            className="absolute z-20 transition-all duration-300 hover:scale-125 cursor-pointer"
+            style={{
+              transform: `translate(${x}px, ${y}px)`,
+            }}
+            title={`${info.name}: ${isEnabled ? "Enabled" : "Disabled"}`}
+          >
+            <SquishySkillBadge skill={skill} size={badgeSize} enabled={isEnabled} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Asana-exact Static Status Pill Component
  */
 function AsanaStatusPill({ status }: { status: "on_track" | "at_risk" | "off_track" }) {
   const config = {
-    on_track: { label: "On track", color: "text-emerald-400 bg-emerald-950/40 border-emerald-800/60" },
-    at_risk: { label: "At risk", color: "text-amber-400 bg-amber-950/40 border-amber-800/60" },
-    off_track: { label: "Off track", color: "text-rose-400 bg-rose-950/40 border-rose-800/60" },
+    on_track: { label: "On track", color: "text-emerald-400 bg-emerald-950/30 border-emerald-800/50" },
+    at_risk: { label: "At risk", color: "text-amber-400 bg-amber-950/30 border-amber-800/50" },
+    off_track: { label: "Off track", color: "text-rose-400 bg-rose-950/30 border-rose-800/50" },
   }[status];
 
   return (
@@ -72,12 +150,12 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
   const voice = run.brandVoiceProfile;
   const stack = run.stack;
 
-  // Safe lookup for buyer / client name across potential relation properties
+  // Safe lookup for buyer / client name
   const runRecord = run as Record<string, any>;
   const buyerName =
     runRecord.buyerName || runRecord.buyer || runRecord.engagement?.buyer || "Client";
 
-  // Derive status states for Asana rows
+  // Status checks for rows
   const deploymentStatus: "on_track" | "at_risk" | "off_track" = isLive
     ? "on_track"
     : isPasteReady
@@ -94,82 +172,89 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
   const voiceStatus: "on_track" | "at_risk" | "off_track" = voice ? "on_track" : "off_track";
   const creativeStatus: "on_track" | "at_risk" | "off_track" = briefs.length > 0 ? "on_track" : "at_risk";
 
-  // Date String for Asana Header
   const formattedDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
 
-  // Conversational Sentence Constructor
+  // Human sentence synthesis
   const buildSentenceSummary = () => {
     if (isLive) {
-      return `Your automation is live! We've calibrated ${buyerName}'s brand voice with a balanced analytical posture (${voice?.tone?.formal_casual?.score ?? 3}/5 formal/casual), synced ${bookingPlatformLabel(stack?.booking_platform)} to ${hostingPlatformLabel(stack?.hosting_platform)}, and deployed the confirmation page VSL along with ${briefs.length} ad creative briefs.`;
+      return `Your automation is live! We've calibrated ${buyerName}'s brand voice (${voice?.tone?.formal_casual?.score ?? 3}/5 posture), synced ${bookingPlatformLabel(stack?.booking_platform)} with ${hostingPlatformLabel(stack?.hosting_platform)}, and deployed your confirmation page VSL alongside ${briefs.length} ad creative briefs.`;
     }
 
     if (isPasteReady) {
-      return `Your automation configuration is complete and ready for deployment. Paste-ready HTML code has been generated for ${hostingPlatformLabel(stack?.hosting_platform)}, brand voice tokens (${voice?.vocabulary?.signature?.slice(0, 3).join(", ") ?? "default"}) are extracted, and ${briefs.length} ad creative briefs are prepared.`;
+      return `Your automation configuration is complete and ready for deployment. Paste-ready HTML code is prepared for ${hostingPlatformLabel(stack?.hosting_platform)}, brand voice tokens are extracted, and ${briefs.length} ad creative briefs are generated.`;
     }
 
     if (!stack?.booking_platform) {
       return `Your automation setup is missing platform API configurations. Please configure your booking platform and hosting stack to enable automated webhook synchronization and live page deployment.`;
     }
 
-    return `Your automation workflow is configured and awaiting review. ${bookingPlatformLabel(stack?.booking_platform)} is linked, brand voice profile is extracted, and ${briefs.length} ad briefs are staged in the queue.`;
+    return `Your automation workflow is configured and awaiting review. ${bookingPlatformLabel(stack?.booking_platform)} is linked, brand voice profile is extracted, and ${briefs.length} ad briefs are prepared.`;
   };
 
   return (
     <div className="flex flex-col gap-6 font-sans antialiased text-zinc-100 max-w-5xl mx-auto py-2">
       {/* ----------------------------------------------------------------- */}
-      {/* 1. ASANA TOP GREETING HEADER                                      */}
+      {/* 1. ASANA TOP GREETING HEADER WITH ORBITAL RING                    */}
       {/* ----------------------------------------------------------------- */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border border-zinc-800/80 bg-transparent">
+        <div className="space-y-1 max-w-xl">
           <p className="text-xs font-medium text-zinc-400 font-sans">{formattedDate}</p>
-          <h1 className="text-2xl font-bold text-white tracking-tight mt-0.5 font-sans">
+          <h1 className="text-2xl font-bold text-white tracking-tight font-sans">
             Good afternoon, {buyerName}
           </h1>
+          <p className="text-xs text-zinc-400 leading-relaxed font-sans pt-1">
+            Pin-Down Onboarding Skill Matrix active. Inspect your live VSL deployment, ad briefs, and voice positioning below.
+          </p>
+
+          {isLive && run.confirmationPageUrl && (
+            <div className="pt-2">
+              <a
+                href={run.confirmationPageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 text-zinc-950 px-3 py-1.5 text-xs font-bold hover:bg-white transition-colors font-sans"
+              >
+                <span>View Live Page</span>
+                <ExternalLink size={12} />
+              </a>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {isLive && run.confirmationPageUrl && (
-            <a
-              href={run.confirmationPageUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/20 transition-colors font-sans border border-zinc-700"
-            >
-              <span>Live VSL Page</span>
-              <ExternalLink size={12} />
-            </a>
-          )}
+        {/* Interactive Orbital Skill Ring Showcase */}
+        <div className="shrink-0 self-center sm:self-auto py-1">
+          <SkillOrbitalRing size={160} />
         </div>
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 2. CARD 1: STATUS UPDATES (ASANA HOME EXACT STYLE)                */}
+      {/* 2. TRANSPARENT STATUS UPDATES CARD                                */}
       {/* ----------------------------------------------------------------- */}
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl backdrop-blur-xs font-sans">
+      <div className="rounded-2xl border border-zinc-800/80 bg-transparent p-6 font-sans">
         <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80">
           <h2 className="text-base font-bold text-white tracking-tight font-sans">Status updates</h2>
           <button
             type="button"
-            className="text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer p-1 rounded-md hover:bg-zinc-800"
+            className="text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer p-1 rounded-md"
           >
             <MoreHorizontal size={18} />
           </button>
         </div>
 
         {/* Conversational Sentence Summary Banner */}
-        <div className="py-5 border-b border-zinc-800/80">
-          <p className="text-sm text-zinc-300 leading-relaxed font-sans max-w-3xl">
+        <div className="py-4 border-b border-zinc-800/80">
+          <p className="text-sm text-zinc-300 leading-relaxed font-sans">
             {buildSentenceSummary()}
           </p>
         </div>
 
         {/* Asana Status Rows with Right-Aligned Pills */}
         <div className="divide-y divide-zinc-800/60 font-sans">
-          {/* Row 1: Confirmation Page Deployment */}
+          {/* Row 1: Deployment */}
           <div className="flex items-center justify-between py-3.5">
             <div className="flex items-center gap-3">
               <Globe size={16} className="text-zinc-400 shrink-0" />
@@ -187,7 +272,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
             <AsanaStatusPill status={deploymentStatus} />
           </div>
 
-          {/* Row 2: Platform Stack & Webhook Sync */}
+          {/* Row 2: Stack Sync */}
           <div className="flex items-center justify-between py-3.5">
             <div className="flex items-center gap-3">
               <Webhook size={16} className="text-zinc-400 shrink-0" />
@@ -201,7 +286,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
             <AsanaStatusPill status={stackStatus} />
           </div>
 
-          {/* Row 3: Brand Voice & Positioning */}
+          {/* Row 3: Brand Voice */}
           <div className="flex items-center justify-between py-3.5">
             <div className="flex items-center gap-3">
               <Palette size={16} className="text-zinc-400 shrink-0" />
@@ -215,7 +300,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
             <AsanaStatusPill status={voiceStatus} />
           </div>
 
-          {/* Row 4: Ad Creative Briefs & Video Scripts */}
+          {/* Row 4: Creative Assets */}
           <div className="flex items-center justify-between py-3.5">
             <div className="flex items-center gap-3">
               <Megaphone size={16} className="text-zinc-400 shrink-0" />
@@ -232,11 +317,11 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 3. CARD 2: MY TASKS & DELIVERABLES (ASANA TABBED DETAILS)        */}
+      {/* 3. TRANSPARENT DELIVERABLES PANEL                                 */}
       {/* ----------------------------------------------------------------- */}
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl backdrop-blur-xs font-sans">
+      <div className="rounded-2xl border border-zinc-800/80 bg-transparent p-6 font-sans">
         <div className="flex items-center gap-3 pb-4 border-b border-zinc-800/80">
-          <div className="h-8 w-8 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center font-bold text-xs shrink-0">
+          <div className="h-8 w-8 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 flex items-center justify-center font-bold text-xs shrink-0">
             {buyerName.slice(0, 2).toUpperCase()}
           </div>
           <h2 className="text-base font-bold text-white tracking-tight font-sans">
@@ -244,7 +329,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
           </h2>
         </div>
 
-        {/* Asana Sub-Tabs */}
+        {/* Clean Sub-Tabs */}
         <div className="flex items-center gap-6 border-b border-zinc-800/80 pt-3 text-xs font-medium font-sans">
           <button
             type="button"
@@ -301,23 +386,20 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
 
         {/* Tab Content Area */}
         <div className="pt-4 font-sans">
-          {/* TAB 1: AD BRIEFS */}
+          {/* TAB 1: AD BRIEFS (Clean, Spacey, Zero Nested Card Boxes) */}
           {activeTab === "briefs" && (
-            <div className="space-y-3">
+            <div className="divide-y divide-zinc-800/60 font-sans">
               {briefs.map((brief) => (
-                <div
-                  key={brief.id}
-                  className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-2 font-sans"
-                >
+                <div key={brief.id} className="py-4 first:pt-1 last:pb-0 space-y-2 font-sans">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">
-                      Pillar: {PILLAR_LABEL[brief.pillar] ?? brief.pillar}
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-teal-400">
+                      PILLAR: {PILLAR_LABEL[brief.pillar] ?? brief.pillar}
                     </span>
                     <button
                       type="button"
                       onClick={() =>
                         handleCopy(
-                          `Hook: ${brief.hook}\nAngle: ${brief.angle}\nFormat: ${brief.suggestedFormat}\nCTA: ${brief.cta}`,
+                          `Hook: ${cleanString(brief.hook)}\nAngle: ${cleanString(brief.angle)}\nFormat: ${brief.suggestedFormat}\nCTA: ${brief.cta}`,
                           `brief-${brief.id}`
                         )
                       }
@@ -332,19 +414,17 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                     </button>
                   </div>
 
-                  <p className="text-xs text-white font-bold font-sans">
-                    Hook: &quot;{brief.hook}&quot;
+                  <p className="text-xs text-white font-bold font-sans leading-relaxed">
+                    Hook: &quot;{cleanString(brief.hook)}&quot;
                   </p>
-                  <p className="text-xs text-zinc-300 font-sans">
-                    <strong className="text-zinc-400">Angle:</strong> {brief.angle}
+
+                  <p className="text-xs text-zinc-300 font-sans leading-relaxed">
+                    <strong className="text-zinc-400 font-sans">Angle:</strong> {cleanString(brief.angle)}
                   </p>
-                  <div className="flex flex-wrap items-center gap-2 pt-1 font-mono text-[10px]">
-                    <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                      Format: {brief.suggestedFormat}
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                      CTA: {brief.cta}
-                    </span>
+
+                  <div className="flex flex-wrap items-center gap-4 pt-1 font-sans text-xs text-zinc-400">
+                    <p><strong className="text-zinc-300 font-mono text-[11px]">Format:</strong> {brief.suggestedFormat}</p>
+                    <p><strong className="text-zinc-300 font-mono text-[11px]">CTA:</strong> {brief.cta}</p>
                   </div>
                 </div>
               ))}
@@ -361,14 +441,14 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
 
           {/* TAB 2: VIDEO SCRIPTS */}
           {activeTab === "scripts" && (
-            <div className="space-y-4">
+            <div className="divide-y divide-zinc-800/60 font-sans">
               {scriptPack ? (
                 <>
                   {/* Hero Script */}
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-2 font-sans">
+                  <div className="py-4 first:pt-1 space-y-3 font-sans">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-mono uppercase font-bold text-emerald-400">
-                        Hero VSL Script ({scriptPack.heroScript.targetLengthSeconds}s)
+                        Hero VSL Script ({scriptPack.heroScript.targetLengthSeconds}s target)
                       </span>
                       <button
                         type="button"
@@ -390,14 +470,14 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                     </div>
 
                     <p className="text-xs font-bold text-white">{scriptPack.heroScript.title}</p>
-                    <div className="space-y-2 pt-1">
+                    <div className="space-y-3 pt-1">
                       {scriptPack.heroScript.chapters?.map((chap, i) => (
-                        <div key={i} className="text-xs text-zinc-300 bg-zinc-900/60 p-2.5 rounded-lg border border-zinc-800/80">
-                          <p className="font-bold text-amber-400 text-[11px] mb-1">
+                        <div key={i} className="text-xs text-zinc-300 space-y-1">
+                          <p className="font-bold text-amber-400 text-[11px] font-mono">
                             {chap.timestampLabel ? `${chap.timestampLabel} · ` : ""}
                             {chap.beat || (chap as any).title || `Chapter ${i + 1}`}
                           </p>
-                          <p className="whitespace-pre-wrap leading-relaxed">{chap.script}</p>
+                          <p className="whitespace-pre-wrap leading-relaxed font-sans text-zinc-300">{chap.script}</p>
                         </div>
                       ))}
                     </div>
@@ -405,10 +485,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
 
                   {/* Breakout Scripts */}
                   {scriptPack.breakoutScripts?.map((breakout) => (
-                    <div
-                      key={breakout.id}
-                      className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-2 font-sans"
-                    >
+                    <div key={breakout.id} className="py-4 space-y-2 font-sans">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-mono uppercase font-bold text-sky-400">
                           Breakout Script: {breakout.title}
@@ -426,7 +503,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                           <span>{copiedKey === `breakout-${breakout.id}` ? "Copied" : "Copy Script"}</span>
                         </button>
                       </div>
-                      <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                      <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap font-sans">
                         {breakout.script}
                       </p>
                     </div>
@@ -444,7 +521,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
 
           {/* TAB 3: PAGE CODE */}
           {activeTab === "code" && (
-            <div className="space-y-3 font-sans">
+            <div className="space-y-3 font-sans pt-2">
               {run.pasteReadyHtml ? (
                 <>
                   <div className="flex items-center justify-between">
@@ -470,7 +547,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                   </div>
 
                   {run.pasteReadyInstructions && (
-                    <p className="text-xs text-zinc-400 bg-zinc-950/40 border border-zinc-800 p-3 rounded-xl leading-relaxed">
+                    <p className="text-xs text-zinc-400 p-3 rounded-xl leading-relaxed border border-zinc-800/80 font-sans">
                       {run.pasteReadyInstructions}
                     </p>
                   )}
@@ -487,23 +564,23 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
 
           {/* TAB 4: BRAND VOICE */}
           {activeTab === "voice" && (
-            <div className="space-y-4 font-sans">
+            <div className="space-y-4 font-sans pt-2">
               {voice ? (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950/40">
+                    <div className="p-3 rounded-xl border border-zinc-800/80">
                       <p className="text-[10px] font-mono uppercase text-zinc-500">Formal ↔ Casual</p>
                       <p className="text-base font-bold text-white mt-0.5">{voice.tone.formal_casual.score}/5</p>
                       <p className="text-[11px] text-zinc-400 mt-1">{voice.tone.formal_casual.note}</p>
                     </div>
 
-                    <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950/40">
+                    <div className="p-3 rounded-xl border border-zinc-800/80">
                       <p className="text-[10px] font-mono uppercase text-zinc-500">Technical ↔ Plain</p>
                       <p className="text-base font-bold text-white mt-0.5">{voice.tone.technical_plain.score}/5</p>
                       <p className="text-[11px] text-zinc-400 mt-1">{voice.tone.technical_plain.note}</p>
                     </div>
 
-                    <div className="p-3 rounded-xl border border-zinc-800 bg-zinc-950/40">
+                    <div className="p-3 rounded-xl border border-zinc-800/80">
                       <p className="text-[10px] font-mono uppercase text-zinc-500">Warm ↔ Neutral</p>
                       <p className="text-base font-bold text-white mt-0.5">{voice.tone.warm_neutral.score}/5</p>
                       <p className="text-[11px] text-zinc-400 mt-1">{voice.tone.warm_neutral.note}</p>
@@ -517,7 +594,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                         {voice.vocabulary.signature.map((token) => (
                           <span
                             key={token}
-                            className="rounded-md bg-zinc-800/80 px-2 py-1 font-mono text-xs text-zinc-200 border border-zinc-700/60"
+                            className="rounded-md bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-200 border border-zinc-800"
                           >
                             {token}
                           </span>
@@ -535,7 +612,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                         {voice.banned_phrases.map((b) => (
                           <span
                             key={b.phrase}
-                            className="rounded-md bg-rose-950/40 px-2 py-1 font-mono text-xs text-rose-300 border border-rose-900/40"
+                            className="rounded-md bg-rose-950/20 px-2 py-1 font-mono text-xs text-rose-300 border border-rose-900/40"
                           >
                             {b.phrase}
                           </span>
