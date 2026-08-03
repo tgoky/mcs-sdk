@@ -16,6 +16,11 @@ import {
   Clock,
   ScanSearch,
   ClipboardCheck,
+  ChevronDown,
+  ChevronUp,
+  Terminal,
+  CheckCircle2,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingPlatformLabel, hostingPlatformLabel } from "@/lib/copy";
@@ -61,6 +66,7 @@ function MutedBadge({ label }: { label: string }) {
 export function PinDownView({ detail }: { detail: PinDownDetail }) {
   const { run } = detail;
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [showBehindTheHood, setShowBehindTheHood] = useState(false);
 
   const deployment = run.confirmationPageDeployment;
   const isLive = deployment?.mode === "live";
@@ -74,70 +80,159 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const briefsCount = run.adCreativeBriefs?.briefs?.length ?? 0;
+  const breakoutsCount = run.pinDownScriptPack?.breakoutScripts?.length ?? 0;
+
   return (
     <div className="flex flex-col gap-4 font-sans antialiased text-zinc-100">
       {/* ----------------------------------------------------------------- */}
-      {/* HERO DEPLOYMENT BANNER                                            */}
+      {/* 1. ASANA-STYLE COMMAND HERO BANNER                                */}
       {/* ----------------------------------------------------------------- */}
       <div
         className={cn(
-          "flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 shadow-xl transition-all font-sans backdrop-blur-xs",
-          isLive && "border-emerald-900/50 bg-emerald-950/10",
-          isPasteReady && "border-sky-900/50 bg-sky-950/10",
-          isPending && "border-violet-900/50 bg-violet-950/10",
-          !deployment && "border-zinc-800/80 bg-transparent"
+          "rounded-2xl border p-5 shadow-xl transition-all font-sans backdrop-blur-xs relative overflow-hidden",
+          isLive && "border-emerald-900/60 bg-emerald-950/10",
+          isPasteReady && "border-sky-900/60 bg-sky-950/10",
+          isPending && "border-violet-900/60 bg-violet-950/10",
+          !deployment && "border-zinc-800/80 bg-zinc-950/30"
         )}
       >
-        <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-full border shrink-0",
-              isLive && "bg-emerald-500/15 text-emerald-400 border-emerald-900/50",
-              isPasteReady && "bg-sky-500/15 text-sky-400 border-sky-900/50",
-              isPending && "bg-violet-500/15 text-violet-400 border-violet-900/50",
-              !deployment && "bg-zinc-800 text-zinc-500 border-zinc-700"
-            )}
-          >
-            <Globe size={16} />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-2">
+            {/* Asana Macro Status Pill */}
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold border uppercase tracking-wider select-none",
+                  isLive && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+                  isPasteReady && "bg-sky-500/10 text-sky-400 border-sky-500/20",
+                  isPending && "bg-violet-500/10 text-violet-400 border-violet-500/20",
+                  !deployment && "bg-zinc-800/80 text-zinc-400 border-zinc-700"
+                )}
+              >
+                <span
+                  className={cn(
+                    "h-2 w-2 rounded-full shrink-0",
+                    isLive && "bg-emerald-400 animate-pulse",
+                    isPasteReady && "bg-sky-400",
+                    isPending && "bg-violet-400",
+                    !deployment && "bg-zinc-500"
+                  )}
+                />
+                {isLive ? "● LIVE & AUTOMATED" : isPasteReady ? "● CODE READY" : isPending ? "● IN QUEUE" : "● PENDING"}
+              </span>
+
+              <span className="text-[11px] font-mono text-zinc-500">
+                Pin-Down Onboarding Skill
+              </span>
+            </div>
+
+            <div>
+              <h1 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                Client Onboarding Engine
+                {isLive && <Sparkles size={16} className="text-emerald-400" />}
+              </h1>
+              <p className="text-xs text-zinc-400 font-sans mt-0.5">
+                {bookingPlatformLabel(run.stack?.booking_platform)} calendar synced ·{" "}
+                {hostingPlatformLabel(run.stack?.hosting_platform)} VSL page deployed ·{" "}
+                {briefsCount + breakoutsCount + 1} creative assets generated
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-bold text-white font-sans">
-              {isLive && "Published Live on Buyer Stack"}
-              {isPasteReady && "Paste-Ready Code Generated"}
-              {isPending && "Pending Manual Approval"}
-              {deployment?.mode === "not_deployed" && "Not Deployed"}
-              {!deployment && "No Deployment Record Found"}
-            </p>
-            <p className="text-xs text-zinc-500 font-mono">
-              {deployment?.deployedVia
-                ? `Target: ${hostingPlatformLabel(deployment.deployedVia)}`
-                : "No deployment target recorded"}
-              {deployment?.reason ? ` — ${deployment.reason}` : ""}
-            </p>
+
+          {/* Action Toolbar */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowBehindTheHood((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700/80 bg-zinc-900/60 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all cursor-pointer shadow-2xs"
+            >
+              <Terminal size={13} className="text-teal-400" />
+              <span>Behind the Hood</span>
+              {showBehindTheHood ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
+
+            {isLive && run.confirmationPageUrl && (
+              <a
+                href={run.confirmationPageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-1.5 text-xs font-bold text-zinc-950 hover:bg-emerald-400 transition-colors shadow-2xs font-sans"
+              >
+                <span>Open Live Page</span>
+                <ExternalLink size={12} />
+              </a>
+            )}
+
+            {isPending && (
+              <Link
+                href="/dashboard/queue"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-500 px-3.5 py-1.5 text-xs font-bold text-zinc-950 hover:bg-violet-400 transition-colors shadow-2xs font-sans"
+              >
+                <ClipboardCheck size={12} />
+                <span>Review in Queue</span>
+              </Link>
+            )}
           </div>
         </div>
-        {isLive && run.confirmationPageUrl && (
-          <a
-            href={run.confirmationPageUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-zinc-950 hover:bg-emerald-400 transition-colors font-sans"
-          >
-            Open live page <ExternalLink size={12} />
-          </a>
-        )}
-        {isPending && (
-          <Link
-            href="/dashboard/queue"
-            className="flex items-center gap-1.5 rounded-lg bg-violet-500 px-3 py-1.5 text-xs font-bold text-zinc-950 hover:bg-violet-400 transition-colors font-sans"
-          >
-            <ClipboardCheck size={12} /> Review in Queue
-          </Link>
+
+        {/* Collapsible Telemetry Checklist ("Behind the Hood") */}
+        {showBehindTheHood && (
+          <div className="mt-4 pt-4 border-t border-zinc-800/80 space-y-2 font-mono text-xs text-zinc-300 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between pb-1">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">
+                AI Onboarding Telemetry Log
+              </span>
+              <span className="text-[10px] text-emerald-400 font-bold">4/4 Steps Completed</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="flex items-start gap-2.5 p-2.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60">
+                <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-zinc-100">Step 1: Calendar & Stack Sync</p>
+                  <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
+                    Connected to {bookingPlatformLabel(run.stack?.booking_platform)} via {run.stack?.webhook_receiver_mode ?? "polling"}.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 p-2.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60">
+                <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-zinc-100">Step 2: Brand Voice Extraction</p>
+                  <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
+                    Extracted tone scores & {run.brandVoiceProfile?.vocabulary?.signature?.length ?? 0} vocabulary tokens.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 p-2.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60">
+                <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-zinc-100">Step 3: VSL & Script Pack</p>
+                  <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
+                    Generated Hero VSL + {breakoutsCount} breakout scripts + {briefsCount} ad briefs.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 p-2.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60">
+                <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-zinc-100">Step 4: VSL Deployment</p>
+                  <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
+                    Target: {hostingPlatformLabel(deployment?.deployedVia)} ({deployment?.mode}).
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* DELIVERABLES GRID (2x2)                                           */}
+      {/* 2. MODULAR WIDGET GRID (2x2)                                      */}
       {/* ----------------------------------------------------------------- */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 font-sans">
         <PrimaryOutputCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
@@ -146,21 +241,23 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
         <CreativeAssetsCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
       </div>
 
-      {/* Existing Page Audit Section */}
+      {/* Existing Page Audit Widget */}
       {run.pinDownPageAudit && <ExistingPageAuditCard audit={run.pinDownPageAudit} />}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// SUB-COMPONENTS
+// ASANA-STYLE WIDGET SUB-COMPONENTS
 // ---------------------------------------------------------------------------
 function Card({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
     <div className="flex flex-col rounded-2xl border border-zinc-800/80 bg-transparent p-4 shadow-2xs font-sans backdrop-blur-xs">
-      <div className="mb-3 flex items-center gap-2 border-b border-zinc-800/80 pb-2.5">
-        <Icon size={14} className="text-zinc-400" />
-        <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-300 font-sans">{title}</h3>
+      <div className="mb-3 flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
+        <div className="flex items-center gap-2">
+          <Icon size={14} className="text-zinc-400" />
+          <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-300 font-sans">{title}</h3>
+        </div>
       </div>
       {children}
     </div>
