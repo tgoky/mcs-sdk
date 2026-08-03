@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   ExternalLink,
@@ -15,17 +15,12 @@ import {
   AlertCircle,
   Clock,
   ScanSearch,
-  Search,
-  Maximize2,
-  Sliders,
   ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingPlatformLabel, hostingPlatformLabel } from "@/lib/copy";
 import { Dropdown } from "@/components/ui/dropdown";
-import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
 import { EmptyState } from "../_shared/empty-state";
-import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { PinDownDetail } from "../_shared/types";
 
 const PILLAR_LABEL: Record<string, string> = {
@@ -35,57 +30,26 @@ const PILLAR_LABEL: Record<string, string> = {
   objections: "Objections",
 };
 
-interface InspectableCard {
-  id: string;
-  type: "deployment" | "brief" | "script" | "voice" | "stack" | "audit";
-  title: string;
-  subtitle?: string;
-  badge?: string;
-  payload: any;
-}
-
 /**
- * Solid Filled Squishy Badge Component (Black text on vibrant solid fills)
+ * Subtle Muted Badge Component
  */
-function SolidBadge({ label }: { label: string }) {
+function MutedBadge({ label }: { label: string }) {
   const norm = label.toLowerCase();
 
-  let bgClass = "bg-zinc-700 text-zinc-100"; // fallback
+  let bgClass = "bg-zinc-800/80 text-zinc-300 border-zinc-700/80";
 
   if (norm.includes("live") || norm.includes("success") || norm.includes("webhook")) {
-    bgClass = "bg-emerald-400 text-zinc-950";
+    bgClass = "bg-emerald-500/10 text-emerald-400 border-emerald-900/50";
   } else if (norm.includes("paste") || norm.includes("polling") || norm.includes("sky")) {
-    bgClass = "bg-sky-400 text-zinc-950";
+    bgClass = "bg-sky-500/10 text-sky-400 border-sky-900/50";
   } else if (norm.includes("pending") || norm.includes("review")) {
-    bgClass = "bg-violet-400 text-zinc-950";
-  } else if (norm.includes("extracted") || norm.includes("hero")) {
-    bgClass = "bg-teal-400 text-zinc-950";
-  } else if (norm.includes("breakout")) {
-    bgClass = "bg-indigo-300 text-zinc-950";
-  } else if (norm.includes("default") || norm.includes("fallback")) {
-    bgClass = "bg-zinc-400 text-zinc-950";
-  } else if (norm.includes("none") || norm.includes("not deployed")) {
-    bgClass = "bg-zinc-800 text-zinc-300 border border-zinc-700";
-  } else if (norm.includes("audited")) {
-    bgClass = "bg-cyan-300 text-zinc-950";
-  } else if (
-    norm.includes("hook") ||
-    norm.includes("talking") ||
-    norm.includes("format") ||
-    norm.includes("stat") ||
-    norm.includes("ugc")
-  ) {
-    // Ad brief formats & hooks getting vibrant distinct fills
-    if (norm.includes("stat") || norm.includes("timer")) bgClass = "bg-purple-300 text-zinc-950";
-    else if (norm.includes("talking") || norm.includes("founder")) bgClass = "bg-teal-300 text-zinc-950";
-    else if (norm.includes("ugc") || norm.includes("testimonial")) bgClass = "bg-sky-300 text-zinc-950";
-    else bgClass = "bg-indigo-300 text-zinc-950";
+    bgClass = "bg-violet-500/10 text-violet-400 border-violet-900/50";
   }
 
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[9.5px] font-extrabold font-mono uppercase tracking-wider select-none shadow-2xs truncate max-w-full",
+        "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-mono font-medium border select-none truncate max-w-full",
         bgClass
       )}
     >
@@ -96,10 +60,7 @@ function SolidBadge({ label }: { label: string }) {
 
 export function PinDownView({ detail }: { detail: PinDownDetail }) {
   const { run } = detail;
-  const [mode, setMode] = useState<RunViewMode>("calendar");
-  const [filterText, setFilterText] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [activeDrawerCard, setActiveDrawerCard] = useState<InspectableCard | null>(null);
 
   const deployment = run.confirmationPageDeployment;
   const isLive = deployment?.mode === "live";
@@ -113,553 +74,91 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const briefs = run.adCreativeBriefs?.briefs ?? [];
-  const scriptPack = run.pinDownScriptPack;
-
-  // Unroll individual deliverables for Board & List views
-  const boardColumns = useMemo(() => {
-    const q = filterText.toLowerCase().trim();
-
-    // 1. Platform Setup
-    const setupCards: InspectableCard[] = [
-      {
-        id: "stack-sync",
-        type: "stack",
-        title: "Platform Stack Sync",
-        subtitle: `Booking: ${bookingPlatformLabel(run.stack?.booking_platform)} · Hosting: ${hostingPlatformLabel(run.stack?.hosting_platform)}`,
-        badge: run.stack?.webhook_receiver_mode ?? "none",
-        payload: run.stack,
-      },
-    ];
-
-    // 2. Brand & Voice
-    const voiceCards: InspectableCard[] = run.brandVoiceProfile
-      ? [
-          {
-            id: "voice-profile",
-            type: "voice",
-            title: "Brand Voice & Tone Profile",
-            subtitle: `Formal/Casual: ${run.brandVoiceProfile.tone.formal_casual.score}/5 · ${run.brandVoiceProfile.vocabulary.signature.length} tokens`,
-            badge: run.brandVoiceProfile.source_path === "default" ? "DEFAULT FALLBACK" : "EXTRACTED",
-            payload: run.brandVoiceProfile,
-          },
-        ]
-      : [];
-
-    // 3. Creative Assets
-    const creativeCards: InspectableCard[] = [];
-
-    briefs.forEach((b) => {
-      creativeCards.push({
-        id: `brief-${b.id}`,
-        type: "brief",
-        title: `Ad Brief: ${PILLAR_LABEL[b.pillar] ?? b.pillar}`,
-        subtitle: b.hook,
-        badge: b.suggestedFormat,
-        payload: b,
-      });
-    });
-
-    if (scriptPack?.heroScript) {
-      creativeCards.push({
-        id: "script-hero",
-        type: "script",
-        title: `Hero Script: ${scriptPack.heroScript.title}`,
-        subtitle: `${scriptPack.heroScript.targetLengthSeconds}s target length`,
-        badge: "Hero VSL",
-        payload: scriptPack.heroScript,
-      });
-    }
-
-    (scriptPack?.breakoutScripts ?? []).forEach((s) => {
-      creativeCards.push({
-        id: `script-${s.id}`,
-        type: "script",
-        title: `Breakout Script: ${s.title}`,
-        subtitle: s.script.slice(0, 80) + "...",
-        badge: "Breakout",
-        payload: s,
-      });
-    });
-
-    // 4. Deployment & Audit
-    const deployCards: InspectableCard[] = [
-      {
-        id: "confirmation-deploy",
-        type: "deployment",
-        title: "Confirmation Page",
-        subtitle: isLive
-          ? run.confirmationPageUrl ?? "Published live"
-          : isPasteReady
-          ? "Paste-Ready Code Generated"
-          : "Deployment Pending",
-        badge: deployment?.mode ?? "NOT DEPLOYED",
-        payload: { deployment, url: run.confirmationPageUrl, html: run.pasteReadyHtml, instructions: run.pasteReadyInstructions },
-      },
-    ];
-
-    if (run.pinDownPageAudit) {
-      deployCards.push({
-        id: "page-audit",
-        type: "audit",
-        title: "Existing Page Audit",
-        subtitle: `${run.pinDownPageAudit.existingPageStrengths.length} Strengths · ${run.pinDownPageAudit.existingPageWeaknesses.length} Weaknesses`,
-        badge: "Audited",
-        payload: run.pinDownPageAudit,
-      });
-    }
-
-    // Apply filter
-    const filterFn = (card: InspectableCard) =>
-      !q || card.title.toLowerCase().includes(q) || (card.subtitle ?? "").toLowerCase().includes(q);
-
-    return [
-      { id: "setup", title: "1. Platform Setup", cards: setupCards.filter(filterFn) },
-      { id: "brand", title: "2. Brand & Voice", cards: voiceCards.filter(filterFn) },
-      { id: "creative", title: "3. Creative Assets", cards: creativeCards.filter(filterFn) },
-      { id: "deployment", title: "4. Deployment & Audit", cards: deployCards.filter(filterFn) },
-    ];
-  }, [run, briefs, scriptPack, filterText, isLive, isPasteReady, deployment]);
-
   return (
-    <div className="flex flex-col gap-3 font-sans antialiased text-zinc-100">
+    <div className="flex flex-col gap-4 font-sans antialiased text-zinc-100">
       {/* ----------------------------------------------------------------- */}
-      {/* 1. PERSISTENT TOOLBAR (TRANSPARENT GLASS)                         */}
+      {/* HERO DEPLOYMENT BANNER                                            */}
       {/* ----------------------------------------------------------------- */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-transparent p-1.5 border border-zinc-800/80">
-        <div className="relative w-64">
-          <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500" />
-          <input
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
-            placeholder="Search briefs, scripts, or terms..."
-            className="w-full rounded-xl border border-zinc-800/80 bg-transparent py-1.5 pl-8 pr-2.5 text-xs font-sans text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
-          />
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 shadow-xl transition-all font-sans backdrop-blur-xs",
+          isLive && "border-emerald-900/50 bg-emerald-950/10",
+          isPasteReady && "border-sky-900/50 bg-sky-950/10",
+          isPending && "border-violet-900/50 bg-violet-950/10",
+          !deployment && "border-zinc-800/80 bg-transparent"
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-full border shrink-0",
+              isLive && "bg-emerald-500/15 text-emerald-400 border-emerald-900/50",
+              isPasteReady && "bg-sky-500/15 text-sky-400 border-sky-900/50",
+              isPending && "bg-violet-500/15 text-violet-400 border-violet-900/50",
+              !deployment && "bg-zinc-800 text-zinc-500 border-zinc-700"
+            )}
+          >
+            <Globe size={16} />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white font-sans">
+              {isLive && "Published Live on Buyer Stack"}
+              {isPasteReady && "Paste-Ready Code Generated"}
+              {isPending && "Pending Manual Approval"}
+              {deployment?.mode === "not_deployed" && "Not Deployed"}
+              {!deployment && "No Deployment Record Found"}
+            </p>
+            <p className="text-xs text-zinc-500 font-mono">
+              {deployment?.deployedVia
+                ? `Target: ${hostingPlatformLabel(deployment.deployedVia)}`
+                : "No deployment target recorded"}
+              {deployment?.reason ? ` — ${deployment.reason}` : ""}
+            </p>
+          </div>
         </div>
-
-        <ViewSwitcher value={mode} onChange={setMode} />
+        {isLive && run.confirmationPageUrl && (
+          <a
+            href={run.confirmationPageUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-zinc-950 hover:bg-emerald-400 transition-colors font-sans"
+          >
+            Open live page <ExternalLink size={12} />
+          </a>
+        )}
+        {isPending && (
+          <Link
+            href="/dashboard/queue"
+            className="flex items-center gap-1.5 rounded-lg bg-violet-500 px-3 py-1.5 text-xs font-bold text-zinc-950 hover:bg-violet-400 transition-colors font-sans"
+          >
+            <ClipboardCheck size={12} /> Review in Queue
+          </Link>
+        )}
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 2. OVERVIEW VIEW                                                  */}
+      {/* DELIVERABLES GRID (2x2)                                           */}
       {/* ----------------------------------------------------------------- */}
-      {mode === "calendar" && (
-        <>
-          {/* Hero Deployment Banner */}
-          <div
-            className={cn(
-              "flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 shadow-xl transition-all font-sans backdrop-blur-xs",
-              isLive && "border-emerald-900/50 bg-emerald-950/10",
-              isPasteReady && "border-sky-900/50 bg-sky-950/10",
-              isPending && "border-violet-900/50 bg-violet-950/10",
-              !deployment && "border-zinc-800/80 bg-transparent"
-            )}
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-full border shrink-0",
-                  isLive && "bg-emerald-500/15 text-emerald-400 border-emerald-900/50",
-                  isPasteReady && "bg-sky-500/15 text-sky-400 border-sky-900/50",
-                  isPending && "bg-violet-500/15 text-violet-400 border-violet-900/50",
-                  !deployment && "bg-zinc-800 text-zinc-500 border-zinc-700"
-                )}
-              >
-                <Globe size={16} />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-white font-sans">
-                  {isLive && "Published Live on Buyer Stack"}
-                  {isPasteReady && "Paste-Ready Code Generated"}
-                  {isPending && "Pending Manual Approval"}
-                  {deployment?.mode === "not_deployed" && "Not Deployed"}
-                  {!deployment && "No Deployment Record Found"}
-                </p>
-                <p className="text-xs text-zinc-500 font-mono">
-                  {deployment?.deployedVia
-                    ? `Target: ${hostingPlatformLabel(deployment.deployedVia)}`
-                    : "No deployment target recorded"}
-                  {deployment?.reason ? ` — ${deployment.reason}` : ""}
-                </p>
-              </div>
-            </div>
-            {isLive && run.confirmationPageUrl && (
-              <a
-                href={run.confirmationPageUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-zinc-950 hover:bg-emerald-400 transition-colors font-sans"
-              >
-                Open live page <ExternalLink size={12} />
-              </a>
-            )}
-            {isPending && (
-              <Link
-                href="/dashboard/queue"
-                className="flex items-center gap-1.5 rounded-lg bg-violet-500 px-3 py-1.5 text-xs font-bold text-zinc-950 hover:bg-violet-400 transition-colors font-sans"
-              >
-                <ClipboardCheck size={12} /> Review in Queue
-              </Link>
-            )}
-          </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 font-sans">
+        <PrimaryOutputCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
+        <BrandVoiceCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
+        <PlatformSyncCard run={run} />
+        <CreativeAssetsCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
+      </div>
 
-          {/* 2x2 Deliverables Grid */}
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 font-sans">
-            <PrimaryOutputCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
-            <BrandVoiceCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
-            <PlatformSyncCard run={run} />
-            <CreativeAssetsCard run={run} onCopy={handleCopy} copiedKey={copiedKey} />
-          </div>
-
-          {run.pinDownPageAudit && <ExistingPageAuditCard audit={run.pinDownPageAudit} />}
-        </>
-      )}
-
-      {/* ----------------------------------------------------------------- */}
-      {/* 3. DENSE LIST VIEW                                                */}
-      {/* ----------------------------------------------------------------- */}
-      {mode === "list" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800/80 bg-transparent font-sans">
-          <table className="w-full text-left text-xs font-sans">
-            <thead>
-              <tr className="border-b border-zinc-800/80 text-[10px] uppercase text-zinc-400 font-sans">
-                <th className="px-4 py-3 font-semibold">Deliverable Type</th>
-                <th className="px-4 py-3 font-semibold">Asset Details</th>
-                <th className="px-4 py-3 font-semibold">Status / Target</th>
-                <th className="px-4 py-3 font-semibold text-right" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800/60">
-              {boardColumns.flatMap((col) =>
-                col.cards.map((card) => (
-                  <tr
-                    key={card.id}
-                    className="hover:bg-zinc-800/30 cursor-pointer transition-colors font-sans"
-                    onClick={() => setActiveDrawerCard(card)}
-                  >
-                    <td className="px-4 py-3 font-medium text-white flex items-center gap-2 font-sans">
-                      {card.type === "brief" && <Megaphone size={13} className="text-purple-400" />}
-                      {card.type === "script" && <Film size={13} className="text-sky-400" />}
-                      {card.type === "deployment" && <Code2 size={13} className="text-emerald-400" />}
-                      {card.type === "voice" && <Palette size={13} className="text-teal-400" />}
-                      {card.type === "stack" && <Webhook size={13} className="text-indigo-400" />}
-                      {card.type === "audit" && <ScanSearch size={13} className="text-cyan-400" />}
-                      {card.title}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-400 truncate max-w-xs font-sans">
-                      {card.subtitle}
-                    </td>
-                    <td className="px-4 py-3 font-mono">
-                      {card.badge && <SolidBadge label={card.badge} />}
-                    </td>
-                    <td className="px-4 py-3 text-right font-sans">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveDrawerCard(card);
-                        }}
-                        className="rounded-lg border border-zinc-700/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white cursor-pointer font-sans transition-colors"
-                      >
-                        Inspect
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* ----------------------------------------------------------------- */}
-      {/* 4. TRANSPARENT KANBAN BOARD VIEW (UNROLLED CARDS + SOLID BADGES)   */}
-      {/* ----------------------------------------------------------------- */}
-      {mode === "board" && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 font-sans pt-1">
-          {boardColumns.map((col) => (
-            <div key={col.id} className="rounded-2xl border border-zinc-800/80 bg-transparent p-3 flex flex-col gap-2 font-sans">
-              <div className="flex items-center justify-between px-1 mb-1 font-sans">
-                <span className="text-xs font-bold text-zinc-300 font-sans">{col.title}</span>
-                <span className="text-[10px] font-mono text-zinc-500 border border-zinc-800 px-2 py-0.5 rounded-md font-bold">
-                  {col.cards.length}
-                </span>
-              </div>
-
-              <div className="space-y-2">
-                {col.cards.map((card) => (
-                  <button
-                    key={card.id}
-                    type="button"
-                    onClick={() => setActiveDrawerCard(card)}
-                    className="w-full text-left rounded-xl border border-zinc-800/80 bg-transparent hover:border-zinc-700 hover:bg-zinc-900/30 p-3.5 transition-all cursor-pointer group shadow-2xs flex flex-col gap-2 font-sans"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs font-bold text-white group-hover:text-teal-400 transition-colors flex items-center gap-1.5 font-sans">
-                        {card.type === "brief" && <Megaphone size={13} className="text-purple-400 shrink-0" />}
-                        {card.type === "script" && <Film size={13} className="text-sky-400 shrink-0" />}
-                        {card.type === "deployment" && <Globe size={13} className="text-emerald-400 shrink-0" />}
-                        {card.type === "voice" && <Palette size={13} className="text-teal-400 shrink-0" />}
-                        {card.type === "stack" && <Webhook size={13} className="text-indigo-400 shrink-0" />}
-                        {card.type === "audit" && <ScanSearch size={13} className="text-cyan-400 shrink-0" />}
-                        <span className="truncate font-sans">{card.title}</span>
-                      </p>
-                      <Maximize2 size={12} className="text-zinc-600 group-hover:text-zinc-300 shrink-0 mt-0.5" />
-                    </div>
-
-                    {card.subtitle && (
-                      <p className="text-[11px] text-zinc-400 font-sans leading-snug line-clamp-2">
-                        {card.subtitle}
-                      </p>
-                    )}
-
-                    {card.badge && (
-                      <div className="pt-0.5">
-                        <SolidBadge label={card.badge} />
-                      </div>
-                    )}
-                  </button>
-                ))}
-
-                {col.cards.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-zinc-800/80 p-4 text-center text-[10px] text-zinc-600 font-sans">
-                    No items in this stage
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ----------------------------------------------------------------- */}
-      {/* 5. SLIDE-OVER TASK INSPECTION DRAWER                              */}
-      {/* ----------------------------------------------------------------- */}
-      <PinDownDetailDrawer
-        card={activeDrawerCard}
-        onClose={() => setActiveDrawerCard(null)}
-        onCopy={handleCopy}
-        copiedKey={copiedKey}
-      />
+      {/* Existing Page Audit Section */}
+      {run.pinDownPageAudit && <ExistingPageAuditCard audit={run.pinDownPageAudit} />}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// ASANA TASK DETAIL DRAWER
-// ---------------------------------------------------------------------------
-function PinDownDetailDrawer({
-  card,
-  onClose,
-  onCopy,
-  copiedKey,
-}: {
-  card: InspectableCard | null;
-  onClose: () => void;
-  onCopy: (text: string, key: string) => void;
-  copiedKey: string | null;
-}) {
-  return (
-    <Sheet open={!!card} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent widthClassName="w-full sm:max-w-xl font-sans antialiased text-zinc-100">
-        {card && (
-          <div className="flex flex-col h-full font-sans antialiased">
-            <SheetHeader className="font-sans">
-              <div className="flex items-center justify-between font-sans">
-                <div className="flex items-center gap-2 text-teal-400 font-sans">
-                  <Sliders size={15} />
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
-                    Pin-Down Deliverable
-                  </span>
-                </div>
-                {card.badge && <SolidBadge label={card.badge} />}
-              </div>
-
-              <SheetTitle className="mt-2 text-lg font-bold text-white font-sans">{card.title}</SheetTitle>
-              {card.subtitle && (
-                <SheetDescription className="text-xs text-zinc-400 font-sans">{card.subtitle}</SheetDescription>
-              )}
-            </SheetHeader>
-
-            <SheetBody className="space-y-4 pt-2 font-sans">
-              {/* Brief Content */}
-              {card.type === "brief" && (
-                <div className="space-y-3 font-sans">
-                  <div className="flex justify-between items-center font-sans">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">Ad Creative Copy</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onCopy(
-                          `Hook: ${card.payload.hook}\nAngle: ${card.payload.angle}\nFormat: ${card.payload.suggestedFormat}\nCTA: ${card.payload.cta}`,
-                          "drawer-brief"
-                        )
-                      }
-                      className="flex items-center gap-1 text-xs font-mono text-zinc-300 hover:text-white cursor-pointer"
-                    >
-                      {copiedKey === "drawer-brief" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                      <span>{copiedKey === "drawer-brief" ? "Copied" : "Copy Brief"}</span>
-                    </button>
-                  </div>
-                  <div className="space-y-2 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-4 text-xs text-zinc-200 font-sans">
-                    <p><strong className="text-zinc-400 font-sans">Pillar:</strong> {PILLAR_LABEL[card.payload.pillar] ?? card.payload.pillar}</p>
-                    <p><strong className="text-zinc-400 font-sans">Hook:</strong> {card.payload.hook}</p>
-                    <p><strong className="text-zinc-400 font-sans">Angle:</strong> {card.payload.angle}</p>
-                    <p><strong className="text-zinc-400 font-sans">Format:</strong> {card.payload.suggestedFormat}</p>
-                    <p><strong className="text-zinc-400 font-sans">CTA:</strong> {card.payload.cta}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Script Content */}
-              {card.type === "script" && (
-                <div className="space-y-3 font-sans">
-                  <div className="flex justify-between items-center font-sans">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">Full Video Script</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onCopy(
-                          "chapters" in card.payload
-                            ? card.payload.chapters.map((c: any) => c.script).join("\n\n")
-                            : card.payload.script,
-                          "drawer-script"
-                        )
-                      }
-                      className="flex items-center gap-1 text-xs font-mono text-zinc-300 hover:text-white cursor-pointer"
-                    >
-                      {copiedKey === "drawer-script" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                      <span>{copiedKey === "drawer-script" ? "Copied" : "Copy Script"}</span>
-                    </button>
-                  </div>
-
-                  {"chapters" in card.payload ? (
-                    <div className="space-y-2 font-sans">
-                      {card.payload.chapters.map((chap: any, idx: number) => (
-                        <div key={idx} className="rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-3 text-xs text-zinc-300 font-sans">
-                          <p className="font-bold text-teal-400 mb-1 font-sans">{chap.title}</p>
-                          <p className="whitespace-pre-wrap leading-relaxed font-sans">{chap.script}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-300 font-sans whitespace-pre-wrap">
-                      {card.payload.script}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Deployment / HTML */}
-              {card.type === "deployment" && (
-                <div className="space-y-3 font-sans">
-                  <div className="flex justify-between items-center font-sans">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">Page Code / Target</span>
-                    {card.payload.html && (
-                      <button
-                        type="button"
-                        onClick={() => onCopy(card.payload.html, "drawer-html")}
-                        className="flex items-center gap-1 text-xs font-mono text-zinc-300 hover:text-white cursor-pointer"
-                      >
-                        {copiedKey === "drawer-html" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                        <span>{copiedKey === "drawer-html" ? "Copied" : "Copy HTML"}</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {card.payload.url && (
-                    <a
-                      href={card.payload.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-between p-3 rounded-xl border border-emerald-900/50 bg-emerald-950/20 text-xs font-bold text-emerald-400 hover:bg-emerald-950/40 transition-colors font-sans"
-                    >
-                      <span className="font-sans">Open Live Deployed Page</span>
-                      <ExternalLink size={13} />
-                    </a>
-                  )}
-
-                  {card.payload.html && (
-                    <div className="max-h-64 overflow-auto rounded-xl border border-zinc-800 bg-black/60 p-3 font-mono text-[10px] text-zinc-400 leading-relaxed">
-                      <pre className="whitespace-pre-wrap break-all">{card.payload.html}</pre>
-                    </div>
-                  )}
-
-                  {card.payload.instructions && (
-                    <p className="text-xs text-zinc-400 leading-relaxed bg-zinc-900/80 border border-zinc-800/80 p-3 rounded-xl font-sans">
-                      {card.payload.instructions}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Voice Profile */}
-              {card.type === "voice" && (
-                <div className="space-y-3 text-xs text-zinc-300 font-sans">
-                  <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/80 p-3.5 space-y-2 font-sans">
-                    <p><strong className="text-zinc-400 font-sans">Formal/Casual:</strong> {card.payload.tone.formal_casual.score}/5 ({card.payload.tone.formal_casual.note})</p>
-                    <p><strong className="text-zinc-400 font-sans">Technical/Plain:</strong> {card.payload.tone.technical_plain.score}/5 ({card.payload.tone.technical_plain.note})</p>
-                    <p><strong className="text-zinc-400 font-sans">Warm/Neutral:</strong> {card.payload.tone.warm_neutral.score}/5 ({card.payload.tone.warm_neutral.note})</p>
-                  </div>
-
-                  <div className="font-sans">
-                    <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1.5">Signature Tokens</span>
-                    <div className="flex flex-wrap gap-1">
-                      {card.payload.vocabulary.signature.map((token: string) => (
-                        <span key={token} className="rounded-md bg-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-200">
-                          {token}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Stack Sync */}
-              {card.type === "stack" && (
-                <div className="space-y-2 text-xs text-zinc-300 rounded-xl border border-zinc-800/80 bg-zinc-900/80 p-3.5 font-mono">
-                  <p><strong className="text-zinc-500 font-mono">Booking Platform:</strong> {bookingPlatformLabel(card.payload?.booking_platform)}</p>
-                  <p><strong className="text-zinc-500 font-mono">Hosting Platform:</strong> {hostingPlatformLabel(card.payload?.hosting_platform)}</p>
-                  <p><strong className="text-zinc-500 font-mono">Webhook Receiver Mode:</strong> {card.payload?.webhook_receiver_mode ?? "none"}</p>
-                </div>
-              )}
-
-              {/* Audit */}
-              {card.type === "audit" && (
-                <div className="space-y-3 text-xs font-sans">
-                  <div>
-                    <span className="block text-[10px] font-mono uppercase text-emerald-400 mb-1">Strengths</span>
-                    <ul className="space-y-1 text-zinc-300 font-sans">
-                      {card.payload.existingPageStrengths.map((s: string, i: number) => (
-                        <li key={i} className="font-sans">✓ {s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-mono uppercase text-rose-400 mb-1">Weaknesses</span>
-                    <ul className="space-y-1 text-zinc-300 font-sans">
-                      {card.payload.existingPageWeaknesses.map((w: string, i: number) => (
-                        <li key={i} className="font-sans">✕ {w}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-            </SheetBody>
-          </div>
-        )}
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// OVERVIEW SUB-COMPONENTS
+// SUB-COMPONENTS
 // ---------------------------------------------------------------------------
 function Card({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
     <div className="flex flex-col rounded-2xl border border-zinc-800/80 bg-transparent p-4 shadow-2xs font-sans backdrop-blur-xs">
-      <div className="mb-3 flex items-center gap-2 border-b border-zinc-800/80 pb-2">
+      <div className="mb-3 flex items-center gap-2 border-b border-zinc-800/80 pb-2.5">
         <Icon size={14} className="text-zinc-400" />
         <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-300 font-sans">{title}</h3>
       </div>
@@ -827,7 +326,7 @@ function PlatformSyncCard({ run }: { run: PinDownDetail["run"] }) {
         <Row label="Hosting Platform" value={hostingPlatformLabel(stack.hosting_platform)} />
         <div className="flex items-center justify-between border-t border-zinc-800/80 pt-2 font-sans">
           <span className="text-zinc-500 font-sans">Webhook Receiver Mode</span>
-          <SolidBadge label={stack.webhook_receiver_mode ?? "none"} />
+          <MutedBadge label={stack.webhook_receiver_mode ?? "none"} />
         </div>
         {stack.webhook_last_received_at && (
           <Row label="Last Webhook Received" value={new Date(stack.webhook_last_received_at).toLocaleString()} icon={Clock} />
