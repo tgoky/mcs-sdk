@@ -24,7 +24,6 @@ import { cn } from "@/lib/utils";
 import { bookingPlatformLabel, hostingPlatformLabel } from "@/lib/copy";
 import { Dropdown } from "@/components/ui/dropdown";
 import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
-import { StatusPill } from "../_shared/status-pill";
 import { EmptyState } from "../_shared/empty-state";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { PinDownDetail } from "../_shared/types";
@@ -42,8 +41,57 @@ interface InspectableCard {
   title: string;
   subtitle?: string;
   badge?: string;
-  tone?: "success" | "warning" | "danger" | "info" | "neutral";
   payload: any;
+}
+
+/**
+ * Solid Filled Squishy Badge Component (Black text on vibrant solid fills)
+ */
+function SolidBadge({ label }: { label: string }) {
+  const norm = label.toLowerCase();
+
+  let bgClass = "bg-zinc-700 text-zinc-100"; // fallback
+
+  if (norm.includes("live") || norm.includes("success") || norm.includes("webhook")) {
+    bgClass = "bg-emerald-400 text-zinc-950";
+  } else if (norm.includes("paste") || norm.includes("polling") || norm.includes("sky")) {
+    bgClass = "bg-sky-400 text-zinc-950";
+  } else if (norm.includes("pending") || norm.includes("review")) {
+    bgClass = "bg-violet-400 text-zinc-950";
+  } else if (norm.includes("extracted") || norm.includes("hero")) {
+    bgClass = "bg-teal-400 text-zinc-950";
+  } else if (norm.includes("breakout")) {
+    bgClass = "bg-indigo-300 text-zinc-950";
+  } else if (norm.includes("default") || norm.includes("fallback")) {
+    bgClass = "bg-zinc-400 text-zinc-950";
+  } else if (norm.includes("none") || norm.includes("not deployed")) {
+    bgClass = "bg-zinc-800 text-zinc-300 border border-zinc-700";
+  } else if (norm.includes("audited")) {
+    bgClass = "bg-cyan-300 text-zinc-950";
+  } else if (
+    norm.includes("hook") ||
+    norm.includes("talking") ||
+    norm.includes("format") ||
+    norm.includes("stat") ||
+    norm.includes("ugc")
+  ) {
+    // Ad brief formats & hooks getting vibrant distinct fills
+    if (norm.includes("stat") || norm.includes("timer")) bgClass = "bg-purple-300 text-zinc-950";
+    else if (norm.includes("talking") || norm.includes("founder")) bgClass = "bg-teal-300 text-zinc-950";
+    else if (norm.includes("ugc") || norm.includes("testimonial")) bgClass = "bg-sky-300 text-zinc-950";
+    else bgClass = "bg-indigo-300 text-zinc-950";
+  }
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[9.5px] font-extrabold font-mono uppercase tracking-wider select-none shadow-2xs truncate max-w-full",
+        bgClass
+      )}
+    >
+      {label}
+    </span>
+  );
 }
 
 export function PinDownView({ detail }: { detail: PinDownDetail }) {
@@ -80,7 +128,6 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
         title: "Platform Stack Sync",
         subtitle: `Booking: ${bookingPlatformLabel(run.stack?.booking_platform)} · Hosting: ${hostingPlatformLabel(run.stack?.hosting_platform)}`,
         badge: run.stack?.webhook_receiver_mode ?? "none",
-        tone: run.stack?.webhook_receiver_mode === "webhook" ? "success" : "info",
         payload: run.stack,
       },
     ];
@@ -93,8 +140,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
             type: "voice",
             title: "Brand Voice & Tone Profile",
             subtitle: `Formal/Casual: ${run.brandVoiceProfile.tone.formal_casual.score}/5 · ${run.brandVoiceProfile.vocabulary.signature.length} tokens`,
-            badge: run.brandVoiceProfile.source_path === "default" ? "Default Fallback" : "Extracted",
-            tone: run.brandVoiceProfile.source_path === "default" ? "neutral" : "info",
+            badge: run.brandVoiceProfile.source_path === "default" ? "DEFAULT FALLBACK" : "EXTRACTED",
             payload: run.brandVoiceProfile,
           },
         ]
@@ -110,7 +156,6 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
         title: `Ad Brief: ${PILLAR_LABEL[b.pillar] ?? b.pillar}`,
         subtitle: b.hook,
         badge: b.suggestedFormat,
-        tone: "warning",
         payload: b,
       });
     });
@@ -122,7 +167,6 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
         title: `Hero Script: ${scriptPack.heroScript.title}`,
         subtitle: `${scriptPack.heroScript.targetLengthSeconds}s target length`,
         badge: "Hero VSL",
-        tone: "info",
         payload: scriptPack.heroScript,
       });
     }
@@ -134,7 +178,6 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
         title: `Breakout Script: ${s.title}`,
         subtitle: s.script.slice(0, 80) + "...",
         badge: "Breakout",
-        tone: "neutral",
         payload: s,
       });
     });
@@ -150,8 +193,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
           : isPasteReady
           ? "Paste-Ready Code Generated"
           : "Deployment Pending",
-        badge: deployment?.mode ?? "Not Deployed",
-        tone: isLive ? "success" : isPasteReady ? "info" : "neutral",
+        badge: deployment?.mode ?? "NOT DEPLOYED",
         payload: { deployment, url: run.confirmationPageUrl, html: run.pasteReadyHtml, instructions: run.pasteReadyInstructions },
       },
     ];
@@ -163,7 +205,6 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
         title: "Existing Page Audit",
         subtitle: `${run.pinDownPageAudit.existingPageStrengths.length} Strengths · ${run.pinDownPageAudit.existingPageWeaknesses.length} Weaknesses`,
         badge: "Audited",
-        tone: "info",
         payload: run.pinDownPageAudit,
       });
     }
@@ -181,18 +222,18 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
   }, [run, briefs, scriptPack, filterText, isLive, isPasteReady, deployment]);
 
   return (
-    <div className="flex flex-col gap-3 font-sans antialiased">
+    <div className="flex flex-col gap-3 font-sans antialiased text-zinc-100">
       {/* ----------------------------------------------------------------- */}
-      {/* 1. ASANA PERSISTENT TOOLBAR                                       */}
+      {/* 1. PERSISTENT TOOLBAR (TRANSPARENT GLASS)                         */}
       {/* ----------------------------------------------------------------- */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-950 p-1.5 border border-zinc-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-transparent p-1.5 border border-zinc-800/80">
         <div className="relative w-64">
           <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500" />
           <input
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Search briefs, scripts, or terms..."
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs font-sans text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
+            className="w-full rounded-xl border border-zinc-800/80 bg-transparent py-1.5 pl-8 pr-2.5 text-xs font-sans text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
           />
         </div>
 
@@ -207,11 +248,11 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
           {/* Hero Deployment Banner */}
           <div
             className={cn(
-              "flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 shadow-xl transition-all font-sans",
+              "flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 shadow-xl transition-all font-sans backdrop-blur-xs",
               isLive && "border-emerald-900/50 bg-emerald-950/10",
               isPasteReady && "border-sky-900/50 bg-sky-950/10",
-              isPending && "border-orange-900/50 bg-orange-950/10",
-              !deployment && "border-zinc-800 bg-zinc-900/30"
+              isPending && "border-violet-900/50 bg-violet-950/10",
+              !deployment && "border-zinc-800/80 bg-transparent"
             )}
           >
             <div className="flex items-center gap-3">
@@ -220,7 +261,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                   "flex h-9 w-9 items-center justify-center rounded-full border shrink-0",
                   isLive && "bg-emerald-500/15 text-emerald-400 border-emerald-900/50",
                   isPasteReady && "bg-sky-500/15 text-sky-400 border-sky-900/50",
-                  isPending && "bg-orange-500/15 text-orange-400 border-orange-900/50",
+                  isPending && "bg-violet-500/15 text-violet-400 border-violet-900/50",
                   !deployment && "bg-zinc-800 text-zinc-500 border-zinc-700"
                 )}
               >
@@ -255,7 +296,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
             {isPending && (
               <Link
                 href="/dashboard/queue"
-                className="flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-zinc-950 hover:bg-orange-400 transition-colors font-sans"
+                className="flex items-center gap-1.5 rounded-lg bg-violet-500 px-3 py-1.5 text-xs font-bold text-zinc-950 hover:bg-violet-400 transition-colors font-sans"
               >
                 <ClipboardCheck size={12} /> Review in Queue
               </Link>
@@ -278,47 +319,47 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
       {/* 3. DENSE LIST VIEW                                                */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 font-sans">
+        <div className="overflow-hidden rounded-2xl border border-zinc-800/80 bg-transparent font-sans">
           <table className="w-full text-left text-xs font-sans">
             <thead>
-              <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500 bg-zinc-900/50 font-sans">
-                <th className="px-4 py-2 font-semibold">Deliverable Type</th>
-                <th className="px-4 py-2 font-semibold">Asset Details</th>
-                <th className="px-4 py-2 font-semibold">Status / Target</th>
-                <th className="px-4 py-2 font-semibold" />
+              <tr className="border-b border-zinc-800/80 text-[10px] uppercase text-zinc-400 font-sans">
+                <th className="px-4 py-3 font-semibold">Deliverable Type</th>
+                <th className="px-4 py-3 font-semibold">Asset Details</th>
+                <th className="px-4 py-3 font-semibold">Status / Target</th>
+                <th className="px-4 py-3 font-semibold text-right" />
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-zinc-800/60">
               {boardColumns.flatMap((col) =>
                 col.cards.map((card) => (
                   <tr
                     key={card.id}
-                    className="border-b border-zinc-900 last:border-b-0 hover:bg-zinc-900/40 cursor-pointer transition-colors font-sans"
+                    className="hover:bg-zinc-800/30 cursor-pointer transition-colors font-sans"
                     onClick={() => setActiveDrawerCard(card)}
                   >
-                    <td className="px-4 py-2.5 font-medium text-white flex items-center gap-2 font-sans">
-                      {card.type === "brief" && <Megaphone size={12} className="text-amber-400" />}
-                      {card.type === "script" && <Film size={12} className="text-sky-400" />}
-                      {card.type === "deployment" && <Code2 size={12} className="text-emerald-400" />}
-                      {card.type === "voice" && <Palette size={12} className="text-amber-400" />}
-                      {card.type === "stack" && <Webhook size={12} className="text-emerald-400" />}
-                      {card.type === "audit" && <ScanSearch size={12} className="text-sky-400" />}
+                    <td className="px-4 py-3 font-medium text-white flex items-center gap-2 font-sans">
+                      {card.type === "brief" && <Megaphone size={13} className="text-purple-400" />}
+                      {card.type === "script" && <Film size={13} className="text-sky-400" />}
+                      {card.type === "deployment" && <Code2 size={13} className="text-emerald-400" />}
+                      {card.type === "voice" && <Palette size={13} className="text-teal-400" />}
+                      {card.type === "stack" && <Webhook size={13} className="text-indigo-400" />}
+                      {card.type === "audit" && <ScanSearch size={13} className="text-cyan-400" />}
                       {card.title}
                     </td>
-                    <td className="px-4 py-2.5 text-zinc-300 truncate max-w-xs font-sans">
+                    <td className="px-4 py-3 text-zinc-400 truncate max-w-xs font-sans">
                       {card.subtitle}
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-zinc-400">
-                      {card.badge && <StatusPill tone={card.tone ?? "neutral"}>{card.badge}</StatusPill>}
+                    <td className="px-4 py-3 font-mono">
+                      {card.badge && <SolidBadge label={card.badge} />}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-sans">
+                    <td className="px-4 py-3 text-right font-sans">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveDrawerCard(card);
                         }}
-                        className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer font-sans"
+                        className="rounded-lg border border-zinc-700/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white cursor-pointer font-sans transition-colors"
                       >
                         Inspect
                       </button>
@@ -332,15 +373,15 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
       )}
 
       {/* ----------------------------------------------------------------- */}
-      {/* 4. ASANA KANBAN BOARD VIEW (UNROLLED CARDS + DRAWER TRIGGER)      */}
+      {/* 4. TRANSPARENT KANBAN BOARD VIEW (UNROLLED CARDS + SOLID BADGES)   */}
       {/* ----------------------------------------------------------------- */}
       {mode === "board" && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 font-sans">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 font-sans pt-1">
           {boardColumns.map((col) => (
-            <div key={col.id} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 flex flex-col gap-2 font-sans">
+            <div key={col.id} className="rounded-2xl border border-zinc-800/80 bg-transparent p-3 flex flex-col gap-2 font-sans">
               <div className="flex items-center justify-between px-1 mb-1 font-sans">
                 <span className="text-xs font-bold text-zinc-300 font-sans">{col.title}</span>
-                <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
+                <span className="text-[10px] font-mono text-zinc-500 border border-zinc-800 px-2 py-0.5 rounded-md font-bold">
                   {col.cards.length}
                 </span>
               </div>
@@ -351,16 +392,16 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                     key={card.id}
                     type="button"
                     onClick={() => setActiveDrawerCard(card)}
-                    className="w-full text-left rounded-xl border border-zinc-800 bg-zinc-900/90 hover:border-zinc-700 p-3 transition-all cursor-pointer group shadow-sm flex flex-col gap-1.5 font-sans"
+                    className="w-full text-left rounded-xl border border-zinc-800/80 bg-transparent hover:border-zinc-700 hover:bg-zinc-900/30 p-3.5 transition-all cursor-pointer group shadow-2xs flex flex-col gap-2 font-sans"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors flex items-center gap-1.5 font-sans">
-                        {card.type === "brief" && <Megaphone size={12} className="text-amber-400 shrink-0" />}
-                        {card.type === "script" && <Film size={12} className="text-sky-400 shrink-0" />}
-                        {card.type === "deployment" && <Globe size={12} className="text-emerald-400 shrink-0" />}
-                        {card.type === "voice" && <Palette size={12} className="text-amber-400 shrink-0" />}
-                        {card.type === "stack" && <Webhook size={12} className="text-emerald-400 shrink-0" />}
-                        {card.type === "audit" && <ScanSearch size={12} className="text-sky-400 shrink-0" />}
+                      <p className="text-xs font-bold text-white group-hover:text-teal-400 transition-colors flex items-center gap-1.5 font-sans">
+                        {card.type === "brief" && <Megaphone size={13} className="text-purple-400 shrink-0" />}
+                        {card.type === "script" && <Film size={13} className="text-sky-400 shrink-0" />}
+                        {card.type === "deployment" && <Globe size={13} className="text-emerald-400 shrink-0" />}
+                        {card.type === "voice" && <Palette size={13} className="text-teal-400 shrink-0" />}
+                        {card.type === "stack" && <Webhook size={13} className="text-indigo-400 shrink-0" />}
+                        {card.type === "audit" && <ScanSearch size={13} className="text-cyan-400 shrink-0" />}
                         <span className="truncate font-sans">{card.title}</span>
                       </p>
                       <Maximize2 size={12} className="text-zinc-600 group-hover:text-zinc-300 shrink-0 mt-0.5" />
@@ -373,17 +414,15 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                     )}
 
                     {card.badge && (
-                      <div className="pt-1">
-                        <StatusPill tone={card.tone ?? "neutral"} className="text-[9.5px]">
-                          {card.badge}
-                        </StatusPill>
+                      <div className="pt-0.5">
+                        <SolidBadge label={card.badge} />
                       </div>
                     )}
                   </button>
                 ))}
 
                 {col.cards.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-zinc-900 p-4 text-center text-[10px] text-zinc-600 font-sans">
+                  <div className="rounded-xl border border-dashed border-zinc-800/80 p-4 text-center text-[10px] text-zinc-600 font-sans">
                     No items in this stage
                   </div>
                 )}
@@ -407,7 +446,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
 }
 
 // ---------------------------------------------------------------------------
-// ASANA TASK DETAIL DRAWER (STRICT FONT PERSISTENCE ON PORTAL ROOT)
+// ASANA TASK DETAIL DRAWER
 // ---------------------------------------------------------------------------
 function PinDownDetailDrawer({
   card,
@@ -422,19 +461,18 @@ function PinDownDetailDrawer({
 }) {
   return (
     <Sheet open={!!card} onOpenChange={(open) => !open && onClose()}>
-      {/* Explicit font-sans antialiased text-zinc-100 on the portal root prevents font mismatch */}
       <SheetContent widthClassName="w-full sm:max-w-xl font-sans antialiased text-zinc-100">
         {card && (
           <div className="flex flex-col h-full font-sans antialiased">
             <SheetHeader className="font-sans">
               <div className="flex items-center justify-between font-sans">
-                <div className="flex items-center gap-2 text-amber-400 font-sans">
+                <div className="flex items-center gap-2 text-teal-400 font-sans">
                   <Sliders size={15} />
                   <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
                     Pin-Down Deliverable
                   </span>
                 </div>
-                {card.badge && <StatusPill tone={card.tone ?? "neutral"}>{card.badge}</StatusPill>}
+                {card.badge && <SolidBadge label={card.badge} />}
               </div>
 
               <SheetTitle className="mt-2 text-lg font-bold text-white font-sans">{card.title}</SheetTitle>
@@ -463,7 +501,7 @@ function PinDownDetailDrawer({
                       <span>{copiedKey === "drawer-brief" ? "Copied" : "Copy Brief"}</span>
                     </button>
                   </div>
-                  <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/80 p-4 text-xs text-zinc-200 font-sans">
+                  <div className="space-y-2 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-4 text-xs text-zinc-200 font-sans">
                     <p><strong className="text-zinc-400 font-sans">Pillar:</strong> {PILLAR_LABEL[card.payload.pillar] ?? card.payload.pillar}</p>
                     <p><strong className="text-zinc-400 font-sans">Hook:</strong> {card.payload.hook}</p>
                     <p><strong className="text-zinc-400 font-sans">Angle:</strong> {card.payload.angle}</p>
@@ -498,14 +536,14 @@ function PinDownDetailDrawer({
                   {"chapters" in card.payload ? (
                     <div className="space-y-2 font-sans">
                       {card.payload.chapters.map((chap: any, idx: number) => (
-                        <div key={idx} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-300 font-sans">
-                          <p className="font-bold text-amber-400 mb-1 font-sans">{chap.title}</p>
+                        <div key={idx} className="rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-3 text-xs text-zinc-300 font-sans">
+                          <p className="font-bold text-teal-400 mb-1 font-sans">{chap.title}</p>
                           <p className="whitespace-pre-wrap leading-relaxed font-sans">{chap.script}</p>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-300 font-sans whitespace-pre-wrap">
+                    <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-300 font-sans whitespace-pre-wrap">
                       {card.payload.script}
                     </div>
                   )}
@@ -548,7 +586,7 @@ function PinDownDetailDrawer({
                   )}
 
                   {card.payload.instructions && (
-                    <p className="text-xs text-zinc-400 leading-relaxed bg-zinc-900/80 border border-zinc-800 p-3 rounded-xl font-sans">
+                    <p className="text-xs text-zinc-400 leading-relaxed bg-zinc-900/80 border border-zinc-800/80 p-3 rounded-xl font-sans">
                       {card.payload.instructions}
                     </p>
                   )}
@@ -558,7 +596,7 @@ function PinDownDetailDrawer({
               {/* Voice Profile */}
               {card.type === "voice" && (
                 <div className="space-y-3 text-xs text-zinc-300 font-sans">
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3.5 space-y-2 font-sans">
+                  <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/80 p-3.5 space-y-2 font-sans">
                     <p><strong className="text-zinc-400 font-sans">Formal/Casual:</strong> {card.payload.tone.formal_casual.score}/5 ({card.payload.tone.formal_casual.note})</p>
                     <p><strong className="text-zinc-400 font-sans">Technical/Plain:</strong> {card.payload.tone.technical_plain.score}/5 ({card.payload.tone.technical_plain.note})</p>
                     <p><strong className="text-zinc-400 font-sans">Warm/Neutral:</strong> {card.payload.tone.warm_neutral.score}/5 ({card.payload.tone.warm_neutral.note})</p>
@@ -579,7 +617,7 @@ function PinDownDetailDrawer({
 
               {/* Stack Sync */}
               {card.type === "stack" && (
-                <div className="space-y-2 text-xs text-zinc-300 rounded-xl border border-zinc-800 bg-zinc-900/80 p-3.5 font-mono">
+                <div className="space-y-2 text-xs text-zinc-300 rounded-xl border border-zinc-800/80 bg-zinc-900/80 p-3.5 font-mono">
                   <p><strong className="text-zinc-500 font-mono">Booking Platform:</strong> {bookingPlatformLabel(card.payload?.booking_platform)}</p>
                   <p><strong className="text-zinc-500 font-mono">Hosting Platform:</strong> {hostingPlatformLabel(card.payload?.hosting_platform)}</p>
                   <p><strong className="text-zinc-500 font-mono">Webhook Receiver Mode:</strong> {card.payload?.webhook_receiver_mode ?? "none"}</p>
@@ -620,8 +658,8 @@ function PinDownDetailDrawer({
 // ---------------------------------------------------------------------------
 function Card({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col rounded-2xl border border-zinc-800 bg-zinc-950 p-4 shadow-md font-sans">
-      <div className="mb-3 flex items-center gap-2 border-b border-zinc-900 pb-2">
+    <div className="flex flex-col rounded-2xl border border-zinc-800/80 bg-transparent p-4 shadow-2xs font-sans backdrop-blur-xs">
+      <div className="mb-3 flex items-center gap-2 border-b border-zinc-800/80 pb-2">
         <Icon size={14} className="text-zinc-400" />
         <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-300 font-sans">{title}</h3>
       </div>
@@ -645,7 +683,7 @@ function PrimaryOutputCard({
     <Card title="Confirmation Page Deliverable" icon={Code2}>
       {isPasteReady && run.pasteReadyHtml ? (
         <>
-          <div className="max-h-48 overflow-auto rounded-xl border border-zinc-800 bg-black/40 p-3 font-mono">
+          <div className="max-h-48 overflow-auto rounded-xl border border-zinc-800/80 bg-black/40 p-3 font-mono">
             <pre className="whitespace-pre-wrap break-all text-[10px] leading-relaxed text-zinc-400">
               {run.pasteReadyHtml}
             </pre>
@@ -653,7 +691,7 @@ function PrimaryOutputCard({
           <button
             type="button"
             onClick={() => onCopy(run.pasteReadyHtml!, "html")}
-            className="mt-2.5 flex w-fit items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer transition-colors font-sans"
+            className="mt-2.5 flex w-fit items-center gap-1.5 rounded-lg border border-zinc-700/80 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer transition-colors font-sans"
           >
             {copiedKey === "html" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
             <span>{copiedKey === "html" ? "Copied HTML" : "Copy HTML Code"}</span>
@@ -663,7 +701,7 @@ function PrimaryOutputCard({
           )}
         </>
       ) : run.confirmationPageUrl ? (
-        <div className="overflow-hidden rounded-xl border border-zinc-800">
+        <div className="overflow-hidden rounded-xl border border-zinc-800/80">
           <iframe
             src={run.confirmationPageUrl}
             className="h-48 w-full bg-white"
@@ -718,9 +756,9 @@ function BrandVoiceCard({
               <span>{label}</span>
               <span>{t.score}/5</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800/80">
               <div
-                className="h-full rounded-full bg-amber-400 transition-all"
+                className="h-full rounded-full bg-teal-400 transition-all"
                 style={{ width: `${(t.score / 5) * 100}%` }}
               />
             </div>
@@ -730,7 +768,7 @@ function BrandVoiceCard({
       </div>
 
       {v.vocabulary.signature.length > 0 && (
-        <div className="mt-3 border-t border-zinc-900 pt-2 font-sans">
+        <div className="mt-3 border-t border-zinc-800/80 pt-2 font-sans">
           <div className="mb-1 flex items-center justify-between">
             <span className="text-[10px] uppercase text-zinc-500 font-mono">Signature Vocabulary</span>
             <button
@@ -743,7 +781,7 @@ function BrandVoiceCard({
           </div>
           <div className="flex flex-wrap gap-1">
             {v.vocabulary.signature.map((w) => (
-              <span key={w} className="rounded-md bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-300 font-mono">
+              <span key={w} className="rounded-md bg-zinc-800/80 px-1.5 py-0.5 text-[10px] text-zinc-300 font-mono">
                 {w}
               </span>
             ))}
@@ -787,11 +825,9 @@ function PlatformSyncCard({ run }: { run: PinDownDetail["run"] }) {
       <div className="space-y-2 text-xs font-sans">
         <Row label="Booking Platform" value={bookingPlatformLabel(stack.booking_platform)} />
         <Row label="Hosting Platform" value={hostingPlatformLabel(stack.hosting_platform)} />
-        <div className="flex items-center justify-between border-t border-zinc-900 pt-2 font-sans">
+        <div className="flex items-center justify-between border-t border-zinc-800/80 pt-2 font-sans">
           <span className="text-zinc-500 font-sans">Webhook Receiver Mode</span>
-          <StatusPill tone={stack.webhook_receiver_mode === "webhook" ? "success" : stack.webhook_receiver_mode === "polling" ? "info" : "neutral"}>
-            {stack.webhook_receiver_mode ?? "none"}
-          </StatusPill>
+          <SolidBadge label={stack.webhook_receiver_mode ?? "none"} />
         </div>
         {stack.webhook_last_received_at && (
           <Row label="Last Webhook Received" value={new Date(stack.webhook_last_received_at).toLocaleString()} icon={Clock} />
@@ -881,7 +917,7 @@ function CreativeAssetsCard({
             </div>
           </div>
           {activeBrief && (
-            <div className="space-y-1.5 rounded-xl border border-zinc-800 bg-zinc-900/60 p-2.5 text-[11px] text-zinc-300 font-sans">
+            <div className="space-y-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 text-[11px] text-zinc-300 font-sans">
               <p className="font-sans"><span className="text-zinc-500 font-sans">Hook:</span> {activeBrief.hook}</p>
               <p className="font-sans"><span className="text-zinc-500 font-sans">Angle:</span> {activeBrief.angle}</p>
               <p className="font-sans"><span className="text-zinc-500 font-sans">Format:</span> {activeBrief.suggestedFormat}</p>
@@ -925,7 +961,7 @@ function CreativeAssetsCard({
             </div>
           </div>
           {activeScript && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-2.5 text-[11px] text-zinc-400 font-sans">
+            <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 text-[11px] text-zinc-400 font-sans">
               <p className="text-zinc-300 font-mono text-[10px]">
                 {"targetLengthSeconds" in activeScript ? `${activeScript.targetLengthSeconds}s target length` : ""}
               </p>
