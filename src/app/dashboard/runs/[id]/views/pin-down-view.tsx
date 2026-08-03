@@ -144,24 +144,61 @@ function SkillOrbitalRing({
 }
 
 /**
- * Asana-exact Static Status Pill Component
+ * Contextual & User-Friendly Status Pill Component
  */
-function AsanaStatusPill({ status }: { status: "on_track" | "at_risk" | "off_track" }) {
-  const config = {
-    on_track: { label: "On track", color: "text-emerald-400 bg-emerald-950/30 border-emerald-800/50" },
-    at_risk: { label: "At risk", color: "text-amber-400 bg-amber-950/30 border-amber-800/50" },
-    off_track: { label: "Off track", color: "text-rose-400 bg-rose-950/30 border-rose-800/50" },
-  }[status];
+export type StatusPillVariant =
+  | "live"
+  | "ready"
+  | "polling"
+  | "action_needed"
+  | "pending"
+  | "off_track";
+
+function StatusPill({
+  variant,
+  customLabel,
+}: {
+  variant: StatusPillVariant;
+  customLabel?: string;
+}) {
+  const config: Record<StatusPillVariant, { label: string; color: string }> = {
+    live: {
+      label: "Live",
+      color: "text-emerald-400 bg-emerald-950/30 border-emerald-800/50",
+    },
+    ready: {
+      label: "Ready",
+      color: "text-emerald-400 bg-emerald-950/30 border-emerald-800/50",
+    },
+    polling: {
+      label: "Polling active",
+      color: "text-sky-400 bg-sky-950/30 border-sky-800/50",
+    },
+    action_needed: {
+      label: "Action needed",
+      color: "text-amber-400 bg-amber-950/30 border-amber-800/50",
+    },
+    pending: {
+      label: "Pending",
+      color: "text-amber-400 bg-amber-950/30 border-amber-800/50",
+    },
+    off_track: {
+      label: "Not configured",
+      color: "text-rose-400 bg-rose-950/30 border-rose-800/50",
+    },
+  };
+
+  const item = config[variant] ?? config.off_track;
 
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border font-sans select-none shrink-0",
-        config.color
+        item.color
       )}
     >
       <span className="text-[9px]">●</span>
-      <span>{config.label}</span>
+      <span>{customLabel || item.label}</span>
     </span>
   );
 }
@@ -192,22 +229,34 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
   const buyerName =
     runRecord.buyerName || runRecord.buyer || runRecord.engagement?.buyer || "Client";
 
-  // Status checks for rows
-  const deploymentStatus: "on_track" | "at_risk" | "off_track" = isLive
-    ? "on_track"
+  // Contextual Status checks for rows
+  const deploymentVariant: StatusPillVariant = isLive
+    ? "live"
     : isPasteReady
-    ? "at_risk"
+    ? "action_needed"
     : "off_track";
 
-  const stackStatus: "on_track" | "at_risk" | "off_track" =
-    stack?.booking_platform && stack?.webhook_receiver_mode === "webhook"
-      ? "on_track"
-      : stack?.booking_platform
-      ? "at_risk"
-      : "off_track";
+  const isWebhook = stack?.webhook_receiver_mode === "webhook";
+  const isPolling = stack?.webhook_receiver_mode === "polling";
 
-  const voiceStatus: "on_track" | "at_risk" | "off_track" = voice ? "on_track" : "off_track";
-  const creativeStatus: "on_track" | "at_risk" | "off_track" = briefs.length > 0 ? "on_track" : "at_risk";
+  const stackVariant: StatusPillVariant = isWebhook
+    ? "live"
+    : isPolling
+    ? "polling"
+    : stack?.booking_platform
+    ? "action_needed"
+    : "off_track";
+
+  const stackLabel = isWebhook
+    ? "Direct sync"
+    : isPolling
+    ? "Polling active"
+    : stack?.booking_platform
+    ? "Sync needed"
+    : "Not connected";
+
+  const voiceVariant: StatusPillVariant = voice ? "ready" : "pending";
+  const creativeVariant: StatusPillVariant = briefs.length > 0 ? "ready" : "pending";
 
   const formattedDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -289,7 +338,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
           </p>
         </div>
 
-        {/* Asana Status Rows with Right-Aligned Pills */}
+        {/* Asana Status Rows with Contextual Pills */}
         <div className="divide-y divide-zinc-800/60 font-sans">
           {/* Row 1: Deployment */}
           <div className="flex items-center justify-between py-3.5">
@@ -301,12 +350,12 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                   {isLive
                     ? `Published on ${hostingPlatformLabel(deployment?.deployedVia)}`
                     : isPasteReady
-                    ? "Paste-Ready Code Generated"
+                    ? "Paste-Ready Code Generated (Copy & Paste to publish)"
                     : "Deployment Pending Manual Review"}
                 </p>
               </div>
             </div>
-            <AsanaStatusPill status={deploymentStatus} />
+            <StatusPill variant={deploymentVariant} />
           </div>
 
           {/* Row 2: Stack Sync */}
@@ -316,11 +365,11 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
               <div>
                 <p className="text-xs font-semibold text-white font-sans">Platform Stack & Webhook Sync</p>
                 <p className="text-[11px] text-zinc-500 font-sans">
-                  Booking: {bookingPlatformLabel(stack?.booking_platform)} · Receiver: {stack?.webhook_receiver_mode ?? "None"}
+                  Booking: {bookingPlatformLabel(stack?.booking_platform)} · Mode: {isPolling ? "Auto-polling (5m window)" : (stack?.webhook_receiver_mode ?? "None")}
                 </p>
               </div>
             </div>
-            <AsanaStatusPill status={stackStatus} />
+            <StatusPill variant={stackVariant} customLabel={stackLabel} />
           </div>
 
           {/* Row 3: Brand Voice */}
@@ -334,7 +383,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                 </p>
               </div>
             </div>
-            <AsanaStatusPill status={voiceStatus} />
+            <StatusPill variant={voiceVariant} />
           </div>
 
           {/* Row 4: Creative Assets */}
@@ -348,7 +397,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                 </p>
               </div>
             </div>
-            <AsanaStatusPill status={creativeStatus} />
+            <StatusPill variant={creativeVariant} />
           </div>
         </div>
       </div>
