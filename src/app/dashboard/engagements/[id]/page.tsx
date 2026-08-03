@@ -13,18 +13,14 @@ import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
 import { RunRowActions } from "./run-row-actions";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { 
   CheckCircle2, 
   XCircle, 
   Loader2, 
   AlertCircle, 
   ArrowRight, 
-  Server, 
-  MapPin,
-  Layers,
-  FileText,
-  RotateCcw,
-  Filter,
+  Server,
 } from "lucide-react";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
@@ -46,43 +42,6 @@ import {
 } from "@/lib/copy";
 
 export const revalidate = 0;
-
-// ---------------------------------------------------------------------------
-// Squishy Badge Icon Hack Configuration
-// ---------------------------------------------------------------------------
-const SKILL_SQUISHY_CONFIG: Record<
-  string,
-  { label: string; bgClass: string; icon: React.ElementType }
-> = {
-  "pin-down": { label: "PD", bgClass: "bg-[#fcd34d]", icon: MapPin },
-  "pile-on": { label: "PO", bgClass: "bg-[#c084fc]", icon: Layers },
-  "pre-call-read": { label: "PR", bgClass: "bg-[#f2a8e4]", icon: FileText },
-  "win-back": { label: "WB", bgClass: "bg-[#fb7185]", icon: RotateCcw },
-  "leak-map": { label: "LM", bgClass: "bg-[#38bdf8]", icon: Filter },
-};
-
-function SquishySkillBadge({ skill, size = 36 }: { skill: string; size?: number }) {
-  const config = SKILL_SQUISHY_CONFIG[skill];
-  if (!config) return null;
-
-  const Icon = config.icon;
-  const iconSize = Math.round(size * 0.54);
-
-  return (
-    <div
-      className={`flex items-center justify-center rounded-full ${config.bgClass} shadow-xs shrink-0 select-none`}
-      style={{ width: size, height: size }}
-      title={skillName(skill)}
-    >
-      <Icon
-        size={iconSize}
-        className="text-zinc-950 stroke-[2.3px] fill-white"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </div>
-  );
-}
 
 function deriveModuleStatus(runs: { status: string }[]): ModuleStatus {
   if (runs.length === 0) return "not_run";
@@ -313,7 +272,7 @@ export default async function EngagementDetailPage({
         </div>
       )}
 
-      {/* Modules Selector Grid with Squishy Badges */}
+      {/* Modules Selector Grid */}
       <div className="space-y-2">
         <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">Modules</h2>
 
@@ -329,7 +288,7 @@ export default async function EngagementDetailPage({
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <SquishySkillBadge skill={skill} size={38} />
+                      <SquishySkillBadge skill={skill} size={38} enabled={true} />
                       <div className="space-y-0.5 min-w-0">
                         <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">{info.name}</p>
                         <p className="text-[11px] font-normal text-zinc-500 dark:text-zinc-400 leading-snug line-clamp-2">{info.description}</p>
@@ -433,7 +392,7 @@ export default async function EngagementDetailPage({
         </div>
       )}
 
-      {/* Run History with Squishy Skill Badges */}
+      {/* Run History */}
       {runs.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -481,7 +440,7 @@ export default async function EngagementDetailPage({
                           className="shrink-0 flex items-center gap-2 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 pt-0.5"
                           title={new Date(run.startedAt).toLocaleString()}
                         >
-                          <SquishySkillBadge skill={run.skillName} size={22} />
+                          <SquishySkillBadge skill={run.skillName} size={22} enabled={true} />
                           <span>{relativeTime(String(run.startedAt))}</span>
                           <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
                           <RunRowActions

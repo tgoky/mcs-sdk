@@ -1,160 +1,144 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Rocket, Layers, ClipboardList, RotateCcw, Map as MapIcon, type LucideIcon } from "lucide-react";
-import { SKILL_IDS, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
+import { SKILLS, SKILL_INFO, type SkillName } from "@/lib/copy";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 
-const TOGGLEABLE_SKILLS: SkillId[] = SKILL_IDS.filter((id) => id !== "pin-down");
-
-const SKILL_ICONS: Record<SkillId, LucideIcon> = {
-  "pin-down": Rocket,
-  "pile-on": Layers,
-  "pre-call-read": ClipboardList,
-  "win-back": RotateCcw,
-  "leak-map": MapIcon,
-};
-
-function Switch({ enabled, busy }: { enabled: boolean; busy: boolean }) {
-  return (
-    <span
-      role="presentation"
-      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
-        enabled
-          ? "bg-emerald-500 dark:bg-emerald-600"
-          : "bg-zinc-300 dark:bg-zinc-800"
-      } ${busy ? "opacity-50" : ""}`}
-    >
-      <span
-        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition-transform duration-200 ease-in-out ${
-          enabled ? "translate-x-[18px]" : "translate-x-[3px]"
-        }`}
-      />
-    </span>
-  );
-}
+// Keep pin-down excluded from manual toggling
+const TOGGLEABLE_SKILLS: SkillName[] = SKILLS.filter((s) => s !== "pin-down");
 
 export function SkillsPanel({
   engagementId,
   initialStates,
 }: {
   engagementId: string;
-  initialStates: Record<SkillId, boolean>;
+  initialStates: Record<SkillName, boolean>;
 }) {
   const router = useRouter();
-  const [states, setStates] = useState(initialStates);
-  const [pending, setPending] = useState<SkillId | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [states, setStates] = useState<Record<SkillName, boolean>>(initialStates);
+  const [updatingSkill, setUpdatingSkill] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
 
-  async function toggle(skillId: SkillId) {
-    const next = !states[skillId];
-    const previous = states[skillId];
+  async function handleToggle(skill: SkillName) {
+    const nextState = !states[skill];
+    const previousState = states[skill];
 
-    setStates((s) => ({ ...s, [skillId]: next }));
-    setPending(skillId);
-    setError(null);
+    setStates((prev) => ({ ...prev, [skill]: nextState }));
+    setUpdatingSkill(skill);
 
-    try {
-      const res = await fetch(`/api/engagements/${engagementId}/skills/${skillId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: next }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setStates((s) => ({ ...s, [skillId]: previous }));
-        setError(data.error ?? `Failed to update ${SKILL_MANIFEST[skillId].name}.`);
-      } else {
-        router.refresh();
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/engagements/${engagementId}/skills/${skill}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: nextState }),
+        });
+
+        if (!res.ok) {
+          setStates((prev) => ({ ...prev, [skill]: previousState }));
+        } else {
+          router.refresh();
+        }
+      } catch {
+        setStates((prev) => ({ ...prev, [skill]: previousState }));
+      } finally {
+        setUpdatingSkill(null);
       }
-    } catch (e: unknown) {
-      setStates((s) => ({ ...s, [skillId]: previous }));
-      setError(e instanceof Error ? e.message : `Failed to update ${SKILL_MANIFEST[skillId].name}.`);
-    } finally {
-      setPending(null);
-    }
+    });
   }
 
-  const onCount = TOGGLEABLE_SKILLS.filter((id) => states[id]).length;
+  const activeCount = TOGGLEABLE_SKILLS.filter((s) => states[s]).length;
 
   return (
-    <div className="w-full space-y-3 py-1">
+    <div className="w-full space-y-2 py-1 font-sans">
       {/* Header Section */}
       <div className="flex items-center justify-between gap-4 pb-2 border-b border-zinc-200/80 dark:border-zinc-800/60">
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100">
+          <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100">
             Automation Skills
-          </h3>
+          </h2>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed font-sans">
             Turn off anything this client doesn&apos;t need. Takes effect on the next run.
           </p>
         </div>
         <span className="shrink-0 text-xs font-mono font-medium text-zinc-500 dark:text-zinc-400">
-          <span className="font-bold text-emerald-600 dark:text-emerald-400">{onCount}</span>/{TOGGLEABLE_SKILLS.length} active
+          <span className="font-bold text-emerald-600 dark:text-emerald-400">{activeCount}</span>/{TOGGLEABLE_SKILLS.length} active
         </span>
       </div>
 
-      {/* Flat Clean List */}
+      {/* Vertical Single-Column List (divide-y) */}
       <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
-        {TOGGLEABLE_SKILLS.map((skillId) => {
-          const skill = SKILL_MANIFEST[skillId];
-          const enabled = states[skillId];
-          const busy = pending === skillId;
-          const Icon = SKILL_ICONS[skillId];
+        {TOGGLEABLE_SKILLS.map((skill) => {
+          const info = SKILL_INFO[skill];
+          const isEnabled = states[skill] ?? true;
+          const isBusy = updatingSkill === skill;
 
           return (
             <div
-              key={skillId}
-              onClick={() => !busy && toggle(skillId)}
-              className="group flex items-center justify-between gap-4 py-3 px-1.5 hover:bg-zinc-500/[0.03] rounded-lg transition-colors cursor-pointer select-none"
+              key={skill}
+              onClick={() => !isBusy && handleToggle(skill)}
+              className="group flex items-center justify-between gap-4 py-3.5 px-2 hover:bg-zinc-500/[0.04] dark:hover:bg-zinc-500/[0.06] rounded-xl transition-colors cursor-pointer select-none"
             >
+              {/* Left Side: Squishy Badge + Title + Full Description */}
               <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                <span
-                  className={`shrink-0 grid place-items-center h-8 w-8 rounded-md transition-colors ${
-                    enabled
-                      ? "text-emerald-500 dark:text-emerald-400 bg-emerald-500/10"
-                      : "text-zinc-400 dark:text-zinc-600 bg-zinc-100 dark:bg-zinc-800/40"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" strokeWidth={1.75} />
-                </span>
+                <SquishySkillBadge skill={skill} size={38} enabled={isEnabled} />
 
                 <div className="min-w-0 flex-1">
                   <span
-                    className={`block text-sm font-semibold tracking-tight transition-colors ${
-                      enabled
+                    className={`block text-sm font-bold tracking-tight transition-colors ${
+                      isEnabled
                         ? "text-zinc-900 dark:text-zinc-100"
                         : "text-zinc-400 dark:text-zinc-500"
                     }`}
                   >
-                    {skill.name}
+                    {info.name}
                   </span>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug truncate font-sans">
-                    {skill.description}
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug font-sans">
+                    {info.description}
                   </p>
                 </div>
               </div>
 
+              {/* Right Side: Filled Toggle Switch Button */}
               <div className="shrink-0 flex items-center gap-3">
                 <span
-                  className={`text-[11px] font-mono font-semibold uppercase tracking-wider ${
-                    busy
+                  className={`text-[11px] font-mono font-bold uppercase tracking-wider ${
+                    isBusy
                       ? "text-zinc-400"
-                      : enabled
+                      : isEnabled
                       ? "text-emerald-600 dark:text-emerald-400"
                       : "text-zinc-400 dark:text-zinc-600"
                   }`}
                 >
-                  {busy ? "…" : enabled ? "On" : "Off"}
+                  {isBusy ? "…" : isEnabled ? "On" : "Off"}
                 </span>
-                <Switch enabled={enabled} busy={busy} />
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isBusy) handleToggle(skill);
+                  }}
+                  disabled={isBusy}
+                  aria-label={`Toggle ${info.name}`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
+                    isEnabled
+                      ? "bg-emerald-500 dark:bg-emerald-600 border border-emerald-600/30"
+                      : "bg-zinc-300 dark:bg-zinc-800 border border-zinc-400/30 dark:border-zinc-700/50"
+                  } ${isBusy ? "opacity-50" : ""}`}
+                >
+                  <span
+                    className={`inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow-md transition-transform duration-200 ease-in-out ${
+                      isEnabled ? "translate-x-[22px]" : "translate-x-[3px]"
+                    }`}
+                  />
+                </button>
               </div>
             </div>
           );
         })}
       </div>
-
-      {error && <p className="text-xs font-mono text-rose-600 dark:text-rose-400 pt-1">⚠ {error}</p>}
     </div>
   );
 }
