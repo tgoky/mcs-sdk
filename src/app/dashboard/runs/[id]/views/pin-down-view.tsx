@@ -29,6 +29,43 @@ const PILLAR_LABEL: Record<string, string> = {
   objections: "Objections",
 };
 
+const PILLAR_SUBTITLE: Record<string, string> = {
+  common_questions: "What are the immediate questions prospects ask before booking?",
+  deeper_questions: "What core bottleneck or process problem are they trying to solve?",
+  success_proof: "What client outcome or proof point validates this offer?",
+  objections: "What misunderstanding or fear holds them back from taking action?",
+};
+
+const PILLAR_COLOR: Record<
+  string,
+  { noteBg: string; border: string; text: string; label: string }
+> = {
+  common_questions: {
+    noteBg: "bg-blue-500/15",
+    border: "border-blue-500/30",
+    text: "text-blue-400",
+    label: "QA",
+  },
+  deeper_questions: {
+    noteBg: "bg-amber-500/15",
+    border: "border-amber-500/30",
+    text: "text-amber-400",
+    label: "DQ",
+  },
+  success_proof: {
+    noteBg: "bg-emerald-500/15",
+    border: "border-emerald-500/30",
+    text: "text-emerald-400",
+    label: "PROOF",
+  },
+  objections: {
+    noteBg: "bg-rose-500/15",
+    border: "border-rose-500/30",
+    text: "text-rose-400",
+    label: "OBJ",
+  },
+};
+
 /**
  * Utility to strip double-escaped AI quotes
  */
@@ -80,7 +117,7 @@ function SkillOrbitalRing({
         <Layers className="w-4 h-4 text-teal-400" />
       </div>
 
-      {/* 5 Orbiting Squishy Skill Badges */}
+      {/* Orbiting Squishy Skill Badges */}
       {SKILLS.map((skill, index) => {
         const angleRad = (index * 72 - 90) * (Math.PI / 180);
         const x = Math.cos(angleRad) * radius;
@@ -385,56 +422,99 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
         </div>
 
         {/* Tab Content Area */}
-        <div className="pt-4 font-sans">
-          {/* TAB 1: AD BRIEFS (Clean, Spacey, Zero Nested Card Boxes) */}
+        <div className="pt-5 font-sans">
+          {/* TAB 1: AD BRIEFS (Separated Canvas Grid Layout) */}
           {activeTab === "briefs" && (
-            <div className="divide-y divide-zinc-800/60 font-sans">
-              {briefs.map((brief) => (
-                <div key={brief.id} className="py-4 first:pt-1 last:pb-0 space-y-2 font-sans">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-teal-400">
-                      PILLAR: {PILLAR_LABEL[brief.pillar] ?? brief.pillar}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleCopy(
-                          `Hook: ${cleanString(brief.hook)}\nAngle: ${cleanString(brief.angle)}\nFormat: ${brief.suggestedFormat}\nCTA: ${brief.cta}`,
-                          `brief-${brief.id}`
-                        )
-                      }
-                      className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                    >
-                      {copiedKey === `brief-${brief.id}` ? (
-                        <Check size={12} className="text-emerald-400" />
-                      ) : (
-                        <Copy size={12} />
-                      )}
-                      <span>{copiedKey === `brief-${brief.id}` ? "Copied" : "Copy Brief"}</span>
-                    </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
+              {briefs.map((brief) => {
+                const color = PILLAR_COLOR[brief.pillar] ?? PILLAR_COLOR.common_questions;
+                const pillarTitle = PILLAR_LABEL[brief.pillar] ?? brief.pillar;
+                const subQuestion = PILLAR_SUBTITLE[brief.pillar] ?? "Core angle & positioning strategy";
+
+                return (
+                  <div
+                    key={brief.id}
+                    className="flex flex-col justify-between p-5 rounded-2xl border border-zinc-800/80 bg-transparent hover:border-zinc-700/80 transition-colors font-sans space-y-4"
+                  >
+                    {/* Header: Sticky Note Icon + Title & Subtitle + Copy */}
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
+                          {/* Sticky Note Badge */}
+                          <div
+                            className={cn(
+                              "w-10 h-10 rounded-xl border flex flex-col items-center justify-center font-mono font-bold text-[9px] shrink-0 shadow-2xs select-none",
+                              color.noteBg,
+                              color.border,
+                              color.text
+                            )}
+                          >
+                            <span>{color.label}</span>
+                          </div>
+
+                          <div className="min-w-0">
+                            <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                              {pillarTitle}
+                            </h3>
+                            <p className="text-[11px] text-zinc-400 font-sans mt-0.5 leading-snug">
+                              {subQuestion}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCopy(
+                              `Hook: ${cleanString(brief.hook)}\nAngle: ${cleanString(brief.angle)}\nFormat: ${brief.suggestedFormat}\nCTA: ${brief.cta}`,
+                              `brief-${brief.id}`
+                            )
+                          }
+                          className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                        >
+                          {copiedKey === `brief-${brief.id}` ? (
+                            <Check size={12} className="text-emerald-400" />
+                          ) : (
+                            <Copy size={12} />
+                          )}
+                          <span>{copiedKey === `brief-${brief.id}` ? "Copied" : "Copy Brief"}</span>
+                        </button>
+                      </div>
+
+                      {/* Hook & Angle Text Body */}
+                      <div className="space-y-2 pt-1 font-sans border-t border-zinc-800/60">
+                        <p className="text-xs font-bold text-zinc-100 leading-relaxed font-sans">
+                          Hook: &quot;{cleanString(brief.hook)}&quot;
+                        </p>
+                        <p className="text-xs text-zinc-400 leading-relaxed font-sans">
+                          <strong className="text-zinc-300 font-sans">Angle:</strong> {cleanString(brief.angle)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Bottom Metadata: Format & CTA */}
+                    <div className="pt-3 border-t border-zinc-800/60 font-sans text-xs text-zinc-400 flex flex-col gap-1">
+                      <p>
+                        <strong className="text-zinc-300 font-mono text-[11px]">Format:</strong>{" "}
+                        <span className="text-zinc-400">{brief.suggestedFormat}</span>
+                      </p>
+                      <p>
+                        <strong className="text-zinc-300 font-mono text-[11px]">CTA:</strong>{" "}
+                        <span className="text-zinc-400">{brief.cta}</span>
+                      </p>
+                    </div>
                   </div>
-
-                  <p className="text-xs text-white font-bold font-sans leading-relaxed">
-                    Hook: &quot;{cleanString(brief.hook)}&quot;
-                  </p>
-
-                  <p className="text-xs text-zinc-300 font-sans leading-relaxed">
-                    <strong className="text-zinc-400 font-sans">Angle:</strong> {cleanString(brief.angle)}
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-4 pt-1 font-sans text-xs text-zinc-400">
-                    <p><strong className="text-zinc-300 font-mono text-[11px]">Format:</strong> {brief.suggestedFormat}</p>
-                    <p><strong className="text-zinc-300 font-mono text-[11px]">CTA:</strong> {brief.cta}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
 
               {briefs.length === 0 && (
-                <EmptyState
-                  icon={Megaphone}
-                  title="No Ad Briefs Generated"
-                  description="Ad creative briefs haven't been generated for this engagement yet."
-                />
+                <div className="col-span-full">
+                  <EmptyState
+                    icon={Megaphone}
+                    title="No Ad Briefs Generated"
+                    description="Ad creative briefs haven't been generated for this engagement yet."
+                  />
+                </div>
               )}
             </div>
           )}
