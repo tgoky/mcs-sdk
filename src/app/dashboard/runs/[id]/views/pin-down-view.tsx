@@ -15,11 +15,9 @@ import {
   AlertCircle,
   MoreHorizontal,
   ClipboardCheck,
-  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingPlatformLabel, hostingPlatformLabel } from "@/lib/copy";
-import { Dropdown } from "@/components/ui/dropdown";
 import { EmptyState } from "../_shared/empty-state";
 import type { PinDownDetail } from "../_shared/types";
 
@@ -74,7 +72,11 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
   const scriptPack = run.pinDownScriptPack;
   const voice = run.brandVoiceProfile;
   const stack = run.stack;
-  const buyerName = run.buyerName || "Client";
+
+  // Safe lookup for buyer / client name across potential relation properties
+  const runRecord = run as Record<string, any>;
+  const buyerName =
+    runRecord.buyerName || runRecord.buyer || runRecord.engagement?.buyer || "Client";
 
   // Derive status states for Asana rows
   const deploymentStatus: "on_track" | "at_risk" | "off_track" = isLive
