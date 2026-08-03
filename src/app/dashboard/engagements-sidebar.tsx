@@ -70,7 +70,7 @@ export async function EngagementsSidebar({ whopUserId }: { whopUserId: string })
           <Radio className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
           <span className="flex flex-col">
             <span>Connect provider</span>
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-normal">Recall.ai · per client</span>
+            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-normal">per client</span>
           </span>
         </Link>
       </nav>
