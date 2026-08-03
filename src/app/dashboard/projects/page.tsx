@@ -3,9 +3,10 @@ import { projects, projectEngagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { and, eq, isNull, desc, sql } from "drizzle-orm";
 import Link from "next/link";
-import { Plus, FolderKanban } from "lucide-react";
-import { SKILL_INFO } from "@/lib/copy";
-import type { SkillId } from "@/lib/skill-manifest";
+import { Plus, FolderKanban, ArrowRight } from "lucide-react";
+import { SKILLS, SKILL_INFO, type SkillName } from "@/lib/copy";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { SkillOrbitalRing } from "./skill-orbital-ring";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -30,79 +31,127 @@ export default async function ProjectsPage() {
     .orderBy(desc(projects.createdAt));
 
   return (
-    <div className="max-w-3xl">
-      <div className="flex items-center justify-between mb-1">
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Projects</h1>
-        <Link
-          href="/dashboard/projects/new"
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-gold text-gold-foreground rounded-md hover:opacity-90 transition-opacity"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          New project
-        </Link>
-      </div>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-        Group clients together and pick which skills run for them by default — e.g. Leak Map + Win-Back only, no
-        Pre-Call Read.
-      </p>
+    <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
+      
+      {/* --- HYPER-MICRO TIGHT DOT GRID OVERLAY --- */}
+      <div 
+        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_0.5px,transparent_0.5px)] dark:bg-[radial-gradient(#3f3f46_0.5px,transparent_0.5px)] [background-size:6px_6px] [mask-image:radial-gradient(ellipse_75%_75%_at_50%_30%,#000_50%,transparent_100%)] opacity-70" 
+        aria-hidden="true"
+      />
 
-      {rows.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">
-          <FolderKanban className="w-8 h-8 mx-auto text-zinc-300 dark:text-zinc-700 mb-3" />
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">No projects yet.</p>
-          <Link
-            href="/dashboard/projects/new"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-gold text-gold-foreground rounded-md hover:opacity-90 transition-opacity"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Create your first project
-          </Link>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {rows.map((project) => {
-            const skills = (project.enabledSkills ?? []) as SkillId[];
-            return (
+      {/* --- PAGE CONTENT --- */}
+      <div className="relative z-10 space-y-6 max-w-4xl mx-auto">
+        
+        {/* Header Hero Banner with Orbital Ring */}
+        <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-xs p-6 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-6 overflow-hidden">
+          <div className="space-y-2 max-w-md">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20">
+                Workspace Automation Archetypes
+              </span>
+            </div>
+            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              Project Archetypes
+            </h1>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed font-sans">
+              Group clients into shared automation templates. Define which skills run by default across your portfolio engagements.
+            </p>
+            <div className="pt-2">
               <Link
-                key={project.id}
-                href={`/dashboard/projects/${project.id}`}
-                className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-900/30 px-4 py-3.5 hover:border-zinc-300 dark:hover:border-zinc-800 transition-colors"
+                href="/dashboard/projects/new"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-lg shadow-xs hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.98] transition-all"
               >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 shrink-0 rounded-[6px] bg-teal-500/90 flex items-center justify-center">
-                      <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-                        <path d="M2 9L6 13L14 3" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </span>
-                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{project.name}</p>
-                  </div>
-                  {project.description && (
-                    <p className="text-xs text-zinc-500 dark:text-zinc-500 mt-1 truncate pl-7">{project.description}</p>
-                  )}
-                  <div className="flex items-center gap-1.5 mt-2 pl-7">
-                    {skills.length === 0 ? (
-                      <span className="text-[11px] text-zinc-400 dark:text-zinc-600">No default skills set</span>
-                    ) : (
-                      skills.map((skillId) => (
-                        <span
-                          key={skillId}
-                          className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
-                        >
-                          {SKILL_INFO[skillId]?.name ?? skillId}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </div>
-                <span className="text-xs text-zinc-400 dark:text-zinc-600 shrink-0 pl-3">
-                  {Number(project.memberCount)} client{Number(project.memberCount) === 1 ? "" : "s"}
-                </span>
+                <Plus size={14} strokeWidth={2.5} />
+                <span>Create New Project</span>
               </Link>
-            );
-          })}
+            </div>
+          </div>
+
+          {/* Interactive Orbital Skill Ring Showcase */}
+          <div className="shrink-0 py-2">
+            <SkillOrbitalRing size={200} />
+          </div>
         </div>
-      )}
+
+        {/* Projects Roster */}
+        {rows.length === 0 ? (
+          <div className="text-center py-16 border border-dashed border-zinc-200 dark:border-zinc-800/80 rounded-2xl bg-white/40 dark:bg-zinc-900/20">
+            <FolderKanban className="w-8 h-8 mx-auto text-zinc-400 dark:text-zinc-600 mb-3" />
+            <p className="text-sm font-bold text-zinc-800 dark:text-zinc-200 mb-1">No projects created yet</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4 max-w-sm mx-auto font-sans">
+              Set up your first project archetype to standardize skill configurations across clients.
+            </p>
+            <Link
+              href="/dashboard/projects/new"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-teal-600 text-white dark:bg-teal-500 rounded-lg shadow-xs hover:bg-teal-700 transition-all"
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              Create your first project
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-400 dark:text-zinc-500">
+              Active Projects ({rows.length})
+            </h2>
+
+            <div className="grid grid-cols-1 gap-3">
+              {rows.map((project) => {
+                const enabledSkillList = (project.enabledSkills ?? []) as SkillName[];
+
+                return (
+                  <Link
+                    key={project.id}
+                    href={`/dashboard/projects/${project.id}`}
+                    className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-900/50 p-4 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-all shadow-2xs"
+                  >
+                    <div className="space-y-2 min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors truncate">
+                          {project.name}
+                        </span>
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 shrink-0">
+                          {Number(project.memberCount)} client{Number(project.memberCount) === 1 ? "" : "s"}
+                        </span>
+                      </div>
+
+                      {project.description && (
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-1 font-sans">
+                          {project.description}
+                        </p>
+                      )}
+
+                      {/* Enabled Skills Badges Strip */}
+                      <div className="flex items-center gap-1.5 pt-1">
+                        {SKILLS.map((skill) => {
+                          const isEnabled = enabledSkillList.includes(skill);
+                          return (
+                            <div
+                              key={skill}
+                              title={`${SKILL_INFO[skill].name}: ${isEnabled ? "Active" : "Disabled"}`}
+                            >
+                              <SquishySkillBadge
+                                skill={skill}
+                                size={22}
+                                enabled={isEnabled}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center font-mono text-xs text-zinc-400">
+                      <span>Manage Archetype</span>
+                      <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

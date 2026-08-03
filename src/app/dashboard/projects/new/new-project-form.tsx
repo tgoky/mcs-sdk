@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { SKILLS, SKILL_INFO } from "@/lib/copy";
-import type { SkillId } from "@/lib/skill-manifest";
+import { SKILLS, SKILL_INFO, type SkillName } from "@/lib/copy";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 
 interface Client {
   engagementId: string;
@@ -15,11 +15,11 @@ export function NewProjectForm({ clients }: { clients: Client[] }) {
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [enabledSkills, setEnabledSkills] = useState<Set<SkillId>>(new Set());
+  const [enabledSkills, setEnabledSkills] = useState<Set<SkillName>>(new Set(SKILLS));
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
-  function toggleSkill(skillId: SkillId) {
+  function toggleSkill(skillId: SkillName) {
     setEnabledSkills((prev) => {
       const next = new Set(prev);
       if (next.has(skillId)) next.delete(skillId);
@@ -69,94 +69,127 @@ export function NewProjectForm({ clients }: { clients: Client[] }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Project name</label>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5 font-sans">
+      {/* Project Name */}
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+          Project Name
+        </label>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Funnel Monitoring — Q3 batch"
-          className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-gold/40"
+          placeholder="e.g. Core SaaS Client Stack"
+          className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/60 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500/40"
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Description (optional)</label>
+      {/* Description */}
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+          Description <span className="text-zinc-400 font-normal">(optional)</span>
+        </label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={2}
-          className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-gold/40 resize-none"
+          placeholder="Brief overview of this archetype's target offer or workflow..."
+          className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/60 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500/40 resize-none"
         />
       </div>
 
+      {/* Default Skills Selector with Squishy Badges */}
       <div className="flex flex-col gap-2">
-        <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-          Default skills — clients added to this project get exactly these turned on, everything else off
+        <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+          Default Skill Stack ({enabledSkills.size}/{SKILLS.length} Enabled)
         </label>
-        <div className="flex flex-col gap-1">
-          {SKILLS.map((skillId) => (
-            <label
-              key={skillId}
-              className="flex items-start gap-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-2.5 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors"
-            >
-              <input
-                type="checkbox"
-                checked={enabledSkills.has(skillId)}
-                onChange={() => toggleSkill(skillId)}
-                className="mt-0.5 accent-gold"
-              />
-              <span>
-                <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                  {SKILL_INFO[skillId].name}
-                </span>
-                <span className="block text-xs text-zinc-500 dark:text-zinc-500">{SKILL_INFO[skillId].description}</span>
-              </span>
-            </label>
-          ))}
+        <div className="flex flex-col gap-1.5">
+          {SKILLS.map((skillId) => {
+            const isEnabled = enabledSkills.has(skillId);
+            const info = SKILL_INFO[skillId];
+
+            return (
+              <div
+                key={skillId}
+                onClick={() => toggleSkill(skillId)}
+                className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                  isEnabled
+                    ? "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 shadow-2xs"
+                    : "border-zinc-200/50 dark:border-zinc-800/40 bg-zinc-50/40 dark:bg-zinc-950/20 opacity-60"
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <SquishySkillBadge skill={skillId} size={32} enabled={isEnabled} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                      {info.name}
+                    </p>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                      {info.description}
+                    </p>
+                  </div>
+                </div>
+
+                <input
+                  type="checkbox"
+                  checked={isEnabled}
+                  onChange={() => {}}
+                  className="h-4 w-4 rounded border-zinc-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
 
+      {/* Client Assignment */}
       <div className="flex flex-col gap-2">
-        <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-          Add clients now (optional — {selectedClients.size} selected)
+        <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+          Assign Clients Now ({selectedClients.size} selected)
         </label>
         {clients.length === 0 ? (
-          <p className="text-xs text-zinc-400 dark:text-zinc-600">No clients yet — create one first, or leave this project empty for now.</p>
+          <p className="text-xs text-zinc-400 font-mono">
+            No clients created yet. You can assign clients later.
+          </p>
         ) : (
-          <div className="max-h-52 overflow-y-auto flex flex-col gap-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 p-1.5">
-            {clients.map((client) => (
-              <label
-                key={client.engagementId}
-                className="flex items-center gap-2.5 rounded-md px-2 py-1.5 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedClients.has(client.engagementId)}
-                  onChange={() => toggleClient(client.engagementId)}
-                  className="accent-gold"
-                />
-                <span className="text-sm text-zinc-700 dark:text-zinc-300">{client.buyer}</span>
-              </label>
-            ))}
+          <div className="max-h-48 overflow-y-auto flex flex-col gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 p-2 bg-white/50 dark:bg-zinc-900/30">
+            {clients.map((client) => {
+              const isSelected = selectedClients.has(client.engagementId);
+              return (
+                <label
+                  key={client.engagementId}
+                  className="flex items-center justify-between rounded-lg px-2.5 py-1.5 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors"
+                >
+                  <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                    {client.buyer}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleClient(client.engagementId)}
+                    className="h-4 w-4 rounded border-zinc-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                  />
+                </label>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+      {error && <p className="text-xs font-mono text-rose-500">{error}</p>}
 
-      <div className="flex items-center gap-2">
+      {/* Action Buttons */}
+      <div className="flex items-center gap-2 pt-2">
         <button
           type="submit"
           disabled={isPending}
-          className="px-4 py-2 text-sm font-semibold bg-gold text-gold-foreground rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
+          className="px-4 py-2 text-xs font-bold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all disabled:opacity-50 cursor-pointer"
         >
-          {isPending ? "Creating…" : "Create project"}
+          {isPending ? "Creating Archetype..." : "Create Project"}
         </button>
         <button
           type="button"
           onClick={() => router.back()}
-          className="px-4 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+          className="px-4 py-2 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
         >
           Cancel
         </button>
