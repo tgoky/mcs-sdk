@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { LayoutGrid, Gavel, ArrowRight, Sparkles } from "lucide-react";
+import { LayoutGrid, Gavel, ArrowRight } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HOME_COPY, WORKSPACE_PRODUCTS, type WorkspaceProduct } from "@/lib/copy";
 
@@ -46,7 +46,7 @@ function ProductCard({ product }: { product: WorkspaceProduct }) {
     <div
       className={`group flex h-full flex-col justify-between rounded-2xl border p-6 transition-all duration-200 select-none ${
         isAvailable
-          ? "border-zinc-200/90 bg-white hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md dark:border-zinc-800/90 dark:bg-zinc-900/40 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/70"
+          ? "border-zinc-200/90 bg-white/80 hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md dark:border-zinc-800/90 dark:bg-zinc-900/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/80 backdrop-blur-xs"
           : "border-zinc-200/60 bg-zinc-50/50 opacity-75 dark:border-zinc-800/40 dark:bg-zinc-950/20"
       }`}
     >
@@ -113,8 +113,16 @@ export default async function WorkspaceHomePage() {
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-zinc-50/50 font-sans text-zinc-600 antialiased dark:bg-zinc-950 dark:text-zinc-400 transition-colors duration-200">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-8 sm:px-10 lg:px-12">
+    <div className="relative min-h-screen bg-zinc-50/50 font-sans text-zinc-600 antialiased dark:bg-zinc-950 dark:text-zinc-400 transition-colors duration-200 overflow-hidden">
+      
+      {/* --- BACKGROUND DOT GRID OVERLAY --- */}
+      <div 
+        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1.2px,transparent_1px)] [background-size:18px_18px] [mask-image:radial-gradient(ellipse_70%_70%_at_50%_30%,#000_60%,transparent_100%)]" 
+        aria-hidden="true"
+      />
+
+      {/* --- MAIN PAGE CONTENT --- */}
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-8 sm:px-10 lg:px-12">
 
         {/* Asana Header Bar */}
         <header className="flex items-center justify-between gap-4 border-b border-zinc-200/80 pb-5 dark:border-zinc-800/80">
@@ -148,7 +156,6 @@ export default async function WorkspaceHomePage() {
         <main className="flex-1 py-10">
           <div className="mb-8 space-y-1">
             <div className="flex items-center gap-1.5">
-              <Sparkles size={14} className="text-teal-600 dark:text-teal-400" />
               <h1 className="font-mono text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                 {HOME_COPY.title}
               </h1>
