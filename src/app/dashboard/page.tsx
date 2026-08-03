@@ -96,9 +96,9 @@ export default async function DashboardPage() {
   return (
     <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
       
-      {/* --- HIGH-DENSITY TIGHT MICRO DOT GRID OVERLAY --- */}
+      {/* --- HYPER-MICRO TIGHT DOT GRID (0.5px / 6px grid) --- */}
       <div 
-        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_0.8px,transparent_0.8px)] dark:bg-[radial-gradient(#27272a_0.8px,transparent_0.8px)] [background-size:10px_10px] [mask-image:radial-gradient(ellipse_75%_75%_at_50%_30%,#000_60%,transparent_100%)] opacity-80" 
+        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_0.5px,transparent_0.5px)] dark:bg-[radial-gradient(#3f3f46_0.5px,transparent_0.5px)] [background-size:6px_6px] [mask-image:radial-gradient(ellipse_75%_75%_at_50%_30%,#000_50%,transparent_100%)] opacity-70" 
         aria-hidden="true"
       />
 
@@ -118,7 +118,6 @@ export default async function DashboardPage() {
 
           {/* Action Toolbar */}
           <div className="flex items-center gap-2 self-start sm:self-auto">
-            {/* Accounts Link */}
             <Link
               href="/dashboard/engagements"
               title={copy.accountsLink || "Accounts"}
@@ -128,7 +127,6 @@ export default async function DashboardPage() {
               <span className="sr-only">{copy.accountsLink || "Accounts"}</span>
             </Link>
 
-            {/* Settings Link */}
             <Link
               href="/dashboard/settings"
               title="Settings"
@@ -138,10 +136,8 @@ export default async function DashboardPage() {
               <span className="sr-only">Settings</span>
             </Link>
 
-            {/* Vertical Separator */}
             <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-1" />
 
-            {/* Primary Action Button */}
             <Link
               href="/dashboard/engagements/new"
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-[#f7fcfe] dark:bg-[#f7fcfe]/10 text-sky-950 dark:text-[#f7fcfe] border border-[#f7fcfe] dark:border-[#f7fcfe]/30 rounded-md shadow-2xs hover:bg-[#f7fcfe]/80 dark:hover:bg-[#f7fcfe]/20 hover:border-[#f7fcfe] dark:hover:border-[#f7fcfe]/60 focus:outline-none focus:ring-2 focus:ring-[#f7fcfe]/40 active:scale-[0.98] transition-all font-mono"
