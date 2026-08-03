@@ -7,7 +7,7 @@ import { LiveExecutionFeed } from "./live-execution-feed";
 import { QueuePanel } from "./queue-panel";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import Link from "next/link";
-import { Settings, FolderKanban, UserPlus } from "lucide-react";
+import { Calendar } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -93,6 +93,12 @@ export default async function DashboardPage() {
     startedAt: r.startedAt.toISOString(),
   }));
 
+  const formattedDate = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
   return (
     <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
       
@@ -116,35 +122,10 @@ export default async function DashboardPage() {
             </p>
           </div>
 
-          {/* Action Toolbar */}
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <Link
-              href="/dashboard/engagements"
-              title={copy.accountsLink || "Accounts"}
-              className="p-2 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200/60 dark:border-zinc-800/80 rounded-md transition-all shadow-2xs active:scale-95"
-            >
-              <FolderKanban className="w-4 h-4" />
-              <span className="sr-only">{copy.accountsLink || "Accounts"}</span>
-            </Link>
-
-            <Link
-              href="/dashboard/settings"
-              title="Settings"
-              className="p-2 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200/60 dark:border-zinc-800/80 rounded-md transition-all shadow-2xs active:scale-95"
-            >
-              <Settings className="w-4 h-4" />
-              <span className="sr-only">Settings</span>
-            </Link>
-
-            <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-1" />
-
-            <Link
-              href="/dashboard/engagements/new"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-[#f7fcfe] dark:bg-[#f7fcfe]/10 text-sky-950 dark:text-[#f7fcfe] border border-[#f7fcfe] dark:border-[#f7fcfe]/30 rounded-md shadow-2xs hover:bg-[#f7fcfe]/80 dark:hover:bg-[#f7fcfe]/20 hover:border-[#f7fcfe] dark:hover:border-[#f7fcfe]/60 focus:outline-none focus:ring-2 focus:ring-[#f7fcfe]/40 active:scale-[0.98] transition-all font-mono"
-            >
-              <UserPlus className="w-3.5 h-3.5 stroke-[2.25]" />
-              <span>{copy.newClientButton}</span>
-            </Link>
+          {/* Date Display */}
+          <div className="inline-flex items-center gap-2 self-start sm:self-auto px-3 py-1.5 text-xs font-mono font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100/80 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-md shadow-2xs">
+            <Calendar className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
+            <span>{formattedDate}</span>
           </div>
         </div>
 
