@@ -26,14 +26,20 @@ export default async function NewProjectPage() {
         aria-hidden="true"
       />
 
-      <div className="relative z-10 max-w-2xl mx-auto space-y-4">
-        <div className="border-b border-zinc-200 dark:border-zinc-800 pb-3">
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
-            Create New Project Archetype
-          </h1>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Configure default skill toggles for clients assigned to this project template.
-          </p>
+      {/* --- PAGE CONTENT (Left-Aligned max-w-2xl) --- */}
+      <div className="relative z-10 max-w-2xl space-y-4">
+        <div className="border-b border-zinc-200 dark:border-zinc-800 pb-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              Create New Project Archetype
+            </h1>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Configure default skill toggles for clients assigned to this project template.
+            </p>
+          </div>
+          <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20 shrink-0">
+            Preview Mode
+          </span>
         </div>
 
         <NewProjectForm clients={clients} />

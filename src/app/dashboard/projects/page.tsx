@@ -42,13 +42,11 @@ export default async function ProjectsPage() {
       {/* --- PAGE CONTENT --- */}
       <div className="relative z-10 space-y-6 max-w-4xl mx-auto">
         
-        {/* Header Hero Banner with Orbital Ring */}
-        <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-xs p-6 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-6 overflow-hidden">
+        {/* Header Hero Banner with Transparent Background */}
+        <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-transparent p-6 flex flex-col sm:flex-row items-center justify-between gap-6 overflow-hidden">
           <div className="space-y-2 max-w-md">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20">
-                Workspace Automation Archetypes
-              </span>
+            
             </div>
             <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
               Project Archetypes
