@@ -19,7 +19,6 @@ import {
   Sliders,
   Plus,
   UserPlus,
-  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -179,8 +178,8 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
 
             <div className="absolute left-full bottom-0 ml-2 z-50 w-[640px] sm:w-[680px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
               <div className="flex min-h-[360px] divide-x divide-zinc-200 dark:divide-zinc-800">
-                {/* LEFT PANE */}
-                <div className="w-72 sm:w-80 p-4 bg-white dark:bg-zinc-900 flex flex-col justify-between shrink-0">
+                {/* LEFT PANE (Black background in Dark Theme) */}
+                <div className="w-72 sm:w-80 p-4 bg-zinc-50 dark:bg-black flex flex-col justify-between shrink-0">
                   <div className="space-y-4">
                     <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                       Account
@@ -275,11 +274,11 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
                       </Link>
                     </div>
 
+                    {/* Upgrade button without icon */}
                     <button
                       type="button"
-                      className="w-full mt-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold bg-teal-500/10 hover:bg-teal-500/20 dark:bg-teal-500/20 dark:hover:bg-teal-500/30 text-teal-800 dark:text-teal-200 border border-teal-500/30 dark:border-teal-500/40 rounded-md transition-colors"
+                      className="w-full mt-1 flex items-center justify-center px-3 py-2 text-xs font-semibold bg-teal-500/10 hover:bg-teal-500/20 dark:bg-teal-500/20 dark:hover:bg-teal-500/30 text-teal-800 dark:text-teal-200 border border-teal-500/30 dark:border-teal-500/40 rounded-md transition-colors"
                     >
-                      <Sparkles className="w-3.5 h-3.5 shrink-0 text-teal-600 dark:text-teal-300" />
                       <span>Upgrade account</span>
                     </button>
 
