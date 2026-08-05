@@ -1,9 +1,10 @@
 import { inngest, winBackEmailSmtpSequenceStart } from "@/lib/inngest";
 import { db } from "@/lib/db";
-import { engagements, winBackEnrollments, type EngagementStack } from "@/models/schema";
+import { engagements, winBackEnrollments, sequenceMessageLog, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { SMTPClient, parseSmtpCredential } from "@/lib/platforms/email";
+import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
 
 /**
  * Durable win-back email sender for the SMTP direct-send platform —
@@ -21,7 +22,7 @@ import { SMTPClient, parseSmtpCredential } from "@/lib/platforms/email";
 export const processWinBackEmailSmtpSequence = inngest.createFunction(
   { id: "process-win-back-email-smtp-sequence", triggers: [winBackEmailSmtpSequenceStart] },
   async ({ event, step }) => {
-    const { engagementId, enrollmentId, prospectEmail, prospectName } = event.data;
+    const { engagementId, runId, enrollmentId, prospectEmail, prospectName } = event.data;
 
     const tenant = await step.run("load-tenant", async () => {
       const [row] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
@@ -78,16 +79,54 @@ export const processWinBackEmailSmtpSequence = inngest.createFunction(
         return { sent, reason: "win-back enrollment no longer active — stopping" };
       }
 
-      await step.run(`send-${message.id}`, async () => {
-        const raw = await resolveCredential(engagementId, "smtp");
-        const config = parseSmtpCredential(raw);
-        await new SMTPClient(config).sendEmail(
-          prospectEmail,
-          message.subject ?? `A quick note for ${prospectName}`,
-          message.body
-        );
-      });
-      sent++;
+      try {
+        await step.run(`send-${message.id}`, async () => {
+          const raw = await resolveCredential(engagementId, "smtp");
+          const config = parseSmtpCredential(raw);
+          await new SMTPClient(config).sendEmail(
+            prospectEmail,
+            message.subject ?? `A quick note for ${prospectName}`,
+            message.body
+          );
+        });
+        await step.run(`log-sent-${message.id}`, async () => {
+          await db.insert(sequenceMessageLog).values({
+            engagementId,
+            runId,
+            sequenceType: "win_back_email_smtp",
+            enrollmentId,
+            messageId: message.id,
+            channel: "email",
+            prospectEmail,
+            status: "sent",
+          });
+        });
+        sent++;
+      } catch (sendErr: any) {
+        await step.run(`log-failed-${message.id}`, async () => {
+          const [logged] = await db
+            .insert(sequenceMessageLog)
+            .values({
+              engagementId,
+              runId,
+              sequenceType: "win_back_email_smtp",
+              enrollmentId,
+              messageId: message.id,
+              channel: "email",
+              prospectEmail,
+              status: "failed",
+              error: sendErr?.message ?? String(sendErr),
+            })
+            .returning({ id: sequenceMessageLog.id });
+
+          await maybeNotifySequenceFailure({
+            engagementId,
+            sequenceType: "win_back_email_smtp",
+            justLoggedId: logged.id,
+            error: sendErr?.message ?? String(sendErr),
+          });
+        });
+      }
     }
 
     return { sent };

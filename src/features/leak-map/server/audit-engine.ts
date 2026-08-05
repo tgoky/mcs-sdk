@@ -8,6 +8,7 @@ import { CalendlyClient } from "@/lib/platforms/booking";
 import { deliverAuditReport } from "@/lib/platforms/audit-output";
 import { getBenchmarkLines } from "./leak-map-benchmarks";
 import { logStep, finishRun, failRun } from "@/lib/run-log";
+import { notifyUser } from "@/lib/notify";
 import crypto from "crypto";
 import type { GetStepTools, Inngest } from "inngest";
 import { fetchWithTimeout } from "@/lib/http";
@@ -324,6 +325,24 @@ Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})
         }
         return res; // <--- Return so we can use it for the summary
       });
+
+      if (!deliveryResult.delivered) {
+        // One notification per failed delivery is fine here, unlike the
+        // per-message sequence senders — a Leak-Map run only fires once
+        // per engagement per scheduled cadence (weekly/monthly), so there's
+        // no risk of this flooding the same way a broken SMS credential
+        // failing dozens of in-flight messages would.
+        await notifyUser({
+          whopUserId: tenant.whopUserId,
+          engagementId: tenant.engagementId,
+          runId,
+          type: "report_delivery_failed",
+          severity: "warning",
+          title: `Leak-Map report failed to deliver`,
+          body: `The audit report generated successfully but delivery via ${deliveryResult.channel} failed: ${deliveryResult.error ?? "unknown error"}. The report itself is safe — view it from this run's page.`,
+          slackWebhookUrl: stack?.slack_webhook_url,
+        });
+      }
 
       // Clean terminal execution closeout with 5-field summary
       await finishRun(runId, {

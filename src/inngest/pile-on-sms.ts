@@ -1,9 +1,10 @@
 import { inngest, pileOnSmsSequenceStart } from "@/lib/inngest";
 import { db } from "@/lib/db";
-import { engagements, type EngagementStack } from "@/models/schema";
+import { engagements, sequenceMessageLog, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { sendSmsForTenant } from "@/lib/platforms/sms";
+import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
 
 /**
  * Pile-On recovery gap 1 — durable SMS sequence sender for the
@@ -20,6 +21,7 @@ export const processPileOnSmsSequence = inngest.createFunction(
   async ({ event, step }) => {
     const { 
       engagementId, 
+      runId,
       bookingId, 
       prospectEmail, 
       prospectPhone, 
@@ -140,23 +142,65 @@ export const processPileOnSmsSequence = inngest.createFunction(
       await step.sleepUntil(`delay-until-${msg.id}`, new Date(msg.targetTimestamp).toISOString());
 
       // Execute out-of-band message delivery step safely
-      await step.run(`send-${msg.id}`, async () => {
-        const apiKey = await resolveCredential(engagementId, stack.sms_platform!);
-        await sendSmsForTenant(
-          stack.sms_platform!,
-          apiKey,
-          {
-            ...stack.sms_platform_meta,
-            sms_compliance_footer_variant: stack?.sms_compliance_footer_variant,
-            sms_compliance_footer_custom: stack?.sms_compliance_footer_custom,
-          },
-          { email: prospectEmail, phone: prospectPhone },
-          msg.body,
-          stack.sms_a2p_10dlc_status
-        );
-      });
-      
-      sent++;
+      try {
+        await step.run(`send-${msg.id}`, async () => {
+          const apiKey = await resolveCredential(engagementId, stack.sms_platform!);
+          await sendSmsForTenant(
+            stack.sms_platform!,
+            apiKey,
+            {
+              ...stack.sms_platform_meta,
+              sms_compliance_footer_variant: stack?.sms_compliance_footer_variant,
+              sms_compliance_footer_custom: stack?.sms_compliance_footer_custom,
+            },
+            { email: prospectEmail, phone: prospectPhone },
+            msg.body,
+            stack.sms_a2p_10dlc_status
+          );
+        });
+        await step.run(`log-sent-${msg.id}`, async () => {
+          await db.insert(sequenceMessageLog).values({
+            engagementId,
+            runId,
+            sequenceType: "pile_on_sms",
+            bookingId,
+            messageId: msg.id,
+            channel: "sms",
+            prospectEmail,
+            prospectPhone,
+            status: "sent",
+          });
+        });
+        sent++;
+      } catch (sendErr: any) {
+        // Same principle as the win-back senders: log it and move on to
+        // the next scheduled message instead of aborting the rest of the
+        // sequence over one failed send.
+        await step.run(`log-failed-${msg.id}`, async () => {
+          const [logged] = await db
+            .insert(sequenceMessageLog)
+            .values({
+              engagementId,
+              runId,
+              sequenceType: "pile_on_sms",
+              bookingId,
+              messageId: msg.id,
+              channel: "sms",
+              prospectEmail,
+              prospectPhone,
+              status: "failed",
+              error: sendErr?.message ?? String(sendErr),
+            })
+            .returning({ id: sequenceMessageLog.id });
+
+          await maybeNotifySequenceFailure({
+            engagementId,
+            sequenceType: "pile_on_sms",
+            justLoggedId: logged.id,
+            error: sendErr?.message ?? String(sendErr),
+          });
+        });
+      }
     }
 
     return { sent };

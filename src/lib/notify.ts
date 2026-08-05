@@ -32,7 +32,9 @@ export type NotificationType =
   | "credential_check_error"
   | "lost_deal_swept"
   | "weekly_metrics"
-  | "conversation_intelligence_objection_found";
+  | "conversation_intelligence_objection_found"
+  | "report_delivery_failed"
+  | "sequence_message_failed";
 
 export type NotificationSeverity = "info" | "warning" | "critical";
 

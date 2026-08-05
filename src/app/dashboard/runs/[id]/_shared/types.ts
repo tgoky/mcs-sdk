@@ -105,13 +105,6 @@ export interface BriefedCall {
   researchStatus: string | null;
   aiSynthesisStatus: string | null;
   createdAt: string;
-  // Latest brief_outcome_log row for this call (keyed by bookingId ===
-  // briefedCallsLog.callId), merged in by the detail route. Can arrive
-  // either from a rep tapping a Slack interactive button
-  // (src/app/api/slack/interactions/route.ts) or from the "Log Sales Call
-  // Outcome" control on this page — both write to the same table, so both
-  // paths converge on the same value here. Null if nobody has logged one.
-  outcome: "showed" | "no_show" | "rescheduled" | null;
 }
 
 export interface PileOnSend {
@@ -127,6 +120,28 @@ export interface PileOnSend {
   createdAt: string;
 }
 
+// One row per actual send attempt from the durable multi-message sequence
+// functions (win-back-sms.ts, win-back-email-smtp.ts, pile-on-sms.ts) —
+// previously nothing was recorded for any message past the first, so a
+// run's UI had no way to know whether a later message in the sequence
+// actually sent.
+export interface SequenceMessage {
+  id: string;
+  engagementId: string;
+  runId: string | null;
+  sequenceType: "win_back_sms" | "win_back_email_smtp" | "pile_on_sms";
+  enrollmentId: string | null;
+  bookingId: string | null;
+  messageId: string;
+  channel: "sms" | "email";
+  prospectEmail: string | null;
+  prospectPhone: string | null;
+  status: "sent" | "failed";
+  error: string | null;
+  sentAt: string;
+  createdAt: string;
+}
+
 export interface WinBackEnrollment {
   id: string;
   engagementId: string;
@@ -135,7 +150,7 @@ export interface WinBackEnrollment {
   runId: string | null;
   enrolledAt: string;
   recoveryWindowDays: number;
-  status: "active" | "rebooked" | "lost" | "reply_exited" | "manual_override";
+  status: "active" | "rebooked" | "lost" | "reply_exited";
   lostAt: string | null;
   freshRescheduleLink: string | null;
   exitReason: string | null;
@@ -176,7 +191,7 @@ export interface AuditRow {
 }
 
 export type PreCallReadDetail = { run: RunDetailBase; calls: BriefedCall[] };
-export type PileOnDetail = { run: RunDetailBase; send: PileOnSend | null };
+export type PileOnDetail = { run: RunDetailBase; send: PileOnSend | null; smsMessages: SequenceMessage[] };
 export type WinBackDetail = { run: RunDetailBase; enrollment: WinBackEnrollment | null; sendLog: WinBackSendLogRow[] };
 export type LeakMapDetail = { run: RunDetailBase; audit: AuditRow | null };
 export type PinDownDetail = { run: RunDetailBase };

@@ -28,14 +28,14 @@ import {
   skillRuns,
   engagements,
   briefedCallsLog,
-  briefOutcomeLog,
   pileOnSendLog,
   winBackEnrollments,
   winBackSendLog,
   auditRunsLog,
+  sequenceMessageLog,
 } from "@/models/schema";
 import { getSession } from "@/lib/session";
-import { and, eq, asc, inArray } from "drizzle-orm";
+import { and, eq, asc } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -85,36 +85,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           .from(briefedCallsLog)
           .where(eq(briefedCallsLog.runId, row.id))
           .orderBy(asc(briefedCallsLog.callTime));
-
-        // brief_outcome_log is keyed by bookingId === briefedCallsLog.callId
-        // (not briefedCallsLog.id — see the module comment on that table)
-        // and is append-only, written from either the Slack interactive
-        // buttons (src/app/api/slack/interactions/route.ts) or this run's
-        // own "Log Sales Call Outcome" control
-        // (src/app/api/pre-call-read/calls/[id]/outcome/route.ts). Pull the
-        // latest row per call so both paths converge on one value here.
-        const bookingIds = calls.map((c) => c.callId);
-        const outcomeRows = bookingIds.length
-          ? await db
-              .select({
-                bookingId: briefOutcomeLog.bookingId,
-                outcome: briefOutcomeLog.outcome,
-                loggedAt: briefOutcomeLog.loggedAt,
-              })
-              .from(briefOutcomeLog)
-              .where(and(eq(briefOutcomeLog.engagementId, row.engagementId), inArray(briefOutcomeLog.bookingId, bookingIds)))
-              .orderBy(asc(briefOutcomeLog.loggedAt))
-          : [];
-
-        const latestOutcomeByBookingId = new Map<string, string>();
-        for (const o of outcomeRows) latestOutcomeByBookingId.set(o.bookingId, o.outcome); // later rows win
-
-        const callsWithOutcome = calls.map((c) => ({
-          ...c,
-          outcome: latestOutcomeByBookingId.get(c.callId) ?? null,
-        }));
-
-        return NextResponse.json({ run: row, calls: callsWithOutcome });
+        return NextResponse.json({ run: row, calls });
       }
 
       case "pile-on": {
@@ -123,7 +94,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           .from(pileOnSendLog)
           .where(eq(pileOnSendLog.runId, row.id))
           .limit(1);
-        return NextResponse.json({ run: row, send: send ?? null });
+        // Real per-message SMS outcomes from the durable sequence sender
+        // (src/inngest/pile-on-sms.ts) — previously the only send data
+        // available for this run was the AI Personalization attempt
+        // above; the SMS/email/ad-attribution channel cards had nothing
+        // to read and fell back to showing configuration state instead.
+        const smsMessages = await db
+          .select()
+          .from(sequenceMessageLog)
+          .where(and(eq(sequenceMessageLog.runId, row.id), eq(sequenceMessageLog.sequenceType, "pile_on_sms")))
+          .orderBy(asc(sequenceMessageLog.sentAt));
+        return NextResponse.json({ run: row, send: send ?? null, smsMessages });
       }
 
       case "win-back": {

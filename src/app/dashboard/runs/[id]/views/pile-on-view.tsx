@@ -24,7 +24,8 @@ import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
 import { StatusPill } from "../_shared/status-pill";
 import { EmptyState } from "../_shared/empty-state";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import type { PileOnDetail } from "../_shared/types";
+import type { PileOnDetail, SequenceMessage } from "../_shared/types";
+import type { RunStep } from "@/models/schema";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 
@@ -39,8 +40,8 @@ interface InspectableChannelCard {
   payload: any;
 }
 
-export function PileOnView({ detail }: { detail: PileOnDetail }) {
-  const { run, send } = detail;
+export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: RunStep[] }) {
+  const { run, send, smsMessages } = detail;
   const [mode, setMode] = useState<RunViewMode>("calendar");
   const [filterText, setFilterText] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -52,6 +53,21 @@ export function PileOnView({ detail }: { detail: PileOnDetail }) {
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2000);
   };
+
+  // Most recent step for a given phase — a phase can appear twice
+  // (running, then success/failed), so this reads the resolved outcome
+  // rather than an early "running" entry.
+  const latestStepFor = (phase: string): RunStep | undefined => {
+    const matches = steps.filter((s) => s.phase === phase);
+    return matches[matches.length - 1];
+  };
+
+  const emailStep = latestStepFor("pile_on_enrollment");
+  const adDataStep = latestStepFor("ad_data_cohort");
+  const smsDispatchStep = latestStepFor("sms_enrollment");
+
+  const smsSentCount = smsMessages.filter((m) => m.status === "sent").length;
+  const smsFailedCount = smsMessages.filter((m) => m.status === "failed").length;
 
   const outcomeTone: Tone = send?.error
     ? "danger"
@@ -86,37 +102,70 @@ export function PileOnView({ detail }: { detail: PileOnDetail }) {
         id: "email-channel",
         type: "email",
         title: "Email Sequence Dispatch",
-        subtitle: emailPlatformLabel(run.stack?.email_platform),
-        badge: "Enrolled",
-        tone: "success",
+        subtitle: emailStep
+          ? emailStep.detail ?? emailPlatformLabel(run.stack?.email_platform)
+          : run.stack?.email_platform
+          ? `${emailPlatformLabel(run.stack.email_platform)} — no enrollment attempt recorded on this run`
+          : "Not configured",
+        badge: emailStep?.status === "success" ? "Enrolled" : emailStep?.status === "failed" ? "Failed" : emailStep?.status === "running" ? "In progress" : "Not attempted",
+        tone: emailStep?.status === "success" ? "success" : emailStep?.status === "failed" ? "danger" : emailStep?.status === "running" ? "info" : "neutral",
         icon: Mail,
-        payload: { platform: emailPlatformLabel(run.stack?.email_platform), raw: run.stack?.email_platform },
+        payload: { platform: emailPlatformLabel(run.stack?.email_platform), raw: run.stack?.email_platform, step: emailStep },
       },
       {
         id: "sms-channel",
         type: "sms",
         title: "SMS Sequence Dispatch",
         subtitle:
-          run.stack?.sms_platform && run.stack.sms_platform !== "none"
-            ? smsPlatformLabel(run.stack.sms_platform)
-            : "Not configured",
-        badge: run.stack?.sms_platform && run.stack.sms_platform !== "none" ? "Scheduled" : "Disabled",
-        tone: run.stack?.sms_platform && run.stack.sms_platform !== "none" ? "info" : "neutral",
+          !run.stack?.sms_platform || run.stack.sms_platform === "none"
+            ? "Not configured"
+            : smsMessages.length > 0
+            ? `${smsSentCount} sent${smsFailedCount > 0 ? `, ${smsFailedCount} failed` : ""} of ${smsMessages.length} attempted so far`
+            : smsDispatchStep?.status === "success"
+            ? "Sequence dispatched — no messages sent yet (still waiting on scheduled times)"
+            : smsDispatchStep?.status === "failed"
+            ? (smsDispatchStep.detail ?? "Sequence failed to start")
+            : `${smsPlatformLabel(run.stack.sms_platform)} — no dispatch recorded on this run`,
+        badge:
+          !run.stack?.sms_platform || run.stack.sms_platform === "none"
+            ? "Disabled"
+            : smsFailedCount > 0 && smsSentCount === 0
+            ? "Failed"
+            : smsFailedCount > 0
+            ? `${smsSentCount} sent, ${smsFailedCount} failed`
+            : smsSentCount > 0
+            ? `${smsSentCount} sent`
+            : smsDispatchStep?.status === "failed"
+            ? "Failed"
+            : "Scheduled",
+        tone:
+          !run.stack?.sms_platform || run.stack.sms_platform === "none"
+            ? "neutral"
+            : smsFailedCount > 0 && smsSentCount === 0
+            ? "danger"
+            : smsFailedCount > 0
+            ? "warning"
+            : smsSentCount > 0
+            ? "success"
+            : smsDispatchStep?.status === "failed"
+            ? "danger"
+            : "info",
         icon: MessageSquare,
-        payload: { platform: smsPlatformLabel(run.stack?.sms_platform), raw: run.stack?.sms_platform },
+        payload: { platform: smsPlatformLabel(run.stack?.sms_platform), raw: run.stack?.sms_platform, messages: smsMessages, dispatchStep: smsDispatchStep },
       },
       {
         id: "ad-data-channel",
         type: "ad_data",
         title: "Ad Attribution Cohort Sync",
-        subtitle:
-          run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none"
-            ? adDataPlatformLabel(run.stack.ad_data_platform)
-            : "Not configured",
-        badge: run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none" ? "Synced" : "Disabled",
-        tone: run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none" ? "info" : "neutral",
+        subtitle: adDataStep
+          ? adDataStep.detail ?? adDataPlatformLabel(run.stack?.ad_data_platform)
+          : run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none"
+          ? `${adDataPlatformLabel(run.stack.ad_data_platform)} — no sync attempt recorded on this run`
+          : "Not configured",
+        badge: adDataStep?.status === "success" ? "Synced" : adDataStep?.status === "failed" ? "Failed" : adDataStep?.status === "running" ? "In progress" : "Not attempted",
+        tone: adDataStep?.status === "success" ? "success" : adDataStep?.status === "failed" ? "danger" : adDataStep?.status === "running" ? "info" : "neutral",
         icon: BarChart3,
-        payload: { platform: adDataPlatformLabel(run.stack?.ad_data_platform), raw: run.stack?.ad_data_platform },
+        payload: { platform: adDataPlatformLabel(run.stack?.ad_data_platform), raw: run.stack?.ad_data_platform, step: adDataStep },
       },
     ];
 
@@ -130,7 +179,7 @@ export function PileOnView({ detail }: { detail: PileOnDetail }) {
       { id: "messaging", title: "2. Messaging Channels", cards: filtered.filter((c) => c.type === "email" || c.type === "sms") },
       { id: "attribution", title: "3. Ad Attribution", cards: filtered.filter((c) => c.type === "ad_data") },
     ];
-  }, [send, run.stack, filterText]);
+  }, [send, run.stack, filterText, emailStep, adDataStep, smsDispatchStep, smsMessages, smsSentCount, smsFailedCount]);
 
   if (!send) {
     return (
@@ -593,9 +642,50 @@ function PileOnDetailDrawer({
                     <p>Connected Platform: {card.subtitle}</p>
                     <p>Target Prospect: {card.payload?.send?.prospectEmail ?? "Booking event prospect"}</p>
                   </div>
-                  <p className="text-xs text-zinc-400 leading-relaxed font-sans bg-zinc-900/40 border border-zinc-800 p-3 rounded-xl">
-                    Outcomes for individual platform calls (e.g. Klaviyo list enrollments or Twilio SMS dispatches) are processed asynchronously via Inngest workers. See the Steps panel for full network trace logs.
-                  </p>
+
+                  {card.type === "sms" && card.payload.messages?.length > 0 ? (
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                        Send History ({card.payload.messages.length} attempted)
+                      </span>
+                      {card.payload.messages.map((m: SequenceMessage) => (
+                        <div
+                          key={m.id}
+                          className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 font-mono text-xs space-y-1"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-zinc-300">{m.messageId}</span>
+                            <StatusPill tone={m.status === "sent" ? "success" : "danger"}>
+                              {m.status === "sent" ? "Sent" : "Failed"}
+                            </StatusPill>
+                          </div>
+                          <p className="text-zinc-500">{new Date(m.sentAt).toLocaleString()}</p>
+                          {m.error && <p className="text-rose-400">{m.error}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : card.type === "sms" ? (
+                    <p className="text-xs text-zinc-400 leading-relaxed font-sans bg-zinc-900/40 border border-zinc-800 p-3 rounded-xl">
+                      No individual messages have sent yet — they fire on the schedule generated for this booking, each logged here the moment it goes out.
+                    </p>
+                  ) : (card.type === "email" || card.type === "ad_data") && card.payload.step ? (
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3.5 font-mono text-xs text-zinc-300 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span>Last attempt outcome</span>
+                        <StatusPill
+                          tone={card.payload.step.status === "success" ? "success" : card.payload.step.status === "failed" ? "danger" : "info"}
+                        >
+                          {card.payload.step.status}
+                        </StatusPill>
+                      </div>
+                      <p className="text-zinc-500">{new Date(card.payload.step.completedAt ?? card.payload.step.startedAt).toLocaleString()}</p>
+                      {card.payload.step.detail && <p className="text-zinc-400">{card.payload.step.detail}</p>}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-400 leading-relaxed font-sans bg-zinc-900/40 border border-zinc-800 p-3 rounded-xl">
+                      No dispatch attempt is recorded for this channel on this run.
+                    </p>
+                  )}
                 </div>
               )}
             </SheetBody>

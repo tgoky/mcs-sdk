@@ -1,9 +1,10 @@
 import { inngest, winBackSmsSequenceStart } from "@/lib/inngest";
 import { db } from "@/lib/db";
-import { engagements, winBackEnrollments, type EngagementStack } from "@/models/schema";
+import { engagements, winBackEnrollments, sequenceMessageLog, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { sendSmsForTenant } from "@/lib/platforms/sms";
+import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
 
 /**
  * Win-Back recovery gap 2 — durable SMS sequence sender for the
@@ -22,7 +23,7 @@ import { sendSmsForTenant } from "@/lib/platforms/sms";
 export const processWinBackSmsSequence = inngest.createFunction(
   { id: "process-win-back-sms-sequence", triggers: [winBackSmsSequenceStart] },
   async ({ event, step }) => {
-    const { engagementId, enrollmentId, prospectEmail, prospectPhone } = event.data;
+    const { engagementId, runId, enrollmentId, prospectEmail, prospectPhone } = event.data;
 
     const tenant = await step.run("load-tenant", async () => {
       const [row] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
@@ -80,18 +81,62 @@ export const processWinBackSmsSequence = inngest.createFunction(
         return { sent, reason: "win-back enrollment no longer active — stopping" };
       }
 
-      await step.run(`send-${message.id}`, async () => {
-        const apiKey = await resolveCredential(engagementId, stack.sms_platform!);
-        await sendSmsForTenant(
-          stack.sms_platform!,
-          apiKey,
-          stack.sms_platform_meta,
-          { email: prospectEmail, phone: prospectPhone },
-          message.body,
-          stack.sms_a2p_10dlc_status
-        );
-      });
-      sent++;
+      try {
+        await step.run(`send-${message.id}`, async () => {
+          const apiKey = await resolveCredential(engagementId, stack.sms_platform!);
+          await sendSmsForTenant(
+            stack.sms_platform!,
+            apiKey,
+            stack.sms_platform_meta,
+            { email: prospectEmail, phone: prospectPhone },
+            message.body,
+            stack.sms_a2p_10dlc_status
+          );
+        });
+        await step.run(`log-sent-${message.id}`, async () => {
+          await db.insert(sequenceMessageLog).values({
+            engagementId,
+            runId,
+            sequenceType: "win_back_sms",
+            enrollmentId,
+            messageId: message.id,
+            channel: "sms",
+            prospectEmail,
+            prospectPhone,
+            status: "sent",
+          });
+        });
+        sent++;
+      } catch (sendErr: any) {
+        // Logged, then move on to the next scheduled message rather than
+        // aborting the rest of the cadence over one failed send — a
+        // transient Twilio error on message 2 shouldn't cancel messages
+        // 3 through 5 too.
+        await step.run(`log-failed-${message.id}`, async () => {
+          const [logged] = await db
+            .insert(sequenceMessageLog)
+            .values({
+              engagementId,
+              runId,
+              sequenceType: "win_back_sms",
+              enrollmentId,
+              messageId: message.id,
+              channel: "sms",
+              prospectEmail,
+              prospectPhone,
+              status: "failed",
+              error: sendErr?.message ?? String(sendErr),
+            })
+            .returning({ id: sequenceMessageLog.id });
+
+          await maybeNotifySequenceFailure({
+            engagementId,
+            sequenceType: "win_back_sms",
+            justLoggedId: logged.id,
+            error: sendErr?.message ?? String(sendErr),
+          });
+        });
+      }
     }
 
     return { sent };

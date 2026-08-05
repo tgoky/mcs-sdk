@@ -993,7 +993,7 @@ export const notifications = pgTable("notifications", {
   whopUserId: text("whop_user_id").notNull(),
   engagementId: text("engagement_id").references(() => engagements.engagementId),
   runId: uuid("run_id"),
-  // "run_failed" | "run_timed_out" | "credential_invalid" | "credential_check_error"
+  // "run_failed" | "run_timed_out" | "credential_invalid" | "credential_check_error" | "report_delivery_failed" | "sequence_message_failed"
   type: text("type").notNull(),
   severity: text("severity").notNull().default("info"), // "info" | "warning" | "critical"
   title: text("title").notNull(),
@@ -1150,6 +1150,48 @@ export const pileOnSendLog = pgTable("pile_on_send_log", {
   error: text("error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// Every message past the first in a Win-Back or Pile-On cadence sends from
+// a separate durable Inngest function (win-back-sms.ts, win-back-email-
+// smtp.ts, pile-on-sms.ts) that runs hours-to-days after the original run
+// completed — none of them wrote anything anywhere on send. Once the
+// initial run showed "success," there was no way to tell whether message
+// 3 of 5 actually went out or silently failed. This table is that missing
+// record — append-only (a step-level retry writes another row rather than
+// overwriting, so a flaky-then-recovered send is visible in the history,
+// not just its final state), one row per attempt, both those functions'
+// UI (win-back-view.tsx's calendar/list, pile-on-view.tsx's channel
+// cards) can now query it directly instead of inferring status from
+// whether the scheduled date/config has merely passed.
+export const sequenceMessageLog = pgTable("sequence_message_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  // The skillRuns row that originally dispatched this sequence — threaded
+  // through the *SequenceStart event payload so this table's rows can be
+  // queried straight off run_id, same as pileOnSendLog/briefedCallsLog,
+  // instead of needing to reverse-derive it from bookingId/enrollmentId.
+  runId: uuid("run_id"),
+  // "win_back_sms" | "win_back_email_smtp" | "pile_on_sms"
+  sequenceType: text("sequence_type").notNull(),
+  // winBackEnrollments.id for the two win-back senders; null for pile-on,
+  // which has no enrollment table and correlates via bookingId instead.
+  enrollmentId: text("enrollment_id"),
+  bookingId: text("booking_id"),
+  // The asset-map entry id (e.g. "sms_2", or a win-back email/SMS id) —
+  // this is what a run's UI correlates against to know which specific
+  // scheduled touchpoint this row is reporting on.
+  messageId: text("message_id").notNull(),
+  channel: text("channel").notNull(), // "sms" | "email"
+  prospectEmail: text("prospect_email"),
+  prospectPhone: text("prospect_phone"),
+  status: text("status").notNull(), // "sent" | "failed"
+  error: text("error"),
+  sentAt: timestamp("sent_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Pin-Down recovery gap 9. A single global table (not per-engagement — the
 // canonical docs URL for "webflow" is the same regardless of which buyer
 // is asking) that a nightly cron HEAD-checks so stale/broken doc links

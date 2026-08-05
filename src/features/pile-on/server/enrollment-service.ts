@@ -294,6 +294,7 @@ export async function handleInboundBookingEvent(
               inngest.send(
                 pileOnSmsSequenceStart.create({
                   engagementId: tenant.engagementId,
+                  runId,
                   bookingId,
                   prospectEmail,
                   prospectPhone,
@@ -482,6 +483,7 @@ export async function handleInboundBookingEvent(
             inngest.send(
               winBackSmsSequenceStart.create({
                 engagementId: tenant.engagementId,
+                runId,
                 enrollmentId: enrollmentRow.id,
                 prospectEmail,
                 prospectPhone,
@@ -512,6 +514,7 @@ export async function handleInboundBookingEvent(
           inngest.send(
             winBackEmailSmtpSequenceStart.create({
               engagementId: tenant.engagementId,
+              runId,
               enrollmentId: enrollmentRow.id,
               prospectEmail,
               prospectName,

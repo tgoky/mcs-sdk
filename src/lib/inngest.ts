@@ -8,7 +8,6 @@ import { Inngest, eventType, staticSchema } from "inngest";
 // stores event payloads, and the engagement's `stack` jsonb carries
 // slack_webhook_url / webhook_signing_secret in plaintext. The worker
 // re-fetches the tenant row itself instead.
-//
 export type SkillRunExecuteData = {
   runId: string;
   engagementId: string;
@@ -117,6 +116,7 @@ export const bookingPollEngagement = eventType("pin-down/booking-poll-engagement
 // a chronological timeline instead of breaking on backward relative minute deltas.
 export type PileOnSmsSequenceStartData = {
   engagementId: string;
+  runId: string;
   bookingId: string;
   prospectEmail: string;
   prospectPhone: string;
@@ -136,6 +136,7 @@ export const pileOnSmsSequenceStart = eventType("pile-on/sms-sequence-start", {
 // src/inngest/win-back-sms.ts.
 export type WinBackSmsSequenceStartData = {
   engagementId: string;
+  runId: string;
   enrollmentId: string;
   prospectEmail: string;
   prospectPhone: string;
@@ -152,6 +153,7 @@ export const winBackSmsSequenceStart = eventType("win-back/sms-sequence-start", 
 // for Twilio/GHL SMS above. See src/inngest/win-back-email-smtp.ts.
 export type WinBackEmailSmtpSequenceStartData = {
   engagementId: string;
+  runId: string;
   enrollmentId: string;
   prospectEmail: string;
   prospectName: string;

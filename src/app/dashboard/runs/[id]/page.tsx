@@ -102,14 +102,14 @@ function RunStatusBadge({ status }: { status: string }) {
   );
 }
 
-function SkillView({ detail, onRefreshDetail }: { detail: RunDetailPayload; onRefreshDetail: () => void }) {
+function SkillView({ detail, steps }: { detail: RunDetailPayload; steps: RunStep[] }) {
   switch (detail.run.skillName) {
     case "pre-call-read":
-      return "calls" in detail ? <PreCallReadView detail={detail} onRefreshDetail={onRefreshDetail} /> : null;
+      return "calls" in detail ? <PreCallReadView detail={detail} /> : null;
     case "pile-on":
-      return "send" in detail ? <PileOnView detail={detail} /> : null;
+      return "send" in detail ? <PileOnView detail={detail} steps={steps} /> : null;
     case "win-back":
-      return "enrollment" in detail ? <WinBackView detail={detail} onRefreshDetail={onRefreshDetail} /> : null;
+      return "enrollment" in detail ? <WinBackView detail={detail} /> : null;
     case "leak-map":
       return "audit" in detail ? <LeakMapView detail={detail} /> : null;
     case "pin-down":
@@ -207,35 +207,26 @@ export default function RunDetailPage() {
     return () => controller.abort();
   }, [runId]);
 
-  // Exposed (not just an inline effect) so the skill views below can pull
-  // the DB's fresh truth after a mutation — e.g. once Win-Back's "Stop
-  // Cadence" or Pre-Call Read's "Log Outcome" / "Re-send to Slack" actually
-  // write something server-side, local `detail` state needs to catch up to
-  // what's really in Postgres now, rather than trusting local-only
-  // component state. Same pattern as fetchRun + CancelRunButton's
-  // onCancelled={() => fetchRun()} one level up, against the base run row.
-  const fetchDetail = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const response = await fetch(`/api/skill-runs/${runId}/detail`, { cache: "no-store", signal });
-      if (!response.ok) return;
-      const data = await response.json();
-      setDetail(data);
-    } catch (cause: unknown) {
-      if (cause instanceof Error && cause.name !== "AbortError") {
-        console.error("Failed to load skill-specific run detail:", cause.message);
-      }
-    }
-  }, [runId]);
-
   useEffect(() => {
     if (!runId) return;
     const controller = new AbortController();
     setDetailLoading(true);
-    fetchDetail(controller.signal).finally(() => {
-      if (!controller.signal.aborted) setDetailLoading(false);
-    });
+    (async () => {
+      try {
+        const response = await fetch(`/api/skill-runs/${runId}/detail`, { cache: "no-store", signal: controller.signal });
+        if (!response.ok) return;
+        const data = await response.json();
+        setDetail(data);
+      } catch (cause: unknown) {
+        if (cause instanceof Error && cause.name !== "AbortError") {
+          console.error("Failed to load skill-specific run detail:", cause.message);
+        }
+      } finally {
+        if (!controller.signal.aborted) setDetailLoading(false);
+      }
+    })();
     return () => controller.abort();
-  }, [runId, fetchDetail]);
+  }, [runId]);
 
   const isRunning = run?.status === "running";
   useEffect(() => {
@@ -356,7 +347,7 @@ export default function RunDetailPage() {
             <Loader2 className="h-5 w-5 animate-spin text-zinc-600" />
           </div>
         ) : detail && detail.run.id === run.id ? (
-          <SkillView detail={detail} onRefreshDetail={() => fetchDetail()} />
+          <SkillView detail={detail} steps={steps} />
         ) : (
           <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 px-6 py-10 text-center text-xs text-zinc-500">
             Skill-specific detail isn't available for this run.
