@@ -48,6 +48,17 @@ export function useSmartPrefill(setForm: Dispatch<SetStateAction<FormData>>) {
     }
   }
 
+  // "Start over" needs to wipe this too — prefillDomain/prefillError/
+  // prefillNotes live outside `form`, so resetting form alone (see
+  // discardDraft in use-draft-persistence.ts) left the Smart Prefill box
+  // showing a stale domain, notes, or error after a reset.
+  function resetPrefill() {
+    setPrefillDomain("");
+    setPrefillLoading(false);
+    setPrefillError(null);
+    setPrefillNotes([]);
+  }
+
   return {
     prefillDomain,
     setPrefillDomain,
@@ -55,5 +66,6 @@ export function useSmartPrefill(setForm: Dispatch<SetStateAction<FormData>>) {
     prefillError,
     prefillNotes,
     runSmartPrefill,
+    resetPrefill,
   };
 }

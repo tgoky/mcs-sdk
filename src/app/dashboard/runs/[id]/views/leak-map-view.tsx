@@ -218,7 +218,9 @@ export function LeakMapView({ detail }: { detail: LeakMapDetail }) {
             <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 font-sans">
               {filteredIssues.length === 0 ? (
                 <div className="p-8 text-center text-xs text-zinc-500 italic font-sans">
-                  No funnel metrics match your search filter.
+                  {issues.length === 0
+                    ? "No funnel issues detected in this audit — the current metrics are within normal range."
+                    : "No funnel metrics match your search filter."}
                 </div>
               ) : (
                 <table className="w-full text-left text-xs font-sans">

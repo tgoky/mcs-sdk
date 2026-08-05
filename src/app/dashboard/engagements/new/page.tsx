@@ -226,7 +226,11 @@ export default function NewEngagementPage() {
             </button>
             <button
               type="button"
-              onClick={discardDraft}
+              onClick={() => {
+                discardDraft();
+                smartPrefill.resetPrefill();
+                emailIntegrations.resetIntegrations();
+              }}
     className="px-2 py-1 rounded-sm border bg-background/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
               style={{ color: "var(--text-secondary)", borderColor: "var(--border)" }}
             >
@@ -291,6 +295,7 @@ export default function NewEngagementPage() {
             allValidationErrors={allValidationErrors}
             setStep={setStep}
             error={error}
+            set={set}
           />
         )}
       </div>

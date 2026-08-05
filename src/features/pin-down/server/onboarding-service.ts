@@ -5,7 +5,7 @@ import { resolveCredential } from "@/lib/credentials";
 import { registerWebhookForTenant, CalendlyClient, CalComClient } from "@/lib/platforms/booking";
 import { publishConfirmationPage } from "@/lib/platforms/hosting";
 import { gateOrExecute } from "@/lib/approval-gate";
-import { buildConfirmationPageHtml } from "./page-builder";
+import { buildConfirmationPageHtml } from "./templates";
 import { buildAdCreativeBriefs } from "@/features/pile-on/server/ad-creative-briefs";
 import { buildScriptPack } from "./script-builder";
 import { auditExistingConfirmationPage } from "./discovery-prefill";
@@ -131,6 +131,7 @@ export async function runPinDownOnboarding(
     | "other";
   const existingProof = tenant.existingProof;
   const rawVoiceCorpus: string = tenant.rawVoiceCorpus ?? "";
+  const confirmationPageTemplate: string | undefined = tenant.confirmationPageTemplate;
 
   try {
     let finalStack = { ...(tenant.stack ?? {}) };
@@ -595,14 +596,17 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
       async () => {
         await logStep(runId, { phase: "confirmation_page_deploy", status: "running" });
 
-        const pageContent = buildConfirmationPageHtml({
-          buyer: buyerName,
-          offerDetails,
-          brandVoiceProfile: voiceProfile,
-          topCallQuestions,
-          prospectMeets,
-          existingProof,
-        });
+        const pageContent = buildConfirmationPageHtml(
+          {
+            buyer: buyerName,
+            offerDetails,
+            brandVoiceProfile: voiceProfile,
+            topCallQuestions,
+            prospectMeets,
+            existingProof,
+          },
+          confirmationPageTemplate
+        );
 
         const gated = await gateOrExecute(
           finalStack,

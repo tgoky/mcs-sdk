@@ -5,7 +5,6 @@ import Link from "next/link";
 import { 
   Plus, 
   Menu, 
-  Search, 
   Building2, 
   Play, 
   CheckCircle2, 
@@ -16,6 +15,7 @@ import {
 import { MobileNav } from "@/app/dashboard/mobile-nav";
 import { NotificationBell } from "@/app/dashboard/notification-bell";
 import { Breadcrumbs } from "@/components/breadcrumbs/breadcrumbs";
+import { GlobalSearch } from "@/components/global-search";
 
 interface TopNavProps {
   onToggleSidebar: () => void;
@@ -152,14 +152,7 @@ export function TopNav({ onToggleSidebar, displayName }: TopNavProps) {
           absolutely centered on the header so it reads as its own element
           instead of sitting flush against the notification bell. */}
       <div className="hidden sm:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-        <button
-          type="button"
-          className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-800 rounded-md transition-colors w-52 md:w-72 cursor-pointer"
-        >
-          <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-          <span className="flex-1 text-left truncate">Search...</span>
-          <kbd className="text-[10px] font-mono bg-white dark:bg-zinc-950 px-1 rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 shrink-0">⌘K</kbd>
-        </button>
+        <GlobalSearch />
       </div>
 
       {/* Right: Notification bell, now on its own */}

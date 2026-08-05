@@ -94,6 +94,8 @@ export function useEmailIntegrations(
 
   // 1. Booking Calendar / Event Types: Fetch active booking options (500ms Debounce)
   useEffect(() => {
+    let cancelled = false;
+
     if (form.bookingApiKey?.trim() && form.bookingPlatform) {
       const timer = setTimeout(() => {
         setFetchingBookingOptions(true);
@@ -116,6 +118,7 @@ export function useEmailIntegrations(
             return data;
           })
           .then((data) => {
+            if (cancelled) return;
             if (data.success) {
               setBookingOptions(data.options ?? []);
             } else {
@@ -123,18 +126,27 @@ export function useEmailIntegrations(
             }
           })
           .catch((err: any) => {
+            if (cancelled) return;
             console.error("[useEmailIntegrations] booking options fetch error:", err);
             setBookingOptionsError(err.message || "Could not retrieve booking calendars.");
           })
           .finally(() => {
-            setFetchingBookingOptions(false);
+            if (!cancelled) setFetchingBookingOptions(false);
           });
       }, 500);
 
-      return () => clearTimeout(timer);
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
     } else {
       setBookingOptions([]);
+      setBookingOptionsError(null);
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     form.bookingPlatform,
     form.bookingApiKey,
@@ -144,6 +156,8 @@ export function useEmailIntegrations(
 
   // 2. Klaviyo: Fetch lists (500ms Debounce)
   useEffect(() => {
+    let cancelled = false;
+
     if (form.emailPlatform === "klaviyo" && form.emailApiKey?.trim()) {
       const timer = setTimeout(() => {
         setFetchingLists(true);
@@ -162,6 +176,7 @@ export function useEmailIntegrations(
             return data;
           })
           .then((data) => {
+            if (cancelled) return;
             if (data.success) {
               setKlaviyoLists(data.lists ?? []);
             } else {
@@ -169,22 +184,33 @@ export function useEmailIntegrations(
             }
           })
           .catch((err: any) => {
+            if (cancelled) return;
             console.error("[useEmailIntegrations] klaviyo fetch error:", err);
             setListsFetchError(err.message || "Could not retrieve profiles from Klaviyo. Please check your token scopes.");
           })
           .finally(() => {
-            setFetchingLists(false);
+            if (!cancelled) setFetchingLists(false);
           });
       }, 500);
 
-      return () => clearTimeout(timer);
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
     } else {
       setKlaviyoLists([]);
+      setListsFetchError(null);
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [form.emailPlatform, form.emailApiKey]);
 
   // 3. ActiveCampaign: Fetch lists when base URL is provided (500ms Debounce)
   useEffect(() => {
+    let cancelled = false;
+
     if (
       form.emailPlatform === "activecampaign" &&
       form.emailApiKey?.trim() &&
@@ -210,6 +236,7 @@ export function useEmailIntegrations(
             return data;
           })
           .then((data) => {
+            if (cancelled) return;
             if (data.success) {
               setAcLists(data.lists ?? []);
             } else {
@@ -217,18 +244,27 @@ export function useEmailIntegrations(
             }
           })
           .catch((err: any) => {
+            if (cancelled) return;
             console.error("[useEmailIntegrations] activecampaign fetch error:", err);
             setAcListsError(err.message || "Could not retrieve ActiveCampaign lists.");
           })
           .finally(() => {
-            setFetchingAcLists(false);
+            if (!cancelled) setFetchingAcLists(false);
           });
       }, 500);
 
-      return () => clearTimeout(timer);
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
     } else {
       setAcLists([]);
+      setAcListsError(null);
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [form.emailPlatform, form.emailApiKey, form.emailActiveCampaignBaseUrl]);
 
   // 4. Custom SMTP: Compose JSON credential blob into emailApiKey
@@ -268,6 +304,7 @@ export function useEmailIntegrations(
   // just confirms the ID the user typed is a real location that token can
   // reach, and surfaces its name back so they know it matched.
   useEffect(() => {
+    let cancelled = false;
     const needsGhl = form.bookingPlatform === "ghl_calendar" || form.emailPlatform === "ghl";
     if (needsGhl && form.ghlApiKey?.trim() && form.ghlLocationId?.trim()) {
       const timer = setTimeout(() => {
@@ -289,6 +326,7 @@ export function useEmailIntegrations(
             return data;
           })
           .then((data) => {
+            if (cancelled) return;
             if (data.success) {
               setGhlLocations(data.location ? [data.location] : []);
             } else {
@@ -296,23 +334,34 @@ export function useEmailIntegrations(
             }
           })
           .catch((err: any) => {
+            if (cancelled) return;
             console.error("[useEmailIntegrations] ghl location verify error:", err);
             setGhlLocationsError(err.message || "Could not verify this Location ID against your key.");
             setGhlLocations([]);
           })
           .finally(() => {
-            setFetchingGhlLocations(false);
+            if (!cancelled) setFetchingGhlLocations(false);
           });
       }, 500);
 
-      return () => clearTimeout(timer);
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
     } else {
       setGhlLocations([]);
+      setGhlLocationsError(null);
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [form.bookingPlatform, form.emailPlatform, form.ghlApiKey, form.ghlLocationId, setForm]);
 
   // 6. GHL: Fetch workflows once the location above is verified
   useEffect(() => {
+    let cancelled = false;
+
     if (
       form.emailPlatform === "ghl" &&
       form.emailGhlLocationId &&
@@ -338,6 +387,7 @@ export function useEmailIntegrations(
           return data;
         })
         .then((data) => {
+          if (cancelled) return;
           if (data.success) {
             setGhlWorkflows(data.workflows ?? []);
           } else {
@@ -345,16 +395,47 @@ export function useEmailIntegrations(
           }
         })
         .catch((err: any) => {
+          if (cancelled) return;
           console.error("[useEmailIntegrations] ghl workflows fetch error:", err);
           setGhlWorkflowsError(err.message || "Could not retrieve GHL workflows.");
         })
         .finally(() => {
-          setFetchingGhlWorkflows(false);
+          if (!cancelled) setFetchingGhlWorkflows(false);
         });
     } else {
       setGhlWorkflows([]);
+      setGhlWorkflowsError(null);
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [form.emailPlatform, form.emailGhlLocationId, form.emailApiKey, ghlLocations]);
+
+  // "Start over" needs to wipe this too. The five fetch effects above are
+  // reactive to form fields and do clear themselves once those fields go
+  // back to their defaults, but a request already in flight at the moment
+  // of reset would still land afterward and repopulate a list right after
+  // it was cleared (fixed above with `cancelled` guards) — this gives
+  // "Start over" an immediate, explicit clear on top of that so nothing
+  // sits stale even for the one render before the effects catch up.
+  function resetIntegrations() {
+    setBookingOptions([]);
+    setFetchingBookingOptions(false);
+    setBookingOptionsError(null);
+    setKlaviyoLists([]);
+    setFetchingLists(false);
+    setListsFetchError(null);
+    setAcLists([]);
+    setFetchingAcLists(false);
+    setAcListsError(null);
+    setGhlLocations([]);
+    setFetchingGhlLocations(false);
+    setGhlLocationsError(null);
+    setGhlWorkflows([]);
+    setFetchingGhlWorkflows(false);
+    setGhlWorkflowsError(null);
+  }
 
   const klaviyoMissingKeyMessage =
     form.emailPlatform === "klaviyo" && !form.emailApiKey?.trim()
@@ -385,5 +466,7 @@ export function useEmailIntegrations(
     ghlWorkflows,
     fetchingGhlWorkflows,
     ghlWorkflowsError,
+
+    resetIntegrations,
   };
 }

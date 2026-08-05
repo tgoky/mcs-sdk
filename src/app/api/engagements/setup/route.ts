@@ -4,6 +4,7 @@ import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { storeCredential } from "@/lib/credentials";
 import { getSession } from "@/lib/session";
+import { isTemplateId, DEFAULT_TEMPLATE } from "@/features/pin-down/server/templates";
 import crypto from "crypto";
 
 export const maxDuration = 30;
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
       prospectMeets,
       rawVoiceCorpus,
       credentials,
+      confirmationPageTemplate,
     } = body;
 
     if (!engagementId || !buyerName) {
@@ -201,6 +203,7 @@ export async function POST(request: Request) {
           prospectMeets: prospectMeets ?? "founder",
           existingProof: body.existingProof,
           rawVoiceCorpus: rawVoiceCorpus ?? "",
+          confirmationPageTemplate: isTemplateId(confirmationPageTemplate) ? confirmationPageTemplate : DEFAULT_TEMPLATE,
           ...(body.discoveryPrefill ? { discoveryPrefill: body.discoveryPrefill } : {}),
           updatedAt: new Date(),
         })

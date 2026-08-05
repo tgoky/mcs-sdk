@@ -477,6 +477,13 @@ export const engagements = pgTable("engagements", {
     vertical?: string;
   }>(),
   brandVoiceProfile: jsonb("brand_voice_profile"),
+  // Which of the Pin-Down confirmation page designs (see
+  // src/features/pin-down/server/templates/) this engagement uses. Plain
+  // text rather than a DB enum so adding a new template later is just a
+  // new registry entry, no migration — validated against the registry's
+  // TemplateId union at the application layer instead (buildConfirmationPageHtml
+  // falls back to the default template for any unrecognized value).
+  confirmationPageTemplate: text("confirmation_page_template").notNull().default("signal"),
   // Live URL on the buyer's own domain when the hosting adapter deploy
   // succeeds; falls back to our internal /confirm/[id] preview page when
   // the buyer's platform has no publish API (ghl, lovable, plain_html) or
@@ -837,7 +844,7 @@ export const winBackEnrollments = pgTable("win_back_enrollments", {
   // should still be judged against the window they were actually enrolled
   // under, not retroactively against a new one.
   recoveryWindowDays: integer("recovery_window_days").notNull(),
-  // "active" | "rebooked" | "lost" | "reply_exited" | "manual_override"
+  // "active" | "rebooked" | "lost" | "reply_exited"
   status: text("status").notNull().default("active"),
   lostAt: timestamp("lost_at"),
   // Win-Back recovery gap 3 — the per-prospect single-use reschedule
@@ -850,7 +857,7 @@ export const winBackEnrollments = pgTable("win_back_enrollments", {
   // `status` because "rebooked" is itself a kind of exit but the two
   // questions (what state is this row in vs. why did it leave "active")
   // are useful to query separately once reply-detection is live.
-  // "rebooked" | "reply_detected" | "window_elapsed" | "manual_override" | null (still active)
+  // "rebooked" | "reply_detected" | "window_elapsed" | null (still active)
   exitReason: text("exit_reason"),
   exitedAt: timestamp("exited_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

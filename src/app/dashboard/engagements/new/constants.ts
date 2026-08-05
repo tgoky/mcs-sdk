@@ -109,6 +109,7 @@ export const DEFAULT_FORM: FormData = {
   existingAuditDescription: "",
   notificationPackSelections: [],
   offerVertical: "",
+  confirmationPageTemplate: "signal",
 };
 
 // Draft persistence: survives page refresh / accidental navigation within

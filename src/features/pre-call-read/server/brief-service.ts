@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { briefedCallsLog, engagements, conversationIntelligenceSessions } from "@/models/schema";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, isNotNull } from "drizzle-orm";
 import { evaluatePersonMatch } from "../person-match";
 import { researchProspect } from "./prospect-research";
 import { runConfiguredEnrichment } from "./apollo-adapter";
@@ -178,8 +178,20 @@ async function processSingleBriefCall(
 ): Promise<CallOutcome> {
   const callLabel = `${call.name} (${call.email})`;
 
+  // Hoisted out of the try block below so the catch block can still read
+  // whatever got determined before the failure — a synthesis or delivery
+  // failure happens after these are set, and the failure-path insert
+  // wants to record them rather than writing a row with nothing in it.
+  let matchResult: Awaited<ReturnType<typeof evaluatePersonMatch>> | null = null;
+  let researchStatus: "completed" | "skipped_low_confidence" | "failed" = "skipped_low_confidence";
+
   try {
     // ── Idempotency gate ──────────────────────────────────────────────
+    // Only a row with a real briefDeliveredAt counts as "already briefed."
+    // A previously-failed attempt (see the catch block below, which now
+    // writes a row too) must stay eligible for retry within the same 24h
+    // window — otherwise the first failure would permanently block every
+    // later retry of that same call for a full day.
     const dup = await run(`dup-check-${call.id}`, async () => {
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const existing = await db
@@ -188,7 +200,8 @@ async function processSingleBriefCall(
         .where(
           and(
             eq(briefedCallsLog.callId, call.id),
-            gte(briefedCallsLog.createdAt, oneDayAgo)
+            gte(briefedCallsLog.createdAt, oneDayAgo),
+            isNotNull(briefedCallsLog.briefDeliveredAt)
           )
         )
         .limit(1);
@@ -203,12 +216,13 @@ async function processSingleBriefCall(
     // ── Rule 14 identity gate ────────────────────────────────────────
     await logStep(runId, { phase: "rule_14_gate", status: "running", label: callLabel });
 
-    const matchResult = await run(`rule14-gate-${call.id}`, () =>
+    const matchResultValue = await run(`rule14-gate-${call.id}`, () =>
       evaluatePersonMatch(
         { email: call.email, name: call.name, companySupplied: call.company, linkedInUrlFromApp: call.linkedInUrl },
         stack.person_match_confidence_threshold ?? 99
       )
     );
+    matchResult = matchResultValue;
 
     await logStep(runId, {
       phase: "rule_14_gate",
@@ -219,7 +233,6 @@ async function processSingleBriefCall(
 
     // ── Prospect research + BYOK enrichment (memoized as ONE step) ────
     let researchSummary: string | null = null;
-    let researchStatus: "completed" | "skipped_low_confidence" | "failed" = "skipped_low_confidence";
     let researchAttempted = false;
     let searchesUsed: number | undefined;
 
@@ -296,7 +309,7 @@ async function processSingleBriefCall(
           prospectEmail: call.email,
           prospectName: call.name,
           callTime: call.callTime,
-          personMatchScore: matchResult.totalScore,
+          personMatchScore: matchResult!.totalScore,
         });
         const probability = scoreShowRate(features);
         showRateLine = `Predicted show probability: ${probability}% (heuristic model, not yet validated against actual outcomes for this engagement)`;
@@ -397,21 +410,40 @@ Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : "
           : undefined
       );
 
-      await db.insert(briefedCallsLog).values({
-        id: crypto.randomUUID(),
-        engagementId: tenant.engagementId,
-        callId: call.id,
-        runId,
-        callTime: call.callTime,
-        prospectName: call.name,
-        briefDeliveredAt: new Date(),
-        destinationDelivered: stack.brief_landing_destination ?? "slack",
-        personMatchScore: matchResult.totalScore,
-        briefText: llmResult.text,
-        researchStatus,
-        aiSynthesisStatus: "completed",
-        createdAt: new Date(),
-      });
+      // Upsert rather than a plain insert: if an earlier attempt for this
+      // same call already wrote a failed row (see the catch block below),
+      // a retry that now succeeds must overwrite it — callId is a unique
+      // column, so a plain insert would throw a duplicate-key error here
+      // instead of correcting the record.
+      await db
+        .insert(briefedCallsLog)
+        .values({
+          id: crypto.randomUUID(),
+          engagementId: tenant.engagementId,
+          callId: call.id,
+          runId,
+          callTime: call.callTime,
+          prospectName: call.name,
+          briefDeliveredAt: new Date(),
+          destinationDelivered: stack.brief_landing_destination ?? "slack",
+          personMatchScore: matchResult!.totalScore,
+          briefText: llmResult.text,
+          researchStatus,
+          aiSynthesisStatus: "completed",
+          createdAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: briefedCallsLog.callId,
+          set: {
+            runId,
+            briefDeliveredAt: new Date(),
+            destinationDelivered: stack.brief_landing_destination ?? "slack",
+            personMatchScore: matchResult!.totalScore,
+            briefText: llmResult.text,
+            researchStatus,
+            aiSynthesisStatus: "completed",
+          },
+        });
     });
 
     await logStep(runId, {
@@ -426,7 +458,7 @@ Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : "
       callLabel,
       researchAttempted,
       searchesUsed,
-      confidenceScore: matchResult.totalScore,
+      confidenceScore: matchResult!.totalScore,
       destination: stack.brief_landing_destination ?? "slack",
     };
   } catch (callErr: any) {
@@ -437,6 +469,46 @@ Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : "
       label: callLabel,
       detail: callErr.message,
     });
+
+    // The actual fix: previously nothing was written here, so a failed
+    // call simply never appeared in briefedCallsLog — not as "failed,"
+    // just entirely absent from the Pre-Call Read view's call list. The
+    // frontend already has a "Failed" badge wired to aiSynthesisStatus
+    // === "failed" (see deriveStatus in pre-call-read-view.tsx); this is
+    // what actually gives it data to render. Best-effort: if even this
+    // write fails, the call still won't be visible, but that's a strictly
+    // worse-than-before regression only if the DB itself is unreachable,
+    // in which case the whole run is failing anyway.
+    try {
+      await db
+        .insert(briefedCallsLog)
+        .values({
+          id: crypto.randomUUID(),
+          engagementId: tenant.engagementId,
+          callId: call.id,
+          runId,
+          callTime: call.callTime,
+          prospectName: call.name,
+          briefDeliveredAt: null,
+          destinationDelivered: null,
+          personMatchScore: matchResult?.totalScore ?? null,
+          briefText: null,
+          researchStatus,
+          aiSynthesisStatus: "failed",
+          createdAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: briefedCallsLog.callId,
+          set: {
+            runId,
+            researchStatus,
+            aiSynthesisStatus: "failed",
+          },
+        });
+    } catch (logErr: any) {
+      console.error(`[pre-call-read] Also failed to write the failure record for ${callLabel}:`, logErr.message);
+    }
+
     return { status: "failed", callLabel, detail: callErr.message };
   }
 }

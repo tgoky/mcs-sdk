@@ -179,6 +179,7 @@ export function buildEngagementPayload(form: FormData) {
     prospectMeets: form.prospectMeets,
     rawVoiceCorpus: form.rawVoiceCorpus,
     existingProof: testimonials.length ? { testimonials } : undefined,
+    confirmationPageTemplate: form.confirmationPageTemplate,
 
     // 12. Credentials Block
     credentials: {

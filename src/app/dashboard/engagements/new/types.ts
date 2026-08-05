@@ -134,6 +134,7 @@ export interface FormData {
   existingAuditDescription: string;
   notificationPackSelections: string[];
   offerVertical: string;
+  confirmationPageTemplate: string;
 }
 
 // Shape returned by the Klaviyo/GHL/ActiveCampaign list & workflow lookups.
