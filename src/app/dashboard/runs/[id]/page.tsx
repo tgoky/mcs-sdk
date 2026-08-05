@@ -102,10 +102,10 @@ function RunStatusBadge({ status }: { status: string }) {
   );
 }
 
-function SkillView({ detail, steps }: { detail: RunDetailPayload; steps: RunStep[] }) {
+function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayload; steps: RunStep[]; onRefreshDetail: () => void }) {
   switch (detail.run.skillName) {
     case "pre-call-read":
-      return "calls" in detail ? <PreCallReadView detail={detail} /> : null;
+      return "calls" in detail ? <PreCallReadView detail={detail} onRefreshDetail={onRefreshDetail} /> : null;
     case "pile-on":
       return "send" in detail ? <PileOnView detail={detail} steps={steps} /> : null;
     case "win-back":
@@ -180,6 +180,17 @@ export default function RunDetailPage() {
       setRun(data.run);
     } catch {
       // Polling failure gracefully ignored
+    }
+  }, [runId]);
+
+    const fetchDetail = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const response = await fetch(`/api/skill-runs/${runId}/detail`, { cache: "no-store", signal });
+      if (!response.ok) return;
+      const data = await response.json();
+      setDetail(data);
+    } catch {
+      // gracefully ignored
     }
   }, [runId]);
 
@@ -347,10 +358,10 @@ export default function RunDetailPage() {
             <Loader2 className="h-5 w-5 animate-spin text-zinc-600" />
           </div>
         ) : detail && detail.run.id === run.id ? (
-          <SkillView detail={detail} steps={steps} />
+      <SkillView detail={detail} steps={steps} onRefreshDetail={fetchDetail} />
         ) : (
           <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 px-6 py-10 text-center text-xs text-zinc-500">
-            Skill-specific detail isn't available for this run.
+            Skill-specific detail is not available for this run.
           </div>
         )}
       </main>
