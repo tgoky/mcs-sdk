@@ -1,20 +1,17 @@
 import { BOOKING_PLATFORM_LABELS, BRIEF_DESTINATION_LABELS, EMAIL_PLATFORM_LABELS, HOSTING_PLATFORM_LABELS } from "@/lib/copy";
 import { STEPS } from "../constants";
 import type { FormData, Step, ValidationError } from "../types";
-import { TemplatePicker } from "./template-picker";
 
 export function ConfirmStep({
   form,
   allValidationErrors,
   setStep,
   error,
-  set,
 }: {
   form: FormData;
   allValidationErrors: ValidationError[];
   setStep: (step: Step) => void;
   error: string | null;
-  set: (field: keyof FormData, value: string | boolean) => void;
 }) {
   return (
     <div className="space-y-6 w-full">
@@ -135,17 +132,6 @@ export function ConfirmStep({
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="space-y-3">
-        <div>
-          <h2 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>Choose a confirmation page design</h2>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-            This is the page {form.buyerName || "your client"}&apos;s prospects land on after booking. Pick a design now —
-            you can change it later from the engagement page, and it&apos;ll regenerate with real call data once you launch.
-          </p>
-        </div>
-        <TemplatePicker form={form} onSelect={(id) => set("confirmationPageTemplate", id)} />
       </div>
 
       {error && (
