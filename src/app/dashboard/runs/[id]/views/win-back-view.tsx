@@ -46,7 +46,13 @@ function dayLabel(offsetDays: number) {
   return offsetDays === 0 ? "Day 1 (immediate)" : `Day ${offsetDays + 1}`;
 }
 
-export function WinBackView({ detail }: { detail: WinBackDetail }) {
+export function WinBackView({
+  detail,
+  onRefreshDetail,
+}: {
+  detail: WinBackDetail;
+  onRefreshDetail?: () => void;
+}) {
   const { run, enrollment, sendLog } = detail;
   const [mode, setMode] = useState<RunViewMode>("calendar");
   const [selected, setSelected] = useState<Touchpoint | null>(null);
@@ -122,6 +128,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
   const handleManualStopCadence = () => {
     if (confirm("Stop automated Win-Back sequence for this prospect? (Useful for off-platform or verbal rebooks)")) {
       setManualExited(true);
+      onRefreshDetail?.();
     }
   };
 
