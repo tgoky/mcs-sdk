@@ -1,0 +1,1 @@
+ALTER TABLE "engagements" ADD COLUMN "confirmation_page_template" text DEFAULT 'signal' NOT NULL;
