@@ -105,6 +105,7 @@ export interface BriefedCall {
   researchStatus: string | null;
   aiSynthesisStatus: string | null;
   createdAt: string;
+    outcome?: "showed" | "no_show" | "rescheduled" | null;
 }
 
 export interface PileOnSend {
