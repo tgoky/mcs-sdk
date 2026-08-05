@@ -1310,6 +1310,8 @@ export const pendingActions = pgTable("pending_actions", {
   executionError: text("execution_error"), // set only if status is execution_failed
 });
 
+
+//look back a step back older commit this is just my own reference dont mind it
 // ── Engagement Skills (per-engagement skill enablement) ────────────────────
 // Decouples "this client bought an agent bundle" from "this specific skill
 // is turned on for them" — the prerequisite for a Skill Library where a
