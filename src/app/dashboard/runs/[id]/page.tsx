@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -170,7 +170,9 @@ export default function RunDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<RunDetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
-  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(true);
+  
+  const techDetailsRef = useRef<HTMLDivElement>(null);
 
   const fetchRun = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -183,7 +185,7 @@ export default function RunDetailPage() {
     }
   }, [runId]);
 
-    const fetchDetail = useCallback(async (signal?: AbortSignal) => {
+  const fetchDetail = useCallback(async (signal?: AbortSignal) => {
     try {
       const response = await fetch(`/api/skill-runs/${runId}/detail`, { cache: "no-store", signal });
       if (!response.ok) return;
@@ -221,7 +223,10 @@ export default function RunDetailPage() {
   useEffect(() => {
     if (!runId) return;
     const controller = new AbortController();
-    setDetailLoading(true);
+    
+    // FIX: Defer synchronous setState to prevent cascading render warning
+    const timeoutId = setTimeout(() => setDetailLoading(true), 0);
+
     (async () => {
       try {
         const response = await fetch(`/api/skill-runs/${runId}/detail`, { cache: "no-store", signal: controller.signal });
@@ -236,10 +241,27 @@ export default function RunDetailPage() {
         if (!controller.signal.aborted) setDetailLoading(false);
       }
     })();
-    return () => controller.abort();
+    
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, [runId]);
 
   const isRunning = run?.status === "running";
+
+  // FIX: Auto-expand and scroll to technical details when a run is live
+  useEffect(() => {
+    if (isRunning) {
+      // Defer state update and DOM manipulation to prevent synchronous setState warning
+      const timeoutId = setTimeout(() => {
+        setShowTechnicalDetails(true);
+        techDetailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isRunning]);
+
   useEffect(() => {
     if (!isRunning) return;
     const controller = new AbortController();
@@ -350,26 +372,9 @@ export default function RunDetailPage() {
       )}
 
       {/* ----------------------------------------------------------------- */}
-      {/* 3. MAIN WORKSPACE (SLOT FOR SKILL VIEWS / CALENDAR / BOARD)       */}
+      {/* 3. STATUS UPDATES & TECHNICAL DETAILS (MOVED UP)                  */}
       {/* ----------------------------------------------------------------- */}
-      <main className="w-full">
-        {detailLoading && !detail ? (
-          <div className="flex h-40 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950">
-            <Loader2 className="h-5 w-5 animate-spin text-zinc-600" />
-          </div>
-        ) : detail && detail.run.id === run.id ? (
-      <SkillView detail={detail} steps={steps} onRefreshDetail={fetchDetail} />
-        ) : (
-          <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 px-6 py-10 text-center text-xs text-zinc-500">
-            Skill-specific detail is not available for this run.
-          </div>
-        )}
-      </main>
-
-      {/* ----------------------------------------------------------------- */}
-      {/* 4. COLLAPSIBLE TECHNICAL DETAILS (DEMOTED TO BOTTOM)              */}
-      {/* ----------------------------------------------------------------- */}
-      <div className="pt-2">
+      <div ref={techDetailsRef} className="pt-2">
         <button
           type="button"
           onClick={() => setShowTechnicalDetails((p) => !p)}
@@ -388,7 +393,7 @@ export default function RunDetailPage() {
                 <span className="text-xs font-semibold text-zinc-200">Execution Steps</span>
                 <span className="text-[11px] font-mono text-zinc-500">{steps.length} steps</span>
               </div>
-              <div className="max-h-[500px] overflow-y-auto p-4">
+              <div className="max-h-[75vh] overflow-y-auto p-4">
                 {steps.length === 0 ? (
                   <p className="text-xs text-zinc-500 italic text-center py-6">{copy.noStepsRecorded}</p>
                 ) : (
@@ -414,6 +419,23 @@ export default function RunDetailPage() {
           </div>
         )}
       </div>
+
+      {/* ----------------------------------------------------------------- */}
+      {/* 4. AUTOMATION DELIVERABLES (MOVED DOWN)                           */}
+      {/* ----------------------------------------------------------------- */}
+      <main className="w-full">
+        {detailLoading && !detail ? (
+          <div className="flex h-40 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950">
+            <Loader2 className="h-5 w-5 animate-spin text-zinc-600" />
+          </div>
+        ) : detail && detail.run.id === run.id ? (
+          <SkillView detail={detail} steps={steps} onRefreshDetail={fetchDetail} />
+        ) : (
+          <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 px-6 py-10 text-center text-xs text-zinc-500">
+            Skill-specific detail is not available for this run.
+          </div>
+        )}
+      </main>
     </div>
   );
 }

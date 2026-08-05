@@ -27,25 +27,6 @@ interface ToastItem {
 const POLL_MS = 5000;
 const TOAST_LIFETIME_MS = 8000;
 
-/**
- * Live evidence that the platform caught a booking the instant it happened
- * — not just a new row quietly appearing in a table somewhere. Every
- * booking today already creates a "pile-on" skillRuns row via the Calendly
- * webhook (see src/app/api/webhooks/booking-event/route.ts) and the
- * prospect's name/email is already captured in that run's step log by
- * src/features/pile-on/server/enrollment-service.ts — it just never
- * surfaced anywhere in the UI until the /api/skill-runs/recent endpoint
- * started returning it as `subjectLabel`.
- *
- * Mounted once at the dashboard layout level so it fires no matter which
- * page a buyer is looking at, the same way the notification bell does.
- *
- * Polling-based rather than a websocket/SSE push — deliberately, to match
- * the rest of this app's architecture (LiveExecutionFeed, the notification
- * bell) instead of introducing a second real-time transport for one
- * feature. The tradeoff is up to POLL_MS latency before a toast appears,
- * which is an acceptable trade for not maintaining a second live channel.
- */
 export function BookingToast() {
   const router = useRouter();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -60,9 +41,6 @@ export function BookingToast() {
       if (signal.aborted) return;
       const runs: RecentRun[] = data.runs ?? [];
 
-      // First poll after mount just establishes the baseline — otherwise
-      // every run that already existed before this component mounted
-      // would fire a toast the instant the dashboard loads.
       if (isFirstPoll.current) {
         runs.forEach((r) => seenRunIds.current.add(r.id));
         isFirstPoll.current = false;
@@ -76,11 +54,6 @@ export function BookingToast() {
       for (const run of fresh) {
         seenRunIds.current.add(run.id);
 
-        // Only genuinely new inbound-booking events get a toast — a run
-        // reappearing because it moved from "running" to "success" isn't
-        // new, it's the same id already in seenRunIds by then. We only
-        // care about pile-on (new booking) and win-back (rebooked/exit)
-        // runs seeded from the Calendly webhook, not every skill run.
         if (run.skillName === "pile-on") {
           newToasts.push({
             runId: run.id,
@@ -103,13 +76,10 @@ export function BookingToast() {
       }
 
       if (newToasts.length > 0) {
-        setToasts((prev) => [...newToasts, ...prev].slice(0, 4)); // cap stack at 4
+        setToasts((prev) => [...newToasts, ...prev].slice(0, 4));
       }
     } catch {
-      // Silent — same reasoning as the notification bell's poll: a missed
-      // beat just means the toast for that booking shows up ~5s late on
-      // the next successful poll, or the buyer sees it in the Live
-      // Executions table regardless. Never worth surfacing as an error.
+      // Silent poll handling
     }
   }, []);
 
@@ -125,7 +95,6 @@ export function BookingToast() {
     };
   }, [poll]);
 
-  // Auto-dismiss each toast on its own timer.
   useEffect(() => {
     if (toasts.length === 0) return;
     const timers = toasts.map((t) =>
@@ -148,30 +117,34 @@ export function BookingToast() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-[60] flex flex-col gap-2 w-80 pointer-events-none">
+    <div className="fixed top-4 right-4 z-[60] flex flex-col gap-2 w-80 pointer-events-none font-sans antialiased tracking-tight">
       {toasts.map((t) => (
         <button
           key={t.runId}
           onClick={() => openRun(t.runId)}
-          className="pointer-events-auto text-left bg-white/95 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-2xl overflow-hidden animate-[slideIn_0.25s_ease-out] hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors group cursor-pointer"
+          className="pointer-events-auto text-left bg-white/95 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/90 rounded-2xl shadow-xl overflow-hidden animate-[slideIn_0.25s_ease-out] hover:border-zinc-300 dark:hover:border-zinc-700 transition-all group cursor-pointer font-sans"
         >
           <div className="flex items-start gap-3 p-3.5">
             <div
-              className={`flex items-center justify-center w-8 h-8 rounded-full shrink-0 ${
-                t.kind === "booking" 
-                  ? "bg-gold/15 text-gold-hover dark:text-gold" 
-                  : "bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400"
+              className={`flex items-center justify-center w-8 h-8 rounded-xl shrink-0 ${
+                t.kind === "booking"
+                  ? "bg-gold/15 text-gold-hover dark:text-gold border border-gold/20"
+                  : "bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-500/20"
               }`}
             >
               {t.kind === "booking" ? <CalendarCheck2 size={15} /> : <RotateCcw size={15} />}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 leading-snug">
+              <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 leading-snug tracking-tight font-sans">
                 {t.kind === "booking" ? "New booking just landed" : "Prospect rebooked"}
               </p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-snug mt-0.5 truncate font-medium">{t.subject}</p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug mt-0.5 truncate font-medium font-sans">
+                {t.subject}
+              </p>
               {t.buyerName && (
-                <p className="text-[10px] text-zinc-400 dark:text-zinc-600 mt-1 uppercase tracking-wide font-mono font-bold">{t.buyerName}</p>
+                <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 uppercase tracking-wider font-mono font-bold">
+                  {t.buyerName}
+                </p>
               )}
             </div>
             <span
@@ -184,7 +157,7 @@ export function BookingToast() {
               <X size={13} />
             </span>
           </div>
-          {/* Decaying progress bar showing time left before auto-dismiss */}
+
           <div className="h-0.5 bg-zinc-100 dark:bg-zinc-900">
             <div
               className={`h-full ${t.kind === "booking" ? "bg-gold/70" : "bg-sky-500/70"}`}
@@ -195,7 +168,6 @@ export function BookingToast() {
           </div>
         </button>
       ))}
-
       <style>{`
         @keyframes slideIn {
           from { opacity: 0; transform: translateX(16px); }

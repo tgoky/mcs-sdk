@@ -69,9 +69,20 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
   const smsSentCount = smsMessages.filter((m) => m.status === "sent").length;
   const smsFailedCount = smsMessages.filter((m) => m.status === "failed").length;
 
+  // ── GRACEFUL FALLBACKS WHEN `send` (AI PERSONALIZATION LOG) IS NULL ──
+  const prospectEmail = send?.prospectEmail 
+    ?? steps.find(s => s.phase === "pile_on_enrollment" && s.detail?.includes("@"))?.detail?.match(/<([^>]+@[^>]+)>/)?.[1] 
+    ?? "Enrolled Prospect";
+
+  const bookingId = send?.bookingId ?? "—";
+
   const outcomeTone: Tone = send?.error
     ? "danger"
     : send?.sentVia === "hybrid"
+    ? "success"
+    : emailStep?.status === "failed"
+    ? "danger"
+    : emailStep?.status === "success"
     ? "success"
     : "info";
 
@@ -79,16 +90,21 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
     ? "Failed"
     : send?.sentVia === "hybrid"
     ? "Personalized (hybrid)"
+    : emailStep?.status === "success"
+    ? "Standard Sequence Enrolled"
+    : emailStep?.status === "failed"
+    ? "Enrollment Failed"
     : "Template fallback";
 
   // Unroll individual dispatch channels into inspectable Asana-grade cards
   const boardColumns = useMemo(() => {
     const q = filterText.toLowerCase().trim();
 
-    if (!send) return [];
+    const cards: InspectableChannelCard[] = [];
 
-    const cards: InspectableChannelCard[] = [
-      {
+    // Only add AI Intro card if AI personalization actually ran
+    if (send) {
+      cards.push({
         id: "ai-intro",
         type: "ai_intro",
         title: "AI Personalization Copy",
@@ -97,7 +113,11 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
         tone: send.sentVia === "hybrid" ? "success" : "info",
         icon: Sparkles,
         payload: { send },
-      },
+      });
+    }
+
+    // ALWAYS add Email, SMS, and Ad channels regardless of AI send status
+    cards.push(
       {
         id: "email-channel",
         type: "email",
@@ -166,8 +186,8 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
         tone: adDataStep?.status === "success" ? "success" : adDataStep?.status === "failed" ? "danger" : adDataStep?.status === "running" ? "info" : "neutral",
         icon: BarChart3,
         payload: { platform: adDataPlatformLabel(run.stack?.ad_data_platform), raw: run.stack?.ad_data_platform, step: adDataStep },
-      },
-    ];
+      }
+    );
 
     const filterFn = (card: InspectableChannelCard) =>
       !q || card.title.toLowerCase().includes(q) || card.subtitle.toLowerCase().includes(q);
@@ -180,53 +200,6 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
       { id: "attribution", title: "3. Ad Attribution", cards: filtered.filter((c) => c.type === "ad_data") },
     ];
   }, [send, run.stack, filterText, emailStep, adDataStep, smsDispatchStep, smsMessages, smsSentCount, smsFailedCount]);
-
-  if (!send) {
-    return (
-      <div className="flex flex-col gap-3 font-sans antialiased">
-        <EmptyState
-          icon={Zap}
-          title="No dispatch recorded for this run"
-          description="This run either failed before the personalization dispatch completed, or it ran before per-run correlation was added — check the Steps panel for detailed logs."
-        />
-
-        {/* Stack Config Reference */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 font-sans">
-          <div className="mb-2 flex items-center gap-2 font-sans">
-            <ListChecks size={14} className="text-zinc-400" />
-            <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-300 font-sans">
-              Configured Dispatch Channels
-            </h3>
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 font-sans">
-            <ChannelChip
-              icon={Mail}
-              label="Email sequence"
-              value={emailPlatformLabel(run.stack?.email_platform)}
-            />
-            <ChannelChip
-              icon={MessageSquare}
-              label="SMS sequence"
-              value={
-                run.stack?.sms_platform && run.stack.sms_platform !== "none"
-                  ? smsPlatformLabel(run.stack.sms_platform)
-                  : "Not configured"
-              }
-            />
-            <ChannelChip
-              icon={BarChart3}
-              label="Ad attribution"
-              value={
-                run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none"
-                  ? adDataPlatformLabel(run.stack.ad_data_platform)
-                  : "Not configured"
-              }
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
@@ -243,7 +216,6 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
             className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
           />
         </div>
-
         <ViewSwitcher value={mode} onChange={setMode} />
       </div>
 
@@ -256,14 +228,14 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 shadow-xl font-sans">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 text-zinc-400 border border-zinc-800 shrink-0 font-bold font-mono text-xs">
-                {send.prospectEmail.slice(0, 2).toUpperCase()}
+                {prospectEmail.slice(0, 2).toUpperCase()}
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-bold text-white font-sans">{send.prospectEmail}</p>
+                  <p className="text-sm font-bold text-white font-sans">{prospectEmail}</p>
                   <button
                     type="button"
-                    onClick={() => handleCopy(send.prospectEmail, "email")}
+                    onClick={() => handleCopy(prospectEmail, "email")}
                     className="text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
                     title="Copy prospect email"
                   >
@@ -275,26 +247,28 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
                   </button>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">
-                  <span>Booking {send.bookingId}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(send.bookingId, "bookingId")}
-                    className="text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
-                    title="Copy booking ID"
-                  >
-                    {copiedKey === "bookingId" ? (
-                      <Check size={11} className="text-emerald-400" />
-                    ) : (
-                      <Copy size={11} />
-                    )}
-                  </button>
+                  <span>Booking {bookingId}</span>
+                  {send && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(send.bookingId, "bookingId")}
+                      className="text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
+                      title="Copy booking ID"
+                    >
+                      {copiedKey === "bookingId" ? (
+                        <Check size={11} className="text-emerald-400" />
+                      ) : (
+                        <Copy size={11} />
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
 
             <div className="flex items-center gap-2 font-sans">
               <StatusPill tone={outcomeTone}>{outcomeLabel}</StatusPill>
-              {send.latencyMs != null && (
+              {send?.latencyMs != null && (
                 <span className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-[11px] font-mono text-zinc-400">
                   <Clock size={11} /> {(send.latencyMs / 1000).toFixed(1)}s total
                 </span>
@@ -321,13 +295,13 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
                   size={14}
                   className={cn(
                     "shrink-0",
-                    send.sentVia === "hybrid" ? "text-amber-400" : "text-zinc-500"
+                    send?.sentVia === "hybrid" ? "text-amber-400" : "text-zinc-500"
                   )}
                 />
                 <div className="min-w-0 text-xs font-sans">
                   <p className="font-semibold text-zinc-200 font-sans">2. AI Personalization</p>
                   <p className="text-[10px] text-zinc-500 font-mono">
-                    {send.sentVia === "hybrid" ? "AI Intro Generated" : "Fallback Template Used"}
+                    {send?.sentVia === "hybrid" ? "AI Intro Generated" : "Fallback Template Used"}
                   </p>
                 </div>
               </div>
@@ -351,7 +325,7 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
                   AI Personalization Content
                 </h3>
               </div>
-              {send.personalizedIntro && (
+              {send?.personalizedIntro && (
                 <button
                   type="button"
                   onClick={() => handleCopy(send.personalizedIntro!, "intro")}
@@ -367,18 +341,18 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
               )}
             </div>
 
-            {send.personalizedIntro ? (
+            {send?.personalizedIntro ? (
               <p className="whitespace-pre-wrap rounded-xl border border-amber-900/30 bg-amber-950/10 p-3.5 text-xs leading-relaxed text-zinc-200 font-sans">
                 {send.personalizedIntro}
               </p>
-            ) : send.error ? (
+            ) : send?.error ? (
               <div className="rounded-xl border border-rose-900/40 bg-rose-950/10 p-3.5 text-xs text-rose-400 flex items-start gap-2 font-sans">
                 <AlertCircle size={14} className="shrink-0 mt-0.5" />
                 <span className="font-sans">Generation/delivery error: {send.error}</span>
               </div>
             ) : (
               <p className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3.5 text-xs italic text-zinc-500 font-sans">
-                No personalized text was generated — AI synthesis did not complete within the allocation budget, so the buyer's standard template intro was delivered to guarantee zero lead delay.
+                Standard sequence mode: Prospect was enrolled directly into your {emailPlatformLabel(run.stack?.email_platform)} workflow without dynamic AI intro synthesis.
               </p>
             )}
           </div>
@@ -415,7 +389,7 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
                         {card.title}
                       </td>
                       <td className="px-4 py-2.5 font-mono text-zinc-300 truncate max-w-xs">{card.subtitle}</td>
-                      <td className="px-4 py-2.5 text-zinc-400 font-mono">{send.prospectEmail}</td>
+                      <td className="px-4 py-2.5 text-zinc-400 font-mono">{prospectEmail}</td>
                       <td className="px-4 py-2.5">
                         <StatusPill tone={card.tone}>{card.badge}</StatusPill>
                       </td>
@@ -478,7 +452,7 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
 
                       <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80 font-sans">
                         <span className="text-[10px] font-mono text-zinc-500 truncate max-w-[120px]">
-                          {send.prospectEmail}
+                          {prospectEmail}
                         </span>
                         <StatusPill tone={card.tone} className="text-[9.5px]">
                           {card.badge}
