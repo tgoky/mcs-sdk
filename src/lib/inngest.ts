@@ -8,6 +8,7 @@ import { Inngest, eventType, staticSchema } from "inngest";
 // stores event payloads, and the engagement's `stack` jsonb carries
 // slack_webhook_url / webhook_signing_secret in plaintext. The worker
 // re-fetches the tenant row itself instead.
+//
 export type SkillRunExecuteData = {
   runId: string;
   engagementId: string;
