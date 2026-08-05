@@ -205,8 +205,8 @@ export function GlobalSearch() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-800 rounded-md transition-colors w-52 md:w-72 cursor-pointer"
+className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-800 rounded-md transition-colors w-72 md:w-96 cursor-pointer"     onClick={() => setOpen(true)}
+        
       >
         <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
         <span className="flex-1 text-left truncate">Search...</span>
