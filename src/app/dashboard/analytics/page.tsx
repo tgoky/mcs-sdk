@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { engagements, skillRuns, pendingActions, humanBlockers, type EngagementStack } from "@/models/schema";
-import { and, eq, gte, isNotNull } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { SKILLS, SKILL_INFO, type SkillName } from "@/lib/copy";
@@ -64,24 +64,34 @@ export default async function AnalyticsPage() {
       })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), gte(skillRuns.startedAt, since))),
+      .where(
+        and(eq(engagements.whopUserId, whopUserId), gte(skillRuns.startedAt, since), isNull(engagements.deletedAt))
+      ),
 
     db
       .select({ engagementId: engagements.engagementId, stack: engagements.stack })
       .from(engagements)
-      .where(eq(engagements.whopUserId, whopUserId)),
+      .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
 
     db
       .select({ id: pendingActions.id })
       .from(pendingActions)
       .innerJoin(engagements, eq(pendingActions.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), eq(pendingActions.status, "pending"))),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(pendingActions.status, "pending"),
+          isNull(engagements.deletedAt)
+        )
+      ),
 
     db
       .select({ id: humanBlockers.id })
       .from(humanBlockers)
       .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), eq(humanBlockers.status, "open"))),
+      .where(
+        and(eq(engagements.whopUserId, whopUserId), eq(humanBlockers.status, "open"), isNull(engagements.deletedAt))
+      ),
 
     db
       .select({ id: pendingActions.id })
@@ -90,7 +100,8 @@ export default async function AnalyticsPage() {
       .where(and(
         eq(engagements.whopUserId, whopUserId),
         isNotNull(pendingActions.decidedAt),
-        gte(pendingActions.decidedAt, since)
+        gte(pendingActions.decidedAt, since),
+        isNull(engagements.deletedAt)
       )),
 
     db
@@ -99,7 +110,8 @@ export default async function AnalyticsPage() {
       .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
       .where(and(
         eq(engagements.whopUserId, whopUserId),
-        gte(humanBlockers.createdAt, since)
+        gte(humanBlockers.createdAt, since),
+        isNull(engagements.deletedAt)
       )),
   ]);
 

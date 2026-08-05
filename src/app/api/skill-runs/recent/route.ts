@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { SKILL_IDS } from "@/lib/skill-manifest";
 import { latestStepLabel } from "@/lib/run-display";
@@ -55,9 +55,15 @@ export async function GET(request: Request) {
         eq(skillRuns.engagementId, engagements.engagementId)
       )
       .where(
+        // A soft-deleted/offboarded client's historical runs shouldn't
+        // keep cluttering the Live Executions feed.
         skill
-          ? and(eq(engagements.whopUserId, session.whopUserId), eq(skillRuns.skillName, skill))
-          : eq(engagements.whopUserId, session.whopUserId)
+          ? and(
+              eq(engagements.whopUserId, session.whopUserId),
+              eq(skillRuns.skillName, skill),
+              isNull(engagements.deletedAt)
+            )
+          : and(eq(engagements.whopUserId, session.whopUserId), isNull(engagements.deletedAt))
       )
       .orderBy(desc(skillRuns.startedAt))
       .limit(limit)

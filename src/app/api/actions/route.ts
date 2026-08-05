@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { pendingActions, engagements } from "@/models/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 /** Pending actions awaiting review, tenant-scoped the same way GET /api/blockers is. */
 export async function GET() {
@@ -21,7 +21,15 @@ export async function GET() {
     })
     .from(pendingActions)
     .innerJoin(engagements, eq(pendingActions.engagementId, engagements.engagementId))
-    .where(and(eq(engagements.whopUserId, session.whopUserId), eq(pendingActions.status, "pending")));
+    .where(
+      and(
+        eq(engagements.whopUserId, session.whopUserId),
+        eq(pendingActions.status, "pending"),
+        // A soft-deleted/offboarded client's leftover pending actions
+        // shouldn't keep showing up here.
+        isNull(engagements.deletedAt)
+      )
+    );
 
   return NextResponse.json({ pendingActions: rows });
 }

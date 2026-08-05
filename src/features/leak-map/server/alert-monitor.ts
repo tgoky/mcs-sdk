@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { activeAlerts, briefedCallsLog, auditRunsLog, engagements, type EngagementStack } from "@/models/schema";
-import { eq, gte, inArray, desc } from "drizzle-orm";
+import { eq, gte, inArray, desc, isNull } from "drizzle-orm";
 import { callClaude, MODEL } from "@/lib/llm";
 import { fetchWithTimeout } from "@/lib/http";
 
@@ -58,7 +58,11 @@ export async function evaluateActiveAlertMonitor(): Promise<number> {
       buyer: engagements.buyer,
     })
     .from(activeAlerts)
-    .innerJoin(engagements, eq(activeAlerts.engagementId, engagements.engagementId));
+    .innerJoin(engagements, eq(activeAlerts.engagementId, engagements.engagementId))
+    // An offboarded/soft-deleted engagement's leftover alert rows
+    // shouldn't keep firing and notifying — nothing else in this
+    // function checks deletedAt.
+    .where(isNull(engagements.deletedAt));
 
   if (alertsWithStack.length === 0) return 0;
 

@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { skillRuns, engagements, type EngagementStack } from "@/models/schema";
-import { and, eq, gte, lt } from "drizzle-orm";
+import { and, eq, gte, isNull, lt } from "drizzle-orm";
 import { KlaviyoClient } from "@/lib/platforms/email";
 import { resolveCredential } from "@/lib/credentials";
 import { notifyUser } from "@/lib/notify";
@@ -51,7 +51,10 @@ export async function findEngagementsForWeeklyReadout(): Promise<string[]> {
 
   const allEngagements = await db
     .select({ engagementId: engagements.engagementId, pausedAt: engagements.pausedAt })
-    .from(engagements);
+    .from(engagements)
+    // isEngagementPaused() below only covers pausedAt, not deletedAt — an
+    // offboarded engagement shouldn't keep getting a weekly readout sent.
+    .where(isNull(engagements.deletedAt));
   const eligible: string[] = [];
 
   for (const { engagementId, pausedAt } of allEngagements) {

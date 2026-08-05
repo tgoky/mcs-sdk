@@ -686,6 +686,21 @@ export function QueuePanel({
     });
   }, [searchFiltered, activeChipIds, priorityById]);
 
+  /** Roster shown in place of the item list when Clients scope is active
+   * and nothing's been picked yet — one row per client, rolled up from
+   * visibleItems. When selectedClientId is null, the railView==="clients"
+   * branch below doesn't filter visibleItems by client at all, so this
+   * naturally reflects the full (tab/search/chip-filtered) item set, not
+   * a stale scoped one. */
+  const rosterCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of visibleItems) {
+      if (!item.engagementId) continue;
+      counts.set(item.engagementId, (counts.get(item.engagementId) ?? 0) + 1);
+    }
+    return counts;
+  }, [visibleItems]);
+
   // 6. Grouped Repeats
   const queueGroups = useMemo(() => {
     if (!savedView.groupRepeats) {
@@ -896,11 +911,14 @@ export function QueuePanel({
       {/* TOP ROW (NORTH): [ All | Clients ] Toggle on Left | Title on Right */}
       {/* ----------------------------------------------------------------- */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-        {/* Left Side: [ All | Clients ] Toggle */}
+        {/* Left Side: [ All | Clients ] Toggle — only meaningful once a client roster is actually offered */}
         <div className="w-full md:w-64 shrink-0">
-          <div className="grid grid-cols-2 p-1 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-medium">
+          {clients.length > 0 && (
+          <div role="tablist" className="grid grid-cols-2 p-1 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-medium">
             <button
               type="button"
+              role="tab"
+              aria-selected={railView === "all"}
               onClick={() => {
                 setRailView("all");
                 setSelectedCategory(null);
@@ -918,10 +936,13 @@ export function QueuePanel({
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={railView === "clients"}
               onClick={() => {
                 setRailView("clients");
                 setSelectedCategory(null);
                 setSelectedClientId(null);
+                setIsRailSearchOpen(true);
                 setPage(0);
               }}
               className={cn(
@@ -934,6 +955,7 @@ export function QueuePanel({
               Clients
             </button>
           </div>
+          )}
         </div>
 
         {/* Right Side: Bold Title & Action Link */}
@@ -1124,6 +1146,7 @@ export function QueuePanel({
                   <button
                     key={client.engagementId}
                     type="button"
+                    data-testid={`rail-client-${client.engagementId}`}
                     onClick={() => { setSelectedClientId(client.engagementId); setPage(0); }}
                     className={cn(
                       "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
@@ -1266,7 +1289,36 @@ export function QueuePanel({
           )}
 
           {/* ROWS */}
-          {visibleItems.length === 0 ? (
+          {railView === "clients" && !selectedClientId ? (
+            clients.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-zinc-500 space-y-1">
+                <p className="text-sm font-medium">{sharedToolbarCopy.noResultsTitle}</p>
+                <p className="text-xs font-mono text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>
+              </div>
+            ) : (
+              <div className="flex-1 divide-y divide-sidebar-border border border-sidebar-border rounded-xl overflow-hidden bg-zinc-900/30">
+                {clients.map((client) => (
+                  <button
+                    key={client.engagementId}
+                    type="button"
+                    data-testid={`roster-row-${client.engagementId}`}
+                    onClick={() => { setSelectedClientId(client.engagementId); setPage(0); }}
+                    className="w-full flex items-center justify-between px-4 py-3 text-left text-xs font-medium text-zinc-200 hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-5 h-5 rounded-[5px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                        <List className="w-3 h-3 stroke-[2.5]" />
+                      </div>
+                      <span className="truncate font-semibold">{client.buyer}</span>
+                    </div>
+                    <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                      {rosterCounts.get(client.engagementId) ?? 0}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )
+          ) : visibleItems.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-zinc-500 space-y-1">
               <p className="text-sm font-medium">{sharedToolbarCopy.noResultsTitle}</p>
               <p className="text-xs font-mono text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>

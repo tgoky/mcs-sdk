@@ -17,6 +17,17 @@ export const runtime = "nodejs";
  * win-back-email-smtp.ts and win-back-sms.ts re-check
  * `winBackEnrollments.status === "active"` before every single send.
  *
+ * FIX: this route previously lived at src/app/api/win-back/[id]/stop —
+ * a sibling of src/app/api/win-back/[engagementId]/export at the same
+ * directory level. Next.js's App Router hard-rejects two different
+ * dynamic segment names ("id" vs "engagementId") under the same parent
+ * path ("You cannot use different slug names for the same dynamic
+ * path"), which broke route-tree construction for this entire route
+ * group — not just this endpoint. Moving this route under the static
+ * `enrollments` segment resolves the conflict and also matches what the
+ * frontend was already calling (/api/win-back/enrollments/{id}/stop)
+ * and what the log messages below already called it.
+ *
  * Two things have to happen for this to actually be trustworthy:
  *
  *  1. Flip the status row (load-bearing, transactional). This alone fully

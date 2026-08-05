@@ -40,7 +40,7 @@ import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/bri
 import { matchesWeeklySchedule, matchesMonthlySchedule } from "@/features/leak-map/server/schedule-matcher";
 import { computeAndPersistBenchmarks } from "@/features/leak-map/server/leak-map-benchmarks";
 import { CANARY_CHECKS, runCanaryCheck, getCanaryEngagementId } from "@/lib/platforms/canary";
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, lt, isNull } from "drizzle-orm";
 import type { EngagementStack } from "@/models/schema";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
@@ -59,7 +59,11 @@ export const nightlyBriefsCron = inngest.createFunction(
   { id: "nightly-briefs-cron", triggers: [{ cron: "TZ=UTC 0 20 * * *" }] }, // 20:00 UTC daily
   async ({ step }) => {
     const prepared = await step.run("prepare-nightly-runs", async () => {
-      const all = await db.select().from(engagements);
+      // isNull(deletedAt) — an offboarded/soft-deleted engagement should
+      // never get picked up here. isEngagementPaused() (checked below)
+      // only covers pausedAt, not deletedAt, so this has to be filtered
+      // separately at the query level.
+      const all = await db.select().from(engagements).where(isNull(engagements.deletedAt));
       // Only engagements that finished Pin-Down (booking platform wired
       // up) have anything to brief tonight.
     const eligible = all.filter((t) => {
@@ -120,7 +124,9 @@ export const leakMapScheduleCron = inngest.createFunction(
     const now = new Date();
 
     const prepared = await step.run("prepare-scheduled-audits", async () => {
-      const targets = await db.select().from(engagements);
+      // isNull(deletedAt) — see the same note on nightlyBriefsCron above;
+      // isEngagementPaused() below only covers pausedAt.
+      const targets = await db.select().from(engagements).where(isNull(engagements.deletedAt));
       const out: { runId: string; engagementId: string; auditType: "weekly" | "monthly" }[] = [];
 
       for (const tenant of targets) {
@@ -483,7 +489,8 @@ export const dynamicBriefCron = inngest.createFunction(
   { id: "dynamic-brief-cron", triggers: [{ cron: "*/15 * * * *" }] },
   async ({ step }) => {
     const engagementIds = await step.run("find-dynamic-brief-engagements", async () => {
-      const all = await db.select().from(engagements);
+      // isNull(deletedAt) — see the same note on nightlyBriefsCron above.
+      const all = await db.select().from(engagements).where(isNull(engagements.deletedAt));
       return all
         .filter((t) => {
           const stack = t.stack as EngagementStack;

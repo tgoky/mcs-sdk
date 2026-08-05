@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { engagements } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { engagements, credentialsRefs } from "@/models/schema";
+import { and, eq } from "drizzle-orm";
 import { storeCredential } from "@/lib/credentials";
 import { getSession } from "@/lib/session";
-import { isTemplateId, DEFAULT_TEMPLATE } from "@/features/pin-down/server/templates";
 import crypto from "crypto";
 
 export const maxDuration = 30;
@@ -36,7 +35,6 @@ export async function POST(request: Request) {
       prospectMeets,
       rawVoiceCorpus,
       credentials,
-      confirmationPageTemplate,
     } = body;
 
     if (!engagementId || !buyerName) {
@@ -130,6 +128,38 @@ export async function POST(request: Request) {
           tx
         );
       }
+
+      // FIX: submit-payload.ts (the wizard's client-side payload builder)
+      // always sets stack.booking_platform_credentials_ref to a
+      // deterministic secrets:// path the instant a booking_platform is
+      // picked, whether or not credentials.booking was actually filled
+      // in and sent — the field name makes it look like a confirmation
+      // that a credential exists, but it's really just an echo of the
+      // dropdown choice. Every read site that checks
+      // stack.booking_platform_credentials_ref (booking-sync-status.ts,
+      // nightlyBriefsCron, the sync-mode/booking-calendars routes) is
+      // relying on it as that confirmation. The wizard's own client-side
+      // validation does currently require a non-empty bookingApiKey
+      // before letting anyone reach this request, so this hasn't been
+      // reachable via the UI — but this route has no reason to trust a
+      // client-supplied value here at all when it can just check the
+      // table it's the source of truth for. Never trust the client's
+      // ref string directly; only ever set it from what's actually in
+      // credentialsRefs after the write above.
+      const [bookingCred] = await tx
+        .select({ id: credentialsRefs.id })
+        .from(credentialsRefs)
+        .where(
+          and(
+            eq(credentialsRefs.engagementId, engagementId),
+            eq(credentialsRefs.provider, finalStack.booking_platform)
+          )
+        )
+        .limit(1);
+      finalStack.booking_platform_credentials_ref = bookingCred
+        ? `secrets://${engagementId}/${finalStack.booking_platform}_pat`
+        : undefined;
+
       if (credentials?.email) {
         await storeCredential(
           engagementId,
@@ -203,7 +233,6 @@ export async function POST(request: Request) {
           prospectMeets: prospectMeets ?? "founder",
           existingProof: body.existingProof,
           rawVoiceCorpus: rawVoiceCorpus ?? "",
-          confirmationPageTemplate: isTemplateId(confirmationPageTemplate) ? confirmationPageTemplate : DEFAULT_TEMPLATE,
           ...(body.discoveryPrefill ? { discoveryPrefill: body.discoveryPrefill } : {}),
           updatedAt: new Date(),
         })

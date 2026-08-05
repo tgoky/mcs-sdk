@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
 import { credentialsRefs, engagements, type EngagementStack } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
-import { CalendlyClient, CalComClient } from "@/lib/platforms/booking";
+import { CalendlyClient, CalComClient, GHLCalendarClient } from "@/lib/platforms/booking";
 import { MailchimpClient, ConvertKitClient, SMTPClient, parseSmtpCredential } from "@/lib/platforms/email";
 import { notifyUser } from "@/lib/notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
@@ -15,19 +15,37 @@ import { isEngagementPaused } from "@/lib/engagement-status";
  * on MailchimpClient/ConvertKitClient/SMTPClient's checkCredentialHealth
  * in src/lib/platforms/email.ts) — not assumed from memory.
  *
- * Deliberately NOT including klaviyo, hubspot, activecampaign, or ghl yet:
+ * Deliberately NOT including klaviyo, hubspot, or activecampaign yet:
  * adding a provider here without first confirming its real validation
  * endpoint would risk flagging a healthy credential as broken (a false
  * "reconnect this" alert is its own trust problem) or silently never
  * catching a real outage. Extend this map only after doing that same
  * doc-check for the new provider.
+ *
+ * ghl_calendar reuses GET /calendars/?locationId= (the same endpoint
+ * resolveCalendarId() already depends on) as its "am I still
+ * authenticated" probe — verified against GHL's own docs, see the doc
+ * comment on GHLCalendarClient.checkCredentialHealth. It needs a second
+ * argument (locationId) that the other validators don't, since GHL scopes
+ * every request to a location rather than the token alone identifying
+ * one — checkSingleCredential resolves that from the engagement's stack
+ * before calling in.
  */
-const VALIDATORS: Record<string, (secret: string) => Promise<void>> = {
+const VALIDATORS: Record<string, (secret: string, ctx: { locationId?: string }) => Promise<void>> = {
   calendly: (token) => new CalendlyClient(token).checkCredentialHealth(),
   cal_com: (token) => new CalComClient(token).checkCredentialHealth(),
   mailchimp: (key) => new MailchimpClient(key).checkCredentialHealth(),
   convertkit: (secret) => new ConvertKitClient(secret).checkCredentialHealth(),
   smtp: (raw) => new SMTPClient(parseSmtpCredential(raw)).checkCredentialHealth(),
+  ghl_calendar: (token, ctx) => {
+    if (!ctx.locationId?.trim()) {
+      // No Location ID on file — nothing to check yet rather than a false
+      // "invalid" flag; findCredentialsNeedingCheck already only selects
+      // ghl_calendar rows that don't hit this branch (see below).
+      return Promise.reject(new Error("No GHL Location ID on file for this engagement."));
+    }
+    return new GHLCalendarClient(token, ctx.locationId).checkCredentialHealth();
+  },
 };
 
 export interface CredentialHealthResult {
@@ -49,10 +67,33 @@ export interface CredentialHealthResult {
  */
 export async function findCredentialsNeedingCheck(): Promise<string[]> {
   const rows = await db
-    .select({ id: credentialsRefs.id, provider: credentialsRefs.provider, pausedAt: engagements.pausedAt })
+    .select({
+      id: credentialsRefs.id,
+      provider: credentialsRefs.provider,
+      pausedAt: engagements.pausedAt,
+      stack: engagements.stack,
+    })
     .from(credentialsRefs)
-    .innerJoin(engagements, eq(credentialsRefs.engagementId, engagements.engagementId));
-  return rows.filter((r) => VALIDATORS[r.provider] && !isEngagementPaused(r)).map((r) => r.id);
+    .innerJoin(engagements, eq(credentialsRefs.engagementId, engagements.engagementId))
+    // isEngagementPaused() below only covers pausedAt — an offboarded
+    // engagement's (presumably dead) credentials shouldn't keep getting
+    // checked, and shouldn't keep triggering "your credential is invalid"
+    // notifications for a client that no longer exists.
+    .where(isNull(engagements.deletedAt));
+  return rows
+    .filter((r) => {
+      if (!VALIDATORS[r.provider] || isEngagementPaused(r)) return false;
+      if (r.provider === "ghl_calendar") {
+        // Without a Location ID, checkSingleCredential's ghl_calendar
+        // validator can't call GHL at all — skip rather than surface a
+        // "stopped working" notification for what's really an
+        // incomplete setup, not a broken credential.
+        const stack = r.stack as EngagementStack | null;
+        return Boolean(stack?.booking_platform_meta?.location_id?.trim());
+      }
+      return true;
+    })
+    .map((r) => r.id);
 }
 
 /**
@@ -72,6 +113,16 @@ export async function checkSingleCredential(
   const validate = VALIDATORS[row.provider];
   if (!validate) return { flagged: false, skipped: true };
 
+  // Fetched once, up front — needed for ghl_calendar's locationId context
+  // before validate() runs, and reused below for the notify-on-failure
+  // block instead of a second query.
+  const [tenant] = await db
+    .select({ whopUserId: engagements.whopUserId, stack: engagements.stack })
+    .from(engagements)
+    .where(eq(engagements.engagementId, row.engagementId))
+    .limit(1);
+  const tenantStack = (tenant?.stack as EngagementStack | null) ?? null;
+
   let secret: string;
   try {
     secret = await resolveCredential(row.engagementId, row.provider);
@@ -88,7 +139,7 @@ export async function checkSingleCredential(
   }
 
   try {
-    await validate(secret);
+    await validate(secret, { locationId: tenantStack?.booking_platform_meta?.location_id });
     await db
       .update(credentialsRefs)
       .set({ healthStatus: "ok", lastCheckedAt: new Date(), lastCheckError: null })
@@ -107,12 +158,6 @@ export async function checkSingleCredential(
       .where(eq(credentialsRefs.id, row.id));
 
     if (wasHealthyOrUnknown) {
-      const [tenant] = await db
-        .select({ whopUserId: engagements.whopUserId, stack: engagements.stack })
-        .from(engagements)
-        .where(eq(engagements.engagementId, row.engagementId))
-        .limit(1);
-
       if (tenant) {
         await notifyUser({
           whopUserId: tenant.whopUserId,
@@ -121,7 +166,7 @@ export async function checkSingleCredential(
           severity: "critical",
           title: `${row.provider} connection needs attention`,
           body: `Your ${row.provider} credential stopped working (${err.message}). Runs that depend on it — bookings, briefs, reschedule links — will fail until it's reconnected in Credentials.`,
-          slackWebhookUrl: (tenant.stack as EngagementStack | null)?.slack_webhook_url,
+          slackWebhookUrl: tenantStack?.slack_webhook_url,
         });
         return { flagged: true, skipped: false };
       }

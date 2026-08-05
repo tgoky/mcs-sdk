@@ -6,6 +6,38 @@ import { inngest, inboundReplyReceived } from "@/lib/inngest";
 import crypto from "crypto";
 
 /**
+ * HubSpot's v3 signature docs (developers.hubspot.com/docs/api/webhooks/
+ * validating-requests) say to "decode any of the URL-encoded characters
+ * listed in the table below" before hashing the request URI — HubSpot's
+ * own signer doesn't percent-encode these when it computes its copy of
+ * the signature, so if Next's URL parsing (or anything in front of it)
+ * leaves them percent-encoded, the two signatures diverge even though
+ * the request is completely legitimate. The docs page doesn't render the
+ * table in fetchable text, but a matching, independently-verified list
+ * exists in a HubSpot Community post confirmed to work
+ * (community.hubspot.com/t5/APIs-Integrations/PHP-Example-for-V3-
+ * Signature-Validation-with-full-explanation/td-p/1182453): : / @ ! $ '
+ * ( ) * , ;
+ */
+const HUBSPOT_URI_DECODE_MAP: Record<string, string> = {
+  "%3A": ":",
+  "%2F": "/",
+  "%40": "@",
+  "%21": "!",
+  "%24": "$",
+  "%27": "'",
+  "%28": "(",
+  "%29": ")",
+  "%2A": "*",
+  "%2C": ",",
+  "%3B": ";",
+};
+
+function decodeHubSpotUriChars(uriPart: string): string {
+  return uriPart.replace(/%(3A|2F|40|21|24|27|28|29|2A|2C|3B)/gi, (m) => HUBSPOT_URI_DECODE_MAP[m.toUpperCase()] ?? m);
+}
+
+/**
  * Win-Back recovery gap 6 — native path, HubSpot Conversations only. See
  * inbound-reply.ts's module comment for why Klaviyo/ActiveCampaign don't
  * have a native path at all.
@@ -47,6 +79,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
+    // IMPORTANT — operational, not a code bug: HubSpot signs the exact
+    // target URL configured for this webhook subscription in the app's
+    // developer settings, protocol included (confirmed via HubSpot
+    // Community — see the decode-map comment above). NEXT_PUBLIC_APP_URL
+    // (or the fallback below) MUST be byte-identical to that configured
+    // URL — scheme, host, and any trailing slash — or every signature
+    // will fail closed and this route will 401 every real HubSpot
+    // delivery while looking like it's "securely verifying." If inbound
+    // replies stop working after a domain change, check this first.
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
 
     let pathname: string;
@@ -62,6 +103,9 @@ export async function POST(req: Request) {
       pathname = qIdx === -1 ? req.url : req.url.substring(0, qIdx);
       search = qIdx === -1 ? "" : req.url.substring(qIdx);
     }
+
+    pathname = decodeHubSpotUriChars(pathname);
+    search = decodeHubSpotUriChars(search);
 
     const absoluteUri = `${appUrl}${pathname}${search}`;
     const sourceString = `POST${absoluteUri}${rawBody}${timestamp}`;

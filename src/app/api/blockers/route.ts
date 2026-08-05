@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { humanBlockers, engagements } from "@/models/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 /**
  * Open blockers across every engagement owned by the calling tenant —
@@ -29,7 +29,15 @@ export async function GET() {
     })
     .from(humanBlockers)
     .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
-    .where(and(eq(engagements.whopUserId, session.whopUserId), eq(humanBlockers.status, "open")));
+    .where(
+      and(
+        eq(engagements.whopUserId, session.whopUserId),
+        eq(humanBlockers.status, "open"),
+        // A soft-deleted/offboarded client's leftover blockers shouldn't
+        // keep showing up here.
+        isNull(engagements.deletedAt)
+      )
+    );
 
   return NextResponse.json({ blockers: rows });
 }

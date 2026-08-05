@@ -10,8 +10,13 @@ import crypto from "crypto";
 export const runtime = "nodejs";
 
 /**
- * Nightly Pre-Call Read cron — fires the Vercel cron job defined in
- * vercel.json: { "path": "/api/crons/nightly-briefs", "schedule": "0 20 * * *" }.
+ * Nightly Pre-Call Read cron. NOT scheduled by Vercel Cron — vercel.json
+ * has no crons block. The actual nightly trigger is nightlyBriefsCron in
+ * src/inngest/crons.ts (registered in src/app/api/inngest/route.ts), which
+ * moved off Vercel Cron because the Hobby plan caps cron cadence at once a
+ * day, too coarse for several of this app's other jobs. This route is kept
+ * as a manually-triggerable / admin-invocable equivalent — useful for
+ * backfills or on-demand runs — but nothing schedules it automatically.
  */
 export async function GET(request: Request) {
   // 1. Unified security gate

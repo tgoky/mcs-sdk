@@ -830,6 +830,32 @@ export class GHLCalendarClient {
   }
 
   /**
+   * Reuses GET /calendars/?locationId= — the same endpoint
+   * resolveCalendarId() already depends on — purely as an "is this token
+   * still good" probe. Verified against GHL's own docs
+   * (marketplace.gohighlevel.com/docs/ghl/calendars/get-calendars/, which
+   * documents 401 for an invalid/expired token) that this requires no
+   * scope beyond what a GHL calendar integration already needs, so
+   * wiring this up doesn't ask the buyer to grant anything new. Throws on
+   * a revoked/invalid token or missing Location ID; resolves silently
+   * when healthy. Used by the daily credential-health cron, not by any
+   * user-facing flow.
+   */
+  async checkCredentialHealth(): Promise<void> {
+    if (!this.locationId?.trim()) {
+      throw new Error("GHL credential check skipped: no Location ID on file for this engagement.");
+    }
+    const res = await fetchWithTimeout(
+      `${this.baseUrl}/calendars/?locationId=${encodeURIComponent(this.locationId.trim())}`,
+      { headers: this.calendarsHeaders() }
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`GHL token check failed [${res.status}]: ${body.slice(0, 300)}`);
+    }
+  }
+
+  /**
    * /calendars/events requires one of userId, calendarId, or groupId —
    * this app only ever collects locationId from the buyer, so resolve the
    * location's calendar id once (first active calendar; falls back to the
@@ -995,11 +1021,6 @@ export class OnceHubClient {
    * `custom_fields: [{name, value}, ...]`. Name isn't a real field on this
    * object, so this falls back to scanning custom_fields for a name-like
    * question, same pattern CalendlyClient uses for its own free-text Q&A.
-   * NOTE: unlike the GHL/Calendly/Cal.com fixes in this file, I could not
-   * reach OnceHub's actual query-parameter reference (their docs are
-   * client-rendered with no public OpenAPI spec I could locate), so the
-   * `starting_after`/`starting_before`/`status` query params below are
-   * unverified — only the response-shape parsing here is confirmed.
    */
   private normalizeBooking(booking: OnceHubBooking, eventKind: "created" | "cancelled"): NormalizedCall {
     const email = booking.attendees?.[0] ?? "";
@@ -1022,6 +1043,60 @@ export class OnceHubClient {
     };
   }
 
+  /**
+   * FIX: this used to filter server-side with `starting_after` /
+   * `starting_before` / `status` query params. Verified against OnceHub's
+   * actual pagination reference (developers.oncehub.com/reference/
+   * pagination, checked directly): `after` and `before` are cursor
+   * parameters that take an *object ID*, not a date — "list bookings"
+   * accepts only `limit` (1-100, default 10), `after`, and `before`, with
+   * no documented date-range or status filter. The old query params were
+   * silently ignored by the API, and with no `limit` set the response
+   * defaulted to only the 10 most recent bookings — for any tenant with
+   * real booking volume, "tomorrow's calls" could come back empty even
+   * with real bookings sitting a page or two further in.
+   *
+   * This instead pages through results (100 at a time, following the
+   * `Link: <url>; rel="next"` response header OnceHub documents — the same
+   * RFC 5988 convention GitHub's API uses, not a body field) and filters
+   * by `starting_time` / `status` client-side, since both are confirmed
+   * real fields on the booking object (developers.oncehub.com/reference/
+   * the-booking-object).
+   *
+   * OnceHub's docs state results come back in "reverse chronological"
+   * order but don't specify by which timestamp (created vs. updated vs.
+   * starting_time) — their docs are a client-rendered reference with no
+   * fetchable OpenAPI spec, so this couldn't be pinned down further. A
+   * future booking that hasn't been touched recently could in principle
+   * sit past this page cap on a very high-activity account. MAX_PAGES is
+   * generous (up to 1,000 of the account's most recently active bookings)
+   * for that reason — if a tenant's real-world volume ever needs more,
+   * raise this rather than re-introducing the broken date filters.
+   */
+  private static readonly MAX_BOOKING_PAGES = 10;
+
+  private async fetchBookingsPaged(): Promise<OnceHubBooking[]> {
+    const all: OnceHubBooking[] = [];
+    let url: string | null = `${this.baseUrl}/bookings?limit=100`;
+    let pages = 0;
+
+    while (url && pages < OnceHubClient.MAX_BOOKING_PAGES) {
+      const res = await fetchWithTimeout(url, { headers: this.headers });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`OnceHub bookings fetch failed [${res.status}]: ${body.slice(0, 300)}`);
+      }
+      const data = (await res.json()) as OnceHubBookingsResponse;
+      all.push(...(data.data ?? []));
+      pages++;
+
+      const linkHeader = res.headers.get("link") ?? res.headers.get("Link");
+      url = linkHeader ? extractNextLinkFromHeader(linkHeader) : null;
+    }
+
+    return all;
+  }
+
   async getTomorrowCalls(): Promise<NormalizedCall[]> {
     const tomorrowStart = new Date();
     tomorrowStart.setDate(tomorrowStart.getDate() + 1);
@@ -1031,16 +1106,13 @@ export class OnceHubClient {
     tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
     tomorrowEnd.setHours(23, 59, 59, 999);
 
-    const res = await fetchWithTimeout(
-      `${this.baseUrl}/bookings?starting_after=${tomorrowStart.toISOString()}&starting_before=${tomorrowEnd.toISOString()}&status=scheduled`,
-      { headers: this.headers }
-    );
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`OnceHub bookings fetch failed [${res.status}]: ${body.slice(0, 300)}`);
-    }
-    const data = (await res.json()) as OnceHubBookingsResponse;
-    return (data.data ?? []).map((booking) => this.normalizeBooking(booking, "created"));
+    const bookings = await this.fetchBookingsPaged();
+    return bookings
+      .filter((b) => {
+        const t = new Date(b.starting_time).getTime();
+        return b.status === "scheduled" && t >= tomorrowStart.getTime() && t <= tomorrowEnd.getTime();
+      })
+      .map((booking) => this.normalizeBooking(booking, "created"));
   }
 
   /**
@@ -1051,16 +1123,13 @@ export class OnceHubClient {
     const windowStart = new Date(Date.now() + startHoursFromNow * 3_600_000);
     const windowEnd = new Date(Date.now() + endHoursFromNow * 3_600_000);
 
-    const res = await fetchWithTimeout(
-      `${this.baseUrl}/bookings?starting_after=${windowStart.toISOString()}&starting_before=${windowEnd.toISOString()}&status=scheduled`,
-      { headers: this.headers }
-    );
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`OnceHub bookings fetch failed [${res.status}]: ${body.slice(0, 300)}`);
-    }
-    const data = (await res.json()) as OnceHubBookingsResponse;
-    return (data.data ?? []).map((booking) => this.normalizeBooking(booking, "created"));
+    const bookings = await this.fetchBookingsPaged();
+    return bookings
+      .filter((b) => {
+        const t = new Date(b.starting_time).getTime();
+        return b.status === "scheduled" && t >= windowStart.getTime() && t <= windowEnd.getTime();
+      })
+      .map((booking) => this.normalizeBooking(booking, "created"));
   }
 
   /**
@@ -1072,24 +1141,34 @@ export class OnceHubClient {
    * silently doing nothing.
    */
   async listBookingsSince(sinceISO: string, lookaheadDays = 14): Promise<NormalizedCall[]> {
-    const start = new Date(sinceISO);
+    const start = new Date(sinceISO).getTime();
     const end = new Date(sinceISO);
     end.setDate(end.getDate() + lookaheadDays);
+    const endMs = end.getTime();
 
-    const results: NormalizedCall[] = [];
-    for (const status of ["scheduled", "canceled"] as const) {
-      const res = await fetchWithTimeout(
-        `${this.baseUrl}/bookings?starting_after=${start.toISOString()}&starting_before=${end.toISOString()}&status=${status}`,
-        { headers: this.headers }
-      );
-      if (!res.ok) continue;
-      const data = (await res.json()) as OnceHubBookingsResponse;
-      for (const booking of data.data ?? []) {
-        results.push(this.normalizeBooking(booking, status === "canceled" ? "cancelled" : "created"));
-      }
-    }
-    return results;
+    const bookings = await this.fetchBookingsPaged();
+    return bookings
+      .filter((b) => {
+        if (b.status !== "scheduled" && b.status !== "canceled") return false;
+        const t = new Date(b.starting_time).getTime();
+        return t >= start && t <= endMs;
+      })
+      .map((booking) => this.normalizeBooking(booking, booking.status === "canceled" ? "cancelled" : "created"));
   }
+}
+
+/**
+ * Parses a `rel="next"` URL out of an RFC 5988-style Link response header
+ * (e.g. `<https://api.oncehub.com/v2/bookings?after=BKNG-XYZ&limit=100>;
+ * rel="next", <...>; rel="previous"`). Returns null once there's no next
+ * page.
+ */
+function extractNextLinkFromHeader(linkHeader: string): string | null {
+  for (const part of linkHeader.split(",")) {
+    const match = part.match(/<([^>]+)>\s*;\s*rel="next"/);
+    if (match) return match[1];
+  }
+  return null;
 }
 
 // ── Router ────────────────────────────────────────────────────────────────

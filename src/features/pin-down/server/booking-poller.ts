@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { engagements, webhookEvents, type EngagementStack } from "@/models/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { listBookingsSinceForTenant, deriveWebhookIdempotencyKey } from "@/lib/platforms/booking";
 import { handleInboundBookingEvent, classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
@@ -48,7 +48,15 @@ export async function findEngagementsDueForPoll(): Promise<string[]> {
   const rows = await db
     .select({ engagementId: engagements.engagementId, stack: engagements.stack, pausedAt: engagements.pausedAt })
     .from(engagements)
-    .where(sql`${engagements.stack}->>'webhook_receiver_mode' = 'polling'`);
+    .where(
+      and(
+        sql`${engagements.stack}->>'webhook_receiver_mode' = 'polling'`,
+        // Without this, an offboarded/soft-deleted engagement whose stack
+        // still says "polling" gets polled forever — pausedAt (checked
+        // per-row below via isEngagementPaused) doesn't cover deletedAt.
+        isNull(engagements.deletedAt)
+      )
+    );
 
   const now = Date.now();
   const due: string[] = [];

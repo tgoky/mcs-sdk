@@ -203,7 +203,15 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
       })
       .from(pendingActions)
       .innerJoin(engagements, eq(pendingActions.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), eq(pendingActions.status, "pending"))),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(pendingActions.status, "pending"),
+          // A soft-deleted/offboarded client's leftover pending actions
+          // shouldn't keep showing up in the Queue panel.
+          isNull(engagements.deletedAt)
+        )
+      ),
 
     db
       .select({
@@ -217,7 +225,13 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
       })
       .from(humanBlockers)
       .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), eq(humanBlockers.status, "open"))),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(humanBlockers.status, "open"),
+          isNull(engagements.deletedAt)
+        )
+      ),
 
     db
       .select()
@@ -307,12 +321,24 @@ export async function getQueueActionableCount(whopUserId: string): Promise<numbe
       .select({ id: pendingActions.id })
       .from(pendingActions)
       .innerJoin(engagements, eq(pendingActions.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), eq(pendingActions.status, "pending"))),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(pendingActions.status, "pending"),
+          isNull(engagements.deletedAt)
+        )
+      ),
     db
       .select({ id: humanBlockers.id })
       .from(humanBlockers)
       .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), eq(humanBlockers.status, "open"))),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(humanBlockers.status, "open"),
+          isNull(engagements.deletedAt)
+        )
+      ),
         db
       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, stack: engagements.stack })
       .from(engagements)

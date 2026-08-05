@@ -546,6 +546,7 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
       {/* ----------------------------------------------------------------- */}
       <PileOnDetailDrawer
         card={activeDrawerCard}
+        send={send}
         onClose={() => setActiveDrawerCard(null)}
         onCopy={handleCopy}
         copiedKey={copiedKey}
@@ -559,11 +560,13 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
 // ---------------------------------------------------------------------------
 function PileOnDetailDrawer({
   card,
+  send,
   onClose,
   onCopy,
   copiedKey,
 }: {
   card: InspectableChannelCard | null;
+  send: PileOnDetail["send"];
   onClose: () => void;
   onCopy: (text: string, key: string) => void;
   copiedKey: string | null;
@@ -608,7 +611,7 @@ function PileOnDetailDrawer({
                         ) : (
                           <Copy size={12} />
                         )}
-                        <span className="font-sans">{copiedKey === "drawer-intro" ? "Copied" : "Copy Copy"}</span>
+                        <span className="font-sans">{copiedKey === "drawer-intro" ? "Copied" : "Copy"}</span>
                       </button>
                     )}
                   </div>
@@ -640,9 +643,10 @@ function PileOnDetailDrawer({
                   <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3.5 font-mono text-xs text-zinc-300 space-y-1.5">
                     <p>Channel Name: {card.title}</p>
                     <p>Connected Platform: {card.subtitle}</p>
-                    <p>Target Prospect: {card.payload?.send?.prospectEmail ?? "Booking event prospect"}</p>
+                    <p>Target Prospect: {send?.prospectEmail ?? "Booking event prospect"}</p>
                   </div>
 
+                  {/* Detailed SMS Message History */}
                   {card.type === "sms" && card.payload.messages?.length > 0 ? (
                     <div className="space-y-2">
                       <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
