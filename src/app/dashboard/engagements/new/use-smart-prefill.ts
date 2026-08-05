@@ -1,20 +1,33 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import type { FormData } from "./types";
 
-// Pin-Down recovery gap 1 — smart pre-fill from the client's marketing
-// domain. Crawls the domain and suggests values for the Offer step;
-// review-and-edit stays with the user before anything gets submitted.
+/**
+ * Smart pre-fill from the client's marketing domain.
+ *
+ * Crawls the domain via /api/pin-down/discovery-prefill (which runs
+ * voice-scraper's Firecrawl-first pipeline) and suggests values for
+ * the Offer step. The scraped corpus is also threaded through to the
+ * Voice step so the user doesn't have to manually paste brand copy.
+ *
+ * Review-and-edit always stays with the user — nothing is auto-submitted.
+ */
 export function useSmartPrefill(setForm: Dispatch<SetStateAction<FormData>>) {
   const [prefillDomain, setPrefillDomain] = useState("");
   const [prefillLoading, setPrefillLoading] = useState(false);
   const [prefillError, setPrefillError] = useState<string | null>(null);
   const [prefillNotes, setPrefillNotes] = useState<string[]>([]);
+  const [lastPrefilledDomain, setLastPrefilledDomain] = useState<string | null>(null);
 
   async function runSmartPrefill() {
     if (!prefillDomain.trim()) return;
+
+    // Prevent duplicate clicks on the same domain
+    if (prefillDomain.trim() === lastPrefilledDomain) return;
+
     setPrefillLoading(true);
     setPrefillError(null);
     setPrefillNotes([]);
+
     try {
       const res = await fetch("/api/pin-down/discovery-prefill", {
         method: "POST",
@@ -23,23 +36,41 @@ export function useSmartPrefill(setForm: Dispatch<SetStateAction<FormData>>) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Pre-fill failed.");
+
       const p = data.prefill as {
         suggestedBuyerName?: string;
         suggestedOfferName?: string;
         suggestedIcp?: string;
+        scrapedCorpus?: string;
         existingConfirmationPageUrl?: string;
         detectedBookingPlatform?: string;
         notes: string[];
       };
-      setForm((f) => ({
-        ...f,
-        buyerName: p.suggestedBuyerName || f.buyerName,
-        offerName: p.suggestedOfferName || f.offerName,
-        offerIcp: p.suggestedIcp || f.offerIcp,
-        marketingDomain: prefillDomain,
-        existingConfirmationPageUrl: p.existingConfirmationPageUrl || f.existingConfirmationPageUrl,
-        bookingPlatform: p.detectedBookingPlatform || f.bookingPlatform,
-      }));
+
+      setForm((f) => {
+        // If the user changed the domain between click and response,
+        // don't apply stale results
+        if (prefillDomain.trim() !== f.marketingDomain && f.marketingDomain) {
+          return f;
+        }
+
+        return {
+          ...f,
+          buyerName: p.suggestedBuyerName || f.buyerName,
+          offerName: p.suggestedOfferName || f.offerName,
+          offerIcp: p.suggestedIcp || f.offerIcp,
+          marketingDomain: prefillDomain.trim(),
+          // Always replace corpus when re-crawling a (new) domain.
+          // If the user typed the SAME domain twice, we skip via the
+          // lastPrefilledDomain guard above — so this always means
+          // "fresh crawl results, trust them."
+          rawVoiceCorpus: p.scrapedCorpus && p.scrapedCorpus.length > 50 ? p.scrapedCorpus : "",
+          existingConfirmationPageUrl: p.existingConfirmationPageUrl || f.existingConfirmationPageUrl,
+          bookingPlatform: p.detectedBookingPlatform || f.bookingPlatform,
+        };
+      });
+
+      setLastPrefilledDomain(prefillDomain.trim());
       setPrefillNotes(p.notes ?? []);
     } catch (e: any) {
       setPrefillError(e.message);
@@ -48,15 +79,12 @@ export function useSmartPrefill(setForm: Dispatch<SetStateAction<FormData>>) {
     }
   }
 
-  // "Start over" needs to wipe this too — prefillDomain/prefillError/
-  // prefillNotes live outside `form`, so resetting form alone (see
-  // discardDraft in use-draft-persistence.ts) left the Smart Prefill box
-  // showing a stale domain, notes, or error after a reset.
   function resetPrefill() {
     setPrefillDomain("");
     setPrefillLoading(false);
     setPrefillError(null);
     setPrefillNotes([]);
+    setLastPrefilledDomain(null);
   }
 
   return {

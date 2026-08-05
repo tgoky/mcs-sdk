@@ -5,19 +5,9 @@ import { fetchWithTimeout } from "@/lib/http";
 /**
  * Pin-Down recovery gap 1 — smart pre-fill.
  *
- * The OG SKILL.md's 5-phase agentic install ran a real Discovery phase:
- * crawl the buyer's site, detect their booking platform, check for an
- * existing confirmation page, and use all of that to cut down how much
- * the operator had to type. UTP replaced Discovery with a flat five-page
- * form the operator fills in entirely by hand.
- *
- * This is NOT a full recovery of the agentic install — that's a
- * deliberate product choice UTP made to hit the "no plugin, no CLI, no
- * Cowork session" bar (see the Tier 3 discussion in the transfer
- * analysis). What this restores is the time-saving part: an optional
- * "smart pre-fill" pass the operator can trigger from the onboarding
- * form, which crawls the buyer's domain and suggests values for the
- * fields that follow rather than leaving every field blank.
+ * Crawls the buyer's site, detects their booking platform, checks for an
+ * existing confirmation page, and uses Claude to suggest values for the
+ * fields that follow.
  */
 
 export interface DiscoveryPrefillResult {
@@ -26,6 +16,7 @@ export interface DiscoveryPrefillResult {
   suggestedBuyerName?: string;
   suggestedOfferName?: string;
   suggestedIcp?: string;
+  scrapedCorpus?: string;
   existingConfirmationPageUrl?: string;
   detectedBookingPlatform?: string;
   notes: string[];
@@ -48,18 +39,52 @@ const BOOKING_PLATFORM_SIGNATURES: Array<{ platform: string; pattern: RegExp }> 
   { platform: "oncehub", pattern: /oncehub\.com/i },
 ];
 
+const BROWSER_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+
 function normalizeDomain(domain: string): string {
   let d = domain.trim().replace(/\/+$/, "");
   if (!/^https?:\/\//i.test(d)) d = `https://${d}`;
   return d;
 }
 
-async function fetchRaw(url: string, timeoutMs = 6000): Promise<string | null> {
+/**
+ * Minimal HTML strip — used ONLY as a last-resort fallback when
+ * scrapeVoiceCorpus returns nothing and we're forced to analyze the raw
+ * homepage HTML. Not a substitute for voice-scraper's Firecrawl pipeline.
+ */
+function stripHtmlForFallback(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&#\d+;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Direct fetch for structural analysis only:
+ * - Booking platform detection (needs raw HTML to find script/iframe embeds)
+ * - Confirmation page existence check (needs raw HTML to check length)
+ *
+ * This is NOT the text extraction path — that goes through voice-scraper.ts
+ * which uses Firecrawl first. This runs in parallel with voice-scraper.
+ *
+ * Kept at a short timeout because booking platform detection is non-critical
+ * (user can select manually) and CF-protected sites will just 403.
+ */
+async function fetchRaw(url: string, timeoutMs = 4000): Promise<string | null> {
   try {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetchWithTimeout(url, {
-      headers: { "User-Agent": "ShowtimePinDownDiscovery/1.0 (+https://mcs-abra.vercel.app)" },
+      headers: {
+        "User-Agent": BROWSER_USER_AGENT,
+        Accept: "text/html",
+      },
       signal: controller.signal,
       redirect: "follow",
     });
@@ -71,27 +96,6 @@ async function fetchRaw(url: string, timeoutMs = 6000): Promise<string | null> {
   }
 }
 
-/**
- * Checks a short list of common confirmation-page paths for a 200
- * response. Best-effort/heuristic, same rationale as voice-scraper.ts's
- * sales/pricing path guessing — this isn't a sitemap crawl, it's "does
- * anything obvious already exist here," which is exactly the question
- * Discovery needs answered before deciding whether to run the
- * existing-page audit at all.
- *
- * Checked in parallel, not sequentially: this function runs inside a
- * Promise.all in runDiscoveryPrefill() alongside scrapeVoiceCorpus (up to
- * CRAWL_BUDGET_MS = 20s), and the whole route has a hard 30s maxDuration
- * with a Claude inference call still to run *after* that Promise.all
- * resolves. A sequential loop over 7 paths at a 4s-per-path timeout has a
- * ~28s worst case by itself — close enough to the 30s ceiling on its own
- * that a slow-to-fail domain could 504 the route before Claude is ever
- * called. Running all 7 in parallel bounds this to roughly one timeout
- * (~3s) instead of the sum of all seven, while still checking every path.
- * `.find()` over the results (not resolution order) preserves
- * CONFIRMATION_PAGE_PATHS' priority order for which match wins when more
- * than one path resolves.
- */
 async function detectExistingConfirmationPage(base: string): Promise<string | undefined> {
   const results = await Promise.all(
     CONFIRMATION_PAGE_PATHS.map(async (path) => {
@@ -111,13 +115,16 @@ function detectBookingPlatform(homepageHtml: string | null): string | undefined 
 }
 
 /**
- * Runs the smart pre-fill pass: crawls the domain's homepage (and reuses
- * voice-scraper's sales/pricing detection for a slightly richer text
- * sample), asks Claude to infer a buyer name / offer name / ICP
- * description from what it found, checks for an existing confirmation
- * page, and sniffs the homepage HTML for a recognizable booking-platform
- * embed. Every suggestion is exactly that — a suggestion the operator
- * reviews and can override in the form, never auto-submitted.
+ * Runs the smart pre-fill pass.
+ *
+ * Execution model:
+ *   fetchRaw (structural) ──┐
+ *   scrapeVoiceCorpus ──────┼── Promise.all (parallel)
+ *   detectConfirmationPage ─┘
+ *                              │
+ *                      Claude inference
+ *                              │
+ *                      Return suggestions
  */
 export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPrefillResult> {
   const base = normalizeDomain(domain);
@@ -131,15 +138,38 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
 
   const detectedBookingPlatform = detectBookingPlatform(homepageHtml);
 
-  if (!corpus || corpus.split(/\s+/).length < 40) {
-    notes.push("Couldn't pull enough readable text from the domain to suggest buyer name/offer/ICP — fill those in manually.");
+  // ── Decide what text to send Claude ──
+  //
+  // Priority 1: Voice corpus from Firecrawl pipeline (clean Markdown)
+  // Priority 2: Stripped homepage HTML (noisy, last resort)
+  // Abort: If neither has enough text
+  let textToAnalyze = "";
+  let usedFallback = false;
+
+  if (corpus && corpus.trim().length > 50) {
+    textToAnalyze = corpus;
+  } else if (homepageHtml) {
+    // BUG FIX: Old code passed raw HTML to Claude here.
+    // Now we strip it first. Still noisy, but at least Claude sees
+    // words instead of <div class="..."> tags.
+    textToAnalyze = stripHtmlForFallback(homepageHtml);
+    usedFallback = true;
+  }
+
+  if (textToAnalyze.trim().length < 20) {
+    notes.push("Couldn't pull readable text from the domain — fill in details manually.");
     return {
       domain: base,
       crawledAt: new Date().toISOString(),
+      scrapedCorpus: corpus || undefined,
       existingConfirmationPageUrl,
       detectedBookingPlatform,
       notes,
     };
+  }
+
+  if (usedFallback) {
+    notes.push("Used a basic HTML strip of the homepage — the voice corpus pipeline didn't return enough. Results may be less accurate.");
   }
 
   let suggestedBuyerName: string | undefined;
@@ -156,14 +186,40 @@ text below, return ONLY a JSON object:
   "icp": "one sentence describing who this is for (their ideal customer), or null if unclear" }
 Return nothing but the JSON object. No preamble, no markdown fences. If you
 aren't reasonably confident, use null rather than guessing.`,
-      userMessage: corpus.slice(0, 6000),
+      userMessage: textToAnalyze.slice(0, 6000),
       maxTokens: 400,
     });
-    const cleaned = result.text.replace(/^```json\s*|\s*```$/g, "").trim();
-    const parsed = JSON.parse(cleaned);
-    suggestedBuyerName = parsed.buyer_name ?? undefined;
-    suggestedOfferName = parsed.offer_name ?? undefined;
-    suggestedIcp = parsed.icp ?? undefined;
+
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      suggestedBuyerName =
+        parsed.buyer_name ??
+        parsed.buyerName ??
+        parsed.company_name ??
+        parsed.companyName ??
+        parsed.brand_name ??
+        undefined;
+
+      suggestedOfferName =
+        parsed.offer_name ??
+        parsed.offerName ??
+        parsed.product_name ??
+        parsed.productName ??
+        parsed.service_name ??
+        undefined;
+
+      suggestedIcp =
+        parsed.icp ??
+        parsed.ideal_customer ??
+        parsed.idealCustomer ??
+        parsed.target_customer ??
+        parsed.targetCustomer ??
+        parsed.who_is_the_ideal_customer ??
+        parsed.target_audience ??
+        undefined;
+    }
   } catch (e: any) {
     notes.push(`Couldn't infer buyer/offer details from the crawl: ${e.message}`);
   }
@@ -186,6 +242,7 @@ aren't reasonably confident, use null rather than guessing.`,
     suggestedBuyerName,
     suggestedOfferName,
     suggestedIcp,
+    scrapedCorpus: corpus,
     existingConfirmationPageUrl,
     detectedBookingPlatform,
     notes,
@@ -213,14 +270,6 @@ function stripHtmlForAudit(html: string): string {
     .slice(0, 10000);
 }
 
-/**
- * When Discovery (or the operator, manually) finds a confirmation page
- * already live at the buyer's domain, this scores it against the target
- * v1 criteria and produces the same "current strengths / weaknesses /
- * v1 improvements" delta doc the OG SKILL.md's conditional audit path
- * generated — surfaced in the dashboard as pinDownPageAudit, never used
- * to silently overwrite or skip generating the new page.
- */
 export async function auditExistingConfirmationPage(
   url: string,
   context: { buyer: string; offerDetails?: any; brandVoiceProfile?: any }
@@ -241,7 +290,7 @@ export async function auditExistingConfirmationPage(
   const text = stripHtmlForAudit(html);
 
   const system = `You are auditing an existing post-booking confirmation page for
-${context.buyer} against what a well-built confirmation page should
+ ${context.buyer} against what a well-built confirmation page should
 include: a hero video/intro setting expectations, a clear "what to expect
 on the call" section, breakout content answering common questions while
 the prospect waits, social proof (if any claims are made, are they
@@ -251,7 +300,7 @@ Offer context: ${JSON.stringify(context.offerDetails ?? {})}
 Target brand voice: ${JSON.stringify(context.brandVoiceProfile ?? {})}
 
 Page content (text-extracted):
-${text}
+ ${text}
 
 Return ONLY a JSON object:
 {
@@ -269,8 +318,9 @@ Be specific and concrete — no generic filler like "could be more engaging." Ne
   });
 
   try {
-    const cleaned = result.text.replace(/^```json\s*|\s*```$/g, "").trim();
-    const parsed = JSON.parse(cleaned);
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON found");
+    const parsed = JSON.parse(jsonMatch[0]);
     return {
       auditedUrl: url,
       auditedAt: now,

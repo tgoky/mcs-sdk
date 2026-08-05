@@ -1,3 +1,4 @@
+// src/features/pin-down/server/voice-scraper.ts
 import { fetchWithTimeout } from "@/lib/http";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 
@@ -17,7 +18,7 @@ interface DiscoveredLink {
 interface RankedCandidate {
   url: string;
   kind: "about_page" | "sales_page" | "pricing_page" | "proof_page" | "supporting_page";
-  priority: number; // 1 = highest value for voice extraction, 3 = lowest
+  priority: number;
 }
 
 interface FirecrawlBudget {
@@ -25,43 +26,66 @@ interface FirecrawlBudget {
   max: number;
 }
 
-const CRAWL_TIMEOUT_MS = 8000;
-const FIRECRAWL_TIMEOUT_MS = 15000; // JS-rendered scrapes are slower
+const CRAWL_TIMEOUT_MS = 5000;
+const FIRECRAWL_TIMEOUT_MS = 15000;
 const FIRECRAWL_MAP_TIMEOUT_MS = 6000;
 const MAX_CHARS_PER_PAGE = 12000;
-const USER_AGENT = "ShowtimePinDownVoiceCrawler/1.0 (+https://mcs-abra.vercel.app)";
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 const THIN_PAGE_WORD_THRESHOLD = 20;
 
-/**
- * Stop walking ranked candidate pages once the combined corpus hits this word target.
- */
 const WORD_BUDGET_TARGET = 5000;
-
-/**
- * Hard ceiling on total pages fetched per crawl (homepage included).
- */
 const MAX_PAGES_PER_CRAWL = 8;
-
-/**
- * Hard ceiling on Firecrawl /v2/scrape (Tier 2) calls per crawl to prevent credit burn.
- */
 const MAX_FIRECRAWL_SCRAPE_CALLS = 4;
-
-/**
- * Number of candidate pages fetched concurrently in parallel.
- */
 const FETCH_BATCH_SIZE = 3;
-
-/**
- * Hard wall-clock ceiling for the ENTIRE scrapeVoiceCorpus() execution.
- */
 const CRAWL_BUDGET_MS = 20000;
 
-// Static fallback paths used only when Firecrawl /v2/map or AI classification is unavailable
 const SALES_STATIC_PATHS = ["/sales", "/sale", "/offer", "/work-with-us", "/apply", "/get-started"];
 const ABOUT_STATIC_PATHS = ["/about", "/about-us", "/our-story", "/story", "/mission", "/manifesto"];
 const PROOF_STATIC_PATHS = ["/case-studies", "/results", "/testimonials", "/success-stories"];
 const PRICING_STATIC_PATHS = ["/pricing", "/plans", "/packages"];
+
+// ── Content Quality Gate ─────────────────────────────────────────────────
+
+/**
+ * Prevents nav bars, footers, cookie banners, and Cloudflare challenge
+ * pages from being mistaken for real marketing copy. Applied to BOTH
+ * Firecrawl output (which is usually clean but can fail) and direct
+ * fetch output (which is frequently noisy).
+ */
+function looksLikeRealContent(text: string): boolean {
+  const words = text.split(/\s+/);
+  if (words.length < 30) return false;
+
+  // Real prose has longer average word length than "Home About Blog Contact"
+  const avgWordLength = words.reduce((sum, w) => sum + w.length, 0) / words.length;
+  if (avgWordLength < 3.5) return false;
+
+  // High concentration of navigation / legal signal words = not content
+  const noiseSignals = [
+    /\b(privacy|terms?\s?(?:of\s?service)?|cookie|gdpr|ccpa|copyright|all rights reserved|powered by)\b/i,
+    /\b(log\s?in|sign\s?(?:up|in)|register|sitemap)\b/i,
+  ];
+
+  const signalCount = noiseSignals.reduce((count, regex) => {
+    const matches = text.match(regex);
+    return count + (matches ? matches.length : 0);
+  }, 0);
+
+  const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
+  if (sentences.length > 0 && signalCount / sentences.length > 0.15) {
+    return false;
+  }
+
+  // Navigation links are very short lines; paragraphs are not
+  const lines = text.split("\n").filter((l) => l.trim().length > 0);
+  const shortLines = lines.filter((l) => l.trim().split(/\s+/).length <= 3).length;
+  if (lines.length > 0 && shortLines / lines.length > 0.6) {
+    return false;
+  }
+
+  return true;
+}
 
 // ── HTML Cleaning & Parsing ─────────────────────────────────────────────
 
@@ -87,6 +111,8 @@ function normalizeDomain(domain: string): string {
   return d;
 }
 
+// ── Tier 2 (now fallback): Direct HTTP fetch ─────────────────────────────
+
 async function fetchPageText(url: string): Promise<string | null> {
   try {
     const controller = new AbortController();
@@ -107,15 +133,21 @@ async function fetchPageText(url: string): Promise<string | null> {
   }
 }
 
-/**
- * Tier 2: Firecrawl's /v2/scrape endpoint for JS-heavy apps or Cloudflare-protected pages.
- */
-async function fetchPageTextViaFirecrawl(url: string, budget: FirecrawlBudget): Promise<string | null> {
+// ── Tier 1 (now primary): Firecrawl /v2/scrape ──────────────────────────
+
+async function fetchPageTextViaFirecrawl(
+  url: string,
+  budget: FirecrawlBudget,
+  deadline: number
+): Promise<string | null> {
   const apiKey = process.env.FIRECRAWL_API_KEY;
   if (!apiKey || budget.used >= budget.max) return null;
-  budget.used += 1; // Synchronously reserved before await
+  if (Date.now() >= deadline) return null;
+
+  budget.used += 1; // Reserve synchronously before await
 
   try {
+    const remaining = deadline - Date.now();
     const res = await fetchWithTimeout(
       "https://api.firecrawl.dev/v2/scrape",
       {
@@ -130,7 +162,7 @@ async function fetchPageTextViaFirecrawl(url: string, budget: FirecrawlBudget): 
           onlyMainContent: true,
         }),
       },
-      FIRECRAWL_TIMEOUT_MS
+      Math.min(FIRECRAWL_TIMEOUT_MS, remaining)
     );
     if (!res.ok) return null;
     const data = await res.json();
@@ -142,6 +174,17 @@ async function fetchPageTextViaFirecrawl(url: string, budget: FirecrawlBudget): 
   }
 }
 
+// ── Unified fetch with quality gate ──────────────────────────────────────
+
+/**
+ * Firecrawl first (clean Markdown, JS rendering, noise stripped).
+ * Direct fetch second (zero-cost safety net when Firecrawl fails,
+ * is unconfigured, or the budget is exhausted).
+ *
+ * Both paths go through looksLikeRealContent() to prevent nav bars,
+ * footers, cookie banners, and Cloudflare challenge pages from
+ * reaching Claude as if they were marketing copy.
+ */
 async function fetchPageTextWithFallback(
   url: string,
   deadline: number,
@@ -149,21 +192,26 @@ async function fetchPageTextWithFallback(
 ): Promise<string | null> {
   if (Date.now() >= deadline) return null;
 
+  // ── TIER 1: Firecrawl ──
+  if (firecrawlBudget.used < firecrawlBudget.max && process.env.FIRECRAWL_API_KEY) {
+    const firecrawlResult = await fetchPageTextViaFirecrawl(url, firecrawlBudget, deadline);
+    if (firecrawlResult && looksLikeRealContent(firecrawlResult)) {
+      return firecrawlResult;
+    }
+  }
+
+  // ── TIER 2: Direct fetch (fallback) ──
+  if (Date.now() >= deadline) return null;
   const direct = await fetchPageText(url);
-  if (direct && direct.split(/\s+/).length >= THIN_PAGE_WORD_THRESHOLD) {
+  if (direct && looksLikeRealContent(direct)) {
     return direct;
   }
 
-  if (Date.now() >= deadline) return null;
-  return fetchPageTextViaFirecrawl(url, firecrawlBudget);
+  return null;
 }
 
 // ── AI Link Classification Engine ──────────────────────────────────────────
 
-/**
- * Uses Claude (Haiku / fast LLM) to analyze the raw link inventory returned by Firecrawl /v2/map.
- * Replaces dumb keyword matching with semantic intent classification.
- */
 async function classifySiteLinksWithAI(
   links: DiscoveredLink[],
   runId?: string
@@ -201,7 +249,6 @@ Return ONLY a JSON array of objects:
       runId,
     });
 
-    // Extract JSON array window defensively to prevent markdown preamble breaks
     const jsonMatch = res.text.match(/\[[\s\S]*\]/);
     const rawJson = jsonMatch ? jsonMatch[0] : res.text.replace(/^```json\s*|\s*```$/g, "").trim();
     const parsed = JSON.parse(rawJson);
@@ -222,7 +269,7 @@ Return ONLY a JSON array of objects:
         priority: typeof item.priority === "number" ? item.priority : 2,
       }));
   } catch {
-    return []; // Soft-fail back to static path guesses on parse failure
+    return [];
   }
 }
 
@@ -265,14 +312,12 @@ async function discoverCandidateUrls(
     const rawLinks: any[] = data?.links ?? [];
     if (rawLinks.length === 0) return staticFallbackCandidates(base);
 
-    // Normalize Firecrawl map output (handles both string[] and { url: string }[] payloads)
     const links: DiscoveredLink[] = rawLinks
       .map((l) => (typeof l === "string" ? { url: l } : { url: l?.url, title: l?.title, description: l?.description }))
       .filter((l): l is DiscoveredLink => Boolean(l.url));
 
     if (links.length === 0) return staticFallbackCandidates(base);
 
-    // AI Semantic Pass: Claude classifies Firecrawl's indexed links
     const aiRanked = await classifySiteLinksWithAI(links, runId);
     if (aiRanked.length > 0) return aiRanked;
 

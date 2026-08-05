@@ -207,38 +207,38 @@ export default function NewEngagementPage() {
 
       <StepIndicator steps={STEPS} current={step} />
 
-      {showRestoredBanner && (
-        <div
-          className="rounded-lg p-3 flex items-center justify-between gap-3 text-xs shadow-xs"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-        >
-          <span style={{ color: "var(--text-muted)" }}>
-            Restored your in-progress setup from before the last refresh. API keys were not saved and need to be re-entered.
-          </span>
-          <div className="flex items-center gap-2 shrink-0 font-mono">
-            <button
-              type="button"
-              onClick={() => setShowRestoredBanner(false)}
-              className="px-2 py-1 rounded-sm hover:opacity-80 cursor-pointer"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              [ Dismiss ]
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                discardDraft();
-                smartPrefill.resetPrefill();
-                emailIntegrations.resetIntegrations();
-              }}
-    className="px-2 py-1 rounded-sm border bg-background/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
-              style={{ color: "var(--text-secondary)", borderColor: "var(--border)" }}
-            >
-              Start over
-            </button>
-          </div>
-        </div>
-      )}
+     {showRestoredBanner && (
+  <div
+    className="rounded-lg p-3 flex items-center justify-between gap-3 text-xs shadow-xs"
+    style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+  >
+    <span style={{ color: "var(--text-muted)" }}>
+      Restored your in-progress setup from before the last refresh. API keys were not saved and need to be re-entered.
+    </span>
+    <div className="flex items-center gap-2 shrink-0 font-mono">
+      <button
+        type="button"
+        onClick={() => setShowRestoredBanner(false)}
+        className="px-2 py-1 rounded-sm hover:opacity-80 cursor-pointer"
+        style={{ color: "var(--text-secondary)" }}
+      >
+        [ Keep Draft ]
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          discardDraft();
+          smartPrefill.resetPrefill();
+          emailIntegrations.resetIntegrations();
+        }}
+        className="px-2 py-1 rounded-sm border bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer font-bold"
+      >
+        [ Dismiss & Clear All ]
+      </button>
+    </div>
+  </div>
+)}
+
 
       <div className="bg-transparent space-y-6 pt-2">
         {step === "offer" && (
