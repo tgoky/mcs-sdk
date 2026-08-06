@@ -1,0 +1,1 @@
+ALTER TABLE "engagements" ADD COLUMN "tag_color" text;

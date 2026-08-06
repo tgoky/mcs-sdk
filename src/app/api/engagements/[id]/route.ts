@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { and, eq } from "drizzle-orm";
+import { isValidTagColorId } from "@/lib/engagement-tag-colors";
 
 export const revalidate = 0;
 
@@ -159,6 +160,45 @@ export async function PATCH(
         .set({ deletedAt: null, pausedAt: null, pausedReason: null, updatedAt: new Date() })
         .where(eq(engagements.engagementId, id));
       return NextResponse.json({ ok: true });
+    }
+
+    // Client rail row edits (buyer name / squircle tag color) — from the
+    // "..." menu in client-sidebar-list.tsx. Deliberately a separate branch
+    // from the stack-edit path below rather than folded into `incoming`:
+    // buyer/tagColor are plain top-level columns, not part of the `stack`
+    // jsonb blob, and this way a client rail edit can never accidentally
+    // race a concurrent Edit Stack Settings save into the same `stack.set()`
+    // call.
+    if (body.buyer !== undefined || body.tagColor !== undefined) {
+      const rowUpdate: { buyer?: string; tagColor?: string | null; updatedAt: Date } = {
+        updatedAt: new Date(),
+      };
+
+      if (body.buyer !== undefined) {
+        const trimmed = typeof body.buyer === "string" ? body.buyer.trim() : "";
+        if (!trimmed) {
+          return NextResponse.json({ error: "Client name can't be empty." }, { status: 400 });
+        }
+        if (trimmed.length > 200) {
+          return NextResponse.json({ error: "Client name is too long." }, { status: 400 });
+        }
+        rowUpdate.buyer = trimmed;
+      }
+
+      if (body.tagColor !== undefined) {
+        if (body.tagColor !== null && !isValidTagColorId(body.tagColor)) {
+          return NextResponse.json({ error: `Invalid tagColor: ${body.tagColor}` }, { status: 400 });
+        }
+        rowUpdate.tagColor = body.tagColor;
+      }
+
+      await db.update(engagements).set(rowUpdate).where(eq(engagements.engagementId, id));
+
+      return NextResponse.json({
+        ok: true,
+        ...(rowUpdate.buyer !== undefined ? { buyer: rowUpdate.buyer } : {}),
+        ...(rowUpdate.tagColor !== undefined ? { tagColor: rowUpdate.tagColor } : {}),
+      });
     }
 
     const incoming = body.stack;

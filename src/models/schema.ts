@@ -457,6 +457,12 @@ export const engagements = pgTable("engagements", {
   engagementId: text("engagement_id").notNull().unique(),
   whopUserId: text("whop_user_id").notNull(),
   buyer: text("buyer").notNull(),
+  // Sidebar client-rail squircle color, set from the "..." row menu's
+  // "Add tag color" submenu (src/app/dashboard/client-sidebar-list.tsx).
+  // One of ENGAGEMENT_TAG_COLORS' ids (src/lib/engagement-tag-colors.ts),
+  // NULL meaning "use the default teal" — never a raw hex value, so the
+  // palette can be re-themed later without a data migration.
+  tagColor: text("tag_color"),
   schemaVersion: text("schema_version").notNull().default("1.0"),
 
   // pin-down writes these once — .$type<T>() gives us TS safety on the jsonb

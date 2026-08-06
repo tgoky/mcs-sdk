@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { LiveCountBadge } from "./live-count-badge";
 
 export interface NavLinkItem {
   href: string;
   label: string;
   icon: ReactNode;
   count?: number;
+  /** When true, count is rendered by LiveCountBadge (polls for updates) instead of as a static number. `count` is still used as its initial value. */
+  live?: boolean;
 }
 
 export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
@@ -45,16 +48,20 @@ export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
               </span>
               <span className="truncate">{link.label}</span>
             </div>
-            {link.count !== undefined && link.count > 0 && (
-              <span
-                className={`ml-auto shrink-0 px-1.5 py-[1px] rounded-full text-[11px] font-mono font-medium transition-colors ${
-                  active
-                    ? "bg-zinc-700 text-white"
-                    : "bg-zinc-800 text-zinc-400 group-hover:text-zinc-200"
-                }`}
-              >
-                {link.count}
-              </span>
+            {link.live ? (
+              <LiveCountBadge initialCount={link.count ?? 0} active={active} />
+            ) : (
+              link.count !== undefined && link.count > 0 && (
+                <span
+                  className={`ml-auto shrink-0 px-1.5 py-[1px] rounded-full text-[11px] font-mono font-medium transition-colors ${
+                    active
+                      ? "bg-zinc-700 text-white"
+                      : "bg-zinc-800 text-zinc-400 group-hover:text-zinc-200"
+                  }`}
+                >
+                  {link.count}
+                </span>
+              )
             )}
           </Link>
         );

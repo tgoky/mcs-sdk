@@ -11,9 +11,9 @@ import {
   FolderKanban,
   ChevronDown,
   Plus,
-  List,
 } from "lucide-react";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
+import { ClientSidebarList } from "./client-sidebar-list";
 
 export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
   const [queueCount, unreadInboxCount, runningCountResult, clientRows] = await Promise.all([
@@ -31,7 +31,7 @@ export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
       .where(and(eq(engagements.whopUserId, whopUserId), eq(skillRuns.status, "running"))),
 
     db
-      .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
+      .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, tagColor: engagements.tagColor })
       .from(engagements)
       .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)))
       .orderBy(desc(engagements.createdAt))
@@ -50,7 +50,7 @@ export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
   // Group 2: Queue, Executions, Projects
   const group2Links: NavLinkItem[] = [
     { href: "/dashboard/queue", label: "Queue", icon: <ListTodo className="w-4 h-4" />, count: queueCount },
-    { href: "/dashboard/runs", label: "Executions", icon: <Activity className="w-4 h-4" />, count: Number(runningCountResult[0]?.count ?? 0) },
+    { href: "/dashboard/runs", label: "Executions", icon: <Activity className="w-4 h-4" />, count: Number(runningCountResult[0]?.count ?? 0), live: true },
     { href: "/dashboard/projects", label: "Projects", icon: <FolderKanban className="w-4 h-4" /> },
   ];
 
@@ -83,26 +83,8 @@ export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
           </Link>
         </div>
 
-        {/* CLIENTS LIST - TEAL SQUIRCLE ICON */}
-        {clientRows.length > 0 ? (
-          <nav className="flex flex-col gap-0.5">
-            {clientRows.map((client) => (
-              <Link
-                key={client.engagementId}
-                href={`/dashboard/engagements/${client.engagementId}`}
-                className="flex items-center gap-3 px-2.5 py-2 rounded-[10px] text-[13px] font-medium text-zinc-300 hover:bg-zinc-800/60 hover:text-white transition-colors duration-100"
-              >
-                {/* Teal Squircle Icon */}
-                <div className="w-6 h-6 rounded-[7px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
-                  <List className="w-3.5 h-3.5 stroke-[2.5]" />
-                </div>
-                <span className="truncate">{client.buyer}</span>
-              </Link>
-            ))}
-          </nav>
-        ) : (
-          <p className="px-2.5 py-1 text-xs text-zinc-500">No clients yet.</p>
-        )}
+        {/* CLIENTS LIST — inline rename + tag-color picker, see client-sidebar-list.tsx */}
+        <ClientSidebarList clients={clientRows} />
       </div>
     </div>
   );
