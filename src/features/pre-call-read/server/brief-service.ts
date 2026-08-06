@@ -424,6 +424,15 @@ Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : "
           runId,
           callTime: call.callTime,
           prospectName: call.name,
+          // Win-Back no-show gap fix — this is the only guaranteed-to-exist
+          // row per call (unlike showRateFeatures, which only exists when
+          // show_rate_scoring_enabled was on), so it's what
+          // resolveCallOutcome (outcome-resolution.ts) looks up to find who
+          // to enroll in Win-Back or sync an ad cohort for. Sourced from
+          // the same NormalizedCall booking.ts already populated — not a
+          // re-fetch, not a guess.
+          prospectEmail: call.email || null,
+          prospectPhone: call.phone ?? null,
           briefDeliveredAt: new Date(),
           destinationDelivered: stack.brief_landing_destination ?? "slack",
           personMatchScore: matchResult!.totalScore,
@@ -436,6 +445,8 @@ Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : "
           target: briefedCallsLog.callId,
           set: {
             runId,
+            prospectEmail: call.email || null,
+            prospectPhone: call.phone ?? null,
             briefDeliveredAt: new Date(),
             destinationDelivered: stack.brief_landing_destination ?? "slack",
             personMatchScore: matchResult!.totalScore,
@@ -489,6 +500,11 @@ Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : "
           runId,
           callTime: call.callTime,
           prospectName: call.name,
+          // Same rationale as the success-path insert above — a failed
+          // brief is still a real scheduled call that can no-show, and
+          // this row is still what resolveCallOutcome looks up.
+          prospectEmail: call.email || null,
+          prospectPhone: call.phone ?? null,
           briefDeliveredAt: null,
           destinationDelivered: null,
           personMatchScore: matchResult?.totalScore ?? null,
@@ -501,6 +517,8 @@ Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : "
           target: briefedCallsLog.callId,
           set: {
             runId,
+            prospectEmail: call.email || null,
+            prospectPhone: call.phone ?? null,
             researchStatus,
             aiSynthesisStatus: "failed",
           },

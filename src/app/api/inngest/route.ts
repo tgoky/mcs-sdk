@@ -28,6 +28,8 @@ import {
   docsLinksValidatorCron,
   dynamicBriefCron,
   processDynamicBriefEngagementCron,
+  assumedNoShowSweepCron,
+  processAssumedNoShowSweepEngagementCron,
 } from "@/inngest/crons";
 
 // Explicit duration floor for this route, paired with checkpointing's
@@ -96,6 +98,10 @@ export const { GET, POST, PUT } = serve({
     // batch — see brief-service.ts's triggerMode (Pre-Call Read recovery gap 1).
     dynamicBriefCron,
     processDynamicBriefEngagementCron,
+    // Win-Back no-show gap fix — the zero-human-required safety net.
+    // See the module comment on assumedNoShowSweepCron in crons.ts.
+    assumedNoShowSweepCron,
+    processAssumedNoShowSweepEngagementCron,
     // Halts a win-back cadence when a prospect replies — see
     // src/inngest/win-back-reply.ts (Win-Back recovery gap 6).
     processInboundReply,

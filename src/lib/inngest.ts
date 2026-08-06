@@ -175,6 +175,18 @@ export const dynamicBriefEngagement = eventType("pre-call-read/dynamic-brief-eng
   schema: staticSchema<DynamicBriefEngagementData>(),
 });
 
+// Win-Back no-show gap fix — the "we can't rely on a human to click a
+// button" safety net. Same fan-out shape as the two above: a scheduler
+// cron does a cheap, broad scan, then dispatches one of these per
+// engagement so one tenant's outcome resolution can't block another's.
+// See assumedNoShowSweepEngagement's handler in crons.ts.
+export type AssumedNoShowSweepEngagementData = {
+  engagementId: string;
+};
+export const assumedNoShowSweepEngagement = eventType("pre-call-read/assumed-no-show-sweep-engagement", {
+  schema: staticSchema<AssumedNoShowSweepEngagementData>(),
+});
+
 export type StaleRunNotifyData = {
   runId: string;
   engagementId: string;

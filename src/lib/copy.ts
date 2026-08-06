@@ -115,6 +115,9 @@ export const CALL_SESSION_STATUS_LABELS: Record<string, string> = {
   scheduled: "Bot scheduled",
   joining: "Bot joining",
   in_call: "In call",
+  // Win-Back no-show gap fix — the call has ended but the transcript
+  // isn't processed yet; see subCode for why it ended (docs.recall.ai/docs/sub-codes).
+  call_ended: "Call ended",
   done: "Processed",
   failed: "Failed",
 };
@@ -123,6 +126,7 @@ export const CALL_SESSION_STATUS_COLORS: Record<string, string> = {
   scheduled: "text-zinc-400 dark:text-zinc-500",
   joining: "text-sky-600 dark:text-sky-400 italic",
   in_call: "text-sky-600 dark:text-sky-400 italic",
+  call_ended: "text-amber-600 dark:text-amber-400",
   done: "text-gold-hover dark:text-gold",
   failed: "text-rose-400",
 };

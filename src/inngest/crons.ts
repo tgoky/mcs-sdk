@@ -26,9 +26,9 @@
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
 import crypto from "crypto";
-import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle } from "@/lib/inngest";
+import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle, assumedNoShowSweepEngagement } from "@/lib/inngest";
 import { db } from "@/lib/db";
-import { engagements, skillRuns, canaryRuns } from "@/models/schema";
+import { engagements, skillRuns, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions } from "@/models/schema";
 import { startRun, closeStaleRun, notifyRunOutcome, failRun } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
 import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
@@ -40,10 +40,11 @@ import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/bri
 import { matchesWeeklySchedule, matchesMonthlySchedule } from "@/features/leak-map/server/schedule-matcher";
 import { computeAndPersistBenchmarks } from "@/features/leak-map/server/leak-map-benchmarks";
 import { CANARY_CHECKS, runCanaryCheck, getCanaryEngagementId } from "@/lib/platforms/canary";
-import { and, eq, lt, isNull } from "drizzle-orm";
+import { and, eq, lt, gte, isNull, notInArray } from "drizzle-orm";
 import type { EngagementStack } from "@/models/schema";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
 // ONE step.run(), then fans out via a SINGLE step.sendEvent() carrying the
@@ -639,5 +640,132 @@ export const checkSingleCanary = inngest.createFunction(
     }
 
     return result;
+  }
+);
+
+// ── Win-Back no-show gap fix — assumed-no-show sweep ────────────────────
+//
+// The universal, zero-human-required safety net. The Recall bot webhook
+// (api/recall/route.ts) resolves attendance definitively when a bot's
+// telemetry is available, but that only covers engagements with
+// stack.conversation_intelligence_provider === "recall_ai" AND a booking
+// platform whose events carry a meetingUrl (currently only Calendly — see
+// the "Tier 4 #24" comment in booking.ts). Every other briefed call — and
+// every rep who just never clicks a Slack/dashboard outcome button —
+// falls through to this: 20 minutes after a call's scheduled time, if
+// nothing has logged an outcome for it yet, assume no_show and act on
+// that assumption. A rep (or Recall, if it resolves late) can still
+// correct it afterward — see exitCorrectedNoShow in outcome-resolution.ts
+// — so the cost of a wrong assumption (someone who actually showed but
+// was slow to get logged) is one Win-Back email that gets walked back,
+// not a silently-lost real no-show. That trade explicitly follows the
+// brief's own reasoning: "It's better to accidentally send one 'Sorry we
+// missed you' email to someone who showed up late... than to let a true
+// no-show go cold forever."
+//
+// Same fan-out shape as bookingPollCron/dynamicBriefCron: a cheap,
+// broad top-level scan, one event per engagement so a single tenant's
+// resolution work can't block another's.
+export const assumedNoShowSweepCron = inngest.createFunction(
+  { id: "assumed-no-show-sweep-cron", triggers: [{ cron: "*/15 * * * *" }] },
+  async ({ step }) => {
+    const engagementIds = await step.run("find-sweep-engagements", async () => {
+      const all = await db.select().from(engagements).where(isNull(engagements.deletedAt));
+      return all.filter((t) => !isEngagementPaused(t)).map((t) => t.engagementId);
+    });
+
+    if (engagementIds.length > 0) {
+      await step.sendEvent(
+        "dispatch-no-show-sweeps",
+        engagementIds.map((engagementId) => assumedNoShowSweepEngagement.create({ engagementId }))
+      );
+    }
+
+    return { dispatched: engagementIds.length };
+  }
+);
+
+/**
+ * Fanned-out handler: resolves assumed no-shows for one engagement.
+ *
+ * Window: calls that were scheduled between 4 hours and 20 minutes ago.
+ * The lower bound (20 min) gives a rep — or Recall — a reasonable chance
+ * to log the real outcome first, since most calls run under that. The
+ * upper bound (4h) isn't about correctness (a call from a week ago with
+ * no outcome logged is just as much a no-show), it's about keeping each
+ * run's query cheap and bounded — nothing stops a call from being caught
+ * on this cron's next pass 15 minutes later if it's missed for any
+ * reason, since the exclusion is "no outcome logged yet", not "seen once
+ * already".
+ */
+export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
+  { id: "process-assumed-no-show-sweep-engagement", triggers: [assumedNoShowSweepEngagement] },
+  async ({ event, step }) => {
+    const { engagementId } = event.data;
+
+    const eligible = await step.run("find-eligible-calls", async () => {
+      const now = new Date();
+      const windowStart = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+      const windowEnd = new Date(now.getTime() - 20 * 60 * 1000);
+
+      const calls = await db
+        .select({ callId: briefedCallsLog.callId, callTime: briefedCallsLog.callTime })
+        .from(briefedCallsLog)
+        .where(
+          and(
+            eq(briefedCallsLog.engagementId, engagementId),
+            gte(briefedCallsLog.callTime, windowStart),
+            lt(briefedCallsLog.callTime, windowEnd)
+          )
+        );
+      if (calls.length === 0) return [];
+
+      // Exclude bookings that already have ANY outcome logged (from any
+      // of the other three sources) — this sweep should never overwrite
+      // a real signal, only fill the gap where none exists yet.
+      const alreadyLogged = await db
+        .select({ bookingId: briefOutcomeLog.bookingId })
+        .from(briefOutcomeLog)
+        .where(eq(briefOutcomeLog.engagementId, engagementId));
+      const loggedIds = new Set(alreadyLogged.map((r) => r.bookingId));
+
+      // Exclude bookings a Recall bot is still actively tracking and
+      // hasn't reached a terminal status for — give Recall's more
+      // precise, per-participant telemetry room to resolve it first
+      // rather than racing an assumption against it. A session stuck
+      // non-terminal past the sweep's own 4h ceiling has effectively
+      // already fallen out of this window on its own.
+      const activeSessions = await db
+        .select({ bookingId: conversationIntelligenceSessions.bookingId })
+        .from(conversationIntelligenceSessions)
+        .where(
+          and(
+            eq(conversationIntelligenceSessions.engagementId, engagementId),
+            notInArray(conversationIntelligenceSessions.status, ["done", "call_ended", "failed"])
+          )
+        );
+      const pendingRecallIds = new Set(activeSessions.map((r) => r.bookingId));
+
+      return calls.filter((c) => !loggedIds.has(c.callId) && !pendingRecallIds.has(c.callId));
+    });
+
+    let resolved = 0;
+    for (const call of eligible) {
+      // Returned, not closure-mutated, from inside step.run — a step's
+      // return value replays safely from Inngest's memoized checkpoint;
+      // mutating an outer variable from inside the callback would not.
+      const wasResolved = await step.run(`resolve-${call.callId}`, async () => {
+        const result = await resolveCallOutcome({
+          engagementId,
+          bookingId: call.callId,
+          outcome: "no_show",
+          source: "auto_sweep",
+        });
+        return result.recorded ? 1 : 0;
+      });
+      resolved += wasResolved;
+    }
+
+    return { checked: eligible.length, resolved };
   }
 );

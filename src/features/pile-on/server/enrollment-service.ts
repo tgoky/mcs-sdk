@@ -379,6 +379,37 @@ export async function handleInboundBookingEvent(
 
   // ── booking.cancelled / no-showed → Win-Back ─────────────────────────
   else if (eventKind === "cancelled") {
+    // Win-Back no-show gap fix — dedup guard. A given booking can now
+    // reach this branch from more than one source: a real
+    // booking.cancelled webhook from the platform, a rep-logged no_show
+    // outcome (dashboard or Slack), Recall bot telemetry, or the
+    // assumed-no-show sweep (see outcome-resolution.ts) — and more than
+    // one of those can legitimately fire for the same booking (e.g. a
+    // true no-show that the prospect later also cancels through the
+    // calendar UI). Without this check each source would create its own
+    // active winBackEnrollments row and the prospect would get enrolled
+    // — and emailed — more than once for one missed call. bookingId is
+    // already resolved above for both branches; this is the authoritative
+    // check (outcome-resolution.ts's own pre-check is best-effort only).
+    const [alreadyEnrolled] = await db
+      .select({ id: winBackEnrollments.id })
+      .from(winBackEnrollments)
+      .where(and(eq(winBackEnrollments.engagementId, tenant.engagementId), eq(winBackEnrollments.sourceBookingId, bookingId)))
+      .limit(1);
+
+    if (alreadyEnrolled) {
+      summary.openItems.push(
+        `${prospectName} (${prospectEmail}) was already enrolled in win-back for this booking (enrollment ${alreadyEnrolled.id}) — skipped a duplicate enrollment.`
+      );
+      await logStep(runId, {
+        phase: "recovery_enrollment",
+        status: "success",
+        detail: "Skipped — already enrolled for this exact booking.",
+      });
+      await finishRun(runId, { summary });
+      return;
+    }
+
     await logStep(runId, {
       phase: "recovery_enrollment",
       status: "running",
@@ -433,6 +464,11 @@ export async function handleInboundBookingEvent(
         recoveryWindowDays: stack.recovery_window_days ?? 30,
         status: "active",
         freshRescheduleLink,
+        // Win-Back no-show gap fix — see the dedup guard above. Persisted
+        // on every enrollment (not just outcome-resolution-triggered
+        // ones) so a genuine platform cancellation and a later no-show
+        // resolution for the same booking can't both create a row either.
+        sourceBookingId: bookingId,
       })
       .returning({ id: winBackEnrollments.id });
 

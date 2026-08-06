@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { briefedCallsLog, briefOutcomeLog, engagements } from "@/models/schema";
+import { briefedCallsLog, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { and, eq } from "drizzle-orm";
+import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
 
 export const runtime = "nodejs";
 
@@ -21,9 +22,13 @@ const VALID_OUTCOMES = new Set(["showed", "no_show", "rescheduled"]);
  * from Slack and one logged from the dashboard converge on one source of
  * truth instead of two disconnected copies.
  *
- * Append-only, same as the Slack path — no upsert. GET
- * /api/skill-runs/[id]/detail resolves "current" outcome as the most
- * recently logged row per call.
+ * Win-Back no-show gap fix — this now goes through
+ * resolveCallOutcome (outcome-resolution.ts) instead of a bare insert.
+ * Previously a "no_show" logged here (or from Slack) only ever wrote this
+ * log row; nothing enrolled the prospect in Win-Back and nothing removed
+ * them from the ad-data cohort. See that module for the full picture —
+ * this route no longer needs to know the prospect's email itself,
+ * resolveCallOutcome looks it up from briefedCallsLog.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -62,16 +67,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Briefed call not found." }, { status: 404 });
     }
 
-    await db.insert(briefOutcomeLog).values({
+    const result = await resolveCallOutcome({
       engagementId: row.engagementId,
       bookingId: row.callId,
-      outcome: body.outcome,
-      loggedBySlackUserId: null, // logged from the dashboard, not a Slack click
+      outcome: body.outcome as "showed" | "no_show" | "rescheduled",
+      source: "dashboard",
     });
 
-    return NextResponse.json({ success: true, outcome: body.outcome });
+    return NextResponse.json({
+      success: result.recorded,
+      outcome: body.outcome,
+      winBack: result.winBack,
+      cohort: result.cohort,
+      ...(result.reason ? { note: result.reason } : {}),
+    });
   } catch (err) {
     console.error("[pre-call-read/calls/[id]/outcome]", err);
     return NextResponse.json({ error: "Failed to log call outcome." }, { status: 500 });
   }
 }
+

@@ -805,6 +805,18 @@ export const briefedCallsLog = pgTable("briefed_calls_log", {
   runId: uuid("run_id"),
   callTime: timestamp("call_time").notNull(),
   prospectName: text("prospect_name"),
+  // No-show/win-back recovery gap — previously this row (the one thing
+  // guaranteed to exist for every briefed call, regardless of whether
+  // show_rate_scoring_enabled ever populated a showRateFeatures row) had
+  // no way to identify the prospect by anything but name. Every outcome
+  // consumer (outcome/route.ts, slack/interactions/route.ts, the Recall
+  // bot webhook, and the assumed-no-show sweep in crons.ts) needs a
+  // reliable prospectEmail to enroll into Win-Back or sync an ad cohort
+  // by. Populated at brief-send time straight from NormalizedCall (see
+  // brief-service.ts), the same source booking.ts already trusts for
+  // this data — not a re-fetch or a guess.
+  prospectEmail: text("prospect_email"),
+  prospectPhone: text("prospect_phone"),
   briefDeliveredAt: timestamp("brief_delivered_at"),
   destinationDelivered: text("destination_delivered"),
   personMatchScore: integer("person_match_score"),
@@ -850,9 +862,25 @@ export const winBackEnrollments = pgTable("win_back_enrollments", {
   // should still be judged against the window they were actually enrolled
   // under, not retroactively against a new one.
   recoveryWindowDays: integer("recovery_window_days").notNull(),
-  // "active" | "rebooked" | "lost" | "reply_exited"
+  // "active" | "rebooked" | "lost" | "reply_exited" | "corrected"
+  // ("corrected" — a no-show-triggered enrollment that a rep later
+  // reversed by logging "showed" for the same booking; see exitReason
+  // "outcome_corrected_to_showed" below and resolveCallOutcome in
+  // outcome-resolution.ts.)
   status: text("status").notNull().default("active"),
   lostAt: timestamp("lost_at"),
+  // Win-Back no-show gap fix — the specific briefedCallsLog.callId this
+  // enrollment was triggered from, when it came from a call-outcome
+  // resolution (Slack/dashboard button, Recall bot telemetry, or the
+  // assumed-no-show sweep) rather than a booking-platform cancellation
+  // webhook. Null for the original cancellation-webhook path, which has
+  // no single "booking" a cancellation is about in the same sense (the
+  // booking itself is what got cancelled). This is the idempotency key
+  // resolveCallOutcome checks before enrolling — the same booking can be
+  // resolved to "no_show" more than once (a rep's late Slack click after
+  // the auto-sweep already fired, for instance) without creating a
+  // second active enrollment for the same missed call.
+  sourceBookingId: text("source_booking_id"),
   // Win-Back recovery gap 3 — the per-prospect single-use reschedule
   // link/UID captured off the cancellation webhook payload, when the
   // booking platform provides one. Null whenever the platform doesn't
@@ -863,7 +891,7 @@ export const winBackEnrollments = pgTable("win_back_enrollments", {
   // `status` because "rebooked" is itself a kind of exit but the two
   // questions (what state is this row in vs. why did it leave "active")
   // are useful to query separately once reply-detection is live.
-  // "rebooked" | "reply_detected" | "window_elapsed" | null (still active)
+  // "rebooked" | "reply_detected" | "window_elapsed" | "outcome_corrected_to_showed" | null (still active)
   exitReason: text("exit_reason"),
   exitedAt: timestamp("exited_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1444,6 +1472,14 @@ export const briefOutcomeLog = pgTable("brief_outcome_log", {
   prospectEmail: text("prospect_email"),
   outcome: text("outcome").notNull(), // "showed" | "no_show" | "rescheduled"
   loggedBySlackUserId: text("logged_by_slack_user_id"),
+  // Win-Back no-show gap fix — which of the four resolution paths logged
+  // this row: "dashboard" | "slack" | "recall_bot" | "auto_sweep". Null on
+  // rows written before this column existed. Distinct from
+  // loggedBySlackUserId (which only ever tells you "was this a Slack
+  // click" for the pre-existing two sources) now that Recall bot
+  // telemetry and the assumed-no-show sweep can log a row with no human
+  // involved at all.
+  source: text("source"),
   loggedAt: timestamp("logged_at").defaultNow().notNull(),
 });
 
@@ -1460,10 +1496,21 @@ export const conversationIntelligenceSessions = pgTable("conversation_intelligen
   bookingId: text("booking_id").notNull(),
   recallBotId: text("recall_bot_id").notNull(),
   meetingUrl: text("meeting_url").notNull(),
-  // "scheduled" | "joining" | "in_call" | "done" | "failed" — mirrors
-  // Recall's own bot.status_change vocabulary loosely; see the adapter for
-  // the exact mapping.
+  // "scheduled" | "joining" | "in_call" | "call_ended" | "done" | "failed"
+  // — mirrors Recall's own bot.status_change vocabulary loosely; see the
+  // adapter for the exact mapping. "call_ended" was added for the
+  // no-show detection fix — it's the status Recall's own bot.call_ended
+  // event reports, checked against docs.recall.ai's Bot Webhooks
+  // reference, and is when subCode below gets set.
   status: text("status").notNull().default("scheduled"),
+  // Win-Back no-show gap fix — Recall's call_ended sub_code, verified
+  // against docs.recall.ai/docs/sub-codes. "timeout_exceeded_noone_joined"
+  // and "timeout_exceeded_waiting_room" mean nobody showed; anything else
+  // (call_ended_by_host, bot_kicked_from_call, etc.) means the bot was in
+  // a live call with people. Stored verbatim, not re-interpreted here, so
+  // an operator can see exactly what Recall reported when debugging a
+  // disputed outcome. Null until a call_ended/fatal event arrives.
+  subCode: text("sub_code"),
   transcriptId: text("transcript_id"),
   // Claude's structured extraction from the finished transcript — this is
   // what feeds back into topObjections, not the raw transcript itself

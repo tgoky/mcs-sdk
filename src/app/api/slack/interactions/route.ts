@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { engagements, briefOutcomeLog, showRateFeatures, type EngagementStack } from "@/models/schema";
-import { eq, and } from "drizzle-orm";
+import { engagements, type EngagementStack } from "@/models/schema";
+import { eq } from "drizzle-orm";
 import { OUTCOME_BUTTON_LABEL } from "@/lib/platforms/email";
+import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
 
 /**
  * Tier 4 #27 — Slack interactive brief buttons.
@@ -95,29 +96,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Signature verification failed." }, { status: 401 });
   }
 
-  // ── Log the outcome ─────────────────────────────────────────────────────
-  await db.insert(briefOutcomeLog).values({
+  // ── Resolve the outcome (Win-Back no-show gap fix) ──────────────────────
+  // Previously this just inserted into briefOutcomeLog and stopped — a
+  // no_show logged from this exact button never enrolled anyone in
+  // Win-Back, and a showed/no_show never removed the prospect from the
+  // ad-data cohort. resolveCallOutcome (outcome-resolution.ts) is now the
+  // shared path for that; prospectEmail from the button's own value is
+  // passed as a hint for engagements briefed before briefedCallsLog
+  // started carrying it directly.
+  const result = await resolveCallOutcome({
     engagementId,
     bookingId,
-    prospectEmail: prospectEmail ?? null,
-    outcome,
-    loggedBySlackUserId: payload.user?.id ?? null,
+    outcome: outcome as "showed" | "no_show" | "rescheduled",
+    source: "slack",
+    slackUserId: payload.user?.id ?? null,
+    prospectEmailHint: prospectEmail ?? null,
   });
-
-  // Tier 4 #25 — feeds the predictive show-rate scorer's training data.
-  // Best-effort: a showRateFeatures row only exists when
-  // show_rate_scoring_enabled was on for this engagement at brief time, so
-  // a miss here is expected and not an error.
-  try {
-    await db
-      .update(showRateFeatures)
-      .set({ actualOutcome: outcome, outcomeRecordedAt: new Date() })
-      .where(and(eq(showRateFeatures.engagementId, engagementId), eq(showRateFeatures.bookingId, bookingId)));
-  } catch {
-    // Non-fatal — the outcome is already durably recorded in
-    // briefOutcomeLog above regardless of whether a matching features row
-    // exists to backfill.
-  }
 
   // Edit the original Slack message via response_url so the buttons don't
   // sit there inviting a second, contradictory click — replaces the
@@ -144,5 +138,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, winBack: result.winBack, cohort: result.cohort });
 }
