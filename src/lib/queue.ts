@@ -200,6 +200,17 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
         buyer: engagements.buyer,
         actionType: pendingActions.actionType,
         createdAt: pendingActions.createdAt,
+        // Assumed-no-show sweep false-positive fix — the panel used to
+        // show every pending action as a bare action-type label with the
+        // buyer's name underneath, no different for a real
+        // platform-reported cancellation an operator opted into gating
+        // vs. a sweep's own inference from missing evidence. Selecting
+        // payload lets the subtitle below surface the actual reasoning
+        // (see outcome-resolution.ts's sweepReason) when the queuing
+        // call site provided one, instead of the operator having to
+        // click into a raw review endpoint to find out why something
+        // needs their attention.
+        payload: pendingActions.payload,
       })
       .from(pendingActions)
       .innerJoin(engagements, eq(pendingActions.engagementId, engagements.engagementId))
@@ -258,17 +269,20 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
   const failureItems = await failedRunQueueItems(engagementStackRows);
 
   const items: QueueItem[] = [
-    ...actionRows.map((a): QueueItem => ({
-      id: a.id,
-      source: "action",
-      category: "approve",
-      title: ACTION_TYPE_LABELS[a.actionType] ?? a.actionType,
-      subtitle: a.buyer,
-      engagementId: a.engagementId,
-      buyer: a.buyer,
-      runId: null,
-      createdAt: a.createdAt.toISOString(),
-    })),
+    ...actionRows.map((a): QueueItem => {
+      const reason = (a.payload as { _reason?: string } | null)?._reason;
+      return {
+        id: a.id,
+        source: "action",
+        category: "approve",
+        title: ACTION_TYPE_LABELS[a.actionType] ?? a.actionType,
+        subtitle: reason ?? a.buyer,
+        engagementId: a.engagementId,
+        buyer: a.buyer,
+        runId: null,
+        createdAt: a.createdAt.toISOString(),
+      };
+    }),
     ...blockerRows.map((b): QueueItem => ({
       id: b.id,
       source: "blocker",

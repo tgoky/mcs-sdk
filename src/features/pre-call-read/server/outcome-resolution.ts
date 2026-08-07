@@ -37,6 +37,7 @@ import {
   engagements,
   showRateFeatures,
   winBackEnrollments,
+  pendingActions,
   type EngagementStack,
 } from "@/models/schema";
 import { inngest, bookingWebhookProcess } from "@/lib/inngest";
@@ -70,7 +71,14 @@ export interface ResolveCallOutcomeParams {
 export interface ResolveCallOutcomeResult {
   recorded: boolean;
   prospectEmail: string | null;
-  winBack: "enrolled" | "exited" | "skipped_duplicate" | "skipped_no_email" | "skipped_disabled" | "none";
+  winBack:
+    | "enrolled"
+    | "exited"
+    | "skipped_duplicate"
+    | "skipped_no_email"
+    | "skipped_disabled"
+    | "pending_review"
+    | "none";
   cohort: "removed" | "skipped_no_email" | "none";
   reason?: string;
 }
@@ -131,8 +139,9 @@ async function triggerNoShowWinBack(
   prospectEmail: string,
   prospectName: string,
   prospectPhone: string | null,
-  stack: EngagementStack | null | undefined
-): Promise<"enrolled" | "skipped_duplicate" | "skipped_disabled"> {
+  stack: EngagementStack | null | undefined,
+  source: OutcomeSource
+): Promise<"enrolled" | "skipped_duplicate" | "skipped_disabled" | "pending_review"> {
   const [existing] = await db
     .select({ id: winBackEnrollments.id })
     .from(winBackEnrollments)
@@ -162,11 +171,36 @@ async function triggerNoShowWinBack(
   // Same gate booking-event/route.ts already uses for a platform-reported
   // cancellation — an operator who requires approval before enrollment
   // gets that here too, not just on the webhook path.
-  await gateOrExecute(stack, engagementId, "webhook_enrollment", { bookingPayload: payload, eventKind: "cancelled" }, () =>
-    inngest.send(bookingWebhookProcess.create({ runId, engagementId, eventKind: "cancelled", bookingPayload: payload }))
+  //
+  // forceGate: source === "auto_sweep" — a sweep-resolved no-show is an
+  // inference from absence (no outcome logged, no Recall session, no CRM
+  // activity — see crons.ts), not a fact the way a platform webhook, a
+  // rep's own click, or Recall's bot telemetry are. It always queues for
+  // human review before Win-Back's "sorry we missed you" email can reach
+  // the prospect, regardless of whether this engagement has approval
+  // gating turned on for anything else. A wrong guess costs one Slack/
+  // dashboard notification and a rejected pending action, not an
+  // embarrassing email to someone who was on the call the whole time.
+  const sweepReason =
+    source === "auto_sweep"
+      ? `Possible no-show: ${prospectName}. No rep logged an outcome, no Recall bot session confirmed attendance, and no recent CRM activity was found on this contact. This is an inference from missing evidence, not a confirmed no-show — approve to start Win-Back recovery, or reject if they actually showed and just weren't logged.`
+      : undefined;
+
+  const gated = await gateOrExecute(
+    stack,
+    engagementId,
+    "webhook_enrollment",
+    // _reason stored on the pending action itself (not just sent to
+    // Slack/notifyUser) so it's still visible to anyone reviewing
+    // pendingActions directly — e.g. a future dashboard list view — not
+    // only to whoever happened to see the one-time notification.
+    { bookingPayload: payload, eventKind: "cancelled", _reason: sweepReason },
+    () => inngest.send(bookingWebhookProcess.create({ runId, engagementId, eventKind: "cancelled", bookingPayload: payload })),
+    source === "auto_sweep",
+    sweepReason
   );
 
-  return "enrolled";
+  return gated.executed ? "enrolled" : "pending_review";
 }
 
 /**
@@ -184,6 +218,35 @@ async function exitCorrectedNoShow(
   prospectEmail: string,
   stack: EngagementStack | null | undefined
 ): Promise<void> {
+  // Forced-gate fix — a sweep-resolved no-show may not have an active
+  // winBackEnrollments row at all yet: forceGate on auto_sweep (see
+  // triggerNoShowWinBack) means it's sitting as a *pending* action
+  // awaiting review, not an executed enrollment. Without this, a rep
+  // clicking "Showed" minutes after a sweep's wrong guess would do
+  // nothing to stop it — the pending action would still be sitting there
+  // for an operator to approve later, unaware the rep already corrected
+  // it. Reject any such pending action for this exact booking before (or
+  // regardless of whether) an executed enrollment also needs exiting.
+  const pending = await db
+    .select({ id: pendingActions.id, payload: pendingActions.payload })
+    .from(pendingActions)
+    .where(
+      and(
+        eq(pendingActions.engagementId, engagementId),
+        eq(pendingActions.actionType, "webhook_enrollment"),
+        eq(pendingActions.status, "pending")
+      )
+    );
+  for (const row of pending) {
+    const payload = row.payload as { bookingPayload?: { _bookingId?: string } };
+    if (payload?.bookingPayload?._bookingId === bookingId) {
+      await db
+        .update(pendingActions)
+        .set({ status: "rejected", decidedAt: new Date(), decidedBy: "system_outcome_correction" })
+        .where(eq(pendingActions.id, row.id));
+    }
+  }
+
   const active = await db
     .select({ id: winBackEnrollments.id })
     .from(winBackEnrollments)
@@ -313,7 +376,15 @@ export async function resolveCallOutcome(params: ResolveCallOutcomeParams): Prom
 
   // ── Decide side effects from the (prior → next) transition ─────────
   if (outcome === "no_show") {
-    result.winBack = await triggerNoShowWinBack(engagementId, bookingId, identity.email, identity.name ?? "Prospect", identity.phone, stack);
+    result.winBack = await triggerNoShowWinBack(
+      engagementId,
+      bookingId,
+      identity.email,
+      identity.name ?? "Prospect",
+      identity.phone,
+      stack,
+      source
+    );
     // Cohort removal only on the FIRST terminal resolution for this
     // booking — a correction from "showed" to "no_show" doesn't need a
     // second removal call, the cohort was already cleared the first time

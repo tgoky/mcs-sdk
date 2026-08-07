@@ -31,6 +31,21 @@ import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 
 export type RecallRegion = "us-east-1" | "us-west-2" | "eu-central-1" | "ap-northeast-1";
 
+// Win-Back no-show gap fix — the set of Recall call_ended sub_codes that
+// mean nobody showed, verified against docs.recall.ai/docs/sub-codes.
+// Single source of truth: app/api/recall/route.ts uses this to decide a
+// live no-show/showed resolution, and the assumed-no-show sweep's
+// historical duration estimator (call-duration-estimator.ts) uses it to
+// exclude genuine no-shows from a "how long do this engagement's calls
+// actually run" average — a second hand-copied literal here would risk
+// drifting out of sync with the one route.ts actually resolves outcomes
+// against.
+export const RECALL_NO_SHOW_SUB_CODES = new Set([
+  "timeout_exceeded_noone_joined",
+  "timeout_exceeded_waiting_room",
+  "call_ended_by_platform_waiting_room_timeout",
+]);
+
 export interface RecallCredential {
   apiKey: string;
   region: RecallRegion;

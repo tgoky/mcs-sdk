@@ -37,6 +37,12 @@ interface CalendlyInvitee {
 interface CalendlyEvent {
   uri: string;
   start_time: string;
+  // Assumed-no-show sweep false-positive fix — confirmed present on a
+  // real /scheduled_events response (not assumed from the create-event
+  // payload shape), same verification bar meetingUrl's location.join_url
+  // got. Lets the sweep know when a call is actually scheduled to end
+  // instead of guessing a flat offset from start_time.
+  end_time?: string;
   location?: { join_url?: string };
 }
 interface CalendlyEventsResponse {
@@ -70,6 +76,14 @@ interface CalComBooking {
   attendees?: CalComAttendee[];
   bookingFieldsResponses?: CalComBookingResponses;
   start: string;
+  // Assumed-no-show sweep false-positive fix — confirmed directly on
+  // Cal.com's own "Get a booking" docs example response (GET
+  // /v2/bookings/{bookingUid}), which shows `end` as a sibling field of
+  // `start` on the same object, alongside a redundant `duration` (both
+  // present in the real example: "start": "...", "end": "...",
+  // "duration": 60). No second event-type lookup needed the way an
+  // earlier pass here assumed might be necessary.
+  end?: string;
   status?: string;
 }
 interface CalComBookingsResponse {
@@ -99,6 +113,12 @@ interface GHLCalendarEvent {
   id: string;
   contactId?: string;
   startTime: string;
+  // Assumed-no-show sweep false-positive fix — confirmed as a real
+  // sibling field of startTime on GHL's own GET /calendars/events
+  // response (the same endpoint this class already calls), verified
+  // against a live documented example response, not assumed from
+  // startTime's presence alone.
+  endTime?: string;
   appointmentStatus?: string;
 }
 interface GHLCalendarEventsResponse {
@@ -181,6 +201,22 @@ export interface NormalizedCall {
   // coverage to those needs the same doc-verification this field got,
   // not a copy-paste guess.
   meetingUrl?: string;
+  // Assumed-no-show sweep false-positive fix. Populated from a real
+  // platform field, not guessed, for three of the four platforms:
+  // Calendly (event.end_time, confirmed against a real
+  // /scheduled_events response), Cal.com (booking.end, confirmed
+  // against Cal.com's own "Get a booking" docs example — end sits right
+  // alongside start on the same object), and GHL Calendar (event.endTime,
+  // confirmed against GHL's own GET /calendars/events docs example — same
+  // pattern, endTime sits right alongside startTime). OnceHub doesn't
+  // populate this yet — its client class below references real fields
+  // seen on a live account for start time, but no end/duration field was
+  // independently confirmed on the endpoint this app actually calls, so
+  // it's left undefined rather than guessed. Undefined means "duration
+  // unknown," and callers must treat that as a distinct case from "known
+  // to be over" — see crons.ts's sweep-window comment and
+  // call-duration-estimator.ts for how the unknown case is handled.
+  callEndTime?: Date;
 }
 
 // ── Calendly ──────────────────────────────────────────────────────────────
@@ -275,6 +311,7 @@ export class CalendlyClient {
             q.question.toLowerCase().includes("linkedin") || (q.answer ?? "").includes("linkedin.com/in/")
           )?.answer ?? undefined,
         callTime: new Date(event.start_time),
+        callEndTime: event.end_time ? new Date(event.end_time) : undefined,
         meetingUrl: event.location?.join_url ?? undefined,
       });
     }
@@ -329,6 +366,7 @@ export class CalendlyClient {
             )?.answer ?? "Not Stated",
           phone: invitee.text_reminder_number ?? undefined,
           callTime: new Date(event.start_time),
+          callEndTime: event.end_time ? new Date(event.end_time) : undefined,
           meetingUrl: event.location?.join_url ?? undefined,
           eventKind: status === "canceled" ? "cancelled" : "created",
         });
@@ -379,6 +417,7 @@ export class CalendlyClient {
             (q) => q.question.toLowerCase().includes("linkedin") || (q.answer ?? "").includes("linkedin.com/in/")
           )?.answer ?? undefined,
         callTime: new Date(event.start_time),
+        callEndTime: event.end_time ? new Date(event.end_time) : undefined,
         meetingUrl: event.location?.join_url ?? undefined,
       });
     }
@@ -627,6 +666,7 @@ export class CalComClient {
           "Not Stated",
         linkedInUrl: booking.bookingFieldsResponses?.linkedin ?? booking.bookingFieldsResponses?.linkedInUrl ?? undefined,
         callTime: new Date(booking.start),
+        callEndTime: booking.end ? new Date(booking.end) : undefined,
       };
     });
   }
@@ -658,6 +698,7 @@ export class CalComClient {
           "Not Stated",
         phone: attendee.phoneNumber ?? booking.bookingFieldsResponses?.attendeePhoneNumber ?? booking.bookingFieldsResponses?.phone ?? undefined,
         callTime: new Date(booking.start),
+        callEndTime: booking.end ? new Date(booking.end) : undefined,
         eventKind: (booking.status === "cancelled" ? "cancelled" : "created") as "created" | "cancelled",
       };
     });
@@ -690,6 +731,7 @@ export class CalComClient {
         company: booking.bookingFieldsResponses?.company ?? booking.bookingFieldsResponses?.organization ?? "Not Stated",
         linkedInUrl: booking.bookingFieldsResponses?.linkedin ?? booking.bookingFieldsResponses?.linkedInUrl ?? undefined,
         callTime: new Date(booking.start),
+        callEndTime: booking.end ? new Date(booking.end) : undefined,
       };
     });
   }
@@ -935,6 +977,7 @@ export class GHLCalendarClient {
         // for GHL-sourced calls unless a future pass adds custom-field-name
         // configuration.
         callTime: new Date(event.startTime),
+        callEndTime: event.endTime ? new Date(event.endTime) : undefined,
         eventKind: isCancelled ? "cancelled" : "created",
       });
     }

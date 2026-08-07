@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { conversationIntelligenceSessions, engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
-import { verifyRecallWebhookSignature } from "@/lib/platforms/conversation-intelligence";
+import { verifyRecallWebhookSignature, RECALL_NO_SHOW_SUB_CODES } from "@/lib/platforms/conversation-intelligence";
 import { inngest, conversationIntelligenceProcess } from "@/lib/inngest";
 import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
 
@@ -127,12 +127,7 @@ export async function POST(req: Request) {
   // failure, not evidence either way about attendance; the assumed
   // no-show sweep is the correct fallback for those bookings instead.
   if (statusCode === "call_ended") {
-    const NO_SHOW_SUB_CODES = new Set([
-      "timeout_exceeded_noone_joined",
-      "timeout_exceeded_waiting_room",
-      "call_ended_by_platform_waiting_room_timeout",
-    ]);
-    const resolvedOutcome = subCode && NO_SHOW_SUB_CODES.has(subCode) ? "no_show" : "showed";
+    const resolvedOutcome = subCode && RECALL_NO_SHOW_SUB_CODES.has(subCode) ? "no_show" : "showed";
     await resolveCallOutcome({
       engagementId: session.engagementId,
       bookingId: session.bookingId,

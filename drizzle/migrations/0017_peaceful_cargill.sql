@@ -1,0 +1,1 @@
+ALTER TABLE "briefed_calls_log" ADD COLUMN "call_end_time" timestamp;

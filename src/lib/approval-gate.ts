@@ -56,7 +56,8 @@ export function isApprovalRequired(
 async function queuePendingAction(
   engagementId: string,
   actionType: PendingActionType,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  reason?: string
 ): Promise<string> {
   const [row] = await db
     .insert(pendingActions)
@@ -78,7 +79,14 @@ async function queuePendingAction(
         type: "credential_check_error",
         severity: "info",
         title: `Approval needed: ${actionType.replace(/_/g, " ")}`,
-        body: `A ${actionType.replace(/_/g, " ")} action is waiting for review before it runs. Approve or reject it from the dashboard.`,
+        // Assumed-no-show sweep false-positive fix — a bare "action X is
+        // waiting for review" told the operator nothing about *why*
+        // before they had to click into the dashboard, which is exactly
+        // the opaque-guess feeling this fix exists to remove. When the
+        // caller supplies a reason (forced gates on an inference always
+        // do — see triggerNoShowWinBack), lead with it so the person
+        // reviewing knows what they're actually being asked to confirm.
+        body: reason ?? `A ${actionType.replace(/_/g, " ")} action is waiting for review before it runs. Approve or reject it from the dashboard.`,
         slackWebhookUrl: stack?.slack_webhook_url,
       });
     } catch {
@@ -98,19 +106,37 @@ async function queuePendingAction(
  * `execute` at all — the caller's job is just to stop, not to run any
  * fallback logic, since the queued action is the source of truth for what
  * still needs to happen.
+ *
+ * `forceGate` — assumed-no-show sweep fix. `isApprovalRequired` is an
+ * opt-in, per-engagement setting: an operator has to have turned it on for
+ * anything to be gated. That's the right default for actions triggered by
+ * real evidence (a platform-reported cancellation, a rep's own Slack
+ * click, Recall bot telemetry). It is NOT the right default for a
+ * Win-Back enrollment whose only basis is "no evidence turned up" — the
+ * assumed-no-show sweep's entire premise (see crons.ts) is an inference
+ * from absence, not a fact, and firing a customer-facing "sorry we missed
+ * you" email off that inference without anyone able to catch a wrong
+ * guess first is exactly the silent-black-box failure mode this fix
+ * exists to close. `forceGate: true` skips the opt-in check and always
+ * queues, independent of what the engagement's own approval settings say
+ * — a human reviews every sweep-sourced no-show enrollment before it can
+ * reach the prospect, full stop, not just for operators who happened to
+ * turn approval gating on for something else.
  */
 export async function gateOrExecute<T>(
   stack: EngagementStack | null | undefined,
   engagementId: string,
   actionType: PendingActionType,
   payload: Record<string, unknown>,
-  execute: () => Promise<T>
+  execute: () => Promise<T>,
+  forceGate = false,
+  reason?: string
 ): Promise<{ executed: true; result: T } | { executed: false; pendingActionId: string }> {
-  if (!isApprovalRequired(stack, actionType)) {
+  if (!forceGate && !isApprovalRequired(stack, actionType)) {
     const result = await execute();
     return { executed: true, result };
   }
-  const pendingActionId = await queuePendingAction(engagementId, actionType, payload);
+  const pendingActionId = await queuePendingAction(engagementId, actionType, payload, reason);
   return { executed: false, pendingActionId };
 }
 

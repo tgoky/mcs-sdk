@@ -705,6 +705,42 @@ export class HubSpotClient {
     }));
   }
 
+  /**
+   * Assumed-no-show sweep false-positive fix — passive CRM-activity
+   * signal. If a rep updated this contact's record (a note, a logged
+   * call/email/meeting/task) after the call was supposed to happen,
+   * that's real evidence the call happened even if nobody clicked a
+   * "Showed" button — reps who do their post-call admin in the CRM they
+   * already live in but skip the separate outcome-logging step
+   * shouldn't get their prospect auto-enrolled in Win-Back for it.
+   *
+   * Uses the legacy Engagements v1 API (engagements/v1/engagements/
+   * recent/modified) — confirmed against HubSpot's own docs to return
+   * `{ engagement, associations: { contactIds }, metadata }` per result,
+   * which is what lets this filter an org-wide "recently modified" feed
+   * down to just this one contact without a second per-engagement fetch.
+   * HubSpot has been migrating activity data toward CRM v4 associations
+   * for newer integrations; this is the confirmed-working surface as of
+   * this pass, not asserted as permanent — re-verify against HubSpot's
+   * docs directly (not this comment) if it starts 404ing.
+   */
+  async hasActivitySince(email: string, since: Date): Promise<boolean> {
+    const contactId = await this.findContactId(email);
+    if (!contactId) return false;
+
+    const res = await fetchWithTimeout(
+      `https://api.hubapi.com/engagements/v1/engagements/recent/modified?since=${since.getTime()}&count=100`,
+      { headers: this.headers }
+    );
+    if (!res.ok) return false;
+
+    const data = (await res.json()) as {
+      results?: Array<{ associations?: { contactIds?: number[] } }>;
+    };
+    const numericContactId = Number(contactId);
+    return (data.results ?? []).some((r) => r.associations?.contactIds?.includes(numericContactId));
+  }
+
   async attachTimelineNote(email: string, briefHtml: string): Promise<void> {
     const contactId = await this.findContactId(email);
     if (!contactId) return;
@@ -1099,6 +1135,28 @@ export class GHLCRMClient {
     }
 
     return results;
+  }
+
+  /**
+   * Assumed-no-show sweep false-positive fix — same passive-activity
+   * signal as HubSpotClient.hasActivitySince, using GHL's GET
+   * /contacts/{contactId}/notes (confirmed current in HighLevel's own API
+   * docs). Notes only in this pass, not tasks — HighLevel's tasks-by-
+   * contact GET endpoint wasn't independently verified against live docs
+   * the same way notes was, so it's left out rather than guessed at.
+   */
+  async hasActivitySince(email: string, since: Date): Promise<boolean> {
+    const contactId = await this.findContactId(email);
+    if (!contactId) return false;
+
+    const res = await fetchWithTimeout(`${this.baseUrl}/contacts/${contactId}/notes`, { headers: this.headers });
+    if (!res.ok) return false;
+
+    const data = (await res.json()) as { notes?: Array<{ dateAdded?: string; createdAt?: string }> };
+    return (data.notes ?? []).some((n) => {
+      const ts = n.dateAdded ?? n.createdAt;
+      return ts ? new Date(ts).getTime() > since.getTime() : false;
+    });
   }
 
   async attachCRMNote(email: string, noteText: string): Promise<void> {

@@ -45,6 +45,8 @@ import type { EngagementStack } from "@/models/schema";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
+import { hasPostCallCrmActivity } from "@/features/pre-call-read/server/crm-activity-check";
+import { estimateEngagementCallDurationMinutes } from "@/features/pre-call-read/server/call-duration-estimator";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
 // ONE step.run(), then fans out via a SINGLE step.sendEvent() carrying the
@@ -688,15 +690,45 @@ export const assumedNoShowSweepCron = inngest.createFunction(
 /**
  * Fanned-out handler: resolves assumed no-shows for one engagement.
  *
- * Window: calls that were scheduled between 4 hours and 20 minutes ago.
- * The lower bound (20 min) gives a rep — or Recall — a reasonable chance
- * to log the real outcome first, since most calls run under that. The
- * upper bound (4h) isn't about correctness (a call from a week ago with
- * no outcome logged is just as much a no-show), it's about keeping each
- * run's query cheap and bounded — nothing stops a call from being caught
- * on this cron's next pass 15 minutes later if it's missed for any
- * reason, since the exclusion is "no outcome logged yet", not "seen once
- * already".
+ * Duration-aware timing fix — the old version treated every booking as
+ * over 20 minutes after callTime, full stop, regardless of how long the
+ * call was actually scheduled to run. For any engagement not using
+ * Recall.ai (which is excluded separately below via pendingRecallIds),
+ * that meant a live 30-60 minute call would get resolved as a no-show,
+ * and Win-Back enrolled, while the rep was still on it. `readyAt` below
+ * is computed per-call from the best duration signal available:
+ *   1. NormalizedCall.callEndTime, when the booking platform provided one
+ *      (Calendly only right now — see booking.ts) — a real fact, not an
+ *      estimate.
+ *   2. A per-engagement historical median from this engagement's own past
+ *      Recall sessions (call-duration-estimator.ts) — a genuine
+ *      statistical estimate from first-party data, used for Cal.com, GHL
+ *      Calendar, and OnceHub, none of which have a confirmed end-time
+ *      field on the endpoint this app calls.
+ *   3. A flat 90-minute default when neither is available (a brand-new
+ *      engagement with no history yet) — deliberately conservative, erring
+ *      toward waiting longer rather than firing early.
+ * Whichever source is used, resolution still can't reach the prospect
+ * without a human approving it first — see the forceGate note in
+ * outcome-resolution.ts's triggerNoShowWinBack. This fix reduces how
+ * often that approval request is a false alarm; it isn't the thing
+ * making false alarms safe. That's the gate.
+ *
+ * CRM passive-activity check — before falling back to "no evidence,
+ * assume no-show," check whether a note, call, email, meeting, or task
+ * was logged on this contact's CRM record after the call was supposed to
+ * happen (crm-activity-check.ts). Positive evidence there resolves the
+ * call as "showed" instead — clearing the ad cohort without ever
+ * touching Win-Back — for reps who do their post-call admin in a CRM
+ * this app doesn't otherwise watch and never come back to click a
+ * Slack/dashboard button.
+ *
+ * The 4-hour upper bound on the initial DB scan isn't about correctness
+ * (a call from a week ago with no outcome logged is just as much a
+ * no-show), it's about keeping each run's query cheap and bounded —
+ * nothing stops a call from being caught on this cron's next pass 15
+ * minutes later if it's missed for any reason, since the exclusion is
+ * "no outcome logged yet", not "seen once already".
  */
 export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
   { id: "process-assumed-no-show-sweep-engagement", triggers: [assumedNoShowSweepEngagement] },
@@ -706,18 +738,20 @@ export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
     const eligible = await step.run("find-eligible-calls", async () => {
       const now = new Date();
       const windowStart = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-      const windowEnd = new Date(now.getTime() - 20 * 60 * 1000);
 
+      // Coarse DB-level filter only: "started sometime in the last 4h."
+      // Whether a given call is actually *ready* to resolve is a per-row
+      // decision below, since it depends on that call's own duration
+      // signal — a flat SQL cutoff can't express that.
       const calls = await db
-        .select({ callId: briefedCallsLog.callId, callTime: briefedCallsLog.callTime })
+        .select({
+          callId: briefedCallsLog.callId,
+          callTime: briefedCallsLog.callTime,
+          callEndTime: briefedCallsLog.callEndTime,
+          prospectEmail: briefedCallsLog.prospectEmail,
+        })
         .from(briefedCallsLog)
-        .where(
-          and(
-            eq(briefedCallsLog.engagementId, engagementId),
-            gte(briefedCallsLog.callTime, windowStart),
-            lt(briefedCallsLog.callTime, windowEnd)
-          )
-        );
+        .where(and(eq(briefedCallsLog.engagementId, engagementId), gte(briefedCallsLog.callTime, windowStart), lt(briefedCallsLog.callTime, now)));
       if (calls.length === 0) return [];
 
       // Exclude bookings that already have ANY outcome logged (from any
@@ -746,7 +780,30 @@ export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
         );
       const pendingRecallIds = new Set(activeSessions.map((r) => r.bookingId));
 
-      return calls.filter((c) => !loggedIds.has(c.callId) && !pendingRecallIds.has(c.callId));
+      const candidates = calls.filter((c) => !loggedIds.has(c.callId) && !pendingRecallIds.has(c.callId));
+      if (candidates.length === 0) return [];
+
+      // One historical-duration lookup per engagement, reused across
+      // every candidate call below rather than recomputed per-row.
+      const historicalEstimateMinutes = await estimateEngagementCallDurationMinutes(engagementId);
+
+      const END_TIME_BUFFER_MS = 15 * 60 * 1000;
+      const ESTIMATE_BUFFER_MS = 20 * 60 * 1000;
+      const UNKNOWN_DURATION_DEFAULT_MS = 90 * 60 * 1000;
+
+      return candidates
+        .map((c) => {
+          let readyAt: Date;
+          if (c.callEndTime) {
+            readyAt = new Date(c.callEndTime.getTime() + END_TIME_BUFFER_MS);
+          } else if (historicalEstimateMinutes !== null) {
+            readyAt = new Date(c.callTime.getTime() + historicalEstimateMinutes * 60 * 1000 + ESTIMATE_BUFFER_MS);
+          } else {
+            readyAt = new Date(c.callTime.getTime() + UNKNOWN_DURATION_DEFAULT_MS);
+          }
+          return { ...c, readyAt };
+        })
+        .filter((c) => c.readyAt <= now);
     });
 
     let resolved = 0;
@@ -755,10 +812,23 @@ export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
       // return value replays safely from Inngest's memoized checkpoint;
       // mutating an outer variable from inside the callback would not.
       const wasResolved = await step.run(`resolve-${call.callId}`, async () => {
+        let outcome: "no_show" | "showed" = "no_show";
+
+        if (call.prospectEmail) {
+          const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+          const stack = (tenant?.stack ?? null) as EngagementStack | null;
+          // Same Inngest step.run JSON round-trip that flattens Date
+          // fields to strings — call.callTime crossed the
+          // find-eligible-calls step boundary and needs re-hydrating
+          // before it can be passed to a function typed to take a Date.
+          const hasCrmActivity = await hasPostCallCrmActivity(engagementId, stack, call.prospectEmail, new Date(call.callTime));
+          if (hasCrmActivity) outcome = "showed";
+        }
+
         const result = await resolveCallOutcome({
           engagementId,
           bookingId: call.callId,
-          outcome: "no_show",
+          outcome,
           source: "auto_sweep",
         });
         return result.recorded ? 1 : 0;

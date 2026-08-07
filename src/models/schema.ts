@@ -804,6 +804,21 @@ export const briefedCallsLog = pgTable("briefed_calls_log", {
   // column existed have no run to backfill against.
   runId: uuid("run_id"),
   callTime: timestamp("call_time").notNull(),
+  // Assumed-no-show sweep false-positive fix — previously the sweep
+  // (crons.ts) treated every booking as over 20 minutes after callTime
+  // regardless of how long the call was actually scheduled to run,
+  // because nothing captured a call's end time. That meant a live
+  // 30-60min call on an engagement without Recall.ai bot coverage could
+  // get resolved as a no-show, and Win-Back enrolled, while the rep was
+  // still on the phone. Populated at brief-send time from
+  // NormalizedCall.callEndTime when the booking platform's own API
+  // exposes it (currently Calendly, Cal.com, and GHL Calendar — confirmed
+  // real end-time fields, not assumed; see booking.ts's module comment
+  // for why OnceHub isn't populated yet). Null means "unknown
+  // duration," not "call already over" — the sweep treats null
+  // differently from a known end time, it does NOT default null to "safe
+  // to resolve now."
+  callEndTime: timestamp("call_end_time"),
   prospectName: text("prospect_name"),
   // No-show/win-back recovery gap — previously this row (the one thing
   // guaranteed to exist for every briefed call, regardless of whether

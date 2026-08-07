@@ -423,6 +423,10 @@ Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : "
           callId: call.id,
           runId,
           callTime: call.callTime,
+          // Assumed-no-show sweep false-positive fix — see the column's
+          // comment in schema.ts. Null on platforms that don't expose an
+          // end time yet; the sweep treats that as "unknown," not "over."
+          callEndTime: call.callEndTime ?? null,
           prospectName: call.name,
           // Win-Back no-show gap fix — this is the only guaranteed-to-exist
           // row per call (unlike showRateFeatures, which only exists when
@@ -447,6 +451,7 @@ Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : "
             runId,
             prospectEmail: call.email || null,
             prospectPhone: call.phone ?? null,
+            callEndTime: call.callEndTime ?? null,
             briefDeliveredAt: new Date(),
             destinationDelivered: stack.brief_landing_destination ?? "slack",
             personMatchScore: matchResult!.totalScore,
@@ -499,6 +504,7 @@ Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : "
           callId: call.id,
           runId,
           callTime: call.callTime,
+          callEndTime: call.callEndTime ?? null,
           prospectName: call.name,
           // Same rationale as the success-path insert above — a failed
           // brief is still a real scheduled call that can no-show, and
@@ -519,6 +525,7 @@ Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : "
             runId,
             prospectEmail: call.email || null,
             prospectPhone: call.phone ?? null,
+            callEndTime: call.callEndTime ?? null,
             researchStatus,
             aiSynthesisStatus: "failed",
           },
@@ -648,6 +655,12 @@ export async function executeNightlyBriefingCycle(
     const normalizedCalls = tomorrowCalls.map((c) => ({
       ...c,
       callTime: new Date(c.callTime),
+      // Assumed-no-show sweep false-positive fix — same Inngest
+      // step.run JSON round-trip that turns callTime back into a string
+      // and needs re-hydrating above also flattens callEndTime the same
+      // way when it's present. Missed on the first pass; caught by
+      // actually running tsc, not by manual review.
+      callEndTime: c.callEndTime ? new Date(c.callEndTime) : undefined,
     }));
 
     if (normalizedCalls.length === 0) {
