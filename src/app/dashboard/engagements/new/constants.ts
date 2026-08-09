@@ -95,6 +95,7 @@ export const DEFAULT_FORM: FormData = {
   discoveredPlatformName: "",
   discoveredPlatformWebsite: "",
   existingConfirmationPageUrl: "",
+  existingConfirmationPageReuse: false,
   rescheduleMode: "time_slots",
   recoveredFromNoShowTaggingEnabled: true,
   inboundReplyMode: "none",

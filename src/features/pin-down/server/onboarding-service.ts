@@ -594,6 +594,29 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
     const { confirmationPageUrl, confirmationPageDeployment, pasteReadyHtml, pasteReadyInstructions, remoteResourceId } = await run(
       "confirmation-deploy",
       async () => {
+        // Buyer opted to keep their existing page (see the existing-page
+        // audit above, which already ran against it) — skip build/deploy
+        // entirely rather than overwrite something they told us to leave
+        // alone.
+        if (finalStack.existing_confirmation_page_reuse && finalStack.existing_confirmation_page_url) {
+          await logStep(runId, {
+            phase: "confirmation_page_deploy",
+            status: "skipped",
+            detail: "Buyer opted to keep their existing confirmation page — nothing built or published.",
+          });
+          return {
+            confirmationPageUrl: finalStack.existing_confirmation_page_url,
+            confirmationPageDeployment: {
+              mode: "not_deployed" as const,
+              reason: "Buyer opted to keep their existing confirmation page.",
+              lastAttemptedAt: new Date().toISOString(),
+            },
+            pasteReadyHtml: null as string | null,
+            pasteReadyInstructions: null as string | null,
+            remoteResourceId: null as string | number | null,
+          };
+        }
+
         await logStep(runId, { phase: "confirmation_page_deploy", status: "running" });
 
         const pageContent = buildConfirmationPageHtml(
@@ -686,6 +709,8 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
       summary.whatWorked.push(`Confirmation page published live on ${finalStack.hosting_platform} at ${confirmationPageUrl}.`);
     } else if (confirmationPageDeployment.mode === "pending_review") {
       summary.openItems.push(`Confirmation page drafted and waiting on your approval before it publishes to ${finalStack.hosting_platform}.`);
+    } else if (confirmationPageDeployment.mode === "not_deployed" && finalStack.existing_confirmation_page_reuse) {
+      summary.whatWorked.push(`Kept the buyer's existing confirmation page at ${confirmationPageUrl} — no new page built or published.`);
     } else {
       summary.whatFailed.push(`Could not auto-publish to ${finalStack.hosting_platform}: ${confirmationPageDeployment.reason}`);
       summary.openItems.push(`Paste-ready HTML ready for ${finalStack.hosting_platform} — manual publish required.`);

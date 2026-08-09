@@ -69,6 +69,7 @@ export function buildEngagementPayload(form: FormData) {
       person_match_confidence_threshold: 99,
       buyer_domain: form.marketingDomain || undefined,
       existing_confirmation_page_url: form.existingConfirmationPageUrl || undefined,
+      existing_confirmation_page_reuse: form.existingConfirmationPageUrl ? form.existingConfirmationPageReuse : undefined,
 
       // 2. Flat DB Properties
       target_list_id: form.emailTargetListId || undefined,

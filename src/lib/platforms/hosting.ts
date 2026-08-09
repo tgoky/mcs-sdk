@@ -15,8 +15,15 @@
  *
  * GHL, Lovable, and plain HTML do not have a reliable, buyer-credentialed
  * API path for pushing a full page (GHL's funnel/page builder API is not a
- * stable public surface at the time this was written; Lovable has no
- * public API at all; "plain HTML" by definition has no platform to call).
+ * stable public surface at the time this was written; "plain HTML" by
+ * definition has no platform to call). Lovable now has an official MCP
+ * server (docs.lovable.dev/integrations/lovable-mcp-server, checked 2026-08)
+ * but it doesn't fit this adapter pattern: no API-key auth at all (OAuth
+ * only), OAuth restricted to five specific AI-client apps (not arbitrary
+ * backends like ours), connecting grants access to the buyer's whole
+ * account rather than one project, and deploy_project republishes whatever
+ * the project's current code already is rather than accepting page content
+ * — there's no "push this HTML" call. Re-check if that changes.
  * For those, we don't fake an integration — we generate the same page
  * content as a self-contained HTML file plus platform-specific paste-ready
  * instructions, exactly the failure-mode behavior the OG SKILL.md

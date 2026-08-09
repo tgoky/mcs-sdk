@@ -148,6 +148,14 @@ export type EngagementStack = {
   // page already live at this URL — triggers the existing-page audit
   // (Pin-Down recovery gap 7) during the confirmation-deploy phase.
   existing_confirmation_page_url?: string;
+  // Operator opt-out: buyer already has a confirmation page and doesn't
+  // want Pin-Down to build/deploy a new one. Requires
+  // existing_confirmation_page_url to be set. When true, the
+  // confirmation_page_deploy phase is skipped entirely (mode
+  // "not_deployed") — the existing-page audit still runs since it's
+  // read-only and non-destructive, but nothing gets published or
+  // overwritten on the buyer's stack.
+  existing_confirmation_page_reuse?: boolean;
   // "smtp" is not a workflow/automation platform like the other five — it's
   // a raw mail transport with no list/flow concept to enroll into. It's
   // wired as a direct-send channel (this app owns the schedule), mirroring

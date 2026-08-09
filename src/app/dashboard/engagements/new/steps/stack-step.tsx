@@ -84,7 +84,34 @@ export function StackStep({
         />
       )}
 
+      {/* ── Existing confirmation page / opt-out ── */}
+      <InputField
+        label="Already have a confirmation page? (optional)"
+        value={form.existingConfirmationPageUrl}
+        onChange={(v) => set("existingConfirmationPageUrl", v)}
+        placeholder="https://yoursite.com/confirmation"
+        helpText="If your client already has one live, we'll audit it against what a strong confirmation page should include."
+      />
+
+      {form.existingConfirmationPageUrl && (
+        <div className="flex items-start space-x-3 pt-4 select-none md:col-span-2">
+          <input
+            type="checkbox"
+            id="reuse-existing-confirmation-page"
+            checked={form.existingConfirmationPageReuse}
+            onChange={(e) => set("existingConfirmationPageReuse", e.target.checked)}
+            className="w-4 h-4 rounded-sm cursor-pointer mt-0.5 border border-zinc-300 dark:border-zinc-800"
+            style={{ accentColor: "var(--accent)" }}
+          />
+          <label htmlFor="reuse-existing-confirmation-page" className="text-xs cursor-pointer leading-normal" style={{ color: "var(--text-secondary)" }}>
+            Keep using this page — don't build or publish a new one. We'll still run the audit above so you can see what's missing, but nothing gets deployed to your client's site.
+          </label>
+        </div>
+      )}
+
       {/* ── Hosting Platform Selection ── */}
+      {!form.existingConfirmationPageReuse && (
+        <>
       <SelectField
         label="Where is the confirmation page hosted?"
         value={form.hostingPlatform}
@@ -151,10 +178,12 @@ export function StackStep({
         </>
       )}
 
-      {(form.hostingPlatform === "ghl" || form.hostingPlatform === "plain_html") && (
+      {(form.hostingPlatform === "ghl" || form.hostingPlatform === "plain_html" || form.hostingPlatform === "lovable") && (
         <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
           {form.hostingPlatform === "ghl"
             ? "GoHighLevel's funnel builder doesn't support automatic publishing yet. We'll generate the page as ready-to-paste HTML with step-by-step instructions instead."
+            : form.hostingPlatform === "lovable"
+            ? "Lovable doesn't have a public API for us to publish to directly yet. We'll generate the page content and instructions for pasting it into your Lovable project chat instead."
             : "Plain HTML sites are published manually. We'll generate a self-contained HTML file the client uploads to their own host."}
         </div>
       )}
@@ -177,6 +206,8 @@ export function StackStep({
             onChange={(v) => set("discoveredPlatformWebsite", v)}
             placeholder="https://theirplatform.com"
           />
+        </>
+      )}
         </>
       )}
 

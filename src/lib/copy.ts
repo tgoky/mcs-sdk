@@ -213,6 +213,7 @@ export const HOSTING_PLATFORM_LABELS: Record<string, string> = {
   webflow: "Webflow",
   ghl: "GoHighLevel",
   wordpress: "WordPress",
+  lovable: "Lovable",
   plain_html: "Plain HTML site",
   discover_from_docs: "Something else (research + review)",
 };
