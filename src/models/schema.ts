@@ -7,6 +7,7 @@ import {
   integer,
   boolean,
   uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 
 // ── Run instrumentation types ───────────────────────────────────────────────
@@ -798,6 +799,63 @@ export const skillRuns = pgTable("skill_runs", {
 });
 
 // ── Briefed Calls Log ─────────────────────────────────────────────────────
+// ── Booking Roster ──────────────────────────────────────────────────────
+// Ground-truth record of every booking, written the moment the webhook
+// arrives (see src/lib/booking-roster.ts / src/inngest/booking-webhook.ts)
+// — independent of Pile-On/Win-Back/Pre-Call Read being enabled, and
+// independent of whether any run has processed the call yet.
+//
+// This exists because briefedCallsLog (below) is written at *brief-send
+// time*, not booking time — a call booked today for two weeks from now had
+// no row anywhere until the night Pre-Call Read actually ran for it. That
+// made every calendar/list/board view that read briefedCallsLog a
+// diagnostic log of past runs, not a roster of upcoming bookings — you
+// couldn't see a booking existed until the night before the call. This
+// table is the fix: one row per booking, from the moment it's made.
+//
+// externalCallId is deliberately the same id booking.ts's NormalizedCall.id
+// resolves to for this same booking (Calendly event UUID, Cal.com uid, GHL
+// event id — see booking-roster.ts's extraction, matched against
+// booking.ts's own per-platform `id:` assignment) — the same value that
+// ends up as briefedCallsLog.callId once/if Pre-Call Read processes this
+// booking. That shared id is what lets a roster query LEFT JOIN
+// briefedCallsLog to derive real status (Scheduled for Briefing → Brief
+// Delivered / Failed) without this table ever being written to from the
+// brief-service.ts path — two independent writers, one join at read time.
+export const bookingRoster = pgTable(
+  "booking_roster",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    externalCallId: text("external_call_id").notNull(),
+    prospectName: text("prospect_name"),
+    prospectEmail: text("prospect_email"),
+    prospectPhone: text("prospect_phone"),
+    callTime: timestamp("call_time").notNull(),
+    callEndTime: timestamp("call_end_time"),
+    meetingUrl: text("meeting_url"),
+    bookingPlatform: text("booking_platform"),
+    // "scheduled" | "cancelled" — deliberately not "no_show"/"completed";
+    // those are call *outcomes*, already tracked elsewhere (briefedCallsLog,
+    // the outcome-resolution module) and read at query time, not duplicated
+    // here. This column only answers "is the booking itself still on."
+    status: text("status").notNull().default("scheduled"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    // One roster row per booking per engagement — a cancellation webhook
+    // for a booking already on the roster updates this row in place
+    // instead of inserting a second one.
+    uniqueIndex("booking_roster_engagement_call_uidx").on(table.engagementId, table.externalCallId),
+    // The roster view's primary query pattern: this engagement, this
+    // month's date range.
+    index("booking_roster_engagement_call_time_idx").on(table.engagementId, table.callTime),
+  ]
+);
+
 export const briefedCallsLog = pgTable("briefed_calls_log", {
   id: uuid("id").defaultRandom().primaryKey(),
   engagementId: text("engagement_id")

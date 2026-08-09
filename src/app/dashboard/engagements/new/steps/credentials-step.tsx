@@ -162,6 +162,21 @@ export function CredentialsStep({
   </div>
 )}
 
+      {/* ── Manual fallback for the standing booking link ──
+          If the live dropdown above can't reach the platform (bad key,
+          API outage, zero event types with a public link), there's no
+          other way to satisfy the Calendly/Cal.com requirement — this
+          text field is the escape hatch so setup is never fully blocked. */}
+      {!bookingIsGhl && (form.bookingPlatform === "calendly" || form.bookingPlatform === "cal_com") && (bookingOptionsError || (!fetchingBookingOptions && hasBookingAuth && bookingOptions.length === 0)) && (
+        <InputField
+          label="Standing Booking Page Link (manual)"
+          value={form.bookingStandingLink}
+          onChange={(v) => set("bookingStandingLink", v)}
+          placeholder={form.bookingPlatform === "calendly" ? "https://calendly.com/your-handle/event" : "https://cal.com/your-handle/event"}
+          helpText="The dropdown above couldn't pull your calendars automatically — paste your public booking page link here instead."
+        />
+      )}
+
 
       {/* ── Email Platform / Credentials ── */}
       {form.emailPlatform === "smtp" ? (

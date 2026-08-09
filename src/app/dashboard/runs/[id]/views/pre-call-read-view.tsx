@@ -48,26 +48,7 @@ const DESTINATION_ICON: Record<string, typeof MessageSquare> = {
   calendar_event: CalendarCheck,
 };
 
-function getDaysInMonthGrid(year: number, month: number) {
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const startDayOfWeek = (firstDay.getDay() + 6) % 7; // Monday = 0
-
-  const days: { date: Date; isCurrentMonth: boolean }[] = [];
-  for (let i = startDayOfWeek; i > 0; i--) days.push({ date: new Date(year, month, 1 - i), isCurrentMonth: false });
-  for (let i = 1; i <= lastDay.getDate(); i++) days.push({ date: new Date(year, month, i), isCurrentMonth: true });
-  const remaining = (days.length > 35 ? 42 : 35) - days.length;
-  for (let i = 1; i <= remaining; i++) days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
-  return days;
-}
-
-function dateKey(d: Date | string) {
-  return new Date(d).toISOString().slice(0, 10);
-}
-
-function timeStr(d: string) {
-  return new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
+import { getDaysInMonthGrid, dateKey, timeStr } from "../_shared/calendar-grid";
 
 export function PreCallReadView({
   detail,

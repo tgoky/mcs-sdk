@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check } from "lucide-react";
 import { SKILL_IDS, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
+import { SquishySkillBadge, SKILL_SQUISHY_CONFIG } from "@/components/squishy-skill-badge";
 
 /**
  * Two-stage post-save screen, replacing the old single "Launch Setup"
@@ -172,37 +174,53 @@ export function LaunchStep({
         </p>
       </div>
 
-      <div className="space-y-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {SKILL_IDS.map((skillId) => {
           const skill = SKILL_MANIFEST[skillId];
+          const config = SKILL_SQUISHY_CONFIG[skillId];
           const checked = selected[skillId];
           return (
             <label
               key={skillId}
-              className="flex items-start gap-3 rounded-lg p-3 border cursor-pointer transition-colors"
+              className="group relative flex items-start gap-3 rounded-xl p-3.5 border cursor-pointer transition-all duration-150"
               style={{
-                borderColor: checked ? "var(--text-primary)" : "var(--border)",
+                borderColor: checked ? config.bgClass.match(/#[0-9a-f]{6}/i)?.[0] ?? "var(--text-primary)" : "var(--border)",
                 background: checked ? "var(--surface-2)" : "var(--surface)",
+                boxShadow: checked ? `0 0 0 1px ${config.bgClass.match(/#[0-9a-f]{6}/i)?.[0] ?? "var(--text-primary)"}` : "none",
               }}
             >
               <input
                 type="checkbox"
                 checked={checked}
                 onChange={(e) => setSelected((s) => ({ ...s, [skillId]: e.target.checked }))}
-                className="mt-0.5 cursor-pointer"
+                className="sr-only"
               />
-              <div className="flex-1">
-                <div className="text-xs font-bold font-mono" style={{ color: "var(--text-primary)" }}>
-                  {skill.name}
-                  {skill.runOnSetup && (
-                    <span className="ml-2 text-[10px] font-normal uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-                      opens its own setup screen next
-                    </span>
-                  )}
+
+              <SquishySkillBadge skill={skillId} size={38} enabled={checked} />
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold font-mono truncate" style={{ color: "var(--text-primary)" }}>
+                    {skill.name}
+                  </span>
+                  <span
+                    className="shrink-0 flex items-center justify-center w-4 h-4 rounded-full border transition-all duration-150"
+                    style={{
+                      borderColor: checked ? config.bgClass.match(/#[0-9a-f]{6}/i)?.[0] ?? "var(--text-primary)" : "var(--border)",
+                      background: checked ? config.bgClass.match(/#[0-9a-f]{6}/i)?.[0] ?? "var(--text-primary)" : "transparent",
+                    }}
+                  >
+                    {checked && <Check size={10} strokeWidth={3.5} className="text-zinc-950" />}
+                  </span>
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                <div className="text-[11px] leading-snug mt-1" style={{ color: "var(--text-muted)" }}>
                   {skill.description}
                 </div>
+                {skill.runOnSetup && (
+                  <div className="mt-1.5 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
+                    Opens its own setup screen next
+                  </div>
+                )}
               </div>
             </label>
           );

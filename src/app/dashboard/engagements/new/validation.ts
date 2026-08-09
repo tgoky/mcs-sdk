@@ -31,8 +31,14 @@ export function getValidationErrors(form: FormData): ValidationError[] {
   if (!form.bookingPlatform) {
     errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "Booking Calendar selection is required" });
   }
+  // This is gated on "credentials", not "stack" — bookingStandingLink can only
+  // be set from the live calendar dropdown in credentials-step.tsx (it needs
+  // the API key first, which also only lives on that step). Gating it on
+  // "stack" was the original bug: it blocked the Next button on the stack
+  // step with no way to satisfy it without leaving that step. Same pattern
+  // as the ghl_calendar check below — keep them in sync.
   if ((form.bookingPlatform === "calendly" || form.bookingPlatform === "cal_com") && !form.bookingStandingLink.trim()) {
-    errors.push({ step: "stack", stepLabel: "Connect Your Tools", issue: "Standing booking page link is required" });
+    errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "Standing booking page link is required — choose a calendar from the dropdown once your API key is verified" });
   }
   // Hard gate on the live calendar dropdown, not just the API key — this
   // is what actually prevents the GHL 422 bug: without a verified

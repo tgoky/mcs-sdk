@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { engagements, webhookEvents, type EngagementStack } from "@/models/schema";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
+import { upsertBookingRoster } from "@/lib/booking-roster";
 import { deriveWebhookIdempotencyKey } from "@/lib/platforms/booking";
 import { startRun, failRun } from "@/lib/run-log";
 import { gateOrExecute } from "@/lib/approval-gate";
@@ -342,6 +343,18 @@ export async function POST(request: Request) {
     // behavior, unchanged); an operator opts a specific engagement into
     // review-before-enroll via require_approval_for_side_effects. Reuses
     // `stack`, already derived from `tenant.stack` above.
+
+    // Roster write happens here, ahead of the gate — deliberately not
+    // inside the gated callback below. "A booking happened" is ground
+    // truth for the calendar/roster views regardless of whether the
+    // downstream ESP enrollment is waiting on human approval; an operator
+    // with approval-gates on shouldn't lose calendar visibility of a
+    // booking just because its enrollment side effects are queued for
+    // review. Fail-soft — never blocks the webhook ack.
+    await upsertBookingRoster(payload, tenant.engagementId, eventKind, stack?.booking_platform).catch((e: unknown) => {
+      console.error("[webhook] Roster write failed (non-fatal):", e instanceof Error ? e.message : String(e));
+    });
+
     const gateResult = await gateOrExecute(
       stack,
       tenant.engagementId,

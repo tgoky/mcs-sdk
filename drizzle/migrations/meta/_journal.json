@@ -134,6 +134,13 @@
       "when": 1786268414277,
       "tag": "0018_medical_beyonder",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786310815055,
+      "tag": "0019_loud_nico_minoru",
+      "breakpoints": true
     }
   ]
 }

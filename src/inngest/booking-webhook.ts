@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { handleInboundBookingEvent } from "@/features/pile-on/server/enrollment-service";
+import { upsertBookingRoster } from "@/lib/booking-roster";
 import { failRun, logStep, finishRun } from "@/lib/run-log";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { SKILL_REGISTRY } from "@/lib/skill-registry";
@@ -72,6 +73,25 @@ export const processBookingWebhookEvent = inngest.createFunction(
       await finishRun(runId);
       return { processed: false, reason: `engagement is ${statusReason}` };
     }
+
+    // Roster write — deliberately unconditional (not gated on Pile-On/
+    // Win-Back being enabled below). Whether a booking happened is a fact,
+    // independent of which automations react to it; an engagement with
+    // Pre-Call Read on but Pile-On off should still see the booking on the
+    // calendar. Fail-soft: a roster hiccup must never block the real
+    // enrollment path this runs alongside.
+    await step.run("write-booking-roster", async () => {
+      const stack = tenant.stack as { booking_platform?: string } | null;
+      const result = await upsertBookingRoster(bookingPayload, engagementId, eventKind, stack?.booking_platform);
+      await logStep(runId, {
+        phase: "booking_roster",
+        status: result.wrote ? "success" : "skipped",
+        detail: result.wrote ? "Roster updated" : (result.reason ?? "Not written"),
+      });
+    }).catch(async (e: unknown) => {
+      const message = e instanceof Error ? e.message : String(e);
+      await logStep(runId, { phase: "booking_roster", status: "failed", detail: message }).catch(() => {});
+    });
 
     // Matches the skillName booking-event/route.ts already used to start
     // this run: a cancellation exits/enrolls into Win-Back, anything else

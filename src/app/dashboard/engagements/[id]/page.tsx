@@ -9,6 +9,7 @@ import { TriggerSkillButton } from "./trigger-skill-button";
 import { EngagementPauseControl } from "./pause-control";
 import { SkillsPanel } from "./skills-panel";
 import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
+import { RosterCalendar } from "./roster-calendar";
 import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
 import { RunRowActions } from "./run-row-actions";
@@ -353,6 +354,8 @@ export default async function EngagementDetailPage({
             })}
           </div>
         </div>
+
+        <RosterCalendar engagementId={id} />
 
         <DeliverablesPanel
           engagementId={id}

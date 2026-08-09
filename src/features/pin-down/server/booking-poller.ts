@@ -4,6 +4,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { listBookingsSinceForTenant, deriveWebhookIdempotencyKey } from "@/lib/platforms/booking";
 import { handleInboundBookingEvent, classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
+import { upsertBookingRoster } from "@/lib/booking-roster";
 import { startRun, failRun, logStep, finishRun } from "@/lib/run-log";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
@@ -147,6 +148,13 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
       name: call.name,
       prospect_email: call.email,
       prospect_name: call.name,
+      // Roster coverage (src/lib/booking-roster.ts) — the polled call already
+      // carries a real callTime/phone from NormalizedCall; surfaced here
+      // under the same `call_time` key the live webhook path's synthetic
+      // extraction looks for, so polling-mode engagements get the same
+      // roster write as webhook-mode ones instead of a silent gap.
+      call_time: call.callTime.toISOString(),
+      phone: call.phone,
       _source: "poll",
       _bookingId: call.id,
     };
@@ -200,6 +208,17 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
         skillName: skillId,
         phase: "webhook_received",
         label: `${call.name} <${call.email}> (polled)`,
+      });
+
+      // Roster write — same rationale as booking-webhook.ts: unconditional,
+      // ahead of the skill-enabled check below, fail-soft.
+      const rosterResult = await upsertBookingRoster(syntheticPayload, engagementId, eventKind, stack.booking_platform).catch(
+        (e: unknown) => ({ wrote: false, reason: e instanceof Error ? e.message : String(e) })
+      );
+      await logStep(runId, {
+        phase: "booking_roster",
+        status: rosterResult.wrote ? "success" : "skipped",
+        detail: rosterResult.wrote ? "Roster updated" : (rosterResult.reason ?? "Not written"),
       });
 
       if (!(await isSkillEnabledForEngagement(engagementId, skillId))) {
