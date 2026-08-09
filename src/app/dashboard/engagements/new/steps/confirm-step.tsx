@@ -1,20 +1,17 @@
 import { BOOKING_PLATFORM_LABELS, BRIEF_DESTINATION_LABELS, EMAIL_PLATFORM_LABELS, HOSTING_PLATFORM_LABELS } from "@/lib/copy";
 import { STEPS } from "../constants";
 import type { FormData, Step, ValidationError } from "../types";
-import { TemplatePicker } from "./template-picker";
 
 export function ConfirmStep({
   form,
   allValidationErrors,
   setStep,
   error,
-  set,
 }: {
   form: FormData;
   allValidationErrors: ValidationError[];
   setStep: (step: Step) => void;
   error: string | null;
-  set: (field: keyof FormData, value: string | boolean) => void;
 }) {
   return (
     <div className="space-y-6 w-full">
@@ -86,24 +83,14 @@ export function ConfirmStep({
             Clicking the button below encrypts and stores what you entered — it does{" "}
             <span className="font-semibold" style={{ color: "var(--text-primary)" }}>not</span> touch{" "}
             <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{form.buyerName || "this client"}&apos;s</span>{" "}
-            real accounts yet. After saving, you&apos;ll get a separate Launch Setup screen — nothing runs until you click that.
-            Launching will, in order:
+            real accounts yet, and neither does Launch itself — Launch just activates the account. After that you&apos;ll
+            choose which skills and agents to turn on. Most just start waiting on their own trigger (a booking webhook, a
+            nightly cron) with zero further setup. Pin-Down is the one exception — enabling it opens its own short config
+            screen (brand voice, confirmation page design) before it runs, since it needs those inputs to do anything.
           </p>
-          <ol className="list-decimal list-inside space-y-1" style={{ color: "var(--text-secondary)" }}>
-            <li>
-              {form.voiceSource === "scrape"
-                ? `Crawl ${form.marketingDomain || form.publishDomain || "the marketing site"} to learn the brand voice.`
-                : "Analyze the pasted writing sample to learn the brand voice."}
-            </li>
-            <li>Generate ad creative briefs, video scripts, and a confirmation page via Claude.</li>
-            <li>
-              Attempt to register a live booking webhook with{" "}
-              {BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform}. If that platform doesn&apos;t
-              support it, this falls back to automatic 5-minute polling — no action needed from you or the client either way.
-            </li>
-          </ol>
           <p style={{ color: "var(--text-muted)" }}>
-            Once you launch, you&apos;ll land on a live status page and can watch each step happen in real time.
+            Booking, email, hosting, and SMS credentials you enter in this wizard are shared — whichever skills and
+            agents you enable later all draw on the same connections rather than asking for them again.
           </p>
         </div>
       )}
@@ -119,12 +106,6 @@ export function ConfirmStep({
             ["Email Platform", EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform],
             ["Hosting Node", HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform],
             ["Brief Delivery Channel", BRIEF_DESTINATION_LABELS[form.briefDestination] ?? form.briefDestination],
-            [
-              "Voice Source",
-              form.voiceSource === "scrape"
-                ? `Live crawl of ${form.marketingDomain || form.publishDomain || "—"}${form.rawVoiceCorpus.trim() ? " + pasted sample" : ""}`
-                : `${form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length} words pasted`,
-            ],
             ["Questions Matrix", `${form.topCallQuestions.split("\n").filter(Boolean).length}`],
             ["Objections Logged", `${form.topObjections.split("\n").filter(Boolean).length}`],
             ["Social Proof Count", `${form.testimonials.filter((t) => t.name && t.role && t.quote).length}`],
@@ -135,17 +116,6 @@ export function ConfirmStep({
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="space-y-3">
-        <div>
-          <h2 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>Choose a confirmation page design</h2>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-            This is the page {form.buyerName || "your client"}&apos;s prospects land on after booking. Pick a design now —
-            you can change it later from the engagement page, and it&apos;ll regenerate with real call data once you launch.
-          </p>
-        </div>
-        <TemplatePicker form={form} onSelect={(id) => set("confirmationPageTemplate", id)} />
       </div>
 
       {error && (

@@ -3,10 +3,18 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { SKILLS, SKILL_INFO, type SkillName } from "@/lib/copy";
+import { SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 
-// Keep pin-down excluded from manual toggling
-const TOGGLEABLE_SKILLS: SkillName[] = SKILLS.filter((s) => s !== "pin-down");
+// pin-down is toggleable like any other bridge here now — see the
+// client-launch rework (POST /api/engagements/[id]/skills/[skillId]).
+// Turning a runOnSetup bridge OFF is plain bookkeeping through that route,
+// same as any other skill. Turning one ON is different: that route
+// rejects it (422) and points at the bridge's own config endpoint instead
+// — see handleClick below, which checks SKILL_MANIFEST[skill].runOnSetup
+// (not a hardcoded "pin-down" check) so a future runOnSetup bridge routes
+// correctly with zero changes here.
+const TOGGLEABLE_SKILLS: SkillName[] = [...SKILLS];
 
 export function SkillsPanel({
   engagementId,
@@ -48,6 +56,18 @@ export function SkillsPanel({
     });
   }
 
+  // Turning a runOnSetup bridge ON has nothing to toggle yet — it needs
+  // its own hinges filled in first, so this routes there instead of
+  // calling the API (which would 422 anyway). Turning one off, and any
+  // other bridge either direction, is a plain toggle.
+  function handleClick(skill: SkillName) {
+    if (!states[skill] && SKILL_MANIFEST[skill].runOnSetup) {
+      router.push(`/dashboard/engagements/${engagementId}/bridges/${skill}`);
+      return;
+    }
+    handleToggle(skill);
+  }
+
   const activeCount = TOGGLEABLE_SKILLS.filter((s) => states[s]).length;
 
   return (
@@ -77,7 +97,7 @@ export function SkillsPanel({
           return (
             <div
               key={skill}
-              onClick={() => !isBusy && handleToggle(skill)}
+              onClick={() => !isBusy && handleClick(skill)}
               className="group flex items-center justify-between gap-4 py-3.5 px-2 hover:bg-zinc-500/[0.04] dark:hover:bg-zinc-500/[0.06] rounded-xl transition-colors cursor-pointer select-none"
             >
               {/* Left Side: Squishy Badge + Title + Full Description */}
@@ -93,6 +113,11 @@ export function SkillsPanel({
                     }`}
                   >
                     {info.name}
+                    {SKILL_MANIFEST[skill].runOnSetup && !isEnabled && (
+                      <span className="ml-2 text-[10px] font-normal font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                        opens its own setup screen
+                      </span>
+                    )}
                   </span>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug font-sans">
                     {info.description}
@@ -100,8 +125,20 @@ export function SkillsPanel({
                 </div>
               </div>
 
-              {/* Right Side: Filled Toggle Switch Button */}
+              {/* Right Side: optional Configure link + Filled Toggle Switch Button */}
               <div className="shrink-0 flex items-center gap-3">
+                {SKILL_MANIFEST[skill].hasHingesPanel && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`/dashboard/engagements/${engagementId}/bridges/${skill}`);
+                    }}
+                    className="text-[11px] font-mono font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer"
+                  >
+                    Configure
+                  </button>
+                )}
                 <span
                   className={`text-[11px] font-mono font-bold uppercase tracking-wider ${
                     isBusy
@@ -118,7 +155,7 @@ export function SkillsPanel({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!isBusy) handleToggle(skill);
+                    if (!isBusy) handleClick(skill);
                   }}
                   disabled={isBusy}
                   aria-label={`Toggle ${info.name}`}

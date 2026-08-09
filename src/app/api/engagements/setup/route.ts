@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       topObjections,
       prospectMeets,
       rawVoiceCorpus,
+      confirmationPageTemplate,
       credentials,
     } = body;
 
@@ -233,6 +234,7 @@ export async function POST(request: Request) {
           prospectMeets: prospectMeets ?? "founder",
           existingProof: body.existingProof,
           rawVoiceCorpus: rawVoiceCorpus ?? "",
+          ...(confirmationPageTemplate ? { confirmationPageTemplate } : {}),
           ...(body.discoveryPrefill ? { discoveryPrefill: body.discoveryPrefill } : {}),
           updatedAt: new Date(),
         })

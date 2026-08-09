@@ -13,7 +13,7 @@ export const STEPS: { id: Step; label: string }[] = [
   { id: "offer", label: "Your Offer" },
   { id: "stack", label: "Connect Your Tools" },
   { id: "credentials", label: "Account Keys" },
-  { id: "voice", label: "Your Brand Voice" },
+  { id: "voice", label: "Sales Context" },
   { id: "confirm", label: "Review & Finish" },
 ];
 

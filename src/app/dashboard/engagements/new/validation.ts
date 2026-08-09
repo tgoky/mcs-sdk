@@ -87,28 +87,18 @@ export function getValidationErrors(form: FormData): ValidationError[] {
     if (!form.emailGhlRecoveryWorkflowId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "GHL Recovery Workflow (Win-Back) must be selected" });
   }
 
-  // Step 4: Voice
-  if (form.voiceSource === "scrape") {
-    // Scraping Mode: Website domain required, pasted text optional!
-    if (!form.marketingDomain.trim() && !form.publishDomain.trim()) {
-      errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: "Marketing website URL is required when scraping brand voice" });
-    }
-  } else {
-    // Manual Mode: Require at least 50 words
-    const wordCount = form.rawVoiceCorpus.trim().split(/\s+/).filter(Boolean).length;
-    if (wordCount < 50) {
-      errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: `Brand Voice sample needs at least 50 words (currently ${wordCount} words)` });
-    }
-  }
-
-  // Common Call Questions: Require at least 1 item (accepts commas, newlines, semicolons, or numbered lists)
+  // Sales Context step — shared across whichever skills/agents get enabled
+  // later (Pin-Down's briefs, Pile-On's ad copy, Pre-Call Read's briefing all
+  // read these). Voice-source validation (marketing domain / word count) used
+  // to live here too — it moved to the Pin-Down bridge's own config screen
+  // (src/app/dashboard/engagements/[id]/bridges/pin-down/page.tsx) along with
+  // the fields it validates, since neither is collected in this wizard anymore.
   if (countItems(form.topCallQuestions) < 1) {
-    errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: "At least 1 common call question is required" });
+    errors.push({ step: "voice", stepLabel: "Sales Context", issue: "At least 1 common call question is required" });
   }
 
-  // Common Objections: Require at least 1 item (accepts commas, newlines, semicolons, or numbered lists)
   if (countItems(form.topObjections) < 1) {
-    errors.push({ step: "voice", stepLabel: "Your Brand Voice", issue: "At least 1 common objection is required" });
+    errors.push({ step: "voice", stepLabel: "Sales Context", issue: "At least 1 common objection is required" });
   }
 
   return errors;

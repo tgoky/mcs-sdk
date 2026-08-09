@@ -60,7 +60,14 @@ export const SKILL_REGISTRY: Record<SkillId, SkillDefinition> = {
   },
 };
 
-/** Skills a freshly-saved engagement should launch automatically once — see /api/pin-down/launch. */
+/**
+ * Bridges that fire immediately, once, the moment they're turned on for
+ * an engagement (via POST /api/engagements/[id]/skills/[skillId] —
+ * see dispatchSkillRun in skill-dispatch.ts) rather than waiting on a
+ * webhook or cron like the rest. Today that's Pin-Down alone. No longer
+ * used to auto-fire anything at client launch — launching a client and
+ * turning a bridge on are separate, deliberate actions.
+ */
 export function getSkillsRunOnSetup(): SkillId[] {
   return SKILL_IDS.filter((id) => SKILL_REGISTRY[id].runOnSetup);
 }

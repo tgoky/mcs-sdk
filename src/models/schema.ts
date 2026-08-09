@@ -465,6 +465,14 @@ export const engagements = pgTable("engagements", {
   tagColor: text("tag_color"),
   schemaVersion: text("schema_version").notNull().default("1.0"),
 
+  // Set once, when the client is launched from the wizard's post-save
+  // screen (POST /api/engagements/[id]/launch). Deliberately independent
+  // of any bridge (skill/agent) running — "launched" means the client
+  // account is configured and ready to have products enabled on it, not
+  // that any specific bridge has fired. NULL until launch; a launched
+  // engagement never reverts to NULL.
+  launchedAt: timestamp("launched_at"),
+
   // pin-down writes these once — .$type<T>() gives us TS safety on the jsonb
   stack: jsonb("stack").$type<EngagementStack>(),
   offerDetails: jsonb("offer_details").$type<{
