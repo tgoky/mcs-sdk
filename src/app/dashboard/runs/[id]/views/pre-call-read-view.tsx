@@ -2,8 +2,6 @@
 
 import { useMemo, useState } from "react";
 import {
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Search,
   Sparkles,
@@ -24,6 +22,8 @@ import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
 import { StatusPill } from "../_shared/status-pill";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { BriefedCall, PreCallReadDetail } from "../_shared/types";
+import type { RunStep } from "@/models/schema";
+import { bookingPlatformLabel } from "@/lib/copy";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 type CallStatus = "pending" | "brief_ready" | "delivered" | "failed";
@@ -48,13 +48,15 @@ const DESTINATION_ICON: Record<string, typeof MessageSquare> = {
   calendar_event: CalendarCheck,
 };
 
-import { getDaysInMonthGrid, dateKey, timeStr } from "../_shared/calendar-grid";
+import { dateKey, timeStr } from "../_shared/calendar-grid";
 
 export function PreCallReadView({
   detail,
+  steps,
   onRefreshDetail,
 }: {
   detail: PreCallReadDetail;
+  steps: RunStep[];
   onRefreshDetail: () => void;
 }) {
   const { run, calls } = detail;
@@ -66,7 +68,6 @@ export function PreCallReadView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(() => calls.find((c) => c.id === selectedId) ?? null, [calls, selectedId]);
   const [filterText, setFilterText] = useState("");
-  const [currentDate, setCurrentDate] = useState(() => (calls[0] ? new Date(calls[0].callTime) : new Date()));
 
   const filteredCalls = useMemo(() => {
     if (!filterText.trim()) return calls;
@@ -75,15 +76,6 @@ export function PreCallReadView({
       (c.prospectName ?? "").toLowerCase().includes(q)
     );
   }, [calls, filterText]);
-
-  const callsByDate = useMemo(() => {
-    const map: Record<string, BriefedCall[]> = {};
-    for (const c of filteredCalls) {
-      const k = dateKey(c.callTime);
-      (map[k] ??= []).push(c);
-    }
-    return map;
-  }, [filteredCalls]);
 
   const callsByDay = useMemo(() => {
     const map = new Map<string, BriefedCall[]>();
@@ -101,10 +93,11 @@ export function PreCallReadView({
     return cols;
   }, [filteredCalls]);
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const gridDays = useMemo(() => getDaysInMonthGrid(year, month), [year, month]);
-  const monthName = currentDate.toLocaleString("default", { month: "long" });
+  // The real log line this run wrote when it fetched its window — surfaced
+  // verbatim instead of a fabricated summary, e.g. "2 call(s) found
+  // (nightly)". Reverse-search so a later "success"/"skipped" entry wins
+  // over an earlier "running" one for the same phase.
+  const rosterFetchStep = useMemo(() => [...steps].reverse().find((s) => s.phase === "roster_fetch") ?? null, [steps]);
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
@@ -126,112 +119,102 @@ export function PreCallReadView({
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 2. CALENDAR / OVERVIEW VIEW                                       */}
+      {/* 2. DAY READOUT — this run's actual window, not a month grid.       */}
+      {/* A single Pre-Call Read run only ever touches one, occasionally    */}
+      {/* two, calendar dates (getTomorrowCalls / the dynamic-webhook lead- */}
+      {/* time window) — see calendar-grid.ts's callers in booking.ts. A    */}
+      {/* 42-cell month grid for that was the wrong shape and read as       */}
+      {/* broken when a run found 0 calls. This reads like a printout of    */}
+      {/* what the run actually checked: the real roster_fetch log line,   */}
+      {/* then one spotlight card per date the run's calls fall on.        */}
+      {/* The engagement-wide month calendar lives on the engagement page   */}
+      {/* (roster-calendar.tsx) — this stays a single-run audit view.       */}
       {/* ----------------------------------------------------------------- */}
       {mode === "calendar" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl font-sans">
-          <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-4 py-2.5">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentDate(new Date(year, month - 1, 1))}
-                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer"
-              >
-                <ChevronLeft size={15} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentDate(new Date(year, month + 1, 1))}
-                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer"
-              >
-                <ChevronRight size={15} />
-              </button>
-
-              <h3 className="text-sm font-bold text-white min-w-[120px] font-sans">
-                {monthName} {year}
-              </h3>
-
-              <button
-                type="button"
-                onClick={() => setCurrentDate(new Date())}
-                className="rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700 cursor-pointer font-sans"
-              >
-                Today
-              </button>
-            </div>
-
-            <div className="text-[11px] font-mono text-zinc-500">
-              {calls.length} total call{calls.length === 1 ? "" : "s"}
-            </div>
+        <div className="flex flex-col gap-3 font-sans">
+          <div className="flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-black/40 px-3 py-2.5 font-mono text-[11px]">
+            <div className="h-3.5 w-1 shrink-0 rounded-full bg-emerald-500/80" />
+            <span className="text-zinc-600">roster_fetch</span>
+            <span className="text-zinc-700">·</span>
+            <span className="text-zinc-400">
+              {rosterFetchStep?.detail ?? "No roster-fetch step logged for this run"}
+            </span>
+            {run.stack?.booking_platform && (
+              <>
+                <span className="text-zinc-700">·</span>
+                <span className="text-zinc-600">{bookingPlatformLabel(run.stack.booking_platform)}</span>
+              </>
+            )}
           </div>
 
-          <div className="grid grid-cols-7 border-b border-zinc-800 bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-              <div key={d} className="border-r border-zinc-800/60 py-2 last:border-r-0">
-                {d}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 auto-rows-fr bg-zinc-950 font-sans">
-            {gridDays.map(({ date, isCurrentMonth }, idx) => {
-              const k = dateKey(date);
-              const dayCalls = callsByDate[k] ?? [];
-              const isToday = dateKey(new Date()) === k;
-
+          {callsByDay.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/50 py-14 text-zinc-600 font-sans">
+              <CalendarX size={22} />
+              <span className="text-xs">This run's window came back empty — nothing to brief.</span>
+            </div>
+          ) : (
+            callsByDay.map(([dayKeyStr, dayCalls]) => {
+              const d = new Date(dayKeyStr);
+              const isToday = dateKey(new Date()) === dayKeyStr;
               return (
-                <div
-                  key={idx}
-                  className={cn(
-                    "flex min-h-[95px] flex-col border-b border-r border-zinc-800/60 p-1.5 transition-colors font-sans",
-                    !isCurrentMonth && "bg-zinc-900/20 text-zinc-600",
-                    isCurrentMonth && "hover:bg-zinc-900/30"
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <span
+                <div key={dayKeyStr} className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl font-sans">
+                  <div className="flex items-center gap-4 border-b border-zinc-800 bg-zinc-900/60 px-5 py-4">
+                    <div
                       className={cn(
-                        "flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold",
-                        isToday
-                          ? "bg-emerald-500 text-zinc-950 font-bold"
-                          : isCurrentMonth
-                          ? "text-zinc-300"
-                          : "text-zinc-600"
+                        "flex flex-col items-center justify-center rounded-xl w-14 h-14 shrink-0 leading-none",
+                        isToday ? "bg-emerald-500 text-zinc-950" : "bg-zinc-900 border border-zinc-800 text-zinc-200"
                       )}
                     >
-                      {date.getDate()}
-                    </span>
+                      <span className="font-mono text-xl font-black">{d.getDate()}</span>
+                      <span className="mt-0.5 text-[8.5px] font-bold uppercase tracking-wider opacity-70">
+                        {d.toLocaleString("default", { month: "short" })}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-bold text-white font-sans">
+                        {d.toLocaleDateString(undefined, { weekday: "long" })}
+                        {isToday && <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-emerald-400">Today</span>}
+                      </span>
+                      <span className="text-[11px] font-mono text-zinc-500">
+                        {dayCalls.length} call{dayCalls.length === 1 ? "" : "s"} in this run's window
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="mt-1 space-y-1 overflow-y-auto max-h-[75px] [scrollbar-width:none]">
-                    {dayCalls.map((call) => {
+                  <div className="flex flex-col px-5 py-3">
+                    {dayCalls.map((call, i) => {
                       const status = deriveStatus(call);
+                      const isLast = i === dayCalls.length - 1;
                       return (
                         <button
                           key={call.id}
                           type="button"
                           onClick={() => setSelectedId(call.id)}
-                          className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] font-sans hover:border-zinc-700 cursor-pointer transition-all"
+                          className="group flex items-stretch gap-3 text-left cursor-pointer"
                         >
-                          <div className="flex items-center justify-between gap-1 font-sans">
-                            <span className="truncate font-bold text-white font-sans">
-                              {call.prospectName ?? "Unnamed prospect"}
-                            </span>
-                            <span className="shrink-0 font-mono text-[9.5px] text-zinc-400">
-                              {timeStr(call.callTime)}
-                            </span>
+                          <div className="flex w-2.5 shrink-0 flex-col items-center">
+                            <div className="mt-4 h-2 w-2 shrink-0 rounded-full bg-zinc-600 transition-colors group-hover:bg-emerald-500" />
+                            {!isLast && <div className="w-px flex-1 bg-zinc-800" />}
                           </div>
-                          <StatusPill tone={STATUS_META[status].tone} className="w-fit">
-                            {STATUS_META[status].label}
-                          </StatusPill>
+                          <div className="mb-2 flex flex-1 items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 transition-colors group-hover:border-zinc-700">
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <span className="w-12 shrink-0 font-mono text-[10.5px] text-zinc-500">{timeStr(call.callTime)}</span>
+                              <span className="truncate text-xs font-bold text-white font-sans">
+                                {call.prospectName ?? "Unnamed prospect"}
+                              </span>
+                            </div>
+                            <StatusPill tone={STATUS_META[status].tone} className="shrink-0">
+                              {STATUS_META[status].label}
+                            </StatusPill>
+                          </div>
                         </button>
                       );
                     })}
                   </div>
                 </div>
               );
-            })}
-          </div>
+            })
+          )}
         </div>
       )}
 

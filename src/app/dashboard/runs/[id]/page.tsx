@@ -105,7 +105,7 @@ function RunStatusBadge({ status }: { status: string }) {
 function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayload; steps: RunStep[]; onRefreshDetail: () => void }) {
   switch (detail.run.skillName) {
     case "pre-call-read":
-      return "calls" in detail ? <PreCallReadView detail={detail} onRefreshDetail={onRefreshDetail} /> : null;
+      return "calls" in detail ? <PreCallReadView detail={detail} steps={steps} onRefreshDetail={onRefreshDetail} /> : null;
     case "pile-on":
       return "send" in detail ? <PileOnView detail={detail} steps={steps} /> : null;
     case "win-back":
