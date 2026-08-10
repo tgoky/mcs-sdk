@@ -25,19 +25,19 @@ import type { AuditHistoryItem, ScheduledAudit, ActiveAlertItem } from "@/app/ap
 
 type ViewMode = "month" | "day" | "list" | "board";
 
-const HOURS = Array.from({ length: 15 }, (_, i) => i + 8); // 8:00 AM to 10:00 PM
+const HOURS = Array.from({ length: 15 }, (_, i) => i + 8);
 
 interface StreamState<T> {
   data: T[];
   loading: boolean;
+  fetched: boolean; // Explicitly track completion
   error: string | null;
 }
 
 function emptyStream<T>(): StreamState<T> {
-  return { data: [], loading: false, error: null };
+  return { data: [], loading: false, fetched: false, error: null };
 }
 
-// ─── DECLARED OUTSIDE RENDER PASS TO PREVENT STATE RESET ──────────────
 function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="flex items-center justify-between rounded-xl border border-rose-800/50 bg-rose-950/20 px-4 py-2.5 text-xs text-rose-300">
@@ -60,7 +60,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
   const [filterText, setFilterText] = useState("");
   const [copied, setCopied] = useState(false);
 
-  // Per-Stream State with Explicit Error Tracking
+  // Per-Stream State
   const [roster, setRoster] = useState<StreamState<RosterEntry>>(emptyStream());
   const [pileOn, setPileOn] = useState<StreamState<PileOnPipelineItem>>(emptyStream());
   const [winBack, setWinBack] = useState<StreamState<WinBackPipelineItem>>(emptyStream());
@@ -76,48 +76,48 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
   const month = currentDate.getMonth();
   const monthString = `${year}-${String(month + 1).padStart(2, "0")}`;
 
-  // Primary Fetch: Roster (Always needed for month grid)
+  // Primary Fetch: Roster
   const fetchRoster = useCallback(async () => {
     setRoster((s) => ({ ...s, loading: true, error: null }));
     try {
       const res = await fetch(`/api/engagements/${engagementId}/roster?month=${monthString}`);
       if (!res.ok) throw new Error(`Roster fetch failed: ${res.status}`);
       const data = await res.json();
-      setRoster({ data: data.entries ?? [], loading: false, error: null });
+      setRoster({ data: data.entries ?? [], loading: false, fetched: true, error: null });
     } catch (err) {
-      setRoster({ data: [], loading: false, error: err instanceof Error ? err.message : "Failed to load roster" });
+      setRoster({ data: [], loading: false, fetched: true, error: err instanceof Error ? err.message : "Failed to load roster" });
     }
   }, [engagementId, monthString]);
 
-  // Lazy Fetch: Pile-On (Only when entering Day or Board view)
+  // Lazy Fetch: Pile-On
   const fetchPileOn = useCallback(async () => {
-    if (pileOn.data.length > 0 || pileOn.loading) return;
+    if (pileOn.fetched || pileOn.loading) return;
     setPileOn((s) => ({ ...s, loading: true, error: null }));
     try {
       const res = await fetch(`/api/engagements/${engagementId}/pile-on-pipeline`);
       if (!res.ok) throw new Error(`Pile-on fetch failed: ${res.status}`);
       const data = await res.json();
-      setPileOn({ data: data.items ?? [], loading: false, error: null });
+      setPileOn({ data: data.items ?? [], loading: false, fetched: true, error: null });
     } catch (err) {
-      setPileOn({ data: [], loading: false, error: err instanceof Error ? err.message : "Failed to load pile-on data" });
+      setPileOn({ data: [], loading: false, fetched: true, error: err instanceof Error ? err.message : "Failed to load pile-on data" });
     }
-  }, [engagementId, pileOn.data.length, pileOn.loading]);
+  }, [engagementId, pileOn.fetched, pileOn.loading]);
 
-  // Lazy Fetch: Win-Back (Only when entering Day or Board view)
+  // Lazy Fetch: Win-Back
   const fetchWinBack = useCallback(async () => {
-    if (winBack.data.length > 0 || winBack.loading) return;
+    if (winBack.fetched || winBack.loading) return;
     setWinBack((s) => ({ ...s, loading: true, error: null }));
     try {
       const res = await fetch(`/api/engagements/${engagementId}/win-back-pipeline`);
       if (!res.ok) throw new Error(`Win-back fetch failed: ${res.status}`);
       const data = await res.json();
-      setWinBack({ data: data.items ?? [], loading: false, error: null });
+      setWinBack({ data: data.items ?? [], loading: false, fetched: true, error: null });
     } catch (err) {
-      setWinBack({ data: [], loading: false, error: err instanceof Error ? err.message : "Failed to load win-back data" });
+      setWinBack({ data: [], loading: false, fetched: true, error: err instanceof Error ? err.message : "Failed to load win-back data" });
     }
-  }, [engagementId, winBack.data.length, winBack.loading]);
+  }, [engagementId, winBack.fetched, winBack.loading]);
 
-  // Lazy Fetch: Leak-Map (Only when entering Day view)
+  // Lazy Fetch: Leak-Map
   const fetchLeakMap = useCallback(async () => {
     if (leakMap !== null || leakMapLoading) return;
     setLeakMapLoading(true);
@@ -134,7 +134,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     }
   }, [engagementId, leakMap, leakMapLoading]);
 
-  // Sync Month Changes & Mode Switches
+  // Effects
   useEffect(() => {
     fetchRoster();
     setPileOn(emptyStream());
@@ -152,7 +152,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     }
   }, [mode, fetchPileOn, fetchWinBack, fetchLeakMap]);
 
-  // Client-Side Indexes
+  // Indexes & Transforms
   const pileOnByBookingId = useMemo(
     () => new Map(pileOn.data.map((p) => [p.bookingId, p])),
     [pileOn.data]
@@ -399,7 +399,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
         </div>
       )}
 
-      {/* 2. Google/Apple Style Day View */}
+      {/* 2. Day View */}
       {mode === "day" && !roster.loading && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
           <div className="lg:col-span-8 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl flex flex-col">
@@ -537,7 +537,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               </div>
             </div>
 
-            {(pileOn.loading || winBack.loading || leakMapLoading) && (
+            {((!pileOn.fetched && pileOn.loading) || (!winBack.fetched && winBack.loading) || leakMapLoading) && (
               <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 space-y-2">
                 <div className="flex items-center gap-2 text-xs text-zinc-400">
                   <RefreshCw size={12} className="animate-spin" />
