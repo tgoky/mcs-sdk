@@ -26,10 +26,10 @@ export const revalidate = 0;
  */
 export async function POST(
   req: Request,
-  { params }: { params: Promise<{ id: string; skillId: string }> }
+  { params }: { params: Promise<{ skillId: string }> }
 ) {
   try {
-    const { id, skillId } = await params;
+    const { skillId } = await params;
     const session = await getSession();
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -46,6 +46,15 @@ export async function POST(
     }
 
     const body = await req.json().catch(() => ({}));
+    const url = new URL(req.url);
+
+    // Resolve `id` (engagementId) from body or query searchParams
+    const id = (body?.id || body?.engagementId || url.searchParams.get("id") || url.searchParams.get("engagementId")) as string | undefined;
+
+    if (!id) {
+      return NextResponse.json({ error: "engagementId (or id) is required." }, { status: 400 });
+    }
+
     if (typeof body?.enabled !== "boolean") {
       return NextResponse.json({ error: "enabled must be a boolean." }, { status: 400 });
     }
@@ -65,7 +74,7 @@ export async function POST(
     return NextResponse.json({ ok: true, skillId, enabled: body.enabled, name: SKILL_MANIFEST[skillId].name });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("[engagements/[id]/skills/[skillId] POST]", message);
+    console.error("[skills/[skillId] POST]", message);
     return NextResponse.json({ error: "Failed to update skill." }, { status: 500 });
   }
 }
