@@ -9,7 +9,7 @@ import { TriggerSkillButton } from "./trigger-skill-button";
 import { EngagementPauseControl } from "./pause-control";
 import { SkillsPanel } from "./skills-panel";
 import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
-import { RosterCalendar } from "./master-roster-calendar";
+import { MasterRosterCalendar } from "./master-roster-calendar";
 import { WinBackPipeline } from "./win-back-pipeline";
 import { PileOnPipeline } from "./pile-on-pipeline";
 import { LeakMapSchedule } from "./leak-map-schedule";
@@ -358,7 +358,7 @@ export default async function EngagementDetailPage({
           </div>
         </div>
 
-        <RosterCalendar engagementId={id} />
+        <MasterRosterCalendar engagementId={id} />
 
         <PileOnPipeline engagementId={id} />
 
