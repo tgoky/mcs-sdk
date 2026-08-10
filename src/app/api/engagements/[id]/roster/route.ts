@@ -1,24 +1,29 @@
 // src/app/api/engagements/[id]/roster/route.ts
+//
+// Reads the ground-truth booking roster (src/lib/booking-roster.ts /
+// models/schema.ts's bookingRoster) for one engagement across a date
+// range — this is what powers the calendar/list/board views actually
+// showing upcoming bookings instead of only past run diagnostics.
+//
+// LEFT JOINs briefedCallsLog on (engagementId, externalCallId = callId) to
+// derive a real lifecycle status per booking without duplicating any state:
+// no matching briefedCallsLog row means Pre-Call Read hasn't processed
+// this call yet ("scheduled" — waiting on the nightly run); a row with
+// briefDeliveredAt set means the brief already went out; failed
+// research/synthesis status means it needs attention. bookingRoster.status
+// = "cancelled" always wins regardless of brief state.
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import {
-  engagements,
-  bookingRoster,
-  briefedCallsLog,
-  pileOnSendLog,
-  winBackEnrollments,
-} from "@/models/schema";
+import { engagements, bookingRoster, briefedCallsLog } from "@/models/schema";
 import { getSession } from "@/lib/session";
-import { and, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, eq, gte, lt } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
 
-export type PreCallStatus = "scheduled" | "brief_delivered" | "brief_failed" | "cancelled";
-export type PileOnStatus = "hybrid_sent" | "fallback_sent" | "pending" | "none";
-export type WinBackStatus = "active" | "rebooked" | "lost" | "reply_exited" | "none";
+export type RosterStatus = "scheduled" | "brief_delivered" | "brief_failed" | "cancelled";
 
-export interface MasterRosterEntry {
+export interface RosterEntry {
   id: string;
   externalCallId: string;
   prospectName: string | null;
@@ -27,33 +32,18 @@ export interface MasterRosterEntry {
   callTime: string;
   callEndTime: string | null;
   bookingPlatform: string | null;
-  bookingStatus: "scheduled" | "cancelled";
-  preCallRead: {
-    status: PreCallStatus;
-    briefDeliveredAt: string | null;
-    destinationDelivered: string | null;
-    briefText: string | null;
-    runId: string | null;
-  };
-  pileOn: {
-    status: PileOnStatus;
-    personalizedIntro: string | null;
-    sentAt: string | null;
-  };
-  winBack: {
-    status: WinBackStatus;
-    freshRescheduleLink: string | null;
-    exitReason: string | null;
-    enrolledAt: string | null;
-  };
+  status: RosterStatus;
+  briefDeliveredAt: string | null;
+  destinationDelivered: string | null;
+  runId: string | null;
 }
 
-function derivePreCallStatus(row: {
+function deriveRosterStatus(row: {
   bookingStatus: string;
   researchStatus: string | null;
   aiSynthesisStatus: string | null;
   briefDeliveredAt: Date | null;
-}): PreCallStatus {
+}): RosterStatus {
   if (row.bookingStatus === "cancelled") return "cancelled";
   if (row.briefDeliveredAt) return "brief_delivered";
   if (row.researchStatus === "failed" || row.aiSynthesisStatus === "failed") return "brief_failed";
@@ -79,12 +69,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     const { searchParams } = new URL(req.url);
+    // month: "YYYY-MM". Defaults to the current month. The calendar UI
+    // requests one month at a time (plus it already fetches adjacent
+    // months on navigation), so this stays a cheap indexed range scan
+    // rather than ever pulling an engagement's entire booking history.
     const monthParam = searchParams.get("month");
     const now = new Date();
     const [year, month] = monthParam?.match(/^\d{4}-\d{2}$/)
       ? monthParam.split("-").map(Number)
       : [now.getFullYear(), now.getMonth() + 1];
 
+    // Widen slightly past the calendar month boundary — the grid shows a
+    // few leading/trailing days from adjacent months, and those days'
+    // bookings should still render instead of looking mysteriously empty.
     const rangeStart = new Date(Date.UTC(year, month - 1, 1));
     rangeStart.setUTCDate(rangeStart.getUTCDate() - 7);
     const rangeEnd = new Date(Date.UTC(year, month, 1));
@@ -105,7 +102,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         aiSynthesisStatus: briefedCallsLog.aiSynthesisStatus,
         briefDeliveredAt: briefedCallsLog.briefDeliveredAt,
         destinationDelivered: briefedCallsLog.destinationDelivered,
-        briefText: briefedCallsLog.briefText,
         runId: briefedCallsLog.runId,
       })
       .from(bookingRoster)
@@ -121,86 +117,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         )
       );
 
-    if (rows.length === 0) {
-      return NextResponse.json({ entries: [] });
-    }
-
-    const bookingIds = rows.map((r) => r.externalCallId);
-    const prospectEmails = rows.map((r) => r.prospectEmail).filter((e): e is string => Boolean(e));
-
-    const [pileOnLogs, winBackRows] = await Promise.all([
-      bookingIds.length > 0
-        ? db
-            .select({
-              bookingId: pileOnSendLog.bookingId,
-              sentVia: pileOnSendLog.sentVia,
-              personalizedIntro: pileOnSendLog.personalizedIntro,
-              createdAt: pileOnSendLog.createdAt,
-            })
-            .from(pileOnSendLog)
-            .where(and(eq(pileOnSendLog.engagementId, engagementId), inArray(pileOnSendLog.bookingId, bookingIds)))
-        : [],
-      prospectEmails.length > 0
-        ? db
-            .select({
-              prospectEmail: winBackEnrollments.prospectEmail,
-              status: winBackEnrollments.status,
-              freshRescheduleLink: winBackEnrollments.freshRescheduleLink,
-              exitReason: winBackEnrollments.exitReason,
-              enrolledAt: winBackEnrollments.enrolledAt,
-            })
-            .from(winBackEnrollments)
-            .where(and(eq(winBackEnrollments.engagementId, engagementId), inArray(winBackEnrollments.prospectEmail, prospectEmails)))
-        : [],
-    ]);
-
-    const pileOnMap = new Map(pileOnLogs.map((p) => [p.bookingId, p]));
-    const winBackMap = new Map(winBackRows.map((w) => [w.prospectEmail.toLowerCase(), w]));
-
-    const entries: MasterRosterEntry[] = rows.map((r) => {
-      const pileOn = pileOnMap.get(r.externalCallId);
-      const winBack = r.prospectEmail ? winBackMap.get(r.prospectEmail.toLowerCase()) : undefined;
-
-      let pileOnStatus: PileOnStatus = "none";
-      if (pileOn) {
-        pileOnStatus = pileOn.sentVia === "hybrid" ? "hybrid_sent" : "fallback_sent";
-      }
-
-      let wbStatus: WinBackStatus = "none";
-      if (winBack) {
-        wbStatus = (winBack.status as WinBackStatus) ?? "none";
-      }
-
-      return {
-        id: r.id,
-        externalCallId: r.externalCallId,
-        prospectName: r.prospectName,
-        prospectEmail: r.prospectEmail,
-        prospectPhone: r.prospectPhone,
-        callTime: r.callTime.toISOString(),
-        callEndTime: r.callEndTime ? r.callEndTime.toISOString() : null,
-        bookingPlatform: r.bookingPlatform,
-        bookingStatus: (r.bookingStatus as "scheduled" | "cancelled") ?? "scheduled",
-        preCallRead: {
-          status: derivePreCallStatus(r),
-          briefDeliveredAt: r.briefDeliveredAt ? r.briefDeliveredAt.toISOString() : null,
-          destinationDelivered: r.destinationDelivered,
-          briefText: r.briefText,
-          runId: r.runId,
-        },
-        pileOn: {
-          status: pileOnStatus,
-          personalizedIntro: pileOn?.personalizedIntro ?? null,
-          sentAt: pileOn?.createdAt ? pileOn.createdAt.toISOString() : null,
-        },
-        winBack: {
-          status: wbStatus,
-          freshRescheduleLink: winBack?.freshRescheduleLink ?? null,
-          exitReason: winBack?.exitReason ?? null,
-          enrolledAt: winBack?.enrolledAt ? winBack.enrolledAt.toISOString() : null,
-        },
-      };
-    });
+    const entries: RosterEntry[] = rows.map((r) => ({
+      id: r.id,
+      externalCallId: r.externalCallId,
+      prospectName: r.prospectName,
+      prospectEmail: r.prospectEmail,
+      prospectPhone: r.prospectPhone,
+      callTime: r.callTime.toISOString(),
+      callEndTime: r.callEndTime ? r.callEndTime.toISOString() : null,
+      bookingPlatform: r.bookingPlatform,
+      status: deriveRosterStatus(r),
+      briefDeliveredAt: r.briefDeliveredAt ? r.briefDeliveredAt.toISOString() : null,
+      destinationDelivered: r.destinationDelivered,
+      runId: r.runId,
+    }));
 
     return NextResponse.json({ entries });
   } catch (err: unknown) {
