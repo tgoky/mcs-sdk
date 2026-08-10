@@ -244,26 +244,29 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             {entry.prospectName ?? "Unnamed prospect"}
                           </span>
                           <span className="shrink-0 font-mono text-[9.5px] text-zinc-400">
-                            {timeStr(new Date(entry.callTime))}
+                            {timeStr(entry.callTime)}
                           </span>
                         </div>
 
-                        {/* MULTI-SKILL STATUS PILLS */}
-                        <div className="flex flex-wrap items-center gap-1">
-                          {entry.bookingStatus === "cancelled" ? (
-                            <StatusPill tone="danger">Cancelled</StatusPill>
-                          ) : (
-                            <>
-                              {entry.preCallRead.status === "brief_delivered" && <StatusPill tone="success">Brief Sent</StatusPill>}
-                              {entry.preCallRead.status === "brief_failed" && <StatusPill tone="danger">Brief Failed</StatusPill>}
-                              {entry.preCallRead.status === "scheduled" && <StatusPill tone="info font-mono">Brief Pending</StatusPill>}
+                   {/* MULTI-SKILL STATUS PILLS */}
+<div className="flex flex-wrap items-center gap-1">
+  {entry.bookingStatus === "cancelled" ? (
+    <StatusPill tone="danger">Cancelled</StatusPill>
+  ) : (
+    <>
+      {entry.preCallRead.status === "brief_delivered" && <StatusPill tone="success">Brief Sent</StatusPill>}
+      {entry.preCallRead.status === "brief_failed" && <StatusPill tone="danger">Brief Failed</StatusPill>}
+      {entry.preCallRead.status === "scheduled" && <StatusPill tone="info" className="font-mono">Brief Pending</StatusPill>}
 
-                              {entry.pileOn.status === "hybrid_sent" && <StatusPill tone="warning">AI Intro</StatusPill>}
-                              {entry.winBack.status === "active" && <StatusPill tone="warning">Win-Back Active</StatusPill>}
-                              {entry.winBack.status === "rebooked" && <StatusPill tone="success">Rebooked</StatusPill>}
-                            </>
-                          )}
-                        </div>
+      {entry.pileOn.status === "hybrid_sent" && <StatusPill tone="warning">AI Intro</StatusPill>}
+      {entry.pileOn.status === "fallback_sent" && <StatusPill tone="info">Fallback Sent</StatusPill>}
+      {entry.pileOn.status === "pending" && <StatusPill tone="neutral">Pile-On Pending</StatusPill>}
+      
+      {entry.winBack.status === "active" && <StatusPill tone="warning">Win-Back Active</StatusPill>}
+      {entry.winBack.status === "rebooked" && <StatusPill tone="success">Rebooked</StatusPill>}
+    </>
+  )}
+</div>
                       </button>
                     ))}
                   </div>
@@ -294,7 +297,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               {filteredEntries.map((entry) => (
                 <tr key={entry.id} className="hover:bg-zinc-900/40">
                   <td className="px-4 py-3 font-mono text-zinc-300 whitespace-nowrap">
-                    {new Date(entry.callTime).toLocaleDateString()} {timeStr(new Date(entry.callTime))}
+                    {new Date(entry.callTime).toLocaleDateString()} {timeStr(entry.callTime)}
                   </td>
                   <td className="px-4 py-3 font-bold text-white">
                     {entry.prospectName ?? "Unnamed"}
@@ -375,7 +378,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-white text-xs">{entry.prospectName ?? "Unnamed"}</span>
-                        <span className="text-[10px] font-mono text-zinc-500">{timeStr(new Date(entry.callTime))}</span>
+                        <span className="text-[10px] font-mono text-zinc-500">{timeStr(entry.callTime)}</span>
                       </div>
                       <span className="block text-[10.5px] font-mono text-zinc-400">{entry.prospectEmail}</span>
                     </button>
@@ -441,7 +444,7 @@ function RosterInspectorDrawer({
             <SheetDescription className="flex items-center gap-2 text-xs text-zinc-400">
               <Building2 size={13} />
               <span>
-                {new Date(entry.callTime).toLocaleDateString()} at {timeStr(new Date(entry.callTime))} via {entry.bookingPlatform ?? "Calendar"}
+                {new Date(entry.callTime).toLocaleDateString()} at {timeStr(entry.callTime)} via {entry.bookingPlatform ?? "Calendar"}
               </span>
             </SheetDescription>
           </SheetHeader>
