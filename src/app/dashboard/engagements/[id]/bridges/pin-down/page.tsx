@@ -25,6 +25,7 @@ export default function PinDownBridgePage({ params }: { params: { id: string } }
   const [marketingDomain, setMarketingDomain] = useState("");
   const [rawVoiceCorpus, setRawVoiceCorpus] = useState("");
   const [existingConfirmationPageUrl, setExistingConfirmationPageUrl] = useState("");
+  const [existingConfirmationPageReuse, setExistingConfirmationPageReuse] = useState(false);
   const [confirmationPageTemplate, setConfirmationPageTemplate] = useState("signal");
   const [existingPileOnSequenceFlagged, setExistingPileOnSequenceFlagged] = useState(false);
   const [existingAuditFlagged, setExistingAuditFlagged] = useState(false);
@@ -54,6 +55,7 @@ export default function PinDownBridgePage({ params }: { params: { id: string } }
         if (data.marketingDomain) setVoiceSource("scrape");
         setRawVoiceCorpus(data.rawVoiceCorpus ?? "");
         setExistingConfirmationPageUrl(data.existingConfirmationPageUrl ?? "");
+        setExistingConfirmationPageReuse(data.existingConfirmationPageReuse ?? false);
         setConfirmationPageTemplate(data.confirmationPageTemplate ?? "signal");
         setExistingPileOnSequenceFlagged(data.existingPileOnSequenceFlagged ?? false);
         setExistingAuditFlagged(data.existingAuditFlagged ?? false);
@@ -95,6 +97,7 @@ export default function PinDownBridgePage({ params }: { params: { id: string } }
           marketingDomain,
           rawVoiceCorpus,
           existingConfirmationPageUrl,
+          existingConfirmationPageReuse,
           confirmationPageTemplate,
           existingPileOnSequenceFlagged,
           existingAuditFlagged,
@@ -194,6 +197,21 @@ export default function PinDownBridgePage({ params }: { params: { id: string } }
         helpText="If the client already has a post-booking confirmation page live, paste its URL — we'll audit it against the new one."
       />
 
+      {existingConfirmationPageUrl && (
+        <label className="flex items-start gap-2 text-xs cursor-pointer -mt-2" style={{ color: "var(--text-secondary)" }}>
+          <input
+            type="checkbox"
+            checked={existingConfirmationPageReuse}
+            onChange={(e) => setExistingConfirmationPageReuse(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Keep using this page — don&apos;t build or publish a new one. We&apos;ll still run the audit above so you
+            can see what&apos;s missing, but nothing gets deployed to {buyer || "the client"}&apos;s site.
+          </span>
+        </label>
+      )}
+
       <div className="space-y-1.5 w-full">
         <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
           Sales copy, scripts, or call transcripts (500 words minimum)
@@ -216,6 +234,7 @@ export default function PinDownBridgePage({ params }: { params: { id: string } }
         </p>
       </div>
 
+      {!existingConfirmationPageReuse && (
       <div className="space-y-3">
         <div>
           <h2 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>
@@ -228,6 +247,7 @@ export default function PinDownBridgePage({ params }: { params: { id: string } }
         </div>
         <TemplatePicker form={previewData} onSelect={setConfirmationPageTemplate} />
       </div>
+      )}
 
       <div className="space-y-3 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>

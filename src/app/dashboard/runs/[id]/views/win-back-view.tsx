@@ -40,6 +40,7 @@ const ENROLLMENT_META: Record<string, { label: string; tone: Tone }> = {
   reply_exited: { label: "Exited — replied", tone: "info" },
   manual_override: { label: "Exited — manual override", tone: "neutral" },
   lost: { label: "Exited — window elapsed", tone: "neutral" },
+  corrected: { label: "Exited — outcome corrected", tone: "neutral" },
 };
 
 function dayLabel(offsetDays: number) {

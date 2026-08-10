@@ -72,6 +72,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     existingAuditFlagged: row.stack?.existing_audit_flagged ?? false,
     existingAuditDescription: row.stack?.existing_audit_description ?? "",
     notificationPackSelections: row.stack?.notification_pack_selections ?? [],
+    // When true, this run skips building/publishing a new confirmation
+    // page and just runs the existing-page audit above.
+    existingConfirmationPageReuse: row.stack?.existing_confirmation_page_reuse ?? false,
     // For the "sequence running on {platform}" label's context only —
     // emailPlatform itself is a shared connection, owned by the general
     // wizard / edit-stack-settings, not this route.
@@ -102,6 +105,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const existingAuditFlagged: boolean = body.existingAuditFlagged === true;
     const existingAuditDescription: string =
       typeof body.existingAuditDescription === "string" ? body.existingAuditDescription.trim() : "";
+    const existingConfirmationPageReuse: boolean = body.existingConfirmationPageReuse === true;
     const notificationPackSelections: string[] = Array.isArray(body.notificationPackSelections)
       ? body.notificationPackSelections.filter((x: unknown) => typeof x === "string")
       : [];
@@ -139,6 +143,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       ...(row.stack ?? {}),
       ...(marketingDomain ? { buyer_domain: marketingDomain } : {}),
       ...(existingConfirmationPageUrl ? { existing_confirmation_page_url: existingConfirmationPageUrl } : {}),
+      // Boolean, always set (not conditionally spread) — mirrors
+      // existing_pile_on_sequence_flagged/existing_audit_flagged below, so
+      // clearing the URL and resaving also clears a stale reuse flag
+      // rather than leaving it silently true with nothing to point at.
+      existing_confirmation_page_reuse: existingConfirmationPageUrl ? existingConfirmationPageReuse : false,
       existing_pile_on_sequence_flagged: existingPileOnSequenceFlagged,
       existing_audit_flagged: existingAuditFlagged,
       ...(existingAuditFlagged ? { existing_audit_description: existingAuditDescription } : {}),

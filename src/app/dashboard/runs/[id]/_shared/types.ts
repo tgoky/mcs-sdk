@@ -151,7 +151,15 @@ export interface WinBackEnrollment {
   runId: string | null;
   enrolledAt: string;
   recoveryWindowDays: number;
-  status: "active" | "rebooked" | "lost" | "reply_exited";
+  // Real status set, verified against every `.set({ status: ... })` write
+  // site: enrollment-service.ts (rebooked), lost-deal-sweep.ts (lost),
+  // win-back-reply.ts (reply_exited), stop/route.ts (manual_override),
+  // outcome-resolution.ts (corrected). This type previously only listed 4
+  // of the 6 — manual_override and corrected were missing, which meant
+  // ENROLLMENT_META[enrollment.status] in win-back-view.tsx had no entry
+  // for either and would throw reading .label/.tone off undefined the
+  // first time either status was opened.
+  status: "active" | "rebooked" | "lost" | "reply_exited" | "manual_override" | "corrected";
   lostAt: string | null;
   freshRescheduleLink: string | null;
   exitReason: string | null;

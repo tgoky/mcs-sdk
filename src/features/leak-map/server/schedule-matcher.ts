@@ -34,7 +34,7 @@ export const DEFAULT_MONTHLY_SCHEDULE: MonthlySchedule = { dayOfMonth: 1, hourLo
  * a date-arithmetic library — correctly handles DST transitions for free,
  * since the timezone database backing Intl already does.
  */
-function getLocalWeekdayAndHour(date: Date, timezone: string): { weekday: number; hour: number; dayOfMonth: number } {
+export function getLocalWeekdayAndHour(date: Date, timezone: string): { weekday: number; hour: number; dayOfMonth: number } {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
     weekday: "short",
@@ -77,4 +77,36 @@ export function matchesMonthlySchedule(schedule: MonthlySchedule | undefined | n
     local = getLocalWeekdayAndHour(now, "UTC");
   }
   return local.dayOfMonth === s.dayOfMonth && local.hour === s.hourLocal;
+}
+
+/**
+ * Finds the next instant (as a UTC Date) at or after `from` that
+ * leakMapScheduleCron's hourly matchesWeeklySchedule() check would fire
+ * on. Deliberately searches hour-by-hour and calls the real matcher
+ * rather than doing independent date arithmetic — the cron only ever
+ * fires on a local-weekday+hour match, and DST transitions make
+ * reimplementing that match independently a real way to drift out of
+ * sync with what will actually happen. Capped at 24*8 hours (one week
+ * plus slack) since a weekly schedule matches at least once in any
+ * 7-day span.
+ */
+export function nextWeeklyOccurrence(schedule: WeeklySchedule | undefined | null, from: Date): Date {
+  const cursor = new Date(from);
+  cursor.setUTCMinutes(0, 0, 0);
+  for (let i = 0; i <= 24 * 8; i++) {
+    if (matchesWeeklySchedule(schedule, cursor)) return new Date(cursor);
+    cursor.setUTCHours(cursor.getUTCHours() + 1);
+  }
+  return cursor; // unreachable in practice — guarantees a return type
+}
+
+/** Same approach as nextWeeklyOccurrence, capped at 32 days. */
+export function nextMonthlyOccurrence(schedule: MonthlySchedule | undefined | null, from: Date): Date {
+  const cursor = new Date(from);
+  cursor.setUTCMinutes(0, 0, 0);
+  for (let i = 0; i <= 24 * 32; i++) {
+    if (matchesMonthlySchedule(schedule, cursor)) return new Date(cursor);
+    cursor.setUTCHours(cursor.getUTCHours() + 1);
+  }
+  return cursor;
 }

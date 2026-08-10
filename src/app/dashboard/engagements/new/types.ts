@@ -118,9 +118,6 @@ export interface FormData {
   // buyer has a confirmation page live (or after running smart pre-fill,
   // gap 1, which can detect this automatically).
   existingConfirmationPageUrl: string;
-  // When true, Pin-Down skips building/deploying a new confirmation page
-  // and just audits the one at existingConfirmationPageUrl instead.
-  existingConfirmationPageReuse: boolean;
   // Win-Back recovery gaps 3, 4, 6
   rescheduleMode: "fresh_link" | "time_slots";
   recoveredFromNoShowTaggingEnabled: boolean;
