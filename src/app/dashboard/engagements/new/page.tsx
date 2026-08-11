@@ -1,8 +1,6 @@
-// app/dashboard/engagements/new/page.tsx
 "use client";
 
 import { useState } from "react";
-import { RotateCcw, Trash2, Check } from "lucide-react";
 import { STEPS, DEFAULT_FORM } from "./constants";
 import { clearDraft, deleteServerDraft } from "./draft-storage";
 import { useDraftPersistence } from "./use-draft-persistence";
@@ -32,6 +30,7 @@ export default function NewEngagementPage() {
     setForm,
     setStep
   );
+
   const emailIntegrations = useEmailIntegrations(form, setForm);
   const smartPrefill = useSmartPrefill(setForm);
 
@@ -67,9 +66,10 @@ export default function NewEngagementPage() {
     setSubmitting(true);
     setError(null);
 
+    // ── Pre-flight validation gate ──
     const validationErrors = getValidationErrors(form);
     if (validationErrors.length > 0) {
-      setError(`Cannot finish setup yet—${validationErrors.length} requirement(s) missing. Scroll up to see the checklist.`);
+      setError(`Cannot finish setup yet — ${validationErrors.length} requirement(s) missing. Scroll up to see the checklist.`);
       setSubmitting(false);
       return;
     }
@@ -82,6 +82,7 @@ export default function NewEngagementPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
       const data = await res.json();
 
       if (!res.ok) {
@@ -98,7 +99,7 @@ export default function NewEngagementPage() {
       const message = e instanceof Error ? e.message : "Unknown error";
       setError(
         message === "Failed to fetch"
-          ? "Couldn't reach the server. Check your connection and try again—nothing was set up yet."
+          ? "Couldn't reach the server. Check your connection and try again — nothing was set up yet."
           : message
       );
       setSubmitting(false);
@@ -119,9 +120,9 @@ export default function NewEngagementPage() {
 
   return (
     <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
-      {/* Hyper-micro tight dot grid background */}
+      {/* --- HYPER-MICRO TIGHT DOT GRID (exact match from app/dashboard/page.tsx) --- */}
       <div 
-        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_0.5px,transparent_0.5px)] dark:bg-[radial-gradient(#3f3f46_0.5px,transparent_0.5px)] [background-size:6px_6px] [mask-image:radial-gradient(ellipse_75%_75%_at_50%_30%,#000_50%,transparent_100%)] opacity-70"
+        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_0.5px,transparent_0.5px)] dark:bg-[radial-gradient(#3f3f46_0.5px,transparent_0.5px)] [background-size:6px_6px] [mask-image:radial-gradient(ellipse_75%_75%_at_50%_30%,#000_50%,transparent_100%)] opacity-70" 
         aria-hidden="true"
       />
 
@@ -132,57 +133,40 @@ export default function NewEngagementPage() {
             Set Up a New Client
           </h1>
           <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-            A one-time setup. Connect their booking calendar and email tool, and teach the system their brand voice—you&apos;ll get a chance to launch separately once everything&apos;s saved.
+            A one-time setup. Connect their booking calendar and email tool, and teach the system their brand voice — you&apos;ll get a chance to launch separately once everything&apos;s saved.
           </p>
         </div>
 
         <StepIndicator steps={STEPS} current={step} />
 
-        {/* --- REVAMPED GLASSMOPHIC DRAFT RESTORE BANNER --- */}
         {showRestoredBanner && (
-          <div className="relative overflow-hidden rounded-2xl p-4 transition-all duration-300 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-400/10 dark:via-amber-400/5 border border-amber-500/30 dark:border-amber-400/20 backdrop-blur-xl shadow-md">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0 border border-amber-500/20 shadow-inner">
-                  <RotateCcw className="w-4 h-4 animate-spin-once" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200 font-mono">
-                      Restored In-Progress Setup
-                    </h4>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 font-medium">
-                      Auto-saved
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-600 dark:text-zinc-300 mt-1 leading-relaxed">
-                    Restored your form state from before the last refresh. API keys were excluded for security and need to be re-entered.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end font-mono">
-                <button
-                  type="button"
-                  onClick={() => setShowRestoredBanner(false)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-white/80 dark:bg-zinc-900/80 hover:bg-white dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 shadow-xs transition-all cursor-pointer active:scale-95"
-                >
-                  <Check className="w-3.5 h-3.5 text-emerald-500" />
-                  Keep Draft
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    discardDraft();
-                    smartPrefill.resetPrefill();
-                    emailIntegrations.resetIntegrations();
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 transition-all cursor-pointer active:scale-95"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Discard & Clear
-                </button>
-              </div>
+          <div
+            className="rounded-lg p-3 flex items-center justify-between gap-3 text-xs shadow-xs"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <span style={{ color: "var(--text-muted)" }}>
+              Restored your in-progress setup from before the last refresh. API keys were not saved and need to be re-entered.
+            </span>
+            <div className="flex items-center gap-2 shrink-0 font-mono">
+              <button
+                type="button"
+                onClick={() => setShowRestoredBanner(false)}
+                className="px-2 py-1 rounded-sm hover:opacity-80 cursor-pointer"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                [ Keep Draft ]
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  discardDraft();
+                  smartPrefill.resetPrefill();
+                  emailIntegrations.resetIntegrations();
+                }}
+                className="px-2 py-1 rounded-sm border bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer font-bold"
+              >
+                [ Dismiss & Clear All ]
+              </button>
             </div>
           </div>
         )}
