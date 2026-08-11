@@ -1,3 +1,4 @@
+// steps/launch-step.tsx
 "use client";
 
 import { useState } from "react";
@@ -68,15 +69,19 @@ export function LaunchStep({
     setFinishError(null);
     let firstRunId: string | null = null;
     let redirectToBridgeConfig: SkillId | null = null;
+
     try {
       for (const skillId of SKILL_IDS) {
-        // runOnSetup bridges (today: pin-down) have their own hinges
-        // panel and reject being enabled through the generic toggle —
-        // route there instead of calling the toggle route for them.
-        if (selected[skillId] && SKILL_MANIFEST[skillId].runOnSetup) {
-          redirectToBridgeConfig = skillId;
+        // runOnSetup bridges (today: pin-down) never go through the generic
+        // toggle route — not even to write a "disabled" row — because the
+        // route rejects any write for them regardless of enabled value.
+        if (SKILL_MANIFEST[skillId].runOnSetup) {
+          if (selected[skillId]) {
+            redirectToBridgeConfig = skillId;
+          }
           continue;
         }
+
         const res = await fetch(`/api/engagements/${engagementId}/skills/${skillId}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -90,6 +95,7 @@ export function LaunchStep({
         }
         if (data.runId && !firstRunId) firstRunId = data.runId;
       }
+
       if (redirectToBridgeConfig) {
         router.push(`/dashboard/engagements/${engagementId}/bridges/${redirectToBridgeConfig}`);
         return;
