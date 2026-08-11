@@ -1,3 +1,4 @@
+// src/app/api/engagements/[id]/skills/[skillId]/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
@@ -8,22 +9,6 @@ import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
-
-/**
- * Per-engagement, per-skill enable/disable — see src/lib/skill-registry.ts
- * and src/lib/engagement-skills.ts. Every real entry point for a skill
- * (the generic dispatcher, the booking webhook, the booking poller, and
- * the approval-gate's own re-run-on-approve executor) already checks this
- * before doing anything, so flipping the toggle here has an immediate,
- * real effect — it isn't cosmetic.
- *
- * pin-down is deliberately not toggleable through this route: it's a
- * one-time setup-time skill (see getSkillsRunOnSetup in skill-registry.ts)
- * dispatched once by /api/pin-down/launch, not an ongoing automation a
- * client turns on or off after the fact. Disabling it here would have no
- * effect on an already-onboarded engagement and could only cause
- * confusion, not a useful outcome.
- */
 
 export async function POST(
   req: Request,
@@ -39,17 +24,20 @@ export async function POST(
     if (!isSkillId(skillId)) {
       return NextResponse.json({ error: `Unknown skill: ${skillId}` }, { status: 400 });
     }
-    if (skillId === "pin-down") {
-      return NextResponse.json(
-        { error: "Pin-Down runs once during setup and isn't toggled after the fact." },
-        { status: 422 }
-      );
-    }
 
     const body = await req.json().catch(() => ({}));
 
     if (typeof body?.enabled !== "boolean") {
       return NextResponse.json({ error: "enabled must be a boolean." }, { status: 400 });
+    }
+
+    // runOnSetup skills (Pin-Down) can be turned OFF via plain bookkeeping,
+    // but enabling them requires going through their dedicated setup workflow.
+    if (SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
+      return NextResponse.json(
+        { error: "Pin-Down runs once during setup and must be configured from its bridge panel." },
+        { status: 422 }
+      );
     }
 
     const [row] = await db
