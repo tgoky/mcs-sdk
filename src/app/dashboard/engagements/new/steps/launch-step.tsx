@@ -72,13 +72,12 @@ export function LaunchStep({
 
     try {
       for (const skillId of SKILL_IDS) {
-        // runOnSetup bridges (today: pin-down) never go through the generic
-        // toggle route — not even to write a "disabled" row — because the
-        // route rejects any write for them regardless of enabled value.
-        if (SKILL_MANIFEST[skillId].runOnSetup) {
-          if (selected[skillId]) {
-            redirectToBridgeConfig = skillId;
-          }
+        // runOnSetup bridges (today: pin-down) only bypass the generic route when SELECTED,
+        // because enabling them requires their dedicated setup screen.
+        // If UNSELECTED, we fall through to POST { enabled: false } so an explicit 
+        // disabled row is written in engagement_skills (preventing the "no row = enabled" fallback).
+        if (SKILL_MANIFEST[skillId].runOnSetup && selected[skillId]) {
+          redirectToBridgeConfig = skillId;
           continue;
         }
 
