@@ -19,8 +19,20 @@ export function getDaysInMonthGrid(year: number, month: number) {
   return days;
 }
 
+// Buckets by the LOCAL calendar day using local getters throughout, for
+// both plain local-midnight Date objects (month-grid cells, built via
+// `new Date(year, month, day)`) and real UTC instants (event timestamps
+// from the DB, e.g. callTime/createdAt/sentAt). Previously used
+// `toISOString().slice(0, 10)` (UTC) against grid cells built in local
+// time — for any client at a positive UTC offset (most of Asia,
+// Australia), local midnight on day N is still UTC day N-1, so every
+// event landed one day early on the calendar.
 export function dateKey(d: Date | string) {
-  return new Date(d).toISOString().slice(0, 10);
+  const dt = typeof d === "string" ? new Date(d) : d;
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const day = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export function timeStr(d: string) {

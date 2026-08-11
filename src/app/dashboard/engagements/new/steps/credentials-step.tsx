@@ -73,6 +73,7 @@ export function CredentialsStep({
             One Private Integration Token covers all of these for its sub-account, so you only enter it once here.
           </div>
           <InputField
+            providerLogo="ghl_calendar"
             label="GoHighLevel Private Integration Token"
             value={form.ghlApiKey}
             onChange={(v) => set("ghlApiKey", v)}
@@ -82,6 +83,7 @@ export function CredentialsStep({
             required
           />
           <InputField
+            providerLogo="ghl_calendar"
             label="GoHighLevel Location ID"
             value={form.ghlLocationId}
             onChange={(v) => set("ghlLocationId", v)}
@@ -108,6 +110,7 @@ export function CredentialsStep({
       {/* ── Non-GHL Booking API Key ── */}
       {!bookingIsGhl && (
         <InputField
+          providerLogo={form.bookingPlatform}
           label={`${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform} API Key / Token`}
           value={form.bookingApiKey}
           onChange={(v) => set("bookingApiKey", v)}
@@ -123,52 +126,46 @@ export function CredentialsStep({
       )}
 
       {/* ── Live Booking Calendar Selection Dropdown ── */}
+      {hasBookingAuth && (
+        <div className="md:col-span-2 space-y-2">
+          {fetchingBookingOptions && (
+            <div className="text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">
+              Contacting {BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform}... Fetching live calendar options...
+            </div>
+          )}
+          {bookingOptionsError && (
+            <div className="rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
+              Warning: {bookingOptionsError}
+            </div>
+          )}
+          <SelectField
+            label="Target Booking Calendar / Event Page"
+            value={form.bookingCalendarId || form.ghlCalendarId || form.calendarId || ""}
+            onChange={(selectedId) => {
+              set("bookingCalendarId", selectedId);
+              const matchedOpt = bookingOptions.find((b) => b.id === selectedId);
+              if (matchedOpt?.link) {
+                set("bookingStandingLink", matchedOpt.link);
+              }
+            }}
+            required
+            disabled={fetchingBookingOptions}
+            options={[
+              { value: "", label: fetchingBookingOptions ? "-- Loading..." : "-- Choose an Active Calendar --" },
+              ...bookingOptions.map((b) => ({
+                value: b.id,
+                label: `${b.name} (${b.link || b.id})`,
+              })),
+            ]}
+            helpText="Selecting your calendar automatically binds its ID and standing booking link."
+          />
+        </div>
+      )}
 
-
-{/* Live Booking Calendar Selection Dropdown */}
-{hasBookingAuth && (
-  <div className="md:col-span-2 space-y-2">
-    {fetchingBookingOptions && (
-      <div className="text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">
-        Contacting {BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform}... Fetching live calendar options...
-      </div>
-    )}
-    {bookingOptionsError && (
-      <div className="rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
-        Warning: {bookingOptionsError}
-      </div>
-    )}
-    <SelectField
-      label="Target Booking Calendar / Event Page"
-      value={form.bookingCalendarId || form.ghlCalendarId || form.calendarId || ""}
-      onChange={(selectedId) => {
-        set("bookingCalendarId", selectedId);
-        const matchedOpt = bookingOptions.find((b) => b.id === selectedId);
-        if (matchedOpt?.link) {
-          set("bookingStandingLink", matchedOpt.link);
-        }
-      }}
-      required
-      disabled={fetchingBookingOptions}
-      options={[
-        { value: "", label: fetchingBookingOptions ? "-- Loading..." : "-- Choose an Active Calendar --" },
-        ...bookingOptions.map((b) => ({
-          value: b.id,
-          label: `${b.name} (${b.link || b.id})`,
-        })),
-      ]}
-      helpText="Selecting your calendar automatically binds its ID and standing booking link."
-    />
-  </div>
-)}
-
-      {/* ── Manual fallback for the standing booking link ──
-          If the live dropdown above can't reach the platform (bad key,
-          API outage, zero event types with a public link), there's no
-          other way to satisfy the Calendly/Cal.com requirement — this
-          text field is the escape hatch so setup is never fully blocked. */}
+      {/* ── Manual fallback for the standing booking link ── */}
       {!bookingIsGhl && (form.bookingPlatform === "calendly" || form.bookingPlatform === "cal_com") && (bookingOptionsError || (!fetchingBookingOptions && hasBookingAuth && bookingOptions.length === 0)) && (
         <InputField
+          providerLogo={form.bookingPlatform}
           label="Standing Booking Page Link (manual)"
           value={form.bookingStandingLink}
           onChange={(v) => set("bookingStandingLink", v)}
@@ -176,7 +173,6 @@ export function CredentialsStep({
           helpText="The dropdown above couldn't pull your calendars automatically — paste your public booking page link here instead."
         />
       )}
-
 
       {/* ── Email Platform / Credentials ── */}
       {form.emailPlatform === "smtp" ? (
@@ -188,6 +184,7 @@ export function CredentialsStep({
             Custom SMTP has no single API key — enter your mail server's connection details below. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
           </div>
           <InputField
+            providerLogo="smtp"
             label="SMTP Host"
             value={form.smtpHost}
             onChange={(v) => set("smtpHost", v)}
@@ -195,6 +192,7 @@ export function CredentialsStep({
             required
           />
           <InputField
+            providerLogo="smtp"
             label="SMTP Port"
             value={form.smtpPort}
             onChange={(v) => set("smtpPort", v)}
@@ -202,6 +200,7 @@ export function CredentialsStep({
             required
           />
           <InputField
+            providerLogo="smtp"
             label="SMTP Username"
             value={form.smtpUsername}
             onChange={(v) => set("smtpUsername", v)}
@@ -209,6 +208,7 @@ export function CredentialsStep({
             required
           />
           <InputField
+            providerLogo="smtp"
             label="SMTP Password"
             value={form.smtpPassword}
             onChange={(v) => set("smtpPassword", v)}
@@ -217,6 +217,7 @@ export function CredentialsStep({
             required
           />
           <InputField
+            providerLogo="smtp"
             label="From address"
             value={form.smtpFromAddress}
             onChange={(v) => set("smtpFromAddress", v)}
@@ -224,6 +225,7 @@ export function CredentialsStep({
             required
           />
           <InputField
+            providerLogo="smtp"
             label="From name (optional)"
             value={form.smtpFromName}
             onChange={(v) => set("smtpFromName", v)}
@@ -247,6 +249,7 @@ export function CredentialsStep({
         <>
           {!emailIsGhl && (
             <InputField
+              providerLogo={form.emailPlatform}
               label={`${EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform} API Key`}
               value={form.emailApiKey}
               onChange={(v) => set("emailApiKey", v)}
@@ -265,7 +268,7 @@ export function CredentialsStep({
                 </div>
               )}
               {(klaviyoMissingKeyMessage ?? listsFetchError) && (
-                <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">         
+                <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
                   ⚠ Warning: {klaviyoMissingKeyMessage ?? listsFetchError}
                 </div>
               )}
@@ -309,6 +312,7 @@ export function CredentialsStep({
           {form.emailPlatform === "activecampaign" && (
             <>
               <InputField
+                providerLogo="activecampaign"
                 label="ActiveCampaign API Access URL"
                 value={form.emailActiveCampaignBaseUrl}
                 onChange={(v) => set("emailActiveCampaignBaseUrl", v)}
@@ -353,6 +357,7 @@ export function CredentialsStep({
                 helpText="The audience for your win-back recovery sequence."
               />
               <InputField
+                providerLogo="activecampaign"
                 label="ActiveCampaign Recovery Automation ID"
                 value={form.recoveryAutomationId}
                 onChange={(v) => set("recoveryAutomationId", v)}
@@ -366,6 +371,7 @@ export function CredentialsStep({
           {form.emailPlatform === "mailchimp" && (
             <>
               <InputField
+                providerLogo="mailchimp"
                 label="Mailchimp Target Audience ID (Pile-On)"
                 value={form.emailTargetListId}
                 onChange={(v) => set("emailTargetListId", v)}
@@ -374,6 +380,7 @@ export function CredentialsStep({
                 required
               />
               <InputField
+                providerLogo="mailchimp"
                 label="Mailchimp Recovery Audience ID (Win-Back)"
                 value={form.emailRecoveryListId}
                 onChange={(v) => set("emailRecoveryListId", v)}
@@ -388,6 +395,7 @@ export function CredentialsStep({
           {form.emailPlatform === "convertkit" && (
             <>
               <InputField
+                providerLogo="convertkit"
                 label="ConvertKit Target Form ID (Pile-On)"
                 value={form.emailTargetListId}
                 onChange={(v) => set("emailTargetListId", v)}
@@ -396,6 +404,7 @@ export function CredentialsStep({
                 required
               />
               <InputField
+                providerLogo="convertkit"
                 label="ConvertKit Recovery Tag ID (Win-Back)"
                 value={form.emailRecoveryListId}
                 onChange={(v) => set("emailRecoveryListId", v)}
@@ -456,6 +465,7 @@ export function CredentialsStep({
       {/* ── Hosting Platform Credentials ── */}
       {form.hostingPlatform !== "ghl" && form.hostingPlatform !== "plain_html" && (
         <InputField
+          providerLogo={form.hostingPlatform}
           label={`${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform} ${
             form.hostingPlatform === "wordpress" ? "Application Password (user:password)" : "API Token"
           }`}

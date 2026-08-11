@@ -35,6 +35,7 @@ export interface RosterEntry {
   status: RosterStatus;
   briefDeliveredAt: string | null;
   destinationDelivered: string | null;
+  briefText: string | null;
   runId: string | null;
 }
 
@@ -73,6 +74,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     // requests one month at a time (plus it already fetches adjacent
     // months on navigation), so this stays a cheap indexed range scan
     // rather than ever pulling an engagement's entire booking history.
+    // ?all=1 opts out of that for callers that genuinely want full
+    // history (the Pre-Call-Read skill page's List/Board views).
+    const wantsAll = searchParams.get("all") === "1";
     const monthParam = searchParams.get("month");
     const now = new Date();
     const [year, month] = monthParam?.match(/^\d{4}-\d{2}$/)
@@ -102,6 +106,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         aiSynthesisStatus: briefedCallsLog.aiSynthesisStatus,
         briefDeliveredAt: briefedCallsLog.briefDeliveredAt,
         destinationDelivered: briefedCallsLog.destinationDelivered,
+        briefText: briefedCallsLog.briefText,
         runId: briefedCallsLog.runId,
       })
       .from(bookingRoster)
@@ -110,11 +115,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         and(eq(briefedCallsLog.engagementId, bookingRoster.engagementId), eq(briefedCallsLog.callId, bookingRoster.externalCallId))
       )
       .where(
-        and(
-          eq(bookingRoster.engagementId, engagementId),
-          gte(bookingRoster.callTime, rangeStart),
-          lt(bookingRoster.callTime, rangeEnd)
-        )
+        wantsAll
+          ? eq(bookingRoster.engagementId, engagementId)
+          : and(
+              eq(bookingRoster.engagementId, engagementId),
+              gte(bookingRoster.callTime, rangeStart),
+              lt(bookingRoster.callTime, rangeEnd)
+            )
       );
 
     const entries: RosterEntry[] = rows.map((r) => ({
@@ -129,6 +136,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       status: deriveRosterStatus(r),
       briefDeliveredAt: r.briefDeliveredAt ? r.briefDeliveredAt.toISOString() : null,
       destinationDelivered: r.destinationDelivered,
+      briefText: r.briefText,
       runId: r.runId,
     }));
 

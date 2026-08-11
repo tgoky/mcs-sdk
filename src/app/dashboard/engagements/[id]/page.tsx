@@ -23,7 +23,6 @@ import {
   ArrowRight, 
   Server,
 } from "lucide-react";
-import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
 import { BookingSyncChip } from "@/components/booking-sync-chip";
 import { BackLink } from "@/components/back-link";
@@ -156,8 +155,6 @@ export default async function EngagementDetailPage({
     mudd_ventures: "Runs on our infra",
     buyer: "Exported to buyer's infra",
   };
-
-  await computeWinBackRevenueAttribution(id);
 
   // Cleaned Offer Metadata values
   const offerName = String(offerDetails?.name || "").trim() || "Unspecified Offer";

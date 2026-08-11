@@ -1,4 +1,26 @@
+// app/dashboard/engagements/new/form-fields.tsx
+
+import { useState } from "react";
 import type { Step } from "./types";
+import { Dropdown } from "@/components/ui/dropdown";
+import { Mail } from "lucide-react";
+
+export function PlatformLogo({ provider }: { provider?: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  if (!provider || provider === "none" || provider === "discover_from_docs" || hasError) {
+    return <Mail className="w-3.5 h-3.5 shrink-0 text-zinc-400" />;
+  }
+
+  return (
+    <img
+      src={`/logos/${provider}.png`}
+      alt={`${provider} logo`}
+      className="w-3.5 h-3.5 shrink-0 object-contain"
+      onError={() => setHasError(true)}
+    />
+  );
+}
 
 export function StepIndicator({
   steps,
@@ -41,6 +63,7 @@ export function InputField({
   type = "text",
   helpText,
   required,
+  providerLogo,
 }: {
   label: string;
   value: string;
@@ -49,16 +72,17 @@ export function InputField({
   type?: string;
   helpText?: string;
   required?: boolean;
+  providerLogo?: string;
 }) {
   return (
     <div className="space-y-1.5 w-full">
-      <label
-        className="text-xs font-semibold block"
-        style={{ color: "var(--text-primary)" }}
-      >
-        {label}{" "}
+      <label className="text-xs font-semibold block text-zinc-900 dark:text-zinc-100">
+        <span className="inline-flex items-center gap-1.5">
+          {providerLogo && <PlatformLogo provider={providerLogo} />}
+          {label}
+        </span>
         {required && (
-          <span className="ml-0.5 font-mono text-[10px]" style={{ color: "var(--text-muted)" }}>
+          <span className="ml-1 font-mono text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">
             (REQUIRED)
           </span>
         )}
@@ -68,20 +92,56 @@ export function InputField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-   className="w-full rounded-lg px-3 py-1.5 text-sm transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-600 shadow-xs"
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          color: "var(--text-primary)",
-        }}
-        onFocus={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-        onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+        className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs"
       />
       {helpText && (
-        <p
-          className="text-[11px] font-normal leading-normal opacity-85"
-          style={{ color: "var(--text-muted)" }}
-        >
+        <p className="text-[11px] font-normal leading-normal text-zinc-500 dark:text-zinc-400">
+          {helpText}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function TextAreaField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  rows = 4,
+  helpText,
+  required,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  rows?: number;
+  helpText?: string;
+  required?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-1.5 w-full">
+      <label className="text-xs font-semibold block text-zinc-900 dark:text-zinc-100">
+        {label}{" "}
+        {required && (
+          <span className="ml-1 font-mono text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">
+            (REQUIRED)
+          </span>
+        )}
+      </label>
+      <textarea
+        rows={rows}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed resize-y"
+      />
+      {helpText && (
+        <p className="text-[11px] font-normal leading-normal text-zinc-500 dark:text-zinc-400">
           {helpText}
         </p>
       )}
@@ -106,43 +166,33 @@ export function SelectField({
   required?: boolean;
   disabled?: boolean;
 }) {
+  const items = options.map((o) => ({ key: o.value, label: o.label }));
+  const selectedOption = options.find((o) => o.value === value);
+
   return (
     <div className="space-y-1.5 w-full">
-      <label
-        className="text-xs font-semibold block"
-        style={{ color: "var(--text-primary)" }}
-      >
-        {label}{" "}
+      <label className="text-xs font-semibold block text-zinc-900 dark:text-zinc-100">
+        <span className="inline-flex items-center gap-1.5">
+          {value && <PlatformLogo provider={value} />}
+          {label}
+        </span>
         {required && (
-          <span className="ml-0.5 font-mono text-[10px]" style={{ color: "var(--text-muted)" }}>
+          <span className="ml-1 font-mono text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">
             (REQUIRED)
           </span>
         )}
       </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+      <Dropdown
+        items={items}
+        selectedKey={value}
+        onSelect={onChange}
         disabled={disabled}
-        className="w-full rounded-lg px-3 py-1.5 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-xs"
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          color: "var(--text-primary)",
-        }}
-        onFocus={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-        onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value} className="bg-background text-foreground">
-            {o.label}
-          </option>
-        ))}
-      </select>
+        placeholder={selectedOption?.label ?? "Select option..."}
+        triggerClassName="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 transition-colors shadow-xs hover:border-zinc-400 dark:hover:border-zinc-700"
+        panelClassName="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xl"
+      />
       {helpText && (
-        <p
-          className="text-[11px] font-normal leading-normal opacity-85"
-          style={{ color: "var(--text-muted)" }}
-        >
+        <p className="text-[11px] font-normal leading-normal text-zinc-500 dark:text-zinc-400">
           {helpText}
         </p>
       )}

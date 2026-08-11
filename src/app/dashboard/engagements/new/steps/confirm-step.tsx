@@ -1,5 +1,6 @@
 import { BOOKING_PLATFORM_LABELS, BRIEF_DESTINATION_LABELS, EMAIL_PLATFORM_LABELS, HOSTING_PLATFORM_LABELS } from "@/lib/copy";
 import { STEPS } from "../constants";
+import { PlatformLogo } from "../form-fields";
 import type { FormData, Step, ValidationError } from "../types";
 
 export function ConfirmStep({
@@ -37,13 +38,13 @@ export function ConfirmStep({
               const stepLabel = STEPS.find((s) => s.id === stepId)?.label ?? stepId;
               return (
                 <div key={stepId} className="space-y-1.5">
-                 <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                     {stepLabel}
                   </span>
                   {stepErrors.map((err, idx) => (
                     <div
                       key={idx}
-                               className="flex items-center justify-between p-2 rounded-sm border bg-background/60"
+                      className="flex items-center justify-between p-2 rounded-sm border bg-background/60"
                       style={{ borderColor: "var(--border)" }}
                     >
                       <span className="font-medium" style={{ color: "var(--text-primary)" }}>
@@ -52,7 +53,7 @@ export function ConfirmStep({
                       <button
                         type="button"
                         onClick={() => setStep(err.step)}
-   className="px-2.5 py-1 text-[11px] font-bold rounded-sm transition-all cursor-pointer border bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 shrink-0 ml-3"
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-sm transition-all cursor-pointer border bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 shrink-0 ml-3"
                       >
                         Jump to Step →
                       </button>
@@ -99,20 +100,23 @@ export function ConfirmStep({
         <h2 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>Review your setup</h2>
         <div className="text-xs font-mono font-medium space-y-2 rounded-lg p-4 shadow-xs" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
           {[
-            ["Client Name", form.buyerName],
-            ["Selling Asset", form.offerName],
-            ["Price Baseline", form.offerPrice || "—"],
-            ["Booking Calendar", BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform],
-            ["Email Platform", EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform],
-            ["Hosting Node", HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform],
-            ["Brief Delivery Channel", BRIEF_DESTINATION_LABELS[form.briefDestination] ?? form.briefDestination],
-            ["Questions Matrix", `${form.topCallQuestions.split("\n").filter(Boolean).length}`],
-            ["Objections Logged", `${form.topObjections.split("\n").filter(Boolean).length}`],
-            ["Social Proof Count", `${form.testimonials.filter((t) => t.name && t.role && t.quote).length}`],
-          ].map(([label, value]) => (
-            <div key={label} className="flex justify-between pb-1.5 last:pb-0" style={{ borderBottom: "1px solid var(--border)" }}>
-              <span style={{ color: "var(--text-muted)" }}>{label}</span>
-              <span className="text-[11px] font-bold" style={{ color: "var(--text-primary)" }}>{value}</span>
+            { label: "Client Name", value: form.buyerName },
+            { label: "Selling Asset", value: form.offerName },
+            { label: "Price Baseline", value: form.offerPrice || "—" },
+            { label: "Booking Calendar", value: BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform, provider: form.bookingPlatform },
+            { label: "Email Platform", value: EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform, provider: form.emailPlatform },
+            { label: "Hosting Node", value: HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform, provider: form.hostingPlatform },
+            { label: "Brief Delivery Channel", value: BRIEF_DESTINATION_LABELS[form.briefDestination] ?? form.briefDestination },
+            { label: "Questions Matrix", value: `${form.topCallQuestions.split("\n").filter(Boolean).length}` },
+            { label: "Objections Logged", value: `${form.topObjections.split("\n").filter(Boolean).length}` },
+            { label: "Social Proof Count", value: `${form.testimonials.filter((t) => t.name && t.role && t.quote).length}` },
+          ].map((item) => (
+            <div key={item.label} className="flex justify-between items-center pb-1.5 last:pb-0" style={{ borderBottom: "1px solid var(--border)" }}>
+              <span style={{ color: "var(--text-muted)" }}>{item.label}</span>
+              <span className="text-[11px] font-bold inline-flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>
+                {item.provider && <PlatformLogo provider={item.provider} />}
+                {item.value}
+              </span>
             </div>
           ))}
         </div>

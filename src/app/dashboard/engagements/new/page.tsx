@@ -119,144 +119,154 @@ export default function NewEngagementPage() {
   }
 
   return (
-    <div className="space-y-6 w-full max-w-none px-1 transition-colors duration-200" style={{ color: "var(--text-secondary)" }}>
-      {/* Header */}
-      <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
-        <h1 className="text-lg font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-          Set Up a New Client
-        </h1>
-        <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-          A one-time setup. Connect their booking calendar and email tool, and teach the system their brand voice — you&apos;ll get a chance to launch separately once everything&apos;s saved.
-        </p>
-      </div>
+    <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
+      {/* --- HYPER-MICRO TIGHT DOT GRID (exact match from app/dashboard/page.tsx) --- */}
+      <div 
+        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_0.5px,transparent_0.5px)] dark:bg-[radial-gradient(#3f3f46_0.5px,transparent_0.5px)] [background-size:6px_6px] [mask-image:radial-gradient(ellipse_75%_75%_at_50%_30%,#000_50%,transparent_100%)] opacity-70" 
+        aria-hidden="true"
+      />
 
-      <StepIndicator steps={STEPS} current={step} />
+      <div className="relative z-10 space-y-6 w-full max-w-none px-1">
+        {/* Header */}
+        <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
+          <h1 className="text-lg font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
+            Set Up a New Client
+          </h1>
+          <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
+            A one-time setup. Connect their booking calendar and email tool, and teach the system their brand voice — you&apos;ll get a chance to launch separately once everything&apos;s saved.
+          </p>
+        </div>
 
-     {showRestoredBanner && (
-  <div
-    className="rounded-lg p-3 flex items-center justify-between gap-3 text-xs shadow-xs"
-    style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-  >
-    <span style={{ color: "var(--text-muted)" }}>
-      Restored your in-progress setup from before the last refresh. API keys were not saved and need to be re-entered.
-    </span>
-    <div className="flex items-center gap-2 shrink-0 font-mono">
-      <button
-        type="button"
-        onClick={() => setShowRestoredBanner(false)}
-        className="px-2 py-1 rounded-sm hover:opacity-80 cursor-pointer"
-        style={{ color: "var(--text-secondary)" }}
-      >
-        [ Keep Draft ]
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          discardDraft();
-          smartPrefill.resetPrefill();
-          emailIntegrations.resetIntegrations();
-        }}
-        className="px-2 py-1 rounded-sm border bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer font-bold"
-      >
-        [ Dismiss & Clear All ]
-      </button>
-    </div>
-  </div>
-)}
+        <StepIndicator steps={STEPS} current={step} />
 
-
-      <div className="bg-transparent space-y-6 pt-2">
-        {step === "offer" && (
-          <OfferStep
-            form={form}
-            set={set}
-            prefillDomain={smartPrefill.prefillDomain}
-            setPrefillDomain={smartPrefill.setPrefillDomain}
-            prefillLoading={smartPrefill.prefillLoading}
-            prefillError={smartPrefill.prefillError}
-            prefillNotes={smartPrefill.prefillNotes}
-            runSmartPrefill={smartPrefill.runSmartPrefill}
-          />
+        {showRestoredBanner && (
+          <div
+            className="rounded-lg p-3 flex items-center justify-between gap-3 text-xs shadow-xs"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <span style={{ color: "var(--text-muted)" }}>
+              Restored your in-progress setup from before the last refresh. API keys were not saved and need to be re-entered.
+            </span>
+            <div className="flex items-center gap-2 shrink-0 font-mono">
+              <button
+                type="button"
+                onClick={() => setShowRestoredBanner(false)}
+                className="px-2 py-1 rounded-sm hover:opacity-80 cursor-pointer"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                [ Keep Draft ]
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  discardDraft();
+                  smartPrefill.resetPrefill();
+                  emailIntegrations.resetIntegrations();
+                }}
+                className="px-2 py-1 rounded-sm border bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer font-bold"
+              >
+                [ Dismiss & Clear All ]
+              </button>
+            </div>
+          </div>
         )}
 
-        {step === "stack" && <StackStep form={form} set={set} />}
+        <div className="bg-transparent space-y-6 pt-2">
+          {step === "offer" && (
+            <OfferStep
+              form={form}
+              set={set}
+              prefillDomain={smartPrefill.prefillDomain}
+              setPrefillDomain={smartPrefill.setPrefillDomain}
+              prefillLoading={smartPrefill.prefillLoading}
+              prefillError={smartPrefill.prefillError}
+              prefillNotes={smartPrefill.prefillNotes}
+              runSmartPrefill={smartPrefill.runSmartPrefill}
+            />
+          )}
 
-        {step === "credentials" && (
-          <CredentialsStep
-  form={form}
-  set={set}
-  bookingOptions={emailIntegrations.bookingOptions}
-  fetchingBookingOptions={emailIntegrations.fetchingBookingOptions}
-  bookingOptionsError={emailIntegrations.bookingOptionsError}
-  klaviyoLists={emailIntegrations.klaviyoLists}
-  fetchingLists={emailIntegrations.fetchingLists}
-  listsFetchError={emailIntegrations.listsFetchError}
-  klaviyoMissingKeyMessage={emailIntegrations.klaviyoMissingKeyMessage}
-  acLists={emailIntegrations.acLists}
-  fetchingAcLists={emailIntegrations.fetchingAcLists}
-  acListsError={emailIntegrations.acListsError}
-  ghlLocations={emailIntegrations.ghlLocations}
-  fetchingGhlLocations={emailIntegrations.fetchingGhlLocations}
-  ghlLocationsError={emailIntegrations.ghlLocationsError}
-  ghlWorkflows={emailIntegrations.ghlWorkflows}
-  fetchingGhlWorkflows={emailIntegrations.fetchingGhlWorkflows}
-  ghlWorkflowsError={emailIntegrations.ghlWorkflowsError}
-/>
-        )}
+          {step === "stack" && <StackStep form={form} set={set} />}
 
-        {step === "voice" && (
-          <VoiceStep
-            form={form}
-            set={set}
-            addTestimonial={addTestimonial}
-            updateTestimonial={updateTestimonial}
-            removeTestimonial={removeTestimonial}
-          />
-        )}
+          {step === "credentials" && (
+            <CredentialsStep
+              form={form}
+              set={set}
+              bookingOptions={emailIntegrations.bookingOptions}
+              fetchingBookingOptions={emailIntegrations.fetchingBookingOptions}
+              bookingOptionsError={emailIntegrations.bookingOptionsError}
+              klaviyoLists={emailIntegrations.klaviyoLists}
+              fetchingLists={emailIntegrations.fetchingLists}
+              listsFetchError={emailIntegrations.listsFetchError}
+              klaviyoMissingKeyMessage={emailIntegrations.klaviyoMissingKeyMessage}
+              acLists={emailIntegrations.acLists}
+              fetchingAcLists={emailIntegrations.fetchingAcLists}
+              acListsError={emailIntegrations.acListsError}
+              ghlLocations={emailIntegrations.ghlLocations}
+              fetchingGhlLocations={emailIntegrations.fetchingGhlLocations}
+              ghlLocationsError={emailIntegrations.ghlLocationsError}
+              ghlWorkflows={emailIntegrations.ghlWorkflows}
+              fetchingGhlWorkflows={emailIntegrations.fetchingGhlWorkflows}
+              ghlWorkflowsError={emailIntegrations.ghlWorkflowsError}
+            />
+          )}
 
-        {step === "confirm" && (
-          <ConfirmStep
-            form={form}
-            allValidationErrors={allValidationErrors}
-            setStep={setStep}
-            error={error}
-          />
-        )}
-      </div>
+          {step === "voice" && (
+            <VoiceStep
+              form={form}
+              set={set}
+              addTestimonial={addTestimonial}
+              updateTestimonial={updateTestimonial}
+              removeTestimonial={removeTestimonial}
+            />
+          )}
 
-      {/* Navigation footer buttons */}
-      <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
-        <button
-          onClick={() => {
-            const idx = STEPS.findIndex((s) => s.id === step);
-            if (idx > 0) setStep(STEPS[idx - 1].id);
-          }}
-          disabled={step === "offer"}
-        className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
-        >
-          Back
-        </button>
+          {step === "confirm" && (
+            <ConfirmStep
+              form={form}
+              allValidationErrors={allValidationErrors}
+              setStep={setStep}
+              error={error}
+            />
+          )}
+        </div>
 
-        {step !== "confirm" ? (
+        {/* Navigation footer buttons */}
+        <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
           <button
+            type="button"
             onClick={() => {
               const idx = STEPS.findIndex((s) => s.id === step);
-              if (idx < STEPS.length - 1) setStep(STEPS[idx + 1].id);
+              if (idx > 0) setStep(STEPS[idx - 1].id);
             }}
-            disabled={!isCurrentStepValid(form, step)}
-    className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+            disabled={step === "offer"}
+            className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
           >
-            Next
+            Back
           </button>
-        ) : (
-          <button
-            onClick={submit}
-            disabled={submitting || allValidationErrors.length > 0}
-  className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
-          >
-            {submitting ? "Saving..." : "Save Setup"}
-          </button>
-        )}
+
+          {step !== "confirm" ? (
+            <button
+              type="button"
+              onClick={() => {
+                const idx = STEPS.findIndex((s) => s.id === step);
+                if (idx < STEPS.length - 1) setStep(STEPS[idx + 1].id);
+              }}
+              disabled={!isCurrentStepValid(form, step)}
+              className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={submit}
+              disabled={submitting || allValidationErrors.length > 0}
+              className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+            >
+              {submitting ? "Saving..." : "Save Setup"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

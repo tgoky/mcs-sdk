@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, Eye, EyeOff, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { KeyRound, Eye, EyeOff, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Mail } from "lucide-react";
 
 interface CredentialField {
   provider: string;
@@ -15,6 +14,23 @@ interface PlatformGroup {
   group: string;
   description: string;
   platforms: CredentialField[];
+}
+
+function PlatformLogo({ provider }: { provider: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError) {
+    return <Mail className="w-4 h-4 shrink-0 text-zinc-400" />;
+  }
+
+  return (
+    <img
+      src={`/logos/${provider}.png`}
+      alt={`${provider} logo`}
+      className="w-4 h-4 shrink-0 object-contain"
+      onError={() => setHasError(true)}
+    />
+  );
 }
 
 const PLATFORM_GROUPS: PlatformGroup[] = [
@@ -86,11 +102,6 @@ const PLATFORM_GROUPS: PlatformGroup[] = [
   },
 ];
 
-// Providers with a real, verified "test this key" endpoint wired up server-
-// side (see VALIDATORS in src/app/api/credentials/test/route.ts). Only
-// these get a "Test connection" button — showing that button for a
-// provider we can't actually validate would be a lie about what the
-// platform can confirm.
 const TESTABLE_PROVIDERS = new Set(["calendly", "cal_com", "mailchimp", "convertkit", "smtp"]);
 
 function PlatformSection({ group }: { group: PlatformGroup }) {
@@ -179,7 +190,8 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
     >
       {/* Group header */}
       <button
-        className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors"
+        type="button"
+        className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors cursor-pointer"
         onClick={() => setExpanded((e) => !e)}
         style={{ background: "transparent" }}
         onMouseEnter={(e) => {
@@ -190,7 +202,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
         }}
       >
         <div>
-          <p className="text-sm" style={{ color: "var(--text-primary)", fontWeight: 600 }}>
+          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
             {group.group}
           </p>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
@@ -206,7 +218,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
 
       {expanded && (
         <div style={{ borderTop: "1px solid var(--border)" }}>
-          {/* Account ID field — shown once per group */}
+          {/* Account ID field */}
           <div
             className="px-5 py-4"
             style={{
@@ -215,13 +227,13 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
             }}
           >
             <label
-              className="block text-xs mb-1.5"
-              style={{ color: "var(--text-primary)", fontWeight: 500 }}
+              className="block text-xs font-medium mb-1.5"
+              style={{ color: "var(--text-primary)" }}
             >
               Which account is this for?
             </label>
             <input
-              className="w-full bg-white/40 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors"
+              className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs"
               value={engagementId}
               onChange={(e) => setEngagementId(e.target.value)}
               placeholder="e.g. eng_acme_corp_001"
@@ -248,12 +260,15 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                 style={{ borderBottom: isLast ? "none" : "1px solid var(--border)" }}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <label
-                    className="text-xs"
-                    style={{ color: "var(--text-primary)", fontWeight: 500 }}
-                  >
-                    {platform.label} API key
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <PlatformLogo provider={platform.provider} />
+                    <label
+                      className="text-xs font-medium"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      {platform.label} API key
+                    </label>
+                  </div>
                   {isSaved && (
                     <div className="flex items-center gap-1">
                       <CheckCircle2 size={12} style={{ color: "var(--success)" }} />
@@ -267,7 +282,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <input
-                      className="w-full bg-white/40 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 pr-8 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors"
+                      className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 pr-8 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs"
                       type={visible[platform.provider] ? "text" : "password"}
                       value={values[platform.provider] ?? ""}
                       onChange={(e) =>
@@ -294,18 +309,20 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                     </button>
                   </div>
                   <button
+                    type="button"
                     onClick={() => save(platform.provider)}
                     disabled={saving === platform.provider}
-                    className="px-4 py-2 text-sm rounded-lg font-medium bg-gold text-gold-foreground hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
+                    className="px-4 py-2 text-xs rounded-lg font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono shadow-xs"
                   >
                     {saving === platform.provider ? "Saving…" : "Save"}
                   </button>
                   {TESTABLE_PROVIDERS.has(platform.provider) && (
                     <button
+                      type="button"
                       onClick={() => testConnection(platform.provider)}
                       disabled={testing === platform.provider}
                       title="Confirms the saved key still works, without waiting for the daily check"
-                      className="px-3 py-2 text-sm rounded-lg font-medium border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
+                      className="px-3 py-2 text-xs rounded-lg font-bold border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono shadow-xs"
                     >
                       {testing === platform.provider ? "Testing…" : "Test"}
                     </button>
@@ -349,15 +366,6 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
   );
 }
 
-/**
- * SMTP is the one connector whose credential isn't a single string — it's
- * host/port/secure/username/password/fromAddress bundled together. Rather
- * than adding schema columns for it, the whole config is JSON-encoded and
- * stored through the exact same generic credential blob every other
- * provider uses (see storeCredential/resolveCredential) — this card just
- * builds that JSON string before posting to the same /api/credentials
- * and /api/credentials/test endpoints as everything above.
- */
 function SmtpCredentialCard() {
   const [expanded, setExpanded] = useState(false);
   const [engagementId, setEngagementId] = useState("");
@@ -444,7 +452,7 @@ function SmtpCredentialCard() {
   }
 
   const inputClass =
-    "w-full bg-white/40 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors";
+    "w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs";
 
   return (
     <div
@@ -452,7 +460,8 @@ function SmtpCredentialCard() {
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <button
-        className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors"
+        type="button"
+        className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors cursor-pointer"
         onClick={() => setExpanded((e) => !e)}
         style={{ background: "transparent" }}
         onMouseEnter={(e) => {
@@ -462,13 +471,16 @@ function SmtpCredentialCard() {
           (e.currentTarget as HTMLElement).style.background = "transparent";
         }}
       >
-        <div>
-          <p className="text-sm" style={{ color: "var(--text-primary)", fontWeight: 600 }}>
-            Custom SMTP
-          </p>
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            Direct-send win-back email for buyers on a bespoke email setup, no ESP required.
-          </p>
+        <div className="flex items-center gap-2">
+          <PlatformLogo provider="smtp" />
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+              Custom SMTP
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+              Direct-send win-back email for buyers on a bespoke email setup, no ESP required.
+            </p>
+          </div>
         </div>
         {expanded ? (
           <ChevronUp size={16} style={{ color: "var(--text-muted)" }} />
@@ -480,7 +492,7 @@ function SmtpCredentialCard() {
       {expanded && (
         <div className="px-5 py-4 space-y-3" style={{ borderTop: "1px solid var(--border)" }}>
           <div>
-            <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
               Which account is this for?
             </label>
             <input
@@ -493,13 +505,13 @@ function SmtpCredentialCard() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
                 Host
               </label>
               <input className={inputClass} value={config.host} onChange={(e) => set("host", e.target.value)} placeholder="smtp.yourprovider.com" />
             </div>
             <div>
-              <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
                 Port
               </label>
               <input className={inputClass} value={config.port} onChange={(e) => set("port", e.target.value)} placeholder="587" />
@@ -507,7 +519,7 @@ function SmtpCredentialCard() {
           </div>
 
           <div>
-            <label className="flex items-center gap-2 text-xs" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+            <label className="flex items-center gap-2 text-xs font-medium" style={{ color: "var(--text-primary)" }}>
               <input type="checkbox" checked={config.secure} onChange={(e) => set("secure", e.target.checked)} />
               Use implicit TLS (usually port 465). Leave unchecked for STARTTLS on 587.
             </label>
@@ -515,13 +527,13 @@ function SmtpCredentialCard() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
                 Username
               </label>
               <input className={inputClass} value={config.username} onChange={(e) => set("username", e.target.value)} placeholder="mailer@yourdomain.com" />
             </div>
             <div>
-              <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
                 Password
               </label>
               <input className={inputClass} type="password" value={config.password} onChange={(e) => set("password", e.target.value)} placeholder="••••••••" />
@@ -530,13 +542,13 @@ function SmtpCredentialCard() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
                 From address
               </label>
               <input className={inputClass} value={config.fromAddress} onChange={(e) => set("fromAddress", e.target.value)} placeholder="hello@yourdomain.com" />
             </div>
             <div>
-              <label className="block text-xs mb-1.5" style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
                 From name (optional)
               </label>
               <input className={inputClass} value={config.fromName} onChange={(e) => set("fromName", e.target.value)} placeholder="Your Company" />
@@ -545,17 +557,19 @@ function SmtpCredentialCard() {
 
           <div className="flex gap-2 pt-1">
             <button
+              type="button"
               onClick={save}
               disabled={saving}
-              className="px-4 py-2 text-sm rounded-lg font-medium bg-gold text-gold-foreground hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
+              className="px-4 py-2 text-xs rounded-lg font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono shadow-xs"
             >
               {saving ? "Saving…" : "Save"}
             </button>
             <button
+              type="button"
               onClick={test}
               disabled={testing}
               title="Confirms the saved SMTP credentials actually connect, without waiting for the daily check"
-              className="px-3 py-2 text-sm rounded-lg font-medium border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono text-xs"
+              className="px-3 py-2 text-xs rounded-lg font-bold border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono shadow-xs"
             >
               {testing ? "Testing…" : "Test"}
             </button>
@@ -601,8 +615,8 @@ export function CredentialsPanel() {
     <div className="w-full space-y-6 transition-colors duration-200">
       <div>
         <h2
-          className="text-base tracking-tight"
-          style={{ color: "var(--text-primary)", fontWeight: 700 }}
+          className="text-base tracking-tight font-bold"
+          style={{ color: "var(--text-primary)" }}
         >
           Connections
         </h2>
@@ -641,14 +655,14 @@ export function CredentialsPanel() {
         <SmtpCredentialCard />
       </div>
 
-      {/* Slack — different character, not a secret */}
+      {/* Slack */}
       <div
         className="rounded-xl p-5 space-y-2 transition-colors duration-200"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
       >
         <p
-          className="text-sm"
-          style={{ color: "var(--text-primary)", fontWeight: 600 }}
+          className="text-sm font-semibold"
+          style={{ color: "var(--text-primary)" }}
         >
           Slack webhook
         </p>

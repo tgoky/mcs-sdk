@@ -16,6 +16,12 @@ import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 // correctly with zero changes here.
 const TOGGLEABLE_SKILLS: SkillName[] = [...SKILLS];
 
+// The three recurring skills that now have a dedicated whole-history page
+// at /skills/[skillId] (see engagements/[id]/skills/*). Pin-Down is
+// one-time onboarding with nothing ongoing to view; Pre-Call Read's full
+// history is already the master roster calendar itself.
+const SKILLS_WITH_PAGE: SkillName[] = ["pre-call-read", "pile-on", "win-back", "leak-map"];
+
 export function SkillsPanel({
   engagementId,
   initialStates,
@@ -125,7 +131,7 @@ export function SkillsPanel({
                 </div>
               </div>
 
-              {/* Right Side: optional Configure link + Filled Toggle Switch Button */}
+              {/* Right Side: optional Configure/View links + Filled Toggle Switch Button */}
               <div className="shrink-0 flex items-center gap-3">
                 {SKILL_MANIFEST[skill].hasHingesPanel && (
                   <button
@@ -137,6 +143,18 @@ export function SkillsPanel({
                     className="text-[11px] font-mono font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer"
                   >
                     Configure
+                  </button>
+                )}
+                {SKILLS_WITH_PAGE.includes(skill) && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`/dashboard/engagements/${engagementId}/skills/${skill}`);
+                    }}
+                    className="text-[11px] font-mono font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer"
+                  >
+                    View
                   </button>
                 )}
                 <span

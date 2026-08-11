@@ -1,4 +1,4 @@
-import { InputField } from "../form-fields";
+import { InputField, TextAreaField } from "../form-fields";
 import type { FormData, Testimonial } from "../types";
 
 export function VoiceStep({
@@ -17,33 +17,21 @@ export function VoiceStep({
   return (
     <div className="space-y-6 w-full">
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-        <div className="space-y-1.5 w-full">
-          <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
-            Most common questions on calls (one per line)
-          </label>
-          <textarea
-            value={form.topCallQuestions}
-            onChange={(e) => set("topCallQuestions", e.target.value)}
-            placeholder={"How long does onboarding take?\nWhat results can I expect?"}
-            rows={4}
-              className="w-full rounded-lg px-3 py-2 text-xs resize-y transition-colors shadow-xs placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-          />
-        </div>
+        <TextAreaField
+          label="Most common questions on calls (one per line)"
+          value={form.topCallQuestions}
+          onChange={(v) => set("topCallQuestions", v)}
+          placeholder={"How long does onboarding take?\nWhat results can I expect?"}
+          rows={4}
+        />
 
-        <div className="space-y-1.5 w-full">
-          <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
-            Most common objections (one per line)
-          </label>
-          <textarea
-            value={form.topObjections}
-            onChange={(e) => set("topObjections", e.target.value)}
-            placeholder={"It's too expensive for our budget right now.\nThe timing doesn't work for us right now."}
-            rows={4}
-      className="w-full rounded-lg px-3 py-2 text-xs resize-y transition-colors shadow-xs placeholder:text-zinc-400 dark:placeholder:text-zinc-600"         
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-          />
-        </div>
+        <TextAreaField
+          label="Most common objections (one per line)"
+          value={form.topObjections}
+          onChange={(v) => set("topObjections", v)}
+          placeholder={"It's too expensive for our budget right now.\nThe timing doesn't work for us right now."}
+          rows={4}
+        />
       </div>
 
       <div className="space-y-3">
@@ -59,7 +47,7 @@ export function VoiceStep({
           <button
             type="button"
             onClick={addTestimonial}
-         className="px-3 py-1.5 text-xs font-bold font-mono uppercase tracking-wider rounded-lg transition-all cursor-pointer border bg-background/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 shrink-0 shadow-xs"
+            className="px-3 py-1.5 text-xs font-bold font-mono uppercase tracking-wider rounded-lg transition-all cursor-pointer border bg-background/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 shrink-0 shadow-xs"
             style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
           >
             + Add testimonial
@@ -67,7 +55,10 @@ export function VoiceStep({
         </div>
 
         {form.testimonials.map((t, i) => (
-          <div key={i} className="grid gap-3 grid-cols-1 md:grid-cols-2 rounded-lg p-3 shadow-xs" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div 
+            key={i} 
+            className="grid gap-3 grid-cols-1 md:grid-cols-2 rounded-lg p-3 shadow-xs bg-zinc-100/40 dark:bg-zinc-900/30 backdrop-blur-md border border-zinc-200 dark:border-zinc-800"
+          >
             <InputField
               label="Name"
               value={t.name}
@@ -97,14 +88,12 @@ export function VoiceStep({
               </button>
             </div>
             <div className="md:col-span-2 space-y-1.5">
-              <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>Quote</label>
-              <textarea
+              <TextAreaField
+                label="Quote"
                 value={t.quote}
-                onChange={(e) => updateTestimonial(i, "quote", e.target.value)}
+                onChange={(v) => updateTestimonial(i, "quote", v)}
                 placeholder="What they said about working with this client..."
                 rows={2}
-          className="w-full rounded-lg px-3 py-2 text-xs resize-y transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
-                style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
               />
             </div>
           </div>

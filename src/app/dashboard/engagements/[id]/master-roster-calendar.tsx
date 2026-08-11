@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -19,13 +20,26 @@ import {
   Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { StatusPill, toneFromSeverity } from "@/app/dashboard/runs/[id]/_shared/status-pill";
+import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import { getDaysInMonthGrid, dateKey, timeStr } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import type { RosterEntry } from "@/app/api/engagements/[id]/roster/route";
 import type { PileOnPipelineItem, PileOnStage } from "@/app/api/engagements/[id]/pile-on-pipeline/route";
 import type { WinBackPipelineItem, WinBackEnrollmentStatus } from "@/app/api/engagements/[id]/win-back-pipeline/route";
-import type { AuditHistoryItem, ScheduledAudit, ActiveAlertItem } from "@/app/api/engagements/[id]/leak-map-schedule/route";
+import type { ActivityEvent, ActivitySkill } from "@/app/api/engagements/[id]/activity/route";
+
+const TONE_TO_SEVERITY_LABEL: Record<string, string> = {
+  danger: "High severity",
+  warning: "Medium severity",
+  info: "Low severity",
+  neutral: "Clean",
+};
+
+const ACTIVITY_SKILL_LABEL: Record<ActivitySkill, string> = {
+  "pile-on": "Pile-On",
+  "win-back": "Win-Back",
+  "leak-map": "Leak-Map",
+};
 
 type ViewMode = "month" | "day" | "list" | "board";
 type BoardPipelineLens = "all" | "pile_on" | "win_back" | "leak_map";
@@ -73,13 +87,12 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
   const [roster, setRoster] = useState<StreamState<RosterEntry>>(emptyStream());
   const [pileOn, setPileOn] = useState<StreamState<PileOnPipelineItem>>(emptyStream());
   const [winBack, setWinBack] = useState<StreamState<WinBackPipelineItem>>(emptyStream());
-  const [leakMap, setLeakMap] = useState<{
-    history: AuditHistoryItem[];
-    scheduled: ScheduledAudit[];
-    alerts: ActiveAlertItem[];
-  } | null>(null);
-  const [leakMapLoading, setLeakMapLoading] = useState(false);
-  const [leakMapError, setLeakMapError] = useState<string | null>(null);
+  // Unified feed for everything that isn't a call: Pile-On/Win-Back
+  // touches actually sent, Win-Back enrollment/exit lifecycle events, and
+  // Leak-Map audit completions. Month-view badges need this immediately
+  // (not lazily, the way pileOn/winBack pipeline rollups are) since a day
+  // can have real activity with zero calls on it.
+  const [activity, setActivity] = useState<StreamState<ActivityEvent>>(emptyStream());
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -98,7 +111,20 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     }
   }, [engagementId, monthString]);
 
-  // Lazy Fetch: Pile-On
+  // Primary Fetch: Activity (Pile-On / Win-Back / Leak-Map events, month-scoped like roster)
+  const fetchActivity = useCallback(async () => {
+    setActivity((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}/activity?month=${monthString}`);
+      if (!res.ok) throw new Error(`Activity fetch failed: ${res.status}`);
+      const data = await res.json();
+      setActivity({ data: data.events ?? [], loading: false, fetched: true, error: null });
+    } catch (err) {
+      setActivity({ data: [], loading: false, fetched: true, error: err instanceof Error ? err.message : "Failed to load skill activity" });
+    }
+  }, [engagementId, monthString]);
+
+  // Lazy Fetch: Pile-On (full-history pipeline rollup, used by List/Board only)
   const fetchPileOn = useCallback(async () => {
     if (pileOn.fetched || pileOn.loading) return;
     setPileOn((s) => ({ ...s, loading: true, error: null }));
@@ -112,7 +138,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     }
   }, [engagementId, pileOn.fetched, pileOn.loading]);
 
-  // Lazy Fetch: Win-Back
+  // Lazy Fetch: Win-Back (full-history pipeline rollup, used by List/Board only)
   const fetchWinBack = useCallback(async () => {
     if (winBack.fetched || winBack.loading) return;
     setWinBack((s) => ({ ...s, loading: true, error: null }));
@@ -126,40 +152,40 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     }
   }, [engagementId, winBack.fetched, winBack.loading]);
 
-  // Lazy Fetch: Leak-Map
-  const fetchLeakMap = useCallback(async () => {
-    if (leakMap !== null || leakMapLoading) return;
-    setLeakMapLoading(true);
-    setLeakMapError(null);
+  // Lazy Fetch: full-history activity (Board view's Leak-Map lens only —
+  // that lens buckets by severity across the whole engagement, same as
+  // the Pile-On/Win-Back lenses next to it, not one month).
+  const [activityAll, setActivityAll] = useState<StreamState<ActivityEvent>>(emptyStream());
+  const fetchActivityAll = useCallback(async () => {
+    if (activityAll.fetched || activityAll.loading) return;
+    setActivityAll((s) => ({ ...s, loading: true, error: null }));
     try {
-      const res = await fetch(`/api/engagements/${engagementId}/leak-map-schedule`);
-      if (!res.ok) throw new Error(`Leak-map fetch failed: ${res.status}`);
+      const res = await fetch(`/api/engagements/${engagementId}/activity?all=1`);
+      if (!res.ok) throw new Error(`Activity fetch failed: ${res.status}`);
       const data = await res.json();
-      setLeakMap(data);
-      setLeakMapLoading(false);
+      setActivityAll({ data: data.events ?? [], loading: false, fetched: true, error: null });
     } catch (err) {
-      setLeakMapError(err instanceof Error ? err.message : "Failed to load audit history");
-      setLeakMapLoading(false);
+      setActivityAll({ data: [], loading: false, fetched: true, error: err instanceof Error ? err.message : "Failed to load skill activity" });
     }
-  }, [engagementId, leakMap, leakMapLoading]);
+  }, [engagementId, activityAll.fetched, activityAll.loading]);
 
   // Sync Month Changes & Mode Switches
   useEffect(() => {
     fetchRoster();
+    fetchActivity();
     setPileOn(emptyStream());
     setWinBack(emptyStream());
-    setLeakMap(null);
-  }, [fetchRoster]);
+  }, [fetchRoster, fetchActivity]);
 
   useEffect(() => {
     if (mode === "day" || mode === "board" || mode === "list") {
       fetchPileOn();
       fetchWinBack();
     }
-    if (mode === "day" || mode === "board") {
-      fetchLeakMap();
+    if (mode === "board") {
+      fetchActivityAll();
     }
-  }, [mode, fetchPileOn, fetchWinBack, fetchLeakMap]);
+  }, [mode, fetchPileOn, fetchWinBack, fetchActivityAll]);
 
   // Client-Side Indexes & Joins
   const pileOnByBookingId = useMemo(
@@ -207,31 +233,71 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     return map;
   }, [filteredEntries]);
 
+  // Same filterText applied to activity as to roster entries — a search
+  // for a prospect should hide unrelated system events (Leak-Map audits
+  // have no prospect and are excluded once a search is active), and an
+  // empty search shows everything.
+  const filteredActivity = useMemo(() => {
+    if (!filterText.trim()) return activity.data;
+    const q = filterText.toLowerCase();
+    return activity.data.filter(
+      (e) => (e.prospectName ?? "").toLowerCase().includes(q) || (e.prospectEmail ?? "").toLowerCase().includes(q)
+    );
+  }, [activity.data, filterText]);
+
+  const activityByDate = useMemo(() => {
+    const map: Record<string, ActivityEvent[]> = {};
+    for (const ev of filteredActivity) {
+      const k = dateKey(new Date(ev.occurredAt));
+      (map[k] ??= []).push(ev);
+    }
+    return map;
+  }, [filteredActivity]);
+
   const dayMetrics = useMemo(() => {
     const metrics: Record<string, {
       totalCalls: number;
       pileOnActive: number;
       winBackActive: number;
       briefDelivered: number;
+      activityBySkill: Record<ActivitySkill, number>;
     }> = {};
+
+    const ensure = (k: string) => {
+      if (!metrics[k]) {
+        metrics[k] = {
+          totalCalls: 0,
+          pileOnActive: 0,
+          winBackActive: 0,
+          briefDelivered: 0,
+          activityBySkill: { "pile-on": 0, "win-back": 0, "leak-map": 0 },
+        };
+      }
+      return metrics[k];
+    };
 
     for (const entry of filteredEntries) {
       const k = dateKey(new Date(entry.callTime));
-      if (!metrics[k]) {
-        metrics[k] = { totalCalls: 0, pileOnActive: 0, winBackActive: 0, briefDelivered: 0 };
-      }
-      metrics[k].totalCalls++;
-      if (entry.pileOnData) metrics[k].pileOnActive++;
-      if (entry.winBackData?.status === "active") metrics[k].winBackActive++;
-      if (entry.status === "brief_delivered") metrics[k].briefDelivered++;
+      const m = ensure(k);
+      m.totalCalls++;
+      if (entry.pileOnData) m.pileOnActive++;
+      if (entry.winBackData?.status === "active") m.winBackActive++;
+      if (entry.status === "brief_delivered") m.briefDelivered++;
+    }
+
+    for (const ev of filteredActivity) {
+      const k = dateKey(new Date(ev.occurredAt));
+      ensure(k).activityBySkill[ev.skill]++;
     }
 
     return metrics;
-  }, [filteredEntries]);
+  }, [filteredEntries, filteredActivity]);
+
+  const EMPTY_METRIC = { totalCalls: 0, pileOnActive: 0, winBackActive: 0, briefDelivered: 0, activityBySkill: { "pile-on": 0, "win-back": 0, "leak-map": 0 } as Record<ActivitySkill, number> };
 
   const selectedDayKey = dateKey(selectedDate);
   const selectedDayEntries = entriesByDate[selectedDayKey] ?? [];
-  const selectedDayMetric = dayMetrics[selectedDayKey] ?? { totalCalls: 0, pileOnActive: 0, winBackActive: 0, briefDelivered: 0 };
+  const selectedDayMetric = dayMetrics[selectedDayKey] ?? EMPTY_METRIC;
 
   useEffect(() => {
     if (selectedDayEntries.length > 0) {
@@ -248,10 +314,86 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     [filteredEntries, selectedEntryId, selectedDayEntries]
   );
 
-  const selectedDayAudits = useMemo(() => {
-    if (!leakMap) return [];
-    return leakMap.history.filter((a) => dateKey(new Date(a.createdAt)) === selectedDayKey);
-  }, [leakMap, selectedDayKey]);
+  const selectedDayActivity = activityByDate[selectedDayKey] ?? [];
+
+  type UnifiedListRow = {
+    key: string;
+    occurredAt: string;
+    skill: "pre-call-read" | ActivitySkill;
+    title: string;
+    tone: "success" | "warning" | "danger" | "info" | "neutral";
+    statusLabel: string;
+    detail: string | null;
+    prospectName: string | null;
+    prospectEmail: string | null;
+    onSelect: () => void;
+  };
+
+  function activityStatusLabel(ev: ActivityEvent): string {
+    switch (ev.type) {
+      case "pile_on_touch_sent":
+      case "win_back_touch_sent":
+        return "sent";
+      case "win_back_enrolled":
+        return "enrolled";
+      case "win_back_rebooked":
+        return "rebooked";
+      case "win_back_lost":
+        return "lost";
+      case "win_back_reply_exited":
+        return "exited";
+      case "win_back_corrected":
+        return "corrected";
+      case "leak_map_audit":
+        return TONE_TO_SEVERITY_LABEL[ev.tone] ?? ev.tone;
+      default:
+        return ev.tone;
+    }
+  }
+
+  const unifiedListRows = useMemo<UnifiedListRow[]>(() => {
+    const callRows: UnifiedListRow[] = filteredEntries.map((entry) => {
+      const parts: string[] = [];
+      if (entry.pileOnData) parts.push(`Pile-On: ${entry.pileOnData.stage.replace(/_/g, " ")}`);
+      if (entry.winBackData) parts.push(`Win-Back: ${entry.winBackData.status.replace(/_/g, " ")}`);
+      return {
+        key: `call:${entry.id}`,
+        occurredAt: entry.callTime,
+        skill: "pre-call-read",
+        title: "Call",
+        tone: entry.status === "brief_delivered" ? "success" : entry.status === "brief_failed" ? "danger" : "neutral",
+        statusLabel: entry.status.replace(/_/g, " "),
+        detail: parts.length > 0 ? parts.join(" · ") : null,
+        prospectName: entry.prospectName,
+        prospectEmail: entry.prospectEmail,
+        onSelect: () => {
+          setSelectedEntryId(entry.id);
+          setSelectedDate(new Date(entry.callTime));
+          setMode("day");
+        },
+      };
+    });
+
+    const activityRows: UnifiedListRow[] = filteredActivity.map((ev) => ({
+      key: ev.id,
+      occurredAt: ev.occurredAt,
+      skill: ev.skill,
+      title: ev.title,
+      tone: ev.tone,
+      statusLabel: activityStatusLabel(ev),
+      detail: ev.detail,
+      prospectName: ev.prospectName,
+      prospectEmail: ev.prospectEmail,
+      onSelect: () => {
+        setSelectedDate(new Date(ev.occurredAt));
+        setMode("day");
+      },
+    }));
+
+    return [...callRows, ...activityRows].sort(
+      (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()
+    );
+  }, [filteredEntries, filteredActivity]);
 
   const gridDays = useMemo(() => getDaysInMonthGrid(year, month), [year, month]);
   const monthName = currentDate.toLocaleString("default", { month: "long" });
@@ -277,9 +419,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
       {winBack.error && (mode === "day" || mode === "board" || mode === "list") && (
         <ErrorBanner message={winBack.error} onRetry={fetchWinBack} />
       )}
-      {leakMapError && mode === "day" && (
-        <ErrorBanner message={leakMapError} onRetry={fetchLeakMap} />
-      )}
+      {activity.error && <ErrorBanner message={activity.error} onRetry={fetchActivity} />}
 
       {/* Toolbar & View Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-2 shadow-sm font-sans">
@@ -400,6 +540,26 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     </div>
                   </div>
 
+                  {/* Other-skill activity this day — the fix for "Leak-Map ran
+                      today but the card looks empty": these render even when
+                      totalCalls is 0, since Pile-On/Win-Back/Leak-Map activity
+                      is never booking-anchored. */}
+                  {metric && (["pile-on", "win-back", "leak-map"] as ActivitySkill[]).some((s) => metric.activityBySkill[s] > 0) && (
+                    <div className="flex items-center gap-1 flex-wrap px-0.5">
+                      {(["pile-on", "win-back", "leak-map"] as ActivitySkill[]).map(
+                        (s) =>
+                          metric.activityBySkill[s] > 0 && (
+                            <div key={s} className="relative">
+                              <SquishySkillBadge skill={s} size={14} enabled={true} />
+                              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-zinc-700 text-[7px] font-bold text-white font-mono">
+                                {metric.activityBySkill[s]}
+                              </span>
+                            </div>
+                          )
+                      )}
+                    </div>
+                  )}
+
                   <div className="my-auto py-1 font-sans">
                     {metric && metric.totalCalls > 0 ? (
                       <div className="rounded-lg bg-sky-950/40 border border-sky-800/50 px-2 py-1 text-sky-200">
@@ -410,8 +570,15 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           {metric.briefDelivered}/{metric.totalCalls} briefed
                         </span>
                       </div>
+                    ) : metric && (["pile-on", "win-back", "leak-map"] as ActivitySkill[]).some((s) => metric.activityBySkill[s] > 0) ? (
+                      <span className="text-[10px] text-zinc-400 font-mono block">
+                        {(["pile-on", "win-back", "leak-map"] as ActivitySkill[])
+                          .filter((s) => metric.activityBySkill[s] > 0)
+                          .map((s) => `${metric.activityBySkill[s]} ${ACTIVITY_SKILL_LABEL[s]}`)
+                          .join(" · ")}
+                      </span>
                     ) : (
-                      <span className="text-[10px] text-zinc-600 font-mono italic block">No calls</span>
+                      <span className="text-[10px] text-zinc-600 font-mono italic block">No activity</span>
                     )}
                   </div>
                 </button>
@@ -454,21 +621,31 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               </div>
             </div>
 
-            {/* System Events Strip (Leak-Map) */}
-            {selectedDayAudits.length > 0 && (
+            {/* Skill Activity Strip — Pile-On touches, Win-Back lifecycle
+                events, and Leak-Map audits for this day. These never have
+                a call tied to them (that's the whole point — a Win-Back
+                touch fires precisely because the prospect hasn't
+                rebooked), so they render independently of whether any
+                meetings are on the timeline below. */}
+            {selectedDayActivity.length > 0 && (
               <div className="border-b border-zinc-800/80 bg-zinc-900/30 p-2 space-y-1.5 font-sans">
                 <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 block px-1">
-                  System Events
+                  Skill Activity
                 </span>
                 <div className="flex flex-wrap gap-1.5 font-sans">
-                  {selectedDayAudits.map((audit) => (
-                    <div key={audit.id} className="flex items-center gap-1.5 rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-2 py-1 text-xs text-emerald-300 font-sans">
-                      <SquishySkillBadge skill="leak-map" size={14} enabled={true} />
-                      <span className="font-bold capitalize">{audit.runType} Audit</span>
-                      <StatusPill tone={audit.overallSeverity === "high" ? "danger" : audit.overallSeverity === "medium" ? "warning" : "neutral"}>
-                        {audit.topIssueCount} issue{audit.topIssueCount === 1 ? "" : "s"}
-                      </StatusPill>
-                    </div>
+                  {selectedDayActivity.map((ev) => (
+                    <Link
+                      key={ev.id}
+                      href={`/dashboard/engagements/${engagementId}/skills/${ev.skill}`}
+                      className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-xs text-zinc-200 hover:border-zinc-700 transition-colors font-sans"
+                    >
+                      <SquishySkillBadge skill={ev.skill} size={14} enabled={true} />
+                      <span className="font-bold">
+                        {ev.prospectName ?? ev.prospectEmail ?? ACTIVITY_SKILL_LABEL[ev.skill]}
+                      </span>
+                      <span className="text-zinc-400">{ev.title}</span>
+                      <StatusPill tone={ev.tone}>{timeStr(ev.occurredAt)}</StatusPill>
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -664,6 +841,13 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           <ExternalLink size={11} />
                         </a>
                       )}
+                      <Link
+                        href={`/dashboard/engagements/${engagementId}/skills/pre-call-read`}
+                        className="flex items-center gap-1.5 text-[11px] font-mono text-sky-400 hover:underline pt-1"
+                      >
+                        <span>View full Pre-Call Read history for this client</span>
+                        <ExternalLink size={11} />
+                      </Link>
                     </div>
                   )}
 
@@ -692,6 +876,13 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       ) : (
                         <p className="text-zinc-500 italic text-[11px] py-4 text-center font-sans">No active Pile-On speed-to-lead sequence for this booking.</p>
                       )}
+                      <Link
+                        href={`/dashboard/engagements/${engagementId}/skills/pile-on`}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-mono text-sky-400 hover:underline pt-1"
+                      >
+                        <span>View full Pile-On history for this client</span>
+                        <ExternalLink size={11} />
+                      </Link>
                     </div>
                   )}
 
@@ -733,13 +924,38 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       ) : (
                         <p className="text-zinc-500 italic text-[11px] py-4 text-center font-sans">Prospect is active/scheduled — not enrolled in Win-Back recovery.</p>
                       )}
+                      <Link
+                        href={`/dashboard/engagements/${engagementId}/skills/win-back`}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-mono text-sky-400 hover:underline pt-1"
+                      >
+                        <span>View full Win-Back history for this client</span>
+                        <ExternalLink size={11} />
+                      </Link>
                     </div>
                   )}
                 </>
+              ) : selectedDayActivity.length > 0 ? (
+                <div className="py-6 space-y-2 font-sans">
+                  <p className="text-[11px] text-zinc-500 text-center font-sans">
+                    No call today, but {selectedDayActivity.length} other skill event{selectedDayActivity.length === 1 ? "" : "s"} happened — see the Skill Activity strip above.
+                  </p>
+                  <div className="flex items-center justify-center gap-2 pt-1">
+                    {Array.from(new Set(selectedDayActivity.map((e) => e.skill))).map((s) => (
+                      <Link
+                        key={s}
+                        href={`/dashboard/engagements/${engagementId}/skills/${s}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-zinc-700 transition-colors"
+                      >
+                        <SquishySkillBadge skill={s} size={13} enabled={true} />
+                        {ACTIVITY_SKILL_LABEL[s]}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
               ) : (
                 <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
                   <Clock size={24} className="mx-auto text-zinc-600" />
-                  <p className="text-xs font-sans">No call selected for this day.</p>
+                  <p className="text-xs font-sans">No call or skill activity for this day.</p>
                 </div>
               )}
             </div>
@@ -754,59 +970,47 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
             <thead>
               <tr className="border-b border-zinc-800 bg-zinc-900/60 text-[10px] uppercase tracking-wider text-zinc-500 font-mono">
                 <th className="px-4 py-2.5">Date & Time</th>
+                <th className="px-4 py-2.5">Skill</th>
                 <th className="px-4 py-2.5">Prospect</th>
-                <th className="px-4 py-2.5">Phone</th>
-                <th className="px-4 py-2.5">Brief Status</th>
-                <th className="px-4 py-2.5">Pile-On Sequence</th>
-                <th className="px-4 py-2.5">Win-Back Status</th>
+                <th className="px-4 py-2.5">Event</th>
+                <th className="px-4 py-2.5">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60 font-sans">
-              {filteredEntries.map((entry) => (
+              {unifiedListRows.map((row) => (
                 <tr
-                  key={entry.id}
-                  onClick={() => {
-                    setSelectedEntryId(entry.id);
-                    setSelectedDate(new Date(entry.callTime));
-                    setMode("day");
-                  }}
+                  key={row.key}
+                  onClick={row.onSelect}
                   className="hover:bg-zinc-900/40 cursor-pointer transition-colors font-sans"
                 >
                   <td className="px-4 py-3 font-mono text-zinc-300 whitespace-nowrap">
-                    {new Date(entry.callTime).toLocaleDateString()} {timeStr(entry.callTime)}
+                    {new Date(row.occurredAt).toLocaleDateString()} {timeStr(row.occurredAt)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <SquishySkillBadge skill={row.skill} size={18} enabled={true} />
                   </td>
                   <td className="px-4 py-3 font-bold text-white font-sans">
-                    {entry.prospectName ?? "Unnamed"}
-                    <span className="block text-[11px] font-normal text-zinc-500 font-mono">{entry.prospectEmail}</span>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-zinc-400">
-                    {entry.prospectPhone ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 font-sans">
-                    <StatusPill tone={entry.status === "brief_delivered" ? "success" : entry.status === "brief_failed" ? "danger" : "neutral"}>
-                      {entry.status.replace("_", " ")}
-                    </StatusPill>
-                  </td>
-                  <td className="px-4 py-3 font-sans">
-                    {entry.pileOnData ? (
-                      <StatusPill tone="info">{entry.pileOnData.stage.replace("_", " ")} ({entry.pileOnData.touchesSent}/{entry.pileOnData.touchesTotal})</StatusPill>
-                    ) : pileOn.loading ? (
-                      <span className="text-zinc-600 font-mono text-[10px]">Loading...</span>
-                    ) : (
-                      <span className="text-zinc-600 font-mono">—</span>
+                    {row.prospectName ?? row.prospectEmail ?? <span className="text-zinc-600 font-normal font-mono">—</span>}
+                    {row.prospectName && row.prospectEmail && (
+                      <span className="block text-[11px] font-normal text-zinc-500 font-mono">{row.prospectEmail}</span>
                     )}
                   </td>
+                  <td className="px-4 py-3 font-sans text-zinc-300">
+                    {row.title}
+                    {row.detail && <span className="block text-[11px] text-zinc-500 font-mono">{row.detail}</span>}
+                  </td>
                   <td className="px-4 py-3 font-sans">
-                    {entry.winBackData ? (
-                      <StatusPill tone="warning">{entry.winBackData.status.replace("_", " ")}</StatusPill>
-                    ) : winBack.loading ? (
-                      <span className="text-zinc-600 font-mono text-[10px]">Loading...</span>
-                    ) : (
-                      <span className="text-zinc-600 font-mono">—</span>
-                    )}
+                    <StatusPill tone={row.tone} className="capitalize">{row.statusLabel}</StatusPill>
                   </td>
                 </tr>
               ))}
+              {unifiedListRows.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-zinc-500 font-sans text-xs">
+                    No calls or skill activity in this month{filterText ? " matching your search" : ""}.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -903,8 +1107,13 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
           {/* LENS 3: LEAK-MAP AUDIT SEVERITY PIPELINE */}
           {boardLens === "leak_map" && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-sans">
-              {(["high", "medium", "low", "none"] as const).map((severity) => {
-                const audits = (leakMap?.history ?? []).filter((h) => h.overallSeverity === severity);
+              {([
+                { severity: "high" as const, tone: "danger" as const },
+                { severity: "medium" as const, tone: "warning" as const },
+                { severity: "low" as const, tone: "info" as const },
+                { severity: "none" as const, tone: "neutral" as const },
+              ]).map(({ severity, tone }) => {
+                const audits = activityAll.data.filter((e) => e.skill === "leak-map" && e.tone === tone);
                 return (
                   <div key={severity} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 space-y-2 font-sans">
                     <div className="flex items-center justify-between border-b border-zinc-800 pb-2 px-1 font-sans">
@@ -914,12 +1123,12 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     <div className="space-y-2 max-h-[500px] overflow-y-auto font-sans">
                       {audits.map((item) => (
                         <div key={item.id} className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 space-y-1 font-sans">
-                          <span className="font-bold text-white text-xs block capitalize font-sans">{item.runType} Audit</span>
+                          <span className="font-bold text-white text-xs block capitalize font-sans">{item.title}</span>
                           <span className="block text-[10px] font-mono text-zinc-400">
-                            {new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                            {new Date(item.occurredAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                           </span>
-                          <StatusPill tone={toneFromSeverity(item.overallSeverity)} className="mt-1">
-                            {item.topIssueCount} issues · {item.alertsFiredCount} alerts
+                          <StatusPill tone={item.tone} className="mt-1">
+                            {item.detail}
                           </StatusPill>
                         </div>
                       ))}

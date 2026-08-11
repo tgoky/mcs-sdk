@@ -36,6 +36,7 @@ export interface WinBackPipelineItem {
   // touch in the asset map has a matching "sent" row, or once the
   // enrollment has exited (no more sends will go out).
   nextTouchAt: string | null;
+  freshRescheduleLink: string | null;
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -121,6 +122,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         touchesSent: sentIds.size,
         touchesTotal,
         nextTouchAt,
+        freshRescheduleLink: e.freshRescheduleLink,
       };
     });
 
