@@ -24,12 +24,13 @@ export const revalidate = 0;
  * effect on an already-onboarded engagement and could only cause
  * confusion, not a useful outcome.
  */
+
 export async function POST(
   req: Request,
-  { params }: { params: Promise<{ skillId: string }> }
+  { params }: { params: Promise<{ id: string; skillId: string }> }
 ) {
   try {
-    const { skillId } = await params;
+    const { id, skillId } = await params;
     const session = await getSession();
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -46,14 +47,6 @@ export async function POST(
     }
 
     const body = await req.json().catch(() => ({}));
-    const url = new URL(req.url);
-
-    // Resolve `id` (engagementId) from body or query searchParams
-    const id = (body?.id || body?.engagementId || url.searchParams.get("id") || url.searchParams.get("engagementId")) as string | undefined;
-
-    if (!id) {
-      return NextResponse.json({ error: "engagementId (or id) is required." }, { status: 400 });
-    }
 
     if (typeof body?.enabled !== "boolean") {
       return NextResponse.json({ error: "enabled must be a boolean." }, { status: 400 });
