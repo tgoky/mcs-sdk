@@ -12,8 +12,6 @@ export function ShellLayout({
   work,
   engagements,
   analytics,
-  strategy,
-  skills,
   meetings,
 }: {
   children: ReactNode;
@@ -22,8 +20,6 @@ export function ShellLayout({
   work: ReactNode;
   engagements: ReactNode;
   analytics: ReactNode;
-  strategy: ReactNode;
-  skills: ReactNode;
   meetings: ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -43,16 +39,13 @@ export function ShellLayout({
           <PrimaryRail displayName={displayName} userEmail={userEmail} />
         </div>
 
-        {/* Column 2: Secondary Collapsible Sidebar — its content swaps
-            entirely based on which primary-rail section is active */}
+        {/* Column 2: Secondary Collapsible Sidebar */}
         {sidebarOpen && (
           <div className="hidden md:flex">
             <SecondarySidebar
               work={work}
               engagements={engagements}
               analytics={analytics}
-              strategy={strategy}
-              skills={skills}
               meetings={meetings}
             />
           </div>
