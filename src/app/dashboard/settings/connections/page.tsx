@@ -18,11 +18,9 @@ interface PlatformGroup {
 
 function PlatformLogo({ provider }: { provider: string }) {
   const [hasError, setHasError] = useState(false);
-
   if (hasError) {
     return <Mail className="w-4 h-4 shrink-0 text-zinc-400" />;
   }
-
   return (
     <img
       src={`/logos/${provider}.png`}
@@ -122,7 +120,6 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
     }
     setTesting(provider);
     setTestResult((r) => ({ ...r, [provider]: undefined as any }));
-
     try {
       const res = await fetch("/api/credentials/test", {
         method: "POST",
@@ -139,7 +136,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
       }
     } catch {
       setTestResult((r) => ({ ...r, [provider]: { ok: false, message: "Network error. Try again." } }));
-    } finally {
+    } font-mono finally {
       setTesting(null);
     }
   }
@@ -154,10 +151,8 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
       setErrors((e) => ({ ...e, _eid: "Enter your account ID first." }));
       return;
     }
-
     setSaving(provider);
     setErrors((e) => ({ ...e, [provider]: "", _eid: "" }));
-
     try {
       const res = await fetch("/api/credentials", {
         method: "POST",
@@ -168,7 +163,6 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
           value,
         }),
       });
-
       if (!res.ok) {
         const data = await res.json();
         setErrors((e) => ({ ...e, [provider]: data.error ?? "Something went wrong." }));
@@ -188,7 +182,6 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
       className="rounded-xl overflow-hidden transition-colors duration-200"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
-      {/* Group header */}
       <button
         type="button"
         className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors cursor-pointer"
@@ -215,10 +208,8 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
           <ChevronDown size={16} style={{ color: "var(--text-muted)" }} />
         )}
       </button>
-
       {expanded && (
         <div style={{ borderTop: "1px solid var(--border)" }}>
-          {/* Account ID field */}
           <div
             className="px-5 py-4"
             style={{
@@ -247,12 +238,9 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
               Find this on your account setup page.
             </p>
           </div>
-
-          {/* Platforms */}
           {group.platforms.map((platform, i) => {
             const isLast = i === group.platforms.length - 1;
             const isSaved = saved.has(platform.provider);
-
             return (
               <div
                 key={platform.provider}
@@ -278,7 +266,6 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                     </div>
                   )}
                 </div>
-
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <input
@@ -314,7 +301,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                     disabled={saving === platform.provider}
                     className="px-4 py-2 text-xs rounded-lg font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono shadow-xs"
                   >
-                    {saving === platform.provider ? "Saving…" : "Save"}
+                    {saving === platform.provider ? "Saving..." : "Save"}
                   </button>
                   {TESTABLE_PROVIDERS.has(platform.provider) && (
                     <button
@@ -324,11 +311,10 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                       title="Confirms the saved key still works, without waiting for the daily check"
                       className="px-3 py-2 text-xs rounded-lg font-bold border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono shadow-xs"
                     >
-                      {testing === platform.provider ? "Testing…" : "Test"}
+                      {testing === platform.provider ? "Testing..." : "Test"}
                     </button>
                   )}
                 </div>
-
                 {testResult[platform.provider] && (
                   <div className="flex items-center gap-1.5 mt-2">
                     {testResult[platform.provider].ok ? (
@@ -344,7 +330,6 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                     </p>
                   </div>
                 )}
-
                 {errors[platform.provider] && (
                   <div className="flex items-center gap-1.5 mt-2">
                     <AlertCircle size={12} style={{ color: "var(--error)" }} />
@@ -353,7 +338,6 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                     </p>
                   </div>
                 )}
-
                 <p className="text-xs mt-2 font-mono opacity-80" style={{ color: "var(--text-muted)" }}>
                   {platform.howTo}
                 </p>
@@ -488,7 +472,6 @@ function SmtpCredentialCard() {
           <ChevronDown size={16} style={{ color: "var(--text-muted)" }} />
         )}
       </button>
-
       {expanded && (
         <div className="px-5 py-4 space-y-3" style={{ borderTop: "1px solid var(--border)" }}>
           <div>
@@ -502,7 +485,6 @@ function SmtpCredentialCard() {
               placeholder="e.g. eng_acme_corp_001"
             />
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
@@ -517,14 +499,12 @@ function SmtpCredentialCard() {
               <input className={inputClass} value={config.port} onChange={(e) => set("port", e.target.value)} placeholder="587" />
             </div>
           </div>
-
           <div>
             <label className="flex items-center gap-2 text-xs font-medium" style={{ color: "var(--text-primary)" }}>
               <input type="checkbox" checked={config.secure} onChange={(e) => set("secure", e.target.checked)} />
               Use implicit TLS (usually port 465). Leave unchecked for STARTTLS on 587.
             </label>
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
@@ -539,7 +519,6 @@ function SmtpCredentialCard() {
               <input className={inputClass} type="password" value={config.password} onChange={(e) => set("password", e.target.value)} placeholder="••••••••" />
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
@@ -554,7 +533,6 @@ function SmtpCredentialCard() {
               <input className={inputClass} value={config.fromName} onChange={(e) => set("fromName", e.target.value)} placeholder="Your Company" />
             </div>
           </div>
-
           <div className="flex gap-2 pt-1">
             <button
               type="button"
@@ -562,7 +540,7 @@ function SmtpCredentialCard() {
               disabled={saving}
               className="px-4 py-2 text-xs rounded-lg font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono shadow-xs"
             >
-              {saving ? "Saving…" : "Save"}
+              {saving ? "Saving..." : "Save"}
             </button>
             <button
               type="button"
@@ -571,7 +549,7 @@ function SmtpCredentialCard() {
               title="Confirms the saved SMTP credentials actually connect, without waiting for the daily check"
               className="px-3 py-2 text-xs rounded-lg font-bold border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer font-mono shadow-xs"
             >
-              {testing ? "Testing…" : "Test"}
+              {testing ? "Testing..." : "Test"}
             </button>
             {saved && (
               <div className="flex items-center gap-1 self-center ml-1">
@@ -580,7 +558,6 @@ function SmtpCredentialCard() {
               </div>
             )}
           </div>
-
           {testResult && (
             <div className="flex items-center gap-1.5">
               {testResult.ok ? (
@@ -593,14 +570,12 @@ function SmtpCredentialCard() {
               </p>
             </div>
           )}
-
           {error && (
             <div className="flex items-center gap-1.5">
               <AlertCircle size={12} style={{ color: "var(--error)" }} />
               <p className="text-xs" style={{ color: "var(--error)" }}>{error}</p>
             </div>
           )}
-
           <p className="text-xs mt-2 font-mono opacity-80" style={{ color: "var(--text-muted)" }}>
             Only runs the Win-Back recovery email cadence today — SMTP has no Pile-On pre-call content yet.
           </p>
@@ -610,7 +585,7 @@ function SmtpCredentialCard() {
   );
 }
 
-export function CredentialsPanel() {
+export default function ConnectionsSettingsPage() {
   return (
     <div className="w-full space-y-6 transition-colors duration-200">
       <div>
@@ -625,7 +600,6 @@ export function CredentialsPanel() {
           before storage — nobody can read them, including Mudd staff.
         </p>
       </div>
-
       <div
         className="flex items-start gap-3 p-4 rounded-xl"
         style={{
@@ -647,14 +621,12 @@ export function CredentialsPanel() {
           never store or log them in plain text.
         </p>
       </div>
-
       <div className="space-y-3">
         {PLATFORM_GROUPS.map((group) => (
           <PlatformSection key={group.group} group={group} />
         ))}
         <SmtpCredentialCard />
       </div>
-
       {/* Slack */}
       <div
         className="rounded-xl p-5 space-y-2 transition-colors duration-200"
