@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
-import { Link2, Lock, Globe } from "lucide-react"; // Import high-fidelity vector tokens
+import { Link2, Lock, Globe } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const ACTIVE_STATUSES = new Set(["active", "trialing", "canceling", "admin"]);
@@ -18,7 +18,7 @@ export default async function LandingIndexPage({
   return (
     <div className="relative min-h-screen bg-background text-foreground font-sans overflow-hidden selection:bg-zinc-200 dark:selection:bg-zinc-800 transition-colors duration-200">
              
-      {/* Self-Contained High-Grade Telemetry CSS Keyframes & Pure-CSS Interactive State Routing */}
+      {/* Self-Contained Panel Keyframes & Pure-CSS Interactive State Routing */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes laserSweep {
           0% { top: 0%; opacity: 0; }
@@ -47,7 +47,7 @@ export default async function LandingIndexPage({
           0%, 100% { transform: scale(1); opacity: 0.3; }
           50% { transform: scale(1.05); opacity: 0.6; }
         }
-        /* Telemetry Panel Layout Architecture Rules */
+        /* Panel Layout Architecture Rules */
         .viz-pindown, .viz-pileon, .viz-winback, .viz-leakmap, .viz-precall { display: none !important; }
         /* Pure CSS Native State Gating - Shifts tabs instantly on navigation item hover */
         body:has(a[href*="pin-down"]:hover) .default-login-content { display: none !important; }
@@ -58,8 +58,8 @@ export default async function LandingIndexPage({
         body:has(a[href*="win-back"]:hover) .viz-winback { display: flex !important; }
         body:has(a[href*="leak-map"]:hover) .default-login-content { display: none !important; }
         body:has(a[href*="leak-map"]:hover) .viz-leakmap { display: flex !important; }
-        body:has(a[href*="pre-call-reads"]:hover) .default-login-content { display: none !important; }
-        body:has(a[href*="pre-call-reads"]:hover) .viz-precall { display: flex !important; }
+        body:has(a[href*="pre-call-read"]:hover) .default-login-content { display: none !important; }
+        body:has(a[href*="pre-call-read"]:hover) .viz-precall { display: flex !important; }
       `}} />
 
       {/* ---------------------------------------------------------------------- */}
@@ -71,13 +71,13 @@ export default async function LandingIndexPage({
           SHOWTIME // 1.34
         </div>
         
-        {/* Items 2-6: Individual Flat direct-sibling links with massive spacing between each */}
+        {/* Items 2-6: Individual Flat direct-sibling links */}
         <div className="flex items-center gap-6">
-          <a href="/dashboard?skill=pin-down" className="hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors">[ pin down ]</a>
-          <a href="/dashboard?skill=pile-on" className="hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors">[ pile on ]</a>
-          <a href="/dashboard?skill=win-back" className="hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors">[ win back ]</a>
-          <a href="/dashboard?skill=leak-map" className="hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors">[ leak map ]</a>
-          <a href="/dashboard?skill=pre-call-reads" className="hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors">[ pre-call reads ]</a>
+          <a href="/dashboard?skill=pin-down" className="hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors">show rate setup</a>
+          <a href="/dashboard?skill=pile-on" className="hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors">pre-call sequence</a>
+          <a href="/dashboard?skill=win-back" className="hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors">booking recovery</a>
+          <a href="/dashboard?skill=leak-map" className="hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors">funnel audit</a>
+          <a href="/dashboard?skill=pre-call-read" className="hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors">call brief</a>
         </div>
         
         {/* Item 7: System Status Balance & Theme Toggle */}
@@ -91,11 +91,11 @@ export default async function LandingIndexPage({
 
       {/* Mobile-only fallback wrap to maintain layout structural sanity on small viewports */}
       <nav className="md:hidden relative z-30 w-full flex flex-wrap justify-center gap-x-4 gap-y-2 border-b border-border px-6 py-4 text-[10px] font-mono uppercase tracking-widest text-zinc-500 bg-background/20">
-        <a href="/dashboard?skill=pin-down">[ pin down ]</a>
-        <a href="/dashboard?skill=pile-on">[ pile on ]</a>
-        <a href="/dashboard?skill=win-back">[ win back ]</a>
-        <a href="/dashboard?skill=leak-map">[ leak map ]</a>
-        <a href="/dashboard?skill=pre-call-reads">[ pre-call reads ]</a>
+        <a href="/dashboard?skill=pin-down">show rate setup</a>
+        <a href="/dashboard?skill=pile-on">pre-call sequence</a>
+        <a href="/dashboard?skill=win-back">booking recovery</a>
+        <a href="/dashboard?skill=leak-map">funnel audit</a>
+        <a href="/dashboard?skill=pre-call-read">call brief</a>
       </nav>
 
       {/* ---------------------------------------------------------------------- */}
@@ -170,7 +170,7 @@ export default async function LandingIndexPage({
                 Stop losing high-ticket revenue to dropped calendar handoffs, fragmented lead tracking, and unverified client data. Showtime links directly into your existing pipelines to streamline backend logic from a single screen.
               </p>
               <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-widest pt-2">
-                System Capabilities: Core Onboarding Mesh &bull; Automated Follow-Ups &bull; Pre-Call AI Reads &bull; Funnel Leak Maps.
+                System Capabilities: Show Rate Setup &bull; Pre-Call Sequences &bull; Call Briefs &bull; Booking Recovery &bull; Funnel Audits.
               </p>
             </div>
           </div>
@@ -191,14 +191,14 @@ export default async function LandingIndexPage({
             <div className="relative border border-zinc-200 dark:border-zinc-800 bg-card/80 backdrop-blur-md p-8 rounded-none shadow-[20px_20px_0px_0px_rgba(200,200,200,0.3)] dark:shadow-[20px_20px_0px_0px_rgba(9,9,11,0.6)] min-h-[352px] flex flex-col justify-between z-10">
               
               {/* ────────────────────────────────────────────────────────────────────── */}
-              {/* SKILL HOVER INTERACTIVE SUITE: Pure CSS Telemetry Graphics Mapping */}
+              {/* SKILL HOVER INTERACTIVE SUITE: Pure CSS Graphics Mapping */}
               {/* ────────────────────────────────────────────────────────────────────── */}
 
-              {/* View 1: [ pin down ] */}
+              {/* View 1: show rate setup */}
               <div className="viz-pindown flex-1 flex flex-col justify-between h-full font-mono text-[9px]">
                 <div className="flex items-center justify-between border-b border-border pb-2.5 text-zinc-600 dark:text-zinc-400 select-none">
-                  <span className="flex items-center gap-1.5 uppercase font-bold">LIVE_TELEMETRY // PIN_DOWN</span>
-                  <span>[ACTIVE]</span>
+                  <span className="flex items-center gap-1.5 uppercase font-bold">SHOW_RATE_SETUP</span>
+                  <span>ACTIVE</span>
                 </div>
                 <div className="my-3.5 h-32 border border-border bg-zinc-50/50 dark:bg-zinc-950/40 flex items-center justify-around px-4 text-zinc-600 dark:text-zinc-400 text-center select-none">
                   <div className="flex flex-col items-center">
@@ -232,7 +232,7 @@ export default async function LandingIndexPage({
                 </div>
                 <div className="p-3 bg-zinc-50 dark:bg-zinc-950 border border-border text-zinc-500 dark:text-zinc-400 h-[56px] overflow-hidden relative rounded-sm leading-normal select-text">
                   <div className="space-y-1 animate-[logStreamScroll_7s_infinite_linear]">
-                    <div>&gt; SYSTEM // INITIALIZING PIN_DOWN ONBOARDING RUN</div>
+                    <div>&gt; SYSTEM // INITIALIZING SHOW RATE SETUP RUN</div>
                     <div>&gt; RESOLVING CANONICAL RESOURCE PROVIDER CONTEXT ENDPOINT</div>
                     <div>&gt; CREATING ENCRYPTED CONFIGURATION DATA RECORD LOCKS</div>
                     <div>&gt; CRYPTO // ADVANCED SYMMETRIC SEED COMPILATION FINALIZED</div>
@@ -240,11 +240,11 @@ export default async function LandingIndexPage({
                 </div>
               </div>
 
-              {/* View 2: [ pile on ] */}
+              {/* View 2: pre-call sequence */}
               <div className="viz-pileon flex-1 flex flex-col justify-between h-full font-mono text-[9px]">
                 <div className="flex items-center justify-between border-b border-border pb-2.5 text-zinc-600 dark:text-zinc-400 select-none">
-                  <span className="flex items-center gap-1.5 uppercase font-bold">LIVE_TELEMETRY // PILE_ON</span>
-                  <span>[ACTIVE]</span>
+                  <span className="flex items-center gap-1.5 uppercase font-bold">PRE_CALL_SEQUENCE</span>
+                  <span>ACTIVE</span>
                 </div>
                 <div className="my-3.5 h-32 border border-border bg-zinc-50/50 dark:bg-zinc-950/40 flex flex-col justify-center px-6 space-y-2.5 text-zinc-400 dark:text-zinc-500 select-none">
                   <div className="space-y-1">
@@ -264,11 +264,11 @@ export default async function LandingIndexPage({
                 </div>
               </div>
 
-              {/* View 3: [ win back ] */}
+              {/* View 3: booking recovery */}
               <div className="viz-winback flex-1 flex flex-col justify-between h-full font-mono text-[9px]">
                 <div className="flex items-center justify-between border-b border-border pb-2.5 text-zinc-600 dark:text-zinc-400 select-none">
-                  <span className="flex items-center gap-1.5 uppercase font-bold">LIVE_TELEMETRY // WIN_BACK</span>
-                  <span>[ACTIVE]</span>
+                  <span className="flex items-center gap-1.5 uppercase font-bold">BOOKING_RECOVERY</span>
+                  <span>ACTIVE</span>
                 </div>
                 <div className="my-3.5 h-32 border border-border bg-zinc-50/50 dark:bg-zinc-950/40 flex items-center justify-center gap-5 text-center select-none">
                   <div className="border border-border p-2 bg-zinc-100 dark:bg-zinc-900/40"><div className="text-amber-600 dark:text-amber-500 font-bold uppercase tracking-wider text-[8px]">No-Show</div><span className="text-zinc-400 dark:text-zinc-500">TRIGGER</span></div>
@@ -283,11 +283,11 @@ export default async function LandingIndexPage({
                 </div>
               </div>
 
-              {/* View 4: [ leak map ] */}
+              {/* View 4: funnel audit */}
               <div className="viz-leakmap flex-1 flex flex-col justify-between h-full font-mono text-[9px]">
                 <div className="flex items-center justify-between border-b border-border pb-2.5 text-zinc-600 dark:text-zinc-400 select-none">
-                  <span className="flex items-center gap-1.5 uppercase font-bold">LIVE_TELEMETRY // LEAK_MAP</span>
-                  <span>[ACTIVE]</span>
+                  <span className="flex items-center gap-1.5 uppercase font-bold">FUNNEL_AUDIT</span>
+                  <span>ACTIVE</span>
                 </div>
                 <div className="my-3.5 h-32 border border-border bg-zinc-50/50 dark:bg-zinc-950/40 grid grid-cols-3 gap-2 p-3 text-center items-center select-none">
                   <div className="border border-border py-2"><span className="text-zinc-500 dark:text-zinc-600 block text-[8px]">FUNNEL_DATA_PULL</span><span className="text-zinc-700 dark:text-zinc-300">n=38</span></div>
@@ -302,11 +302,11 @@ export default async function LandingIndexPage({
                 </div>
               </div>
 
-              {/* View 5: [ pre-call reads ] */}
+              {/* View 5: call brief */}
               <div className="viz-precall flex-1 flex flex-col justify-between h-full font-mono text-[9px]">
                 <div className="flex items-center justify-between border-b border-border pb-2.5 text-zinc-600 dark:text-zinc-400 select-none">
-                  <span className="flex items-center gap-1.5 uppercase font-bold">LIVE_TELEMETRY // PRE_CALL_READS</span>
-                  <span>[ACTIVE]</span>
+                  <span className="flex items-center gap-1.5 uppercase font-bold">CALL_BRIEF</span>
+                  <span>ACTIVE</span>
                 </div>
                 <div className="my-3.5 h-32 border border-border bg-zinc-50/50 dark:bg-zinc-950/40 flex flex-col justify-between p-3 leading-relaxed text-zinc-400 dark:text-zinc-500 select-none">
                   <div className="flex justify-between text-zinc-800 dark:text-zinc-400"><span>IDENTITY_MATCH_ACCURACY:</span><span className="text-sky-600 dark:text-sky-400 font-bold">99 / 100</span></div>
@@ -325,18 +325,18 @@ export default async function LandingIndexPage({
                 <div className="space-y-6">
                   <div className="flex items-center justify-between border-b border-border pb-4 font-mono text-[10px] tracking-widest text-zinc-400 dark:text-zinc-500 uppercase">
                     <span>SHOW TIME // AUTH_MODE</span>
-                    <span>[01]</span>
+                    <span>01</span>
                   </div>
                   <div className="space-y-2">
                     <label className="block font-mono text-xs uppercase tracking-wider text-zinc-700 dark:text-zinc-400">
                       Dashboard Access
                     </label>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-normal">
-                      Initialize pile-on, pin-downs, pre-call reads, win backs & leak-maps.
+                      Initialize show rate setup, pre-call sequences, call briefs, booking recovery &amp; funnel audits.
                     </p>
                   </div>
                   {membershipRequired && (
-        <div className="rounded-sm border border-amber-500/20 bg-amber-500/5 p-3.5 text-left text-xs text-amber-600 dark:text-amber-400 font-mono space-y-1">         
+                    <div className="rounded-sm border border-amber-500/20 bg-amber-500/5 p-3.5 text-left text-xs text-amber-600 dark:text-amber-400 font-mono space-y-1">         
                       <div className="font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-500">
                         ! ACCESS_DENIED
                       </div>
@@ -349,7 +349,7 @@ export default async function LandingIndexPage({
                   )}
                 </div>
                 
-                {/* BACKGROUND DIAGNOSTIC TELEMETRY LOGGER: Active during static standby periods */}
+                {/* BACKGROUND DIAGNOSTIC LOGGER: Active during static standby periods */}
                 <div className="my-2 p-2.5 bg-zinc-50 dark:bg-zinc-950 border border-border text-[9px] font-mono text-zinc-400 dark:text-zinc-600 h-[40px] overflow-hidden relative rounded-sm leading-normal select-none">
                   <div className="space-y-1 animate-[logStreamScroll_9s_infinite_linear]">
                     <div>&gt; SYSTEM_DAEMON // CENTRAL AUTOMATION NODE ACTIVE</div>
@@ -362,7 +362,7 @@ export default async function LandingIndexPage({
                   {session.whopUserId && hasAccess ? (
                     <a href="/home" className="block w-full">
                       <Button className="w-full h-11 text-xs font-mono uppercase tracking-widest bg-ink text-ink-foreground rounded-none hover:bg-ink-hover transition-all cursor-pointer">
-                        [ Enter Workspace ]
+                        Enter Workspace
                       </Button>
                     </a>
                   ) : session.whopUserId ? (
