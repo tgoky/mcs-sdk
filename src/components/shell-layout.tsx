@@ -4,6 +4,7 @@ import { useState, ReactNode } from "react";
 import { TopNav } from "@/components/top-nav";
 import { PrimaryRail } from "@/components/primary-rail";
 import { SecondarySidebar } from "@/components/secondary-sidebar";
+import { SettingsSidebar } from "@/app/dashboard/settings/settings-sidebar";
 
 export function ShellLayout({
   children,
@@ -13,6 +14,7 @@ export function ShellLayout({
   engagements,
   analytics,
   meetings,
+  settings,
 }: {
   children: ReactNode;
   displayName: string;
@@ -21,6 +23,7 @@ export function ShellLayout({
   engagements: ReactNode;
   analytics: ReactNode;
   meetings: ReactNode;
+  settings?: ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -48,6 +51,7 @@ export function ShellLayout({
               engagements={engagements}
               analytics={analytics}
               meetings={meetings}
+              settings={settings ?? <SettingsSidebar />}
             />
           </div>
         )}
