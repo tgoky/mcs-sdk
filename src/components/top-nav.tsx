@@ -30,7 +30,7 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
         <button
           type="button"
           onClick={onToggleSidebar}
-          className="hidden md:flex p-1.5 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-sm transition-colors cursor-pointer"
+          className="hidden md:flex p-1.5 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
           title="Toggle Navigation"
         >
           <Menu className="w-4 h-4" />
@@ -41,7 +41,7 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
           <button
             type="button"
             onClick={() => setCreateOpen((prev) => !prev)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-sm transition-all shadow-xs active:scale-95 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-full transition-all shadow-xs active:scale-95 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Create</span>
