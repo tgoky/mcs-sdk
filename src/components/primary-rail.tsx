@@ -10,14 +10,8 @@ import {
   BookOpen,
   CalendarClock,
   LogOut,
-  User,
   Settings,
   Home,
-  Check,
-  Calendar,
-  Sliders,
-  Plus,
-  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -34,7 +28,6 @@ const RAIL_SECTIONS: Array<{ href: string; title: string; icon: LucideIcon }> = 
   { href: "/dashboard", title: "Work", icon: LayoutGrid },
   { href: "/dashboard/engagements", title: "Engagements", icon: Building2 },
   { href: "/dashboard/analytics", title: "Analytics", icon: BarChart3 },
-  // { href: "/dashboard/strategy", title: "Strategy", icon: Target },
   { href: "/dashboard/settings", title: "Settings", icon: Settings },
   { href: "/dashboard/library", title: "Library", icon: BookOpen },
   { href: "/dashboard/meetings", title: "Meetings", icon: CalendarClock },
@@ -170,150 +163,49 @@ export function PrimaryRail({ displayName, userEmail }: PrimaryRailProps) {
           {initials}
         </button>
 
-        {/* Profile Popover */}
+        {/* Cleaned-Up Profile Popover (Obs 2B) */}
         {popoverOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setPopoverOpen(false)} />
 
-            <div className="absolute left-full bottom-0 ml-2 z-50 w-[640px] sm:w-[680px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
-              <div className="flex min-h-[360px] divide-x divide-zinc-200 dark:divide-zinc-800">
-                {/* LEFT PANE (Black background in Dark Theme) */}
-                <div className="w-72 sm:w-80 p-4 bg-zinc-50 dark:bg-black flex flex-col justify-between shrink-0">
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      Account
-                    </h3>
-                    
-                    <div className="flex items-center gap-2.5 py-1 px-1 min-w-0">
-                      <div className="w-6 h-6 rounded-full bg-teal-600 dark:bg-teal-500 text-white font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
-                        {initials}
-                      </div>
-                      <span
-                        className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate min-w-0"
-                        title={userEmail || displayName}
-                      >
-                        {userEmail || displayName}
-                      </span>
-                      <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0 ml-1" />
-                      <Check className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 shrink-0 ml-auto" />
-                    </div>
-                  </div>
+            <div className="absolute left-full bottom-0 ml-2 z-50 w-56 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xl rounded-lg p-1.5 text-xs font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+              {/* Identity Header (Non-clickable) */}
+              <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-900 mb-1">
+                <p className="text-[10px] font-mono text-zinc-400 uppercase">Signed in as</p>
+                <p className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                  {userEmail || displayName}
+                </p>
+              </div>
 
-                  <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
-                    <div className="flex items-center justify-between px-1">
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Theme</span>
-                      <ThemeToggle />
-                    </div>
+              <div className="space-y-0.5">
+                {/* Single Settings Destination */}
+                <Link
+                  href="/dashboard/settings"
+                  onClick={() => setPopoverOpen(false)}
+                  className="flex items-center gap-2 rounded-md px-3 py-1.5 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
+                >
+                  <Settings className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
+                  <span>Settings</span>
+                </Link>
 
-                    <form action="/api/auth/logout" method="POST">
-                      <button
-                        type="submit"
-                        className="flex items-center gap-2.5 px-1 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer bg-transparent border-none"
-                      >
-                        <LogOut className="w-4 h-4 shrink-0" />
-                        <span>Log out</span>
-                      </button>
-                    </form>
-                  </div>
+                {/* Theme Toggle Row */}
+                <div className="flex items-center justify-between rounded-md px-3 py-1.5 text-zinc-700 dark:text-zinc-300">
+                  <span className="text-xs">Theme</span>
+                  <ThemeToggle />
                 </div>
+              </div>
 
-                {/* RIGHT PANE */}
-                <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-full bg-teal-600 dark:bg-teal-500 text-white font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-sm">
-                        {initials}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                          {displayName}
-                        </p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-                          {userEmail}
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md transition-colors"
-                    >
-                      <Calendar className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                      <span>Set out of office</span>
-                    </button>
-
-                    <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2" />
-
-                    <div className="space-y-1">
-                      <Link
-                        href="/dashboard/settings"
-                        onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
-                      >
-                        <Sliders className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>Admin console</span>
-                      </Link>
-
-                      <Link
-                        href="/dashboard/engagements/new"
-                        onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
-                      >
-                        <Plus className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>New workspace</span>
-                      </Link>
-
-                      <Link
-                        href="/dashboard/settings"
-                        onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
-                      >
-                        <UserPlus className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>Invite to Showtime</span>
-                      </Link>
-                    </div>
-
-                    {/* Upgrade button without icon */}
-                    <button
-                      type="button"
-                      className="w-full mt-1 flex items-center justify-center px-3 py-2 text-xs font-semibold bg-teal-500/10 hover:bg-teal-500/20 dark:bg-teal-500/20 dark:hover:bg-teal-500/30 text-teal-800 dark:text-teal-200 border border-teal-500/30 dark:border-teal-500/40 rounded-md transition-colors"
-                    >
-                      <span>Upgrade account</span>
-                    </button>
-
-                    <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2" />
-
-                    <div className="space-y-1">
-                      <Link
-                        href="/dashboard/settings"
-                        onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
-                      >
-                        <User className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>Profile</span>
-                      </Link>
-
-                      <Link
-                        href="/dashboard/settings"
-                        onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
-                      >
-                        <Settings className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>Settings</span>
-                      </Link>
-
-                      <Link
-                        href="/api/auth/login"
-                        onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
-                      >
-                        <Plus className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>Add another account</span>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-
+              {/* Log Out */}
+              <div className="border-t border-zinc-100 dark:border-zinc-900 mt-1 pt-1">
+                <form action="/api/auth/logout" method="POST">
+                  <button
+                    type="submit"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer bg-transparent border-none text-xs font-medium"
+                  >
+                    <LogOut className="w-3.5 h-3.5 shrink-0" />
+                    <span>Log out</span>
+                  </button>
+                </form>
               </div>
             </div>
           </>
