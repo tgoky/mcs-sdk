@@ -7,8 +7,6 @@ import { BookingToast } from "./booking-toast";
 import { WorkSidebar, WorkSidebarSkeleton } from "./work-sidebar";
 import { EngagementsSidebar, EngagementsSidebarSkeleton } from "./engagements-sidebar";
 import { AnalyticsSidebar } from "./analytics-sidebar";
-import { StrategySidebar } from "./strategy-sidebar";
-import { SkillsSidebar, SkillsSidebarSkeleton } from "./skills-sidebar";
 import { MeetingsSidebar } from "./meetings-sidebar";
 
 export const dynamic = "force-dynamic";
@@ -38,10 +36,14 @@ export default async function DashboardLayout({
       {/* 3-Region Asana Layout Shell. Every section's sidebar is fetched
           here and handed down as its own Suspense-wrapped slot — only the
           one SecondarySidebar actually renders for the current route (see
-          its own file comment), but keeping all six queries independent
+          its own file comment), but keeping all four queries independent
           means switching sections never waits on a different section's
-          DB round trip. Analytics/Strategy/Meetings have no DB-backed
-          counts today so they don't need a Suspense/skeleton pair. */}
+          DB round trip. Analytics has no DB-backed counts today so it
+          doesn't need a Suspense/skeleton pair. Strategy and Skills used
+          to be here too; Strategy's primary-rail entry was already
+          commented out (dead), and Skills' SKILL STATUS panel was
+          deleted per the 2026-08-07 handoff's Observation 8 — see
+          secondary-sidebar.tsx's file comment. */}
       <ShellLayout
         displayName={displayName}
         userEmail={userEmail}
@@ -56,12 +58,6 @@ export default async function DashboardLayout({
           </Suspense>
         }
         analytics={<AnalyticsSidebar />}
-        strategy={<StrategySidebar />}
-        skills={
-          <Suspense fallback={<SkillsSidebarSkeleton />}>
-            <SkillsSidebar whopUserId={whopUserId} />
-          </Suspense>
-        }
         meetings={<MeetingsSidebar />}
       >
         {children}

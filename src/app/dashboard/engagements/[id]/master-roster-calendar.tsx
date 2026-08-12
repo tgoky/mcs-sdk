@@ -20,6 +20,7 @@ import {
   Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { skillName } from "@/lib/copy";
 import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import { getDaysInMonthGrid, dateKey, timeStr } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
@@ -35,10 +36,14 @@ const TONE_TO_SEVERITY_LABEL: Record<string, string> = {
   neutral: "Clean",
 };
 
+// Finding A fix (2026-08-07 handoff) — this was a 4th independently
+// hardcoded copy of skill display names (beyond the 3 the handoff named),
+// found while sweeping for the same drift pattern. Derived from
+// skillName() (copy.ts) now.
 const ACTIVITY_SKILL_LABEL: Record<ActivitySkill, string> = {
-  "pile-on": "Pile-On",
-  "win-back": "Win-Back",
-  "leak-map": "Leak-Map",
+  "pile-on": skillName("pile-on"),
+  "win-back": skillName("win-back"),
+  "leak-map": skillName("leak-map"),
 };
 
 type ViewMode = "month" | "day" | "list" | "board";

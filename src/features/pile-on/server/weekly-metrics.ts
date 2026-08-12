@@ -5,6 +5,16 @@ import { KlaviyoClient } from "@/lib/platforms/email";
 import { resolveCredential } from "@/lib/credentials";
 import { notifyUser } from "@/lib/notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
+import { matchesWeeklyLocalHour } from "@/features/leak-map/server/schedule-matcher";
+
+// Verified-defect fix (2026-08-08 handoff, defect #2). Was driven by a
+// literal "TZ=UTC 0 8 * * 1" cron expression on weeklyMetricsCron; that
+// cron now runs hourly (see crons.ts) and this engagement-level check
+// decides whether "now" is this engagement's own Monday 08:00, same
+// pattern as leakMapScheduleCron. Defaults to UTC when an engagement
+// hasn't set stack.timezone — identical behavior to today until one does.
+const WEEKLY_READOUT_LOCAL_DAY = 1; // Monday
+const WEEKLY_READOUT_LOCAL_HOUR = 8;
 
 export interface WeeklyMetricsResult {
   engagementsProcessed: number;
@@ -50,15 +60,17 @@ export async function findEngagementsForWeeklyReadout(): Promise<string[]> {
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
   const allEngagements = await db
-    .select({ engagementId: engagements.engagementId, pausedAt: engagements.pausedAt })
+    .select({ engagementId: engagements.engagementId, pausedAt: engagements.pausedAt, stack: engagements.stack })
     .from(engagements)
     // isEngagementPaused() below only covers pausedAt, not deletedAt — an
     // offboarded engagement shouldn't keep getting a weekly readout sent.
     .where(isNull(engagements.deletedAt));
   const eligible: string[] = [];
 
-  for (const { engagementId, pausedAt } of allEngagements) {
+  for (const { engagementId, pausedAt, stack } of allEngagements) {
     if (isEngagementPaused({ pausedAt })) continue;
+    const engagementStack = stack as EngagementStack | null;
+    if (!matchesWeeklyLocalHour(engagementStack?.timezone, WEEKLY_READOUT_LOCAL_DAY, WEEKLY_READOUT_LOCAL_HOUR, now)) continue;
 
     const [thisWeekBookings, priorWeekBookings] = await Promise.all([
       db

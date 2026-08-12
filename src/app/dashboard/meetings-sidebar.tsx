@@ -17,7 +17,7 @@ export function MeetingsSidebar() {
         href="/dashboard/meetings"
         className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold bg-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-900 transition-all"
       >
-        <CalendarClock className="w-4 h-4 text-gold dark:text-gold-hover" />
+        <CalendarClock className="w-4 h-4 text-ink dark:text-ink-hover" />
         <span>Upcoming</span>
       </Link>
 

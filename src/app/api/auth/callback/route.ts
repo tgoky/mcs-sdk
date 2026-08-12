@@ -7,21 +7,7 @@ import { checkActiveMembership, isAdminEmail } from "@/lib/whop-access";
 import { db } from "@/lib/db";
 import { users } from "@/models/schema";
 import { decryptOAuthState } from "@/lib/oauth-state";
-
-function buildRedirectHtml(destination: string): string {
-  return `<!DOCTYPE html>
-<html>
-  <head>
-    <meta http-equiv="refresh" content="0;url=${destination}" />
-  </head>
-  <body style="background:#1f1a2e;color:#fff;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
-    <p>Authenticated — redirecting...</p>
-    <script>
-      window.location.href = ${JSON.stringify(destination)};
-    </script>
-  </body>
-</html>`;
-}
+import { buildOAuthRedirectHtml } from "@/lib/oauth-redirect-html";
 
 export async function GET(request: Request) {
   try {
@@ -96,7 +82,7 @@ export async function GET(request: Request) {
       : "/?membership=required";
 
     // 6. Create the NextResponse object with the redirect HTML payload
-    const response = new NextResponse(buildRedirectHtml(destination), {
+    const response = new NextResponse(buildOAuthRedirectHtml(destination, "Authenticated — redirecting..."), {
       status: 200,
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });

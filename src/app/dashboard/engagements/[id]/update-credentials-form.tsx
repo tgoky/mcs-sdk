@@ -134,7 +134,7 @@ function CredentialRow({
             onClick={() => setMode("paste")}
             className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
               mode === "paste"
-                ? "border-gold/40 bg-gold/10 text-gold-hover dark:text-gold"
+                ? "border-ink/40 bg-ink/10 text-ink-hover dark:text-ink"
                 : "border-transparent text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400"
             }`}
           >
@@ -144,7 +144,7 @@ function CredentialRow({
             onClick={() => setMode("reuse")}
             className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
               mode === "reuse"
-                ? "border-gold/40 bg-gold/10 text-gold-hover dark:text-gold"
+                ? "border-ink/40 bg-ink/10 text-ink-hover dark:text-ink"
                 : "border-transparent text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400"
             }`}
           >
@@ -189,7 +189,7 @@ function CredentialRow({
               className="w-full text-[11px] font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
             />
           )}
-          {saved && <span className="text-[11px] font-mono text-gold-hover dark:text-gold">Saved</span>}
+          {saved && <span className="text-[11px] font-mono text-ink-hover dark:text-ink">Saved</span>}
           {error && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">{error}</span>}
         </div>
       ) : (
@@ -223,7 +223,7 @@ function CredentialRow({
             </div>
           )}
           {linked && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-mono text-gold-hover dark:text-gold">
+            <span className="inline-flex items-center gap-1 text-[11px] font-mono text-ink-hover dark:text-ink">
               <Check className="w-3 h-3" /> Linked — this client now uses that saved credential.
             </span>
           )}

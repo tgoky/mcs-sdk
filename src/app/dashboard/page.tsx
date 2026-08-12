@@ -104,7 +104,7 @@ export default async function DashboardPage() {
       
       {/* --- HYPER-MICRO TIGHT DOT GRID (0.5px / 6px grid) --- */}
       <div 
-        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_0.5px,transparent_0.5px)] dark:bg-[radial-gradient(#3f3f46_0.5px,transparent_0.5px)] [background-size:6px_6px] [mask-image:radial-gradient(ellipse_75%_75%_at_50%_30%,#000_50%,transparent_100%)] opacity-70" 
+        className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" 
         aria-hidden="true"
       />
 

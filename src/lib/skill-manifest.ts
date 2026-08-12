@@ -43,10 +43,25 @@ export interface SkillManifestEntry {
  * pulling onboarding-service.ts, audit-engine.ts, etc. — and everything
  * those import (db drivers, Node built-ins) — into the browser bundle.
  */
+// Display-layer rename (2026-08-07 handoff, "The 5 skill renames, locked").
+// This is the ONLY place these 5 display names are authored — copy.ts's
+// SKILL_INFO, queue-panel.tsx, master-roster-calendar.tsx, and
+// inbox/page.tsx all derive their labels from this file now instead of
+// keeping their own copies (that's what Finding A's naming-source-drift
+// bug was: three-plus components independently hardcoding the same name
+// and drifting out of sync). Internal ids (SkillId/SKILL_IDS below),
+// database skillRuns.skillName values, route segments, Inngest event
+// names, and schema JSON keys are all deliberately untouched — this is a
+// display rename only, not a data migration. The 7 LLM system prompts
+// that separately name these skills (brief-service.ts, cadence-builder.ts,
+// both hybrid-personalizer.ts files, audit-engine.ts) and
+// export-to-skill-pack.ts (writes flow names into the buyer's own Klaviyo/
+// GHL account) are excluded from this pass on purpose — those need their
+// own testing pass, not a find-and-replace.
 export const SKILL_MANIFEST: Record<SkillId, SkillManifestEntry> = {
   "pin-down": {
     id: "pin-down",
-    name: "Pin-Down",
+    name: "Show Rate Setup",
     description:
       "Onboards a new client: learns their brand voice, drafts ad creative briefs, video scripts, and a confirmation page, and wires up their booking webhook.",
     runOnSetup: true,
@@ -54,28 +69,28 @@ export const SKILL_MANIFEST: Record<SkillId, SkillManifestEntry> = {
   },
   "pile-on": {
     id: "pile-on",
-    name: "Pile-On",
+    name: "Pre-Call Sequence",
     description: "Enrolls booked prospects into pre-call and win-back sequences as bookings come in via webhook.",
     runOnSetup: false,
     hasHingesPanel: false,
   },
   "pre-call-read": {
     id: "pre-call-read",
-    name: "Pre-Call Read",
+    name: "Call Brief",
     description: "Nightly briefing cycle: researches tomorrow's booked calls and delivers a brief before each one.",
     runOnSetup: false,
     hasHingesPanel: true,
   },
   "win-back": {
     id: "win-back",
-    name: "Win-Back",
+    name: "Booking Recovery",
     description: "Generates and manages a re-engagement cadence for prospects who went cold.",
     runOnSetup: false,
     hasHingesPanel: true,
   },
   "leak-map": {
     id: "leak-map",
-    name: "Leak-Map",
+    name: "Funnel Audit",
     description: "Audits the funnel for drop-off points and produces a report.",
     runOnSetup: false,
     hasHingesPanel: true,

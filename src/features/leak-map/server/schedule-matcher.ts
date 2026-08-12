@@ -80,6 +80,42 @@ export function matchesMonthlySchedule(schedule: MonthlySchedule | undefined | n
 }
 
 /**
+ * Verified-defect fix (2026-08-08 handoff, defect #2) — generic version of
+ * the same local-hour match used above, for daily crons that aren't
+ * leak-map-specific (nightly briefs, credential health, lost-deal sweep).
+ * `timezone` defaults to "UTC" when the engagement hasn't set one, so
+ * every one of these crons behaves exactly as it does today (fires at the
+ * literal UTC hour) until an engagement actually configures a non-UTC
+ * timezone — no behavior change for existing tenants, just no longer
+ * hardcoded.
+ */
+export function matchesDailyLocalHour(timezone: string | undefined | null, hourLocal: number, now: Date): boolean {
+  let local;
+  try {
+    local = getLocalWeekdayAndHour(now, timezone || "UTC");
+  } catch {
+    local = getLocalWeekdayAndHour(now, "UTC");
+  }
+  return local.hour === hourLocal;
+}
+
+/** Same as matchesDailyLocalHour, gated to a single local weekday too (weeklyMetricsCron's Monday 08:00). */
+export function matchesWeeklyLocalHour(
+  timezone: string | undefined | null,
+  dayOfWeek: number,
+  hourLocal: number,
+  now: Date
+): boolean {
+  let local;
+  try {
+    local = getLocalWeekdayAndHour(now, timezone || "UTC");
+  } catch {
+    local = getLocalWeekdayAndHour(now, "UTC");
+  }
+  return local.weekday === dayOfWeek && local.hour === hourLocal;
+}
+
+/**
  * Finds the next instant (as a UTC Date) at or after `from` that
  * leakMapScheduleCron's hourly matchesWeeklySchedule() check would fire
  * on. Deliberately searches hour-by-hour and calls the real matcher

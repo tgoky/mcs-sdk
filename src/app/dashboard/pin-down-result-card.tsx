@@ -103,7 +103,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
       {/* Primary status card — colored left accent flags status at a glance */}
       <div
         className={`rounded-lg p-5 space-y-2.5 shadow-sm bg-card border border-border border-l-4 ${
-          isPasteReady ? "border-l-indigo-500 dark:border-l-indigo-400" : "border-l-gold"
+          isPasteReady ? "border-l-indigo-500 dark:border-l-indigo-400" : "border-l-ink"
         }`}
       >
         <div className="flex items-center gap-2.5">
@@ -111,7 +111,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
             className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-mono font-bold shrink-0 ${
               isPasteReady
                 ? "bg-indigo-600 dark:bg-indigo-500 text-white"
-                : "bg-gold text-gold-foreground"
+                : "bg-ink text-ink-foreground"
             }`}
           >
             {isPasteReady ? "!" : "✓"}
@@ -173,7 +173,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
               href={data.confirmationPageUrl}
               target="_blank"
               rel="noreferrer"
-              className="font-mono text-sm underline underline-offset-4 break-all block transition-colors font-bold text-gold-hover dark:text-gold hover:opacity-80"
+              className="font-mono text-sm underline underline-offset-4 break-all block transition-colors font-bold text-ink-hover dark:text-ink hover:opacity-80"
             >
               {data.confirmationPageUrl}
             </a>
@@ -243,7 +243,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
       {/* CTA */}
       <button
         onClick={() => router.push(`/dashboard/engagements/${data.engagementId}`)}
-        className="px-4 py-2 text-sm font-bold font-mono uppercase tracking-wider rounded-md transition-all cursor-pointer hover:opacity-90 active:translate-y-px text-gold-foreground bg-gold hover:bg-gold-hover shadow-sm"
+        className="px-4 py-2 text-sm font-bold font-mono uppercase tracking-wider rounded-md transition-all cursor-pointer hover:opacity-90 active:translate-y-px text-ink-foreground bg-ink hover:bg-ink-hover shadow-sm"
       >
         Go to Client Dashboard
       </button>

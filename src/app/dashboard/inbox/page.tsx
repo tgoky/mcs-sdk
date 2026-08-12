@@ -5,6 +5,7 @@ import { eq, desc } from "drizzle-orm";
 import { InboxRow } from "./inbox-row";
 import { MarkAllReadButton } from "./mark-all-read-button";
 import type { NotificationType } from "@/lib/notify";
+import { skillName } from "@/lib/copy";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -31,7 +32,7 @@ const TABS: Array<{ key: string; label: string; types: NotificationType[] | null
     label: "Alerts",
     types: ["run_failed", "run_timed_out", "credential_invalid", "credential_check_error"],
   },
-  { key: "win-back", label: "Win-Back", types: ["lost_deal_swept"] },
+  { key: "win-back", label: skillName("win-back"), types: ["lost_deal_swept"] },
   { key: "insights", label: "Insights", types: ["weekly_metrics", "conversation_intelligence_objection_found"] },
 ];
 
@@ -112,7 +113,7 @@ export default async function InboxPage({
             href={tab.key === "all" ? "/dashboard/inbox" : `/dashboard/inbox?tab=${tab.key}`}
             className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               tab.key === activeTab.key
-                ? "border-gold text-zinc-900 dark:text-zinc-100"
+                ? "border-ink text-zinc-900 dark:text-zinc-100"
                 : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
             }`}
           >

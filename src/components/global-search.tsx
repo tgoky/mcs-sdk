@@ -14,7 +14,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import { runStatusColor } from "@/lib/copy";
+import { runStatusDotColor } from "@/lib/copy";
 
 interface ClientResult {
   id: string;
@@ -295,7 +295,7 @@ className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-z
                         icon={Play}
                         title={item.title}
                         subtitle={item.subtitle}
-                        statusDot={runStatusColor(item.status)}
+                        statusDot={runStatusDotColor(item.status)}
                         active={idx === activeIndex}
                         onClick={() => navigateTo(item.href)}
                         onMouseEnter={() => setActiveIndex(idx)}
@@ -412,7 +412,7 @@ function ResultRow({
         <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">{title}</p>
         {subtitle && <p className="text-[11px] text-zinc-500 dark:text-zinc-500 truncate">{subtitle}</p>}
       </div>
-      {statusDot && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot.includes("rose") ? "bg-rose-400" : statusDot.includes("gold") ? "bg-amber-400" : statusDot.includes("amber") ? "bg-amber-400" : "bg-zinc-400"}`} />}
+      {statusDot && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />}
       {badge && (
         <span className="text-[9px] font-bold font-mono uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 shrink-0">
           {badge}

@@ -417,7 +417,7 @@ export function PreCallReadModuleView({
                       {/* Name & Diagnostic Action Column */}
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#82e6d4] text-[#05221d] shrink-0 font-bold">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-mint text-accent-mint-foreground shrink-0 font-bold">
                             <List size={15} strokeWidth={2.5} />
                           </div>
                           <div className="min-w-0">

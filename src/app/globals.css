@@ -39,9 +39,14 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --color-gold: var(--gold);
-  --color-gold-hover: var(--gold-hover);
-  --color-gold-foreground: var(--gold-foreground);
+  --color-ink: var(--ink);
+  --color-ink-hover: var(--ink-hover);
+  --color-ink-foreground: var(--ink-foreground);
+  --color-accent-client: var(--accent-client);
+  --color-accent-mint: var(--accent-mint);
+  --color-accent-mint-foreground: var(--accent-mint-foreground);
+  --color-danger-cta: var(--danger-cta);
+  --color-danger-cta-hover: var(--danger-cta-hover);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -107,8 +112,8 @@
   --popover: color-mix(in oklch, var(--background) 92%, #1f1a2e 8%);
   --popover-foreground: oklch(0.145 0 0);
 
-  --primary: var(--gold);
-  --primary-foreground: var(--gold-foreground);
+  --primary: var(--ink);
+  --primary-foreground: var(--ink-foreground);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -128,8 +133,8 @@
 
   --sidebar: #f0edf6;
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: var(--gold);
-  --sidebar-primary-foreground: var(--gold-foreground);
+  --sidebar-primary: var(--ink);
+  --sidebar-primary-foreground: var(--ink-foreground);
   --sidebar-accent: var(--card);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: var(--border);
@@ -144,9 +149,27 @@
   --success: oklch(0.45 0.15 155);
   --accent-dim: color-mix(in oklch, var(--foreground) 6%, transparent);
 
-  --gold: #1c1a22;
-  --gold-hover: #2c2a31;
-  --gold-foreground: #ffffff;
+  --ink: #1c1a22;
+  --ink-hover: #2c2a31;
+  --ink-foreground: #ffffff;
+  /* Defect #4 fix (2026-08-08 handoff) — was 3 identical bg-[#7fe3d4]
+     arbitrary values in queue-panel.tsx marking the "all clients" roster
+     icon chip. Same value in both themes on purpose: it's a fixed
+     identity marker for the client-roster view, not a themed surface
+     color. */
+  --accent-client: #7fe3d4;
+  /* Defect #4 fix — was bg-[#82e6d4] text-[#05221d] repeated across 5
+     module-view components (win-back, pre-call-read, pin-down, pile-on,
+     leak-map) for the "mint" row-icon chip. Fixed identity color, not
+     themed, same reasoning as --accent-client above. */
+  --accent-mint: #82e6d4;
+  --accent-mint-foreground: #05221d;
+  /* Defect #4 fix — was bg-[#f15153] hover:bg-[#e0484a] in top-nav.tsx's
+     one destructive/urgent CTA. Named for its role since it isn't part
+     of the rose/error scale (it's a brighter, more saturated red used
+     specifically for this one high-visibility button). */
+  --danger-cta: #f15153;
+  --danger-cta-hover: #e0484a;
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
@@ -161,8 +184,8 @@
   --popover: #1c1729;
   --popover-foreground: oklch(0.985 0 0);
 
-  --primary: var(--gold);
-  --primary-foreground: var(--gold-foreground);
+  --primary: var(--ink);
+  --primary-foreground: var(--ink-foreground);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -181,8 +204,8 @@
 
   --sidebar: #100c19;
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: var(--gold);
-  --sidebar-primary-foreground: var(--gold-foreground);
+  --sidebar-primary: var(--ink);
+  --sidebar-primary-foreground: var(--ink-foreground);
   --sidebar-accent: var(--card);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
@@ -197,9 +220,47 @@
   --success: oklch(0.765 0.177 163.223);
   --accent-dim: color-mix(in oklch, var(--foreground) 8%, transparent);
 
-  --gold: #f2eff7;
-  --gold-hover: #ffffff;
-  --gold-foreground: #0b0812;
+  --ink: #f2eff7;
+  --ink-hover: #ffffff;
+  --ink-foreground: #0b0812;
+}
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* STATUS TEXT UTILITIES                                                  */
+/* Bound to --error / --success / --text-secondary, which already carry  */
+/* distinct, contrast-checked values per theme (see :root / .dark above).*/
+/* Use these instead of raw rose-400 / amber-400 / gold on status text —  */
+/* those Tailwind shades are calibrated for fills/borders, not body text, */
+/* and amber-400 is intentionally desaturated to neutral gray in this    */
+/* theme (see "Idle / Neutral" comment above), so it never reads as a    */
+/* warning color to begin with.                                          */
+/* ────────────────────────────────────────────────────────────────────── */
+.text-status-success {
+  color: var(--success);
+}
+.text-status-error {
+  color: var(--error);
+}
+.text-status-neutral {
+  color: var(--text-secondary);
+}
+
+/* Defect #4 fix — the exact string
+   "bg-[radial-gradient(#cbd5e1_0.5px,transparent_0.5px)] dark:bg-[radial-gradient(#3f3f46_0.5px,transparent_0.5px)]
+   [background-size:6px_6px] [mask-image:radial-gradient(ellipse_75%_75%_at_50%_30%,#000_50%,transparent_100%)]
+   opacity-70" was copy-pasted across 7 dashboard page files (dashboard,
+   runs, queue, projects, projects/new, engagements/new,
+   engagements/[id]). Single source now; apply as
+   `<div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden />`. */
+.bg-dot-grid {
+  background-image: radial-gradient(#cbd5e1 0.5px, transparent 0.5px);
+  background-size: 6px 6px;
+  mask-image: radial-gradient(ellipse 75% 75% at 50% 30%, #000 50%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 75% 75% at 50% 30%, #000 50%, transparent 100%);
+  opacity: 0.7;
+}
+.dark .bg-dot-grid {
+  background-image: radial-gradient(#3f3f46 0.5px, transparent 0.5px);
 }
 
 @layer base {

@@ -23,7 +23,7 @@ import {
   Tag as TagIcon,
   Trash2,
 } from "lucide-react";
-import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, skillName as skillDisplayName } from "@/lib/copy";
+import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, skillName as skillDisplayName, SKILLS } from "@/lib/copy";
 import type { StackSection } from "@/lib/error-classification";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { pauseEngagement, resumeEngagement, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
@@ -888,13 +888,13 @@ export function QueuePanel({
     preset: "By Smart Presets",
   };
 
+  // Finding A fix (2026-08-07 handoff) — was its own hardcoded copy of
+  // the 5 skill names, one of the three sources that had drifted out of
+  // sync. Derived from SKILLS/skillDisplayName (copy.ts) now, same as
+  // everywhere else in this file already reads skill names from.
   const skillTargetLabels: Record<string, string> = {
     all: "Any Skill",
-    "pin-down": "Pin-Down",
-    "pile-on": "Pile-On",
-    "pre-call-read": "Pre-Call Read",
-    "win-back": "Win-Back",
-    "leak-map": "Leak-Map",
+    ...Object.fromEntries(SKILLS.map((id) => [id, skillDisplayName(id)])),
   };
 
   const categoryTargetLabels: Record<string, string> = {
@@ -928,7 +928,7 @@ export function QueuePanel({
               className={cn(
                 "py-1.5 rounded-lg text-center transition-all cursor-pointer",
                 railView === "all"
-                  ? "bg-[#3f3f42] text-white font-semibold shadow-xs"
+                  ? "bg-zinc-700 text-white font-semibold shadow-xs"
                   : "text-zinc-400 hover:text-zinc-200"
               )}
             >
@@ -948,7 +948,7 @@ export function QueuePanel({
               className={cn(
                 "py-1.5 rounded-lg text-center transition-all cursor-pointer",
                 railView === "clients"
-                  ? "bg-[#3f3f42] text-white font-semibold shadow-xs"
+                  ? "bg-zinc-700 text-white font-semibold shadow-xs"
                   : "text-zinc-400 hover:text-zinc-200"
               )}
             >
@@ -1084,7 +1084,7 @@ export function QueuePanel({
                   className={cn(
                     "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
                     selectedCategory === null && !selectedTagId
-                      ? "bg-[#3f3f42] text-white font-semibold"
+                      ? "bg-zinc-700 text-white font-semibold"
                       : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                   )}
                 >
@@ -1105,7 +1105,7 @@ export function QueuePanel({
                     className={cn(
                       "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
                       selectedCategory === cat.id && !selectedTagId
-                        ? "bg-[#3f3f42] text-white font-semibold"
+                        ? "bg-zinc-700 text-white font-semibold"
                         : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                     )}
                   >
@@ -1127,12 +1127,12 @@ export function QueuePanel({
                   className={cn(
                     "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
                     selectedClientId === null
-                      ? "bg-[#3f3f42] text-white font-semibold"
+                      ? "bg-zinc-700 text-white font-semibold"
                       : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                   )}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-5 h-5 rounded-[5px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0">
+                    <div className="w-5 h-5 rounded-[5px] bg-accent-client text-zinc-950 flex items-center justify-center shrink-0">
                       <List className="w-3 h-3 stroke-[2.5]" />
                     </div>
                     <span className="truncate">All clients</span>
@@ -1151,12 +1151,12 @@ export function QueuePanel({
                     className={cn(
                       "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
                       selectedClientId === client.engagementId
-                        ? "bg-[#3f3f42] text-white font-semibold"
+                        ? "bg-zinc-700 text-white font-semibold"
                         : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                     )}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-5 h-5 rounded-[5px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                      <div className="w-5 h-5 rounded-[5px] bg-accent-client text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
                         <List className="w-3 h-3 stroke-[2.5]" />
                       </div>
                       <span className="truncate">{client.buyer}</span>
@@ -1210,7 +1210,7 @@ export function QueuePanel({
                         }}
                         className={cn(
                           "w-full flex items-center justify-between px-2.5 py-1.5 rounded-[10px] text-xs font-medium transition-colors cursor-pointer pr-6",
-                          active ? "bg-[#3f3f42] text-white font-semibold" : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                          active ? "bg-zinc-700 text-white font-semibold" : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                         )}
                       >
                         <div className="flex items-center gap-2 min-w-0">
@@ -1306,7 +1306,7 @@ export function QueuePanel({
                     className="w-full flex items-center justify-between px-4 py-3 text-left text-xs font-medium text-zinc-200 hover:bg-zinc-800/50 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-5 h-5 rounded-[5px] bg-[#7fe3d4] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                      <div className="w-5 h-5 rounded-[5px] bg-accent-client text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
                         <List className="w-3 h-3 stroke-[2.5]" />
                       </div>
                       <span className="truncate font-semibold">{client.buyer}</span>

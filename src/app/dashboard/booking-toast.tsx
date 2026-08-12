@@ -128,7 +128,7 @@ export function BookingToast() {
             <div
               className={`flex items-center justify-center w-8 h-8 rounded-xl shrink-0 ${
                 t.kind === "booking"
-                  ? "bg-gold/15 text-gold-hover dark:text-gold border border-gold/20"
+                  ? "bg-ink/15 text-ink-hover dark:text-ink border border-ink/20"
                   : "bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-500/20"
               }`}
             >
@@ -160,7 +160,7 @@ export function BookingToast() {
 
           <div className="h-0.5 bg-zinc-100 dark:bg-zinc-900">
             <div
-              className={`h-full ${t.kind === "booking" ? "bg-gold/70" : "bg-sky-500/70"}`}
+              className={`h-full ${t.kind === "booking" ? "bg-ink/70" : "bg-sky-500/70"}`}
               style={{
                 animation: `shrinkWidth ${TOAST_LIFETIME_MS}ms linear forwards`,
               }}

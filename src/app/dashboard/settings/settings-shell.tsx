@@ -46,7 +46,7 @@ export function SettingsShell({
             onClick={() => selectTab(id)}
             className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
               tab === id
-                ? "border-gold text-zinc-900 dark:text-zinc-100"
+                ? "border-ink text-zinc-900 dark:text-zinc-100"
                 : "border-transparent text-zinc-500 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
             }`}
           >

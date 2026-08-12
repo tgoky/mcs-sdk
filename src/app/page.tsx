@@ -248,8 +248,8 @@ export default async function LandingIndexPage({
                 </div>
                 <div className="my-3.5 h-32 border border-border bg-zinc-50/50 dark:bg-zinc-950/40 flex flex-col justify-center px-6 space-y-2.5 text-zinc-400 dark:text-zinc-500 select-none">
                   <div className="space-y-1">
-                    <div className="flex justify-between text-[8px]"><span>INBOUND_BOOKING_ALERT</span><span className="text-gold-hover dark:text-gold">100%</span></div>
-                    <div className="h-1 w-full bg-zinc-200 dark:bg-zinc-900 border border-border"><div className="h-full bg-gold" style={{ width: "100%" }} /></div>
+                    <div className="flex justify-between text-[8px]"><span>INBOUND_BOOKING_ALERT</span><span className="text-ink-hover dark:text-ink">100%</span></div>
+                    <div className="h-1 w-full bg-zinc-200 dark:bg-zinc-900 border border-border"><div className="h-full bg-ink" style={{ width: "100%" }} /></div>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-[8px]"><span>MESSAGE_PERSONALIZATION</span><span className="text-indigo-600 dark:text-indigo-400 animate-pulse">75%</span></div>
@@ -361,7 +361,7 @@ export default async function LandingIndexPage({
                 <div className="pt-2">
                   {session.whopUserId && hasAccess ? (
                     <a href="/home" className="block w-full">
-                      <Button className="w-full h-11 text-xs font-mono uppercase tracking-widest bg-gold text-gold-foreground rounded-none hover:bg-gold-hover transition-all cursor-pointer">
+                      <Button className="w-full h-11 text-xs font-mono uppercase tracking-widest bg-ink text-ink-foreground rounded-none hover:bg-ink-hover transition-all cursor-pointer">
                         [ Enter Workspace ]
                       </Button>
                     </a>
@@ -376,7 +376,7 @@ export default async function LandingIndexPage({
                     </a>
                   ) : (
                     <a href="/api/auth/login" className="block w-full">
-                      <Button className="w-full h-11 text-xs font-mono uppercase tracking-wider bg-gold text-gold-foreground rounded-none hover:bg-gold-hover transition-colors cursor-pointer">
+                      <Button className="w-full h-11 text-xs font-mono uppercase tracking-wider bg-ink text-ink-foreground rounded-none hover:bg-ink-hover transition-colors cursor-pointer">
                         Authenticate with Whop
                       </Button>
                     </a>

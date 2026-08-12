@@ -32,7 +32,7 @@ export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
             aria-current={active ? "page" : undefined}
             className={`group relative flex items-center justify-between rounded-[10px] px-3 py-2 text-[13px] font-medium transition-all ${
               active
-                ? "bg-[#3f3f42] text-white font-semibold shadow-xs"
+                ? "bg-zinc-700 text-white font-semibold shadow-xs"
                 : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
             }`}
           >

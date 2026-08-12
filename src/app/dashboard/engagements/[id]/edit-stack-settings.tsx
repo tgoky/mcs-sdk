@@ -387,7 +387,7 @@ export function EditStackSettings({
   const emailStructureFields = emailStructureFieldsFor(emailPlatform);
 
   const sectionHighlightClass = (key: string) =>
-    highlightSection === key ? " ring-2 ring-gold rounded-lg -mx-2 px-2 py-2 transition-shadow duration-500" : "";
+    highlightSection === key ? " ring-2 ring-ink rounded-lg -mx-2 px-2 py-2 transition-shadow duration-500" : "";
 
   async function save() {
     setBusy(true);
@@ -768,7 +768,7 @@ export function EditStackSettings({
         >
           <Save className="w-3 h-3" /> {busy ? "Saving…" : "Save changes"}
         </button>
-        {saved && <span className="text-[11px] font-mono text-gold-hover dark:text-gold mt-3">Saved.</span>}
+        {saved && <span className="text-[11px] font-mono text-ink-hover dark:text-ink mt-3">Saved.</span>}
         {error && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400 mt-3">{error}</span>}
       </div>
     </div>

@@ -74,7 +74,7 @@ export function InboxRow(props: InboxRowProps) {
           <p className={`truncate ${!read ? "font-semibold text-zinc-900 dark:text-zinc-100" : "font-medium text-zinc-700 dark:text-zinc-300"}`}>
             {props.title}
           </p>
-          {!read && <span className="w-1.5 h-1.5 rounded-full bg-gold shrink-0" aria-label="Unread" />}
+          {!read && <span className="w-1.5 h-1.5 rounded-full bg-ink shrink-0" aria-label="Unread" />}
         </div>
         <p className="text-zinc-500 dark:text-zinc-400 mt-0.5 line-clamp-2">{props.body}</p>
         <div className="flex items-center gap-2 mt-1 text-[11px] text-zinc-400 dark:text-zinc-600 font-mono">

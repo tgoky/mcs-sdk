@@ -37,7 +37,7 @@ import { findEngagementsForWeeklyReadout, processWeeklyMetricsForEngagement } fr
 import { findEngagementsDueForPoll, pollBookingsForEngagement } from "@/features/pin-down/server/booking-poller";
 import { validateAllPlatformDocsLinks } from "@/features/pin-down/server/docs-link-validator";
 import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/brief-service";
-import { matchesWeeklySchedule, matchesMonthlySchedule } from "@/features/leak-map/server/schedule-matcher";
+import { matchesWeeklySchedule, matchesMonthlySchedule, matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
 import { computeAndPersistBenchmarks } from "@/features/leak-map/server/leak-map-benchmarks";
 import { CANARY_CHECKS, runCanaryCheck, getCanaryEngagementId } from "@/lib/platforms/canary";
 import { and, eq, lt, gte, isNull, notInArray } from "drizzle-orm";
@@ -58,9 +58,17 @@ import { estimateEngagementCallDurationMinutes } from "@/features/pre-call-read/
 // just one level down, in executeSkillRun (src/inngest/skill.ts) — that's
 // what each fanned-out event triggers.
 
+// Verified-defect fix (2026-08-08 handoff, defect #2) — the target local
+// hour nightly briefs fire at. Was a literal "TZ=UTC 0 20 * * *" cron
+// expression; now the trigger runs hourly and this constant is checked
+// against each engagement's own timezone via matchesDailyLocalHour, same
+// pattern leakMapScheduleCron already uses for buyer-configurable cadence.
+const NIGHTLY_BRIEF_LOCAL_HOUR = 20; // 20:00 in the engagement's own timezone (defaults to UTC)
+
 export const nightlyBriefsCron = inngest.createFunction(
-  { id: "nightly-briefs-cron", triggers: [{ cron: "TZ=UTC 0 20 * * *" }] }, // 20:00 UTC daily
+  { id: "nightly-briefs-cron", triggers: [{ cron: "0 * * * *" }] }, // hourly; fires per-engagement at their local 20:00
   async ({ step }) => {
+    const now = new Date();
     const prepared = await step.run("prepare-nightly-runs", async () => {
       // isNull(deletedAt) — an offboarded/soft-deleted engagement should
       // never get picked up here. isEngagementPaused() (checked below)
@@ -76,7 +84,8 @@ export const nightlyBriefsCron = inngest.createFunction(
     stack?.booking_platform &&
     stack?.booking_platform_credentials_ref &&
     // ✅ Exclude dynamic polling clients so they don't get double-processed at night
-    stack?.brief_trigger_type !== "dynamic_webhook"
+    stack?.brief_trigger_type !== "dynamic_webhook" &&
+    matchesDailyLocalHour(stack?.timezone, NIGHTLY_BRIEF_LOCAL_HOUR, now)
   );
 });
 
@@ -301,7 +310,10 @@ export const notifyStaleRunCron = inngest.createFunction(
  * invocation per credential, each with its own execution window.
  */
 export const credentialHealthCron = inngest.createFunction(
-  { id: "credential-health-cron", triggers: [{ cron: "TZ=UTC 0 13 * * *" }] }, // 13:00 UTC daily
+  // Verified-defect fix (2026-08-08 handoff, defect #2): hourly poll,
+  // per-engagement local-13:00 check lives in findCredentialsNeedingCheck
+  // (credential-health.ts).
+  { id: "credential-health-cron", triggers: [{ cron: "0 * * * *" }] },
   async ({ step }) => {
     const ids = await step.run("find-credentials-needing-check", () => findCredentialsNeedingCheck());
 
@@ -340,7 +352,10 @@ export const checkSingleCredentialHealthCron = inngest.createFunction(
  * per engagement in their own fanned-out invocation.
  */
 export const lostDealSweepCron = inngest.createFunction(
-  { id: "lost-deal-sweep-cron", triggers: [{ cron: "TZ=UTC 0 14 * * *" }] }, // 14:00 UTC daily
+  // Verified-defect fix (2026-08-08 handoff, defect #2): hourly poll,
+  // per-engagement local-14:00 gate lives in markElapsedEnrollmentsLost
+  // (lost-deal-sweep.ts).
+  { id: "lost-deal-sweep-cron", triggers: [{ cron: "0 * * * *" }] },
   async ({ step }) => {
     const { markedLost, byEngagement } = await step.run("mark-elapsed-enrollments-lost", () =>
       markElapsedEnrollmentsLost()
@@ -381,7 +396,10 @@ export const processLostDealEngagementCron = inngest.createFunction(
  * invocation.
  */
 export const weeklyMetricsCron = inngest.createFunction(
-  { id: "weekly-metrics-cron", triggers: [{ cron: "TZ=UTC 0 8 * * 1" }] }, // Monday 08:00 UTC
+  // Verified-defect fix (2026-08-08 handoff, defect #2): hourly poll,
+  // per-engagement local-Monday-08:00 check lives in
+  // findEngagementsForWeeklyReadout (weekly-metrics.ts).
+  { id: "weekly-metrics-cron", triggers: [{ cron: "0 * * * *" }] },
   async ({ step }) => {
     const eligible = await step.run("find-engagements-for-weekly-readout", () =>
       findEngagementsForWeeklyReadout()

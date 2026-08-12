@@ -21,7 +21,8 @@ export const revalidate = 0;
  * existingConfirmationPageUrl, existingPileOnSequenceFlagged,
  * existingAuditFlagged/Description, and notificationPackSelections all
  * resolved to onboarding-service.ts (Pin-Down) alone as their real
- * reader — the last three despite being labeled "Pile-On"/"Leak-Map" in
+ * reader — the last three despite being labeled "Pre-Call Sequence"/
+ * "Funnel Audit" in
  * the wizard's own inline comments, which describe which gap a field
  * closes, not which bridge's code actually consumes it today.
  *

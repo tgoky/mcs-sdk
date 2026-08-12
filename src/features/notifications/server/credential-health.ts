@@ -6,6 +6,15 @@ import { CalendlyClient, CalComClient, GHLCalendarClient } from "@/lib/platforms
 import { MailchimpClient, ConvertKitClient, SMTPClient, parseSmtpCredential } from "@/lib/platforms/email";
 import { notifyUser } from "@/lib/notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
+import { matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
+
+// Verified-defect fix (2026-08-08 handoff, defect #2). Was driven by a
+// literal "TZ=UTC 0 13 * * *" cron expression on credentialHealthCron;
+// that cron now runs hourly (see crons.ts) and this checks whether "now"
+// is this engagement's own local 13:00, same pattern as
+// leakMapScheduleCron. Defaults to UTC when stack.timezone is unset —
+// identical behavior to today until an engagement sets one.
+const CREDENTIAL_HEALTH_LOCAL_HOUR = 13;
 
 /**
  * Providers with a verified "am I still authenticated" endpoint wired up.
@@ -80,9 +89,11 @@ export async function findCredentialsNeedingCheck(): Promise<string[]> {
     // checked, and shouldn't keep triggering "your credential is invalid"
     // notifications for a client that no longer exists.
     .where(isNull(engagements.deletedAt));
+  const now = new Date();
   return rows
     .filter((r) => {
       if (!VALIDATORS[r.provider] || isEngagementPaused(r)) return false;
+      if (!matchesDailyLocalHour((r.stack as EngagementStack | null)?.timezone, CREDENTIAL_HEALTH_LOCAL_HOUR, now)) return false;
       if (r.provider === "ghl_calendar") {
         // Without a Location ID, checkSingleCredential's ghl_calendar
         // validator can't call GHL at all — skip rather than surface a

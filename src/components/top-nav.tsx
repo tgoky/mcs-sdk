@@ -63,7 +63,7 @@ export function TopNav({ onToggleSidebar, displayName }: TopNavProps) {
           <button
             type="button"
             onClick={() => setCreateOpen((prev) => !prev)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#f15153] hover:bg-[#e0484a] text-white rounded-full transition-all shadow-sm active:scale-95 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-danger-cta hover:bg-danger-cta-hover text-white rounded-full transition-all shadow-sm active:scale-95 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Create</span>

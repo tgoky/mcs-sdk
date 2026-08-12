@@ -12,8 +12,6 @@ export function ShellLayout({
   work,
   engagements,
   analytics,
-  strategy,
-  skills,
   meetings,
 }: {
   children: ReactNode;
@@ -22,8 +20,6 @@ export function ShellLayout({
   work: ReactNode;
   engagements: ReactNode;
   analytics: ReactNode;
-  strategy: ReactNode;
-  skills: ReactNode;
   meetings: ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -51,8 +47,6 @@ export function ShellLayout({
               work={work}
               engagements={engagements}
               analytics={analytics}
-              strategy={strategy}
-              skills={skills}
               meetings={meetings}
             />
           </div>

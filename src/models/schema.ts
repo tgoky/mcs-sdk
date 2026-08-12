@@ -289,6 +289,19 @@ export type EngagementStack = {
   // Pin-Down's polling fallback.
   weekly_summary_schedule?: { dayOfWeek: number; hourLocal: number; timezone: string }; // dayOfWeek: 0=Sun..6=Sat
   monthly_deep_dive_schedule?: { dayOfMonth: number; hourLocal: number; timezone: string };
+  // Verified-defect fix (2026-08-08 handoff, defect #2) — engagement-level
+  // IANA timezone (e.g. "America/New_York"), consumed by nightlyBriefsCron
+  // via matchesDailyLocalHour (schedule-matcher.ts) so nightly briefs land
+  // at 20:00 in the buyer's own time instead of a fixed 20:00 UTC.
+  // Undefined defaults to "UTC" — identical behavior to today until an
+  // engagement actually sets one. No Settings UI writes this yet (see
+  // 2026-08-07 handoff, Observation 1 — deferred until the first non-UTC
+  // operator makes it urgent); credentialHealthCron, lostDealSweepCron, and
+  // weeklyMetricsCron still need the equivalent per-engagement timezone
+  // check added inside their own service functions (credential-health.ts,
+  // lost-deal-sweep.ts, weekly-metrics.ts) since those crons don't iterate
+  // engagements directly the way nightlyBriefsCron does.
+  timezone?: string;
   // ── Leak Map recovery gap 2: report delivery format ─────────────────────
   // "dashboard_only" (default) — report lands in auditRunsLog, viewable in
   // the dashboard, nothing pushed anywhere. "slack" — Block Kit message to

@@ -59,7 +59,7 @@ export default async function MeetingsPage({
         <a
           href="/dashboard/meetings"
           className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-            !isPast ? "border-gold text-zinc-900 dark:text-zinc-100" : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+            !isPast ? "border-ink text-zinc-900 dark:text-zinc-100" : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
           }`}
         >
           Upcoming
@@ -67,7 +67,7 @@ export default async function MeetingsPage({
         <a
           href="/dashboard/meetings?range=past"
           className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-            isPast ? "border-gold text-zinc-900 dark:text-zinc-100" : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+            isPast ? "border-ink text-zinc-900 dark:text-zinc-100" : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
           }`}
         >
           Past

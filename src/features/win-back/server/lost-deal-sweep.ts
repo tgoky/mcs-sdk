@@ -7,7 +7,19 @@ import { KlaviyoClient } from "@/lib/platforms/email";
 import { resolveCredential } from "@/lib/credentials";
 import { notifyUser } from "@/lib/notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
+import { matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
 import type { GetStepTools, Inngest } from "inngest";
+
+// Verified-defect fix (2026-08-08 handoff, defect #2). Was driven by a
+// literal "TZ=UTC 0 14 * * *" cron expression on lostDealSweepCron; that
+// cron now runs hourly (see crons.ts) and this gates each row to the
+// owning engagement's own local 14:00, same pattern as leakMapScheduleCron.
+// Defaults to UTC when stack.timezone is unset — identical behavior to
+// today until an engagement sets one. An enrollment whose recovery window
+// elapses mid-day simply gets marked lost at that engagement's next local
+// 14:00 rather than immediately — acceptable since this is a maintenance
+// sweep + buyer notification, not a time-critical action.
+const LOST_DEAL_SWEEP_LOCAL_HOUR = 14;
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -33,9 +45,13 @@ export async function markElapsedEnrollmentsLost(): Promise<
 > {
   const now = new Date();
 
-  const elapsed = await db
-    .select()
+  const elapsedRows = await db
+    .select({
+      enrollment: winBackEnrollments,
+      timezone: engagements.stack,
+    })
     .from(winBackEnrollments)
+    .innerJoin(engagements, eq(winBackEnrollments.engagementId, engagements.engagementId))
     .where(
       and(
         eq(winBackEnrollments.status, "active"),
@@ -45,6 +61,10 @@ export async function markElapsedEnrollmentsLost(): Promise<
         )
       )
     );
+
+  const elapsed = elapsedRows
+    .filter((r) => matchesDailyLocalHour((r.timezone as EngagementStack | null)?.timezone, LOST_DEAL_SWEEP_LOCAL_HOUR, now))
+    .map((r) => r.enrollment);
 
   const byEngagementMap = new Map<string, string[]>();
 

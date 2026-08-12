@@ -115,7 +115,7 @@ export default async function ReschedulePage({
             </p>
             <a
               href={standardBookingUrl}
-              className="inline-block rounded-lg bg-gold px-5 py-2.5 text-sm font-medium text-gold-foreground"
+              className="inline-block rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-ink-foreground"
             >
               Open the booking page
             </a>

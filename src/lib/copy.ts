@@ -15,35 +15,39 @@
 // Modules (the five automations users can run)
 // ---------------------------------------------------------------------------
 
-export const SKILLS = [
-  "pin-down",
-  "pile-on",
-  "pre-call-read",
-  "win-back",
-  "leak-map",
-] as const;
+import { SKILL_MANIFEST, SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
 
-export type SkillName = (typeof SKILLS)[number];
+export const SKILLS = SKILL_IDS;
 
+export type SkillName = SkillId;
+
+// Finding A fix (2026-08-07 handoff) — `name` is no longer authored here;
+// it's read straight from SKILL_MANIFEST (skill-manifest.ts), the single
+// source of truth for display names. `description` stays independently
+// authored in this file on purpose: these are short dashboard blurbs for
+// a different audience than skill-manifest.ts's longer technical
+// descriptions (consumed by the engagement detail page's Skills panel) —
+// the drift Finding A flagged was specifically the *name* rendering three
+// different ways, not the descriptions serving different UI contexts.
 export const SKILL_INFO: Record<SkillName, { name: string; description: string }> = {
   "pin-down": {
-    name: "Pin Down",
+    name: SKILL_MANIFEST["pin-down"].name,
     description: "Sets up a new client account and onboarding flow.",
   },
   "pile-on": {
-    name: "Pile On",
+    name: SKILL_MANIFEST["pile-on"].name,
     description: "Runs a pre-call email and SMS sequence for every new booking.",
   },
   "pre-call-read": {
-    name: "Pre-Call Read",
+    name: SKILL_MANIFEST["pre-call-read"].name,
     description: "Sends your team a quick briefing before every call.",
   },
   "win-back": {
-    name: "Win-Back",
+    name: SKILL_MANIFEST["win-back"].name,
     description: "Re-engages prospects who no-showed or went cold.",
   },
   "leak-map": {
-    name: "Leak Map",
+    name: SKILL_MANIFEST["leak-map"].name,
     description: "Weekly check for where you're losing customers in the funnel.",
   },
 };
@@ -68,10 +72,10 @@ export const MODULE_STATUS_LABELS: Record<ModuleStatus, string> = {
 };
 
 export const MODULE_STATUS_COLORS: Record<ModuleStatus, string> = {
-  live: "text-gold-hover dark:text-gold",
+  live: "text-status-success font-medium",
   running: "text-sky-600 dark:text-sky-400",
-  failed: "text-rose-400",
-  not_run: "text-zinc-600",
+  failed: "text-status-error",
+  not_run: "text-zinc-600 dark:text-zinc-500",
 };
 
 // ---------------------------------------------------------------------------
@@ -87,11 +91,11 @@ export const RUN_STATUS_LABELS: Record<string, string> = {
 };
 
 export const RUN_STATUS_COLORS: Record<string, string> = {
-  success: "text-gold font-medium",
-  failed: "text-rose-400",
-  running: "text-zinc-400 italic",
-  cancelled: "text-amber-400",
-  timed_out: "text-amber-400",
+  success: "text-status-success font-medium",
+  failed: "text-status-error",
+  running: "text-sky-600 dark:text-sky-400 italic",
+  cancelled: "text-status-neutral",
+  timed_out: "text-status-neutral",
 };
 
 /** Friendly run-status word for a raw status string, with a safe fallback. */
@@ -103,6 +107,31 @@ export function runStatusLabel(status: string | null | undefined): string {
 export function runStatusColor(status: string | null | undefined): string {
   if (!status) return RUN_STATUS_COLORS.running;
   return RUN_STATUS_COLORS[status.toLowerCase()] ?? RUN_STATUS_COLORS.running;
+}
+
+/**
+ * Solid-fill dot color for a run status — a genuinely separate concern
+ * from runStatusColor above (that one returns a *text* color class; a
+ * status dot needs a *background-fill* class, and rose-400/emerald-400
+ * read fine as small fills even where they're not used as text color
+ * post-defect-#1). Previously global-search.tsx string-sniffed
+ * runStatusColor's return value (`.includes("ink")`, `.includes("rose")`)
+ * to guess a dot color — that broke the moment defect #1's fix renamed
+ * those classes, and was fragile before that too (two components quietly
+ * relying on exact substrings of each other). This is the single source
+ * for both now.
+ */
+export const RUN_STATUS_DOT_COLORS: Record<string, string> = {
+  success: "bg-emerald-400",
+  failed: "bg-rose-400",
+  running: "bg-sky-400",
+  cancelled: "bg-zinc-400",
+  timed_out: "bg-zinc-400",
+};
+
+export function runStatusDotColor(status: string | null | undefined): string {
+  if (!status) return RUN_STATUS_DOT_COLORS.running;
+  return RUN_STATUS_DOT_COLORS[status.toLowerCase()] ?? RUN_STATUS_DOT_COLORS.running;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,12 +152,12 @@ export const CALL_SESSION_STATUS_LABELS: Record<string, string> = {
 };
 
 export const CALL_SESSION_STATUS_COLORS: Record<string, string> = {
-  scheduled: "text-zinc-400 dark:text-zinc-500",
+  scheduled: "text-status-neutral",
   joining: "text-sky-600 dark:text-sky-400 italic",
   in_call: "text-sky-600 dark:text-sky-400 italic",
-  call_ended: "text-amber-600 dark:text-amber-400",
-  done: "text-gold-hover dark:text-gold",
-  failed: "text-rose-400",
+  call_ended: "text-status-neutral",
+  done: "text-status-success font-medium",
+  failed: "text-status-error",
 };
 
 /** Friendly call-intelligence-session-status word, with a safe fallback. */

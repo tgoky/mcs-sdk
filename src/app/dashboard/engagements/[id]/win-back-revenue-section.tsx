@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Sparkles
 } from "lucide-react";
+import { skillName } from "@/lib/copy";
 
 export interface RecoveredEnrollment {
   prospectEmail: string;
@@ -365,7 +366,7 @@ export function WinBackRevenueSection({
                               {initials}
                             </div>
                             <span className="text-[11px] font-mono text-zinc-500 truncate max-w-[110px]">
-                              {latestDeal ? latestDeal.prospectEmail : "Win-Back"}
+                              {latestDeal ? latestDeal.prospectEmail : skillName("win-back")}
                             </span>
                           </div>
 
