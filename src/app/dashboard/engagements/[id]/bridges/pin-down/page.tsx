@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { InputField } from "../../../new/form-fields";
 import { TemplatePicker } from "../../../new/steps/template-picker";
@@ -13,8 +13,8 @@ import { DEFAULT_FORM } from "../../../new/constants";
  * Skills panel (enabling Pin-Down for an already-launched client). Same
  * screen either way; GET pre-fills whatever's already saved.
  */
-export default function PinDownBridgePage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default function PinDownBridgePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);

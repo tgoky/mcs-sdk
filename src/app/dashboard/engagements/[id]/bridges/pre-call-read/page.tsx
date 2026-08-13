@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { InputField, SelectField } from "../../../new/form-fields";
 
-export default function PreCallReadBridgePage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default function PreCallReadBridgePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
