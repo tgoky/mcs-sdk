@@ -840,18 +840,20 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       {selectedEntry.runId && (
                         <a
                           href={`/dashboard/runs/${selectedEntry.runId}`}
-                          className="inline-flex items-center gap-1.5 text-[11px] font-mono text-sky-400 hover:underline pt-1"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:border-zinc-700 transition-colors w-fit"
                         >
+                          <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
                           <span>View research execution run</span>
-                          <ExternalLink size={11} />
+                          <ExternalLink size={11} className="text-zinc-500" />
                         </a>
                       )}
                       <Link
                         href={`/dashboard/engagements/${engagementId}/skills/pre-call-read`}
-                        className="flex items-center gap-1.5 text-[11px] font-mono text-sky-400 hover:underline pt-1"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:border-zinc-700 transition-colors w-fit"
                       >
+                        <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
                         <span>View full Pre-Call Read history for this client</span>
-                        <ExternalLink size={11} />
+                        <ExternalLink size={11} className="text-zinc-500" />
                       </Link>
                     </div>
                   )}
@@ -883,10 +885,11 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       )}
                       <Link
                         href={`/dashboard/engagements/${engagementId}/skills/pile-on`}
-                        className="inline-flex items-center gap-1.5 text-[11px] font-mono text-sky-400 hover:underline pt-1"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:border-zinc-700 transition-colors w-fit"
                       >
+                        <SquishySkillBadge skill="pile-on" size={14} enabled={true} />
                         <span>View full Pile-On history for this client</span>
-                        <ExternalLink size={11} />
+                        <ExternalLink size={11} className="text-zinc-500" />
                       </Link>
                     </div>
                   )}
@@ -931,10 +934,11 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       )}
                       <Link
                         href={`/dashboard/engagements/${engagementId}/skills/win-back`}
-                        className="inline-flex items-center gap-1.5 text-[11px] font-mono text-sky-400 hover:underline pt-1"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:border-zinc-700 transition-colors w-fit"
                       >
+                        <SquishySkillBadge skill="win-back" size={14} enabled={true} />
                         <span>View full Win-Back history for this client</span>
-                        <ExternalLink size={11} />
+                        <ExternalLink size={11} className="text-zinc-500" />
                       </Link>
                     </div>
                   )}

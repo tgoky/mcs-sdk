@@ -16,6 +16,7 @@ import { ViewSwitcher, type RunViewMode } from "../../runs/[id]/_shared/view-swi
 import { StatusPill } from "../../runs/[id]/_shared/status-pill";
 import { getDaysInMonthGrid, dateKey } from "../../runs/[id]/_shared/calendar-grid";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import type { PileOnPipelineItem, PileOnStage } from "@/app/api/engagements/[id]/pile-on-pipeline/route";
 
 const STAGE_META: Record<PileOnStage, { label: string; tone: "success" | "warning" | "danger" | "info" | "neutral" }> = {
@@ -87,11 +88,14 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       <div className="flex items-center justify-between gap-2 px-0.5">
-        <div>
-          <h3 className="text-sm font-bold text-white font-sans">Pile-On Pipeline</h3>
-          <p className="text-[11px] text-zinc-500 font-sans mt-0.5">
-            Every booked lead's speed-to-lead sequence, in one board — not one run page per booking.
-          </p>
+        <div className="flex items-center gap-2.5">
+          <SquishySkillBadge skill="pile-on" size={28} enabled={true} />
+          <div>
+            <h3 className="text-sm font-bold text-white font-sans">Pile-On Pipeline</h3>
+            <p className="text-[11px] text-zinc-500 font-sans mt-0.5">
+              Every booked lead's speed-to-lead sequence, in one board — not one run page per booking.
+            </p>
+          </div>
         </div>
         {!loading && callTodayCount > 0 && (
           <div className="flex items-center gap-1 text-[11px] font-mono text-red-400 shrink-0">
@@ -211,9 +215,29 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
 
               return (
                 <div key={idx} className={cn("flex min-h-[90px] flex-col border-b border-r border-zinc-800/60 p-1.5 font-sans", !isCurrentMonth && "bg-zinc-900/20 text-zinc-600", isCurrentMonth && "hover:bg-zinc-900/30")}>
-                  <span className={cn("flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold", isToday ? "bg-emerald-500 text-zinc-950 font-bold" : isCurrentMonth ? "text-zinc-300" : "text-zinc-600")}>
-                    {date.getDate()}
-                  </span>
+                  <div className="flex items-start justify-between gap-1 w-full">
+                    <span className={cn("flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold shrink-0", isToday ? "bg-emerald-500 text-zinc-950 font-bold" : isCurrentMonth ? "text-zinc-300" : "text-zinc-600")}>
+                      {date.getDate()}
+                    </span>
+                    {dayItems.length > 0 && (
+                      <div className="relative shrink-0">
+                        <SquishySkillBadge skill="pile-on" size={16} enabled={true} />
+                        <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-purple-500 text-[8px] font-bold text-zinc-950 font-mono">
+                          {dayItems.length}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {dayItems.length > 1 && (
+                    <div className="mt-1 rounded-lg bg-purple-950/40 border border-purple-800/50 px-2 py-1 text-purple-200">
+                      <span className="text-[11px] font-bold block leading-none font-sans">
+                        {dayItems.length} calls
+                      </span>
+                      <span className="text-[9.5px] text-purple-400/80 font-mono mt-0.5 block">
+                        {dayItems.filter((i) => i.stage === "call_today").length} due today
+                      </span>
+                    </div>
+                  )}
                   <div className="mt-1 space-y-1 overflow-y-auto max-h-[65px] [scrollbar-width:none]">
                     {dayItems.map((item) => (
                       <button key={item.id} type="button" onClick={() => setSelectedId(item.id)} className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] font-sans hover:border-zinc-700 cursor-pointer">
@@ -278,8 +302,13 @@ function PileOnDrawer({ item, onClose }: { item: PileOnPipelineItem | null; onCl
               </div>
 
               {item.runId && (
-                <a href={`/dashboard/runs/${item.runId}`} className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-300 hover:text-white font-sans">
-                  View the run that sent Email 1 <ExternalLink size={11} />
+                <a
+                  href={`/dashboard/runs/${item.runId}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:border-zinc-700 transition-colors w-fit"
+                >
+                  <SquishySkillBadge skill="pile-on" size={14} enabled={true} />
+                  <span>View the run that sent Email 1</span>
+                  <ExternalLink size={11} className="text-zinc-500" />
                 </a>
               )}
             </SheetBody>

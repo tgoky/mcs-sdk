@@ -1,11 +1,12 @@
 import { db } from "@/lib/db";
-import { skillRuns, engagements, activeAlerts } from "@/models/schema";
+import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getQueueItems } from "@/lib/queue";
-import { eq, desc, sql, and, isNull } from "drizzle-orm";
+import { eq, desc, sql, and, isNull, gte, lt } from "drizzle-orm";
 import { LiveExecutionFeed } from "./live-execution-feed";
 import { QueuePanel } from "./queue-panel";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
+import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
 import Link from "next/link";
 import { Calendar } from "lucide-react";
 
@@ -16,10 +17,13 @@ export default async function DashboardPage() {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
 
+  const { thisWeekStart, lastWeekStart, lastWeekEnd } = getWeekWindows();
+
   const [
     userEngagements,
-    criticalAlerts,
     totalRunsResult,
+    thisWeekResult,
+    lastWeekResult,
     runningCountResult,
     recentRunsRaw,
     queueItems,
@@ -29,17 +33,8 @@ export default async function DashboardPage() {
       .from(engagements)
       .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
 
-    db
-      .select()
-      .from(activeAlerts)
-      .innerJoin(engagements, eq(activeAlerts.engagementId, engagements.engagementId))
-      .where(
-        and(
-          eq(activeAlerts.severity, "critical"),
-          eq(engagements.whopUserId, whopUserId)
-        )
-      ),
-
+    // All-time total — kept as quiet secondary context under the weekly
+    // number below, not the headline anymore (see automatedActionsAllTime).
     db
       .select({ count: sql<number>`count(*)` })
       .from(skillRuns)
@@ -48,6 +43,36 @@ export default async function DashboardPage() {
         and(
           eq(engagements.whopUserId, whopUserId),
           eq(skillRuns.status, "success")
+        )
+      ),
+
+    // This week's completions (Mon 00:00 → now) — the headline number.
+    // Resets on its own every Monday since it's always a live window,
+    // never a stored/accumulated counter.
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(skillRuns)
+      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(skillRuns.status, "success"),
+          gte(skillRuns.completedAt, thisWeekStart)
+        )
+      ),
+
+    // Same Mon–Sun window, one week back — the only baseline this week's
+    // number can be meaningfully compared against (see weeklyTrendLabel).
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(skillRuns)
+      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(skillRuns.status, "success"),
+          gte(skillRuns.completedAt, lastWeekStart),
+          lt(skillRuns.completedAt, lastWeekEnd)
         )
       ),
 
@@ -76,11 +101,20 @@ export default async function DashboardPage() {
       .orderBy(desc(skillRuns.startedAt))
       .limit(8),
 
+    // Already the tenant's real "needs a human" feed (pending approvals,
+    // open blockers, run failures, credential-health alerts) — reused
+    // below for the Issues stat instead of the near-always-empty
+    // active_alerts rule-definitions table. See summarizeIssues().
     getQueueItems(whopUserId),
   ]);
 
-  const completedActions = totalRunsResult[0]?.count ?? 0;
+  const completedThisWeek = Number(thisWeekResult[0]?.count ?? 0);
+  const completedLastWeek = Number(lastWeekResult[0]?.count ?? 0);
+  const completedAllTime = Number(totalRunsResult[0]?.count ?? 0);
+  const weeklyTrend = weeklyTrendLabel(completedThisWeek, completedLastWeek);
   const runningCount = Number(runningCountResult[0]?.count ?? 0);
+  const pausedCount = userEngagements.filter((e) => e.pausedAt).length;
+  const issues = summarizeIssues(queueItems);
 
   const clients = userEngagements.map((e) => ({
     engagementId: e.engagementId,
@@ -144,26 +178,39 @@ export default async function DashboardPage() {
                   {runningCount > 0 ? copy.stat.activeAccountsRunning(runningCount) : copy.stat.activeAccountsAllGood}
                 </span>
               </div>
+              {pausedCount > 0 && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 font-mono">
+                  {copy.stat.activeAccountsPaused(pausedCount)}
+                </p>
+              )}
             </div>
 
             <div className="space-y-1 sm:border-l border-zinc-200 dark:border-zinc-900 sm:pl-4">
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">{copy.stat.automatedActions}</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
+                {copy.stat.automatedActions} <span className="text-zinc-400 dark:text-zinc-600">· {copy.stat.automatedActionsThisWeek}</span>
+              </p>
               <div className="flex items-baseline space-x-1.5">
-                <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{completedActions}</span>
+                <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{completedThisWeek}</span>
                 <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">{copy.stat.automatedActionsUnit}</span>
               </div>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
+                {weeklyTrend ?? "No completions yet this week"} · {copy.stat.automatedActionsAllTime(completedAllTime)}
+              </p>
             </div>
 
             <div className="space-y-1 sm:border-l border-zinc-200 dark:border-zinc-900 sm:pl-4">
               <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">{copy.stat.systemIntegrity}</p>
               <div className="flex items-baseline space-x-2">
-                <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{criticalAlerts.length}</span>
+                <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{issues.count}</span>
                 <span className={`text-xs font-mono ${
-                  criticalAlerts.length > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-zinc-400 dark:text-zinc-600"
+                  issues.count > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-zinc-400 dark:text-zinc-600"
                 }`}>
-                  {criticalAlerts.length > 0 ? copy.stat.systemIntegrityFound : copy.stat.systemIntegrityClear}
+                  {issues.count > 0 ? copy.stat.systemIntegrityFound : copy.stat.systemIntegrityClear}
                 </span>
               </div>
+              {issues.breakdown && (
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">{issues.breakdown}</p>
+              )}
             </div>
           </div>
         </div>
