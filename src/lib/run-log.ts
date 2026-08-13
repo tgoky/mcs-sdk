@@ -257,6 +257,14 @@ export async function logStep(runId: string, opts: LogStepOptions): Promise<void
 
 export interface FinishRunOptions {
   summary?: RunSummary;
+  // Ghost-metric fix — finishRun previously hardcoded status: "success"
+  // unconditionally, so a run that was skipped for being paused/deleted/
+  // disabled (see the four call sites below with no summary) still
+  // counted as a completed success — inflating any "Tasks Completed"
+  // dashboard metric with runs where nothing actually happened. Defaults
+  // to "success" so every existing real-completion call site (the ones
+  // passing a summary) is unaffected.
+  status?: "success" | "skipped";
 }
 
 /**
@@ -286,10 +294,16 @@ function closeDanglingSteps(
 
 /** Marks a run as successfully completed and writes the final five-field summary, if provided. */
 export async function finishRun(runId: string, opts: FinishRunOptions = {}): Promise<void> {
+  const status = opts.status ?? "success";
   await withStepsLock(runId, (row) => {
+    // closeDanglingSteps only closes a stray "running" step, if any — the
+    // skip-path callers passing status: "skipped" never have one (they
+    // return before any step starts), so "success" here is just this
+    // helper's own unrelated close-out semantic, not a claim about the
+    // run's outcome.
     const steps = closeDanglingSteps(row?.steps ?? [], "success");
     return {
-      status: "success",
+      status,
       completedAt: new Date(),
       steps,
       ...(opts.summary ? { summary: opts.summary } : {}),

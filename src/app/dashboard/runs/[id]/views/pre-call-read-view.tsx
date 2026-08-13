@@ -42,6 +42,24 @@ const STATUS_META: Record<CallStatus, { label: string; tone: Tone }> = {
   failed: { label: "Failed", tone: "danger" },
 };
 
+/**
+ * Horror Story #2 fix — a single source of truth for how identity
+ * verification is described across the table row, the card badge, and the
+ * drawer, replacing three separate "personMatchScore/100" renders. A raw
+ * Rule-14 score (e.g. "30/100") reads as a data-quality problem to a rep
+ * who doesn't know what Rule 14 is, and the card badge specifically used
+ * to render ANY score in green with the word "Match" — actively
+ * misleading for a low score that means the opposite of a confirmed
+ * match. `tone` lets each call site pick success styling only when
+ * verification actually happened.
+ */
+function matchLabel(call: BriefedCall): { text: string; tone: Tone } {
+  if (call.researchStatus === "completed") return { text: "Verified", tone: "success" };
+  if (call.researchStatus === "failed") return { text: "Research failed", tone: "warning" };
+  if (call.researchStatus === "skipped_low_confidence") return { text: "Not verified", tone: "neutral" };
+  return { text: "Not scored", tone: "neutral" };
+}
+
 const DESTINATION_ICON: Record<string, typeof MessageSquare> = {
   slack: MessageSquare,
   crm_note: StickyNote,
@@ -242,7 +260,7 @@ export function PreCallReadView({
                     <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500 font-sans">
                       <th className="px-4 py-2 font-semibold">Prospect</th>
                       <th className="px-4 py-2 font-semibold">Call Time</th>
-                      <th className="px-4 py-2 font-semibold">Match Score</th>
+                      <th className="px-4 py-2 font-semibold">Identity</th>
                       <th className="px-4 py-2 font-semibold">Status</th>
                       <th className="px-4 py-2 font-semibold" />
                     </tr>
@@ -257,7 +275,7 @@ export function PreCallReadView({
                           </td>
                           <td className="px-4 py-2.5 font-mono text-zinc-400">{timeStr(call.callTime)}</td>
                           <td className="px-4 py-2.5 text-zinc-400 font-mono">
-                            {call.personMatchScore != null ? `${call.personMatchScore}/100` : "—"}
+                            {matchLabel(call).text}
                           </td>
                           <td className="px-4 py-2.5">
                             <StatusPill tone={STATUS_META[status].tone}>{STATUS_META[status].label}</StatusPill>
@@ -331,11 +349,20 @@ export function PreCallReadView({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-zinc-800/80">
-                        {call.personMatchScore != null && (
-                          <span className="inline-flex items-center rounded-md bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[9.5px] font-mono font-bold text-emerald-400">
-                            {call.personMatchScore}/100 Match
-                          </span>
-                        )}
+                        {call.personMatchScore != null && (() => {
+                          const { text, tone } = matchLabel(call);
+                          const toneClass =
+                            tone === "success"
+                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                              : tone === "warning"
+                                ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                                : "bg-zinc-800 border-zinc-700 text-zinc-400";
+                          return (
+                            <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9.5px] font-mono font-bold ${toneClass}`}>
+                              {text}
+                            </span>
+                          );
+                        })()}
 
                         <span className="inline-flex items-center gap-1 rounded-md bg-zinc-800 px-1.5 py-0.5 text-[9.5px] font-mono text-zinc-300">
                           <DestIcon size={10} className="text-zinc-400" />
@@ -500,13 +527,11 @@ function BriefDrawer({
               {/* Metadata Cards */}
               <div className="grid grid-cols-2 gap-2 text-xs font-sans">
                 <div className="space-y-0.5 rounded-xl border border-zinc-800 bg-zinc-900 p-2.5">
-                  <span className="block text-[10px] font-mono uppercase text-zinc-500">Identity Match</span>
-                  <p className="font-semibold text-zinc-200 font-sans">
-                    {call.personMatchScore != null ? `${call.personMatchScore} / 100` : "Not Scored"}
-                  </p>
+                  <span className="block text-[10px] font-mono uppercase text-zinc-500">Prospect identity</span>
+                  <p className="font-semibold text-zinc-200 font-sans">{matchLabel(call).text}</p>
                 </div>
                 <div className="space-y-0.5 rounded-xl border border-zinc-800 bg-zinc-900 p-2.5">
-                  <span className="block text-[10px] font-mono uppercase text-zinc-500">Delivery Channel</span>
+                  <span className="block text-[10px] font-mono uppercase text-zinc-500">Sent to</span>
                   <p className="flex items-center gap-1 font-semibold text-zinc-200 font-sans">
                     <DestIcon size={12} className="text-zinc-400" />
                     {call.destinationDelivered ?? destinationLabel ?? "Slack"}
@@ -538,7 +563,10 @@ function BriefDrawer({
                   />
                 ) : (
                   <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-300 font-sans whitespace-pre-wrap">
-                    {editableText || "No brief text generated for this call."}
+                    {editableText ||
+                      (call.aiSynthesisStatus === "failed"
+                        ? `Brief generation failed for ${call.prospectName ?? "this prospect"}'s call at ${timeStr(call.callTime)}. Try regenerating from the run, or open the call directly to prep manually.`
+                        : `${call.prospectName ?? "This prospect"}'s call at ${timeStr(call.callTime)} hasn't been briefed yet.`)}
                   </div>
                 )}
               </div>

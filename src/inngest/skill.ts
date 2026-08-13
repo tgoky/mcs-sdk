@@ -56,7 +56,7 @@ export const executeSkillRun = inngest.createFunction(
         status: "skipped",
         detail: `${skipReason} — run skipped.`,
       });
-      await finishRun(runId);
+      await finishRun(runId, { status: "skipped" });
       return;
     }
 
@@ -77,7 +77,7 @@ export const executeSkillRun = inngest.createFunction(
           status: "skipped",
           detail: `${definition.name} is turned off for this engagement — nothing ran.`,
         });
-        await finishRun(runId);
+        await finishRun(runId, { status: "skipped" });
         return;
       }
 

@@ -219,7 +219,18 @@ export class AuditEngine {
       const report = await run("stage-5-report", async () => {
         await logStep(runId, { phase: "stage_5_report", status: "running" });
 
-        let result = "All tracked metrics nominal. No funnel leaks detected.";
+        // "All tracked metrics nominal" is only true when there was
+        // actually enough data to check — an account with zero bookings
+        // yet also lands here (highestSeverity stays "none" because
+        // insufficientData forces severity to "none", not because
+        // anything was verified healthy), and the old message claimed a
+        // clean bill of health it never actually checked for.
+        const hasAnyUsableData = metrics.some((m) => !m.insufficientData);
+        let result = hasAnyUsableData
+          ? "All tracked metrics nominal. No funnel leaks detected."
+          : metrics.length > 0
+            ? "Not enough data yet to check for funnel leaks — every tracked metric is still below the minimum sample size. This isn't a clean bill of health, it's too early to tell either way."
+            : "No metrics could be pulled for this period yet.";
 
         // Leak Map recovery gap 1 — depth differs by cadence, not just
         // schedule. Weekly: concise, top-3-only, matching the OG

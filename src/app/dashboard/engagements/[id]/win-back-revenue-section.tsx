@@ -34,51 +34,47 @@ type PeriodOption = {
   months: { name: string; year: number; monthIdx: number }[];
 };
 
-// Generates periods (Quarters) for 2026
-function getPeriodOptions(): PeriodOption[] {
-  return [
-    {
-      id: "q3_2026",
-      label: "Q3 2026",
-      sublabel: "Jul 1 - Sep 30, 2026",
-      badge: "Current",
-      months: [
-        { name: "July 2026", year: 2026, monthIdx: 6 },
-        { name: "August 2026", year: 2026, monthIdx: 7 },
-        { name: "September 2026", year: 2026, monthIdx: 8 },
-      ],
-    },
-    {
-      id: "q2_2026",
-      label: "Q2 2026",
-      sublabel: "Apr 1 - Jun 30, 2026",
-      months: [
-        { name: "April 2026", year: 2026, monthIdx: 3 },
-        { name: "May 2026", year: 2026, monthIdx: 4 },
-        { name: "June 2026", year: 2026, monthIdx: 5 },
-      ],
-    },
-    {
-      id: "q1_2026",
-      label: "Q1 2026",
-      sublabel: "Jan 1 - Mar 31, 2026",
-      months: [
-        { name: "January 2026", year: 2026, monthIdx: 0 },
-        { name: "February 2026", year: 2026, monthIdx: 1 },
-        { name: "March 2026", year: 2026, monthIdx: 2 },
-      ],
-    },
-    {
-      id: "q4_2026",
-      label: "Q4 2026",
-      sublabel: "Oct 1 - Dec 31, 2026",
-      months: [
-        { name: "October 2026", year: 2026, monthIdx: 9 },
-        { name: "November 2026", year: 2026, monthIdx: 10 },
-        { name: "December 2026", year: 2026, monthIdx: 11 },
-      ],
-    },
-  ];
+// Generates the current quarter plus the 3 preceding it, computed from
+// today's date — this used to hardcode Q1–Q4 2026 by name, so the
+// flagship revenue view would show nothing at all once the calendar
+// rolled into 2027. "Current" always tracks whichever quarter contains
+// today, not a fixed year.
+function getPeriodOptions(referenceDate: Date = new Date()): PeriodOption[] {
+  const currentQuarterIdx = Math.floor(referenceDate.getMonth() / 3); // 0-3
+  const currentYear = referenceDate.getFullYear();
+
+  const options: PeriodOption[] = [];
+  for (let back = 0; back < 4; back++) {
+    // Walk backwards from the current quarter, wrapping the year at Q1.
+    const absoluteQuarter = currentYear * 4 + currentQuarterIdx - back;
+    const year = Math.floor(absoluteQuarter / 4);
+    const quarterIdx = ((absoluteQuarter % 4) + 4) % 4; // 0-3, safe for negative years
+    const startMonthIdx = quarterIdx * 3;
+
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December",
+    ];
+    const months = [0, 1, 2].map((offset) => ({
+      name: `${monthNames[startMonthIdx + offset]} ${year}`,
+      year,
+      monthIdx: startMonthIdx + offset,
+    }));
+
+    const startDate = new Date(year, startMonthIdx, 1);
+    const endDate = new Date(year, startMonthIdx + 3, 0); // last day of the quarter
+    const fmt = (d: Date) =>
+      `${monthNames[d.getMonth()].slice(0, 3)} ${d.getDate()}`;
+
+    options.push({
+      id: `q${quarterIdx + 1}_${year}`,
+      label: `Q${quarterIdx + 1} ${year}`,
+      sublabel: `${fmt(startDate)} - ${fmt(endDate)}, ${year}`,
+      badge: back === 0 ? "Current" : undefined,
+      months,
+    });
+  }
+  return options;
 }
 
 // Utility to get initials for pink avatar badge (e.g. "AD")

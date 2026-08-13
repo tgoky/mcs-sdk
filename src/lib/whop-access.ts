@@ -119,3 +119,33 @@ export async function checkActiveMembership(
     membershipId: best.id,
   };
 }
+/**
+ * Tenant-scoped authorization for a specific engagement — admin override
+ * retained. Defect fix: /api/actions/[id]/review and
+ * /api/blockers/[id]/resolve were previously admin-only, but the Queue UI
+ * (src/app/dashboard/queue) shows pending approvals and blockers to every
+ * tenant, not just the admin. A non-admin buyer clicking "Approve" on
+ * their own engagement's queued action hit a 403 dead end — the approval
+ * flow only ever worked for the operator's own account. Real tenants
+ * approve/resolve items on engagements they own (engagements.whopUserId);
+ * an admin can still act on anyone's.
+ */
+export async function isAuthorizedForEngagement(
+  session: { whopUserId?: string; email: string },
+  engagementId: string
+): Promise<boolean> {
+  if (!session.whopUserId) return false;
+  if (isAdminEmail(session.email)) return true;
+
+  const { db } = await import("@/lib/db");
+  const { engagements } = await import("@/models/schema");
+  const { eq } = await import("drizzle-orm");
+
+  const [row] = await db
+    .select({ whopUserId: engagements.whopUserId })
+    .from(engagements)
+    .where(eq(engagements.engagementId, engagementId))
+    .limit(1);
+
+  return row?.whopUserId === session.whopUserId;
+}

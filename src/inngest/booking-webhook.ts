@@ -70,7 +70,7 @@ export const processBookingWebhookEvent = inngest.createFunction(
         status: "skipped",
         detail: `Engagement is ${statusReason} — booking webhook enrollment skipped.`,
       });
-      await finishRun(runId);
+      await finishRun(runId, { status: "skipped" });
       return { processed: false, reason: `engagement is ${statusReason}` };
     }
 
@@ -107,7 +107,7 @@ export const processBookingWebhookEvent = inngest.createFunction(
         status: "skipped",
         detail: `${SKILL_REGISTRY[skillId].name} is turned off for this engagement — this booking event was not enrolled.`,
       });
-      await finishRun(runId);
+      await finishRun(runId, { status: "skipped" });
       return { processed: false, reason: "skill disabled for this engagement" };
     }
 

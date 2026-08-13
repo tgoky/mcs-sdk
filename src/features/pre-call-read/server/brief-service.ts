@@ -37,7 +37,12 @@ type StepTools = GetStepTools<Inngest.Any>;
  * rather than raw objects, since this prompt is the single place all
  * three sources actually converge into the brief.
  */
-function buildBriefSystemPrompt(tenant: any, researchSummary: string | null, engagementContext: string | null): string {
+function buildBriefSystemPrompt(
+  tenant: any,
+  researchSummary: string | null,
+  engagementContext: string | null,
+  call: NormalizedCall
+): string {
   return `You are the Pre-Call Read briefing engine for Showtime.
 Synthesize a concise closer brief in exactly 7 sections. Format each section title in bold (no # headers).
 Sections required:
@@ -50,7 +55,13 @@ Known call questions: ${JSON.stringify(tenant.topCallQuestions ?? [])}
 ${
   researchSummary
     ? `Public research findings on this prospect (use these for Prospect Overview and Company Context — do not repeat verbatim, synthesize naturally, and never state something the research below didn't actually establish):\n${researchSummary}`
-    : `If research was omitted due to low identity confidence, write "Research omitted — identity confidence below threshold" under Prospect Overview and leave Engagement History blank. Do not fabricate details.`
+    : `Public research was not run for this prospect (their booking details didn't give us enough to confidently confirm identity — a personal email address, a common name, or missing company/LinkedIn info, so we deliberately didn't guess). Do not write an internal-sounding line like "research omitted" or reference a confidence score or threshold anywhere in the brief — the rep reading this doesn't know or care what Rule 14 is. Instead: if bookingNotes below has content, build Prospect Overview and Recommended Opening directly from what the prospect themselves wrote when booking — that is real signal even without research. If bookingNotes is empty too, write one honest, human sentence for Prospect Overview along the lines of "We don't have enough to verify who this is beyond what they told us booking the call — go in with open questions." Never fabricate a company, title, or background detail that isn't in bookingNotes.`
+}
+
+${
+  call.bookingNotes && call.bookingNotes.length > 0
+    ? `What the prospect wrote on the booking form, in their own words (use this — it's the single best signal available when research is skipped, and still useful context when research ran too):\n${call.bookingNotes.map((n: { question: string; answer: string }) => `- ${n.question}: ${n.answer}`).join("\n")}`
+    : ""
 }
 
 ${
@@ -367,13 +378,12 @@ Name: ${call.name}
 Email: ${call.email}
 Company: ${call.company}
 Call time: ${call.callTime.toISOString()}
-Identity confidence score: ${matchResult.totalScore}/100
-Research omitted: ${!matchResult.passed}${showRateLine ? `\n${showRateLine}` : ""}`;
+Identity confidence: ${matchResult.passed ? "confirmed enough to research" : "not confirmed — research skipped, rely on booking notes and be upfront about the gap"}${showRateLine ? `\n${showRateLine}` : ""}`;
 
     const llmResult = await run(`synthesize-${call.id}`, () =>
       callClaudeWithRetry({
         model: MODEL.SYNTHESIS,
-        system: buildBriefSystemPrompt(tenant, researchSummary, engagementContext),
+        system: buildBriefSystemPrompt(tenant, researchSummary, engagementContext, call),
         userMessage,
         maxTokens: 1500,
         runId,
@@ -606,7 +616,7 @@ export async function executeNightlyBriefingCycle(
       status: "skipped",
       detail: `${skipReason} — briefing cycle skipped.`,
     });
-    await finishRun(runId);
+    await finishRun(runId, { status: "skipped" });
     return 0;
   }
 

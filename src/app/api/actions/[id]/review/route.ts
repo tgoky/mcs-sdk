@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { isAdminEmail } from "@/lib/whop-access";
+import { isAuthorizedForEngagement } from "@/lib/whop-access";
 import { db } from "@/lib/db";
 import { pendingActions } from "@/models/schema";
 import { eq } from "drizzle-orm";
@@ -8,17 +8,33 @@ import { ACTION_EXECUTORS, type PendingActionType } from "@/lib/approval-gate";
 
 /**
  * Cross-cutting recovery gap 22 — explicit human-approval gates. This is
- * the "human decides" side of gateOrExecute: an admin approves (runs the
- * deferred action now, via ACTION_EXECUTORS) or rejects (marks it decided,
- * no-op) a queued pending_actions row. See src/lib/approval-gate.ts.
+ * the "human decides" side of gateOrExecute: the engagement's own tenant
+ * (or an admin) approves (runs the deferred action now, via
+ * ACTION_EXECUTORS) or rejects (marks it decided, no-op) a queued
+ * pending_actions row. See src/lib/approval-gate.ts.
+ *
+ * Tenant-scoping fix: this used to be admin-only, but the Queue UI shows
+ * pending actions to every tenant on their own engagement — non-admin
+ * buyers hit a 403 trying to approve/reject their own queue items. The
+ * action is loaded first so we can check ownership of *its* engagement,
+ * not just authenticate the request.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
-  if (!session.whopUserId || !isAdminEmail(session.email)) {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  if (!session.whopUserId) {
+    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
   const { id } = await params;
+
+  const [action] = await db.select().from(pendingActions).where(eq(pendingActions.id, id)).limit(1);
+  if (!action || action.status !== "pending") {
+    return NextResponse.json({ error: "Pending action not found or already decided." }, { status: 404 });
+  }
+
+  if (!(await isAuthorizedForEngagement(session, action.engagementId))) {
+    return NextResponse.json({ error: "You don't have access to this engagement." }, { status: 403 });
+  }
 
   let body: { decision?: "approved" | "rejected" };
   try {
@@ -29,11 +45,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if (body.decision !== "approved" && body.decision !== "rejected") {
     return NextResponse.json({ error: "decision must be 'approved' or 'rejected'." }, { status: 400 });
-  }
-
-  const [action] = await db.select().from(pendingActions).where(eq(pendingActions.id, id)).limit(1);
-  if (!action || action.status !== "pending") {
-    return NextResponse.json({ error: "Pending action not found or already decided." }, { status: 404 });
   }
 
   if (body.decision === "rejected") {

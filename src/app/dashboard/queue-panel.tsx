@@ -330,10 +330,19 @@ function QueueRow({
             <GroupCountToggle count={groupCount} expanded={groupExpanded} onToggle={onToggleGroup} />
           )}
         </div>
-        <p className="text-xs text-zinc-400 truncate">
+        {/*
+          Reasoning fix — this used to be one truncated line cramming
+          buyer name + subtitle + relative time together, so a real
+          sentence (queue.ts already computes the sweep's actual
+          reasoning into `subtitle` — e.g. "Sarah missed Thursday's call,
+          nobody logged an outcome, and there's no CRM activity") got cut
+          off mid-thought. The reasoning now gets its own line with room
+          to read (clamped at 2 lines, not 1, for the rare longer one);
+          buyer/timestamp move to a separate compact metadata line below it.
+        */}
+        <p className="text-xs text-zinc-300 line-clamp-2 leading-relaxed">{item.subtitle}</p>
+        <p className="text-[11px] text-zinc-500 truncate">
           {item.buyer ? `${item.buyer} · ` : ""}
-          {item.subtitle}
-          {" · "}
           {relativeTime(item.createdAt)}
         </p>
         {errorText && (

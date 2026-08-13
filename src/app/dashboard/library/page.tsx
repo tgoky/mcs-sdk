@@ -111,7 +111,7 @@ export default function LibraryPage() {
               ))}
             </div>
             <Link
-              href="/dashboard/settings?tab=booking-sync"
+              href="/dashboard/settings/booking-sync"
               className="inline-flex items-center gap-1.5 text-xs font-mono text-zinc-500 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
             >
               <KeyRound size={12} />

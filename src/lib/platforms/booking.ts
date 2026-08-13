@@ -70,6 +70,12 @@ interface CalComBookingResponses {
   linkedInUrl?: string;
   phone?: string;
   attendeePhoneNumber?: string;
+  // Horror Story #2 fix — Cal.com booking forms can carry arbitrary
+  // custom fields beyond the ones named above (e.g. "notes", "What would
+  // you like to discuss?"). The named fields keep their own typed keys
+  // for backward compat; this index signature is only read by
+  // extractCalComNotes below, which skips the named keys already used.
+  [customFieldKey: string]: string | undefined;
 }
 interface CalComBooking {
   id: string | number;
@@ -217,6 +223,18 @@ export interface NormalizedCall {
   // to be over" — see crons.ts's sweep-window comment and
   // call-duration-estimator.ts for how the unknown case is handled.
   callEndTime?: Date;
+  // Horror Story #2 fix — the prospect's own free-text answers from the
+  // booking form (e.g. "what would you like to discuss?"), previously
+  // fetched (questions_and_answers on Calendly, custom_fields on OnceHub)
+  // but discarded after picking out company/LinkedIn. This is the
+  // highest-signal, zero-AI-cost input available for a brief and it was
+  // being thrown away. Excludes whichever Q&A entries were already used
+  // for `company`/`linkedInUrl` above, so the brief doesn't show the same
+  // answer twice under two different labels. Undefined (not empty array)
+  // when the platform/method doesn't populate this yet — see per-platform
+  // comments at each construction site for what's actually wired vs. not
+  // yet doc-verified.
+  bookingNotes?: { question: string; answer: string }[];
 }
 
 // ── Calendly ──────────────────────────────────────────────────────────────
@@ -262,6 +280,25 @@ export class CalendlyClient {
   }
 
   /**
+   * Horror Story #2 fix — returns every question_and_answer pair NOT
+   * already consumed by the company/LinkedIn extraction above it at each
+   * call site, so a brief never shows the same answer twice under two
+   * labels. This is the prospect's own words on why they booked — the
+   * single cheapest, highest-impact brief improvement available, per the
+   * audit doc, and it requires zero AI.
+   */
+  private extractBookingNotes(invitee: CalendlyInvitee): { question: string; answer: string }[] {
+    return (invitee.questions_and_answers ?? [])
+      .filter((q) => {
+        const question = q.question.toLowerCase();
+        const isCompanyQuestion = question.includes("company");
+        const isLinkedInQuestion = question.includes("linkedin") || (q.answer ?? "").includes("linkedin.com/in/");
+        return !isCompanyQuestion && !isLinkedInQuestion && (q.answer ?? "").trim().length > 0;
+      })
+      .map((q) => ({ question: q.question, answer: q.answer ?? "" }));
+  }
+
+  /**
    * Fleches tomorrow's scheduled events and expands each to its invitee record.
    * Calendly v2: /scheduled_events does NOT include invitee data — must call
    * /scheduled_events/{uuid}/invitees per event.
@@ -300,7 +337,7 @@ export class CalendlyClient {
 
       results.push({
         id: eventUuid,
-        name: invitee.name ?? "Unknown",
+        name: invitee.name ?? "Prospect",
         email: invitee.email ?? "",
         company:
           invitee.questions_and_answers?.find((q) =>
@@ -313,6 +350,7 @@ export class CalendlyClient {
         callTime: new Date(event.start_time),
         callEndTime: event.end_time ? new Date(event.end_time) : undefined,
         meetingUrl: event.location?.join_url ?? undefined,
+        bookingNotes: this.extractBookingNotes(invitee),
       });
     }
     return results;
@@ -358,7 +396,7 @@ export class CalendlyClient {
 
                 results.push({
           id: invitee.uri ?? eventUuid, // <--- This is all you need
-          name: invitee.name ?? "Unknown",
+          name: invitee.name ?? "Prospect",
           email: invitee.email ?? "",
           company:
             invitee.questions_and_answers?.find((q) =>
@@ -369,6 +407,7 @@ export class CalendlyClient {
           callEndTime: event.end_time ? new Date(event.end_time) : undefined,
           meetingUrl: event.location?.join_url ?? undefined,
           eventKind: status === "canceled" ? "cancelled" : "created",
+          bookingNotes: this.extractBookingNotes(invitee),
         });
       }
     }
@@ -408,7 +447,7 @@ export class CalendlyClient {
 
       results.push({
         id: eventUuid,
-        name: invitee.name ?? "Unknown",
+        name: invitee.name ?? "Prospect",
         email: invitee.email ?? "",
         company:
           invitee.questions_and_answers?.find((q) => q.question.toLowerCase().includes("company"))?.answer ?? "Not Stated",
@@ -620,6 +659,26 @@ export class CalendlyClient {
 
 // ── Cal.com ───────────────────────────────────────────────────────────────
 
+/**
+ * Horror Story #2 fix — every bookingFieldsResponses key not already
+ * consumed by the company/linkedin/phone extraction at each Cal.com call
+ * site, so the brief doesn't show the same answer twice under two labels.
+ */
+const CALCOM_NAMED_FIELDS = new Set([
+  "company",
+  "organization",
+  "linkedin",
+  "linkedInUrl",
+  "phone",
+  "attendeePhoneNumber",
+]);
+function extractCalComNotes(responses?: CalComBookingResponses): { question: string; answer: string }[] {
+  if (!responses) return [];
+  return Object.entries(responses)
+    .filter(([key, value]) => !CALCOM_NAMED_FIELDS.has(key) && (value ?? "").trim().length > 0)
+    .map(([key, value]) => ({ question: key, answer: value! }));
+}
+
 export class CalComClient {
   private baseUrl = "https://api.cal.com/v2";
   private headers: HeadersInit;
@@ -658,7 +717,7 @@ export class CalComClient {
       const attendee = booking.attendees?.[0] ?? {};
       return {
         id: String(booking.id),
-        name: attendee.name ?? "Unknown",
+        name: attendee.name ?? "Prospect",
         email: attendee.email ?? "",
         company:
           booking.bookingFieldsResponses?.company ??
@@ -667,6 +726,7 @@ export class CalComClient {
         linkedInUrl: booking.bookingFieldsResponses?.linkedin ?? booking.bookingFieldsResponses?.linkedInUrl ?? undefined,
         callTime: new Date(booking.start),
         callEndTime: booking.end ? new Date(booking.end) : undefined,
+        bookingNotes: extractCalComNotes(booking.bookingFieldsResponses),
       };
     });
   }
@@ -690,7 +750,7 @@ export class CalComClient {
       const attendee = booking.attendees?.[0] ?? {};
       return {
         id: String(booking.id),
-        name: attendee.name ?? "Unknown",
+        name: attendee.name ?? "Prospect",
         email: attendee.email ?? "",
         company:
           booking.bookingFieldsResponses?.company ??
@@ -700,6 +760,7 @@ export class CalComClient {
         callTime: new Date(booking.start),
         callEndTime: booking.end ? new Date(booking.end) : undefined,
         eventKind: (booking.status === "cancelled" ? "cancelled" : "created") as "created" | "cancelled",
+        bookingNotes: extractCalComNotes(booking.bookingFieldsResponses),
       };
     });
   }
@@ -726,12 +787,13 @@ export class CalComClient {
       const attendee = booking.attendees?.[0] ?? {};
       return {
         id: String(booking.id),
-        name: attendee.name ?? "Unknown",
+        name: attendee.name ?? "Prospect",
         email: attendee.email ?? "",
         company: booking.bookingFieldsResponses?.company ?? booking.bookingFieldsResponses?.organization ?? "Not Stated",
         linkedInUrl: booking.bookingFieldsResponses?.linkedin ?? booking.bookingFieldsResponses?.linkedInUrl ?? undefined,
         callTime: new Date(booking.start),
         callEndTime: booking.end ? new Date(booking.end) : undefined,
+        bookingNotes: extractCalComNotes(booking.bookingFieldsResponses),
       };
     });
   }
@@ -966,7 +1028,7 @@ export class GHLCalendarClient {
       const isCancelled = event.appointmentStatus?.toLowerCase() === "cancelled";
       calls.push({
         id: event.id,
-        name: contact?.name ?? "Unknown",
+        name: contact?.name ?? "Prospect",
         email: contact?.email ?? "",
         company: contact?.companyName ?? "Not Stated",
         phone: contact?.phone ?? undefined,
@@ -979,6 +1041,15 @@ export class GHLCalendarClient {
         callTime: new Date(event.startTime),
         callEndTime: event.endTime ? new Date(event.endTime) : undefined,
         eventKind: isCancelled ? "cancelled" : "created",
+        // Horror Story #2 fix — bookingNotes deliberately left undefined
+        // here, not populated with a guess. Same limitation as the
+        // LinkedIn comment above: GHL custom fields are buyer-defined
+        // (Custom Fields API returns opaque per-account field IDs, not a
+        // stable "notes" key this app could reliably read across
+        // accounts), so there's no doc-verified source to extract from
+        // without per-account field-name configuration this app doesn't
+        // have yet — unlike Calendly/Cal.com/OnceHub, where the field
+        // shapes are fixed and confirmed above.
       });
     }
     return calls;
@@ -1074,15 +1145,23 @@ export class OnceHubClient {
     const linkedinField = booking.custom_fields?.find(
       (f) => /linkedin/i.test(f.name) || (f.value ?? "").includes("linkedin.com/in/")
     );
+    // Horror Story #2 fix — every other custom field OnceHub's booking
+    // form collected, excluding the three already pulled out above, so
+    // the brief doesn't show an answer twice under two labels.
+    const usedFieldNames = new Set([nameField?.name, companyField?.name, linkedinField?.name].filter(Boolean));
+    const bookingNotes = (booking.custom_fields ?? [])
+      .filter((f) => !usedFieldNames.has(f.name) && (f.value ?? "").trim().length > 0)
+      .map((f) => ({ question: f.name, answer: f.value! }));
 
     return {
       id: booking.id,
-      name: nameField?.value ?? "Unknown",
+      name: nameField?.value ?? "Prospect",
       email,
       company: companyField?.value ?? "Not Stated",
       linkedInUrl: linkedinField?.value ?? undefined,
       callTime: new Date(booking.starting_time),
       eventKind,
+      bookingNotes,
     };
   }
 

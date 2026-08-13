@@ -17,9 +17,19 @@ interface ConfirmPageProps {
 }
 
 /**
- * Public Post-Booking Landing Zone Router
+ * Public Post-Booking Confirmation Page
  * Location: src/app/confirm/[id]/page.tsx
- * Captures scheduling parameters and provides an elegant confirmation view
+ *
+ * Horror Story fix — this page is shown to a cold prospect right after
+ * they book, not to the buyer or their team. It previously read like a
+ * sci-fi terminal ("Secure transmission link verified", "meeting
+ * parameters have been correctly recorded", "Showtime Telemetry
+ * Secured") — jargon a booking prospect has no context for, plus this
+ * app's own internal product name ("Showtime") leaking onto a page that
+ * should look like it belongs to {tenant.buyer}, not to the platform
+ * running underneath. This is also the un-styled fallback route (buyers
+ * can configure a custom confirmation page instead — see the 5 templates
+ * in templates/), so it's competing with those on first impression.
  */
 export default async function PublicBookingConfirmationPage({
   params,
@@ -43,12 +53,12 @@ export default async function PublicBookingConfirmationPage({
   // Parse incoming scheduler metadata fields safely
   const rawFirstName = resolvedSearchParams.invitee_first_name ?? "";
   const rawLastName = resolvedSearchParams.invitee_last_name ?? "";
-  const prospectName = `${rawFirstName} ${rawLastName}`.trim() || "Prospect";
-  
-  const assignedHost = resolvedSearchParams.assigned_to ?? tenant.prospectMeets ?? "our lead strategist";
-  
+  const prospectName = `${rawFirstName} ${rawLastName}`.trim();
+
+  const assignedHost = resolvedSearchParams.assigned_to ?? tenant.prospectMeets ?? "our team";
+
   // Cleanly format execution dates if available
-  let localizedTimeText = "your requested interval slot";
+  let localizedTimeText = "the time you selected";
   if (resolvedSearchParams.event_start_time) {
     try {
       localizedTimeText = new Date(resolvedSearchParams.event_start_time).toLocaleDateString(undefined, {
@@ -71,31 +81,29 @@ export default async function PublicBookingConfirmationPage({
         
         <div className="space-y-2 text-center">
           <div className="h-8 w-8 rounded-lg bg-zinc-100 flex items-center justify-center text-zinc-950 font-black text-xs mx-auto mb-4 shadow-sm">
-            M
+            {(tenant.buyer?.trim()?.[0] ?? "?").toUpperCase()}
           </div>
           <h1 className="text-lg font-medium text-zinc-100 tracking-tighter">
-            Booking Confirmed
+            You&apos;re booked
           </h1>
           <p className="text-xs text-zinc-500">
-            Secure transmission link verified with {tenant.buyer}.
+            with {tenant.buyer}
           </p>
         </div>
 
         <div className="border-t border-b border-zinc-900/60 py-4 space-y-3 font-sans text-xs text-zinc-400 leading-relaxed">
           <p>
-            Hello <span className="text-zinc-200 font-mono font-medium">{prospectName}</span>, your meeting parameters have been correctly recorded.
+            {prospectName ? (
+              <>Hi <span className="text-zinc-200 font-mono font-medium">{prospectName}</span>, you&apos;re all set.</>
+            ) : (
+              "You're all set."
+            )}
           </p>
           <p>
-            You are scheduled to connect with <span className="text-zinc-200 font-medium capitalize">{assignedHost}</span> on <span className="text-ink font-mono font-medium">{localizedTimeText}</span>.
+            You&apos;ll meet with <span className="text-zinc-200 font-medium capitalize">{assignedHost}</span> on <span className="text-ink font-mono font-medium">{localizedTimeText}</span>.
           </p>
           <p className="text-[13px] text-zinc-500 font-light pt-1">
-            An automated calendar invitation containing direct video coordinates has been dispatched to your provided contact record. Our systems are preparing brief metrics for our team ahead of the sync.
-          </p>
-        </div>
-
-        <div className="text-center">
-          <p className="text-[11px] font-mono text-zinc-600 uppercase tracking-widest">
-            Showtime Telemetry Secured
+            A calendar invite with the video link is on its way to your email. We&apos;re looking forward to the call.
           </p>
         </div>
       </div>

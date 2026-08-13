@@ -18,6 +18,26 @@ import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
 import { StatusPill, toneFromSeverity } from "../_shared/status-pill";
 import { EmptyState } from "../_shared/empty-state";
+
+/**
+ * Horror Story #4 fix — audit-engine.ts writes gap entries like
+ * "[insufficient-data] Booking show rate: sample too small (current n=0,
+ * prior n=0, floor=5). Delta suppressed, no recommendation should be
+ * generated for this metric." — a string built for the LLM prompt (it's
+ * an instruction: don't generate a recommendation for this one), not for
+ * a person reading the report. This was rendering verbatim, brackets and
+ * all. Other gap strings (e.g. "Could not pull X: <error>") are already
+ * plain English and pass through unchanged.
+ */
+const INSUFFICIENT_DATA_GAP = /^\[insufficient-data\] (.+?): sample too small \(current n=(\d+), prior n=(\d+), floor=(\d+)\)\./;
+function humanizeGap(gap: string): string {
+  const match = gap.match(INSUFFICIENT_DATA_GAP);
+  if (!match) return gap;
+  const [, metricName, current, , floor] = match;
+  const have = Number(current);
+  const need = Number(floor);
+  return `${metricName} — not enough data yet to call a trend (${have} this period, need at least ${need}).`;
+}
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { AuditRow, LeakMapDetail } from "../_shared/types";
 
@@ -165,8 +185,8 @@ export function LeakMapView({ detail }: { detail: LeakMapDetail }) {
                   </div>
                   <ul className="space-y-1 font-sans">
                     {filteredGaps.map((g, i) => (
-                      <li key={i} className="text-xs text-zinc-500 font-mono">
-                        · {g}
+                      <li key={i} className="text-xs text-zinc-500 font-sans">
+                        · {humanizeGap(g)}
                       </li>
                     ))}
                   </ul>

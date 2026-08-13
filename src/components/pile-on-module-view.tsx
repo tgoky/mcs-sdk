@@ -248,6 +248,11 @@ export function PileOnModuleView({
   }, [filteredRuns, groupRepeats]);
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  // Quick-action gear menu fix: this was hardcoded open={false} /
+  // onOpenChange={() => {}} — a controlled Popover that could never open.
+  // One openPanelId tracks which row's menu is open at a time (opening a
+  // second one closes the first, same as any menu-bar pattern).
+  const [openPanelId, setOpenPanelId] = useState<string | null>(null);
   function toggleGroupExpanded(sig: string) {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -455,9 +460,9 @@ export function PileOnModuleView({
                       {/* Quick-Action Gear Menu */}
                       <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <ActionPanel
-                          open={false}
-                          onOpenChange={() => {}}
-                          sections={buildRunSections(r, dispatch, () => {}, refresh)}
+                          open={openPanelId === r.id}
+                          onOpenChange={(next) => setOpenPanelId(next ? r.id : null)}
+                          sections={buildRunSections(r, dispatch, () => setOpenPanelId(null), refresh)}
                           errorText={error}
                           busyKey={busyKey}
                           triggerLabel={`Quick actions for ${r.buyerName ?? "run"}`}

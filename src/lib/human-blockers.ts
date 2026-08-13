@@ -106,6 +106,20 @@ export async function createBlocker(input: {
  * that already resumed would just be ignored anyway — but there's no
  * reason to emit it.
  */
+/**
+ * Looks up which engagement a blocker belongs to, without mutating it —
+ * used by the resolve API route to authorize the request (tenant owns
+ * this engagement, or is admin) before calling resolveBlocker/abandonBlocker.
+ */
+export async function getBlockerEngagementId(blockerId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ engagementId: humanBlockers.engagementId })
+    .from(humanBlockers)
+    .where(eq(humanBlockers.id, blockerId))
+    .limit(1);
+  return row?.engagementId ?? null;
+}
+
 export async function resolveBlocker(
   blockerId: string,
   resolvedBy: string,
