@@ -245,7 +245,10 @@ export default function PinDownBridgePage({ params }: { params: Promise<{ id: st
             once Pin-Down runs.
           </p>
         </div>
-        <TemplatePicker form={previewData} onSelect={setConfirmationPageTemplate} />
+      <TemplatePicker 
+  form={{ ...previewData, confirmationPageTemplate }} 
+  onSelect={setConfirmationPageTemplate} 
+/>
       </div>
       )}
 
