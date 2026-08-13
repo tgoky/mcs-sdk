@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { InputField, SelectField } from "../../../new/form-fields";
 
@@ -16,8 +16,8 @@ const DAY_OPTIONS = [
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${h.toString().padStart(2, "0")}:00` }));
 const DAY_OF_MONTH_OPTIONS = Array.from({ length: 28 }, (_, d) => ({ value: String(d + 1), label: String(d + 1) }));
 
-export default function LeakMapBridgePage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default function LeakMapBridgePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);

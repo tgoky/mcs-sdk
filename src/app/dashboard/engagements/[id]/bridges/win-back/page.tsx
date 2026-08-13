@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { InputField, SelectField } from "../../../new/form-fields";
 
@@ -10,8 +10,8 @@ import { InputField, SelectField } from "../../../new/form-fields";
  * reachable anytime from the engagement detail page as a plain
  * review/edit screen, not a required stop before turning Win-Back on.
  */
-export default function WinBackBridgePage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default function WinBackBridgePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
