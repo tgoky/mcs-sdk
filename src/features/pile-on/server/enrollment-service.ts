@@ -193,11 +193,6 @@ export async function handleInboundBookingEvent(
           activecampaign_base_url: stack.activecampaign_base_url,
         })
       );
-      await logStep(runId, {
-        phase: "win_back_exit_signal",
-        status: "success",
-        detail: `Sent rebooked exit signal for ${prospectEmail} (no-op if they were never in win-back).`,
-      });
 
       // The enrollment status flip and the recovery_count increment must
       // land together — previously these were two independent statements,
@@ -236,6 +231,21 @@ export async function handleInboundBookingEvent(
 
         return rows;
       }));
+
+      // Log line moved here (was previously written before we knew the
+      // outcome) and now says what actually happened: the exit signal
+      // fires unconditionally (see the comment above), but "removed from
+      // win-back" was previously asserted even for prospects who were
+      // never enrolled in the first place — a false claim on the common
+      // path, not just an internal-jargon problem.
+      await logStep(runId, {
+        phase: "win_back_exit_signal",
+        status: "success",
+        detail:
+          rebookedRows.length > 0
+            ? `Removed ${prospectEmail} from the win-back sequence — they rebooked.`
+            : `${prospectEmail} rebooked directly — they weren't in an active win-back sequence, nothing to remove.`,
+      });
 
       if (rebookedRows.length > 0) {
 

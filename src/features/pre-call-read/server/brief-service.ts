@@ -219,7 +219,7 @@ async function processSingleBriefCall(
     const matchResultValue = await run(`rule14-gate-${call.id}`, () =>
       evaluatePersonMatch(
         { email: call.email, name: call.name, companySupplied: call.company, linkedInUrlFromApp: call.linkedInUrl },
-        stack.person_match_confidence_threshold ?? 99
+        stack.person_match_confidence_threshold ?? 70
       )
     );
     matchResult = matchResultValue;

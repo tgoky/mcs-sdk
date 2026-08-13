@@ -35,6 +35,30 @@ export async function getEngagementSkillStates(engagementId: string): Promise<Re
   return Object.fromEntries(SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<SkillId, boolean>;
 }
 
+/**
+ * One query for every engagement with a given skill explicitly disabled —
+ * for cron/poller prepare steps that need to filter N engagements down to
+ * "eligible for this skill" without N round trips to
+ * isSkillEnabledForEngagement. Same "no row = enabled" contract: this
+ * returns only the explicit opt-outs, so callers exclude these ids from
+ * their eligible set rather than trying to build an "enabled" list.
+ *
+ * Ghost-run fix: every cron/poller that creates a visible skillRuns row
+ * for a skill must call this (or isSkillEnabledForEngagement) BEFORE
+ * creating that row, not after — see nightlyBriefsCron / leakMapScheduleCron
+ * in src/inngest/crons.ts and pollBookingPlatforms in booking-poller.ts for
+ * the pattern. A disabled skill should never appear to run and then reveal
+ * itself as skipped; it should simply not appear.
+ */
+export async function getDisabledEngagementIdsForSkill(skillId: SkillId): Promise<Set<string>> {
+  const rows = await db
+    .select({ engagementId: engagementSkills.engagementId })
+    .from(engagementSkills)
+    .where(and(eq(engagementSkills.skillId, skillId), eq(engagementSkills.enabled, false)));
+
+  return new Set(rows.map((r) => r.engagementId));
+}
+
 /** Upserts the enabled flag for one (engagementId, skillId) pair — see the Skills panel on the engagement detail page. */
 export async function setSkillEnabledForEngagement(
   engagementId: string,

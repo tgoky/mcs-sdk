@@ -7,6 +7,7 @@ import { upsertBookingRoster } from "@/lib/booking-roster";
 import { deriveWebhookIdempotencyKey } from "@/lib/platforms/booking";
 import { startRun, failRun } from "@/lib/run-log";
 import { gateOrExecute } from "@/lib/approval-gate";
+import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { inngest, bookingWebhookProcess } from "@/lib/inngest";
 import crypto from "crypto";
 
@@ -354,6 +355,16 @@ export async function POST(request: Request) {
     await upsertBookingRoster(payload, tenant.engagementId, eventKind, stack?.booking_platform).catch((e: unknown) => {
       console.error("[webhook] Roster write failed (non-fatal):", e instanceof Error ? e.message : String(e));
     });
+
+    // Ghost-run fix: this used to only be checked downstream, inside
+    // src/inngest/booking-webhook.ts, AFTER startRun had already created
+    // a visible run — so a disabled skill's booking still showed up as a
+    // live execution, then revealed itself as skipped when opened. The
+    // roster write above already happened, so the booking is still on the
+    // calendar; nothing else needs to run or appear to run.
+    if (!(await isSkillEnabledForEngagement(tenant.engagementId, skillName))) {
+      return NextResponse.json({ success: true, skillDisabled: true });
+    }
 
     const gateResult = await gateOrExecute(
       stack,

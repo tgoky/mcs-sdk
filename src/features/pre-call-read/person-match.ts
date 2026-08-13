@@ -32,7 +32,8 @@ function normalizeCompanyString(text: string): string {
 /**
  * Rule 14 identity confidence evaluator.
  * Scores 0–100 across four input signals before any external API is called.
- * Must reach `threshold` (default 99) for research to proceed.
+ * Must reach `threshold` (default 70 — see the reasoning at the call site
+ * default in submit-payload.ts) for research to proceed.
  *
  * Points breakdown:
  *   Input 1 — email domain:  0 | 15 | 30
@@ -43,7 +44,7 @@ function normalizeCompanyString(text: string): string {
  */
 export async function evaluatePersonMatch(
   payload: DisambiguationPayload,
-  threshold = 99
+  threshold = 70
 ): Promise<DisambiguationResult> {
   let score = 0;
   const trace: Record<string, number | string> = {};

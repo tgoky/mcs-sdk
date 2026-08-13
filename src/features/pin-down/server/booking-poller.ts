@@ -5,10 +5,9 @@ import { resolveCredential } from "@/lib/credentials";
 import { listBookingsSinceForTenant, deriveWebhookIdempotencyKey } from "@/lib/platforms/booking";
 import { handleInboundBookingEvent, classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
 import { upsertBookingRoster } from "@/lib/booking-roster";
-import { startRun, failRun, logStep, finishRun } from "@/lib/run-log";
+import { startRun, failRun, logStep } from "@/lib/run-log";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
-import { SKILL_REGISTRY } from "@/lib/skill-registry";
 import crypto from "crypto";
 import type { GetStepTools, Inngest } from "inngest";
 
@@ -199,37 +198,38 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
       continue; // already processed, either by a prior poll or a live webhook
     }
 
-    const runId = crypto.randomUUID();
     const skillId = eventKind === "cancelled" ? "win-back" : "pile-on";
+
+    // Roster write — unconditional, ahead of the skill-enabled check below,
+    // fail-soft. "A booking happened" is ground truth for the calendar
+    // regardless of which automation reacts to it, and it no longer needs
+    // a run to attach its log line to (see the ghost-run fix below).
+    const rosterResult = await upsertBookingRoster(syntheticPayload, engagementId, eventKind, stack.booking_platform).catch(
+      (e: unknown) => ({ wrote: false, reason: e instanceof Error ? e.message : String(e) })
+    );
+
+    // Ghost-run fix: this check used to happen AFTER startRun, so a
+    // disabled skill still got a visible run created for it that then
+    // revealed itself as skipped when opened — hide-and-seek. Checking
+    // first means a disabled skill never creates a run at all.
+    if (!(await isSkillEnabledForEngagement(engagementId, skillId))) {
+      continue;
+    }
+
+    const runId = crypto.randomUUID();
     try {
       await startRun({
         id: runId,
         engagementId,
         skillName: skillId,
         phase: "webhook_received",
-        label: `${call.name} <${call.email}> (polled)`,
+        label: `${call.name} <${call.email}>`,
       });
-
-      // Roster write — same rationale as booking-webhook.ts: unconditional,
-      // ahead of the skill-enabled check below, fail-soft.
-      const rosterResult = await upsertBookingRoster(syntheticPayload, engagementId, eventKind, stack.booking_platform).catch(
-        (e: unknown) => ({ wrote: false, reason: e instanceof Error ? e.message : String(e) })
-      );
       await logStep(runId, {
         phase: "booking_roster",
         status: rosterResult.wrote ? "success" : "skipped",
         detail: rosterResult.wrote ? "Roster updated" : (rosterResult.reason ?? "Not written"),
       });
-
-      if (!(await isSkillEnabledForEngagement(engagementId, skillId))) {
-        await logStep(runId, {
-          phase: "skill_disabled",
-          status: "skipped",
-          detail: `${SKILL_REGISTRY[skillId].name} is turned off for this engagement — this polled booking was not enrolled.`,
-        });
-        await finishRun(runId);
-        continue;
-      }
 
       const classified = classifyBookingEvent(syntheticPayload);
       await handleInboundBookingEvent(syntheticPayload, tenant, runId, classified === "unknown" ? eventKind : classified, step);

@@ -43,7 +43,7 @@ import { CANARY_CHECKS, runCanaryCheck, getCanaryEngagementId } from "@/lib/plat
 import { and, eq, lt, gte, isNull, notInArray } from "drizzle-orm";
 import type { EngagementStack } from "@/models/schema";
 import { isEngagementPaused } from "@/lib/engagement-status";
-import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { isSkillEnabledForEngagement, getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
 import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
 import { hasPostCallCrmActivity } from "@/features/pre-call-read/server/crm-activity-check";
 import { estimateEngagementCallDurationMinutes } from "@/features/pre-call-read/server/call-duration-estimator";
@@ -75,12 +75,22 @@ export const nightlyBriefsCron = inngest.createFunction(
       // only covers pausedAt, not deletedAt, so this has to be filtered
       // separately at the query level.
       const all = await db.select().from(engagements).where(isNull(engagements.deletedAt));
+
+      // Ghost-run fix: this used to be checked downstream in skill.ts,
+      // AFTER startRun already created a visible run for a disabled
+      // skill — the run would appear live, then reveal itself as
+      // "turned off for this engagement, nothing ran" when opened.
+      // Filtering here means a disabled engagement never gets a run
+      // created for it in the first place.
+      const disabledForPreCallRead = await getDisabledEngagementIdsForSkill("pre-call-read");
+
       // Only engagements that finished Pin-Down (booking platform wired
       // up) have anything to brief tonight.
     const eligible = all.filter((t) => {
   const stack = t.stack as EngagementStack;
   return (
     !isEngagementPaused(t) &&
+    !disabledForPreCallRead.has(t.engagementId) &&
     stack?.booking_platform &&
     stack?.booking_platform_credentials_ref &&
     // ✅ Exclude dynamic polling clients so they don't get double-processed at night
@@ -97,7 +107,7 @@ export const nightlyBriefsCron = inngest.createFunction(
           engagementId: tenant.engagementId,
           skillName: "pre-call-read",
           phase: "roster_fetch",
-          label: "Nightly cron (Inngest)",
+          label: "Nightly briefing run",
         });
         out.push({ runId, engagementId: tenant.engagementId });
       }
@@ -139,10 +149,14 @@ export const leakMapScheduleCron = inngest.createFunction(
       // isNull(deletedAt) — see the same note on nightlyBriefsCron above;
       // isEngagementPaused() below only covers pausedAt.
       const targets = await db.select().from(engagements).where(isNull(engagements.deletedAt));
+      // Ghost-run fix — same as nightlyBriefsCron above: check enablement
+      // before startRun, not after.
+      const disabledForLeakMap = await getDisabledEngagementIdsForSkill("leak-map");
       const out: { runId: string; engagementId: string; auditType: "weekly" | "monthly" }[] = [];
 
       for (const tenant of targets) {
         if (isEngagementPaused(tenant)) continue;
+        if (disabledForLeakMap.has(tenant.engagementId)) continue;
 
         const stack = tenant.stack as EngagementStack | null;
 
@@ -164,7 +178,7 @@ export const leakMapScheduleCron = inngest.createFunction(
             engagementId: tenant.engagementId,
             skillName: "leak-map",
             phase: "stage_1_data_pull",
-            label: `${auditType === "weekly" ? "Weekly" : "Monthly"} cron (Inngest, ${stack?.[auditType === "weekly" ? "weekly_summary_schedule" : "monthly_deep_dive_schedule"]?.timezone ?? "UTC"})`,
+            label: `${auditType === "weekly" ? "Weekly" : "Monthly"} audit`,
           });
           out.push({ runId, engagementId: tenant.engagementId, auditType });
         }
@@ -564,7 +578,7 @@ export const processDynamicBriefEngagementCron = inngest.createFunction(
       engagementId,
       skillName: "pre-call-read",
       phase: "roster_fetch",
-      label: "Dynamic brief trigger (Inngest)",
+      label: "Brief triggered by call activity",
     });
 
     try {

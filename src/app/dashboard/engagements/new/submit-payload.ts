@@ -66,7 +66,19 @@ export function buildEngagementPayload(form: FormData) {
       hosting_platform_meta: hostingMetaByPlatform[form.hostingPlatform] ?? undefined,
       brief_landing_destination: form.briefDestination,
       slack_webhook_url: form.slackWebhookUrl,
-      person_match_confidence_threshold: 99,
+      // 70, not 99. At 99 the only bookings that ever clear the gate are
+      // ones with a corporate email matching the typed company (30) + a
+      // distinctive name (30) + a submitted LinkedIn URL (25) + a company
+      // field (15) — all four at once, which almost no booking form
+      // actually collects. 70 admits the realistic common case (corporate
+      // domain match + distinctive name + company field = 75, or corporate
+      // domain match + distinctive name alone = 60 falls just short and
+      // correctly stays gated without a company field to cross-check
+      // against) while still requiring at least two independent signals.
+      // A personal-inbox booking with no other signal (Gmail + common
+      // name) still correctly scores near zero and skips research — that
+      // part of the gate is doing its job and shouldn't change.
+      person_match_confidence_threshold: 70,
       buyer_domain: form.marketingDomain || undefined,
       existing_confirmation_page_url: form.existingConfirmationPageUrl || undefined,
 

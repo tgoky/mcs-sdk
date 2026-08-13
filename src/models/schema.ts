@@ -330,7 +330,7 @@ export type EngagementStack = {
   brief_landing_destination?: "slack" | "crm_note" | "calendar_event";
   slack_webhook_url?: string;       // per-engagement, never global
   brief_lead_time_hours?: number;   // default 12, range 1-48
-  person_match_confidence_threshold?: number; // default 99
+  person_match_confidence_threshold?: number; // default 70
   // ── Pre-Call Read recovery gap 1: dynamic trigger ──────────────────────
   // "nightly" (default): one batch run against tomorrow's roster, same as
   // today. "dynamic_webhook": briefs go out as soon as a call falls inside
