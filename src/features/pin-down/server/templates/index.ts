@@ -1,11 +1,7 @@
 import type { ConfirmationPageContent } from "@/lib/platforms/hosting";
 import { buildPageContentModel, type PageBuilderInput, type PageContentModel } from "./content-model";
 import { DEFAULT_TEMPLATE, isTemplateId, type TemplateId } from "./types";
-import { buildSignalHtml } from "./signal";
-import { buildLedgerHtml } from "./ledger";
-import { buildStudioHtml } from "./studio";
-import { buildGridHtml } from "./grid";
-import { buildFieldNotesHtml } from "./fieldnotes";
+
 import { buildContractHtml } from "./contract";
 import { buildGoldenTicketHtml } from "./goldenticket";
 import { buildTentativeHoldHtml } from "./tentativehold";
@@ -17,11 +13,7 @@ export { TEMPLATE_META, TEMPLATE_IDS, DEFAULT_TEMPLATE, isTemplateId } from "./t
 export type { TemplateId, TemplateMeta } from "./types";
 
 const BUILDERS: Record<TemplateId, (model: PageContentModel) => string> = {
-  signal: buildSignalHtml,
-  ledger: buildLedgerHtml,
-  studio: buildStudioHtml,
-  grid: buildGridHtml,
-  fieldnotes: buildFieldNotesHtml,
+
   contract: buildContractHtml,
   goldenticket: buildGoldenTicketHtml,
   tentativehold: buildTentativeHoldHtml,
