@@ -14,9 +14,40 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string; skillId: string }> }
 ) {
+  const { id, skillId } = await params;
+  const session = await getSession();
+
+  // ═══════════════════════════════════════════════════════════
+  // TEMPORARY DIAGNOSTIC — REMOVE AFTER FIX
+  // ═══════════════════════════════════════════════════════════
+  console.log("╔══════ SKILLS ROUTE ══════");
+  console.log("║ engagementId:", JSON.stringify(id));
+  console.log("║ skillId:", skillId);
+  console.log("║ session.whopUserId:", session?.whopUserId);
+  console.log("║ session.email:", session?.email);
+  
+  // Check if the row exists AT ALL (ignoring user ID for this diagnostic)
+  const [diagRow] = await db
+    .select({ 
+      engagementId: engagements.engagementId, 
+      whopUserId: engagements.whopUserId 
+    })
+    .from(engagements)
+    .where(eq(engagements.engagementId, id))
+    .limit(1);
+    
+  console.log("║ row found:", !!diagRow);
+  if (diagRow) {
+    console.log("║ row.engagementId:", JSON.stringify(diagRow.engagementId));
+    console.log("║ row.whopUserId:", diagRow.whopUserId);
+    console.log("║ userId match:", diagRow.whopUserId === session?.whopUserId);
+  } else {
+    console.log("║ ⚠️ ROW DOES NOT EXIST IN DATABASE");
+  }
+  console.log("╚════════════════════════");
+  // ═══════════════════════════════════════════════════════════
+
   try {
-    const { id, skillId } = await params;
-    const session = await getSession();
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
