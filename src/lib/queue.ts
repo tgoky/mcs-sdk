@@ -21,11 +21,28 @@
 // mistake this codebase already found and fixed once).
 
 import { db } from "@/lib/db";
-import { pendingActions, humanBlockers, notifications, engagements, skillRuns, type EngagementStack } from "@/models/schema";
+import {
+  pendingActions,
+  humanBlockers,
+  notifications,
+  engagements,
+  skillRuns,
+  engagementSkills,
+  type EngagementStack,
+} from "@/models/schema";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { ACTION_TYPE_LABELS, BLOCKER_TYPE_LABELS, bookingPlatformLabel, skillName as skillDisplayName } from "@/lib/copy";
 import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
 import { classifyRunError, type StackSection } from "@/lib/error-classification";
+
+/**
+ * The only two skills src/app/api/skill-runs/trigger/route.ts currently
+ * accepts for a manual re-trigger (see lib/quick-actions.ts). A failed run
+ * on any other skill can still be diagnosed and linked to the right
+ * settings section, but "Run again" specifically isn't offered for it —
+ * widen this the day the trigger route grows support for the rest.
+ */
+const RETRIGGERABLE_SKILLS = new Set(["pre-call-read", "leak-map"]);
 
 export type QueueCategory = "approve" | "action_needed" | "alert" | "fyi";
 export type QueueSource = "action" | "blocker" | "notification" | "sync_setup" | "run_failure";
@@ -56,6 +73,16 @@ export interface QueueItem {
   isCredentialIssue?: boolean;
   /** Only set for source "run_failure" — which "Edit stack settings" section the failure belongs to (booking/email/sms/hosting/ad_data). Powers the "Platform area" toolbar chip group. */
   diagnosisSection?: StackSection;
+  /**
+   * Only meaningful for source "run_failure" on one of RETRIGGERABLE_SKILLS
+   * (pre-call-read, leak-map) — whether this skill is currently enabled for
+   * this client per engagementSkills. Undefined for every other item and
+   * for non-retriggerable skills, where it isn't relevant. Powers whether
+   * the row/menu offer "Run again" — see getRepairAction in
+   * lib/queue-repair-action.ts, which must not offer a re-trigger for a
+   * skill the buyer explicitly turned off for this client.
+   */
+  skillEnabledForClient?: boolean;
 }
 
 const CATEGORY_PRIORITY: Record<QueueCategory, number> = {
@@ -152,6 +179,27 @@ async function failedRunQueueItems(
     .orderBy(desc(skillRuns.startedAt))
     .limit(500);
 
+  // One batched lookup for every (engagement, retriggerable skill) pair
+  // that could end up as a run_failure item below, instead of an
+  // isSkillEnabledForEngagement() round trip per item. Only rows that
+  // explicitly disable a skill are stored (see engagement-skills.ts), so
+  // absence from this set means enabled — matching that helper's own
+  // "no row means enabled" default.
+  const disabledPairs = new Set(
+    (
+      await db
+        .select({ engagementId: engagementSkills.engagementId, skillId: engagementSkills.skillId })
+        .from(engagementSkills)
+        .where(
+          and(
+            inArray(engagementSkills.engagementId, engagementIds),
+            inArray(engagementSkills.skillId, [...RETRIGGERABLE_SKILLS]),
+            eq(engagementSkills.enabled, false)
+          )
+        )
+    ).map((r) => `${r.engagementId}:${r.skillId}`)
+  );
+
   const seen = new Set<string>();
   const items: QueueItem[] = [];
 
@@ -185,6 +233,9 @@ async function failedRunQueueItems(
       skillName: run.skillName,
       isCredentialIssue: diagnosis.isCredentialIssue,
       diagnosisSection: diagnosis.section,
+      skillEnabledForClient: RETRIGGERABLE_SKILLS.has(run.skillName)
+        ? !disabledPairs.has(`${run.engagementId}:${run.skillName}`)
+        : undefined,
     });
   }
 

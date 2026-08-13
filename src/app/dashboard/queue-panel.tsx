@@ -10,9 +10,7 @@ import {
   CircleAlert,
   Info,
   ClipboardCheck,
-  PauseCircle,
-  PlayCircle,
-  Waves,
+  RotateCcw,
   Copy,
   Search,
   Plus,
@@ -26,7 +24,8 @@ import {
 import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, skillName as skillDisplayName, SKILLS } from "@/lib/copy";
 import type { StackSection } from "@/lib/error-classification";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
-import { pauseEngagement, resumeEngagement, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
+import { triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
+import { getRepairAction, type RepairAction } from "@/lib/queue-repair-action";
 import { SegmentedTabs, type SegmentedTabOption } from "@/components/segmented-tabs";
 import { TableSearchInput } from "@/components/table-search-input";
 import { TimeRangeMenu, computeTimeRangeBounds, isWithinTimeRange, type TimeRangeValue } from "@/components/time-range-menu";
@@ -51,6 +50,7 @@ export interface QueueItemDTO {
   engagementPausedAt?: string | null;
   isCredentialIssue?: boolean;
   diagnosisSection?: StackSection;
+  skillEnabledForClient?: boolean;
 }
 
 export interface ClientOption {
@@ -205,13 +205,48 @@ function QueueItemPreview({ item }: { item: QueueItemDTO }) {
   );
 }
 
+/**
+ * Turns a getRepairAction() result into the one ActionPanelItem the menu
+ * shows for it — the same repair the row button offers, so the two
+ * surfaces can't disagree. No "Client automations" section here anymore:
+ * pause/resume are client-level and already live on the engagement page,
+ * and a queue row about one failure is the wrong place to stop a client's
+ * whole automation stack or fire off an unrelated skill. See Observation 6.
+ */
+function repairActionItem(
+  repair: RepairAction,
+  dispatch: ReturnType<typeof useQuickActions>["run"],
+  closePanel: () => void,
+  onDone: () => void
+): ActionPanelSection["items"][number] {
+  if (repair.kind === "trigger") {
+    return {
+      key: repair.key,
+      icon: RotateCcw,
+      label: repair.label,
+      onSelect: () =>
+        dispatch(
+          repair.key,
+          () => triggerSkillRun(repair.engagementId, repair.skillName),
+          () => {
+            onDone();
+            closePanel();
+          }
+        ),
+    };
+  }
+  return { key: repair.key, icon: ArrowUpRight, label: repair.label, href: repair.href };
+}
+
 function buildQueueSections(
   item: QueueItemDTO,
   dispatch: ReturnType<typeof useQuickActions>["run"],
   closePanel: () => void,
   onDone: () => void
 ): ActionPanelSection[] {
-  const isPaused = !!item.engagementPausedAt;
+  const repair = getRepairAction(item);
+
+  const fix: ActionPanelSection["items"] = repair ? [repairActionItem(repair, dispatch, closePanel, onDone)] : [];
 
   const nav: ActionPanelSection["items"] = [];
   if (item.runId) {
@@ -226,43 +261,13 @@ function buildQueueSections(
     });
   }
 
-  const automation: ActionPanelSection["items"] = [];
-  if (item.engagementId) {
-    if (item.skillName !== "leak-map") {
-      automation.push({
-        key: "leak-map",
-        icon: Waves,
-        label: "Generate Leak Map for this client",
-        onSelect: () =>
-          dispatch("leak-map", () => triggerSkillRun(item.engagementId as string, "leak-map"), () => { onDone(); closePanel(); }),
-      });
-    }
-    automation.push(
-      isPaused
-        ? {
-            key: "resume",
-            icon: PlayCircle,
-            label: "Resume automations for this client",
-            onSelect: () =>
-              dispatch("resume", () => resumeEngagement(item.engagementId as string), () => { onDone(); closePanel(); }),
-          }
-        : {
-            key: "pause",
-            icon: PauseCircle,
-            label: "Pause automations for this client",
-            onSelect: () =>
-              dispatch("pause", () => pauseEngagement(item.engagementId as string), () => { onDone(); closePanel(); }),
-          }
-    );
-  }
-
   const utility: ActionPanelSection["items"] = [
     { key: "copy", icon: Copy, label: "Copy item ID", onSelect: () => dispatch("copy", () => copyToClipboard(item.id)) },
   ];
 
   const sections: ActionPanelSection[] = [];
+  if (fix.length > 0) sections.push({ label: "Fix", items: fix });
   if (nav.length > 0) sections.push({ label: "Go to", items: nav });
-  if (automation.length > 0) sections.push({ label: "Client automations", items: automation });
   sections.push({ label: "Utility", items: utility });
   return sections;
 }
@@ -302,6 +307,10 @@ function QueueRow({
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const { busyKey, error, run: dispatch } = useQuickActions();
+  // Same derived repair the quick-actions menu below uses — see
+  // Observation 6. The row button renders whatever this returns instead
+  // of a hardcoded "Fix now"/"Review" label, so the two can't disagree.
+  const repair = getRepairAction(item);
 
   return (
     <div className={`group flex items-center gap-3 py-3 px-3 border-b border-sidebar-border/60 last:border-b-0 hover:bg-zinc-800/40 transition-colors ${nested ? "pl-6 bg-zinc-900/20" : ""}`}>
@@ -330,6 +339,12 @@ function QueueRow({
         {errorText && (
           <p className="text-xs text-rose-400 font-mono">{errorText}</p>
         )}
+        {/* Local dispatch error (e.g. a failed row-level "Run again")
+            wouldn't otherwise be visible unless the quick-actions popover
+            happens to be open — surface it here too. */}
+        {error && !errorText && (
+          <p className="text-xs text-rose-400 font-mono">{error}</p>
+        )}
       </div>
 
       <div className="flex items-center gap-1.5 shrink-0">
@@ -354,13 +369,13 @@ function QueueRow({
 
         {item.category === "action_needed" && item.source === "sync_setup" && (
           <>
-            {href ? (
+            {(repair?.kind === "link" ? repair.href : href) ? (
               <Link
-                href={href}
+                href={repair?.kind === "link" ? repair.href : (href as string)}
                 onClick={onLinkNavigate}
                 className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors"
               >
-                <ArrowUpRight size={12} /> Review
+                <ArrowUpRight size={12} /> {repair?.label ?? "Review"}
               </Link>
             ) : null}
             <button
@@ -375,13 +390,23 @@ function QueueRow({
 
         {item.category === "action_needed" && item.source === "run_failure" && (
           <>
-            {href ? (
+            {repair?.kind === "trigger" ? (
+              <button
+                disabled={isBusy || busyKey === repair.key}
+                onClick={() =>
+                  dispatch(repair.key, () => triggerSkillRun(repair.engagementId, repair.skillName), onActionComplete)
+                }
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors disabled:opacity-60"
+              >
+                <RotateCcw size={12} /> {busyKey === repair.key ? "Running…" : repair.label}
+              </button>
+            ) : (repair?.kind === "link" ? repair.href : href) ? (
               <Link
-                href={href}
+                href={repair?.kind === "link" ? repair.href : (href as string)}
                 onClick={onLinkNavigate}
                 className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors"
               >
-                <ArrowUpRight size={12} /> Fix now
+                <ArrowUpRight size={12} /> {repair?.label ?? "Fix now"}
               </Link>
             ) : null}
             <button

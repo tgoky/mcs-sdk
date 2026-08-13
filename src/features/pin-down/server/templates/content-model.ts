@@ -51,8 +51,9 @@ export interface PageContentModel {
   showProof: boolean;
   calendarAddToUrl?: string;
   /** Deterministic short reference code derived from the buyer's name
-   * (e.g. "PD-JSC") — not a real tracking ID, just a docket-style flourish
-   * a couple of templates (Ledger) use as their signature element. */
+   * (e.g. "PD-JSC") — not a real tracking ID, just a docket-style flourish.
+   * Used as a signature element by Ledger, Contract (agreement reference),
+   * and The Golden Ticket (ticket-stub number). */
   reference: string;
 }
 

@@ -1,180 +1,150 @@
-# Critical Analysis: What's Actually Broken, Why, and What To Do
+# The Verdict First
 
-I've read the entire codebase. The good news first, because it matters: **the underlying architecture is genuinely sound** — the run-log system, the Inngest fan-out patterns, the credential encryption, the queue merge logic, the error classification module. These are better than most seed-stage SaaS codebases. The bad news: **your three crises are all real bugs or real design gaps, and they share one root cause — enforcement and diagnosis logic is scattered across entry points instead of centralized, so guarantees the UI promises ("paused means paused," "errors are explained") are only true on *some* code paths.**
+**Don't kill it. But understand what you actually have:** you built a genuinely sophisticated workflow engine — and then shipped its admin console as the product.
 
-Let me take each crisis apart with evidence, then give you the plan.
+Your backend is better than most seed-stage SaaS I've seen: idempotency keys on webhooks, timing-safe signature verification, forced human-approval gates on inferred no-shows, credential vault with key rotation, k-anonymity floors on benchmarks, Inngest fan-out done correctly. That's 60% of the hard work and it's largely *right*.
 
----
+The 30/100 rating is accurate — but it's not because the app is broken everywhere. It's because:
 
-## 1. The GHL 422 — Claude was wrong, and your instinct was right
+1. **Three specific defaults/bugs destroy the golden path** (detailed below — one config value alone is why your briefs are garbage)
+2. **The UI renders your data model instead of your user's mental model.** Your database thinks in `runs`, `steps`, and `phases`. Your users think in *people*, *meetings*, and *money*. Every screen shows them the former.
+3. **You have no empty-state design anywhere**, so a new account experiences the product at its absolute worst (n=0 audits, "Unknown" prospects, "No brief text generated").
 
-Trace the actual call chain in `GHLCalendarClient` (src/lib/platforms/booking.ts):
-
-1. `fetchEventsInRange()` first calls `resolveCalendarId()`, which hits `GET /calendars/?locationId={id}`.
-2. **If your location ID or token were bad, the run would have failed with `"GHL calendar list fetch failed [4xx]"` — a different error string.**
-3. Your error is `"GHL appointments fetch failed [422]"` — which is thrown *after* the calendar list succeeded.
-
-**Your token and location ID are verifiably fine. The failure is in the `/calendars/events` request this codebase constructs — not in your configuration.** The "bad location ID" diagnosis was wrong, and the evidence disproving it was sitting in your own step log the whole time. Nothing surfaced that reasoning — that's the black box complaint, precisely.
-
-### The two most likely real causes
-
-**A. The calendar ID you configured is being ignored.** This is the strongest candidate and it's a genuine bug:
-
-- The schema has `booking_platform_meta.calendar_id`, and the Edit Stack Settings form even offers a "Calendar ID (optional)" field for GHL.
-- **`GHLCalendarClient` never reads it.** Its constructor takes only `(apiKey, locationId)`, and `resolveCalendarId()` always lists all calendars and picks *the first active one* — which may be a group/round-robin/service calendar type that GHL's events endpoint rejects with a 422.
-- Worse: the onboarding wizard *does* have you pick a specific GHL calendar (via `/api/integrations/booking/events`), but `submit-payload.ts` only stores the widget *link* as `bookingStandingLink` — the calendar ID is thrown away. Your selection during onboarding never reaches runtime.
-
-**B. The 422 response body is being swallowed.** `fetchEventsInRange` throws with `body.slice(0, 300)` appended — but you only saw `[422]`. Either GHL returned an empty body, or the UI truncated it (the engagement card truncates errorMessage at 100 chars; the run bullet shows it raw). Either way, the single most diagnostic piece of information — GHL's own validation message — never reached you.
-
-also theres a probability others may have issues like this not just GHL 
-
-### Fixes (all small)
-
-1. **Pass `meta.calendar_id` into `GHLCalendarClient` and prefer it over the first-active heuristic.** Make the wizard persist the chosen calendar's ID into `booking_platform_meta.calendar_id`.
-2. **Never truncate `errorMessage` on the run detail page** (truncate on cards, full text on detail). Store the full response body.
-3. **Add a GHL entry to the credential-test VALIDATORS** that runs the *actual* events fetch (a one-day window dry run), not just the location verify. Right now `/api/credentials/test` can't test GHL at all.
-4. **Add a "dry run" phase to Pin-Down onboarding**: execute `fetchTomorrowCallsForTenant` once at setup. A 422 should surface while you're sitting at the wizard, not at 20:00 that night as a cron failure.
-
-Also worth knowing: the double "Checking today's calls — Interrupted" in your timeline is `executeSkillRun`'s `retries: 1` — the first attempt failed, `failRun` closed the dangling step as "Interrupted," Inngest retried, it failed again identically. That's working as designed but reads as chaos. Consider labeling the second entry "Retry 1 of 1."
+This is a 6–10 week presentation-and-defaults crisis, not a rewrite. If you spend those weeks adding more infrastructure instead, then yes — kill it.
 
 ---
 
-## 2. The pause that didn't pause — this is the most serious finding
+# Part 1: Root-Cause Diagnosis of Your Horror Stories
 
-Here's the uncomfortable truth: **pause enforcement is implemented per-dispatch-site, and several dispatch sites don't have it.** The banner promises a global guarantee that the architecture doesn't actually provide.
+## Horror Story #1: "Pre-Call Reads running when turned off" — CONFIRMED BUG, here's the exact mechanism
 
-**Paths that DO check `isEngagementPaused`:** the Inngest crons in `src/inngest/crons.ts` (nightly briefs, leak map schedule, lost-deal sweep, weekly metrics, booking poll, dynamic brief) and credential health.
+Your crons **create the run before checking whether the skill is enabled.**
 
-**Paths that do NOT check pause:**
+In `nightlyBriefsCron` (crons.ts), the eligibility filter checks booking platform, credentials, trigger type, and local hour — but **never calls `isSkillEnabledForEngagement`**. It then calls `startRun()` (creating a visible `skillRuns` row) and dispatches. Only later, inside `executeSkillRun` (skill.ts), does the enablement check happen — at which point it logs `"turned off for this engagement — nothing ran"` and calls `finishRun()`.
 
-| Path | File | Consequence |
-|---|---|---|
-| `/api/crons/leak-map-audit` (Vercel-cron/manual route) | `src/app/api/crons/leak-map-audit/route.ts` | Sweeps **every** engagement, dispatches leak-map runs, zero pause filter |
-| `/api/crons/nightly-briefs` (Vercel-cron/manual route) | its route.ts | Same — no pause filter, and its own comment says vercel.json used to schedule it |
-| **Booking webhook** | `src/app/api/webhooks/booking-event/route.ts` | A paused (or soft-deleted!) client's webhooks still enroll prospects into ESP sequences |
-| Approval-gate executors | `src/lib/approval-gate.ts` | Approving a queued action ignores pause |
-| The Inngest worker itself | `src/inngest/skill.ts` | `executeSkillRun` checks skill-enabled but **not** pause — so *any* event that reaches it runs regardless |
+**Result:** the user sees a live execution appear, watches it "run," opens it, and gets told it never ran. That's your hide-and-seek. Worse:
 
-Your leak map run's label was "Weekly cron (Inngest)" — check the Inngest dashboard for that run's triggering event to confirm which function dispatched it. If it was the Inngest `leak-map-schedule-cron`, the pause read somehow saw a null `pausedAt` (worth verifying the DB row directly); if the label came through a legacy route, you have **two schedulers competing** — check whether your deployed `vercel.json` still contains a `crons` block. Also note: the run fired at 09:00 not because of anything you did — that's the default weekly Leak Map schedule (Monday, 09:00). It wasn't "some days after your pause"; it was the next scheduled tick.
+- `finishRun()` marks it `status: "success"` — so **your dashboard's "Tasks Completed" counter is inflated by ghost runs of disabled skills.** Your vanity metric counts nothing happening.
+- The same dispatch-then-check pattern exists in `leakMapScheduleCron`, `bookingPollCron` (booking-poller.ts), and the webhook worker (`booking-webhook.ts`).
+- Meanwhile `processDynamicBriefEngagementCron` checks enablement *before* `startRun` — proof your own codebase knows the right pattern and applies it inconsistently.
 
-### The structural fix — make pause impossible to bypass
+**Fix:** Add a bulk helper (`getEngagementIdsWithSkillEnabled(skillId)` — one query, not N) and filter in every cron's prepare step **before** `startRun`. For the webhook path, write the roster row (correct — a booking is a fact) but never create a skill run for a disabled skill; at most write to a low-visibility audit log. Ghost runs must be structurally impossible, not filtered in the UI.
 
-Enforce pause **once, in the worker**, so it doesn't matter what dispatched the event:
+## Horror Story #2: "The brief is a terminal read" — the smoking gun is one config value
 
-```ts
-// executeSkillRun, right after load-tenant:
-if (isEngagementPaused(tenant)) {
-  await logStep(runId, { phase: "skill_disabled", status: "skipped",
-    detail: "Engagement is paused — run skipped." });
-  await finishRun(runId);
-  return;
-}
-```
+Open `submit-payload.ts`: every new engagement gets `person_match_confidence_threshold: 99`.
 
-Do the same in `processBookingWebhookEvent`, the booking webhook HTTP route (check `pausedAt`/`deletedAt` right after tenant lookup — return 200 with a "paused" acknowledgment so the platform stops retrying), and the approval executors. Keep the per-cron filters as an optimization, but the worker check is the guarantee.
+Now do the math against `person-match.ts`. Max score 100 requires **all four simultaneously**: a corporate email whose domain matches the typed company name (30) + a statistically distinctive surname (30) + a LinkedIn URL from the booking form (25) + a company field (15). Most booking forms collect *name and email*. A prospect with a Gmail address and a common surname scores near zero. Even a perfect corporate prospect without a LinkedIn URL caps at 75.
 
-Then, keep the manual-run exception explicit: manual triggers can pass a `manualOverride: true` flag on the event; the worker allows those through. That preserves the "Manual Run buttons still work" promise honestly.
+**At threshold 99, research runs for approximately nobody.** So your flagship "researched brief" pipeline skips research on ~100% of real bookings, the prompt is explicitly instructed to write "Research omitted" and leave Engagement History blank, and the user gets the hollow shell you described. Your best feature is disabled by your own default.
 
-### Also: pause needs *evidence*
+And it compounds:
 
-Right now, when a cron skips a paused engagement, nothing is recorded. You had no way to know whether the pause was working until it visibly didn't. Add a lightweight ledger: when the worker skips a paused run, that skipped run row *is* the evidence — surface "Paused since Tue · 4 scheduled runs skipped" on the engagement banner. This converts pause from "trust me" to "here's proof."
+- **You're dropping the highest-signal free data that exists.** You asked: *"Most people booking calls give us emails, phone numbers, and some rarely drop notes. I don't even know if we're able to extract notes."* You currently can't — `NormalizedCall` has no field for booking-form answers. Calendly's invitee payload carries `questions_and_answers` (the "what do you want to discuss?" field — the prospect telling you *in their own words why they booked*), and your pipeline discards it. This is the single cheapest, highest-impact brief improvement available and it requires zero AI.
+- **"Unknown"** — your payload extraction falls back to `"Prospect"`/`"Unknown"` and that string leaks into run labels, drawers, and Slack. A brief that opens with "Unknown" is a trust-killer regardless of what follows.
+- **Slack failure is handled backwards.** If `slack_webhook_url` was never configured, the run fails at *delivery time* — after burning tokens — and the user sees a failed run with raw internals. Missing delivery config should be a **pre-flight blocker** ("Pre-call briefs are paused: connect Slack or switch delivery to email — 30 seconds") surfaced in the Queue, and the run should never start.
+- **The drawer shows raw internals:** "Identity Match: 30/100," "Delivery Channel: slack," "Synthesized Brief Content." That's your Rule 14 scoring engine leaking directly onto the screen.
 
-### On deleting the client
+## Horror Story #3: The webhook run reads like a machine log — because it is one
 
-Don't delete out of fear — and know that deleting wouldn't fully protect you today anyway: soft-delete sets `pausedAt`, so it inherits *exactly the same bypass gaps* (the webhook route checks neither `pausedAt` nor `deletedAt`). Fix central enforcement first; then both pause and delete become airtight. Also: several read paths (`SidebarSkills`, analytics, `queue.ts`'s `engagementStackRows`) don't filter `deletedAt`, so deleted clients still count in stats and can still generate queue nudges. Add `isNull(deletedAt)` consistently.
+"Run started [Unknown <email> (polled)] — Roster updated — Enrolled Unknown in pre-call sequence — Sent rebooked exit signal (no-op if...)". Every one of those strings is a `logStep` label written by an engineer for an engineer, rendered verbatim. `(polled)`, `(Inngest)`, `webhook_received`, `no-op` — all shipping to users. You built `copy.ts` for exactly this purpose and then bypassed it in every `startRun`/`logStep` label.
 
----
+Also: your app *can't* know the prospect was told not to attend — that's fine. What's not fine is that there's no way to attach a note to a meeting, and the presentation gives no human summary ("Sarah's Thursday call was booked → we started her 3-email pre-call sequence"). Which leads to the structural point:
 
-## 3. "No summary was recorded" — the code never writes one, and the copy lies
+**Your UI has no first-class Meeting or Prospect. Everything is a Run.** You already built the right table — `bookingRoster` — and its file comment even explains it exists to fix "the black-box problem." But the UI still centers runs. Invert this: **Meetings and Prospects are the product; runs are an audit trail behind a "History" disclosure.**
 
-This is not your fault and not a misconfiguration. Look at `AuditEngine.runAuditPipeline` (audit-engine.ts): on success it calls `await finishRun(runId)` — **with no summary**. Same for Win-Back's `generateRecoveryCadence`. Only Pin-Down and Pre-Call Read build `RunSummary` objects.
+## Horror Story #4: The funnel audit with n=0 — statistically correct, product-illiterate
 
-So every successful Leak Map run will *always* show "No summary was recorded. Re-triggering the module will produce a full summary going forward" — and re-triggering will do no such thing. **The fallback copy is a false promise.**
+Your `insufficientData` gating in `audit-engine.ts` is genuinely good engineering (most competitors would happily alarm on n=2). But:
 
-Fix in two parts:
-1. Build a real summary in the audit engine — you already have everything: metrics computed, gaps, severity, delivery result. Five lines of assembly.
-2. Change the fallback copy in `RUN_DETAIL_COPY.noSummaryRecorded` to something honest: "This module doesn't produce a written summary yet" — until every skill does.
+- **You run a full audit — LLM call included — on an engagement with zero data**, then render `[insufficient-data] ... (current n=0, prior n=0, floor=5)` — bracket-tagged internal gap strings — directly to the user.
+- "Decisions: Assigned funnel health severity: none" is a developer writing to himself.
+- The fix isn't better copy on the same report. It's **three report modes**: (a) *No data yet* → don't run the audit at all; produce a "Getting set up" state: what's connected, what will be measured, what's needed to start ("You need ~5 briefed calls before trends mean anything — you have 0. Here's what's blocking bookings from flowing in."); (b) *Healthy* → three sentences and one suggestion, not a metrics table; (c) *Issues found* → your LLM prompt **already generates** Issue | Severity | Likely Cause | Recommended Action | Expected Impact | Effort — and then `leak-map-view.tsx` dumps it into a `whitespace-pre-wrap` monospace box. Render those as action cards with "Fix this" links (you already built `classifyRunError` + `fixHref` deep-links for the Queue — reuse that pattern).
 
-Related polish: the "Pipeline: Writing your report" tile on a *completed* run is the stale `phase` scalar. On terminal runs, render "Completed" instead of the last phase label.
+## Horror Story #5: The dashboard — you already have the intelligence, you're rendering the counters
 
-### Your Inngest console questions, answered directly
+"Active Accounts / Tasks Completed / Issues" tells nobody anything (and Tasks Completed is inflated by ghost runs, see above). Meanwhile you already have every data source a real briefing needs: `bookingRoster` (today's calls), `getQueueItems` (what needs a human), `winBackEnrollments` + `computeWinBackRevenueAttribution` (money), `skillRuns` (activity). The spec is in Part 2.
 
-- **Cancelling a run from the Inngest dashboard**: it stops the function, but your DB row stays at "running" until the stale-run reaper closes it (up to 2 hours, `STALE_RUN_CEILING_MINUTES`). It won't break anything, but it looks broken in your UI. Use the in-app Cancel button instead — it does the DB write *and* sends the cancel event.
-- **Replaying/manually invoking a run from Inngest**: risky. The booking-webhook worker deliberately has `retries: 0` because ESP enrollment and hybrid sends are not idempotency-keyed at the function level — a manual replay can double-enroll a real prospect. Never replay `process-booking-webhook-event` or the SMS sequences from the console. Cron functions and `execute-skill-run` for leak-map/pre-call-read are safer (dup-checked internally), but the rule of thumb is: **operate from the app, not the Inngest console.**
+## Horror Story #6: Notifications — you have four concurrent pollers and still no urgency
+
+On any dashboard page you're simultaneously running: BookingToast (5s), LiveCountBadge (5s), LiveExecutionFeed (5s), NotificationBell (30s). Four poll loops, and yet: no toast for critical failures, no badge for new queue items without a full navigation, and the bell buries criticals among FYIs. The fix is consolidation (one shared poll/SSE feeding toasts + badges + bell), not more infrastructure. This is real but it is **not your #1 problem** — pushback below.
+
+## Horror Story #7 & #8 — covered in the redesigns (Part 2) and the Win-Back section specifically.
 
 ---
 
-## 4. The systemic pattern behind all of this
+# Part 2: Code Audit — Defects You Didn't Mention But Should Know About
 
-Every one of your crises is the same disease with different symptoms:
+These are verified against the code you pasted, not vibes:
 
-> **Guarantees are implemented at call sites instead of chokepoints, and diagnostic information is generated but not surfaced.**
-
-- Pause: checked in 6 places, missing in 5, instead of once in the worker.
-- The 422: the disproving evidence (calendar-list succeeded) was in the step log; the response body was in the throw; neither reached you.
-- The summary: two skills write it, two don't, and the UI copy assumes all do.
-- Two scheduler systems (Inngest crons + the legacy `/api/crons/*` routes) with different filters, different auth (`nightly-briefs` doesn't even use `requireCronOrAdmin`), and different labels.
-
-The fix philosophy for the whole codebase: **one chokepoint per guarantee.** Worker enforces pause/delete/enabled. `failRun` captures full error context. Every skill's success path must produce a summary (make `finishRun` warn in dev when called without one).
-
----
-
-## 5. The Queue: your instinct is exactly right — it should be the control plane
-
-You already have 80% of the machinery (`queue.ts`, `error-classification.ts`, `fixSection`/`fixCredential` deep links — genuinely well-designed). What's missing is making it the **single answer to "what does this system need from me right now, and what happens if I do it."** Concretely:
-
-### P0 — close the loop on run failures
-1. Your GHL 422 *should* have appeared as a queue item ("GHL rejected a saved value · Fix now") via `failedRunQueueItems` — verify it did. If it didn't, that's a second bug to chase (check that the run's status was `failed`, not `timed_out` — classification only reads `failed`).
-2. **Add a "Retry run" button** to run_failure items. Fix → verify → retry, all from the queue. Right now the buyer fixes something and then has to know that tonight's cron is the test. That's the "everything is rigid" feeling.
-3. **After a fix, auto-verify**: the "Fix now" flow should end with a call to `/api/credentials/test` (or the new dry-run endpoint) and show green/red immediately.
-4. **Improve classification depth**: today it's status-code + platform-name. For GHL 422 specifically, the classifier should know "calendar list succeeded, events failed → the problem is the calendar/query, not the credential or location" — you can derive this from the step log, which the classifier currently never reads.
-
-### P1 — expand what the queue covers
-- **Repeated-failure escalation**: you already compute `consecutiveFailures` in module-overview.ts but only show it on a page nobody visits nightly. After 2 consecutive failures of the same skill: create a queue item, and after 3, **auto-pause that skill for that engagement** (not the whole client) with a queue item explaining why. A system that fails identically every night for a week without intervening is what destroys trust.
-- **Paused-because-of-error engagements** as standing queue items: "You paused Acme (reason: error) 3 days ago — diagnosis attached, fix & resume here."
-- Credential-health `invalid` results (currently notification-only) as `action_needed` items.
-- Admin-only items: platform adapter drafts pending review, canary drift, broken docs links — all exist as tables with no queue surface.
-
-### P2 — the queue as approval center
-You have Co-Pilot mode (`require_approval_for_side_effects`) and it defaults on for confirmation pages. Extend the pattern: let operators opt engagements into review-before-enroll during their first week ("training wheels mode"), then graduate to autopilot. This directly addresses "users can't master anything" — they learn what the system does by approving it a few times before letting it run free.
+| # | Defect | Location | Severity |
+|---|--------|----------|----------|
+| 1 | **Approve/resolve endpoints are admin-only, but the Queue shows approvals to every customer.** `POST /api/actions/[id]/review` and `/api/blockers/[id]/resolve` require `isAdminEmail`. Your forced-gate sweep no-shows queue pending actions for tenants **who cannot act on them** — a 403 dead end. Works only while the sole user is you. | actions/review, blockers/resolve routes | **Critical for SaaS** |
+| 2 | **The gear/quick-action menu is dead in all 5 module views.** `<ActionPanel open={false} onOpenChange={() => {}} ...>` — hardcoded shut. It can never open. Shipped five times via copy-paste. | pin-down/pile-on/pre-call-read/win-back/leak-map module views | High |
+| 3 | **Win-Back revenue quarters are hardcoded to 2026.** `getPeriodOptions()` literally hardcodes Q1–Q4 2026. In January 2027 the flagship revenue view shows nothing. | win-back-revenue-section.tsx | High |
+| 4 | **Broken redirect chain:** `/dashboard/credentials` → `/dashboard/settings?tab=credentials` → `settings/page.tsx` redirects to `/settings/profile`, dropping the tab. Library's "Settings → Booking Sync" link has the same fate. `settings-shell.tsx` appears orphaned. | credentials/page, settings/page, library/page | Medium |
+| 5 | **`credentials-panel.tsx` is an empty file.** Shipped in the repo. | settings/credentials-panel.tsx | Hygiene |
+| 6 | **Five ~700-line module views that differ by ~10 lines each**, plus THREE competing generations of the same component (`module-command-center.tsx`, `module-porfolio-shell.tsx` — filename typo included — and `shared-module-views.tsx`), at least two unmounted. This is thousands of lines of drift-prone duplication. | components/ | High (velocity killer) |
+| 7 | **Hardcoded dark theme in module/pipeline views** (`text-zinc-100` on transparent backgrounds) inside an app with a light mode. In light mode, those pages are near-white text on white. You have ≥3 coexisting styling systems (zinc-hardcoded, Tailwind dark: tokens, `var(--text-primary)` inline styles). | module views, pipeline views, bridge pages | Medium |
+| 8 | **Public confirmation page speaks robot to your buyer's prospects:** "Secure transmission link verified," "meeting parameters have been correctly recorded," "Showtime Telemetry Secured." This is a page a *cold prospect* sees. It reads like a sci-fi terminal, and it's competing with the 5 nice templates you built in `templates/` — the fallback route undersells the product. | confirm/[id]/page.tsx | Medium |
+| 9 | **Engagement page fetches ALL runs unbounded** then slices to 20 in render. Also `deriveModuleStatus` maps a `running` run to "Not started yet." | engagements/[id]/page.tsx | Low/Medium |
+| 10 | **Third-party branding in stored labels:** "Nightly cron (Inngest)", "Weekly cron (Inngest, UTC)", "(polled)", "Manually triggered via dashboard" are written into `skillRuns` labels and render as `subjectLabel` in feeds. `copy.ts` can't save you because the strings are persisted at write time. | crons.ts, booking-poller.ts | Medium |
+| 11 | **Show-rate scorer + booking-form completeness features exist but the two best inputs are never wired** (`emailEngagementScore`, `applicationCompletenessRatio` always undefined). And the landing/marketing surface promises none of the genuinely differentiated stuff you built. | show-rate-scorer.ts | Low |
 
 ---
 
-## 6. Predictability: users "don't know when to expect what" because nothing shows them
+# Part 3: The Redesigns
 
-There is no surface anywhere in the app that answers "what will run, when, for this client." Everything is discovered after the fact via the activity feed. Build:
+## 3.1 What a Call Brief actually is (your ultimate question)
 
-1. **A per-engagement "Automation Schedule" card**: Nightly briefs → 20:00 UTC daily · Leak Map weekly → Monday 09:00 (their TZ) · Booking poll → every 5 min · next run in 2h 14m. All of this is derivable from existing config — it's a read-only render, maybe a day of work, and it's the single highest-leverage trust feature you can ship.
-2. **"Next run" + "last run" on every module card**, not just last.
-3. **Fix the timezone inconsistency**: Leak Map is timezone-aware per engagement; nightly briefs are hardcoded `20:00 UTC` for everyone. For international clients, a European buyer's "tomorrow's roster" is computed at 9-10pm their time, an Australian buyer's at 6-7am — the "night before" framing breaks. Make the brief schedule per-engagement timezone-aware like Leak Map's (the `schedule-matcher.ts` pattern already exists to copy).
+**A brief is a 30-second read that changes how the rep opens the call.** Not a research report, not a log. Concretely, five sections, always rendered — never "No brief text generated":
+
+1. **Header** — Name, company/title (if verified), call time *in the rep's timezone* with countdown, meeting link, phone, one-tap "join / call / email."
+2. **Why they booked** — their booking-form answers **verbatim** (extract `questions_and_answers` — see above), plus source ("Came in from your [Meta retargeting ad]" — you already built `getAdDataContextForTenant`; wire it visibly).
+3. **What they've done** — a small timeline: booked 3 days ago, opened 2 of 3 emails, watched 60% of your video (Klaviyo + Wistia adapters already exist and already feed the prompt — surface them as UI, not just prompt fodder).
+4. **How to open + what they'll push back on** — 2 openers, top 2 likely objections (from `topObjections`, increasingly CI-mined), one matched proof point.
+5. **Watch out** — human-language risk flags: "Rescheduled once before," "Booked 10 minutes ago — low-commitment risk." Never "Identity Match: 30/100." Instead: *"Common name + personal email — we only used what they told us, nothing scraped."* That honesty line is a **feature**, not an apology.
+
+Structural changes required: split research into **company-level** (domain-based, safe even for common names — always runs) vs **person-level** (Rule-14 gated, threshold dropped from 99 to a tiered ~70, paid enrichment gated higher). Store the brief as structured JSON sections, not a markdown blob, so Slack blocks and the dashboard card render the same object. Slack delivery becomes rich blocks with the outcome buttons you already have.
+
+## 3.2 The Dashboard → daily briefing (all data already exists)
+
+- **Row 1 — Today:** meetings from `bookingRoster` with brief-status chips and a "next call in 47 min" countdown. Empty state: "No calls today. 4 tomorrow — briefs go out tonight at 8pm."
+- **Row 2 — Needs you:** top 3 `getQueueItems`, with the approve/dismiss action **inline** (post-fix #1 above).
+- **Row 3 — This week vs last:** Bookings (Δ), Show rate, Briefs delivered, **$ recovered** (revenue-attribution). Deltas, not lifetime counts.
+- **Row 4 — Wins feed:** "Sarah rebooked — $8,000 recovered" from `winBackEnrollments` exits.
+- Live Executions moves off the front page to `/runs`. It's ops tooling, not the greeting.
+
+## 3.3 Queue redesign
+
+Three lanes: **Approve** (with the *reasoning* rendered — you already store `_reason` on sweep-gated actions; make it the headline), **Fix** (your `classifyRunError` diagnosis cards with deep links — this is genuinely your best UX pattern in the whole codebase; make it the template for everything), **FYI** (collapsed). Make review tenant-scoped (owner approves their own engagement's actions; admin override retained). Every approval must read like a colleague asking: *"Sarah missed Thursday's call, nobody logged an outcome, and there's no CRM activity. Start the 'sorry we missed you' recovery? [Yes] [She showed]."* You already generate exactly this sentence in `triggerNoShowWinBack` — it just dies in a notification instead of powering the UI.
+
+## 3.4 Win-Back — lead with money
+
+Your own comment in `revenue-attribution.ts` says it: *"'Win-Back recovered $84,000 this quarter' is the single sentence that turns 'a background service is running' into proof of value."* You wrote the module, then left it unmounted for months (per your own file comments) and hardcoded its quarters. Fixes: dynamic quarters; recovered-$ on the dashboard AND the engagement header; add **"at-risk pipeline"** = active enrollments × offer price ("$32,000 in recovery right now"); every recovery fires a win notification/toast. This number is your retention argument and your case-study generator.
 
 ---
 
-## 7. Priority-ordered action plan
+# Part 4: Roadmap 30 → 90
 
-**P0 — this week (trust restoration):**
-1. Central pause/delete/enabled enforcement in `executeSkillRun` + booking webhook route + `processBookingWebhookEvent` + approval executors.
-2. Verify/remove any remaining `vercel.json` crons; add pause filters + `requireCronOrAdmin` to the legacy `/api/crons/*` routes regardless.
-3. GHL fix: honor `booking_platform_meta.calendar_id`, persist the wizard's calendar choice, add GHL to credential-test validators, stop truncating error bodies.
-4. Write summaries for leak-map and win-back success paths; fix the false "re-triggering will produce a summary" copy.
+**Phase 0 — Stop the bleeding (Week 1).** Ghost runs (enablement check before `startRun`, everywhere). Threshold 99 → tiered defaults + company-research-always. Extract booking-form Q&A into `NormalizedCall` and the brief. Slack/delivery misconfig → pre-flight queue blocker, not run failure. Strip Inngest/cron/polled/no-op from all persisted labels. Fix the five dead ActionPanels, the 2026 quarters, the redirect chain, delete the empty file. *Exit criteria: a brand-new engagement can go 7 days without seeing one internal term or one ghost run.* **→ ~45/100**
 
-**P1 — next (the queue becomes the product):**
-5. Retry-run action, post-fix auto-verify, step-log-aware classification.
-6. Consecutive-failure escalation → auto-pause-skill + queue item.
-7. Automation Schedule card + "next run" everywhere.
-8. Pin-Down dry-run phase (execute the real roster fetch at onboarding).
+**Phase 1 — The Brief (Weeks 2–4).** Structured-section briefs, redesigned drawer + Slack blocks, guaranteed non-empty rendering, honesty lines instead of scores. Promote Meetings (roster) to the primary nav object; runs behind "History." **→ ~60**
 
-**P2 —  after (international competitiveness):**
-9. Timezone-aware nightly briefs; locale-aware dates/currency in the UI and revenue attribution.
-10. Pause evidence ledger ("N runs skipped since paused").
-11. Fix `deletedAt` filtering across sidebar/analytics/queue reads; Calendly poll-vs-webhook idempotency key mismatch (they use different key formats, so a booking seen by both paths can double-enroll for Calendly specifically).
-12. Admin health dashboard: canary results, credential health matrix, per-run Inngest deep links — so the next black box gets opened by you in 30 seconds instead of a support crisis.
+**Phase 2 — Dashboard + Queue (Weeks 4–6).** Daily-briefing dashboard per spec; tenant-scoped approvals; consolidated poller → toasts for criticals + live badges. **→ ~70**
+
+**Phase 3 — Audit + Win-Back money (Weeks 6–8).** Three-mode audits (no-data mode never runs the LLM); issue cards with fix links; revenue front-and-center; weekly email digest via existing Resend path. **→ ~78**
+
+**Phase 4 — Consolidation (Weeks 8–10).** One generic module view replaces five + kill the three orphaned generations; one theming system; empty states everywhere; rewrite the public confirm page; onboarding restructured to "connect calendar → see tomorrow's calls in 5 minutes," everything else deferred to per-skill activation (your bridge-pages architecture already supports this — use it). **→ 82–85.** The last 10 points are earned, not built: validated show-rate model (you're already logging training data), integration breadth, and polish from real usage.
 
 ---
 
-## Bottom line
+# Part 5: Pushbacks — where I disagree with you
 
-You are not "wasting your time creating TS files." The flows genuinely work — the leak map run you showed executed a real 5-stage pipeline, correctly found no data for a new client, and correctly reported "severity: none." What's fallen apart is the **contract layer between the system and the human**: promises the UI makes (paused, summarized, diagnosed) that the code only partially keeps, and diagnostic gold (step logs, response bodies) that never reaches the screen. That's a fixable, well-bounded set of problems —  — and fixing them converts your existing machinery from "unpredictable black box" into the transparent, self-explaining ops product that actually can compete internationally. The queue-as-control-plane instinct you have is the right product thesis; the codebase is already 80% of the way to supporting it.
+1. **"Inngest could do much more."** No. Your orchestration layer is the *best* part of this codebase — the fan-out patterns, `waitForEvent` blockers, and checkpointing are already above-market. Zero ROI there. The gap is 100% in what you render. Do not touch it for a quarter.
+2. **Notifications are not your #1 fire.** A perfect notification system announcing "Unknown enrolled in pre-call sequence" makes things *worse*. Fix the content, then the plumbing (consolidate the four pollers you already have).
+3. **Stop the Asana cosplay.** You copy-pasted Asana's Calendar/List/Board triad onto every skill — ~15 view permutations — plus quarterly "milestone cards" with decorative pink avatars mimicking screenshots. Sales tools are **answer-first**, not project-management chrome. Each skill needs *one* correct view (Meetings→calendar+list, Win-Back→pipeline+$, Audit→report). Cut the rest; every extra view is drift surface (see defect #6).
+4. **Wrong comparison set.** Grok is a category error and I can't meaningfully benchmark you against products I can't verify exist. Your real comps: **Gong/Fireflies/Attention** (call intelligence), **Clay/Apollo** (enrichment), **Momentum** (workflow), plus generic no-show-reminder tools. Your defensible wedge — which *none* of them own end-to-end — is the **closed loop: booking → brief → outcome → recovery → attributed dollars**. Fireflies knows what happened on calls; you can know what happened *around* them and prove the revenue. That's the positioning. Lead every surface with the money.
+5. **Feature freeze.** No new skills, no new platform adapters, until Phase 3 ships. Your codebase's own comments show a pattern of building complete features (revenue attribution, pipelines, WinBackRevenueSection) and never mounting them. You don't have a building problem. You have a shipping-the-last-mile problem — and the roadmap above *is* the last mile.
 
-
-also i just focused on the GHL 422 , tomorrow it could be calendly or cal or active campaign or another, look deeply and verify every other credential to ensure we are actually doing the right thing, like how i spotted what was wrong with ghl
+**Bottom line:** the engine is real, the defaults sabotage it, and the interface narrates the machine instead of serving the human. Fix those three things in that order and this is a fundamentally different product in ten weeks.

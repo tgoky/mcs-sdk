@@ -13,15 +13,13 @@ import {
   ArrowUpRight,
   Clock,
   Ban,
-  PauseCircle,
-  PlayCircle,
   RotateCcw,
   Waves,
   Copy,
 } from "lucide-react";
 import { skillName, phaseLabel, SKILL_INFO, SKILLS, EXECUTIONS_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, type SkillName } from "@/lib/copy";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
-import { cancelSkillRun, pauseEngagement, resumeEngagement, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
+import { cancelSkillRun, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
 import { SegmentedTabs, type SegmentedTabOption } from "@/components/segmented-tabs";
 import { TableSearchInput } from "@/components/table-search-input";
 import { TimeRangeMenu, computeTimeRangeBounds, isWithinTimeRange, type TimeRangeValue } from "@/components/time-range-menu";
@@ -276,7 +274,6 @@ function buildRunSections(
 ): ActionPanelSection[] {
   const isRunning = run.status.toLowerCase() === "running";
   const skill = run.skillName as SkillName;
-  const isPaused = !!run.engagementPausedAt;
   const canManualTrigger = skill === "pre-call-read" || skill === "leak-map";
 
   const primary: ActionPanelSection["items"] = [
@@ -292,6 +289,12 @@ function buildRunSections(
     });
   }
 
+  // Deliberately only actions about *this run* — a cross-skill "Generate
+  // Leak Map for this client" and client-level Pause/Resume used to live
+  // here too, but pause/resume already have a real home on the client
+  // engagement page, and firing an unrelated skill from a specific run's
+  // menu is the same "wrong place for this" pattern the queue panel had.
+  // See Observation 6.
   const runControl: ActionPanelSection["items"] = [];
 
   if (isRunning) {
@@ -312,37 +315,6 @@ function buildRunSections(
         run.engagementId &&
         dispatch("retrigger", () => triggerSkillRun(run.engagementId as string, skill), () => { onDone(); closePanel(); }),
     });
-  }
-
-  if (run.engagementId && skill !== "leak-map" && !isRunning) {
-    runControl.push({
-      key: "leak-map",
-      icon: Waves,
-      label: "Generate Leak Map for this client",
-      onSelect: () =>
-        run.engagementId &&
-        dispatch("leak-map", () => triggerSkillRun(run.engagementId as string, "leak-map"), () => { onDone(); closePanel(); }),
-    });
-  }
-
-  if (run.engagementId) {
-    runControl.push(
-      isPaused
-        ? {
-            key: "resume",
-            icon: PlayCircle,
-            label: "Resume automations for this client",
-            onSelect: () =>
-              dispatch("resume", () => resumeEngagement(run.engagementId as string), () => { onDone(); closePanel(); }),
-          }
-        : {
-            key: "pause",
-            icon: PauseCircle,
-            label: "Pause automations for this client",
-            onSelect: () =>
-              dispatch("pause", () => pauseEngagement(run.engagementId as string), () => { onDone(); closePanel(); }),
-          }
-    );
   }
 
   const utility: ActionPanelSection["items"] = [

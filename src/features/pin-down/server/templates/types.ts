@@ -1,6 +1,27 @@
-export type TemplateId = "signal" | "ledger" | "studio" | "grid" | "fieldnotes";
+export type TemplateId =
+  | "signal"
+  | "ledger"
+  | "studio"
+  | "grid"
+  | "fieldnotes"
+  | "contract"
+  | "goldenticket"
+  | "tentativehold"
+  | "assessment"
+  | "minimalist";
 
-export const TEMPLATE_IDS: TemplateId[] = ["signal", "ledger", "studio", "grid", "fieldnotes"];
+export const TEMPLATE_IDS: TemplateId[] = [
+  "signal",
+  "ledger",
+  "studio",
+  "grid",
+  "fieldnotes",
+  "contract",
+  "goldenticket",
+  "tentativehold",
+  "assessment",
+  "minimalist",
+];
 
 export const DEFAULT_TEMPLATE: TemplateId = "signal";
 
@@ -53,6 +74,41 @@ export const TEMPLATE_META: Record<TemplateId, TemplateMeta> = {
     tagline: "A well-kept notebook, annotated by hand",
     bestFor: "Educators, researchers, applied-expertise offers",
     swatch: ["#EDE6D6", "#8B5E34", "#2B2620"],
+  },
+  contract: {
+    id: "contract",
+    name: "The Contract",
+    tagline: "Ceremonial and precise, an agreement not an ad",
+    bestFor: "Premium $10K+ coaching or advisory, gravitas buyers",
+    swatch: ["#141119", "#C6A15B", "#F4EFE4"],
+  },
+  goldenticket: {
+    id: "goldenticket",
+    name: "The Golden Ticket",
+    tagline: "A die-cut stub built for a room that's filling up",
+    bestFor: "Workshops, events, cohort or seat-limited registration",
+    swatch: ["#151014", "#E8B23D", "#FCEFCF"],
+  },
+  tentativehold: {
+    id: "tentativehold",
+    name: "The Tentative Hold",
+    tagline: "One honest tap turns a hold into a commitment",
+    bestFor: "Agency or done-for-you, needs a confirmation micro-step",
+    swatch: ["#EEF1F5", "#2B4C7E", "#1B2733"],
+  },
+  assessment: {
+    id: "assessment",
+    name: "The Pre-Call Assessment",
+    tagline: "A short self-check that primes the call itself",
+    bestFor: "Niche or vertical offers where qualification changes the call",
+    swatch: ["#F5F7F5", "#1F6F5C", "#1C2321"],
+  },
+  minimalist: {
+    id: "minimalist",
+    name: "The Minimalist Trust",
+    tagline: "One quiet line, then out of the way",
+    bestFor: "Strong brands, post-optin flows, keeping the lead moving",
+    swatch: ["#FFFFFF", "#171717", "#6B6B6B"],
   },
 };
 

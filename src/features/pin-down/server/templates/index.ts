@@ -6,6 +6,11 @@ import { buildLedgerHtml } from "./ledger";
 import { buildStudioHtml } from "./studio";
 import { buildGridHtml } from "./grid";
 import { buildFieldNotesHtml } from "./fieldnotes";
+import { buildContractHtml } from "./contract";
+import { buildGoldenTicketHtml } from "./goldenticket";
+import { buildTentativeHoldHtml } from "./tentativehold";
+import { buildAssessmentHtml } from "./assessment";
+import { buildMinimalistHtml } from "./minimalist";
 
 export type { PageBuilderInput } from "./content-model";
 export { TEMPLATE_META, TEMPLATE_IDS, DEFAULT_TEMPLATE, isTemplateId } from "./types";
@@ -17,6 +22,11 @@ const BUILDERS: Record<TemplateId, (model: PageContentModel) => string> = {
   studio: buildStudioHtml,
   grid: buildGridHtml,
   fieldnotes: buildFieldNotesHtml,
+  contract: buildContractHtml,
+  goldenticket: buildGoldenTicketHtml,
+  tentativehold: buildTentativeHoldHtml,
+  assessment: buildAssessmentHtml,
+  minimalist: buildMinimalistHtml,
 };
 
 /**
