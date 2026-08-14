@@ -35,6 +35,7 @@ import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
 import { VerboseTime } from "@/components/relative-time";
 import { cn } from "@/lib/utils";
+import { QueueFixDrawer } from "@/components/queue-fix-drawer";
 
 export interface QueueItemDTO {
   id: string;
@@ -295,6 +296,7 @@ function QueueRow({
   onRunMutation,
   onLinkNavigate,
   onActionComplete,
+  onOpenFixDrawer,  // <--- ADD HERE
   groupCount = 1,
   groupExpanded = false,
   onToggleGroup,
@@ -311,6 +313,11 @@ function QueueRow({
   onRunMutation: (url: string) => void;
   onLinkNavigate: () => void;
   onActionComplete: () => void;
+  onOpenFixDrawer: (        // <--- ADD THESE 3 LINES
+    engagementId: string,
+    type: "stack" | "credentials",
+    section?: string | null
+  ) => void;
   groupCount?: number;
   groupExpanded?: boolean;
   onToggleGroup?: () => void;
@@ -323,6 +330,40 @@ function QueueRow({
   // Observation 6. The row button renders whatever this returns instead
   // of a hardcoded "Fix now"/"Review" label, so the two can't disagree.
   const repair = getRepairAction(item);
+
+    // Smart link router — inspects the href to decide whether to open a
+  // drawer (stack settings or credentials) or allow normal navigation.
+  // Only 2 of the 5 queue workflows hit this path; the other 3
+  // (trigger, approve/reject, resolve/abandon) are handled by their
+  // own dedicated buttons above and never reach this function.
+  const handleFixLinkClick = (e: React.MouseEvent, targetHref: string | null | undefined) => {
+    if (!item.engagementId || !targetHref) return;
+
+    // 1. Credential fix → credentials drawer
+    if (targetHref.includes("fixCredential=1")) {
+      e.preventDefault();
+      onOpenFixDrawer(item.engagementId, "credentials");
+      return;
+    }
+
+    // 2. Stack settings fix → stack settings drawer, scrolled to section
+    const sectionMatch = targetHref.match(/fixSection=([^&#]+)/);
+    if (sectionMatch) {
+      e.preventDefault();
+      onOpenFixDrawer(item.engagementId, "stack", sectionMatch[1]);
+      return;
+    }
+
+    // 3. Sync setup nudges always target the booking/webhook section
+    if (item.source === "sync_setup") {
+      e.preventDefault();
+      onOpenFixDrawer(item.engagementId, "stack", "booking");
+      return;
+    }
+
+    // 4. Everything else (e.g. plain /dashboard/runs/[id]) → normal nav
+    onLinkNavigate();
+  };
 
   return (
     <div className={`group flex items-center gap-3 py-3 px-3 border-b border-sidebar-border/60 last:border-b-0 hover:bg-zinc-800/40 transition-colors ${nested ? "pl-6 bg-zinc-900/20" : ""}`}>
@@ -394,7 +435,7 @@ function QueueRow({
             {(repair?.kind === "link" ? repair.href : href) ? (
               <Link
                 href={repair?.kind === "link" ? repair.href : (href as string)}
-                onClick={onLinkNavigate}
+     onClick={(e) => handleFixLinkClick(e, repair?.kind === "link" ? repair.href : href)}
                 className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors"
               >
                 <ArrowUpRight size={12} /> {repair?.label ?? "Review"}
@@ -422,10 +463,11 @@ function QueueRow({
               >
                 <RotateCcw size={12} /> {busyKey === repair.key ? "Running…" : repair.label}
               </button>
+           // FIXED:
             ) : (repair?.kind === "link" ? repair.href : href) ? (
               <Link
                 href={repair?.kind === "link" ? repair.href : (href as string)}
-                onClick={onLinkNavigate}
+                onClick={(e) => handleFixLinkClick(e, repair?.kind === "link" ? repair.href : href)}
                 className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors"
               >
                 <ArrowUpRight size={12} /> {repair?.label ?? "Fix now"}
@@ -462,6 +504,7 @@ function QueueRow({
 
         {(item.category === "alert" || item.category === "fyi") && (
           <>
+   
             {href ? (
               <Link
                 href={href}
@@ -510,6 +553,12 @@ export function QueuePanel({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string>(copy.errors.generic);
+
+    const [activeFix, setActiveFix] = useState<{
+    engagementId: string;
+    type: "stack" | "credentials";
+    section?: string | null;
+  } | null>(null);
 
   // Rail Scope State
   const [railView, setRailView] = useState<ClientScopeView>("all");
@@ -885,8 +934,12 @@ export function QueuePanel({
         onLinkNavigate={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
         onActionComplete={refreshNow}
         matchedTag={matchedTag}
+        onOpenFixDrawer={(engagementId, type, section) => {
+  setActiveFix({ engagementId, type, section });
+}}
         {...extra}
       />
+      
     );
   }
 
@@ -1577,8 +1630,17 @@ export function QueuePanel({
               </button>
             </div>
           </div>
+          
         </div>
       )}
+       <QueueFixDrawer
+        isOpen={!!activeFix}
+        engagementId={activeFix?.engagementId ?? null}
+        type={activeFix?.type ?? null}
+        section={activeFix?.section ?? null}
+        onClose={() => setActiveFix(null)}
+        onSuccess={refreshNow}
+      />
     </div>
   );
 }
