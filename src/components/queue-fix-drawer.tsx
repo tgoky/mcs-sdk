@@ -77,7 +77,7 @@ export function QueueFixDrawer({
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto p-0 font-sans">
+           <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-0 font-sans">
         <div className="p-6 space-y-5">
           <SheetHeader className="space-y-1.5">
             <SheetTitle className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
