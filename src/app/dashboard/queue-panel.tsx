@@ -33,6 +33,7 @@ import { ViewCustomizer, FilterChipBar, type CustomizerSection } from "@/compone
 import { useLocalViewState } from "@/lib/use-local-view-state";
 import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
+import { VerboseTime } from "@/components/relative-time";
 import { cn } from "@/lib/utils";
 
 export interface QueueItemDTO {
@@ -159,15 +160,15 @@ function queueSignature(item: QueueItemDTO): string {
   ].join("|");
 }
 
-function relativeTime(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(ms / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
+// function relativeTime(iso: string): string {
+//   const ms = Date.now() - new Date(iso).getTime();
+//   const mins = Math.floor(ms / 60_000);
+//   if (mins < 1) return "just now";
+//   if (mins < 60) return `${mins}m ago`;
+//   const hours = Math.floor(mins / 60);
+//   if (hours < 24) return `${hours}h ago`;
+//   return `${Math.floor(hours / 24)}d ago`;
+// }
 
 function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
   const isGold = category !== "fyi";
@@ -191,16 +192,27 @@ function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
   );
 }
 
+/** Shared short-run-ref badge — same visual on both Queue and Live Executions
+ *  so the operator can eyeball-match a queue item to its run in < 1 second. */
+function RunRefBadge({ runId }: { runId: string }) {
+  return (
+    <span className="font-mono text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800/80 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700/60 shrink-0 select-all">
+      #{runId.slice(0, 8)}
+    </span>
+  );
+}
+
 function QueueItemPreview({ item }: { item: QueueItemDTO }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
         <CategoryBadge category={item.category} />
+        {item.runId && <RunRefBadge runId={item.runId} />}
       </div>
       <p className="font-semibold text-foreground leading-snug">{item.title}</p>
       <p className="text-muted-foreground leading-snug">{item.subtitle}</p>
       {item.buyer && <p className="font-mono text-muted-foreground/80">{item.buyer}</p>}
-      <p className="text-muted-foreground/70">{relativeTime(item.createdAt)}</p>
+     <VerboseTime isoString={item.createdAt} className="text-muted-foreground/70 text-[11px]" />
     </div>
   );
 }
@@ -325,7 +337,8 @@ function QueueRow({
               {matchedTag.name}
             </span>
           )}
-          <p className="text-xs font-bold text-zinc-100 truncate">{item.title}</p>
+              <p className="text-xs font-bold text-zinc-100 truncate">{item.title}</p>
+          {item.runId && <RunRefBadge runId={item.runId} />}
           {onToggleGroup && (
             <GroupCountToggle count={groupCount} expanded={groupExpanded} onToggle={onToggleGroup} />
           )}
@@ -341,10 +354,10 @@ function QueueRow({
           buyer/timestamp move to a separate compact metadata line below it.
         */}
         <p className="text-xs text-zinc-300 line-clamp-2 leading-relaxed">{item.subtitle}</p>
-        <p className="text-[11px] text-zinc-500 truncate">
-          {item.buyer ? `${item.buyer} · ` : ""}
-          {relativeTime(item.createdAt)}
-        </p>
+     <p className="text-[11px] text-zinc-500 truncate">
+  {item.buyer ? `${item.buyer} · ` : ""}
+  <VerboseTime isoString={item.createdAt} className="text-[11px] text-zinc-500" />
+</p>
         {errorText && (
           <p className="text-xs text-rose-400 font-mono">{errorText}</p>
         )}

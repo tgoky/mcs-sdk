@@ -26,6 +26,7 @@ import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
 import { phaseLabel } from "@/lib/copy";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { formatVerboseDate } from "@/components/relative-time";
 
 export interface SkillRun {
   id: string;
@@ -430,7 +431,7 @@ export function PileOnModuleView({
                                 isFailed ? "text-rose-400 font-mono" : "text-emerald-400"
                               )}
                             >
-                              {actionSummary(r)} · <RelativeTime isoString={r.startedAt} />
+                           {actionSummary(r)} · <span title={formatVerboseDate(r.startedAt).full}>{formatVerboseDate(r.startedAt).absolute}</span>
                             </p>
                           </div>
                         </div>
@@ -480,7 +481,7 @@ export function PileOnModuleView({
                         >
                           <td className="px-4 py-2.5 pl-12">
                             <p className="text-[11px] font-mono text-zinc-400 truncate">
-                              {actionSummary(subRun)} · <RelativeTime isoString={subRun.startedAt} />
+                           {actionSummary(subRun)} · <span title={formatVerboseDate(subRun.startedAt).full}>{formatVerboseDate(subRun.startedAt).absolute}</span>
                             </p>
                           </td>
                           <td className="px-4 py-2.5 text-center">
@@ -531,14 +532,14 @@ export function PileOnModuleView({
                   disabled={clampedPage === 0}
                   className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  ← Prev
+                  Prev
                 </button>
                 <button
                   onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
                   disabled={clampedPage >= pageCount - 1}
                   className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  Next →
+                  Next
                 </button>
               </div>
             </div>
@@ -588,10 +589,9 @@ export function PileOnModuleView({
                       </p>
 
                       <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/80 text-[10.5px] text-zinc-400 font-mono">
-                        <div className="flex items-center gap-1">
-                          <Clock size={11} className="text-zinc-500 shrink-0" />
-                          <RelativeTime isoString={r.startedAt} />
-                        </div>
+                     <span title={formatVerboseDate(r.startedAt).full} className="text-[10.5px]">
+  {formatVerboseDate(r.startedAt).absolute}
+</span>
 
                         <StatusPill tone={deriveTone(r.status)}>{deriveLabel(r.status)}</StatusPill>
                       </div>

@@ -27,6 +27,7 @@ import { ViewCustomizer, FilterChipBar, type CustomizerSection } from "@/compone
 import { useLocalViewState } from "@/lib/use-local-view-state";
 import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
+import { VerboseTime } from "@/components/relative-time";
 
 interface SkillRun {
   id: string;
@@ -216,26 +217,26 @@ function ClientCell({ run }: { run: SkillRun }) {
   );
 }
 
-function RelativeTime({ isoString }: { isoString: string }) {
-  const compute = useCallback(() => {
-    const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
-    if (diff < 60) return `${diff}s`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-    return `${Math.floor(diff / 86400)}d`;
-  }, [isoString]);
+// function RelativeTime({ isoString }: { isoString: string }) {
+//   const compute = useCallback(() => {
+//     const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+//     if (diff < 60) return `${diff}s`;
+//     if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+//     if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+//     return `${Math.floor(diff / 86400)}d`;
+//   }, [isoString]);
 
-  const [label, setLabel] = useState(compute);
+//   const [label, setLabel] = useState(compute);
 
-  useEffect(() => {
-    const id = setInterval(() => setLabel(compute()), 1000);
-    return () => clearInterval(id);
-  }, [compute]);
+//   useEffect(() => {
+//     const id = setInterval(() => setLabel(compute()), 1000);
+//     return () => clearInterval(id);
+//   }, [compute]);
 
-  return (
-    <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 tabular-nums">{label}</span>
-  );
-}
+//   return (
+//     <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 tabular-nums">{label}</span>
+//   );
+// }
 
 /** Short run reference badge — identical styling to the one in queue-panel
  *  so the operator can eyeball-match `#a1b2c3d4` across both surfaces. */
@@ -253,7 +254,7 @@ function RunPreview({ run }: { run: SkillRun }) {
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <span className="font-semibold text-foreground truncate">{displayName}</span>
-        <RelativeTime isoString={run.startedAt} />
+       <VerboseTime isoString={run.startedAt} className="text-xs" />
       </div>
       <div className="flex items-center gap-1.5 text-muted-foreground">
         <span className="font-mono font-bold uppercase tracking-wide text-[11px]">{skillName(run.skillName)}</span>
@@ -417,9 +418,9 @@ function RunRow({
         </div>
       </td>
 
-      <td className="px-4 py-2.5 text-right whitespace-nowrap">
-        <RelativeTime isoString={run.startedAt} />
-      </td>
+    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+  <VerboseTime isoString={run.startedAt} className="text-xs" />
+</td>
 
       <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1">
