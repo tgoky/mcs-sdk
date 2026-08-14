@@ -5,7 +5,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { TriggerSkillButton } from "./trigger-skill-button";
+
 import { EngagementPauseControl } from "./pause-control";
 import { SkillsPanel } from "./skills-panel";
 import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
@@ -28,7 +28,7 @@ import { BookingSyncChip } from "@/components/booking-sync-chip";
 import { BackLink } from "@/components/back-link";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import {
-  SKILL_INFO,
+
   SKILLS,
   skillName,
   phaseLabel,
@@ -36,20 +36,11 @@ import {
   bookingPlatformLabel,
   emailPlatformLabel,
   type SkillName,
-  type ModuleStatus,
-  MODULE_STATUS_LABELS,
-  MODULE_STATUS_COLORS,
+
 } from "@/lib/copy";
 
 export const revalidate = 0;
 
-function deriveModuleStatus(runs: { status: string }[]): ModuleStatus {
-  if (runs.length === 0) return "not_run";
-  const s = runs[0].status.toLowerCase();
-  if (s === "success") return "live";
-  if (s === "failed") return "failed";
-  return "not_run";
-}
 
 function RunStatusIcon({ status }: { status: string }) {
   const s = status.toLowerCase();
@@ -71,15 +62,6 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function PhaseTag({ phase, status }: { phase: string | null; status: string }) {
-  const label = phaseLabel(phase);
-  const isRunning = status.toLowerCase() === "running";
-  return (
-    <span className={`text-[11px] font-mono tracking-tight ${isRunning ? "text-zinc-600 dark:text-zinc-300 italic" : "text-zinc-400 dark:text-zinc-500"}`}>
-      {label}
-    </span>
-  );
-}
 
 export default async function EngagementDetailPage({
   params,
@@ -269,7 +251,11 @@ export default async function EngagementDetailPage({
           )}
         </div>
 
-        <SkillsPanel engagementId={engagement.engagementId} initialStates={skillStates} />
+       <SkillsPanel
+  engagementId={engagement.engagementId}
+  initialStates={skillStates}
+  runsBySkill={runsBySkill}
+/>
 
         {engagement.pausedAt && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-xs font-mono text-amber-800 dark:text-amber-400">
@@ -280,77 +266,7 @@ export default async function EngagementDetailPage({
         )}
 
         {/* Modules Selector Grid */}
-        <div className="space-y-2">
-          <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">Modules</h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {SKILLS.map((skill) => {
-              const info = SKILL_INFO[skill];
-              const skillRunList = runsBySkill[skill];
-              const status = deriveModuleStatus(skillRunList);
-              const latestRun = skillRunList[0] ?? null;
-
-              return (
-                <div key={skill} className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-xs p-4 flex flex-col justify-between min-h-[190px] shadow-xs">
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <SquishySkillBadge skill={skill} size={38} enabled={true} />
-                        <div className="space-y-0.5 min-w-0">
-                          <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">{info.name}</p>
-                          <p className="text-[11px] font-normal text-zinc-500 dark:text-zinc-400 leading-snug line-clamp-2">{info.description}</p>
-                        </div>
-                      </div>
-                      <span className={`text-[10px] font-mono font-bold shrink-0 px-2 py-0.5 bg-zinc-100 dark:bg-zinc-900 rounded-md border border-zinc-200 dark:border-zinc-800 ${MODULE_STATUS_COLORS[status]}`}>
-                        {MODULE_STATUS_LABELS[status]}
-                      </span>
-                    </div>
-
-                    {latestRun && (
-                      <div className="border-t border-zinc-200 dark:border-zinc-800/60 pt-2.5 space-y-1">
-                        <div className="flex items-center justify-between font-mono text-[11px]">
-                          <p className="text-zinc-400 dark:text-zinc-500">Last execution</p>
-                          <Link
-                            href={`/dashboard/runs/${latestRun.id}`}
-                            className="text-[10px] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors flex items-center gap-0.5 font-bold"
-                          >
-                            View run <ArrowRight className="w-2.5 h-2.5" />
-                          </Link>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <PhaseTag phase={latestRun.phase} status={latestRun.status} />
-                          <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
-                            {new Date(latestRun.startedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                          </span>
-                        </div>
-                        {latestRun.status.toLowerCase() === "failed" && latestRun.errorMessage && (
-                          <p className="text-[11px] text-rose-600 dark:text-rose-400/80 leading-snug pt-0.5 font-mono break-all">
-                            {latestRun.errorMessage.length < 100
-                              ? latestRun.errorMessage
-                              : latestRun.errorMessage.slice(0, 97) + "…"}
-                          </p>
-                        )}
-                        {latestRun.status.toLowerCase() === "failed" && !latestRun.errorMessage && (
-                          <p className="text-[11px] text-rose-600 dark:text-rose-400/80 leading-snug pt-0.5 font-medium">
-                            This module needs attention. Click &quot;View run&quot; for details.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/50 mt-3">
-                    <TriggerSkillButton
-                      engagementId={engagement.engagementId}
-                      skillName={skill}
-                      label={`Run ${info.name}`}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+       
 
         {/* SINGLE UNIFIED SCHEDULE HUB (Month, Day Timeline, List, Board) */}
         <MasterRosterCalendar engagementId={id} />
