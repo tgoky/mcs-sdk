@@ -12,6 +12,8 @@ export interface NavLinkItem {
   count?: number;
   /** When true, count is rendered by LiveCountBadge (polls for updates) instead of as a static number. `count` is still used as its initial value. */
   live?: boolean;
+  /** Initial value for LiveCountBadge's second number — see that component's doc. Ignored unless `live` is also set. */
+  unseenCount?: number;
 }
 
 export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
@@ -49,7 +51,7 @@ export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
               <span className="truncate">{link.label}</span>
             </div>
             {link.live ? (
-              <LiveCountBadge initialCount={link.count ?? 0} active={active} />
+              <LiveCountBadge initialCount={link.count ?? 0} initialUnseenCount={link.unseenCount ?? 0} active={active} />
             ) : (
               link.count !== undefined && link.count > 0 && (
                 <span

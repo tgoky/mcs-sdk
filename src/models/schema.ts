@@ -469,6 +469,16 @@ export const users = pgTable("users", {
   whopUserId: text("whop_user_id").notNull().unique(),
   email: text("email"),
   subscriptionStatus: text("subscription_status").notNull().default("inactive"),
+  // Executions sidebar unread-count fix — a run that starts and finishes
+  // between glances used to leave the nav badge back at 0 with no trace
+  // anything happened (the badge only ever showed the *currently running*
+  // count — see live-count-badge.tsx). NULL means "never visited /
+  // pre-migration" and is deliberately treated as zero-unseen rather than
+  // "everything since forever," so this doesn't dump a scary backlog
+  // count on every existing user the moment this column exists. Set to
+  // now() when the user actually visits /dashboard/runs — see
+  // markExecutionsSeen in run-log.ts.
+  executionsLastSeenAt: timestamp("executions_last_seen_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

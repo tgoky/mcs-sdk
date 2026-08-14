@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { engagements, notifications, skillRuns, projects as projectsTable } from "@/models/schema";
 import { getQueueActionableCount } from "@/lib/queue";
+import { getUnseenCompletedExecutionCount } from "@/lib/run-log";
 import { eq, and, sql, isNull, desc } from "drizzle-orm";
 import Link from "next/link";
 import {
@@ -16,7 +17,7 @@ import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 import { ClientSidebarList } from "./client-sidebar-list";
 
 export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
-  const [queueCount, unreadInboxCount, runningCountResult, clientRows] = await Promise.all([
+  const [queueCount, unreadInboxCount, runningCountResult, unseenCompletedCount, clientRows] = await Promise.all([
     getQueueActionableCount(whopUserId),
 
     db
@@ -30,6 +31,8 @@ export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
       .where(and(eq(engagements.whopUserId, whopUserId), eq(skillRuns.status, "running"))),
 
+    getUnseenCompletedExecutionCount(whopUserId),
+
     db
       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, tagColor: engagements.tagColor })
       .from(engagements)
@@ -38,7 +41,7 @@ export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
       .limit(10),
   ]).catch((err) => {
     console.error("[WorkSidebar] query failed:", err);
-    return [0, [{ count: 0 }], [{ count: 0 }], []] as const;
+    return [0, [{ count: 0 }], [{ count: 0 }], 0, []] as const;
   });
 
   // Group 1: Home & Inbox
@@ -50,7 +53,18 @@ export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
   // Group 2: Queue, Executions, Projects
   const group2Links: NavLinkItem[] = [
     { href: "/dashboard/queue", label: "Queue", icon: <ListTodo className="w-4 h-4" />, count: queueCount },
-    { href: "/dashboard/runs", label: "Executions", icon: <Activity className="w-4 h-4" />, count: Number(runningCountResult[0]?.count ?? 0), live: true },
+    {
+      href: "/dashboard/runs",
+      label: "Executions",
+      icon: <Activity className="w-4 h-4" />,
+      count: Number(runningCountResult[0]?.count ?? 0),
+      live: true,
+      // See LiveCountBadge's unseenCompleted doc — a run finishing between
+      // glances used to leave this badge back at 0 with no trace anything
+      // happened. This is the initial value only; the badge keeps polling
+      // both numbers from there.
+      unseenCount: unseenCompletedCount,
+    },
     { href: "/dashboard/projects", label: "Projects", icon: <FolderKanban className="w-4 h-4" /> },
   ];
 

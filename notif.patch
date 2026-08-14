@@ -1,0 +1,1207 @@
+diff --git a/src/app/api/actions/[id]/review/route.ts b/src/app/api/actions/[id]/review/route.ts
+index 7977978..cfa69e1 100644
+--- a/src/app/api/actions/[id]/review/route.ts
++++ b/src/app/api/actions/[id]/review/route.ts
+@@ -4,14 +4,18 @@ import { isAuthorizedForEngagement } from "@/lib/whop-access";
+ import { db } from "@/lib/db";
+ import { pendingActions } from "@/models/schema";
+ import { eq } from "drizzle-orm";
+-import { ACTION_EXECUTORS, type PendingActionType } from "@/lib/approval-gate";
++import { decidePendingAction } from "@/lib/approval-gate";
+ 
+ /**
+  * Cross-cutting recovery gap 22 — explicit human-approval gates. This is
+  * the "human decides" side of gateOrExecute: the engagement's own tenant
+  * (or an admin) approves (runs the deferred action now, via
+  * ACTION_EXECUTORS) or rejects (marks it decided, no-op) a queued
+- * pending_actions row. See src/lib/approval-gate.ts.
++ * pending_actions row. The actual decide/execute logic lives in
++ * decidePendingAction (src/lib/approval-gate.ts) — shared with the Slack
++ * interactions route, so an Approve/Reject click from Slack runs the
++ * identical path a dashboard click does. This route's job is just auth:
++ * load the action, confirm the caller owns its engagement, then delegate.
+  *
+  * Tenant-scoping fix: this used to be admin-only, but the Queue UI shows
+  * pending actions to every tenant on their own engagement — non-admin
+@@ -47,34 +51,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
+     return NextResponse.json({ error: "decision must be 'approved' or 'rejected'." }, { status: 400 });
+   }
+ 
+-  if (body.decision === "rejected") {
+-    await db
+-      .update(pendingActions)
+-      .set({ status: "rejected", decidedAt: new Date(), decidedBy: session.email })
+-      .where(eq(pendingActions.id, id));
+-    return NextResponse.json({ success: true, status: "rejected" });
++  const result = await decidePendingAction(id, body.decision, session.email);
++  if (!result.ok) {
++    return NextResponse.json({ error: result.error }, { status: 404 });
+   }
+-
+-  // Approved — mark decided first (so a slow/failing executor can't leave
+-  // the row looking un-decided and retryable-by-accident), then attempt
+-  // execution, recording failure on the row rather than throwing it away.
+-  await db
+-    .update(pendingActions)
+-    .set({ status: "approved", decidedAt: new Date(), decidedBy: session.email })
+-    .where(eq(pendingActions.id, id));
+-
+-  try {
+-    const executor = ACTION_EXECUTORS[action.actionType as PendingActionType];
+-    if (!executor) {
+-      throw new Error(`No executor registered for action type "${action.actionType}"`);
+-    }
+-    await executor(action.engagementId, action.payload);
+-    return NextResponse.json({ success: true, status: "approved", executed: true });
+-  } catch (error: any) {
+-    await db
+-      .update(pendingActions)
+-      .set({ status: "execution_failed", executionError: error.message })
+-      .where(eq(pendingActions.id, id));
+-    return NextResponse.json({ error: `Approved but execution failed: ${error.message}` }, { status: 500 });
++  if (result.status === "approved" && !result.executed) {
++    return NextResponse.json({ error: `Approved but execution failed: ${result.error}` }, { status: 500 });
+   }
++  return NextResponse.json({ success: true, status: result.status, ...(result.status === "approved" ? { executed: true } : {}) });
+ }
+diff --git a/src/app/api/inngest/route.ts b/src/app/api/inngest/route.ts
+index b281de8..92cf095 100644
+--- a/src/app/api/inngest/route.ts
++++ b/src/app/api/inngest/route.ts
+@@ -30,6 +30,7 @@ import {
+   processDynamicBriefEngagementCron,
+   assumedNoShowSweepCron,
+   processAssumedNoShowSweepEngagementCron,
++  pendingActionDigestCron,
+ } from "@/inngest/crons";
+ 
+ // Explicit duration floor for this route, paired with checkpointing's
+@@ -102,6 +103,11 @@ export const { GET, POST, PUT } = serve({
+     // See the module comment on assumedNoShowSweepCron in crons.ts.
+     assumedNoShowSweepCron,
+     processAssumedNoShowSweepEngagementCron,
++    // Batches the immediate Slack ping the sweep above would otherwise
++    // send once per ambiguous call into one periodic digest per
++    // engagement — see the module comment on pendingActionDigestCron in
++    // crons.ts.
++    pendingActionDigestCron,
+     // Halts a win-back cadence when a prospect replies — see
+     // src/inngest/win-back-reply.ts (Win-Back recovery gap 6).
+     processInboundReply,
+diff --git a/src/app/api/skill-runs/running-count/route.ts b/src/app/api/skill-runs/running-count/route.ts
+index 7747fd0..c5ccf36 100644
+--- a/src/app/api/skill-runs/running-count/route.ts
++++ b/src/app/api/skill-runs/running-count/route.ts
+@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
+ import { skillRuns, engagements } from "@/models/schema";
+ import { getSession } from "@/lib/session";
+ import { and, eq, sql } from "drizzle-orm";
++import { getUnseenCompletedExecutionCount } from "@/lib/run-log";
+ 
+ export const runtime = "nodejs";
+ export const revalidate = 0;
+@@ -17,6 +18,12 @@ export const revalidate = 0;
+  * a run that starts while the buyer is already sitting on a page would
+  * never bump the Executions badge until they reloaded — see the file
+  * comment on live-count-badge.tsx for the full story.
++ *
++ * unseenCompleted is the other half of that same fix: how many runs
++ * finished since the user last visited /dashboard/runs, independent of
++ * whether anything's running right now — see getUnseenCompletedExecutionCount
++ * (run-log.ts). One endpoint, one poll, so the two numbers the badge
++ * needs never arrive out of step with each other.
+  */
+ export async function GET() {
+   try {
+@@ -25,13 +32,16 @@ export async function GET() {
+       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+     }
+ 
+-    const [row] = await db
+-      .select({ count: sql<number>`count(*)` })
+-      .from(skillRuns)
+-      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+-      .where(and(eq(engagements.whopUserId, session.whopUserId), eq(skillRuns.status, "running")));
++    const [runningRow, unseenCompleted] = await Promise.all([
++      db
++        .select({ count: sql<number>`count(*)` })
++        .from(skillRuns)
++        .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
++        .where(and(eq(engagements.whopUserId, session.whopUserId), eq(skillRuns.status, "running"))),
++      getUnseenCompletedExecutionCount(session.whopUserId),
++    ]);
+ 
+-    return NextResponse.json({ count: Number(row?.count ?? 0) });
++    return NextResponse.json({ count: Number(runningRow[0]?.count ?? 0), unseenCompleted });
+   } catch (err) {
+     console.error("[skill-runs/running-count]", err);
+     return NextResponse.json({ error: "Failed to fetch running count." }, { status: 500 });
+diff --git a/src/app/api/slack/interactions/route.ts b/src/app/api/slack/interactions/route.ts
+index 653edbc..50c3b48 100644
+--- a/src/app/api/slack/interactions/route.ts
++++ b/src/app/api/slack/interactions/route.ts
+@@ -5,9 +5,13 @@ import { engagements, type EngagementStack } from "@/models/schema";
+ import { eq } from "drizzle-orm";
+ import { OUTCOME_BUTTON_LABEL } from "@/lib/platforms/email";
+ import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
++import { decidePendingAction } from "@/lib/approval-gate";
+ 
+ /**
+- * Tier 4 #27 — Slack interactive brief buttons.
++ * Tier 4 #27 — Slack interactive brief buttons, plus (this round) Queue
++ * approve/reject buttons on pendingActions notifications (see
++ * queuePendingAction, src/lib/approval-gate.ts). Two interaction types,
++ * routed by action_id, sharing one verification path.
+  *
+  * Slack's "Interactivity & Shortcuts" Request URL is one URL per Slack
+  * app, shared across every engagement that uses Slack delivery — unlike
+@@ -41,6 +45,22 @@ function verifySlackSignature(signingSecret: string, timestamp: string, rawBody:
+   return safeEqual(computed, receivedSignature);
+ }
+ 
++/** Shared by both interaction types below — see the file header for why the lookup has to come before verification. */
++async function verifyEngagementSlackSignature(
++  engagementId: string,
++  timestamp: string,
++  rawBody: string,
++  receivedSignature: string
++): Promise<boolean> {
++  const [engagement] = await db
++    .select({ stack: engagements.stack })
++    .from(engagements)
++    .where(eq(engagements.engagementId, engagementId))
++    .limit(1);
++  const signingSecret = (engagement?.stack as EngagementStack | null)?.slack_signing_secret;
++  return Boolean(signingSecret) && verifySlackSignature(signingSecret!, timestamp, rawBody, receivedSignature);
++}
++
+ export async function POST(req: Request) {
+   const rawBody = await req.text();
+   const timestamp = req.headers.get("x-slack-request-timestamp");
+@@ -72,6 +92,64 @@ export async function POST(req: Request) {
+   }
+ 
+   const action = payload.actions[0];
++
++  // ── Queue approve/reject (this round) ──────────────────────────────────
++  if (action.action_id === "pending_action_approve" || action.action_id === "pending_action_reject") {
++    let value: { engagementId?: string; id?: string };
++    try {
++      value = JSON.parse(action.value ?? "{}");
++    } catch {
++      return NextResponse.json({ error: "Invalid button value." }, { status: 400 });
++    }
++    const { engagementId, id } = value;
++    if (!engagementId || !id) {
++      return NextResponse.json({ error: "Malformed button value." }, { status: 400 });
++    }
++
++    if (!(await verifyEngagementSlackSignature(engagementId, timestamp, rawBody, receivedSignature))) {
++      return NextResponse.json({ error: "Signature verification failed." }, { status: 401 });
++    }
++
++    const decision = action.action_id === "pending_action_approve" ? "approved" : "rejected";
++    const decidedBy = payload.user?.username ?? payload.user?.id ?? "slack";
++    const result = await decidePendingAction(id, decision, decidedBy);
++
++    // Same reasoning as the outcome-button branch below: replace the
++    // actions block so a second click can't fire a contradictory decision
++    // on an already-decided row.
++    if (payload.response_url) {
++      const confirmText = !result.ok
++        ? result.error
++        : result.status === "rejected"
++          ? "Rejected"
++          : result.executed
++            ? "Approved"
++            : `Approved, but execution failed: ${result.error}`;
++      try {
++        await fetch(payload.response_url, {
++          method: "POST",
++          headers: { "Content-Type": "application/json" },
++          body: JSON.stringify({
++            replace_original: true,
++            blocks: [
++              ...(payload.message?.blocks?.filter((b: { block_id?: string }) => b.block_id !== "queue_item_actions") ?? []),
++              { type: "context", elements: [{ type: "mrkdwn", text: `*${confirmText}*` }] },
++            ],
++          }),
++        });
++      } catch {
++        // Decision is already recorded — a failure to edit the Slack
++        // message is cosmetic, not a reason to fail this request.
++      }
++    }
++
++    if (!result.ok) {
++      return NextResponse.json({ error: result.error }, { status: 404 });
++    }
++    return NextResponse.json({ success: true, status: result.status });
++  }
++
++  // ── Pre-call brief outcome buttons (existing) ───────────────────────────
+   let buttonValue: { engagementId?: string; bookingId?: string; prospectEmail?: string; outcome?: string };
+   try {
+     buttonValue = JSON.parse(action.value ?? "{}");
+@@ -85,14 +163,7 @@ export async function POST(req: Request) {
+   }
+ 
+   // ── Verify against THIS engagement's signing secret, not before ────────
+-  const [engagement] = await db
+-    .select({ stack: engagements.stack })
+-    .from(engagements)
+-    .where(eq(engagements.engagementId, engagementId))
+-    .limit(1);
+-  const signingSecret = (engagement?.stack as EngagementStack | null)?.slack_signing_secret;
+-
+-  if (!signingSecret || !verifySlackSignature(signingSecret, timestamp, rawBody, receivedSignature)) {
++  if (!(await verifyEngagementSlackSignature(engagementId, timestamp, rawBody, receivedSignature))) {
+     return NextResponse.json({ error: "Signature verification failed." }, { status: 401 });
+   }
+ 
+diff --git a/src/app/dashboard/live-count-badge.tsx b/src/app/dashboard/live-count-badge.tsx
+index 73a9e63..b9c6823 100644
+--- a/src/app/dashboard/live-count-badge.tsx
++++ b/src/app/dashboard/live-count-badge.tsx
+@@ -22,19 +22,33 @@ const POLL_MS = 5_000;
+  * one asked for live behavior — see work-sidebar.tsx for where it's wired
+  * in.
+  *
+- * Renders nothing when the count is 0, same as the static badge it
+- * replaces (SidebarNavLinks' `link.count !== undefined && link.count > 0`
+- * guard) — a run instantly reappearing in the feed is expected; the badge
+- * disappearing when nothing's running isn't a bug.
++ * Two numbers, one badge:
++ *  - count: runs in "running" right now. Solid pill, same treatment this
++ *    badge always had.
++ *  - unseenCount: runs that finished since the user last visited
++ *    /dashboard/runs (see getUnseenCompletedExecutionCount, run-log.ts) —
++ *    the actual fix for "a run starts and finishes between glances and
++ *    the badge just goes back to 0 with no trace anything happened."
++ *    Shown as an outlined pill (ring, not fill) rather than a new color,
++ *    to keep the dashboard's existing no-status-color convention — same
++ *    zinc palette, distinguished by shape/weight only, but visually
++ *    distinct from "actively running right now."
++ *
++ * If both are 0, nothing renders — a run instantly reappearing (count) or
++ * a first-ever visit with nothing to catch up on (unseenCount) is
++ * expected, not a bug.
+  */
+ export function LiveCountBadge({
+   initialCount,
++  initialUnseenCount,
+   active,
+ }: {
+   initialCount: number;
++  initialUnseenCount: number;
+   active: boolean;
+ }) {
+   const [count, setCount] = useState(initialCount);
++  const [unseenCount, setUnseenCount] = useState(initialUnseenCount);
+ 
+   const load = useCallback(async (signal: AbortSignal) => {
+     try {
+@@ -43,6 +57,7 @@ export function LiveCountBadge({
+       const data = await res.json();
+       if (signal.aborted) return;
+       setCount(Number(data.count ?? 0));
++      setUnseenCount(Number(data.unseenCompleted ?? 0));
+     } catch {
+       // Silent, same as NotificationBell's poll — includes AbortError on
+       // unmount; a missed tick just tries again in POLL_MS.
+@@ -58,15 +73,33 @@ export function LiveCountBadge({
+     };
+   }, [load]);
+ 
+-  if (count <= 0) return null;
++  // Running takes priority when both are nonzero — "N running" is the more
++  // urgent, more current fact; the unseen-completed count is still sitting
++  // there waiting and will show again the moment nothing's actively running.
++  if (count > 0) {
++    return (
++      <span
++        className={`ml-auto shrink-0 px-1.5 py-[1px] rounded-full text-[11px] font-mono font-medium transition-colors ${
++          active ? "bg-zinc-700 text-white" : "bg-zinc-800 text-zinc-400 group-hover:text-zinc-200"
++        }`}
++      >
++        {count}
++      </span>
++    );
++  }
++
++  if (unseenCount > 0) {
++    return (
++      <span
++        title={`${unseenCount} run${unseenCount === 1 ? "" : "s"} finished since you last checked`}
++        className={`ml-auto shrink-0 px-1.5 py-[1px] rounded-full text-[11px] font-mono font-medium border transition-colors ${
++          active ? "border-zinc-500 text-zinc-200" : "border-zinc-700 text-zinc-400 group-hover:text-zinc-200 group-hover:border-zinc-600"
++        }`}
++      >
++        {unseenCount}
++      </span>
++    );
++  }
+ 
+-  return (
+-    <span
+-      className={`ml-auto shrink-0 px-1.5 py-[1px] rounded-full text-[11px] font-mono font-medium transition-colors ${
+-        active ? "bg-zinc-700 text-white" : "bg-zinc-800 text-zinc-400 group-hover:text-zinc-200"
+-      }`}
+-    >
+-      {count}
+-    </span>
+-  );
++  return null;
+ }
+diff --git a/src/app/dashboard/runs/page.tsx b/src/app/dashboard/runs/page.tsx
+index 25f94df..e1b637f 100644
+--- a/src/app/dashboard/runs/page.tsx
++++ b/src/app/dashboard/runs/page.tsx
+@@ -5,7 +5,9 @@ import { getQueueItems } from "@/lib/queue";
+ import { eq, desc, sql } from "drizzle-orm";
+ import { LiveExecutionFeed } from "../live-execution-feed";
+ import { latestStepLabel } from "@/lib/run-display";
+-import { EXECUTIONS_TOOLBAR_COPY as copy } from "@/lib/copy";
++import { markExecutionsSeen } from "@/lib/run-log";
++import { EXECUTIONS_TOOLBAR_COPY as copy, skillName as skillDisplayName } from "@/lib/copy";
++import { SquishySkillBadge, SKILL_SQUISHY_CONFIG } from "@/components/squishy-skill-badge";
+ import Link from "next/link";
+ 
+ export const dynamic = "force-dynamic";
+@@ -23,26 +25,34 @@ export default async function RunsPage() {
+   const session = await getSession();
+   const whopUserId = session.whopUserId!;
+ 
+-  const rows = await db
+-    .select({
+-      id: skillRuns.id,
+-      skillName: skillRuns.skillName,
+-      status: skillRuns.status,
+-      phase: skillRuns.phase,
+-      startedAt: skillRuns.startedAt,
+-      completedAt: skillRuns.completedAt,
+-      engagementId: skillRuns.engagementId,
+-      buyerName: engagements.buyer,
+-      engagementPausedAt: engagements.pausedAt,
+-      errorMessage: skillRuns.errorMessage,
+-      steps: skillRuns.steps,
+-      stepCount: sql<number>`coalesce(jsonb_array_length(${skillRuns.steps}), 0)`,
+-    })
+-    .from(skillRuns)
+-    .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+-    .where(eq(engagements.whopUserId, whopUserId))
+-    .orderBy(desc(skillRuns.startedAt))
+-    .limit(150);
++  const [rows, , queueItems] = await Promise.all([
++    db
++      .select({
++        id: skillRuns.id,
++        skillName: skillRuns.skillName,
++        status: skillRuns.status,
++        phase: skillRuns.phase,
++        startedAt: skillRuns.startedAt,
++        completedAt: skillRuns.completedAt,
++        engagementId: skillRuns.engagementId,
++        buyerName: engagements.buyer,
++        engagementPausedAt: engagements.pausedAt,
++        errorMessage: skillRuns.errorMessage,
++        steps: skillRuns.steps,
++        stepCount: sql<number>`coalesce(jsonb_array_length(${skillRuns.steps}), 0)`,
++      })
++      .from(skillRuns)
++      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
++      .where(eq(engagements.whopUserId, whopUserId))
++      .orderBy(desc(skillRuns.startedAt))
++      .limit(150),
++    // Clears the Executions nav badge's unseen-completed count — see
++    // getUnseenCompletedExecutionCount's doc (run-log.ts). Run alongside
++    // the row fetch rather than after it so visiting this page doesn't
++    // pick up any extra latency for it.
++    markExecutionsSeen(whopUserId),
++    getQueueItems(whopUserId),
++  ]);
+ 
+   const runs = rows.map(({ steps, startedAt, completedAt, ...rest }) => ({
+     ...rest,
+@@ -52,7 +62,16 @@ export default async function RunsPage() {
+     subjectLabel: latestStepLabel(steps),
+   }));
+ 
+-  const queueItems = await getQueueItems(whopUserId);
++  // At-a-glance per-skill breakdown for the strip below — counts within
++  // this page's existing 150-run live window (see the file comment
++  // above), not a lifetime total. Only counts skills SquishySkillBadge
++  // actually has art for; an unrecognized skillName is silently dropped
++  // here rather than showing a blank/broken badge.
++  const skillCounts = new Map<string, number>();
++  for (const run of runs) {
++    if (!SKILL_SQUISHY_CONFIG[run.skillName]) continue;
++    skillCounts.set(run.skillName, (skillCounts.get(run.skillName) ?? 0) + 1);
++  }
+ 
+   return (
+     <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
+@@ -72,6 +91,16 @@ export default async function RunsPage() {
+           <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
+             Every skill run across your engagements — filter by module, status, or client below.
+           </p>
++
++          {skillCounts.size > 0 && (
++            <div className="flex items-center gap-3 pt-3" role="list" aria-label="Runs by skill">
++              {Array.from(skillCounts.entries()).map(([skill, n]) => (
++                <div key={skill} role="listitem" title={`${n} ${skillDisplayName(skill)} run${n === 1 ? "" : "s"}`}>
++                  <SquishySkillBadge skill={skill} size={30} count={n} />
++                </div>
++              ))}
++            </div>
++          )}
+         </div>
+ 
+         <LiveExecutionFeed initialRuns={runs} title={copy.allExecutionsTitle} storageKey="all" />
+diff --git a/src/app/dashboard/sidebar-nav-links.tsx b/src/app/dashboard/sidebar-nav-links.tsx
+index af13653..ea7f1e4 100644
+--- a/src/app/dashboard/sidebar-nav-links.tsx
++++ b/src/app/dashboard/sidebar-nav-links.tsx
+@@ -12,6 +12,8 @@ export interface NavLinkItem {
+   count?: number;
+   /** When true, count is rendered by LiveCountBadge (polls for updates) instead of as a static number. `count` is still used as its initial value. */
+   live?: boolean;
++  /** Initial value for LiveCountBadge's second number — see that component's doc. Ignored unless `live` is also set. */
++  unseenCount?: number;
+ }
+ 
+ export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
+@@ -49,7 +51,7 @@ export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
+               <span className="truncate">{link.label}</span>
+             </div>
+             {link.live ? (
+-              <LiveCountBadge initialCount={link.count ?? 0} active={active} />
++              <LiveCountBadge initialCount={link.count ?? 0} initialUnseenCount={link.unseenCount ?? 0} active={active} />
+             ) : (
+               link.count !== undefined && link.count > 0 && (
+                 <span
+diff --git a/src/app/dashboard/work-sidebar.tsx b/src/app/dashboard/work-sidebar.tsx
+index 53ed3b7..da6fd7d 100644
+--- a/src/app/dashboard/work-sidebar.tsx
++++ b/src/app/dashboard/work-sidebar.tsx
+@@ -1,6 +1,7 @@
+ import { db } from "@/lib/db";
+ import { engagements, notifications, skillRuns, projects as projectsTable } from "@/models/schema";
+ import { getQueueActionableCount } from "@/lib/queue";
++import { getUnseenCompletedExecutionCount } from "@/lib/run-log";
+ import { eq, and, sql, isNull, desc } from "drizzle-orm";
+ import Link from "next/link";
+ import {
+@@ -16,7 +17,7 @@ import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
+ import { ClientSidebarList } from "./client-sidebar-list";
+ 
+ export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
+-  const [queueCount, unreadInboxCount, runningCountResult, clientRows] = await Promise.all([
++  const [queueCount, unreadInboxCount, runningCountResult, unseenCompletedCount, clientRows] = await Promise.all([
+     getQueueActionableCount(whopUserId),
+ 
+     db
+@@ -30,6 +31,8 @@ export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
+       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+       .where(and(eq(engagements.whopUserId, whopUserId), eq(skillRuns.status, "running"))),
+ 
++    getUnseenCompletedExecutionCount(whopUserId),
++
+     db
+       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, tagColor: engagements.tagColor })
+       .from(engagements)
+@@ -38,7 +41,7 @@ export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
+       .limit(10),
+   ]).catch((err) => {
+     console.error("[WorkSidebar] query failed:", err);
+-    return [0, [{ count: 0 }], [{ count: 0 }], []] as const;
++    return [0, [{ count: 0 }], [{ count: 0 }], 0, []] as const;
+   });
+ 
+   // Group 1: Home & Inbox
+@@ -50,7 +53,18 @@ export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
+   // Group 2: Queue, Executions, Projects
+   const group2Links: NavLinkItem[] = [
+     { href: "/dashboard/queue", label: "Queue", icon: <ListTodo className="w-4 h-4" />, count: queueCount },
+-    { href: "/dashboard/runs", label: "Executions", icon: <Activity className="w-4 h-4" />, count: Number(runningCountResult[0]?.count ?? 0), live: true },
++    {
++      href: "/dashboard/runs",
++      label: "Executions",
++      icon: <Activity className="w-4 h-4" />,
++      count: Number(runningCountResult[0]?.count ?? 0),
++      live: true,
++      // See LiveCountBadge's unseenCompleted doc — a run finishing between
++      // glances used to leave this badge back at 0 with no trace anything
++      // happened. This is the initial value only; the badge keeps polling
++      // both numbers from there.
++      unseenCount: unseenCompletedCount,
++    },
+     { href: "/dashboard/projects", label: "Projects", icon: <FolderKanban className="w-4 h-4" /> },
+   ];
+ 
+diff --git a/src/components/squishy-skill-badge.tsx b/src/components/squishy-skill-badge.tsx
+index 236f0f8..eaa2967 100644
+--- a/src/components/squishy-skill-badge.tsx
++++ b/src/components/squishy-skill-badge.tsx
+@@ -17,10 +17,13 @@ export function SquishySkillBadge({
+   skill,
+   size = 36,
+   enabled = true,
++  count,
+ }: {
+   skill: string;
+   size?: number;
+   enabled?: boolean;
++  /** Optional small overlay in the corner — e.g. "3 Pin-Down runs" at a glance on the Executions page. Omitted (no badge rendered) when undefined or 0. */
++  count?: number;
+ }) {
+   const config = SKILL_SQUISHY_CONFIG[skill];
+   if (!config) return null;
+@@ -29,24 +32,33 @@ export function SquishySkillBadge({
+   const iconSize = Math.round(size * 0.54);
+ 
+   return (
+-    <div
+-      className={`flex items-center justify-center rounded-full transition-all duration-200 shrink-0 select-none ${
+-        enabled
+-          ? `${config.bgClass} shadow-xs`
+-          : "bg-zinc-200 dark:bg-zinc-800 opacity-40 grayscale"
+-      }`}
+-      style={{ width: size, height: size }}
+-    >
+-      <Icon
+-        size={iconSize}
+-        className={`${
++    <div className="relative shrink-0" style={{ width: size, height: size }}>
++      <div
++        className={`flex items-center justify-center rounded-full transition-all duration-200 select-none w-full h-full ${
+           enabled
+-            ? "text-zinc-950 fill-white"
+-            : "text-zinc-500 dark:text-zinc-400 fill-transparent"
+-        } stroke-[2.3px]`}
+-        strokeLinecap="round"
+-        strokeLinejoin="round"
+-      />
++            ? `${config.bgClass} shadow-xs`
++            : "bg-zinc-200 dark:bg-zinc-800 opacity-40 grayscale"
++        }`}
++      >
++        <Icon
++          size={iconSize}
++          className={`${
++            enabled
++              ? "text-zinc-950 fill-white"
++              : "text-zinc-500 dark:text-zinc-400 fill-transparent"
++          } stroke-[2.3px]`}
++          strokeLinecap="round"
++          strokeLinejoin="round"
++        />
++      </div>
++      {Boolean(count) && (
++        <span
++          className="absolute -bottom-1 -right-1 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[10px] font-mono font-bold leading-none ring-2 ring-white dark:ring-zinc-950"
++          aria-hidden="true"
++        >
++          {count! > 99 ? "99+" : count}
++        </span>
++      )}
+     </div>
+   );
+ }
+\ No newline at end of file
+diff --git a/src/features/pre-call-read/server/outcome-resolution.ts b/src/features/pre-call-read/server/outcome-resolution.ts
+index fae4743..0503d20 100644
+--- a/src/features/pre-call-read/server/outcome-resolution.ts
++++ b/src/features/pre-call-read/server/outcome-resolution.ts
+@@ -194,7 +194,29 @@ async function triggerNoShowWinBack(
+     // Slack/notifyUser) so it's still visible to anyone reviewing
+     // pendingActions directly — e.g. a future dashboard list view — not
+     // only to whoever happened to see the one-time notification.
+-    { bookingPayload: payload, eventKind: "cancelled", _reason: sweepReason },
++    {
++      bookingPayload: payload,
++      eventKind: "cancelled",
++      _reason: sweepReason,
++      // See approval-gate.ts's _title doc — actionType stays
++      // "webhook_enrollment" (deliberately, for the shared execution
++      // path), but a reviewer deciding "did this person actually
++      // no-show" should never see a title about webhook enrollment.
++      _title: source === "auto_sweep" ? "Possible no-show — review before Win-Back recovery starts" : undefined,
++      // Volume fix — at any real call count, one instant Slack ping per
++      // ambiguous sweep call (this cron runs every 15 minutes, per
++      // engagement) turns into exactly the "alert app" pattern this
++      // gating exists to avoid being. _digest tells queuePendingAction to
++      // skip its own immediate Slack/email push for this row — the row
++      // itself still lands in the Queue immediately either way, this
++      // only affects the external ping — and instead let
++      // pendingActionDigestCron (crons.ts) fold it into the next
++      // periodic batch for this engagement. Not set for other sources:
++      // a Slack-button or dashboard-triggered no-show is a one-off event
++      // a human is already looking at, not a recurring background
++      // inference — it should still interrupt immediately.
++      _digest: source === "auto_sweep" ? true : undefined,
++    },
+     () => inngest.send(bookingWebhookProcess.create({ runId, engagementId, eventKind: "cancelled", bookingPayload: payload })),
+     source === "auto_sweep",
+     sweepReason
+diff --git a/src/inngest/crons.ts b/src/inngest/crons.ts
+index ceeb824..765b64d 100644
+--- a/src/inngest/crons.ts
++++ b/src/inngest/crons.ts
+@@ -28,7 +28,7 @@
+ import crypto from "crypto";
+ import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle, assumedNoShowSweepEngagement } from "@/lib/inngest";
+ import { db } from "@/lib/db";
+-import { engagements, skillRuns, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions } from "@/models/schema";
++import { engagements, skillRuns, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions, pendingActions } from "@/models/schema";
+ import { startRun, closeStaleRun, notifyRunOutcome, failRun } from "@/lib/run-log";
+ import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
+ import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
+@@ -871,3 +871,115 @@ export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
+     return { checked: eligible.length, resolved };
+   }
+ );
++
++// ── Pending-approval digest — batches _digest-flagged Slack pings ───────
++//
++// queuePendingAction (approval-gate.ts) skips its own immediate Slack/
++// email push for any pendingActions row whose payload carries _digest:
++// true — currently only the assumed-no-show sweep above sets it (see the
++// _digest doc in outcome-resolution.ts). This is the other half: folds
++// everything accumulated since the last run into ONE Slack message per
++// engagement, so a busy call day produces one periodic batch instead of
++// one interruption per ambiguous call — the actual scaling problem with
++// per-call approval pings, independent of how good the underlying
++// no-show detection is. The pendingActions row itself is never delayed:
++// it's visible in the Queue the moment it's created, same as before —
++// only the external ping is throttled, so per-item Approve/Reject in the
++// dashboard (or Slack, if a later digest round adds per-item buttons
++// here too) still happens one decision at a time, just without one
++// notification per decision.
++//
++// Runs every 30 minutes, offset from the sweep's own 15-minute cadence
++// so there's always at least one full sweep pass of fresh data to report
++// on by the time this runs.
++export const pendingActionDigestCron = inngest.createFunction(
++  { id: "pending-action-digest-cron", triggers: [{ cron: "*/30 * * * *" }] },
++  async ({ step }) => {
++    const undigested = await step.run("find-undigested", async () => {
++      // _digest is the real filter (checked in JS below, since it lives
++      // inside the jsonb payload) — actionType here is just a cheap
++      // narrowing before that: every _digest row today is a
++      // webhook_enrollment row (see triggerNoShowWinBack).
++      const rows = await db
++        .select({
++          id: pendingActions.id,
++          engagementId: pendingActions.engagementId,
++          payload: pendingActions.payload,
++        })
++        .from(pendingActions)
++        .where(and(eq(pendingActions.status, "pending"), eq(pendingActions.actionType, "webhook_enrollment")));
++
++      return rows.filter((r) => {
++        const p = r.payload as { _digest?: boolean; _digestedAt?: string } | null;
++        return p?._digest === true && !p?._digestedAt;
++      });
++    });
++
++    if (undigested.length === 0) {
++      return { engagementsPinged: 0, itemsDigested: 0 };
++    }
++
++    const byEngagement = new Map<string, typeof undigested>();
++    for (const row of undigested) {
++      const list = byEngagement.get(row.engagementId) ?? [];
++      list.push(row);
++      byEngagement.set(row.engagementId, list);
++    }
++
++    let engagementsPinged = 0;
++
++    for (const [engagementId, rows] of byEngagement) {
++      await step.run(`digest-${engagementId}`, async () => {
++        const [engagement] = await db
++          .select({ stack: engagements.stack })
++          .from(engagements)
++          .where(eq(engagements.engagementId, engagementId))
++          .limit(1);
++        const slackWebhookUrl = (engagement?.stack as EngagementStack | null)?.slack_webhook_url;
++
++        if (slackWebhookUrl) {
++          const MAX_LISTED = 10;
++          const listed = rows.slice(0, MAX_LISTED);
++          const lines = listed.map((r) => {
++            const reason = (r.payload as { _reason?: string } | null)?._reason;
++            // Same "lead with the specific reason" choice queuePendingAction
++            // makes for the immediate-ping case — a bare count tells a
++            // reviewer nothing about what they're actually being asked
++            // to confirm for each one.
++            return `• ${reason ?? "Possible no-show — no evidence found."}`;
++          });
++          const overflow = rows.length - listed.length;
++
++          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
++          const text =
++            `*${rows.length} call${rows.length === 1 ? "" : "s"} need${rows.length === 1 ? "s" : ""} a no-show review*\n` +
++            lines.join("\n") +
++            (overflow > 0 ? `\n…and ${overflow} more` : "") +
++            `\n<${appUrl}/dashboard/queue|Review in Queue →>`;
++
++          await fetch(slackWebhookUrl, {
++            method: "POST",
++            headers: { "Content-Type": "application/json" },
++            body: JSON.stringify({ text }),
++          }).catch((e) => {
++            console.error("[pending-action-digest] Slack delivery failed:", e.message);
++          });
++          engagementsPinged++;
++        }
++
++        // Mark every row in this batch digested regardless of whether
++        // Slack actually fired — an engagement with no webhook configured
++        // should never accumulate an ever-growing "undigested" backlog it
++        // can never clear. The row is still sitting in the Queue either
++        // way; this only ever gates the external ping.
++        const now = new Date().toISOString();
++        for (const row of rows) {
++          const payload = { ...(row.payload as Record<string, unknown>), _digestedAt: now };
++          await db.update(pendingActions).set({ payload }).where(eq(pendingActions.id, row.id));
++        }
++      });
++    }
++
++    return { engagementsPinged, itemsDigested: undigested.length };
++  }
++);
+diff --git a/src/lib/approval-gate.ts b/src/lib/approval-gate.ts
+index 9d744a7..dfabd61 100644
+--- a/src/lib/approval-gate.ts
++++ b/src/lib/approval-gate.ts
+@@ -70,7 +70,12 @@ async function queuePendingAction(
+     .where(eq(engagements.engagementId, engagementId))
+     .limit(1);
+ 
+-  if (engagement) {
++  // _digest rows skip the immediate notifyUser call entirely — see the
++  // _digest doc in outcome-resolution.ts. The pendingActions row above is
++  // already created either way, so it's visible in the Queue right away;
++  // this only decides whether it ALSO gets an instant external ping, or
++  // waits to be folded into pendingActionDigestCron's next batch.
++  if (engagement && !(payload as { _digest?: boolean })._digest) {
+     try {
+       const stack = engagement.stack as EngagementStack;
+       await notifyUser({
+@@ -78,7 +83,14 @@ async function queuePendingAction(
+         engagementId,
+         type: "credential_check_error",
+         severity: "info",
+-        title: `Approval needed: ${actionType.replace(/_/g, " ")}`,
++        // Payload can carry an optional _title (same convention as
++        // _reason below) for a call site whose actionType label is too
++        // generic/mechanism-y to tell a reviewer what they're actually
++        // deciding — see triggerNoShowWinBack, which reuses actionType
++        // "webhook_enrollment" deliberately (it drives the identical
++        // execution path a real webhook enrollment would) but needs its
++        // own, accurate headline rather than "webhook enrollment".
++        title: (payload as { _title?: string })._title ?? `Approval needed: ${actionType.replace(/_/g, " ")}`,
+         // Assumed-no-show sweep false-positive fix — a bare "action X is
+         // waiting for review" told the operator nothing about *why*
+         // before they had to click into the dashboard, which is exactly
+@@ -88,6 +100,33 @@ async function queuePendingAction(
+         // reviewing knows what they're actually being asked to confirm.
+         body: reason ?? `A ${actionType.replace(/_/g, " ")} action is waiting for review before it runs. Approve or reject it from the dashboard.`,
+         slackWebhookUrl: stack?.slack_webhook_url,
++        // Real Approve/Reject buttons, not just a link back to the
++        // dashboard — clicking either runs the identical
++        // decidePendingAction path a dashboard click does (see the Slack
++        // interactions route). value must carry engagementId: that's
++        // what lets the interactions route pick the right signing secret
++        // to verify against *before* trusting anything else in the click.
++        slackActions: [
++          {
++            label: "✅ Approve",
++            style: "primary",
++            actionId: "pending_action_approve",
++            value: JSON.stringify({ engagementId, id: row.id }),
++          },
++          {
++            label: "❌ Reject",
++            style: "danger",
++            actionId: "pending_action_reject",
++            value: JSON.stringify({ engagementId, id: row.id }),
++          },
++        ],
++        // The pendingActions row just inserted above is already this
++        // event's in-app, Queue-visible, actionable record (Approve/
++        // Reject) — see notify.ts's persistInApp doc. Without this, the
++        // same event also landed as an unlinked "fyi" Queue item nothing
++        // ever clears, showing the same message twice under two
++        // different actions with two different titles.
++        persistInApp: false,
+       });
+     } catch {
+       // Same isolation as everywhere else notify.ts is called — a
+@@ -293,4 +332,63 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string,
+       detail: deployResult.reason,
+     });
+   },
+-};
+\ No newline at end of file
++};
++
++/**
++ * The single "a human decided" entry point for a pending action —
++ * extracted from POST /api/actions/[id]/review so the Slack interactions
++ * handler (src/app/api/slack/interactions/route.ts) can call the exact
++ * same approve/reject/execute logic a dashboard click runs, instead of a
++ * second, drifting copy of it. Callers still own their own auth: the
++ * dashboard route checks session + isAuthorizedForEngagement before
++ * calling this; the Slack route's trust comes from the signature
++ * verification it already does before dispatching here (see that file's
++ * header comment for why that has to happen in that specific order).
++ */
++export async function decidePendingAction(
++  id: string,
++  decision: "approved" | "rejected",
++  decidedBy: string
++): Promise<
++  | { ok: true; status: "rejected" }
++  | { ok: true; status: "approved"; executed: true }
++  | { ok: true; status: "approved"; executed: false; error: string }
++  | { ok: false; error: string }
++> {
++  const [action] = await db.select().from(pendingActions).where(eq(pendingActions.id, id)).limit(1);
++  if (!action || action.status !== "pending") {
++    return { ok: false, error: "Pending action not found or already decided." };
++  }
++
++  if (decision === "rejected") {
++    await db
++      .update(pendingActions)
++      .set({ status: "rejected", decidedAt: new Date(), decidedBy })
++      .where(eq(pendingActions.id, id));
++    return { ok: true, status: "rejected" };
++  }
++
++  // Approved — mark decided first (so a slow/failing executor can't leave
++  // the row looking un-decided and retryable-by-accident), then attempt
++  // execution, recording failure on the row rather than throwing it away.
++  await db
++    .update(pendingActions)
++    .set({ status: "approved", decidedAt: new Date(), decidedBy })
++    .where(eq(pendingActions.id, id));
++
++  try {
++    const executor = ACTION_EXECUTORS[action.actionType as PendingActionType];
++    if (!executor) {
++      throw new Error(`No executor registered for action type "${action.actionType}"`);
++    }
++    await executor(action.engagementId, action.payload);
++    return { ok: true, status: "approved", executed: true };
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : String(error);
++    await db
++      .update(pendingActions)
++      .set({ status: "execution_failed", executionError: message })
++      .where(eq(pendingActions.id, id));
++    return { ok: true, status: "approved", executed: false, error: message };
++  }
++}
+\ No newline at end of file
+diff --git a/src/lib/human-blockers.ts b/src/lib/human-blockers.ts
+index a3f0d01..9baad76 100644
+--- a/src/lib/human-blockers.ts
++++ b/src/lib/human-blockers.ts
+@@ -87,6 +87,11 @@ export async function createBlocker(input: {
+         title: `${input.skillName}: action needed to continue`,
+         body: input.description,
+         slackWebhookUrl: stack?.slack_webhook_url,
++        // The humanBlockers row just inserted above is already this
++        // event's in-app, Queue-visible, actionable record (Resolve) —
++        // see notify.ts's persistInApp doc. Without this, the same
++        // blocker also landed as a second, unlinked "alert" Queue item.
++        persistInApp: false,
+       });
+     } catch {
+       // Never let a notification failure prevent the blocker itself from
+diff --git a/src/lib/notify.ts b/src/lib/notify.ts
+index b0f14b2..8bb48b3 100644
+--- a/src/lib/notify.ts
++++ b/src/lib/notify.ts
+@@ -4,9 +4,25 @@
+ // know about, right now, without them having to go check the dashboard."
+ //
+ // Three channels, in order of guarantee:
+-//   1. In-app  — ALWAYS written. This is the reliability floor: every
++//   1. In-app  — written by default. This is the reliability floor: every
+ //      tenant has this channel by definition, no setup required. The
+-//      dashboard notification bell reads straight from this table.
++//      dashboard notification bell AND the Queue panel (src/lib/queue.ts)
++//      both read straight from this table, surfacing every row here as
++//      its own alert/fyi queue item.
++//
++//      That last part is exactly why persistInApp exists: a caller that
++//      already wrote a pendingActions row, a humanBlockers row, or marked
++//      a skillRun failed/timed_out already HAS an in-app, queue-visible
++//      record of this event — usually a richer one, with real actions
++//      (approve/reject, resolve, run again) that this generic channel
++//      can't offer. Also writing a notifications row for that same event
++//      does not add a second useful thing for the buyer to look at; it
++//      adds an unlinked duplicate that nothing ever clears when the real
++//      one gets resolved. persistInApp: false skips *only* that row —
++//      Slack and email still fire below, since "ping me" is still exactly
++//      what should happen. See queuePendingAction (approval-gate.ts),
++//      createBlocker (human-blockers.ts), and notifyRunOutcome
++//      (run-log.ts) for the three call sites that pass it.
+ //   2. Slack   — only if the engagement has stack.slack_webhook_url set
+ //      (same per-engagement webhook src/features/leak-map/server/alert-monitor.ts
+ //      already uses for Leak-Map breach alerts).
+@@ -38,6 +54,22 @@ export type NotificationType =
+ 
+ export type NotificationSeverity = "info" | "warning" | "critical";
+ 
++/**
++ * One button on an interactive Slack message — same shape deliverBrief's
++ * outcome buttons already use (src/lib/platforms/email.ts), so both
++ * produce Block Kit the Slack interactions handler
++ * (src/app/api/slack/interactions/route.ts) parses the same way: read
++ * engagementId out of the (still untrusted) value, verify that
++ * engagement's signing secret, only then act.
++ */
++export interface SlackAction {
++  label: string;
++  style?: "primary" | "danger";
++  actionId: string;
++  /** JSON-stringified — must include engagementId; see the interactions route's verification order. */
++  value: string;
++}
++
+ export interface NotifyOptions {
+   whopUserId: string;
+   engagementId?: string;
+@@ -48,28 +80,47 @@ export interface NotifyOptions {
+   body: string;
+   /** Per-engagement Slack webhook, if the tenant has one configured. */
+   slackWebhookUrl?: string;
++  /**
++   * Default true. Set false when the caller already wrote its own
++   * actionable/queue-visible record of this event (a pendingActions row,
++   * a humanBlockers row, a failed skillRun) — see the file header. Never
++   * suppresses Slack or email, only the in-app notifications-table row
++   * and the duplicate Queue item it would otherwise produce.
++   */
++  persistInApp?: boolean;
++  /**
++   * Optional row of interactive buttons on the Slack message (requires
++   * slackWebhookUrl). Omit for every notification that's genuinely just
++   * FYI — a button that can't actually resolve anything (most blocker
++   * types need a URL or credential, not a click) is worse than no button,
++   * since it invites a click that does nothing. Only queuePendingAction
++   * passes this today, for Approve/Reject.
++   */
++  slackActions?: SlackAction[];
+ }
+ 
+ export async function notifyUser(opts: NotifyOptions): Promise<void> {
+-  // ── 1. In-app (always) ────────────────────────────────────────────────
+-  try {
+-    await db.insert(notifications).values({
+-      id: crypto.randomUUID(),
+-      whopUserId: opts.whopUserId,
+-      engagementId: opts.engagementId ?? null,
+-      runId: opts.runId ?? null,
+-      type: opts.type,
+-      severity: opts.severity,
+-      title: opts.title,
+-      body: opts.body,
+-      read: false,
+-      createdAt: new Date(),
+-    });
+-  } catch (e) {
+-    // If even the in-app write fails (DB down), there's nowhere reliable
+-    // left to surface this — log and continue to the best-effort channels
+-    // below, since Slack/email might still get through independently.
+-    console.error("[notify] failed to write in-app notification:", e);
++  // ── 1. In-app (default on — see persistInApp above) ─────────────────
++  if (opts.persistInApp !== false) {
++    try {
++      await db.insert(notifications).values({
++        id: crypto.randomUUID(),
++        whopUserId: opts.whopUserId,
++        engagementId: opts.engagementId ?? null,
++        runId: opts.runId ?? null,
++        type: opts.type,
++        severity: opts.severity,
++        title: opts.title,
++        body: opts.body,
++        read: false,
++        createdAt: new Date(),
++      });
++    } catch (e) {
++      // If even the in-app write fails (DB down), there's nowhere reliable
++      // left to surface this — log and continue to the best-effort channels
++      // below, since Slack/email might still get through independently.
++      console.error("[notify] failed to write in-app notification:", e);
++    }
+   }
+ 
+   // ── 2. Slack (best-effort, only if configured) ──────────────────────────
+@@ -79,12 +130,34 @@ export async function notifyUser(opts: NotifyOptions): Promise<void> {
+   // can be killed mid-flight, silently dropping the Slack alert. The
+   // .catch still ensures a failed delivery never throws out of notifyUser.
+   if (opts.slackWebhookUrl) {
++    const body = opts.slackActions?.length
++      ? {
++          // Fallback text for notifications/screen readers; blocks below
++          // are what actually renders. Same shape deliverBrief's outcome
++          // buttons use (src/lib/platforms/email.ts) — the interactions
++          // route parses both the same way.
++          text: `${opts.title}\n${opts.body}`,
++          blocks: [
++            { type: "section", text: { type: "mrkdwn", text: `*${opts.title}*\n${opts.body}` } },
++            {
++              type: "actions",
++              block_id: "queue_item_actions",
++              elements: opts.slackActions.map((a) => ({
++                type: "button",
++                text: { type: "plain_text", text: a.label },
++                ...(a.style ? { style: a.style } : {}),
++                action_id: a.actionId,
++                value: a.value,
++              })),
++            },
++          ],
++        }
++      : { text: `*[${opts.severity.toUpperCase()}] ${opts.title}*\n${opts.body}` };
++
+     await fetch(opts.slackWebhookUrl, {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+-      body: JSON.stringify({
+-        text: `*[${opts.severity.toUpperCase()}] ${opts.title}*\n${opts.body}`,
+-      }),
++      body: JSON.stringify(body),
+     }).catch((e) => {
+       console.error("[notify] Slack delivery failed:", e.message);
+     });
+diff --git a/src/lib/queue.ts b/src/lib/queue.ts
+index f6762db..d974a73 100644
+--- a/src/lib/queue.ts
++++ b/src/lib/queue.ts
+@@ -321,12 +321,16 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
+ 
+   const items: QueueItem[] = [
+     ...actionRows.map((a): QueueItem => {
+-      const reason = (a.payload as { _reason?: string } | null)?._reason;
++      const payload = a.payload as { _reason?: string; _title?: string } | null;
++      const reason = payload?._reason;
+       return {
+         id: a.id,
+         source: "action",
+         category: "approve",
+-        title: ACTION_TYPE_LABELS[a.actionType] ?? a.actionType,
++        // Same _title override approval-gate.ts's Slack/email title uses
++        // — otherwise a reviewer sees the correct, specific reason as the
++        // subtitle under a generic, mechanism-describing title above it.
++        title: payload?._title ?? ACTION_TYPE_LABELS[a.actionType] ?? a.actionType,
+         subtitle: reason ?? a.buyer,
+         engagementId: a.engagementId,
+         buyer: a.buyer,
+diff --git a/src/lib/run-log.ts b/src/lib/run-log.ts
+index 6f8b654..f8e5127 100644
+--- a/src/lib/run-log.ts
++++ b/src/lib/run-log.ts
+@@ -33,8 +33,8 @@
+ //   await cancelRun(runId);
+ 
+ import { db } from "@/lib/db";
+-import { skillRuns, engagements, type EngagementStack } from "@/models/schema";
+-import { and, eq } from "drizzle-orm";
++import { skillRuns, engagements, users, type EngagementStack } from "@/models/schema";
++import { and, eq, gt, isNotNull, ne, sql } from "drizzle-orm";
+ import { notifyUser } from "@/lib/notify";
+ import { skillName as skillDisplayName } from "@/lib/copy";
+ 
+@@ -82,6 +82,13 @@ export async function notifyRunOutcome(
+       title,
+       body: detail,
+       slackWebhookUrl: (tenant.stack as EngagementStack | null)?.slack_webhook_url,
++      // queue.ts's failedRunQueueItems already derives a queue item for
++      // this exact run straight from skillRuns — live, and richer than a
++      // generic notification (deep link to the likely-wrong field, "Run
++      // again", credential-issue detection). See notify.ts's persistInApp
++      // doc. Without this, every run failure also landed as a second,
++      // unlinked "alert" Queue item pointing nowhere in particular.
++      persistInApp: false,
+     });
+   } catch (e) {
+     console.error("[run-log] failed to dispatch run-outcome notification:", e);
+@@ -482,4 +489,46 @@ export function emptySummary(): RunSummary {
+     openItems: [],
+     decisionsMade: [],
+   };
++}
++
++// ── Executions sidebar unread-count fix ──────────────────────────────────
++//
++// live-count-badge.tsx's existing poll only ever reports the *currently
++// running* count, so a run that starts and finishes between glances — the
++// common case for anything short — leaves the badge back at 0 with
++// nothing to show it happened. This pair adds the other half: how many
++// runs reached a terminal state since the user last actually looked at
++// /dashboard/runs, independent of whether anything's running right now.
++
++/**
++ * Terminal runs (not "running") for this user, completed after their
++ * users.executionsLastSeenAt — see the column's doc in schema.ts for why
++ * NULL counts as zero rather than "everything." "running" is excluded on
++ * purpose: that state already has its own live badge (running-count
++ * route), and double-counting a run in both numbers while it's in flight
++ * would make the two badges disagree with each other for no reason.
++ */
++export async function getUnseenCompletedExecutionCount(whopUserId: string): Promise<number> {
++  const [user] = await db.select({ executionsLastSeenAt: users.executionsLastSeenAt }).from(users).where(eq(users.whopUserId, whopUserId)).limit(1);
++  if (!user?.executionsLastSeenAt) return 0;
++
++  const [row] = await db
++    .select({ count: sql<number>`count(*)` })
++    .from(skillRuns)
++    .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
++    .where(
++      and(
++        eq(engagements.whopUserId, whopUserId),
++        ne(skillRuns.status, "running"),
++        isNotNull(skillRuns.completedAt),
++        gt(skillRuns.completedAt, user.executionsLastSeenAt)
++      )
++    );
++
++  return Number(row?.count ?? 0);
++}
++
++/** Called when the user actually visits /dashboard/runs — see that page. */
++export async function markExecutionsSeen(whopUserId: string): Promise<void> {
++  await db.update(users).set({ executionsLastSeenAt: new Date() }).where(eq(users.whopUserId, whopUserId));
+ }
+\ No newline at end of file
+diff --git a/src/models/schema.ts b/src/models/schema.ts
+index 45ce36c..0b448ab 100644
+--- a/src/models/schema.ts
++++ b/src/models/schema.ts
+@@ -469,6 +469,16 @@ export const users = pgTable("users", {
+   whopUserId: text("whop_user_id").notNull().unique(),
+   email: text("email"),
+   subscriptionStatus: text("subscription_status").notNull().default("inactive"),
++  // Executions sidebar unread-count fix — a run that starts and finishes
++  // between glances used to leave the nav badge back at 0 with no trace
++  // anything happened (the badge only ever showed the *currently running*
++  // count — see live-count-badge.tsx). NULL means "never visited /
++  // pre-migration" and is deliberately treated as zero-unseen rather than
++  // "everything since forever," so this doesn't dump a scary backlog
++  // count on every existing user the moment this column exists. Set to
++  // now() when the user actually visits /dashboard/runs — see
++  // markExecutionsSeen in run-log.ts.
++  executionsLastSeenAt: timestamp("executions_last_seen_at"),
+   createdAt: timestamp("created_at").defaultNow().notNull(),
+   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+ });

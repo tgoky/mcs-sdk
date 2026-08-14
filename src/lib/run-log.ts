@@ -33,8 +33,8 @@
 //   await cancelRun(runId);
 
 import { db } from "@/lib/db";
-import { skillRuns, engagements, type EngagementStack } from "@/models/schema";
-import { and, eq } from "drizzle-orm";
+import { skillRuns, engagements, users, type EngagementStack } from "@/models/schema";
+import { and, eq, gt, isNotNull, ne, sql } from "drizzle-orm";
 import { notifyUser } from "@/lib/notify";
 import { skillName as skillDisplayName } from "@/lib/copy";
 
@@ -489,4 +489,46 @@ export function emptySummary(): RunSummary {
     openItems: [],
     decisionsMade: [],
   };
+}
+
+// ── Executions sidebar unread-count fix ──────────────────────────────────
+//
+// live-count-badge.tsx's existing poll only ever reports the *currently
+// running* count, so a run that starts and finishes between glances — the
+// common case for anything short — leaves the badge back at 0 with
+// nothing to show it happened. This pair adds the other half: how many
+// runs reached a terminal state since the user last actually looked at
+// /dashboard/runs, independent of whether anything's running right now.
+
+/**
+ * Terminal runs (not "running") for this user, completed after their
+ * users.executionsLastSeenAt — see the column's doc in schema.ts for why
+ * NULL counts as zero rather than "everything." "running" is excluded on
+ * purpose: that state already has its own live badge (running-count
+ * route), and double-counting a run in both numbers while it's in flight
+ * would make the two badges disagree with each other for no reason.
+ */
+export async function getUnseenCompletedExecutionCount(whopUserId: string): Promise<number> {
+  const [user] = await db.select({ executionsLastSeenAt: users.executionsLastSeenAt }).from(users).where(eq(users.whopUserId, whopUserId)).limit(1);
+  if (!user?.executionsLastSeenAt) return 0;
+
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(skillRuns)
+    .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+    .where(
+      and(
+        eq(engagements.whopUserId, whopUserId),
+        ne(skillRuns.status, "running"),
+        isNotNull(skillRuns.completedAt),
+        gt(skillRuns.completedAt, user.executionsLastSeenAt)
+      )
+    );
+
+  return Number(row?.count ?? 0);
+}
+
+/** Called when the user actually visits /dashboard/runs — see that page. */
+export async function markExecutionsSeen(whopUserId: string): Promise<void> {
+  await db.update(users).set({ executionsLastSeenAt: new Date() }).where(eq(users.whopUserId, whopUserId));
 }

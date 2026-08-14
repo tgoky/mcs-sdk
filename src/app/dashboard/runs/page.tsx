@@ -5,7 +5,9 @@ import { getQueueItems } from "@/lib/queue";
 import { eq, desc, sql } from "drizzle-orm";
 import { LiveExecutionFeed } from "../live-execution-feed";
 import { latestStepLabel } from "@/lib/run-display";
-import { EXECUTIONS_TOOLBAR_COPY as copy } from "@/lib/copy";
+import { markExecutionsSeen } from "@/lib/run-log";
+import { EXECUTIONS_TOOLBAR_COPY as copy, skillName as skillDisplayName } from "@/lib/copy";
+import { SquishySkillBadge, SKILL_SQUISHY_CONFIG } from "@/components/squishy-skill-badge";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -23,26 +25,34 @@ export default async function RunsPage() {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
 
-  const rows = await db
-    .select({
-      id: skillRuns.id,
-      skillName: skillRuns.skillName,
-      status: skillRuns.status,
-      phase: skillRuns.phase,
-      startedAt: skillRuns.startedAt,
-      completedAt: skillRuns.completedAt,
-      engagementId: skillRuns.engagementId,
-      buyerName: engagements.buyer,
-      engagementPausedAt: engagements.pausedAt,
-      errorMessage: skillRuns.errorMessage,
-      steps: skillRuns.steps,
-      stepCount: sql<number>`coalesce(jsonb_array_length(${skillRuns.steps}), 0)`,
-    })
-    .from(skillRuns)
-    .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-    .where(eq(engagements.whopUserId, whopUserId))
-    .orderBy(desc(skillRuns.startedAt))
-    .limit(150);
+  const [rows, , queueItems] = await Promise.all([
+    db
+      .select({
+        id: skillRuns.id,
+        skillName: skillRuns.skillName,
+        status: skillRuns.status,
+        phase: skillRuns.phase,
+        startedAt: skillRuns.startedAt,
+        completedAt: skillRuns.completedAt,
+        engagementId: skillRuns.engagementId,
+        buyerName: engagements.buyer,
+        engagementPausedAt: engagements.pausedAt,
+        errorMessage: skillRuns.errorMessage,
+        steps: skillRuns.steps,
+        stepCount: sql<number>`coalesce(jsonb_array_length(${skillRuns.steps}), 0)`,
+      })
+      .from(skillRuns)
+      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+      .where(eq(engagements.whopUserId, whopUserId))
+      .orderBy(desc(skillRuns.startedAt))
+      .limit(150),
+    // Clears the Executions nav badge's unseen-completed count — see
+    // getUnseenCompletedExecutionCount's doc (run-log.ts). Run alongside
+    // the row fetch rather than after it so visiting this page doesn't
+    // pick up any extra latency for it.
+    markExecutionsSeen(whopUserId),
+    getQueueItems(whopUserId),
+  ]);
 
   const runs = rows.map(({ steps, startedAt, completedAt, ...rest }) => ({
     ...rest,
@@ -52,7 +62,16 @@ export default async function RunsPage() {
     subjectLabel: latestStepLabel(steps),
   }));
 
-  const queueItems = await getQueueItems(whopUserId);
+  // At-a-glance per-skill breakdown for the strip below — counts within
+  // this page's existing 150-run live window (see the file comment
+  // above), not a lifetime total. Only counts skills SquishySkillBadge
+  // actually has art for; an unrecognized skillName is silently dropped
+  // here rather than showing a blank/broken badge.
+  const skillCounts = new Map<string, number>();
+  for (const run of runs) {
+    if (!SKILL_SQUISHY_CONFIG[run.skillName]) continue;
+    skillCounts.set(run.skillName, (skillCounts.get(run.skillName) ?? 0) + 1);
+  }
 
   return (
     <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
@@ -72,6 +91,16 @@ export default async function RunsPage() {
           <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
             Every skill run across your engagements — filter by module, status, or client below.
           </p>
+
+          {skillCounts.size > 0 && (
+            <div className="flex items-center gap-3 pt-3" role="list" aria-label="Runs by skill">
+              {Array.from(skillCounts.entries()).map(([skill, n]) => (
+                <div key={skill} role="listitem" title={`${n} ${skillDisplayName(skill)} run${n === 1 ? "" : "s"}`}>
+                  <SquishySkillBadge skill={skill} size={30} count={n} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <LiveExecutionFeed initialRuns={runs} title={copy.allExecutionsTitle} storageKey="all" />
