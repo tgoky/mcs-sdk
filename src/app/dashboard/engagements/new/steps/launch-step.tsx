@@ -1,25 +1,31 @@
 // steps/launch-step.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { SKILL_IDS, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
 import { SquishySkillBadge, SKILL_SQUISHY_CONFIG } from "@/components/squishy-skill-badge";
 
 /**
- * Two-stage post-save screen, replacing the old single "Launch Setup"
- * button that always fired Pin-Down:
+ * Post-save screen. Launch itself (POST /api/engagements/[id]/launch) is
+ * product-agnostic and side-effect-free beyond stamping launchedAt — it
+ * fires no bridge and nothing else in the codebase reads launchedAt to
+ * gate anything. There's no reason to make the user click a button for
+ * it, so it fires automatically the moment this screen mounts, and the
+ * only thing the user actually sees and acts on is bridge selection:
  *
- *  1. Launch — POST /api/engagements/[id]/launch. Product-agnostic:
- *     marks the client account configured and ready. Fires no bridge.
- *  2. Configure bridges — every bridge in SKILL_MANIFEST, freely
- *     selectable, none pre-checked and none privileged (including
- *     Pin-Down). Finishing writes an explicit enabled/disabled row for
- *     every single bridge via POST /api/engagements/[id]/skills/[skillId]
- *     — deliberately never leaning on that endpoint's "no row = enabled"
- *     default, so what a client ends up running is always something this
- *     screen actually decided, not an implicit fallback.
+ *  - every bridge in SKILL_MANIFEST, freely selectable, none pre-checked
+ *    and none privileged (including Pin-Down). Finishing writes an
+ *    explicit enabled/disabled row for every single bridge via
+ *    POST /api/engagements/[id]/skills/[skillId] — deliberately never
+ *    leaning on that endpoint's "no row = enabled" default, so what a
+ *    client ends up running is always something this screen actually
+ *    decided, not an implicit fallback.
+ *
+ * If the auto-launch call itself fails (network/server error, not a form
+ * problem), the user gets a retry button rather than being dropped back
+ * into the setup form.
  */
 export function LaunchStep({
   engagementId,
@@ -28,7 +34,7 @@ export function LaunchStep({
 }: {
   engagementId: string;
   buyerName: string;
-  /** Only offered pre-launch — nothing server-side has happened yet at that point, same as before this rework. */
+  /** Only offered if auto-launch fails — lets the user bail out to setup rather than being stuck retrying. */
   onBack?: () => void;
 }) {
   const router = useRouter();
@@ -63,6 +69,46 @@ export function LaunchStep({
       setLaunching(false);
     }
   }
+
+  // Auto-fire launch on mount — see file header. Inlined (rather than
+  // calling the launch() defined above, which the Retry button still
+  // uses) with an AbortController so a fast unmount can't set state on
+  // a gone component; runs once per mount, engagementId is stable for
+  // the life of this screen.
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function autoLaunch() {
+      setLaunching(true);
+      setLaunchError(null);
+      try {
+        const res = await fetch(`/api/engagements/${engagementId}/launch`, {
+          method: "POST",
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        if (controller.signal.aborted) return;
+        if (!res.ok) {
+          setLaunchError(data.error ?? "Launch failed. You can try again — nothing else was affected.");
+          setLaunching(false);
+          return;
+        }
+        setLaunched(true);
+        setLaunching(false);
+      } catch (e: unknown) {
+        if (controller.signal.aborted) return;
+        const message = e instanceof Error ? e.message : "Unknown error";
+        setLaunchError(
+          message === "Failed to fetch" ? "Couldn't reach the server. Check your connection and try again." : message
+        );
+        setLaunching(false);
+      }
+    }
+
+    void autoLaunch();
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function finish() {
     setFinishing(true);
@@ -111,7 +157,25 @@ export function LaunchStep({
 
   const selectedCount = Object.values(selected).filter(Boolean).length;
 
+  // Launch is auto-fired on mount (see effect above). This branch is now
+  // only ever seen mid-flight (brief) or on a genuine launch failure —
+  // never as a screen the user has to act on to proceed.
   if (!launched) {
+    if (!launchError) {
+      return (
+        <div
+          className="flex items-center gap-2.5 text-xs font-mono py-10 justify-center"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <span
+            className="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin"
+            aria-hidden="true"
+          />
+          Setting up {buyerName}&apos;s account…
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-6 w-full max-w-none px-1 transition-colors duration-200" style={{ color: "var(--text-secondary)" }}>
         <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -119,29 +183,13 @@ export function LaunchStep({
             {buyerName} is saved
           </h1>
           <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-            Nothing has run yet. Launch when you&apos;re ready.
+            Setup was saved, but activating the account failed.
           </p>
         </div>
 
-        <div
-          className="rounded-lg p-4 text-xs font-mono space-y-2 border"
-          style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
-        >
-          <div className="font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>
-            <span>▶</span> What Launch does
-          </div>
-          <p style={{ color: "var(--text-muted)" }}>
-            Launching activates <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{buyerName}&apos;s</span>{" "}
-            account — nothing more. It doesn&apos;t run Pin-Down, Pile-On, or any other skill or agent. Right after, you&apos;ll
-            choose which of those to turn on, and it&apos;s fine to turn on none yet if {buyerName} isn&apos;t ready for any of them.
-          </p>
-        </div>
-
-        {launchError && (
-          <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
-            ⚠ Error: {launchError}
-          </p>
-        )}
+        <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
+          ⚠ Error: {launchError}
+        </p>
 
         <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
           {onBack ? (
@@ -160,7 +208,7 @@ export function LaunchStep({
             disabled={launching}
             className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
           >
-            {launching ? "Launching..." : "Launch Client"}
+            {launching ? "Retrying..." : "Retry"}
           </button>
         </div>
       </div>

@@ -133,7 +133,7 @@ export default function NewEngagementPage() {
             Set Up a New Client
           </h1>
           <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-            A one-time setup. Connect their booking calendar and email tool, and teach the system their brand voice — you&apos;ll get a chance to launch separately once everything&apos;s saved.
+            A one-time setup. Connect their booking calendar and email tool, and teach the system their brand voice — saving takes you straight into picking which skills to turn on.
           </p>
         </div>
 
