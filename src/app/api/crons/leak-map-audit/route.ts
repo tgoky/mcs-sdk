@@ -47,7 +47,7 @@ export async function GET(request: Request) {
         engagementId: tenant.engagementId,
         skillName: "leak-map",
         phase: "stage_1_data_pull",
-        label: `${type} cron`,
+       label: `${type === "monthly" ? "Monthly" : "Weekly"} Funnel Audit`,
       });
 
       await inngest.send(

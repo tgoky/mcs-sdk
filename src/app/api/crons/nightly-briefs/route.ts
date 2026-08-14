@@ -64,7 +64,7 @@ export async function GET(request: Request) {
         engagementId: tenant.engagementId,
         skillName: "pre-call-read",
         phase: "roster_fetch",
-        label: "Nightly cron",
+     label: "Scheduled call briefing cycle",
       });
 
       await inngest.send(

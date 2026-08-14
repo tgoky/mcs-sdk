@@ -237,6 +237,16 @@ function RelativeTime({ isoString }: { isoString: string }) {
   );
 }
 
+/** Short run reference badge — identical styling to the one in queue-panel
+ *  so the operator can eyeball-match `#a1b2c3d4` across both surfaces. */
+function RunRefBadge({ runId }: { runId: string }) {
+  return (
+    <span className="font-mono text-[10px] text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800/60 px-1.5 py-0.5 rounded border border-zinc-200/80 dark:border-zinc-800 shrink-0 select-all">
+      #{runId.slice(0, 8)}
+    </span>
+  );
+}
+
 function RunPreview({ run }: { run: SkillRun }) {
   const displayName = run.buyerName ?? run.engagementId ?? "Unknown client";
   return (
@@ -247,6 +257,7 @@ function RunPreview({ run }: { run: SkillRun }) {
       </div>
       <div className="flex items-center gap-1.5 text-muted-foreground">
         <span className="font-mono font-bold uppercase tracking-wide text-[11px]">{skillName(run.skillName)}</span>
+        <RunRefBadge runId={run.id} />
         <span>·</span>
         <div className="flex items-center gap-1">
           <RunStatusIcon status={run.status} />
@@ -369,9 +380,12 @@ function RunRow({
       </td>
 
       <td className="px-4 py-2.5">
-        <span className="text-sm text-zinc-600 dark:text-zinc-400 font-semibold whitespace-nowrap">
-          {skillName(run.skillName)}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm text-zinc-600 dark:text-zinc-400 font-semibold whitespace-nowrap">
+            {skillName(run.skillName)}
+          </span>
+          <RunRefBadge runId={run.id} />
+        </div>
         {(run.stepCount ?? 0) > 0 && (
           <span className="ml-2 text-[10px] font-mono text-zinc-400 dark:text-zinc-700">
             {run.stepCount} step{run.stepCount === 1 ? "" : "s"}

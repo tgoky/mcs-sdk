@@ -107,7 +107,7 @@ const CATEGORY_PRIORITY: Record<QueueCategory, number> = {
  * pendingActions/humanBlockers row would need.
  */
 function syncSetupQueueItems(
-  rows: { engagementId: string; buyer: string; stack: unknown }[]
+  rows: { engagementId: string; buyer: string; stack: unknown; createdAt: Date }[]
 ): QueueItem[] {
   const items: QueueItem[] = [];
   for (const row of rows) {
@@ -122,11 +122,11 @@ function syncSetupQueueItems(
       engagementId: row.engagementId,
       buyer: row.buyer,
       runId: null,
-      // Nothing is actually blocked on this (unlike a real human_blocker
-      // pausing a run), so it deliberately sorts to the back of the
-      // action_needed tier rather than outranking genuine blockers —
-      // "now" sorts last under the ascending-createdAt tiebreak below.
-      createdAt: new Date().toISOString(),
+      // Anchored to the engagement's real creation timestamp instead of
+      // synthesizing a fresh "now" on every read/poll. This ensures the
+      // item's age is stable and meaningful — a client added yesterday
+      // shows "1d ago" consistently, not "just now" on every visit.
+      createdAt: row.createdAt.toISOString(),
     });
   }
   return items;
@@ -284,6 +284,11 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
         description: humanBlockers.description,
         skillName: humanBlockers.skillName,
         createdAt: humanBlockers.createdAt,
+        // runId was being persisted by createBlocker() but silently
+        // dropped here — the mapper below hardcoded null. Selecting it
+        // lets blocker items link straight to /dashboard/runs/[runId]
+        // instead of falling back to the generic engagement page.
+        runId: humanBlockers.runId,
       })
       .from(humanBlockers)
       .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
@@ -308,6 +313,7 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
         buyer: engagements.buyer,
         stack: engagements.stack,
         pausedAt: engagements.pausedAt,
+        createdAt: engagements.createdAt,
       })
       .from(engagements)
       .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
@@ -346,7 +352,9 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
       subtitle: b.description || `${b.buyer} · ${b.skillName}`,
       engagementId: b.engagementId,
       buyer: b.buyer,
-      runId: null,
+      // Was hardcoded to null — the real runId was sitting in the DB
+      // the whole time, just never selected/passed through.
+      runId: b.runId ?? null,
       createdAt: b.createdAt.toISOString(),
     })),
     ...notificationRows.map((n): QueueItem => ({
@@ -408,7 +416,7 @@ export async function getQueueActionableCount(whopUserId: string): Promise<numbe
           isNull(engagements.deletedAt)
         )
       ),
-        db
+    db
       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, stack: engagements.stack })
       .from(engagements)
       .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
