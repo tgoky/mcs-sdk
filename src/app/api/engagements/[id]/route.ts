@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { engagements, type EngagementStack } from "@/models/schema";
+import { engagements, credentialsRefs, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { and, eq } from "drizzle-orm";
 import { isValidTagColorId } from "@/lib/engagement-tag-colors";
@@ -15,6 +15,22 @@ export const revalidate = 0;
  * back synchronously in the POST /api/engagements/setup response; now that
  * setup runs asynchronously via Inngest, the client needs a way to fetch
  * them after the fact.
+ *
+ * Also the fetch QueueFixDrawer (src/components/queue-fix-drawer.tsx) uses
+ * to hydrate EditStackSettings / UpdateCredentialsForm when a Queue repair
+ * opens them in place — those forms only prefill already-saved config
+ * (platform choice, structural IDs, which provider a credential is linked
+ * to) when `stack` and `vaultLinksByProvider` are actually present here.
+ * This previously selected neither, so the drawer always opened blank
+ * regardless of what onboarding had already saved for that engagement —
+ * `stack` was missing entirely, and UpdateCredentialsForm's own early
+ * return (`if (!bookingPlatform && !emailPlatform && !hasRecall) return
+ * null`) meant the credentials drawer rendered nothing at all. Both are
+ * additive to the response shape the setup-polling flow already relies
+ * on, and mirror exactly what the engagement page's own server component
+ * (src/app/dashboard/engagements/[id]/page.tsx) already selects and
+ * passes down — so a value saved from one surface is never invisible on
+ * the other.
  */
 export async function GET(
   _req: Request,
@@ -31,6 +47,7 @@ export async function GET(
     .select({
       engagementId: engagements.engagementId,
       buyer: engagements.buyer,
+      stack: engagements.stack,
       confirmationPageUrl: engagements.confirmationPageUrl,
       confirmationPageDeployment: engagements.confirmationPageDeployment,
       pasteReadyHtml: engagements.pasteReadyHtml,
@@ -48,7 +65,13 @@ export async function GET(
     return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
   }
 
-  return NextResponse.json({ engagement: row });
+  const credentialRows = await db
+    .select({ provider: credentialsRefs.provider, vaultId: credentialsRefs.vaultId })
+    .from(credentialsRefs)
+    .where(eq(credentialsRefs.engagementId, id));
+  const vaultLinksByProvider = Object.fromEntries(credentialRows.map((r) => [r.provider, r.vaultId]));
+
+  return NextResponse.json({ engagement: row, vaultLinksByProvider });
 }
 
 const EDITABLE_BOOKING_PLATFORMS = [

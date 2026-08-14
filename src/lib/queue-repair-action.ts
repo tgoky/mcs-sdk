@@ -37,8 +37,20 @@ export interface RepairActionItem {
  * src/app/api/skill-runs/trigger/route.ts. */
 const RETRIGGERABLE_SKILLS = new Set(["pre-call-read", "leak-map"]);
 
+/**
+ * Describes an in-place drawer a "link" repair can open instead of a full
+ * page navigation — see QueueFixDrawer. Optional: a "link" repair with no
+ * `drawer` genuinely has nowhere in-place to land (e.g. a run detail page)
+ * and should navigate normally.
+ */
+export interface DrawerTarget {
+  type: "stack" | "credentials";
+  /** Which Edit Stack Settings section to scroll to/highlight; irrelevant for "credentials". */
+  section?: string | null;
+}
+
 export type RepairAction =
-  | { kind: "link"; key: string; label: string; href: string }
+  | { kind: "link"; key: string; label: string; href: string; drawer?: DrawerTarget }
   | { kind: "trigger"; key: string; label: string; engagementId: string; skillName: string };
 
 /**
@@ -46,11 +58,24 @@ export type RepairAction =
  * when nothing here can point at one — in which case the caller should
  * fall back to a plain "Open run" / "Open engagement" link rather than
  * relabeling that as a fix.
+ *
+ * `drawer`, when present, is the one source of truth both the row button
+ * (queue-panel.tsx's handleFixLinkClick) and the "..." quick-actions menu
+ * (repairActionItem) read to decide "open the in-place drawer" vs. "follow
+ * the link" — neither surface re-derives this by pattern-matching the
+ * href, so they can't drift apart the way they used to (see the file
+ * header comment above).
  */
 export function getRepairAction(item: RepairActionItem): RepairAction | null {
   if (item.source === "run_failure") {
     if (item.isCredentialIssue && item.fixHref) {
-      return { kind: "link", key: "update-credential", label: "Update credential", href: item.fixHref };
+      return {
+        kind: "link",
+        key: "update-credential",
+        label: "Update credential",
+        href: item.fixHref,
+        drawer: { type: "credentials" },
+      };
     }
 
     if (
@@ -69,7 +94,13 @@ export function getRepairAction(item: RepairActionItem): RepairAction | null {
     }
 
     if (item.fixHref) {
-      return { kind: "link", key: "fix-settings", label: "Fix settings", href: item.fixHref };
+      return {
+        kind: "link",
+        key: "fix-settings",
+        label: "Fix settings",
+        href: item.fixHref,
+        drawer: item.diagnosisSection ? { type: "stack", section: item.diagnosisSection } : undefined,
+      };
     }
 
     return null;
@@ -87,6 +118,7 @@ export function getRepairAction(item: RepairActionItem): RepairAction | null {
       key: "setup-webhook",
       label: "Set up webhook",
       href: `/dashboard/engagements/${item.engagementId}?fixSection=booking#stack-settings`,
+      drawer: { type: "stack", section: "booking" },
     };
   }
 

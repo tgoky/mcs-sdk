@@ -27,6 +27,7 @@ export function QueueFixDrawer({
   const [loading, setLoading] = useState(true);
   const [stack, setStack] = useState<EngagementStack | null>(null);
   const [buyer, setBuyer] = useState<string | null>(null);
+  const [vaultLinksByProvider, setVaultLinksByProvider] = useState<Record<string, string | null>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,6 +46,7 @@ export function QueueFixDrawer({
         const eng = data.engagement ?? data;
         setStack(eng.stack ?? null);
         setBuyer(eng.buyer ?? null);
+        setVaultLinksByProvider(data.vaultLinksByProvider ?? {});
         setLoading(false);
       })
       .catch((err) => {
@@ -64,6 +66,7 @@ export function QueueFixDrawer({
       setLoading(true);
       setStack(null);
       setBuyer(null);
+      setVaultLinksByProvider({});
       setError(null);
     }
   }, [isOpen]);
@@ -110,6 +113,7 @@ export function QueueFixDrawer({
               bookingPlatform={stack?.booking_platform ?? null}
               emailPlatform={stack?.email_platform ?? null}
               conversationIntelligenceProvider={stack?.conversation_intelligence_provider ?? null}
+              vaultLinksByProvider={vaultLinksByProvider}
               embedded
               onRequestClose={handleSuccess}
             />

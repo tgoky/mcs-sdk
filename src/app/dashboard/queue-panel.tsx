@@ -217,12 +217,21 @@ function QueueItemPreview({ item }: { item: QueueItemDTO }) {
  * pause/resume are client-level and already live on the engagement page,
  * and a queue row about one failure is the wrong place to stop a client's
  * whole automation stack or fire off an unrelated skill. See Observation 6.
+ *
+ * A "link" repair with a `drawer` target (credential fix, stack-settings
+ * fix, webhook setup) opens QueueFixDrawer in place instead of navigating
+ * away — the same rule QueueRow's handleFixLinkClick applies to the row
+ * button, both reading getRepairAction's `drawer` field so this menu can
+ * never fall back to a full-page nav for a fix the row button handles
+ * inline.
  */
 function repairActionItem(
+  item: QueueItemDTO,
   repair: RepairAction,
   dispatch: ReturnType<typeof useQuickActions>["run"],
   closePanel: () => void,
-  onDone: () => void
+  onDone: () => void,
+  onOpenFixDrawer: (engagementId: string, type: "stack" | "credentials", section?: string | null) => void
 ): ActionPanelSection["items"][number] {
   if (repair.kind === "trigger") {
     return {
@@ -240,6 +249,21 @@ function repairActionItem(
         ),
     };
   }
+
+  if (item.engagementId && repair.drawer) {
+    const engagementId = item.engagementId;
+    const drawer = repair.drawer;
+    return {
+      key: repair.key,
+      icon: ArrowUpRight,
+      label: repair.label,
+      onSelect: () => {
+        closePanel();
+        onOpenFixDrawer(engagementId, drawer.type, drawer.section ?? null);
+      },
+    };
+  }
+
   return { key: repair.key, icon: ArrowUpRight, label: repair.label, href: repair.href };
 }
 
@@ -247,11 +271,14 @@ function buildQueueSections(
   item: QueueItemDTO,
   dispatch: ReturnType<typeof useQuickActions>["run"],
   closePanel: () => void,
-  onDone: () => void
+  onDone: () => void,
+  onOpenFixDrawer: (engagementId: string, type: "stack" | "credentials", section?: string | null) => void
 ): ActionPanelSection[] {
   const repair = getRepairAction(item);
 
-  const fix: ActionPanelSection["items"] = repair ? [repairActionItem(repair, dispatch, closePanel, onDone)] : [];
+  const fix: ActionPanelSection["items"] = repair
+    ? [repairActionItem(item, repair, dispatch, closePanel, onDone, onOpenFixDrawer)]
+    : [];
 
   const nav: ActionPanelSection["items"] = [];
   if (item.runId) {
@@ -288,7 +315,7 @@ function QueueRow({
   onRunMutation,
   onLinkNavigate,
   onActionComplete,
-  onOpenFixDrawer,  // <--- ADD HERE
+  onOpenFixDrawer,
   groupCount = 1,
   groupExpanded = false,
   onToggleGroup,
@@ -305,7 +332,7 @@ function QueueRow({
   onRunMutation: (url: string) => void;
   onLinkNavigate: () => void;
   onActionComplete: () => void;
-  onOpenFixDrawer: (        // <--- ADD THESE 3 LINES
+  onOpenFixDrawer: (
     engagementId: string,
     type: "stack" | "credentials",
     section?: string | null
@@ -323,37 +350,19 @@ function QueueRow({
   // of a hardcoded "Fix now"/"Review" label, so the two can't disagree.
   const repair = getRepairAction(item);
 
-    // Smart link router — inspects the href to decide whether to open a
-  // drawer (stack settings or credentials) or allow normal navigation.
-  // Only 2 of the 5 queue workflows hit this path; the other 3
-  // (trigger, approve/reject, resolve/abandon) are handled by their
-  // own dedicated buttons above and never reach this function.
-  const handleFixLinkClick = (e: React.MouseEvent, targetHref: string | null | undefined) => {
-    if (!item.engagementId || !targetHref) return;
-
-    // 1. Credential fix → credentials drawer
-    if (targetHref.includes("fixCredential=1")) {
+  // Smart link router — reads getRepairAction's `drawer` field (the one
+  // source of truth, shared with the "..." quick-actions menu below) to
+  // decide whether to open a drawer (stack settings or credentials) in
+  // place or allow normal navigation. Only 2 of the 5 queue workflows hit
+  // this path; the other 3 (trigger, approve/reject, resolve/abandon) are
+  // handled by their own dedicated buttons above and never reach this
+  // function.
+  const handleFixLinkClick = (e: React.MouseEvent) => {
+    if (item.engagementId && repair?.kind === "link" && repair.drawer) {
       e.preventDefault();
-      onOpenFixDrawer(item.engagementId, "credentials");
+      onOpenFixDrawer(item.engagementId, repair.drawer.type, repair.drawer.section ?? null);
       return;
     }
-
-    // 2. Stack settings fix → stack settings drawer, scrolled to section
-    const sectionMatch = targetHref.match(/fixSection=([^&#]+)/);
-    if (sectionMatch) {
-      e.preventDefault();
-      onOpenFixDrawer(item.engagementId, "stack", sectionMatch[1]);
-      return;
-    }
-
-    // 3. Sync setup nudges always target the booking/webhook section
-    if (item.source === "sync_setup") {
-      e.preventDefault();
-      onOpenFixDrawer(item.engagementId, "stack", "booking");
-      return;
-    }
-
-    // 4. Everything else (e.g. plain /dashboard/runs/[id]) → normal nav
     onLinkNavigate();
   };
 
@@ -426,7 +435,7 @@ function QueueRow({
             {(repair?.kind === "link" ? repair.href : href) ? (
               <Link
                 href={repair?.kind === "link" ? repair.href : (href as string)}
-     onClick={(e) => handleFixLinkClick(e, repair?.kind === "link" ? repair.href : href)}
+                onClick={handleFixLinkClick}
                 className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors"
               >
                 <ArrowUpRight size={12} /> {repair?.label ?? "Review"}
@@ -454,11 +463,10 @@ function QueueRow({
               >
                 <RotateCcw size={12} /> {busyKey === repair.key ? "Running…" : repair.label}
               </button>
-           // FIXED:
             ) : (repair?.kind === "link" ? repair.href : href) ? (
               <Link
                 href={repair?.kind === "link" ? repair.href : (href as string)}
-                onClick={(e) => handleFixLinkClick(e, repair?.kind === "link" ? repair.href : href)}
+                onClick={handleFixLinkClick}
                 className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors"
               >
                 <ArrowUpRight size={12} /> {repair?.label ?? "Fix now"}
@@ -519,7 +527,7 @@ function QueueRow({
           open={panelOpen}
           onOpenChange={setPanelOpen}
           header={<QueueItemPreview item={item} />}
-          sections={buildQueueSections(item, dispatch, () => setPanelOpen(false), onActionComplete)}
+          sections={buildQueueSections(item, dispatch, () => setPanelOpen(false), onActionComplete, onOpenFixDrawer)}
           errorText={error}
           busyKey={busyKey}
           triggerLabel={`Quick actions for ${item.title}`}
@@ -926,11 +934,10 @@ export function QueuePanel({
         onActionComplete={refreshNow}
         matchedTag={matchedTag}
         onOpenFixDrawer={(engagementId, type, section) => {
-  setActiveFix({ engagementId, type, section });
-}}
+          setActiveFix({ engagementId, type, section });
+        }}
         {...extra}
       />
-      
     );
   }
 
