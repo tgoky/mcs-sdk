@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "executions_last_seen_at" timestamp;

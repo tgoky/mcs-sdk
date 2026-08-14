@@ -141,6 +141,13 @@
       "when": 1786310815055,
       "tag": "0019_loud_nico_minoru",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786698385844,
+      "tag": "0020_futuristic_old_lace",
+      "breakpoints": true
     }
   ]
 }
