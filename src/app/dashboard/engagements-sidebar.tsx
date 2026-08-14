@@ -3,6 +3,7 @@ import { engagements } from "@/models/schema";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import Link from "next/link";
 import { Building2, Plus, FolderPlus, RotateCcw, Radio } from "lucide-react";
+import { RecentEngagementsSection } from "./recent-engagements-section";
 
 /**
  * The "Engagements" section's secondary sidebar. Unlike Work's sidebar
@@ -75,29 +76,7 @@ export async function EngagementsSidebar({ whopUserId }: { whopUserId: string })
         </Link>
       </nav>
 
-      <div className="my-3 border-t border-sidebar-border" />
-
-      <div className="px-2.5 pb-2 text-[11px] font-semibold text-zinc-500 font-mono tracking-wider uppercase">
-        Recent
-      </div>
-      {recent.length > 0 ? (
-        <nav className="flex flex-col gap-0.5">
-          {recent.map((client) => (
-            <Link
-              key={client.engagementId}
-              href={`/dashboard/engagements/${client.engagementId}`}
-              className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100 transition-all truncate"
-            >
-              <span className="w-4 h-4 shrink-0 rounded-[5px] bg-teal-500/90 flex items-center justify-center text-[8px] font-bold text-white">
-                {client.buyer.slice(0, 1).toUpperCase()}
-              </span>
-              <span className="truncate">{client.buyer}</span>
-            </Link>
-          ))}
-        </nav>
-      ) : (
-        <p className="px-2.5 py-1 text-xs text-zinc-400 dark:text-zinc-600">No engagements yet.</p>
-      )}
+      <RecentEngagementsSection recent={recent} />
     </div>
   );
 }

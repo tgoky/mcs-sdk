@@ -4,32 +4,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { ChevronRight, Home } from "lucide-react";
 import { useBreadcrumbLabels } from "./breadcrumb-context";
-
-/** Friendly labels for every static top-level dashboard route. */
-const ROUTE_LABELS: Record<string, string> = {
-  dashboard: "Dashboard",
-  engagements: "Engagements",
-  new: "New Client",
-  queue: "Queue",
-  analytics: "Analytics",
-  library: "Library",
-  settings: "Settings",
-  runs: "Runs",
-  credentials: "Credentials",
-};
-
-/** Segments that look like a UUID/CUID/nanoid — a dynamic record id, not a
- * real page name — and therefore need either a registered label (via
- * SetBreadcrumbLabel) or a generic fallback rather than being shown raw. */
-function looksLikeId(segment: string): boolean {
-  return /^[a-z0-9]{8,}(-[a-z0-9]{4,}){0,4}$/i.test(segment) && /[0-9]/.test(segment);
-}
-
-function fallbackLabelFor(segment: string, parentSegment: string | undefined): string {
-  if (parentSegment === "engagements") return "Client";
-  if (parentSegment === "runs") return "Run";
-  return segment;
-}
+import { labelForSegment } from "./label-for-path";
 
 interface Crumb {
   href: string;
@@ -60,19 +35,7 @@ export function Breadcrumbs() {
   segments.forEach((segment, i) => {
     builtPath += `/${segment}`;
     const isLast = i === segments.length - 1;
-    const registered = labels[builtPath];
-
-    let label: string;
-    if (registered) {
-      label = registered;
-    } else if (ROUTE_LABELS[segment]) {
-      label = ROUTE_LABELS[segment];
-    } else if (looksLikeId(segment)) {
-      label = fallbackLabelFor(segment, segments[i - 1]);
-    } else {
-      label = segment;
-    }
-
+    const label = labelForSegment(segment, segments[i - 1], labels[builtPath]);
     crumbs.push({ href: builtPath, label, isCurrent: isLast });
   });
 
