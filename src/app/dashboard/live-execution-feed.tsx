@@ -258,7 +258,7 @@ function RunPreview({ run }: { run: SkillRun }) {
       </div>
       <div className="flex items-center gap-1.5 text-muted-foreground">
         <span className="font-mono font-bold uppercase tracking-wide text-[11px]">{skillName(run.skillName)}</span>
-        <RunRefBadge runId={run.id} />
+        {/* <RunRefBadge runId={run.id} /> */}
         <span>·</span>
         <div className="flex items-center gap-1">
           <RunStatusIcon status={run.status} />

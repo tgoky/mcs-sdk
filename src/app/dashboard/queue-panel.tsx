@@ -195,20 +195,12 @@ function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
 
 /** Shared short-run-ref badge — same visual on both Queue and Live Executions
  *  so the operator can eyeball-match a queue item to its run in < 1 second. */
-function RunRefBadge({ runId }: { runId: string }) {
-  return (
-    <span className="font-mono text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800/80 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700/60 shrink-0 select-all">
-      #{runId.slice(0, 8)}
-    </span>
-  );
-}
 
 function QueueItemPreview({ item }: { item: QueueItemDTO }) {
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex items-center gap-2 flex-wrap">
         <CategoryBadge category={item.category} />
-        {item.runId && <RunRefBadge runId={item.runId} />}
       </div>
       <p className="font-semibold text-foreground leading-snug">{item.title}</p>
       <p className="text-muted-foreground leading-snug">{item.subtitle}</p>
@@ -378,8 +370,7 @@ function QueueRow({
               {matchedTag.name}
             </span>
           )}
-              <p className="text-xs font-bold text-zinc-100 truncate">{item.title}</p>
-          {item.runId && <RunRefBadge runId={item.runId} />}
+             <p className="text-xs font-bold text-zinc-100 truncate">{item.title}</p>
           {onToggleGroup && (
             <GroupCountToggle count={groupCount} expanded={groupExpanded} onToggle={onToggleGroup} />
           )}
