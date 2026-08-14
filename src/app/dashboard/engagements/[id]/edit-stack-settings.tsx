@@ -443,6 +443,11 @@ export function EditStackSettings({
       if (res.ok) {
         setSaved(true);
         router.refresh();
+        if (embedded && onRequestClose) {
+          setTimeout(() => {
+            onRequestClose();
+          }, 800);
+        }
       } else {
         setError(data.error ?? "Failed to save.");
       }

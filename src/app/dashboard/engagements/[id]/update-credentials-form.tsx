@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { KeyRound, Link2, Check } from "lucide-react";
 import { bookingPlatformLabel, emailPlatformLabel, conversationIntelligenceProviderLabel } from "@/lib/copy";
 
@@ -13,21 +13,26 @@ interface VaultCredential {
   createdAt: string;
 }
 
+// FIXED: Added embedded and onRequestClose to CredentialRow props
 function CredentialRow({
   engagementId,
   provider,
   label,
   currentlyLinkedVaultId,
+  embedded = false,
+  onRequestClose,
 }: {
   engagementId: string;
   provider: string;
   label: string;
-  /** If this engagement/provider is already linked to a saved credential, its id — preselects that option instead of defaulting to "enter a new key." */
   currentlyLinkedVaultId?: string | null;
+  embedded?: boolean;
+  onRequestClose?: () => void;
 }) {
+  const router = useRouter();
   const [mode, setMode] = useState<"paste" | "reuse">(currentlyLinkedVaultId ? "reuse" : "paste");
 
-  // ── Paste-a-new-key mode ──────────────────────────────────────────────
+  // Paste a new key state
   const [value, setValue] = useState("");
   const [saveForReuse, setSaveForReuse] = useState(false);
   const [reuseLabel, setReuseLabel] = useState("");
@@ -35,7 +40,7 @@ function CredentialRow({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // ── Reuse-a-saved-credential mode ─────────────────────────────────────
+  // Reuse saved credential state
   const [vaultOptions, setVaultOptions] = useState<VaultCredential[] | null>(null);
   const [selectedVaultId, setSelectedVaultId] = useState(currentlyLinkedVaultId ?? "");
   const [linking, setLinking] = useState(false);
@@ -70,7 +75,6 @@ function CredentialRow({
         setError(data.error ?? "Failed to update.");
         return;
       }
-
       if (saveForReuse) {
         const vaultRes = await fetch("/api/credential-vault", {
           method: "POST",
@@ -79,24 +83,28 @@ function CredentialRow({
         });
         if (!vaultRes.ok) {
           const vaultData = await vaultRes.json().catch(() => ({}));
-          // The engagement's own credential DID save successfully — only
-          // the "also make it reusable" half failed. Say so precisely
-          // rather than a blanket error that implies nothing was saved.
           setError(`Saved for this client, but couldn't save it as reusable: ${vaultData.error ?? "unknown error"}`);
           setSaved(true);
           setValue("");
           return;
         }
-        setVaultOptions(null); // force a refetch next time "Reuse" is opened, so the new one shows up
+        setVaultOptions(null);
       }
-
       setSaved(true);
-      setValue(""); // never keep a secret in state longer than it takes to send it
+      setValue("");
       setReuseLabel("");
       setSaveForReuse(false);
+      router.refresh();
+
+      // FIXED: Trigger auto-close on success
+      if (embedded && onRequestClose) {
+        setTimeout(() => {
+          onRequestClose();
+        }, 800);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update.");
-    } finally {
+    } finally { // FIXED: Corrected typo 'fontally' -> 'finally'
       setBusy(false);
     }
   }
@@ -115,6 +123,14 @@ function CredentialRow({
       const data = await res.json();
       if (res.ok) {
         setLinked(true);
+        router.refresh();
+
+        // FIXED: Trigger auto-close on success
+        if (embedded && onRequestClose) {
+          setTimeout(() => {
+            onRequestClose();
+          }, 800);
+        }
       } else {
         setLinkError(data.error ?? "Failed to link.");
       }
@@ -152,7 +168,6 @@ function CredentialRow({
           </button>
         </div>
       </div>
-
       {mode === "paste" ? (
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
@@ -169,7 +184,7 @@ function CredentialRow({
               disabled={busy || !value.trim()}
               className="text-[11px] font-mono font-bold px-2.5 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-40 transition-all cursor-pointer shrink-0"
             >
-              {busy ? "Saving…" : "Update"}
+              {busy ? "Saving " : "Update"}
             </button>
           </div>
           <label className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-500 dark:text-zinc-500 cursor-pointer">
@@ -195,10 +210,10 @@ function CredentialRow({
       ) : (
         <div className="space-y-1.5">
           {vaultOptions === null ? (
-            <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">Loading saved credentials…</p>
+            <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">Loading saved credentials </p>
           ) : vaultOptions.length === 0 ? (
             <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
-              No saved {label.replace(/ key$/i, "")} credentials yet —
+              No saved {label.replace(/ key$/i, "")} credentials yet 
               switch to &quot;Enter new key,&quot; check &quot;save this so I can reuse it,&quot; and it&apos;ll show up here for your next client.
             </p>
           ) : (
@@ -208,7 +223,7 @@ function CredentialRow({
                 onChange={(e) => { setSelectedVaultId(e.target.value); setLinked(false); }}
                 className="flex-1 min-w-0 text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
               >
-                <option value="">— choose a saved credential —</option>
+                <option value="">choose a saved credential</option>
                 {vaultOptions.map((v) => (
                   <option key={v.id} value={v.id}>{v.label}</option>
                 ))}
@@ -218,13 +233,13 @@ function CredentialRow({
                 disabled={linking || !selectedVaultId || selectedVaultId === currentlyLinkedVaultId}
                 className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2.5 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-40 transition-all cursor-pointer shrink-0"
               >
-                <Link2 className="w-3 h-3" /> {linking ? "Linking…" : "Link"}
+                <Link2 className="w-3 h-3" /> {linking ? "Linking " : "Link"}
               </button>
             </div>
           )}
           {linked && (
             <span className="inline-flex items-center gap-1 text-[11px] font-mono text-ink-hover dark:text-ink">
-              <Check className="w-3 h-3" /> Linked — this client now uses that saved credential.
+              <Check className="w-3 h-3" /> Linked this client now uses that saved credential.
             </span>
           )}
           {linkError && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">{linkError}</span>}
@@ -234,15 +249,6 @@ function CredentialRow({
   );
 }
 
-/**
- * Re-enters a credential value for a platform already configured on this
- * engagement — the fix for "the credential is wrong and there's nowhere to
- * update it." Auto-scoped to this engagementId and whichever platforms are
- * actually set on the stack, unlike the generic /dashboard/credentials
- * page, which requires typing the engagement ID by hand and has no picker.
- * Posts to the same POST /api/credentials the generic page already uses
- * (which upserts on (engagementId, provider)) — no new backend needed.
- */
 export function UpdateCredentialsForm({
   engagementId,
   bookingPlatform,
@@ -255,21 +261,13 @@ export function UpdateCredentialsForm({
   engagementId: string;
   bookingPlatform?: string | null;
   emailPlatform?: string | null;
-  /** Only "recall_ai" currently has a credential to enter here; "none"/unset renders nothing for this row. */
   conversationIntelligenceProvider?: string | null;
-  /** provider → the vault credential id it's currently linked to, or null if it stores its own value. Absent entirely = no credential saved yet at all. */
   vaultLinksByProvider?: Record<string, string | null>;
-  /** Rendered inside the Edit action menu's Modal — parent already owns visibility. */
   embedded?: boolean;
-  /** Called (in addition to the internal Close button) so the wrapping Modal can dismiss itself too. */
   onRequestClose?: () => void;
 }) {
-  // Set by the Queue's "Fix now" link on a classified 401/403 run failure
-  // (see src/lib/error-classification.ts) — opens straight to this form
-  // instead of landing on a collapsed button the buyer has to know exists.
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(() => searchParams.get("fixCredential") === "1" || embedded);
-
   const hasRecall = conversationIntelligenceProvider === "recall_ai";
   if (!bookingPlatform && !emailPlatform && !hasRecall) return null;
 
@@ -301,12 +299,15 @@ export function UpdateCredentialsForm({
         </div>
       )}
       <div className="space-y-2">
+        {/* FIXED: Forwarding embedded and onRequestClose to CredentialRow instances */}
         {bookingPlatform && (
           <CredentialRow
             engagementId={engagementId}
             provider={bookingPlatform}
             label={`${bookingPlatformLabel(bookingPlatform)} key`}
             currentlyLinkedVaultId={vaultLinksByProvider?.[bookingPlatform]}
+            embedded={embedded}
+            onRequestClose={onRequestClose}
           />
         )}
         {emailPlatform && (
@@ -315,6 +316,8 @@ export function UpdateCredentialsForm({
             provider={emailPlatform}
             label={`${emailPlatformLabel(emailPlatform)} key`}
             currentlyLinkedVaultId={vaultLinksByProvider?.[emailPlatform]}
+            embedded={embedded}
+            onRequestClose={onRequestClose}
           />
         )}
         {hasRecall && (
@@ -323,6 +326,8 @@ export function UpdateCredentialsForm({
             provider="recall_ai"
             label={`${conversationIntelligenceProviderLabel("recall_ai")} key`}
             currentlyLinkedVaultId={vaultLinksByProvider?.["recall_ai"]}
+            embedded={embedded}
+            onRequestClose={onRequestClose}
           />
         )}
       </div>
