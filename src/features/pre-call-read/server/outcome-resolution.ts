@@ -194,7 +194,29 @@ async function triggerNoShowWinBack(
     // Slack/notifyUser) so it's still visible to anyone reviewing
     // pendingActions directly — e.g. a future dashboard list view — not
     // only to whoever happened to see the one-time notification.
-    { bookingPayload: payload, eventKind: "cancelled", _reason: sweepReason },
+    {
+      bookingPayload: payload,
+      eventKind: "cancelled",
+      _reason: sweepReason,
+      // See approval-gate.ts's _title doc — actionType stays
+      // "webhook_enrollment" (deliberately, for the shared execution
+      // path), but a reviewer deciding "did this person actually
+      // no-show" should never see a title about webhook enrollment.
+      _title: source === "auto_sweep" ? "Possible no-show — review before Win-Back recovery starts" : undefined,
+      // Volume fix — at any real call count, one instant Slack ping per
+      // ambiguous sweep call (this cron runs every 15 minutes, per
+      // engagement) turns into exactly the "alert app" pattern this
+      // gating exists to avoid being. _digest tells queuePendingAction to
+      // skip its own immediate Slack/email push for this row — the row
+      // itself still lands in the Queue immediately either way, this
+      // only affects the external ping — and instead let
+      // pendingActionDigestCron (crons.ts) fold it into the next
+      // periodic batch for this engagement. Not set for other sources:
+      // a Slack-button or dashboard-triggered no-show is a one-off event
+      // a human is already looking at, not a recurring background
+      // inference — it should still interrupt immediately.
+      _digest: source === "auto_sweep" ? true : undefined,
+    },
     () => inngest.send(bookingWebhookProcess.create({ runId, engagementId, eventKind: "cancelled", bookingPayload: payload })),
     source === "auto_sweep",
     sweepReason

@@ -28,7 +28,7 @@
 import crypto from "crypto";
 import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle, assumedNoShowSweepEngagement } from "@/lib/inngest";
 import { db } from "@/lib/db";
-import { engagements, skillRuns, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions } from "@/models/schema";
+import { engagements, skillRuns, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions, pendingActions } from "@/models/schema";
 import { startRun, closeStaleRun, notifyRunOutcome, failRun } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
 import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
@@ -869,5 +869,117 @@ export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
     }
 
     return { checked: eligible.length, resolved };
+  }
+);
+
+// ── Pending-approval digest — batches _digest-flagged Slack pings ───────
+//
+// queuePendingAction (approval-gate.ts) skips its own immediate Slack/
+// email push for any pendingActions row whose payload carries _digest:
+// true — currently only the assumed-no-show sweep above sets it (see the
+// _digest doc in outcome-resolution.ts). This is the other half: folds
+// everything accumulated since the last run into ONE Slack message per
+// engagement, so a busy call day produces one periodic batch instead of
+// one interruption per ambiguous call — the actual scaling problem with
+// per-call approval pings, independent of how good the underlying
+// no-show detection is. The pendingActions row itself is never delayed:
+// it's visible in the Queue the moment it's created, same as before —
+// only the external ping is throttled, so per-item Approve/Reject in the
+// dashboard (or Slack, if a later digest round adds per-item buttons
+// here too) still happens one decision at a time, just without one
+// notification per decision.
+//
+// Runs every 30 minutes, offset from the sweep's own 15-minute cadence
+// so there's always at least one full sweep pass of fresh data to report
+// on by the time this runs.
+export const pendingActionDigestCron = inngest.createFunction(
+  { id: "pending-action-digest-cron", triggers: [{ cron: "*/30 * * * *" }] },
+  async ({ step }) => {
+    const undigested = await step.run("find-undigested", async () => {
+      // _digest is the real filter (checked in JS below, since it lives
+      // inside the jsonb payload) — actionType here is just a cheap
+      // narrowing before that: every _digest row today is a
+      // webhook_enrollment row (see triggerNoShowWinBack).
+      const rows = await db
+        .select({
+          id: pendingActions.id,
+          engagementId: pendingActions.engagementId,
+          payload: pendingActions.payload,
+        })
+        .from(pendingActions)
+        .where(and(eq(pendingActions.status, "pending"), eq(pendingActions.actionType, "webhook_enrollment")));
+
+      return rows.filter((r) => {
+        const p = r.payload as { _digest?: boolean; _digestedAt?: string } | null;
+        return p?._digest === true && !p?._digestedAt;
+      });
+    });
+
+    if (undigested.length === 0) {
+      return { engagementsPinged: 0, itemsDigested: 0 };
+    }
+
+    const byEngagement = new Map<string, typeof undigested>();
+    for (const row of undigested) {
+      const list = byEngagement.get(row.engagementId) ?? [];
+      list.push(row);
+      byEngagement.set(row.engagementId, list);
+    }
+
+    let engagementsPinged = 0;
+
+    for (const [engagementId, rows] of byEngagement) {
+      await step.run(`digest-${engagementId}`, async () => {
+        const [engagement] = await db
+          .select({ stack: engagements.stack })
+          .from(engagements)
+          .where(eq(engagements.engagementId, engagementId))
+          .limit(1);
+        const slackWebhookUrl = (engagement?.stack as EngagementStack | null)?.slack_webhook_url;
+
+        if (slackWebhookUrl) {
+          const MAX_LISTED = 10;
+          const listed = rows.slice(0, MAX_LISTED);
+          const lines = listed.map((r) => {
+            const reason = (r.payload as { _reason?: string } | null)?._reason;
+            // Same "lead with the specific reason" choice queuePendingAction
+            // makes for the immediate-ping case — a bare count tells a
+            // reviewer nothing about what they're actually being asked
+            // to confirm for each one.
+            return `• ${reason ?? "Possible no-show — no evidence found."}`;
+          });
+          const overflow = rows.length - listed.length;
+
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+          const text =
+            `*${rows.length} call${rows.length === 1 ? "" : "s"} need${rows.length === 1 ? "s" : ""} a no-show review*\n` +
+            lines.join("\n") +
+            (overflow > 0 ? `\n…and ${overflow} more` : "") +
+            `\n<${appUrl}/dashboard/queue|Review in Queue →>`;
+
+          await fetch(slackWebhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+          }).catch((e) => {
+            console.error("[pending-action-digest] Slack delivery failed:", e.message);
+          });
+          engagementsPinged++;
+        }
+
+        // Mark every row in this batch digested regardless of whether
+        // Slack actually fired — an engagement with no webhook configured
+        // should never accumulate an ever-growing "undigested" backlog it
+        // can never clear. The row is still sitting in the Queue either
+        // way; this only ever gates the external ping.
+        const now = new Date().toISOString();
+        for (const row of rows) {
+          const payload = { ...(row.payload as Record<string, unknown>), _digestedAt: now };
+          await db.update(pendingActions).set({ payload }).where(eq(pendingActions.id, row.id));
+        }
+      });
+    }
+
+    return { engagementsPinged, itemsDigested: undigested.length };
   }
 );

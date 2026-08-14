@@ -70,7 +70,12 @@ async function queuePendingAction(
     .where(eq(engagements.engagementId, engagementId))
     .limit(1);
 
-  if (engagement) {
+  // _digest rows skip the immediate notifyUser call entirely — see the
+  // _digest doc in outcome-resolution.ts. The pendingActions row above is
+  // already created either way, so it's visible in the Queue right away;
+  // this only decides whether it ALSO gets an instant external ping, or
+  // waits to be folded into pendingActionDigestCron's next batch.
+  if (engagement && !(payload as { _digest?: boolean })._digest) {
     try {
       const stack = engagement.stack as EngagementStack;
       await notifyUser({
@@ -78,7 +83,14 @@ async function queuePendingAction(
         engagementId,
         type: "credential_check_error",
         severity: "info",
-        title: `Approval needed: ${actionType.replace(/_/g, " ")}`,
+        // Payload can carry an optional _title (same convention as
+        // _reason below) for a call site whose actionType label is too
+        // generic/mechanism-y to tell a reviewer what they're actually
+        // deciding — see triggerNoShowWinBack, which reuses actionType
+        // "webhook_enrollment" deliberately (it drives the identical
+        // execution path a real webhook enrollment would) but needs its
+        // own, accurate headline rather than "webhook enrollment".
+        title: (payload as { _title?: string })._title ?? `Approval needed: ${actionType.replace(/_/g, " ")}`,
         // Assumed-no-show sweep false-positive fix — a bare "action X is
         // waiting for review" told the operator nothing about *why*
         // before they had to click into the dashboard, which is exactly
@@ -88,6 +100,33 @@ async function queuePendingAction(
         // reviewing knows what they're actually being asked to confirm.
         body: reason ?? `A ${actionType.replace(/_/g, " ")} action is waiting for review before it runs. Approve or reject it from the dashboard.`,
         slackWebhookUrl: stack?.slack_webhook_url,
+        // Real Approve/Reject buttons, not just a link back to the
+        // dashboard — clicking either runs the identical
+        // decidePendingAction path a dashboard click does (see the Slack
+        // interactions route). value must carry engagementId: that's
+        // what lets the interactions route pick the right signing secret
+        // to verify against *before* trusting anything else in the click.
+        slackActions: [
+          {
+            label: "✅ Approve",
+            style: "primary",
+            actionId: "pending_action_approve",
+            value: JSON.stringify({ engagementId, id: row.id }),
+          },
+          {
+            label: "❌ Reject",
+            style: "danger",
+            actionId: "pending_action_reject",
+            value: JSON.stringify({ engagementId, id: row.id }),
+          },
+        ],
+        // The pendingActions row just inserted above is already this
+        // event's in-app, Queue-visible, actionable record (Approve/
+        // Reject) — see notify.ts's persistInApp doc. Without this, the
+        // same event also landed as an unlinked "fyi" Queue item nothing
+        // ever clears, showing the same message twice under two
+        // different actions with two different titles.
+        persistInApp: false,
       });
     } catch {
       // Same isolation as everywhere else notify.ts is called — a
@@ -294,3 +333,62 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
     });
   },
 };
+
+/**
+ * The single "a human decided" entry point for a pending action —
+ * extracted from POST /api/actions/[id]/review so the Slack interactions
+ * handler (src/app/api/slack/interactions/route.ts) can call the exact
+ * same approve/reject/execute logic a dashboard click runs, instead of a
+ * second, drifting copy of it. Callers still own their own auth: the
+ * dashboard route checks session + isAuthorizedForEngagement before
+ * calling this; the Slack route's trust comes from the signature
+ * verification it already does before dispatching here (see that file's
+ * header comment for why that has to happen in that specific order).
+ */
+export async function decidePendingAction(
+  id: string,
+  decision: "approved" | "rejected",
+  decidedBy: string
+): Promise<
+  | { ok: true; status: "rejected" }
+  | { ok: true; status: "approved"; executed: true }
+  | { ok: true; status: "approved"; executed: false; error: string }
+  | { ok: false; error: string }
+> {
+  const [action] = await db.select().from(pendingActions).where(eq(pendingActions.id, id)).limit(1);
+  if (!action || action.status !== "pending") {
+    return { ok: false, error: "Pending action not found or already decided." };
+  }
+
+  if (decision === "rejected") {
+    await db
+      .update(pendingActions)
+      .set({ status: "rejected", decidedAt: new Date(), decidedBy })
+      .where(eq(pendingActions.id, id));
+    return { ok: true, status: "rejected" };
+  }
+
+  // Approved — mark decided first (so a slow/failing executor can't leave
+  // the row looking un-decided and retryable-by-accident), then attempt
+  // execution, recording failure on the row rather than throwing it away.
+  await db
+    .update(pendingActions)
+    .set({ status: "approved", decidedAt: new Date(), decidedBy })
+    .where(eq(pendingActions.id, id));
+
+  try {
+    const executor = ACTION_EXECUTORS[action.actionType as PendingActionType];
+    if (!executor) {
+      throw new Error(`No executor registered for action type "${action.actionType}"`);
+    }
+    await executor(action.engagementId, action.payload);
+    return { ok: true, status: "approved", executed: true };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    await db
+      .update(pendingActions)
+      .set({ status: "execution_failed", executionError: message })
+      .where(eq(pendingActions.id, id));
+    return { ok: true, status: "approved", executed: false, error: message };
+  }
+}

@@ -87,6 +87,11 @@ export async function createBlocker(input: {
         title: `${input.skillName}: action needed to continue`,
         body: input.description,
         slackWebhookUrl: stack?.slack_webhook_url,
+        // The humanBlockers row just inserted above is already this
+        // event's in-app, Queue-visible, actionable record (Resolve) —
+        // see notify.ts's persistInApp doc. Without this, the same
+        // blocker also landed as a second, unlinked "alert" Queue item.
+        persistInApp: false,
       });
     } catch {
       // Never let a notification failure prevent the blocker itself from

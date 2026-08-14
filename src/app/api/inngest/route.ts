@@ -30,6 +30,7 @@ import {
   processDynamicBriefEngagementCron,
   assumedNoShowSweepCron,
   processAssumedNoShowSweepEngagementCron,
+  pendingActionDigestCron,
 } from "@/inngest/crons";
 
 // Explicit duration floor for this route, paired with checkpointing's
@@ -102,6 +103,11 @@ export const { GET, POST, PUT } = serve({
     // See the module comment on assumedNoShowSweepCron in crons.ts.
     assumedNoShowSweepCron,
     processAssumedNoShowSweepEngagementCron,
+    // Batches the immediate Slack ping the sweep above would otherwise
+    // send once per ambiguous call into one periodic digest per
+    // engagement — see the module comment on pendingActionDigestCron in
+    // crons.ts.
+    pendingActionDigestCron,
     // Halts a win-back cadence when a prospect replies — see
     // src/inngest/win-back-reply.ts (Win-Back recovery gap 6).
     processInboundReply,

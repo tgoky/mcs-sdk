@@ -1,0 +1,729 @@
+diff --git a/src/app/api/actions/[id]/review/route.ts b/src/app/api/actions/[id]/review/route.ts
+index 7977978..cfa69e1 100644
+--- a/src/app/api/actions/[id]/review/route.ts
++++ b/src/app/api/actions/[id]/review/route.ts
+@@ -4,14 +4,18 @@ import { isAuthorizedForEngagement } from "@/lib/whop-access";
+ import { db } from "@/lib/db";
+ import { pendingActions } from "@/models/schema";
+ import { eq } from "drizzle-orm";
+-import { ACTION_EXECUTORS, type PendingActionType } from "@/lib/approval-gate";
++import { decidePendingAction } from "@/lib/approval-gate";
+ 
+ /**
+  * Cross-cutting recovery gap 22 — explicit human-approval gates. This is
+  * the "human decides" side of gateOrExecute: the engagement's own tenant
+  * (or an admin) approves (runs the deferred action now, via
+  * ACTION_EXECUTORS) or rejects (marks it decided, no-op) a queued
+- * pending_actions row. See src/lib/approval-gate.ts.
++ * pending_actions row. The actual decide/execute logic lives in
++ * decidePendingAction (src/lib/approval-gate.ts) — shared with the Slack
++ * interactions route, so an Approve/Reject click from Slack runs the
++ * identical path a dashboard click does. This route's job is just auth:
++ * load the action, confirm the caller owns its engagement, then delegate.
+  *
+  * Tenant-scoping fix: this used to be admin-only, but the Queue UI shows
+  * pending actions to every tenant on their own engagement — non-admin
+@@ -47,34 +51,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
+     return NextResponse.json({ error: "decision must be 'approved' or 'rejected'." }, { status: 400 });
+   }
+ 
+-  if (body.decision === "rejected") {
+-    await db
+-      .update(pendingActions)
+-      .set({ status: "rejected", decidedAt: new Date(), decidedBy: session.email })
+-      .where(eq(pendingActions.id, id));
+-    return NextResponse.json({ success: true, status: "rejected" });
++  const result = await decidePendingAction(id, body.decision, session.email);
++  if (!result.ok) {
++    return NextResponse.json({ error: result.error }, { status: 404 });
+   }
+-
+-  // Approved — mark decided first (so a slow/failing executor can't leave
+-  // the row looking un-decided and retryable-by-accident), then attempt
+-  // execution, recording failure on the row rather than throwing it away.
+-  await db
+-    .update(pendingActions)
+-    .set({ status: "approved", decidedAt: new Date(), decidedBy: session.email })
+-    .where(eq(pendingActions.id, id));
+-
+-  try {
+-    const executor = ACTION_EXECUTORS[action.actionType as PendingActionType];
+-    if (!executor) {
+-      throw new Error(`No executor registered for action type "${action.actionType}"`);
+-    }
+-    await executor(action.engagementId, action.payload);
+-    return NextResponse.json({ success: true, status: "approved", executed: true });
+-  } catch (error: any) {
+-    await db
+-      .update(pendingActions)
+-      .set({ status: "execution_failed", executionError: error.message })
+-      .where(eq(pendingActions.id, id));
+-    return NextResponse.json({ error: `Approved but execution failed: ${error.message}` }, { status: 500 });
++  if (result.status === "approved" && !result.executed) {
++    return NextResponse.json({ error: `Approved but execution failed: ${result.error}` }, { status: 500 });
+   }
++  return NextResponse.json({ success: true, status: result.status, ...(result.status === "approved" ? { executed: true } : {}) });
+ }
+diff --git a/src/app/api/inngest/route.ts b/src/app/api/inngest/route.ts
+index b281de8..92cf095 100644
+--- a/src/app/api/inngest/route.ts
++++ b/src/app/api/inngest/route.ts
+@@ -30,6 +30,7 @@ import {
+   processDynamicBriefEngagementCron,
+   assumedNoShowSweepCron,
+   processAssumedNoShowSweepEngagementCron,
++  pendingActionDigestCron,
+ } from "@/inngest/crons";
+ 
+ // Explicit duration floor for this route, paired with checkpointing's
+@@ -102,6 +103,11 @@ export const { GET, POST, PUT } = serve({
+     // See the module comment on assumedNoShowSweepCron in crons.ts.
+     assumedNoShowSweepCron,
+     processAssumedNoShowSweepEngagementCron,
++    // Batches the immediate Slack ping the sweep above would otherwise
++    // send once per ambiguous call into one periodic digest per
++    // engagement — see the module comment on pendingActionDigestCron in
++    // crons.ts.
++    pendingActionDigestCron,
+     // Halts a win-back cadence when a prospect replies — see
+     // src/inngest/win-back-reply.ts (Win-Back recovery gap 6).
+     processInboundReply,
+diff --git a/src/app/api/slack/interactions/route.ts b/src/app/api/slack/interactions/route.ts
+index 653edbc..50c3b48 100644
+--- a/src/app/api/slack/interactions/route.ts
++++ b/src/app/api/slack/interactions/route.ts
+@@ -5,9 +5,13 @@ import { engagements, type EngagementStack } from "@/models/schema";
+ import { eq } from "drizzle-orm";
+ import { OUTCOME_BUTTON_LABEL } from "@/lib/platforms/email";
+ import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
++import { decidePendingAction } from "@/lib/approval-gate";
+ 
+ /**
+- * Tier 4 #27 — Slack interactive brief buttons.
++ * Tier 4 #27 — Slack interactive brief buttons, plus (this round) Queue
++ * approve/reject buttons on pendingActions notifications (see
++ * queuePendingAction, src/lib/approval-gate.ts). Two interaction types,
++ * routed by action_id, sharing one verification path.
+  *
+  * Slack's "Interactivity & Shortcuts" Request URL is one URL per Slack
+  * app, shared across every engagement that uses Slack delivery — unlike
+@@ -41,6 +45,22 @@ function verifySlackSignature(signingSecret: string, timestamp: string, rawBody:
+   return safeEqual(computed, receivedSignature);
+ }
+ 
++/** Shared by both interaction types below — see the file header for why the lookup has to come before verification. */
++async function verifyEngagementSlackSignature(
++  engagementId: string,
++  timestamp: string,
++  rawBody: string,
++  receivedSignature: string
++): Promise<boolean> {
++  const [engagement] = await db
++    .select({ stack: engagements.stack })
++    .from(engagements)
++    .where(eq(engagements.engagementId, engagementId))
++    .limit(1);
++  const signingSecret = (engagement?.stack as EngagementStack | null)?.slack_signing_secret;
++  return Boolean(signingSecret) && verifySlackSignature(signingSecret!, timestamp, rawBody, receivedSignature);
++}
++
+ export async function POST(req: Request) {
+   const rawBody = await req.text();
+   const timestamp = req.headers.get("x-slack-request-timestamp");
+@@ -72,6 +92,64 @@ export async function POST(req: Request) {
+   }
+ 
+   const action = payload.actions[0];
++
++  // ── Queue approve/reject (this round) ──────────────────────────────────
++  if (action.action_id === "pending_action_approve" || action.action_id === "pending_action_reject") {
++    let value: { engagementId?: string; id?: string };
++    try {
++      value = JSON.parse(action.value ?? "{}");
++    } catch {
++      return NextResponse.json({ error: "Invalid button value." }, { status: 400 });
++    }
++    const { engagementId, id } = value;
++    if (!engagementId || !id) {
++      return NextResponse.json({ error: "Malformed button value." }, { status: 400 });
++    }
++
++    if (!(await verifyEngagementSlackSignature(engagementId, timestamp, rawBody, receivedSignature))) {
++      return NextResponse.json({ error: "Signature verification failed." }, { status: 401 });
++    }
++
++    const decision = action.action_id === "pending_action_approve" ? "approved" : "rejected";
++    const decidedBy = payload.user?.username ?? payload.user?.id ?? "slack";
++    const result = await decidePendingAction(id, decision, decidedBy);
++
++    // Same reasoning as the outcome-button branch below: replace the
++    // actions block so a second click can't fire a contradictory decision
++    // on an already-decided row.
++    if (payload.response_url) {
++      const confirmText = !result.ok
++        ? result.error
++        : result.status === "rejected"
++          ? "Rejected"
++          : result.executed
++            ? "Approved"
++            : `Approved, but execution failed: ${result.error}`;
++      try {
++        await fetch(payload.response_url, {
++          method: "POST",
++          headers: { "Content-Type": "application/json" },
++          body: JSON.stringify({
++            replace_original: true,
++            blocks: [
++              ...(payload.message?.blocks?.filter((b: { block_id?: string }) => b.block_id !== "queue_item_actions") ?? []),
++              { type: "context", elements: [{ type: "mrkdwn", text: `*${confirmText}*` }] },
++            ],
++          }),
++        });
++      } catch {
++        // Decision is already recorded — a failure to edit the Slack
++        // message is cosmetic, not a reason to fail this request.
++      }
++    }
++
++    if (!result.ok) {
++      return NextResponse.json({ error: result.error }, { status: 404 });
++    }
++    return NextResponse.json({ success: true, status: result.status });
++  }
++
++  // ── Pre-call brief outcome buttons (existing) ───────────────────────────
+   let buttonValue: { engagementId?: string; bookingId?: string; prospectEmail?: string; outcome?: string };
+   try {
+     buttonValue = JSON.parse(action.value ?? "{}");
+@@ -85,14 +163,7 @@ export async function POST(req: Request) {
+   }
+ 
+   // ── Verify against THIS engagement's signing secret, not before ────────
+-  const [engagement] = await db
+-    .select({ stack: engagements.stack })
+-    .from(engagements)
+-    .where(eq(engagements.engagementId, engagementId))
+-    .limit(1);
+-  const signingSecret = (engagement?.stack as EngagementStack | null)?.slack_signing_secret;
+-
+-  if (!signingSecret || !verifySlackSignature(signingSecret, timestamp, rawBody, receivedSignature)) {
++  if (!(await verifyEngagementSlackSignature(engagementId, timestamp, rawBody, receivedSignature))) {
+     return NextResponse.json({ error: "Signature verification failed." }, { status: 401 });
+   }
+ 
+diff --git a/src/features/pre-call-read/server/outcome-resolution.ts b/src/features/pre-call-read/server/outcome-resolution.ts
+index fae4743..0503d20 100644
+--- a/src/features/pre-call-read/server/outcome-resolution.ts
++++ b/src/features/pre-call-read/server/outcome-resolution.ts
+@@ -194,7 +194,29 @@ async function triggerNoShowWinBack(
+     // Slack/notifyUser) so it's still visible to anyone reviewing
+     // pendingActions directly — e.g. a future dashboard list view — not
+     // only to whoever happened to see the one-time notification.
+-    { bookingPayload: payload, eventKind: "cancelled", _reason: sweepReason },
++    {
++      bookingPayload: payload,
++      eventKind: "cancelled",
++      _reason: sweepReason,
++      // See approval-gate.ts's _title doc — actionType stays
++      // "webhook_enrollment" (deliberately, for the shared execution
++      // path), but a reviewer deciding "did this person actually
++      // no-show" should never see a title about webhook enrollment.
++      _title: source === "auto_sweep" ? "Possible no-show — review before Win-Back recovery starts" : undefined,
++      // Volume fix — at any real call count, one instant Slack ping per
++      // ambiguous sweep call (this cron runs every 15 minutes, per
++      // engagement) turns into exactly the "alert app" pattern this
++      // gating exists to avoid being. _digest tells queuePendingAction to
++      // skip its own immediate Slack/email push for this row — the row
++      // itself still lands in the Queue immediately either way, this
++      // only affects the external ping — and instead let
++      // pendingActionDigestCron (crons.ts) fold it into the next
++      // periodic batch for this engagement. Not set for other sources:
++      // a Slack-button or dashboard-triggered no-show is a one-off event
++      // a human is already looking at, not a recurring background
++      // inference — it should still interrupt immediately.
++      _digest: source === "auto_sweep" ? true : undefined,
++    },
+     () => inngest.send(bookingWebhookProcess.create({ runId, engagementId, eventKind: "cancelled", bookingPayload: payload })),
+     source === "auto_sweep",
+     sweepReason
+diff --git a/src/inngest/crons.ts b/src/inngest/crons.ts
+index ceeb824..765b64d 100644
+--- a/src/inngest/crons.ts
++++ b/src/inngest/crons.ts
+@@ -28,7 +28,7 @@
+ import crypto from "crypto";
+ import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle, assumedNoShowSweepEngagement } from "@/lib/inngest";
+ import { db } from "@/lib/db";
+-import { engagements, skillRuns, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions } from "@/models/schema";
++import { engagements, skillRuns, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions, pendingActions } from "@/models/schema";
+ import { startRun, closeStaleRun, notifyRunOutcome, failRun } from "@/lib/run-log";
+ import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
+ import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
+@@ -871,3 +871,115 @@ export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
+     return { checked: eligible.length, resolved };
+   }
+ );
++
++// ── Pending-approval digest — batches _digest-flagged Slack pings ───────
++//
++// queuePendingAction (approval-gate.ts) skips its own immediate Slack/
++// email push for any pendingActions row whose payload carries _digest:
++// true — currently only the assumed-no-show sweep above sets it (see the
++// _digest doc in outcome-resolution.ts). This is the other half: folds
++// everything accumulated since the last run into ONE Slack message per
++// engagement, so a busy call day produces one periodic batch instead of
++// one interruption per ambiguous call — the actual scaling problem with
++// per-call approval pings, independent of how good the underlying
++// no-show detection is. The pendingActions row itself is never delayed:
++// it's visible in the Queue the moment it's created, same as before —
++// only the external ping is throttled, so per-item Approve/Reject in the
++// dashboard (or Slack, if a later digest round adds per-item buttons
++// here too) still happens one decision at a time, just without one
++// notification per decision.
++//
++// Runs every 30 minutes, offset from the sweep's own 15-minute cadence
++// so there's always at least one full sweep pass of fresh data to report
++// on by the time this runs.
++export const pendingActionDigestCron = inngest.createFunction(
++  { id: "pending-action-digest-cron", triggers: [{ cron: "*/30 * * * *" }] },
++  async ({ step }) => {
++    const undigested = await step.run("find-undigested", async () => {
++      // _digest is the real filter (checked in JS below, since it lives
++      // inside the jsonb payload) — actionType here is just a cheap
++      // narrowing before that: every _digest row today is a
++      // webhook_enrollment row (see triggerNoShowWinBack).
++      const rows = await db
++        .select({
++          id: pendingActions.id,
++          engagementId: pendingActions.engagementId,
++          payload: pendingActions.payload,
++        })
++        .from(pendingActions)
++        .where(and(eq(pendingActions.status, "pending"), eq(pendingActions.actionType, "webhook_enrollment")));
++
++      return rows.filter((r) => {
++        const p = r.payload as { _digest?: boolean; _digestedAt?: string } | null;
++        return p?._digest === true && !p?._digestedAt;
++      });
++    });
++
++    if (undigested.length === 0) {
++      return { engagementsPinged: 0, itemsDigested: 0 };
++    }
++
++    const byEngagement = new Map<string, typeof undigested>();
++    for (const row of undigested) {
++      const list = byEngagement.get(row.engagementId) ?? [];
++      list.push(row);
++      byEngagement.set(row.engagementId, list);
++    }
++
++    let engagementsPinged = 0;
++
++    for (const [engagementId, rows] of byEngagement) {
++      await step.run(`digest-${engagementId}`, async () => {
++        const [engagement] = await db
++          .select({ stack: engagements.stack })
++          .from(engagements)
++          .where(eq(engagements.engagementId, engagementId))
++          .limit(1);
++        const slackWebhookUrl = (engagement?.stack as EngagementStack | null)?.slack_webhook_url;
++
++        if (slackWebhookUrl) {
++          const MAX_LISTED = 10;
++          const listed = rows.slice(0, MAX_LISTED);
++          const lines = listed.map((r) => {
++            const reason = (r.payload as { _reason?: string } | null)?._reason;
++            // Same "lead with the specific reason" choice queuePendingAction
++            // makes for the immediate-ping case — a bare count tells a
++            // reviewer nothing about what they're actually being asked
++            // to confirm for each one.
++            return `• ${reason ?? "Possible no-show — no evidence found."}`;
++          });
++          const overflow = rows.length - listed.length;
++
++          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
++          const text =
++            `*${rows.length} call${rows.length === 1 ? "" : "s"} need${rows.length === 1 ? "s" : ""} a no-show review*\n` +
++            lines.join("\n") +
++            (overflow > 0 ? `\n…and ${overflow} more` : "") +
++            `\n<${appUrl}/dashboard/queue|Review in Queue →>`;
++
++          await fetch(slackWebhookUrl, {
++            method: "POST",
++            headers: { "Content-Type": "application/json" },
++            body: JSON.stringify({ text }),
++          }).catch((e) => {
++            console.error("[pending-action-digest] Slack delivery failed:", e.message);
++          });
++          engagementsPinged++;
++        }
++
++        // Mark every row in this batch digested regardless of whether
++        // Slack actually fired — an engagement with no webhook configured
++        // should never accumulate an ever-growing "undigested" backlog it
++        // can never clear. The row is still sitting in the Queue either
++        // way; this only ever gates the external ping.
++        const now = new Date().toISOString();
++        for (const row of rows) {
++          const payload = { ...(row.payload as Record<string, unknown>), _digestedAt: now };
++          await db.update(pendingActions).set({ payload }).where(eq(pendingActions.id, row.id));
++        }
++      });
++    }
++
++    return { engagementsPinged, itemsDigested: undigested.length };
++  }
++);
+diff --git a/src/lib/approval-gate.ts b/src/lib/approval-gate.ts
+index 9d744a7..dfabd61 100644
+--- a/src/lib/approval-gate.ts
++++ b/src/lib/approval-gate.ts
+@@ -70,7 +70,12 @@ async function queuePendingAction(
+     .where(eq(engagements.engagementId, engagementId))
+     .limit(1);
+ 
+-  if (engagement) {
++  // _digest rows skip the immediate notifyUser call entirely — see the
++  // _digest doc in outcome-resolution.ts. The pendingActions row above is
++  // already created either way, so it's visible in the Queue right away;
++  // this only decides whether it ALSO gets an instant external ping, or
++  // waits to be folded into pendingActionDigestCron's next batch.
++  if (engagement && !(payload as { _digest?: boolean })._digest) {
+     try {
+       const stack = engagement.stack as EngagementStack;
+       await notifyUser({
+@@ -78,7 +83,14 @@ async function queuePendingAction(
+         engagementId,
+         type: "credential_check_error",
+         severity: "info",
+-        title: `Approval needed: ${actionType.replace(/_/g, " ")}`,
++        // Payload can carry an optional _title (same convention as
++        // _reason below) for a call site whose actionType label is too
++        // generic/mechanism-y to tell a reviewer what they're actually
++        // deciding — see triggerNoShowWinBack, which reuses actionType
++        // "webhook_enrollment" deliberately (it drives the identical
++        // execution path a real webhook enrollment would) but needs its
++        // own, accurate headline rather than "webhook enrollment".
++        title: (payload as { _title?: string })._title ?? `Approval needed: ${actionType.replace(/_/g, " ")}`,
+         // Assumed-no-show sweep false-positive fix — a bare "action X is
+         // waiting for review" told the operator nothing about *why*
+         // before they had to click into the dashboard, which is exactly
+@@ -88,6 +100,33 @@ async function queuePendingAction(
+         // reviewing knows what they're actually being asked to confirm.
+         body: reason ?? `A ${actionType.replace(/_/g, " ")} action is waiting for review before it runs. Approve or reject it from the dashboard.`,
+         slackWebhookUrl: stack?.slack_webhook_url,
++        // Real Approve/Reject buttons, not just a link back to the
++        // dashboard — clicking either runs the identical
++        // decidePendingAction path a dashboard click does (see the Slack
++        // interactions route). value must carry engagementId: that's
++        // what lets the interactions route pick the right signing secret
++        // to verify against *before* trusting anything else in the click.
++        slackActions: [
++          {
++            label: "✅ Approve",
++            style: "primary",
++            actionId: "pending_action_approve",
++            value: JSON.stringify({ engagementId, id: row.id }),
++          },
++          {
++            label: "❌ Reject",
++            style: "danger",
++            actionId: "pending_action_reject",
++            value: JSON.stringify({ engagementId, id: row.id }),
++          },
++        ],
++        // The pendingActions row just inserted above is already this
++        // event's in-app, Queue-visible, actionable record (Approve/
++        // Reject) — see notify.ts's persistInApp doc. Without this, the
++        // same event also landed as an unlinked "fyi" Queue item nothing
++        // ever clears, showing the same message twice under two
++        // different actions with two different titles.
++        persistInApp: false,
+       });
+     } catch {
+       // Same isolation as everywhere else notify.ts is called — a
+@@ -293,4 +332,63 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string,
+       detail: deployResult.reason,
+     });
+   },
+-};
+\ No newline at end of file
++};
++
++/**
++ * The single "a human decided" entry point for a pending action —
++ * extracted from POST /api/actions/[id]/review so the Slack interactions
++ * handler (src/app/api/slack/interactions/route.ts) can call the exact
++ * same approve/reject/execute logic a dashboard click runs, instead of a
++ * second, drifting copy of it. Callers still own their own auth: the
++ * dashboard route checks session + isAuthorizedForEngagement before
++ * calling this; the Slack route's trust comes from the signature
++ * verification it already does before dispatching here (see that file's
++ * header comment for why that has to happen in that specific order).
++ */
++export async function decidePendingAction(
++  id: string,
++  decision: "approved" | "rejected",
++  decidedBy: string
++): Promise<
++  | { ok: true; status: "rejected" }
++  | { ok: true; status: "approved"; executed: true }
++  | { ok: true; status: "approved"; executed: false; error: string }
++  | { ok: false; error: string }
++> {
++  const [action] = await db.select().from(pendingActions).where(eq(pendingActions.id, id)).limit(1);
++  if (!action || action.status !== "pending") {
++    return { ok: false, error: "Pending action not found or already decided." };
++  }
++
++  if (decision === "rejected") {
++    await db
++      .update(pendingActions)
++      .set({ status: "rejected", decidedAt: new Date(), decidedBy })
++      .where(eq(pendingActions.id, id));
++    return { ok: true, status: "rejected" };
++  }
++
++  // Approved — mark decided first (so a slow/failing executor can't leave
++  // the row looking un-decided and retryable-by-accident), then attempt
++  // execution, recording failure on the row rather than throwing it away.
++  await db
++    .update(pendingActions)
++    .set({ status: "approved", decidedAt: new Date(), decidedBy })
++    .where(eq(pendingActions.id, id));
++
++  try {
++    const executor = ACTION_EXECUTORS[action.actionType as PendingActionType];
++    if (!executor) {
++      throw new Error(`No executor registered for action type "${action.actionType}"`);
++    }
++    await executor(action.engagementId, action.payload);
++    return { ok: true, status: "approved", executed: true };
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : String(error);
++    await db
++      .update(pendingActions)
++      .set({ status: "execution_failed", executionError: message })
++      .where(eq(pendingActions.id, id));
++    return { ok: true, status: "approved", executed: false, error: message };
++  }
++}
+\ No newline at end of file
+diff --git a/src/lib/human-blockers.ts b/src/lib/human-blockers.ts
+index a3f0d01..9baad76 100644
+--- a/src/lib/human-blockers.ts
++++ b/src/lib/human-blockers.ts
+@@ -87,6 +87,11 @@ export async function createBlocker(input: {
+         title: `${input.skillName}: action needed to continue`,
+         body: input.description,
+         slackWebhookUrl: stack?.slack_webhook_url,
++        // The humanBlockers row just inserted above is already this
++        // event's in-app, Queue-visible, actionable record (Resolve) —
++        // see notify.ts's persistInApp doc. Without this, the same
++        // blocker also landed as a second, unlinked "alert" Queue item.
++        persistInApp: false,
+       });
+     } catch {
+       // Never let a notification failure prevent the blocker itself from
+diff --git a/src/lib/notify.ts b/src/lib/notify.ts
+index b0f14b2..8bb48b3 100644
+--- a/src/lib/notify.ts
++++ b/src/lib/notify.ts
+@@ -4,9 +4,25 @@
+ // know about, right now, without them having to go check the dashboard."
+ //
+ // Three channels, in order of guarantee:
+-//   1. In-app  — ALWAYS written. This is the reliability floor: every
++//   1. In-app  — written by default. This is the reliability floor: every
+ //      tenant has this channel by definition, no setup required. The
+-//      dashboard notification bell reads straight from this table.
++//      dashboard notification bell AND the Queue panel (src/lib/queue.ts)
++//      both read straight from this table, surfacing every row here as
++//      its own alert/fyi queue item.
++//
++//      That last part is exactly why persistInApp exists: a caller that
++//      already wrote a pendingActions row, a humanBlockers row, or marked
++//      a skillRun failed/timed_out already HAS an in-app, queue-visible
++//      record of this event — usually a richer one, with real actions
++//      (approve/reject, resolve, run again) that this generic channel
++//      can't offer. Also writing a notifications row for that same event
++//      does not add a second useful thing for the buyer to look at; it
++//      adds an unlinked duplicate that nothing ever clears when the real
++//      one gets resolved. persistInApp: false skips *only* that row —
++//      Slack and email still fire below, since "ping me" is still exactly
++//      what should happen. See queuePendingAction (approval-gate.ts),
++//      createBlocker (human-blockers.ts), and notifyRunOutcome
++//      (run-log.ts) for the three call sites that pass it.
+ //   2. Slack   — only if the engagement has stack.slack_webhook_url set
+ //      (same per-engagement webhook src/features/leak-map/server/alert-monitor.ts
+ //      already uses for Leak-Map breach alerts).
+@@ -38,6 +54,22 @@ export type NotificationType =
+ 
+ export type NotificationSeverity = "info" | "warning" | "critical";
+ 
++/**
++ * One button on an interactive Slack message — same shape deliverBrief's
++ * outcome buttons already use (src/lib/platforms/email.ts), so both
++ * produce Block Kit the Slack interactions handler
++ * (src/app/api/slack/interactions/route.ts) parses the same way: read
++ * engagementId out of the (still untrusted) value, verify that
++ * engagement's signing secret, only then act.
++ */
++export interface SlackAction {
++  label: string;
++  style?: "primary" | "danger";
++  actionId: string;
++  /** JSON-stringified — must include engagementId; see the interactions route's verification order. */
++  value: string;
++}
++
+ export interface NotifyOptions {
+   whopUserId: string;
+   engagementId?: string;
+@@ -48,28 +80,47 @@ export interface NotifyOptions {
+   body: string;
+   /** Per-engagement Slack webhook, if the tenant has one configured. */
+   slackWebhookUrl?: string;
++  /**
++   * Default true. Set false when the caller already wrote its own
++   * actionable/queue-visible record of this event (a pendingActions row,
++   * a humanBlockers row, a failed skillRun) — see the file header. Never
++   * suppresses Slack or email, only the in-app notifications-table row
++   * and the duplicate Queue item it would otherwise produce.
++   */
++  persistInApp?: boolean;
++  /**
++   * Optional row of interactive buttons on the Slack message (requires
++   * slackWebhookUrl). Omit for every notification that's genuinely just
++   * FYI — a button that can't actually resolve anything (most blocker
++   * types need a URL or credential, not a click) is worse than no button,
++   * since it invites a click that does nothing. Only queuePendingAction
++   * passes this today, for Approve/Reject.
++   */
++  slackActions?: SlackAction[];
+ }
+ 
+ export async function notifyUser(opts: NotifyOptions): Promise<void> {
+-  // ── 1. In-app (always) ────────────────────────────────────────────────
+-  try {
+-    await db.insert(notifications).values({
+-      id: crypto.randomUUID(),
+-      whopUserId: opts.whopUserId,
+-      engagementId: opts.engagementId ?? null,
+-      runId: opts.runId ?? null,
+-      type: opts.type,
+-      severity: opts.severity,
+-      title: opts.title,
+-      body: opts.body,
+-      read: false,
+-      createdAt: new Date(),
+-    });
+-  } catch (e) {
+-    // If even the in-app write fails (DB down), there's nowhere reliable
+-    // left to surface this — log and continue to the best-effort channels
+-    // below, since Slack/email might still get through independently.
+-    console.error("[notify] failed to write in-app notification:", e);
++  // ── 1. In-app (default on — see persistInApp above) ─────────────────
++  if (opts.persistInApp !== false) {
++    try {
++      await db.insert(notifications).values({
++        id: crypto.randomUUID(),
++        whopUserId: opts.whopUserId,
++        engagementId: opts.engagementId ?? null,
++        runId: opts.runId ?? null,
++        type: opts.type,
++        severity: opts.severity,
++        title: opts.title,
++        body: opts.body,
++        read: false,
++        createdAt: new Date(),
++      });
++    } catch (e) {
++      // If even the in-app write fails (DB down), there's nowhere reliable
++      // left to surface this — log and continue to the best-effort channels
++      // below, since Slack/email might still get through independently.
++      console.error("[notify] failed to write in-app notification:", e);
++    }
+   }
+ 
+   // ── 2. Slack (best-effort, only if configured) ──────────────────────────
+@@ -79,12 +130,34 @@ export async function notifyUser(opts: NotifyOptions): Promise<void> {
+   // can be killed mid-flight, silently dropping the Slack alert. The
+   // .catch still ensures a failed delivery never throws out of notifyUser.
+   if (opts.slackWebhookUrl) {
++    const body = opts.slackActions?.length
++      ? {
++          // Fallback text for notifications/screen readers; blocks below
++          // are what actually renders. Same shape deliverBrief's outcome
++          // buttons use (src/lib/platforms/email.ts) — the interactions
++          // route parses both the same way.
++          text: `${opts.title}\n${opts.body}`,
++          blocks: [
++            { type: "section", text: { type: "mrkdwn", text: `*${opts.title}*\n${opts.body}` } },
++            {
++              type: "actions",
++              block_id: "queue_item_actions",
++              elements: opts.slackActions.map((a) => ({
++                type: "button",
++                text: { type: "plain_text", text: a.label },
++                ...(a.style ? { style: a.style } : {}),
++                action_id: a.actionId,
++                value: a.value,
++              })),
++            },
++          ],
++        }
++      : { text: `*[${opts.severity.toUpperCase()}] ${opts.title}*\n${opts.body}` };
++
+     await fetch(opts.slackWebhookUrl, {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+-      body: JSON.stringify({
+-        text: `*[${opts.severity.toUpperCase()}] ${opts.title}*\n${opts.body}`,
+-      }),
++      body: JSON.stringify(body),
+     }).catch((e) => {
+       console.error("[notify] Slack delivery failed:", e.message);
+     });
+diff --git a/src/lib/queue.ts b/src/lib/queue.ts
+index f6762db..d974a73 100644
+--- a/src/lib/queue.ts
++++ b/src/lib/queue.ts
+@@ -321,12 +321,16 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
+ 
+   const items: QueueItem[] = [
+     ...actionRows.map((a): QueueItem => {
+-      const reason = (a.payload as { _reason?: string } | null)?._reason;
++      const payload = a.payload as { _reason?: string; _title?: string } | null;
++      const reason = payload?._reason;
+       return {
+         id: a.id,
+         source: "action",
+         category: "approve",
+-        title: ACTION_TYPE_LABELS[a.actionType] ?? a.actionType,
++        // Same _title override approval-gate.ts's Slack/email title uses
++        // — otherwise a reviewer sees the correct, specific reason as the
++        // subtitle under a generic, mechanism-describing title above it.
++        title: payload?._title ?? ACTION_TYPE_LABELS[a.actionType] ?? a.actionType,
+         subtitle: reason ?? a.buyer,
+         engagementId: a.engagementId,
+         buyer: a.buyer,
+diff --git a/src/lib/run-log.ts b/src/lib/run-log.ts
+index 6f8b654..5c13965 100644
+--- a/src/lib/run-log.ts
++++ b/src/lib/run-log.ts
+@@ -82,6 +82,13 @@ export async function notifyRunOutcome(
+       title,
+       body: detail,
+       slackWebhookUrl: (tenant.stack as EngagementStack | null)?.slack_webhook_url,
++      // queue.ts's failedRunQueueItems already derives a queue item for
++      // this exact run straight from skillRuns — live, and richer than a
++      // generic notification (deep link to the likely-wrong field, "Run
++      // again", credential-issue detection). See notify.ts's persistInApp
++      // doc. Without this, every run failure also landed as a second,
++      // unlinked "alert" Queue item pointing nowhere in particular.
++      persistInApp: false,
+     });
+   } catch (e) {
+     console.error("[run-log] failed to dispatch run-outcome notification:", e);

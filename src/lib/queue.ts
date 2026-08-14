@@ -321,12 +321,16 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
 
   const items: QueueItem[] = [
     ...actionRows.map((a): QueueItem => {
-      const reason = (a.payload as { _reason?: string } | null)?._reason;
+      const payload = a.payload as { _reason?: string; _title?: string } | null;
+      const reason = payload?._reason;
       return {
         id: a.id,
         source: "action",
         category: "approve",
-        title: ACTION_TYPE_LABELS[a.actionType] ?? a.actionType,
+        // Same _title override approval-gate.ts's Slack/email title uses
+        // — otherwise a reviewer sees the correct, specific reason as the
+        // subtitle under a generic, mechanism-describing title above it.
+        title: payload?._title ?? ACTION_TYPE_LABELS[a.actionType] ?? a.actionType,
         subtitle: reason ?? a.buyer,
         engagementId: a.engagementId,
         buyer: a.buyer,

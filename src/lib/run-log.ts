@@ -82,6 +82,13 @@ export async function notifyRunOutcome(
       title,
       body: detail,
       slackWebhookUrl: (tenant.stack as EngagementStack | null)?.slack_webhook_url,
+      // queue.ts's failedRunQueueItems already derives a queue item for
+      // this exact run straight from skillRuns — live, and richer than a
+      // generic notification (deep link to the likely-wrong field, "Run
+      // again", credential-issue detection). See notify.ts's persistInApp
+      // doc. Without this, every run failure also landed as a second,
+      // unlinked "alert" Queue item pointing nowhere in particular.
+      persistInApp: false,
     });
   } catch (e) {
     console.error("[run-log] failed to dispatch run-outcome notification:", e);

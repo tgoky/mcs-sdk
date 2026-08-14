@@ -5,9 +5,13 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { OUTCOME_BUTTON_LABEL } from "@/lib/platforms/email";
 import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
+import { decidePendingAction } from "@/lib/approval-gate";
 
 /**
- * Tier 4 #27 — Slack interactive brief buttons.
+ * Tier 4 #27 — Slack interactive brief buttons, plus (this round) Queue
+ * approve/reject buttons on pendingActions notifications (see
+ * queuePendingAction, src/lib/approval-gate.ts). Two interaction types,
+ * routed by action_id, sharing one verification path.
  *
  * Slack's "Interactivity & Shortcuts" Request URL is one URL per Slack
  * app, shared across every engagement that uses Slack delivery — unlike
@@ -41,6 +45,22 @@ function verifySlackSignature(signingSecret: string, timestamp: string, rawBody:
   return safeEqual(computed, receivedSignature);
 }
 
+/** Shared by both interaction types below — see the file header for why the lookup has to come before verification. */
+async function verifyEngagementSlackSignature(
+  engagementId: string,
+  timestamp: string,
+  rawBody: string,
+  receivedSignature: string
+): Promise<boolean> {
+  const [engagement] = await db
+    .select({ stack: engagements.stack })
+    .from(engagements)
+    .where(eq(engagements.engagementId, engagementId))
+    .limit(1);
+  const signingSecret = (engagement?.stack as EngagementStack | null)?.slack_signing_secret;
+  return Boolean(signingSecret) && verifySlackSignature(signingSecret!, timestamp, rawBody, receivedSignature);
+}
+
 export async function POST(req: Request) {
   const rawBody = await req.text();
   const timestamp = req.headers.get("x-slack-request-timestamp");
@@ -72,6 +92,64 @@ export async function POST(req: Request) {
   }
 
   const action = payload.actions[0];
+
+  // ── Queue approve/reject (this round) ──────────────────────────────────
+  if (action.action_id === "pending_action_approve" || action.action_id === "pending_action_reject") {
+    let value: { engagementId?: string; id?: string };
+    try {
+      value = JSON.parse(action.value ?? "{}");
+    } catch {
+      return NextResponse.json({ error: "Invalid button value." }, { status: 400 });
+    }
+    const { engagementId, id } = value;
+    if (!engagementId || !id) {
+      return NextResponse.json({ error: "Malformed button value." }, { status: 400 });
+    }
+
+    if (!(await verifyEngagementSlackSignature(engagementId, timestamp, rawBody, receivedSignature))) {
+      return NextResponse.json({ error: "Signature verification failed." }, { status: 401 });
+    }
+
+    const decision = action.action_id === "pending_action_approve" ? "approved" : "rejected";
+    const decidedBy = payload.user?.username ?? payload.user?.id ?? "slack";
+    const result = await decidePendingAction(id, decision, decidedBy);
+
+    // Same reasoning as the outcome-button branch below: replace the
+    // actions block so a second click can't fire a contradictory decision
+    // on an already-decided row.
+    if (payload.response_url) {
+      const confirmText = !result.ok
+        ? result.error
+        : result.status === "rejected"
+          ? "Rejected"
+          : result.executed
+            ? "Approved"
+            : `Approved, but execution failed: ${result.error}`;
+      try {
+        await fetch(payload.response_url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            replace_original: true,
+            blocks: [
+              ...(payload.message?.blocks?.filter((b: { block_id?: string }) => b.block_id !== "queue_item_actions") ?? []),
+              { type: "context", elements: [{ type: "mrkdwn", text: `*${confirmText}*` }] },
+            ],
+          }),
+        });
+      } catch {
+        // Decision is already recorded — a failure to edit the Slack
+        // message is cosmetic, not a reason to fail this request.
+      }
+    }
+
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 404 });
+    }
+    return NextResponse.json({ success: true, status: result.status });
+  }
+
+  // ── Pre-call brief outcome buttons (existing) ───────────────────────────
   let buttonValue: { engagementId?: string; bookingId?: string; prospectEmail?: string; outcome?: string };
   try {
     buttonValue = JSON.parse(action.value ?? "{}");
@@ -85,14 +163,7 @@ export async function POST(req: Request) {
   }
 
   // ── Verify against THIS engagement's signing secret, not before ────────
-  const [engagement] = await db
-    .select({ stack: engagements.stack })
-    .from(engagements)
-    .where(eq(engagements.engagementId, engagementId))
-    .limit(1);
-  const signingSecret = (engagement?.stack as EngagementStack | null)?.slack_signing_secret;
-
-  if (!signingSecret || !verifySlackSignature(signingSecret, timestamp, rawBody, receivedSignature)) {
+  if (!(await verifyEngagementSlackSignature(engagementId, timestamp, rawBody, receivedSignature))) {
     return NextResponse.json({ error: "Signature verification failed." }, { status: 401 });
   }
 

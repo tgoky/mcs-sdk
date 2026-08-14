@@ -4,14 +4,18 @@ import { isAuthorizedForEngagement } from "@/lib/whop-access";
 import { db } from "@/lib/db";
 import { pendingActions } from "@/models/schema";
 import { eq } from "drizzle-orm";
-import { ACTION_EXECUTORS, type PendingActionType } from "@/lib/approval-gate";
+import { decidePendingAction } from "@/lib/approval-gate";
 
 /**
  * Cross-cutting recovery gap 22 — explicit human-approval gates. This is
  * the "human decides" side of gateOrExecute: the engagement's own tenant
  * (or an admin) approves (runs the deferred action now, via
  * ACTION_EXECUTORS) or rejects (marks it decided, no-op) a queued
- * pending_actions row. See src/lib/approval-gate.ts.
+ * pending_actions row. The actual decide/execute logic lives in
+ * decidePendingAction (src/lib/approval-gate.ts) — shared with the Slack
+ * interactions route, so an Approve/Reject click from Slack runs the
+ * identical path a dashboard click does. This route's job is just auth:
+ * load the action, confirm the caller owns its engagement, then delegate.
  *
  * Tenant-scoping fix: this used to be admin-only, but the Queue UI shows
  * pending actions to every tenant on their own engagement — non-admin
@@ -47,34 +51,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "decision must be 'approved' or 'rejected'." }, { status: 400 });
   }
 
-  if (body.decision === "rejected") {
-    await db
-      .update(pendingActions)
-      .set({ status: "rejected", decidedAt: new Date(), decidedBy: session.email })
-      .where(eq(pendingActions.id, id));
-    return NextResponse.json({ success: true, status: "rejected" });
+  const result = await decidePendingAction(id, body.decision, session.email);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: 404 });
   }
-
-  // Approved — mark decided first (so a slow/failing executor can't leave
-  // the row looking un-decided and retryable-by-accident), then attempt
-  // execution, recording failure on the row rather than throwing it away.
-  await db
-    .update(pendingActions)
-    .set({ status: "approved", decidedAt: new Date(), decidedBy: session.email })
-    .where(eq(pendingActions.id, id));
-
-  try {
-    const executor = ACTION_EXECUTORS[action.actionType as PendingActionType];
-    if (!executor) {
-      throw new Error(`No executor registered for action type "${action.actionType}"`);
-    }
-    await executor(action.engagementId, action.payload);
-    return NextResponse.json({ success: true, status: "approved", executed: true });
-  } catch (error: any) {
-    await db
-      .update(pendingActions)
-      .set({ status: "execution_failed", executionError: error.message })
-      .where(eq(pendingActions.id, id));
-    return NextResponse.json({ error: `Approved but execution failed: ${error.message}` }, { status: 500 });
+  if (result.status === "approved" && !result.executed) {
+    return NextResponse.json({ error: `Approved but execution failed: ${result.error}` }, { status: 500 });
   }
+  return NextResponse.json({ success: true, status: result.status, ...(result.status === "approved" ? { executed: true } : {}) });
 }
