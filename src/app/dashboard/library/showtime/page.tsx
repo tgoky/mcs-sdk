@@ -1,8 +1,9 @@
 import { getSession } from "@/lib/session";
 import { getPackageOverview } from "@/lib/package-overview";
-import { SKILL_MANIFEST } from "@/lib/skill-manifest";
+import { SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
 import { BackLink } from "@/components/back-link";
 import { SkillSequence } from "@/components/library/skill-sequence";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import {
   LayoutGrid,
   Webhook,
@@ -12,11 +13,6 @@ import {
   ShieldCheck,
   Star,
   ImageIcon,
-  Zap,
-  Sparkles,
-  BarChart3,
-  RefreshCw,
-  SlidersHorizontal,
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
@@ -39,11 +35,17 @@ const SETUP_GUIDES = [
   },
 ];
 
-const DETAILED_SKILL_PLAYBOOKS = [
+const DETAILED_SKILL_PLAYBOOKS: Array<{
+  id: SkillId;
+  badge: string;
+  trigger: string;
+  cadence: string;
+  overview: string;
+  workflow: string[];
+  deliverables: string[];
+}> = [
   {
     id: "pin-down",
-    icon: SlidersHorizontal,
-    accentColor: "text-amber-500",
     badge: "Setup Bridge (Onboarding)",
     trigger: "Manual launch or wizard dispatch upon adding a new client.",
     cadence: "One-time execution per client onboarding pass.",
@@ -64,8 +66,6 @@ const DETAILED_SKILL_PLAYBOOKS = [
   },
   {
     id: "pile-on",
-    icon: Zap,
-    accentColor: "text-teal-500",
     badge: "Real-Time Event Stream",
     trigger: "Inbound booking webhook or 5-minute background polling cycle.",
     cadence: "Instant event-driven execution per booked prospect.",
@@ -86,8 +86,6 @@ const DETAILED_SKILL_PLAYBOOKS = [
   },
   {
     id: "pre-call-read",
-    icon: Sparkles,
-    accentColor: "text-indigo-500",
     badge: "Scheduled & Dynamic Batch",
     trigger: "Nightly cron sweep (00:00 server time) or lead-time window trigger.",
     cadence: "Nightly batch or dynamic 1-hour pre-call alert.",
@@ -107,8 +105,6 @@ const DETAILED_SKILL_PLAYBOOKS = [
   },
   {
     id: "win-back",
-    icon: RefreshCw,
-    accentColor: "text-rose-500",
     badge: "Recovery Cadence Engine",
     trigger: "Cancellation webhook, rep Slack button click, or assumed-no-show sweep.",
     cadence: "Durable 30-day automated re-engagement cycle.",
@@ -128,8 +124,6 @@ const DETAILED_SKILL_PLAYBOOKS = [
   },
   {
     id: "leak-map",
-    icon: BarChart3,
-    accentColor: "text-emerald-500",
     badge: "Pipeline Diagnostics",
     trigger: "Scheduled weekly audit cron or manual on-demand trigger.",
     cadence: "Weekly recurring audit or manual run.",
@@ -271,7 +265,7 @@ export default async function ShowtimePackagePage() {
         <SkillSequence skills={overview.skills} />
       </div>
 
-      {/* Flat, Non-Card Skill Breakdown Section */}
+      {/* Flat, Non-Card Skill Breakdown Section with SquishySkillBadge */}
       <div className="space-y-6 pt-2">
         <div className="border-b border-zinc-200 dark:border-zinc-800/80 pb-4">
           <h2 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
@@ -285,15 +279,14 @@ export default async function ShowtimePackagePage() {
         <div className="divide-y divide-zinc-200 dark:divide-zinc-800/80">
           {DETAILED_SKILL_PLAYBOOKS.map((playbook, idx) => {
             const overviewSkill = overview.skills.find((s) => s.skillId === playbook.id);
-            const manifest = SKILL_MANIFEST[playbook.id as keyof typeof SKILL_MANIFEST];
-            const PlaybookIcon = playbook.icon;
+            const manifest = SKILL_MANIFEST[playbook.id];
 
             return (
               <div key={playbook.id} className="py-8 first:pt-0 space-y-5">
-                {/* Title + Stats Line */}
+                {/* Title + SquishySkillBadge + Stats Line */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <PlaybookIcon size={22} className={playbook.accentColor} />
+                    <SquishySkillBadge skill={playbook.id} size={28} />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-mono font-bold text-zinc-400">0{idx + 1}.</span>
