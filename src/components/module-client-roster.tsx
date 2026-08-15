@@ -35,22 +35,26 @@ function relativeTime(iso: string | null): string {
   return `${Math.floor(diffSec / 86400)}d ago`;
 }
 
+// Matches the real skillRuns.status vocabulary used elsewhere (see
+// runs/[id]/page.tsx's isFailed/isCancelled/isTimedOut and
+// module-overview.ts's FAILURE_STATUSES) rather than guessing at values
+// like "error" or "in_progress" that don't actually appear in this schema.
 function statusTone(status: string | null): "success" | "danger" | "warning" | "neutral" {
   if (!status) return "neutral";
-  const s = status.toLowerCase();
-  if (s === "success" || s === "completed") return "success";
-  if (s === "failed" || s === "error" || s === "timed_out") return "danger";
-  if (s === "running" || s === "in_progress") return "warning";
+  if (status === "success") return "success";
+  if (status === "failed" || status === "timed_out") return "danger";
+  if (status === "cancelled") return "neutral";
+  if (status === "running") return "warning";
   return "neutral";
 }
 
 function statusLabel(status: string | null): string {
   if (!status) return "Not run yet";
-  const s = status.toLowerCase();
-  if (s === "success" || s === "completed") return "Healthy";
-  if (s === "failed" || s === "error") return "Failed";
-  if (s === "timed_out") return "Timed out";
-  if (s === "running" || s === "in_progress") return "Running";
+  if (status === "success") return "Healthy";
+  if (status === "failed") return "Failed";
+  if (status === "timed_out") return "Timed out";
+  if (status === "cancelled") return "Cancelled";
+  if (status === "running") return "Running";
   return status;
 }
 
