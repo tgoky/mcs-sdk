@@ -3,7 +3,6 @@ import { getPackageOverview } from "@/lib/package-overview";
 import { SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { BackLink } from "@/components/back-link";
 import { SkillSequence } from "@/components/library/skill-sequence";
-import { StatChip } from "@/components/library/stat-chip";
 import {
   LayoutGrid,
   Webhook,
@@ -12,19 +11,13 @@ import {
   CheckCircle2,
   ShieldCheck,
   Star,
+  ImageIcon,
   Zap,
   Sparkles,
   BarChart3,
   RefreshCw,
   SlidersHorizontal,
   ArrowRight,
-  Clock,
-  FileText,
-  Terminal,
-  Slack,
-  Check,
-  TrendingUp,
-  UserCheck,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -50,7 +43,7 @@ const DETAILED_SKILL_PLAYBOOKS = [
   {
     id: "pin-down",
     icon: SlidersHorizontal,
-    accentColor: "text-amber-500 bg-amber-500/10 border-amber-500/20",
+    accentColor: "text-amber-500",
     badge: "Setup Bridge (Onboarding)",
     trigger: "Manual launch or wizard dispatch upon adding a new client.",
     cadence: "One-time execution per client onboarding pass.",
@@ -72,7 +65,7 @@ const DETAILED_SKILL_PLAYBOOKS = [
   {
     id: "pile-on",
     icon: Zap,
-    accentColor: "text-teal-500 bg-teal-500/10 border-teal-500/20",
+    accentColor: "text-teal-500",
     badge: "Real-Time Event Stream",
     trigger: "Inbound booking webhook or 5-minute background polling cycle.",
     cadence: "Instant event-driven execution per booked prospect.",
@@ -94,7 +87,7 @@ const DETAILED_SKILL_PLAYBOOKS = [
   {
     id: "pre-call-read",
     icon: Sparkles,
-    accentColor: "text-indigo-500 bg-indigo-500/10 border-indigo-500/20",
+    accentColor: "text-indigo-500",
     badge: "Scheduled & Dynamic Batch",
     trigger: "Nightly cron sweep (00:00 server time) or lead-time window trigger.",
     cadence: "Nightly batch or dynamic 1-hour pre-call alert.",
@@ -115,7 +108,7 @@ const DETAILED_SKILL_PLAYBOOKS = [
   {
     id: "win-back",
     icon: RefreshCw,
-    accentColor: "text-rose-500 bg-rose-500/10 border-rose-500/20",
+    accentColor: "text-rose-500",
     badge: "Recovery Cadence Engine",
     trigger: "Cancellation webhook, rep Slack button click, or assumed-no-show sweep.",
     cadence: "Durable 30-day automated re-engagement cycle.",
@@ -136,7 +129,7 @@ const DETAILED_SKILL_PLAYBOOKS = [
   {
     id: "leak-map",
     icon: BarChart3,
-    accentColor: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
+    accentColor: "text-emerald-500",
     badge: "Pipeline Diagnostics",
     trigger: "Scheduled weekly audit cron or manual on-demand trigger.",
     cadence: "Weekly recurring audit or manual run.",
@@ -156,129 +149,17 @@ const DETAILED_SKILL_PLAYBOOKS = [
   },
 ];
 
-/* --- Visual Showcase Components --- */
-
-function VisualCardSetup() {
-  return (
-    <div className="aspect-video w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-950 p-4 font-sans text-xs flex flex-col justify-between select-none overflow-hidden shadow-inner">
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal size={14} className="text-amber-400" />
-          <span className="font-bold text-white text-[11px]">Client Setup (pin-down)</span>
-        </div>
-        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
-          Active
-        </span>
-      </div>
-
-      <div className="space-y-2 py-1">
-        <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 p-2 rounded-lg text-[11px]">
-          <span className="text-zinc-400 flex items-center gap-1.5">
-            <Webhook size={12} className="text-teal-400" /> Push Webhook
-          </span>
-          <span className="text-white font-mono text-[10px]">Calendly Connected</span>
-        </div>
-
-        <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 p-2 rounded-lg text-[11px]">
-          <span className="text-zinc-400 flex items-center gap-1.5">
-            <Check size={12} className="text-amber-400" /> Brand Voice
-          </span>
-          <span className="text-amber-300 font-mono text-[10px]">Profile Extracted</span>
-        </div>
-      </div>
-
-      <div className="bg-zinc-900/80 border border-zinc-800 p-2 rounded-lg flex items-center justify-between text-[10px] font-mono text-zinc-400">
-        <span>Confirmation Page:</span>
-        <span className="text-teal-400 truncate max-w-[140px]">/confirm/live-pass</span>
-      </div>
-    </div>
-  );
-}
-
-function VisualCardExecution() {
-  return (
-    <div className="aspect-video w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-950 p-4 font-sans text-xs flex flex-col justify-between select-none overflow-hidden shadow-inner">
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
-        <div className="flex items-center gap-2">
-          <Slack size={14} className="text-indigo-400" />
-          <span className="font-bold text-white text-[11px]">Briefs &amp; Intro (pile-on / pre-call)</span>
-        </div>
-        <span className="text-[10px] font-mono text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded">
-          Real-Time
-        </span>
-      </div>
-
-      <div className="bg-zinc-900 border border-zinc-800 p-2.5 rounded-lg space-y-1.5">
-        <div className="flex items-center justify-between text-[10px] font-mono">
-          <span className="text-white font-bold flex items-center gap-1">
-            <UserCheck size={11} className="text-indigo-400" /> Marcus Vance
-          </span>
-          <span className="text-zinc-500">Apex Media</span>
-        </div>
-        <p className="text-[10.5px] text-zinc-300 line-clamp-2 leading-relaxed">
-          &quot;Verified LinkedIn match. Pain point: high customer acquisition costs. Ready to switch platforms.&quot;
-        </p>
-      </div>
-
-      <div className="flex items-center justify-between text-[10px] font-mono bg-zinc-900/60 p-2 rounded border border-zinc-800/60">
-        <span className="text-zinc-400">Claude Personalization:</span>
-        <span className="text-emerald-400 font-semibold">Delivered in 2.1s</span>
-      </div>
-    </div>
-  );
-}
-
-function VisualCardRecovery() {
-  return (
-    <div className="aspect-video w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-950 p-4 font-sans text-xs flex flex-col justify-between select-none overflow-hidden shadow-inner">
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
-        <div className="flex items-center gap-2">
-          <TrendingUp size={14} className="text-emerald-400" />
-          <span className="font-bold text-white text-[11px]">Funnel &amp; Win-Back (leak-map)</span>
-        </div>
-        <span className="text-[10px] font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded">
-          Recovery Active
-        </span>
-      </div>
-
-      <div className="space-y-2 py-1">
-        <div className="space-y-1">
-          <div className="flex justify-between text-[10px] font-mono text-zinc-400">
-            <span>Show-Up Conversion</span>
-            <span className="text-emerald-400 font-bold">84%</span>
-          </div>
-          <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden flex">
-            <div className="bg-emerald-500 h-full w-[84%]" />
-            <div className="bg-rose-500 h-full w-[16%]" />
-          </div>
-        </div>
-
-        <div className="bg-zinc-900 border border-zinc-800 p-2 rounded-lg flex items-center justify-between text-[10.5px] font-mono">
-          <span className="text-zinc-300">16% Cold Prospects:</span>
-          <span className="text-rose-400 font-semibold">Auto-Enrolled (30d)</span>
-        </div>
-      </div>
-
-      <div className="bg-zinc-900/60 p-2 rounded border border-zinc-800/60 flex items-center justify-between text-[10px] font-mono text-zinc-400">
-        <span>Reschedule Link:</span>
-        <span className="text-teal-400">Single-Use Fresh URL</span>
-      </div>
-    </div>
-  );
-}
-
 export default async function ShowtimePackagePage() {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
   const overview = await getPackageOverview(whopUserId);
 
   return (
-    <div className="w-full space-y-8 px-6 py-6 font-sans">
+    <div className="w-full space-y-10 px-6 py-6 font-sans">
       <BackLink href="/dashboard/library" label="Back to All Packages" />
 
-      {/* Main Marketplace Card Header - Full Width */}
+      {/* Main Marketplace Top Banner */}
       <div className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-6 sm:p-8 space-y-8 shadow-sm">
-        {/* Header Row */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
           <div className="flex items-start gap-4 min-w-0">
             <div className="shrink-0 flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-teal-500 dark:bg-teal-400 shadow-[0_0_0_1px_rgba(45,212,191,0.25),0_8px_24px_-8px_rgba(45,212,191,0.5)]">
@@ -358,15 +239,26 @@ export default async function ShowtimePackagePage() {
           </div>
         </div>
 
-        {/* 3 Logical Feature Gallery Visuals */}
+        {/* Media Gallery Dropzones */}
         <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800/80 space-y-4">
           <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-            Platform Capabilities &amp; System Previews
+            Screenshots &amp; Media
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <VisualCardSetup />
-            <VisualCardExecution />
-            <VisualCardRecovery />
+            <div className="group relative aspect-video w-full rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors overflow-hidden">
+              <ImageIcon size={24} />
+              <span className="text-xs font-mono">Drop Image 1</span>
+            </div>
+
+            <div className="group relative aspect-video w-full rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors overflow-hidden">
+              <ImageIcon size={24} />
+              <span className="text-xs font-mono">Drop Image 2</span>
+            </div>
+
+            <div className="group relative aspect-video w-full rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors overflow-hidden">
+              <ImageIcon size={24} />
+              <span className="text-xs font-mono">Drop Image 3</span>
+            </div>
           </div>
         </div>
       </div>
@@ -379,128 +271,97 @@ export default async function ShowtimePackagePage() {
         <SkillSequence skills={overview.skills} />
       </div>
 
-      {/* Exhaustive Skill Execution Playbook */}
+      {/* Flat, Non-Card Skill Breakdown Section */}
       <div className="space-y-6 pt-2">
-        <div>
-          <h2 className="text-base font-bold text-zinc-900 dark:text-white tracking-tight">
-            Comprehensive Skill Execution Playbook
+        <div className="border-b border-zinc-200 dark:border-zinc-800/80 pb-4">
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
+            Skill Execution Guidelines
           </h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Operational guide detailing execution triggers, automated workflows, and expected outputs for each skill in this suite.
+          <p className="text-xs text-zinc-500 mt-1">
+            Complete operational breakdown for each automation in the Showtime suite.
           </p>
         </div>
 
-        <div className="space-y-6">
+        <div className="divide-y divide-zinc-200 dark:divide-zinc-800/80">
           {DETAILED_SKILL_PLAYBOOKS.map((playbook, idx) => {
             const overviewSkill = overview.skills.find((s) => s.skillId === playbook.id);
             const manifest = SKILL_MANIFEST[playbook.id as keyof typeof SKILL_MANIFEST];
             const PlaybookIcon = playbook.icon;
 
             return (
-              <div
-                key={playbook.id}
-                className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 p-6 space-y-5 shadow-sm hover:border-zinc-300 dark:hover:border-zinc-700 transition-all"
-              >
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-200 dark:border-zinc-800/80">
+              <div key={playbook.id} className="py-8 first:pt-0 space-y-5">
+                {/* Title + Stats Line */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-xl border shrink-0 ${playbook.accentColor}`}>
-                      <PlaybookIcon size={20} />
-                    </div>
+                    <PlaybookIcon size={22} className={playbook.accentColor} />
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono text-zinc-400 font-semibold">0{idx + 1}.</span>
+                        <span className="text-sm font-mono font-bold text-zinc-400">0{idx + 1}.</span>
                         <h3 className="text-base font-bold text-zinc-900 dark:text-white">
                           {manifest.name}
                         </h3>
-                        <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded">
-                          {playbook.id}
+                        <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
+                          ({playbook.id})
                         </span>
                       </div>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                        {playbook.overview}
-                      </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 shrink-0 text-xs font-mono text-zinc-500 dark:text-zinc-400 self-start sm:self-auto">
-                    <span className="px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700/60 text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
-                      {playbook.badge}
-                    </span>
-                    {overviewSkill && (
-                      <div className="flex items-center gap-3 border-l border-zinc-200 dark:border-zinc-800 pl-4">
-                        <div>
-                          <span className="text-zinc-400 block text-[9px] uppercase">Active</span>
-                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">{overviewSkill.activeClients} clients</span>
-                        </div>
-                        <div>
-                          <span className="text-zinc-400 block text-[9px] uppercase">Pass Rate</span>
-                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                            {overviewSkill.successRate !== null ? `${overviewSkill.successRate}%` : "—"}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  {overviewSkill && (
+                    <div className="flex items-center gap-4 text-xs font-mono text-zinc-500 dark:text-zinc-400">
+                      <span>Active: <strong className="text-zinc-900 dark:text-zinc-200">{overviewSkill.activeClients} clients</strong></span>
+                      <span>Pass: <strong className="text-zinc-900 dark:text-zinc-200">{overviewSkill.successRate !== null ? `${overviewSkill.successRate}%` : "—"}</strong></span>
+                      <Link
+                        href={`/dashboard/modules/${playbook.id}`}
+                        className="inline-flex items-center gap-1 text-teal-600 dark:text-teal-400 hover:underline ml-2"
+                      >
+                        View Runs <ArrowRight size={12} />
+                      </Link>
+                    </div>
+                  )}
                 </div>
 
-                {/* Grid Details */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Triggers & Cadence */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-mono font-semibold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
-                      <Clock size={13} className="text-teal-500" /> Trigger &amp; Cadence
+                {/* Overview Description */}
+                <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-4xl">
+                  {playbook.overview}
+                </p>
+
+                {/* Underneath Stacked Specifications */}
+                <div className="space-y-4 text-xs text-zinc-600 dark:text-zinc-400 pt-1">
+                  {/* 1. Trigger & Cadence */}
+                  <div className="space-y-1">
+                    <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
+                      Trigger &amp; Frequency
                     </h4>
-                    <div className="space-y-2 text-xs text-zinc-600 dark:text-zinc-400">
-                      <div>
-                        <span className="font-semibold text-zinc-800 dark:text-zinc-300 block">How it runs:</span>
-                        <p className="mt-0.5 leading-relaxed">{playbook.trigger}</p>
-                      </div>
-                      <div>
-                        <span className="font-semibold text-zinc-800 dark:text-zinc-300 block">Frequency:</span>
-                        <p className="mt-0.5 leading-relaxed">{playbook.cadence}</p>
-                      </div>
-                    </div>
+                    <p><strong className="text-zinc-800 dark:text-zinc-300">Run Mode:</strong> {playbook.trigger}</p>
+                    <p><strong className="text-zinc-800 dark:text-zinc-300">Frequency:</strong> {playbook.cadence}</p>
                   </div>
 
-                  {/* Workflow Steps */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-mono font-semibold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
-                      <Terminal size={13} className="text-indigo-500" /> Automated Workflow
+                  {/* 2. Automated Workflow */}
+                  <div className="space-y-1">
+                    <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
+                      Automated Workflow Steps
                     </h4>
-                    <ul className="space-y-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+                    <ul className="space-y-1 list-disc list-inside">
                       {playbook.workflow.map((step, sIdx) => (
-                        <li key={sIdx} className="flex items-start gap-2 leading-relaxed">
-                          <span className="text-indigo-500 font-mono text-[10px] mt-0.5 shrink-0">0{sIdx + 1}.</span>
-                          <span>{step}</span>
-                        </li>
+                        <li key={sIdx} className="leading-relaxed">{step}</li>
                       ))}
                     </ul>
                   </div>
 
-                  {/* Expected Deliverables */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-mono font-semibold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
-                      <FileText size={13} className="text-emerald-500" /> Expected Deliverables
+                  {/* 3. Expected Deliverables */}
+                  <div className="space-y-1">
+                    <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
+                      Key Outputs &amp; Deliverables
                     </h4>
-                    <ul className="space-y-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+                    <ul className="space-y-1 list-disc list-inside text-emerald-600 dark:text-emerald-400 font-mono text-[11px]">
                       {playbook.deliverables.map((item, dIdx) => (
-                        <li key={dIdx} className="flex items-center gap-2">
-                          <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-                          <span>{item}</span>
+                        <li key={dIdx}>
+                          <span className="text-zinc-700 dark:text-zinc-300 font-sans">{item}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
-                </div>
-
-                <div className="pt-2 flex justify-end">
-                  <Link
-                    href={`/dashboard/modules/${playbook.id}`}
-                    className="inline-flex items-center gap-1.5 text-xs font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
-                  >
-                    View All Client Runs for {manifest.name} <ArrowRight size={12} />
-                  </Link>
                 </div>
               </div>
             );
@@ -508,28 +369,34 @@ export default async function ShowtimePackagePage() {
         </div>
       </div>
 
-      {/* Booking Platform Setup Section */}
-      <div className="space-y-3 pt-2">
-        <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-          Booking platform setup
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Flat Booking Platform Setup Section */}
+      <div className="space-y-4 pt-4 border-t border-zinc-200 dark:border-zinc-800/80">
+        <div>
+          <h2 className="text-base font-bold text-zinc-900 dark:text-white tracking-tight">
+            Booking Platform Sync Instructions
+          </h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            How webhooks and polling sync operate across connected calendar platforms.
+          </p>
+        </div>
+
+        <div className="divide-y divide-zinc-200 dark:divide-zinc-800/80">
           {SETUP_GUIDES.map((guide) => (
-            <div
-              key={guide.title}
-              className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/20 space-y-2"
-            >
+            <div key={guide.title} className="py-4 space-y-1">
               <div className="flex items-center gap-2">
                 <Webhook size={15} className="text-teal-600 dark:text-teal-400 shrink-0" />
-                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{guide.title}</p>
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{guide.title}</h3>
               </div>
-              <p className="text-xs text-zinc-600 dark:text-zinc-500 leading-relaxed">{guide.body}</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-4xl pl-6">
+                {guide.body}
+              </p>
             </div>
           ))}
         </div>
+
         <Link
           href="/dashboard/settings/booking-sync"
-          className="inline-flex items-center gap-1.5 text-xs font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors pt-1"
+          className="inline-flex items-center gap-1.5 text-xs font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors pt-2"
         >
           <KeyRound size={12} />
           Go to Settings → Booking Sync
