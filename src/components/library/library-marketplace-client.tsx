@@ -4,22 +4,19 @@ import { useState, useMemo } from "react";
 import type { PackageOverview } from "@/lib/package-overview";
 import { PackageHeroCard } from "@/components/library/package-hero-card";
 import { PackageTeaserCard } from "@/components/library/package-teaser-card";
-import {
-  Search,
-  Settings,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+import { Search, Settings, ChevronDown, ChevronRight } from "lucide-react";
 
 export function LibraryMarketplaceClient({ overview }: { overview: PackageOverview }) {
   const [activeTab, setActiveTab] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCollection, setSelectedCollection] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedExecutionMode, setSelectedExecutionMode] = useState<string>("all");
 
   const [openSections, setOpenSections] = useState({
     collections: true,
     categories: true,
+    executionMode: true,
   });
 
   const toggleSection = (section: keyof typeof openSections) => {
@@ -33,6 +30,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
         name: "Showtime",
         category: "Revenue Execution",
         collection: "Top Installed Apps",
+        executionMode: "Hybrid Webhook & Cron",
         status: "installed" as const,
       },
       {
@@ -40,6 +38,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
         name: "Counter Claim",
         category: "Disputes & Compliance",
         collection: "Newly Added Apps",
+        executionMode: "Dispute Event Listener",
         status: "coming_soon" as const,
       },
     ],
@@ -53,6 +52,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
 
       if (selectedCollection !== "all" && pkg.collection !== selectedCollection) return false;
       if (selectedCategory !== "all" && pkg.category !== selectedCategory) return false;
+      if (selectedExecutionMode !== "all" && pkg.executionMode !== selectedExecutionMode) return false;
 
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
@@ -61,7 +61,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
 
       return true;
     });
-  }, [packages, activeTab, selectedCollection, selectedCategory, searchQuery]);
+  }, [packages, activeTab, selectedCollection, selectedCategory, selectedExecutionMode, searchQuery]);
 
   return (
     <div className="w-full space-y-6 font-sans">
@@ -123,8 +123,9 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
 
       {/* Layout Split */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pt-2">
-        {/* Sidebar Filters */}
+        {/* Sidebar Filters - 3 Sections */}
         <div className="lg:col-span-3 space-y-6 text-xs text-zinc-600 dark:text-zinc-400">
+          {/* Section 1: Collections */}
           <div className="space-y-3 pb-4 border-b border-zinc-200 dark:border-zinc-800">
             <button
               type="button"
@@ -138,7 +139,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
             {openSections.collections && (
               <div className="space-y-2 pt-1">
                 {[
-                  { id: "all", label: "All Packages" },
+                  { id: "all", label: "All Collections" },
                   { id: "Top Installed Apps", label: "Top Installed Apps" },
                   { id: "Newly Added Apps", label: "Newly Added Apps" },
                 ].map((col) => (
@@ -160,6 +161,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
             )}
           </div>
 
+          {/* Section 2: Categories */}
           <div className="space-y-3 pb-4 border-b border-zinc-200 dark:border-zinc-800">
             <button
               type="button"
@@ -189,6 +191,42 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
                       className="accent-teal-500 focus:ring-0"
                     />
                     <span>{cat.label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Section 3: Execution Mode */}
+          <div className="space-y-3 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => toggleSection("executionMode")}
+              className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer"
+            >
+              <span>Execution Mode</span>
+              {openSections.executionMode ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+
+            {openSections.executionMode && (
+              <div className="space-y-2 pt-1">
+                {[
+                  { id: "all", label: "All Execution Modes" },
+                  { id: "Hybrid Webhook & Cron", label: "Hybrid Webhook & Cron" },
+                  { id: "Dispute Event Listener", label: "Dispute Event Listener" },
+                ].map((mode) => (
+                  <label
+                    key={mode.id}
+                    className="flex items-center gap-2.5 cursor-pointer hover:text-zinc-900 dark:hover:text-white transition-colors"
+                  >
+                    <input
+                      type="radio"
+                      name="executionMode"
+                      checked={selectedExecutionMode === mode.id}
+                      onChange={() => setSelectedExecutionMode(mode.id)}
+                      className="accent-teal-500 focus:ring-0"
+                    />
+                    <span>{mode.label}</span>
                   </label>
                 ))}
               </div>
