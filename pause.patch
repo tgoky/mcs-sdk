@@ -1,0 +1,248 @@
+diff --git a/src/app/dashboard/engagements/[id]/page.tsx b/src/app/dashboard/engagements/[id]/page.tsx
+index 93542f5..f21715a 100644
+--- a/src/app/dashboard/engagements/[id]/page.tsx
++++ b/src/app/dashboard/engagements/[id]/page.tsx
+@@ -255,6 +255,7 @@ export default async function EngagementDetailPage({
+   engagementId={engagement.engagementId}
+   initialStates={skillStates}
+   runsBySkill={runsBySkill}
++  isPaused={Boolean(engagement.pausedAt)}
+ />
+ 
+         {engagement.pausedAt && (
+diff --git a/src/app/dashboard/engagements/[id]/skills-panel.tsx b/src/app/dashboard/engagements/[id]/skills-panel.tsx
+index bc5a9df..c1c019d 100644
+--- a/src/app/dashboard/engagements/[id]/skills-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/skills-panel.tsx
+@@ -3,7 +3,7 @@
+ import { useState, useTransition } from "react";
+ import { useRouter } from "next/navigation";
+ import Link from "next/link";
+-import { ArrowRight, Settings2, ExternalLink } from "lucide-react";
++import { ArrowRight, Settings2, ExternalLink, PauseCircle } from "lucide-react";
+ import {
+   SKILLS,
+   SKILL_INFO,
+@@ -31,8 +31,22 @@ export interface ModuleRunDTO {
+   stepCount: number;
+ }
+ 
+-function deriveModuleStatus(runs: ModuleRunDTO[], isEnabled: boolean): ModuleStatus | "disabled" {
++function deriveModuleStatus(
++  runs: ModuleRunDTO[],
++  isEnabled: boolean,
++  isPaused: boolean
++): ModuleStatus | "disabled" {
+   if (!isEnabled) return "disabled";
++  // Engagement-level pause deliberately does NOT touch the skill's own
++  // enabled/disabled setting (see EngagementPauseControl) — it just means
++  // nothing will actually execute right now, so "live"/"not started"/etc.
++  // would all be misleading. Failed stays visible: a real past failure is
++  // still worth surfacing even while paused.
++  if (isPaused) {
++    const s = runs?.[0]?.status.toLowerCase();
++    if (s === "failed") return "failed";
++    return "paused";
++  }
+   if (!runs || runs.length === 0) return "not_run";
+   const s = runs[0].status.toLowerCase();
+   if (s === "success") return "live";
+@@ -59,10 +73,13 @@ export function SkillsPanel({
+   engagementId,
+   initialStates,
+   runsBySkill,
++  isPaused = false,
+ }: {
+   engagementId: string;
+   initialStates: Record<SkillName, boolean>;
+   runsBySkill: Record<SkillName, ModuleRunDTO[]>;
++  /** Whether the parent engagement is currently paused (engagement.pausedAt !== null). Purely visual here — it never mutates a skill's stored on/off state. */
++  isPaused?: boolean;
+ }) {
+   const router = useRouter();
+   const [states, setStates] = useState<Record<SkillName, boolean>>(initialStates);
+@@ -119,9 +136,17 @@ export function SkillsPanel({
+             Manage status, configuration, and manual executions for this client.
+           </p>
+         </div>
+-        <span className="shrink-0 text-xs font-mono font-medium text-zinc-500 dark:text-zinc-400">
+-          <span className="font-bold text-emerald-600 dark:text-emerald-400">{activeCount}</span>/{TOGGLEABLE_SKILLS.length} active
+-        </span>
++        <div className="flex items-center gap-2 shrink-0">
++          {isPaused && (
++            <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
++              <PauseCircle className="w-3 h-3" />
++              Client paused
++            </span>
++          )}
++          <span className="text-xs font-mono font-medium text-zinc-500 dark:text-zinc-400">
++            <span className="font-bold text-emerald-600 dark:text-emerald-400">{activeCount}</span>/{TOGGLEABLE_SKILLS.length} active
++          </span>
++        </div>
+       </div>
+ 
+       {/* Merged Module Cards Grid */}
+@@ -131,14 +156,20 @@ export function SkillsPanel({
+           const isEnabled = states[skill] ?? true;
+           const isBusy = updatingSkill === skill;
+           const skillRuns = runsBySkill[skill] ?? [];
+-          const status = deriveModuleStatus(skillRuns, isEnabled);
++          const status = deriveModuleStatus(skillRuns, isEnabled, isPaused);
+           const latestRun = skillRuns[0] ?? null;
++          // Skill is switched on but won't run right now because the whole
++          // client is paused — the case this component previously gave no
++          // visual signal for.
++          const isPausedActive = isEnabled && isPaused;
+ 
+           return (
+             <div
+               key={skill}
+               className={`rounded-2xl border p-4 flex flex-col justify-between min-h-[220px] transition-all shadow-2xs ${
+-                isEnabled
++                isPausedActive
++                  ? "border-amber-300/70 dark:border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/[0.04] backdrop-blur-xs"
++                  : isEnabled
+                   ? "border-zinc-200 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/60 backdrop-blur-xs"
+                   : "border-zinc-200/60 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-950/40 opacity-75"
+               }`}
+@@ -148,7 +179,7 @@ export function SkillsPanel({
+                 {/* Badge + Name + Toggle */}
+                 <div className="flex items-start justify-between gap-3">
+                   <div className="flex items-center gap-3 min-w-0 flex-1">
+-                    <SquishySkillBadge skill={skill} size={36} enabled={isEnabled} />
++                    <SquishySkillBadge skill={skill} size={36} enabled={isEnabled} paused={isPausedActive} />
+                     <div className="min-w-0 flex-1">
+                       <div className="flex items-center gap-1.5 flex-wrap">
+                         <span
+@@ -224,14 +255,24 @@ export function SkillsPanel({
+                           {latestRun.errorMessage}
+                         </p>
+                       )}
++
++                      {isPausedActive && (
++                        <p className="text-[11px] text-amber-600 dark:text-amber-400 italic font-mono pt-0.5">
++                          Won&apos;t run again until this client is resumed.
++                        </p>
++                      )}
+                     </div>
++                  ) : isPausedActive ? (
++                    <p className="text-[11px] text-amber-600 dark:text-amber-400 italic font-mono pt-1">
++                      No executions yet — paused while this client is on hold.
++                    </p>
+                   ) : isEnabled ? (
+                     <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic font-mono pt-1">
+                       No executions recorded yet.
+                     </p>
+                   ) : (
+                     <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic font-mono pt-1">
+-                      Module is currently paused for this client.
++                      Module is turned off for this client.
+                     </p>
+                   )}
+                 </div>
+diff --git a/src/components/squishy-skill-badge.tsx b/src/components/squishy-skill-badge.tsx
+index eaa2967..18137ee 100644
+--- a/src/components/squishy-skill-badge.tsx
++++ b/src/components/squishy-skill-badge.tsx
+@@ -1,6 +1,6 @@
+ "use client";
+ 
+-import { MapPin, Layers, FileText, RotateCcw, Filter } from "lucide-react";
++import { MapPin, Layers, FileText, RotateCcw, Filter, Pause } from "lucide-react";
+ 
+ export const SKILL_SQUISHY_CONFIG: Record<
+   string,
+@@ -17,11 +17,20 @@ export function SquishySkillBadge({
+   skill,
+   size = 36,
+   enabled = true,
++  paused = false,
+   count,
+ }: {
+   skill: string;
+   size?: number;
+   enabled?: boolean;
++  /**
++   * True when this skill is switched ON but the parent engagement is
++   * currently paused, so it won't actually run. Deliberately separate from
++   * `enabled` — pausing a client must never flip a skill's own stored
++   * on/off state, only how it's *displayed*. Ignored when enabled=false,
++   * since an off skill has nothing extra to communicate.
++   */
++  paused?: boolean;
+   /** Optional small overlay in the corner — e.g. "3 Pin-Down runs" at a glance on the Executions page. Omitted (no badge rendered) when undefined or 0. */
+   count?: number;
+ }) {
+@@ -30,12 +39,15 @@ export function SquishySkillBadge({
+ 
+   const Icon = config.icon;
+   const iconSize = Math.round(size * 0.54);
++  const showPaused = enabled && paused;
+ 
+   return (
+     <div className="relative shrink-0" style={{ width: size, height: size }}>
+       <div
+         className={`flex items-center justify-center rounded-full transition-all duration-200 select-none w-full h-full ${
+-          enabled
++          showPaused
++            ? "bg-amber-100 dark:bg-amber-500/15 shadow-xs ring-1 ring-amber-400/60 dark:ring-amber-500/40"
++            : enabled
+             ? `${config.bgClass} shadow-xs`
+             : "bg-zinc-200 dark:bg-zinc-800 opacity-40 grayscale"
+         }`}
+@@ -43,7 +55,9 @@ export function SquishySkillBadge({
+         <Icon
+           size={iconSize}
+           className={`${
+-            enabled
++            showPaused
++              ? "text-amber-600 dark:text-amber-400 fill-transparent"
++              : enabled
+               ? "text-zinc-950 fill-white"
+               : "text-zinc-500 dark:text-zinc-400 fill-transparent"
+           } stroke-[2.3px]`}
+@@ -51,6 +65,14 @@ export function SquishySkillBadge({
+           strokeLinejoin="round"
+         />
+       </div>
++      {showPaused && (
++        <span
++          className="absolute -top-1 -right-1 flex items-center justify-center w-3.5 h-3.5 rounded-full bg-amber-500 ring-2 ring-white dark:ring-zinc-950"
++          aria-hidden="true"
++        >
++          <Pause size={7} className="text-white" fill="white" strokeWidth={0} />
++        </span>
++      )}
+       {Boolean(count) && (
+         <span
+           className="absolute -bottom-1 -right-1 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[10px] font-mono font-bold leading-none ring-2 ring-white dark:ring-zinc-950"
+diff --git a/src/lib/copy.ts b/src/lib/copy.ts
+index 3d92d43..068a737 100644
+--- a/src/lib/copy.ts
++++ b/src/lib/copy.ts
+@@ -62,13 +62,16 @@ export function skillName(raw: string | null | undefined): string {
+ // Overall module status (per-client module cards)
+ // ---------------------------------------------------------------------------
+ 
+-export type ModuleStatus = "live" | "running" | "failed" | "not_run";
++export type ModuleStatus = "live" | "running" | "failed" | "not_run" | "paused";
+ 
+ export const MODULE_STATUS_LABELS: Record<ModuleStatus, string> = {
+   live: "Running fine",
+   running: "In progress",
+   failed: "Needs attention",
+   not_run: "Not started yet",
++  // Distinct from "disabled": the skill itself is still turned ON, it's the
++  // whole client/engagement that's on hold, so nothing will actually fire.
++  paused: "Automation paused",
+ };
+ 
+ export const MODULE_STATUS_COLORS: Record<ModuleStatus, string> = {
+@@ -76,6 +79,7 @@ export const MODULE_STATUS_COLORS: Record<ModuleStatus, string> = {
+   running: "text-sky-600 dark:text-sky-400",
+   failed: "text-status-error",
+   not_run: "text-zinc-600 dark:text-zinc-500",
++  paused: "text-amber-600 dark:text-amber-400 font-medium",
+ };
+ 
+ // ---------------------------------------------------------------------------

@@ -255,6 +255,7 @@ export default async function EngagementDetailPage({
   engagementId={engagement.engagementId}
   initialStates={skillStates}
   runsBySkill={runsBySkill}
+  isPaused={Boolean(engagement.pausedAt)}
 />
 
         {engagement.pausedAt && (

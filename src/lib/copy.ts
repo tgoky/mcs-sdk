@@ -62,13 +62,16 @@ export function skillName(raw: string | null | undefined): string {
 // Overall module status (per-client module cards)
 // ---------------------------------------------------------------------------
 
-export type ModuleStatus = "live" | "running" | "failed" | "not_run";
+export type ModuleStatus = "live" | "running" | "failed" | "not_run" | "paused";
 
 export const MODULE_STATUS_LABELS: Record<ModuleStatus, string> = {
   live: "Running fine",
   running: "In progress",
   failed: "Needs attention",
   not_run: "Not started yet",
+  // Distinct from "disabled": the skill itself is still turned ON, it's the
+  // whole client/engagement that's on hold, so nothing will actually fire.
+  paused: "Automation paused",
 };
 
 export const MODULE_STATUS_COLORS: Record<ModuleStatus, string> = {
@@ -76,6 +79,7 @@ export const MODULE_STATUS_COLORS: Record<ModuleStatus, string> = {
   running: "text-sky-600 dark:text-sky-400",
   failed: "text-status-error",
   not_run: "text-zinc-600 dark:text-zinc-500",
+  paused: "text-amber-600 dark:text-amber-400 font-medium",
 };
 
 // ---------------------------------------------------------------------------
