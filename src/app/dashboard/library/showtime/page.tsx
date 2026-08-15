@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   ShieldCheck,
   Star,
-  ImageIcon,
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
@@ -38,6 +37,7 @@ const SETUP_GUIDES = [
 const DETAILED_SKILL_PLAYBOOKS: Array<{
   id: SkillId;
   badge: string;
+  image: string;
   trigger: string;
   cadence: string;
   overview: string;
@@ -47,6 +47,7 @@ const DETAILED_SKILL_PLAYBOOKS: Array<{
   {
     id: "pin-down",
     badge: "Setup Bridge (Onboarding)",
+    image: "/images/sts.jpeg",
     trigger: "Manual launch or wizard dispatch upon adding a new client.",
     cadence: "One-time execution per client onboarding pass.",
     overview:
@@ -67,6 +68,7 @@ const DETAILED_SKILL_PLAYBOOKS: Array<{
   {
     id: "pile-on",
     badge: "Real-Time Event Stream",
+    image: "/images/prec.jpeg",
     trigger: "Inbound booking webhook or 5-minute background polling cycle.",
     cadence: "Instant event-driven execution per booked prospect.",
     overview:
@@ -87,6 +89,7 @@ const DETAILED_SKILL_PLAYBOOKS: Array<{
   {
     id: "pre-call-read",
     badge: "Scheduled & Dynamic Batch",
+    image: "/images/cabr.jpeg",
     trigger: "Nightly cron sweep (00:00 server time) or lead-time window trigger.",
     cadence: "Nightly batch or dynamic 1-hour pre-call alert.",
     overview:
@@ -106,6 +109,7 @@ const DETAILED_SKILL_PLAYBOOKS: Array<{
   {
     id: "win-back",
     badge: "Recovery Cadence Engine",
+    image: "/images/brec.jpeg",
     trigger: "Cancellation webhook, rep Slack button click, or assumed-no-show sweep.",
     cadence: "Durable 30-day automated re-engagement cycle.",
     overview:
@@ -125,6 +129,7 @@ const DETAILED_SKILL_PLAYBOOKS: Array<{
   {
     id: "leak-map",
     badge: "Pipeline Diagnostics",
+    image: "/images/fudit.jpeg",
     trigger: "Scheduled weekly audit cron or manual on-demand trigger.",
     cadence: "Weekly recurring audit or manual run.",
     overview:
@@ -233,26 +238,31 @@ export default async function ShowtimePackagePage() {
           </div>
         </div>
 
-        {/* Media Gallery Dropzones */}
+        {/* Media Gallery Screenshots */}
         <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800/80 space-y-4">
           <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-            Screenshots &amp; Media
+            Screenshots &amp; Media ({DETAILED_SKILL_PLAYBOOKS.length})
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="group relative aspect-video w-full rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors overflow-hidden">
-              <ImageIcon size={24} />
-              <span className="text-xs font-mono">Drop Image 1</span>
-            </div>
-
-            <div className="group relative aspect-video w-full rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors overflow-hidden">
-              <ImageIcon size={24} />
-              <span className="text-xs font-mono">Drop Image 2</span>
-            </div>
-
-            <div className="group relative aspect-video w-full rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors overflow-hidden">
-              <ImageIcon size={24} />
-              <span className="text-xs font-mono">Drop Image 3</span>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {DETAILED_SKILL_PLAYBOOKS.map((pb) => {
+              const manifest = SKILL_MANIFEST[pb.id];
+              return (
+                <div key={pb.id} className="space-y-2 group">
+                  <div className="relative aspect-video w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 overflow-hidden shadow-sm group-hover:border-zinc-400 dark:group-hover:border-zinc-700 transition-all">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={pb.image}
+                      alt={manifest.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] px-0.5">
+                    <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{manifest.name}</span>
+                    <span className="font-mono text-zinc-400 text-[10px] uppercase">({pb.id})</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -265,7 +275,7 @@ export default async function ShowtimePackagePage() {
         <SkillSequence skills={overview.skills} />
       </div>
 
-      {/* Flat, Non-Card Skill Breakdown Section with SquishySkillBadge */}
+      {/* Flat, Non-Card Skill Breakdown Section with Images */}
       <div className="space-y-6 pt-2">
         <div className="border-b border-zinc-200 dark:border-zinc-800/80 pb-4">
           <h2 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
@@ -282,7 +292,7 @@ export default async function ShowtimePackagePage() {
             const manifest = SKILL_MANIFEST[playbook.id];
 
             return (
-              <div key={playbook.id} className="py-8 first:pt-0 space-y-5">
+              <div key={playbook.id} className="py-8 first:pt-0 space-y-6">
                 {/* Title + SquishySkillBadge + Stats Line */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -314,46 +324,58 @@ export default async function ShowtimePackagePage() {
                   )}
                 </div>
 
-                {/* Overview Description */}
-                <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-4xl">
-                  {playbook.overview}
-                </p>
-
-                {/* Underneath Stacked Specifications */}
-                <div className="space-y-4 text-xs text-zinc-600 dark:text-zinc-400 pt-1">
-                  {/* 1. Trigger & Cadence */}
-                  <div className="space-y-1">
-                    <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
-                      Trigger &amp; Frequency
-                    </h4>
-                    <p><strong className="text-zinc-800 dark:text-zinc-300">Run Mode:</strong> {playbook.trigger}</p>
-                    <p><strong className="text-zinc-800 dark:text-zinc-300">Frequency:</strong> {playbook.cadence}</p>
+                {/* Main Content Grid: Image Preview + Text Details */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  {/* Skill Screenshot */}
+                  <div className="lg:col-span-5 relative aspect-video w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 overflow-hidden shadow-sm">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={playbook.image}
+                      alt={manifest.name}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
 
-                  {/* 2. Automated Workflow */}
-                  <div className="space-y-1">
-                    <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
-                      Automated Workflow Steps
-                    </h4>
-                    <ul className="space-y-1 list-disc list-inside">
-                      {playbook.workflow.map((step, sIdx) => (
-                        <li key={sIdx} className="leading-relaxed">{step}</li>
-                      ))}
-                    </ul>
-                  </div>
+                  {/* Text Details & Specifications */}
+                  <div className="lg:col-span-7 space-y-4 text-xs text-zinc-600 dark:text-zinc-400">
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                      {playbook.overview}
+                    </p>
 
-                  {/* 3. Expected Deliverables */}
-                  <div className="space-y-1">
-                    <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
-                      Key Outputs &amp; Deliverables
-                    </h4>
-                    <ul className="space-y-1 list-disc list-inside text-emerald-600 dark:text-emerald-400 font-mono text-[11px]">
-                      {playbook.deliverables.map((item, dIdx) => (
-                        <li key={dIdx}>
-                          <span className="text-zinc-700 dark:text-zinc-300 font-sans">{item}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    {/* 1. Trigger & Cadence */}
+                    <div className="space-y-1 pt-1">
+                      <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
+                        Trigger &amp; Frequency
+                      </h4>
+                      <p><strong className="text-zinc-800 dark:text-zinc-300">Run Mode:</strong> {playbook.trigger}</p>
+                      <p><strong className="text-zinc-800 dark:text-zinc-300">Frequency:</strong> {playbook.cadence}</p>
+                    </div>
+
+                    {/* 2. Automated Workflow */}
+                    <div className="space-y-1">
+                      <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
+                        Automated Workflow Steps
+                      </h4>
+                      <ul className="space-y-1 list-disc list-inside">
+                        {playbook.workflow.map((step, sIdx) => (
+                          <li key={sIdx} className="leading-relaxed">{step}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* 3. Expected Deliverables */}
+                    <div className="space-y-1">
+                      <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
+                        Key Outputs &amp; Deliverables
+                      </h4>
+                      <ul className="space-y-1 list-disc list-inside text-emerald-600 dark:text-emerald-400 font-mono text-[11px]">
+                        {playbook.deliverables.map((item, dIdx) => (
+                          <li key={dIdx}>
+                            <span className="text-zinc-700 dark:text-zinc-300 font-sans">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
