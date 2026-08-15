@@ -18,11 +18,11 @@ const SETUP_GUIDES = [
   },
   {
     title: "GoHighLevel",
-    body: "GHL's v2 Private Integration API has no endpoint to create webhooks programmatically, so onboarding starts you on 5-minute auto-polling. Head to Settings → Booking Sync any time to switch to a direct webhook — it walks through adding a Custom Webhook action to a GHL workflow, including the exact header GHL needs.",
+    body: "GHL's v2 Private Integration API has no endpoint to create webhooks programmatically, so onboarding starts you on 5-minute auto-polling. Head to Settings → Booking Sync any time to switch to a direct webhook.",
   },
   {
     title: "OnceHub",
-    body: "Same story as GHL today: auto-polling by default, with step-by-step instructions in Settings → Booking Sync to add a webhook from OnceHub's own interface. OnceHub's Developer Center now describes a webhooks API that returns a signing_secret directly, similar to Calendly/Cal.com — worth checking their current docs if you want fully automatic setup, since that wasn't available when this fallback was originally built.",
+    body: "Auto-polling by default, with step-by-step instructions in Settings → Booking Sync to add a webhook from OnceHub's own interface.",
   },
 ];
 
@@ -32,11 +32,11 @@ export default async function ShowtimePackagePage() {
   const overview = await getPackageOverview(whopUserId);
 
   return (
-    <div className="w-full max-w-3xl space-y-8 px-6 py-6 font-sans">
+    <div className="w-full max-w-5xl space-y-8 px-6 py-6 font-sans">
       <BackLink href="/dashboard/library" label="Library" />
 
-      {/* Hero */}
-      <div className="space-y-5">
+      {/* Package Header Banner */}
+      <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-6 space-y-6">
         <div className="flex items-start gap-4">
           <div className="shrink-0 flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-500 dark:bg-teal-400 shadow-[0_0_0_1px_rgba(45,212,191,0.25),0_8px_24px_-8px_rgba(45,212,191,0.5)]">
             <LayoutGrid size={26} className="text-zinc-950 stroke-[2.3px]" />
@@ -49,13 +49,12 @@ export default async function ShowtimePackagePage() {
               </span>
             </div>
             <p className="text-sm text-zinc-400 mt-1 leading-relaxed max-w-xl">
-              Sales execution for your booked calls — client setup, follow-up sequences, call briefs,
-              win-back, and funnel health, all in one place.
+              Sales execution for your booked calls — client setup, follow-up sequences, call briefs, win-back, and funnel health, all in one place.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-8 pl-1">
+        <div className="flex items-center gap-8 pt-2 border-t border-zinc-800/60">
           <StatChip label="Active clients" value={`${overview.activeClients}/${overview.totalClients}`} />
           <StatChip label={`Runs (${overview.windowDays}d)`} value={String(overview.runsInWindow)} />
           <StatChip
@@ -66,7 +65,7 @@ export default async function ShowtimePackagePage() {
         </div>
       </div>
 
-      {/* Signature element: the real client journey through the 5 skills */}
+      {/* Client Journey Timeline */}
       <div className="space-y-3">
         <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
           How a client moves through it
@@ -74,37 +73,39 @@ export default async function ShowtimePackagePage() {
         <SkillSequence skills={overview.skills} />
       </div>
 
-      {/* Full skill listing */}
+      {/* Skills Sub-Grid (App Store Style) */}
       <div className="space-y-3">
         <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-          All 5 skills
+          Included Skills (5)
         </h2>
-        <div className="rounded-2xl border border-zinc-800/80 divide-y divide-zinc-800/60 overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {overview.skills.map((skill) => (
-            <SkillDetailRow key={skill.skillId} skill={skill} manifest={SKILL_MANIFEST[skill.skillId]} />
+            <div key={skill.skillId} className="rounded-2xl border border-zinc-800/80 bg-zinc-900/30 overflow-hidden hover:border-zinc-700 transition-all">
+              <SkillDetailRow skill={skill} manifest={SKILL_MANIFEST[skill.skillId]} />
+            </div>
           ))}
         </div>
       </div>
 
-      {/* Booking platform setup */}
+      {/* Booking Platform Setup Section */}
       <div className="space-y-3 pt-2">
         <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
           Booking platform setup
         </h2>
-        <div className="rounded-2xl border border-zinc-800/80 divide-y divide-zinc-800/60">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {SETUP_GUIDES.map((guide) => (
-            <div key={guide.title} className="px-4 sm:px-5 py-4 flex items-start gap-3">
-              <Webhook size={15} className="text-zinc-600 mt-0.5 shrink-0" />
-              <div>
+            <div key={guide.title} className="p-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/20 space-y-2">
+              <div className="flex items-center gap-2">
+                <Webhook size={15} className="text-teal-400 shrink-0" />
                 <p className="text-sm font-bold text-zinc-100">{guide.title}</p>
-                <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{guide.body}</p>
               </div>
+              <p className="text-xs text-zinc-500 leading-relaxed">{guide.body}</p>
             </div>
           ))}
         </div>
         <Link
           href="/dashboard/settings/booking-sync"
-          className="inline-flex items-center gap-1.5 text-xs font-mono text-zinc-500 hover:text-zinc-200 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-mono text-zinc-500 hover:text-zinc-200 transition-colors pt-1"
         >
           <KeyRound size={12} />
           Go to Settings → Booking Sync
