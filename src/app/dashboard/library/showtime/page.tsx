@@ -4,6 +4,7 @@ import { SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
 import { BackLink } from "@/components/back-link";
 import { SkillSequence } from "@/components/library/skill-sequence";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { MediaGallery } from "@/components/library/media-gallery";
 import {
   LayoutGrid,
   Webhook,
@@ -13,7 +14,6 @@ import {
   ShieldCheck,
   Star,
   ArrowRight,
-  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -239,38 +239,12 @@ export default async function ShowtimePackagePage() {
           </div>
         </div>
 
-        {/* Horizontal Interface & Workflow Previews (Scroll Rail) */}
+        {/* Media Gallery Section */}
         <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800/80 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-              Interface &amp; Workflow Previews ({DETAILED_SKILL_PLAYBOOKS.length})
-            </h2>
-            <span className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400">
-              Scroll right <ChevronRight size={12} />
-            </span>
-          </div>
-
-          <div className="flex gap-5 overflow-x-auto snap-x snap-mandatory pb-4 pt-1 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700">
-            {DETAILED_SKILL_PLAYBOOKS.map((pb) => {
-              const manifest = SKILL_MANIFEST[pb.id];
-              return (
-                <div key={pb.id} className="shrink-0 w-[300px] sm:w-[420px] snap-start space-y-2 group">
-                  <div className="relative aspect-video w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 overflow-hidden shadow-sm group-hover:border-zinc-400 dark:group-hover:border-zinc-700 transition-all">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={pb.image}
-                      alt={manifest.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] px-1">
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{manifest.name}</span>
-                    <span className="font-mono text-zinc-400 text-[10px] uppercase">({pb.badge})</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
+            Interface &amp; Workflow Previews ({DETAILED_SKILL_PLAYBOOKS.length})
+          </h2>
+          <MediaGallery items={DETAILED_SKILL_PLAYBOOKS} />
         </div>
       </div>
 
@@ -282,7 +256,7 @@ export default async function ShowtimePackagePage() {
         <SkillSequence skills={overview.skills} />
       </div>
 
-      {/* Flat, Non-Card Skill Breakdown Section (Pure Text) */}
+      {/* Flat Skill Execution Guidelines */}
       <div className="space-y-6 pt-2">
         <div className="border-b border-zinc-200 dark:border-zinc-800/80 pb-4">
           <h2 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
@@ -300,7 +274,6 @@ export default async function ShowtimePackagePage() {
 
             return (
               <div key={playbook.id} className="py-8 first:pt-0 space-y-5">
-                {/* Title + SquishySkillBadge + Stats Line */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <SquishySkillBadge skill={playbook.id} size={28} />
@@ -331,14 +304,11 @@ export default async function ShowtimePackagePage() {
                   )}
                 </div>
 
-                {/* Overview Description */}
                 <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-4xl">
                   {playbook.overview}
                 </p>
 
-                {/* Underneath Stacked Specifications */}
                 <div className="space-y-4 text-xs text-zinc-600 dark:text-zinc-400 pt-1">
-                  {/* 1. Trigger & Cadence */}
                   <div className="space-y-1">
                     <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
                       Trigger &amp; Frequency
@@ -347,7 +317,6 @@ export default async function ShowtimePackagePage() {
                     <p><strong className="text-zinc-800 dark:text-zinc-300">Frequency:</strong> {playbook.cadence}</p>
                   </div>
 
-                  {/* 2. Automated Workflow */}
                   <div className="space-y-1">
                     <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
                       Automated Workflow Steps
@@ -359,7 +328,6 @@ export default async function ShowtimePackagePage() {
                     </ul>
                   </div>
 
-                  {/* 3. Expected Deliverables */}
                   <div className="space-y-1">
                     <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
                       Key Outputs &amp; Deliverables
@@ -409,7 +377,7 @@ export default async function ShowtimePackagePage() {
           className="inline-flex items-center gap-1.5 text-xs font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors pt-2"
         >
           <KeyRound size={12} />
-          Go to  Booking Sync
+          Go to Booking Sync
         </Link>
       </div>
     </div>
