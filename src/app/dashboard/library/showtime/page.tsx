@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   ShieldCheck,
   Star,
-  ImageIcon,
   Zap,
   Sparkles,
   BarChart3,
@@ -20,12 +19,12 @@ import {
   SlidersHorizontal,
   ArrowRight,
   Clock,
-  Send,
   FileText,
-  AlertCircle,
-  Database,
-  Layers,
   Terminal,
+  Slack,
+  Check,
+  TrendingUp,
+  UserCheck,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -157,6 +156,117 @@ const DETAILED_SKILL_PLAYBOOKS = [
   },
 ];
 
+/* --- Visual Showcase Components --- */
+
+function VisualCardSetup() {
+  return (
+    <div className="aspect-video w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-950 p-4 font-sans text-xs flex flex-col justify-between select-none overflow-hidden shadow-inner">
+      <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal size={14} className="text-amber-400" />
+          <span className="font-bold text-white text-[11px]">Client Setup (pin-down)</span>
+        </div>
+        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
+          Active
+        </span>
+      </div>
+
+      <div className="space-y-2 py-1">
+        <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 p-2 rounded-lg text-[11px]">
+          <span className="text-zinc-400 flex items-center gap-1.5">
+            <Webhook size={12} className="text-teal-400" /> Push Webhook
+          </span>
+          <span className="text-white font-mono text-[10px]">Calendly Connected</span>
+        </div>
+
+        <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 p-2 rounded-lg text-[11px]">
+          <span className="text-zinc-400 flex items-center gap-1.5">
+            <Check size={12} className="text-amber-400" /> Brand Voice
+          </span>
+          <span className="text-amber-300 font-mono text-[10px]">Profile Extracted</span>
+        </div>
+      </div>
+
+      <div className="bg-zinc-900/80 border border-zinc-800 p-2 rounded-lg flex items-center justify-between text-[10px] font-mono text-zinc-400">
+        <span>Confirmation Page:</span>
+        <span className="text-teal-400 truncate max-w-[140px]">/confirm/live-pass</span>
+      </div>
+    </div>
+  );
+}
+
+function VisualCardExecution() {
+  return (
+    <div className="aspect-video w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-950 p-4 font-sans text-xs flex flex-col justify-between select-none overflow-hidden shadow-inner">
+      <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+        <div className="flex items-center gap-2">
+          <Slack size={14} className="text-indigo-400" />
+          <span className="font-bold text-white text-[11px]">Briefs &amp; Intro (pile-on / pre-call)</span>
+        </div>
+        <span className="text-[10px] font-mono text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded">
+          Real-Time
+        </span>
+      </div>
+
+      <div className="bg-zinc-900 border border-zinc-800 p-2.5 rounded-lg space-y-1.5">
+        <div className="flex items-center justify-between text-[10px] font-mono">
+          <span className="text-white font-bold flex items-center gap-1">
+            <UserCheck size={11} className="text-indigo-400" /> Marcus Vance
+          </span>
+          <span className="text-zinc-500">Apex Media</span>
+        </div>
+        <p className="text-[10.5px] text-zinc-300 line-clamp-2 leading-relaxed">
+          &quot;Verified LinkedIn match. Pain point: high customer acquisition costs. Ready to switch platforms.&quot;
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between text-[10px] font-mono bg-zinc-900/60 p-2 rounded border border-zinc-800/60">
+        <span className="text-zinc-400">Claude Personalization:</span>
+        <span className="text-emerald-400 font-semibold">Delivered in 2.1s</span>
+      </div>
+    </div>
+  );
+}
+
+function VisualCardRecovery() {
+  return (
+    <div className="aspect-video w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-950 p-4 font-sans text-xs flex flex-col justify-between select-none overflow-hidden shadow-inner">
+      <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={14} className="text-emerald-400" />
+          <span className="font-bold text-white text-[11px]">Funnel &amp; Win-Back (leak-map)</span>
+        </div>
+        <span className="text-[10px] font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded">
+          Recovery Active
+        </span>
+      </div>
+
+      <div className="space-y-2 py-1">
+        <div className="space-y-1">
+          <div className="flex justify-between text-[10px] font-mono text-zinc-400">
+            <span>Show-Up Conversion</span>
+            <span className="text-emerald-400 font-bold">84%</span>
+          </div>
+          <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden flex">
+            <div className="bg-emerald-500 h-full w-[84%]" />
+            <div className="bg-rose-500 h-full w-[16%]" />
+          </div>
+        </div>
+
+        <div className="bg-zinc-900 border border-zinc-800 p-2 rounded-lg flex items-center justify-between text-[10.5px] font-mono">
+          <span className="text-zinc-300">16% Cold Prospects:</span>
+          <span className="text-rose-400 font-semibold">Auto-Enrolled (30d)</span>
+        </div>
+      </div>
+
+      <div className="bg-zinc-900/60 p-2 rounded border border-zinc-800/60 flex items-center justify-between text-[10px] font-mono text-zinc-400">
+        <span>Reschedule Link:</span>
+        <span className="text-teal-400">Single-Use Fresh URL</span>
+      </div>
+    </div>
+  );
+}
+
 export default async function ShowtimePackagePage() {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
@@ -248,26 +358,15 @@ export default async function ShowtimePackagePage() {
           </div>
         </div>
 
-        {/* Media Gallery Placeholder */}
+        {/* 3 Logical Feature Gallery Visuals */}
         <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800/80 space-y-4">
           <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-            Screenshots &amp; Media
+            Platform Capabilities &amp; System Previews
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="group relative aspect-video w-full rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors overflow-hidden">
-              <ImageIcon size={24} />
-              <span className="text-xs font-mono">Drop Image 1</span>
-            </div>
-
-            <div className="group relative aspect-video w-full rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors overflow-hidden">
-              <ImageIcon size={24} />
-              <span className="text-xs font-mono">Drop Image 2</span>
-            </div>
-
-            <div className="group relative aspect-video w-full rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors overflow-hidden">
-              <ImageIcon size={24} />
-              <span className="text-xs font-mono">Drop Image 3</span>
-            </div>
+            <VisualCardSetup />
+            <VisualCardExecution />
+            <VisualCardRecovery />
           </div>
         </div>
       </div>
@@ -433,7 +532,7 @@ export default async function ShowtimePackagePage() {
           className="inline-flex items-center gap-1.5 text-xs font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors pt-1"
         >
           <KeyRound size={12} />
-          Go to Booking Sync
+          Go to Settings → Booking Sync
         </Link>
       </div>
     </div>
