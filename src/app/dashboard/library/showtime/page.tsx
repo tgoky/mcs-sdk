@@ -5,7 +5,7 @@ import { BackLink } from "@/components/back-link";
 import { SkillSequence } from "@/components/library/skill-sequence";
 import { SkillDetailRow } from "@/components/library/skill-detail-row";
 import { StatChip } from "@/components/library/stat-chip";
-import { LayoutGrid, Webhook, KeyRound } from "lucide-react";
+import { LayoutGrid, Webhook, KeyRound, Download } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -44,9 +44,14 @@ export default async function ShowtimePackagePage() {
           <div className="min-w-0 pt-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-white">Showtime</h1>
-              <span className="inline-flex items-center gap-1 rounded-md border border-emerald-800/60 bg-emerald-950/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400">
-                Installed &amp; active
-              </span>
+              
+              {/* Filled Download Icon Badge */}
+              <div 
+                title="Installed & active" 
+                className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shadow-sm"
+              >
+                <Download size={13} className="fill-emerald-400 text-emerald-400 stroke-[2.2px]" />
+              </div>
             </div>
             <p className="text-sm text-zinc-400 mt-1 leading-relaxed max-w-xl">
               Sales execution for your booked calls — client setup, follow-up sequences, call briefs, win-back, and funnel health, all in one place.
