@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, ArrowRight } from "lucide-react";
+import { ChevronRight, ArrowRight, ChevronDown } from "lucide-react";
 import { isSkillId, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
 import { SkillsNavList } from "@/components/skills-nav-list";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
@@ -100,11 +100,10 @@ function SkillSiblingClients({ skillId, currentEngagementId }: { skillId: SkillI
     <>
       <div className="my-3 border-t border-sidebar-border" />
 
-      {/* Glassmorphism Title Header */}
-      <div className="mx-2 mb-2 px-3 py-1.5 rounded-xl bg-white/5 dark:bg-zinc-900/40 backdrop-blur-md border border-white/10 dark:border-zinc-800/60 shadow-xs">
-        <span className="text-xs font-semibold text-zinc-200 tracking-tight">
-          Clients · {manifest.name}
-        </span>
+      {/* Borderless Header with Down Arrow */}
+      <div className="px-2.5 pb-2 text-[11px] font-semibold text-zinc-500 font-mono tracking-wider flex items-center justify-between">
+        <span>Clients · {manifest.name}</span>
+        <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
       </div>
 
       {clients === null ? (
@@ -119,7 +118,6 @@ function SkillSiblingClients({ skillId, currentEngagementId }: { skillId: SkillI
             <Link
               key={client.engagementId}
               href={`/dashboard/engagements/${client.engagementId}/skills/${skillId}`}
-              title={`${client.buyer} — ${manifest.name}`}
               className="group flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 transition-all duration-150"
             >
               <div className="flex items-center gap-2.5 min-w-0">

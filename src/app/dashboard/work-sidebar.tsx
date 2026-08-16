@@ -44,7 +44,7 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
   // Group 1: Home & Inbox
   const group1Links: NavLinkItem[] = [
     { href: "/dashboard", label: "Home", icon: <Home className="w-4 h-4" /> },
-    { href: "/dashboard/inbox", label: "Inbox", icon: <Inbox className="w-4 h-4" />, count: Number(unreadInboxCount[0]?.count ?? 0) },
+    { href: "/dashboard/inbox", label: "Notification", icon: <Inbox className="w-4 h-4" />, count: Number(unreadInboxCount[0]?.count ?? 0) },
   ];
 
   // Group 2: Queue, Executions, Projects
@@ -84,7 +84,7 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
       <div className="space-y-1">
         <div className="flex items-center gap-1.5 px-2 py-1.5 text-[13px] font-bold text-zinc-300 tracking-tight">
           <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
-          <span>Skills</span>
+          <span>Installed Skills</span>
         </div>
 
         <SkillsNavList />
