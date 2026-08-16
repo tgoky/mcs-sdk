@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Users,
+  Activity,
   ChevronDown,
   LayoutList,
   Kanban,
@@ -115,10 +116,16 @@ export function ModuleClientRoster({
   summaries = [],
   manifest,
   skill,
+  activeViewTab = "roster",
+  onTabChange,
+  clientCount,
 }: {
   summaries: ModuleClientSummary[];
   manifest: SkillManifestEntry;
   skill: SkillId;
+  activeViewTab?: "roster" | "activity";
+  onTabChange?: (tab: "roster" | "activity") => void;
+  clientCount?: number;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"list" | "board">("list");
@@ -196,10 +203,46 @@ export function ModuleClientRoster({
 
   return (
     <div className="space-y-3 font-sans antialiased text-zinc-100">
-      {/* TOOLBAR */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-        {/* Transparent Filter Pills */}
+      {/* UNIFIED SINGLE TOOLBAR ROW */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        {/* Left Side: Scope Switcher + Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+          {/* Scope Segmented Pill Switcher */}
+          {onTabChange && (
+            <div className="inline-flex items-center rounded-full border border-zinc-800/90 bg-zinc-900/60 p-0.5 shrink-0 mr-1">
+              <button
+                type="button"
+                onClick={() => onTabChange("roster")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer",
+                  activeViewTab === "roster"
+                    ? "bg-zinc-800 text-white shadow-xs"
+                    : "text-zinc-400 hover:text-zinc-200"
+                )}
+              >
+                <Users size={13} />
+                <span>Clients</span>
+                <span className="text-[10px] font-mono text-zinc-400">
+                  {clientCount ?? summaries.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onTabChange("activity")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer",
+                  activeViewTab === "activity"
+                    ? "bg-zinc-800 text-white shadow-xs"
+                    : "text-zinc-400 hover:text-zinc-200"
+                )}
+              >
+                <Activity size={13} />
+                <span>All Activity</span>
+              </button>
+            </div>
+          )}
+
+          {/* Status Filters */}
           {(["all", "active", "needs_attention", "paused"] as FilterStatus[]).map((tab) => {
             const isActive = statusFilter === tab;
             const labels: Record<FilterStatus, string> = {
@@ -231,7 +274,7 @@ export function ModuleClientRoster({
           })}
         </div>
 
-        {/* Action Controls & View Switcher */}
+        {/* Right Side: Search + Actions + View Mode Switcher */}
         <div className="flex items-center gap-2.5">
           <div className="relative w-44 sm:w-56">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
@@ -249,12 +292,12 @@ export function ModuleClientRoster({
 
           <Link
             href="/dashboard/engagements/new"
-            className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-3 py-1 text-xs font-bold text-zinc-950 hover:bg-amber-300 transition-colors shadow-xs"
+            className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-3 py-1 text-xs font-bold text-zinc-950 hover:bg-amber-300 transition-colors shadow-xs shrink-0"
           >
             <Plus size={13} /> Onboard Client
           </Link>
 
-          <div className="flex items-center rounded-full border border-zinc-800/90 bg-transparent p-0.5">
+          <div className="flex items-center rounded-full border border-zinc-800/90 bg-transparent p-0.5 shrink-0">
             <button
               type="button"
               onClick={() => setMode("list")}
