@@ -9,7 +9,8 @@ import { QueuePanel } from "./queue-panel";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
 import Link from "next/link";
-import { Calendar } from "lucide-react";
+import { Calendar
+ } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

@@ -22,6 +22,7 @@ import {
   AlertCircle, 
   ArrowRight, 
   Server,
+  ChevronLeft
 } from "lucide-react";
 import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
 import { BookingSyncChip } from "@/components/booking-sync-chip";
@@ -168,15 +169,21 @@ export default async function EngagementDetailPage({
       <div className="relative z-10 space-y-6">
 
         {/* Header Section */}
-      {/* Header Section */}
+     {/* Header Section */}
         <div className="space-y-4 border-b border-zinc-200 dark:border-zinc-800/80 pb-5">
           <SetBreadcrumbLabel label={engagement.buyer} />
 
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="space-y-3">
-              {/* Back Button & Client Name in the same horizontal line */}
+              {/* Circular Back Button & Client Name in the same horizontal row */}
               <div className="flex items-center gap-3">
-                <BackLink href="/dashboard/engagements" label="All Clients" />
+                <Link
+                  href="/dashboard/engagements"
+                  className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
+                  aria-label="Back to All Clients"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Link>
                 <div>
                   <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">{engagement.buyer}</h1>
                   <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">{engagement.engagementId}</p>

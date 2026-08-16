@@ -53,21 +53,21 @@ export async function EngagementsSidebar({ whopUserId, workspaceId }: { whopUser
           <span>Create a client</span>
         </Link>
 
-        <Link
+        {/* <Link
           href="/dashboard/projects/new"
           className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100 transition-all"
         >
           <FolderPlus className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
           <span>Create project</span>
-        </Link>
+        </Link> */}
 
-        <Link
+        {/* <Link
           href="/dashboard/modules/win-back"
           className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100 transition-all"
         >
           <RotateCcw className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
           <span>Initialize Win-Back</span>
-        </Link>
+        </Link> */}
 
         <Link
           href="/dashboard/engagements"
