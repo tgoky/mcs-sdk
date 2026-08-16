@@ -271,14 +271,14 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
     }
 
     if (isPasteReady) {
-      return `Your automation configuration is complete and ready for deployment. Paste-ready HTML code is prepared for ${hostingPlatformLabel(stack?.hosting_platform)}, brand voice tokens are extracted, and ${briefs.length} ad creative briefs are generated.`;
+      return `Your setup is complete and ready to go live. Paste-ready code is prepared for ${hostingPlatformLabel(stack?.hosting_platform)}, your brand voice has been learned, and ${briefs.length} ad creative briefs are ready.`;
     }
 
     if (!stack?.booking_platform) {
-      return `Your automation setup is missing platform API configurations. Please configure your booking platform and hosting stack to enable automated webhook synchronization and live page deployment.`;
+      return `Your setup is missing a few connections. Add your booking and hosting platforms below to turn on automatic booking sync and get your page live.`;
     }
 
-    return `Your automation workflow is configured and awaiting review. ${bookingPlatformLabel(stack?.booking_platform)} is linked, brand voice profile is extracted, and ${briefs.length} ad briefs are prepared.`;
+    return `Your setup is configured and waiting on review. ${bookingPlatformLabel(stack?.booking_platform)} is connected, your brand voice has been learned, and ${briefs.length} ad briefs are ready.`;
   };
 
   return (
@@ -293,7 +293,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
             Good afternoon, {buyerName}
           </h1>
           <p className="text-xs text-zinc-400 leading-relaxed font-sans pt-1">
-            Pin-Down Onboarding Skill Matrix active. Inspect your live VSL deployment, ad briefs, and voice positioning below.
+            Your account setup is underway — check out your live page, ad briefs, and brand voice below.
           </p>
 
           {isLive && run.confirmationPageUrl && (
@@ -718,7 +718,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
 
                   {voice.vocabulary.signature.length > 0 && (
                     <div>
-                      <p className="text-xs font-bold text-zinc-300 mb-2">Signature Vocabulary Tokens</p>
+                      <p className="text-xs font-bold text-zinc-300 mb-2">Signature Words & Phrases</p>
                       <div className="flex flex-wrap gap-1.5">
                         {voice.vocabulary.signature.map((token) => (
                           <span

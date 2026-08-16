@@ -23,7 +23,7 @@ import { StatusPill } from "../_shared/status-pill";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { BriefedCall, PreCallReadDetail } from "../_shared/types";
 import type { RunStep } from "@/models/schema";
-import { bookingPlatformLabel } from "@/lib/copy";
+import { bookingPlatformLabel, briefDestinationLabel, phaseLabel } from "@/lib/copy";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 type CallStatus = "pending" | "brief_ready" | "delivered" | "failed";
@@ -150,12 +150,12 @@ export function PreCallReadView({
       {/* ----------------------------------------------------------------- */}
       {mode === "calendar" && (
         <div className="flex flex-col gap-3 font-sans">
-          <div className="flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-black/40 px-3 py-2.5 font-mono text-[11px]">
+          <div className="flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-black/40 px-3 py-2.5 text-[11px] font-sans">
             <div className="h-3.5 w-1 shrink-0 rounded-full bg-emerald-500/80" />
-            <span className="text-zinc-600">roster_fetch</span>
+            <span className="text-zinc-400 font-semibold">{phaseLabel("roster_fetch")}</span>
             <span className="text-zinc-700">·</span>
             <span className="text-zinc-400">
-              {rosterFetchStep?.detail ?? "No roster-fetch step logged for this run"}
+              {rosterFetchStep?.detail ?? "We haven't checked for calls on this run yet"}
             </span>
             {run.stack?.booking_platform && (
               <>
@@ -366,7 +366,7 @@ export function PreCallReadView({
 
                         <span className="inline-flex items-center gap-1 rounded-md bg-zinc-800 px-1.5 py-0.5 text-[9.5px] font-mono text-zinc-300">
                           <DestIcon size={10} className="text-zinc-400" />
-                          {call.destinationDelivered ?? run.stack?.brief_landing_destination ?? "Slack"}
+                          {briefDestinationLabel(call.destinationDelivered ?? run.stack?.brief_landing_destination ?? "slack")}
                         </span>
                       </div>
                     </button>
@@ -534,7 +534,7 @@ function BriefDrawer({
                   <span className="block text-[10px] font-mono uppercase text-zinc-500">Sent to</span>
                   <p className="flex items-center gap-1 font-semibold text-zinc-200 font-sans">
                     <DestIcon size={12} className="text-zinc-400" />
-                    {call.destinationDelivered ?? destinationLabel ?? "Slack"}
+                    {briefDestinationLabel(call.destinationDelivered ?? destinationLabel ?? "slack")}
                   </p>
                 </div>
               </div>
@@ -543,7 +543,7 @@ function BriefDrawer({
               <div className="space-y-2 font-sans">
                 <div className="flex items-center justify-between font-sans">
                   <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400">
-                    Synthesized Brief Content
+                    Call Brief
                   </span>
                   <button
                     type="button"

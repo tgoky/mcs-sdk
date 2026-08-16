@@ -6,17 +6,13 @@ import Link from "next/link";
 import {
   AlertCircle,
   Ban,
-  CalendarClock,
   CheckCircle2,
   ChevronDown,
   CircleAlert,
   Clock3,
-  Coins,
-  Cpu,
   ExternalLink,
   FileText,
   Loader2,
-  Terminal,
   XCircle,
   Wrench,
 } from "lucide-react";
@@ -28,6 +24,7 @@ import { PreCallReadView } from "./views/pre-call-read-view";
 import { WinBackView } from "./views/win-back-view";
 import { LeakMapView } from "./views/leak-map-view";
 import { skillName, phaseLabel, runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
+import { classifyRunError } from "@/lib/error-classification";
 import { BackLink } from "@/components/back-link";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import type { RunStep, RunSummary } from "@/models/schema";
@@ -55,11 +52,6 @@ function formatDuration(ms: number | null): string {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
-}
-
-function formatCost(cents: number | null): string {
-  if (cents === null || cents === 0) return "—";
-  return `$${(cents / 100).toFixed(4)}`;
 }
 
 function RunStatusBadge({ status }: { status: string }) {
@@ -170,7 +162,7 @@ export default function RunDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<RunDetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
-  const [showTechnicalDetails, setShowTechnicalDetails] = useState(true);
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   
   const techDetailsRef = useRef<HTMLDivElement>(null);
 
@@ -322,57 +314,75 @@ export default function RunDetailPage() {
         <div className="flex items-center gap-3 shrink-0 text-xs text-zinc-400 font-mono">
           <span>{formatDuration(run.durationMs)}</span>
           <span className="text-zinc-800">•</span>
-          <span>{formatCost(run.costInCents)}</span>
           <RunStatusBadge status={run.status} />
           {isRunning && <CancelRunButton runId={runId} onCancelled={() => fetchRun()} />}
         </div>
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 2. ASANA-STYLE COMPACT TOP DIAGNOSTIC BANNER (WHEN FAILED)       */}
+      {/* 2. FAILURE / CANCELLED / TIMED-OUT BANNERS                        */}
       {/* ----------------------------------------------------------------- */}
-      {isFailed && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-900/60 bg-rose-950/30 px-3.5 py-2 text-xs text-rose-200 shadow-sm">
-          <div className="flex items-center gap-2 min-w-0">
-            <CircleAlert size={15} className="text-rose-400 shrink-0" />
-            <div className="flex items-center gap-2 truncate">
-              <span className="font-bold text-rose-300">Run Failed:</span>
-              <span className="truncate text-rose-200/90 font-mono text-[11px]">
-                {run.errorMessage ?? "An unexpected error occurred during step execution."}
-              </span>
+      {isFailed && (() => {
+        const diagnosis = classifyRunError(run.errorMessage);
+        // Route "Fix Settings" to the actual broken section (booking,
+        // email, sms, ad_data, hosting) instead of always pointing at
+        // booking — the diagnosis already knows which platform failed;
+        // hardcoding one section here meant every non-booking failure
+        // sent people to fix the wrong thing. See
+        // src/lib/queue.ts's failedRunQueueItems for the same pattern
+        // this mirrors.
+        return (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-900/60 bg-rose-950/30 px-3.5 py-2.5 text-xs text-rose-200 shadow-sm">
+            <div className="flex items-start gap-2 min-w-0">
+              <CircleAlert size={15} className="text-rose-400 shrink-0 mt-0.5" />
+              <div className="min-w-0 font-sans">
+                {diagnosis ? (
+                  <>
+                    <span className="font-bold text-rose-300">{diagnosis.title}</span>
+                    <p className="text-rose-200/90 mt-0.5">{diagnosis.explanation}</p>
+                  </>
+                ) : (
+                  <span className="text-rose-200/90">
+                    This run hit an unexpected error. There&apos;s nothing you need to do — if it keeps happening, let your account contact know.
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
-            {run.engagementId && (
+            {run.engagementId && diagnosis && (
               <Link
-                href={`/dashboard/engagements/${run.engagementId}?fixSection=booking#stack-settings`}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition-colors"
+                href={`/dashboard/engagements/${run.engagementId}?fixSection=${diagnosis.section}#stack-settings`}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition-colors shrink-0"
               >
                 <Wrench size={12} />
                 <span>Fix Settings</span>
               </Link>
             )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {isCancelled && (
         <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-3.5 py-2 text-xs text-zinc-400">
           <Ban size={14} className="text-zinc-500" />
-          <span>Run was manually cancelled by user.</span>
+          <span>This run was cancelled.</span>
         </div>
       )}
 
       {isTimedOut && (
         <div className="flex items-center gap-2 rounded-xl border border-amber-900/50 bg-amber-950/20 px-3.5 py-2 text-xs text-amber-300">
           <Clock3 size={14} className="text-amber-400" />
-          <span>Run timed out after exceeding its maximum runtime ceiling.</span>
+          <span>This run took longer than expected and was stopped automatically.</span>
         </div>
       )}
 
       {/* ----------------------------------------------------------------- */}
-      {/* 3. STATUS UPDATES & TECHNICAL DETAILS (MOVED UP)                  */}
+      {/* 3. RUN ACTIVITY (renamed from "technical details" — same content, */}
+      {/* framed as an explanation for the person reading it, not a debug  */}
+      {/* console; collapsed by default once a run is done, since a buyer  */}
+      {/* landing here doesn't need the step-by-step log unless they go    */}
+      {/* looking for it. Still auto-expands + scrolls into view while a   */}
+      {/* run is actively in progress, so live progress is visible.        */}
       {/* ----------------------------------------------------------------- */}
       <div ref={techDetailsRef} className="pt-2">
         <button
@@ -381,16 +391,16 @@ export default function RunDetailPage() {
           className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 transition-colors hover:text-white cursor-pointer select-none"
         >
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTechnicalDetails ? "rotate-180" : ""}`} />
-          <span>{showTechnicalDetails ? "Hide" : "Show"} technical details</span>
+          <span>{showTechnicalDetails ? "Hide" : "Show"} what happened during this run</span>
           <span className="text-zinc-600">·</span>
-          <span className="text-zinc-500">{steps.length} step{steps.length === 1 ? "" : "s"}, phase timeline & raw metadata</span>
+          <span className="text-zinc-500">{steps.length} step{steps.length === 1 ? "" : "s"}</span>
         </button>
 
         {showTechnicalDetails && (
           <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
             <section className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
               <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-                <span className="text-xs font-semibold text-zinc-200">Execution Steps</span>
+                <span className="text-xs font-semibold text-zinc-200">Run activity</span>
                 <span className="text-[11px] font-mono text-zinc-500">{steps.length} steps</span>
               </div>
               <div className="max-h-[75vh] overflow-y-auto p-4">
@@ -404,16 +414,17 @@ export default function RunDetailPage() {
 
             <aside className="space-y-4">
               {run.summary && <SummarySection summary={run.summary} />}
-              <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs space-y-2 font-mono">
-                <span className="text-[10px] uppercase text-zinc-500 block font-sans font-bold">Metadata</span>
-                <div className="flex justify-between text-zinc-400">
-                  <span>Started:</span>
-                  <span className="text-zinc-200">{new Date(run.startedAt).toLocaleTimeString()}</span>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs space-y-2">
+                <span className="text-[10px] uppercase text-zinc-500 block font-sans font-bold">Details</span>
+                <div className="flex justify-between text-zinc-400 font-sans">
+                  <span>Started</span>
+                  <span className="text-zinc-200">{new Date(run.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                 </div>
-                <div className="flex justify-between text-zinc-400">
-                  <span>Run ID:</span>
-                  <span className="text-zinc-500 text-[10px] truncate max-w-[150px]">{run.id}</span>
+                <div className="flex justify-between text-zinc-400 font-sans gap-3">
+                  <span className="shrink-0">Reference ID</span>
+                  <span className="text-zinc-500 text-[10px] font-mono truncate max-w-[150px]" title={run.id}>{run.id}</span>
                 </div>
+                <p className="text-[10px] text-zinc-600 font-sans pt-1">Have this handy if you ever need to reference this run with your account contact.</p>
               </div>
             </aside>
           </div>
@@ -432,7 +443,7 @@ export default function RunDetailPage() {
           <SkillView detail={detail} steps={steps} onRefreshDetail={fetchDetail} />
         ) : (
           <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 px-6 py-10 text-center text-xs text-zinc-500">
-            Skill-specific detail is not available for this run.
+            We don&apos;t have anything more to show for this run yet.
           </div>
         )}
       </main>

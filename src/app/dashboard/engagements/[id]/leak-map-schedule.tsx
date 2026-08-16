@@ -18,10 +18,15 @@ import { StatusPill, toneFromSeverity } from "../../runs/[id]/_shared/status-pil
 import { getDaysInMonthGrid, dateKey } from "../../runs/[id]/_shared/calendar-grid";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { auditRunTypeLabel } from "@/lib/copy";
+import { LeakMapView } from "../../runs/[id]/views/leak-map-view";
+import type { LeakMapDetail } from "../../runs/[id]/_shared/types";
 import type { AuditHistoryItem, ScheduledAudit, ActiveAlertItem } from "@/app/api/engagements/[id]/leak-map-schedule/route";
 
-const SEVERITY_COLUMNS: Array<"high" | "medium" | "low" | "none"> = ["high", "medium", "low", "none"];
 const SEVERITY_LABEL: Record<string, string> = { high: "High severity", medium: "Medium severity", low: "Low severity", none: "No issues found" };
+// Board view removed at the user's request — grouping audits by severity
+// duplicated what the severity pill already shows in List/Calendar.
+const SCHEDULE_MODES: RunViewMode[] = ["calendar", "list"];
 
 export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
   const [mode, setMode] = useState<RunViewMode>("list");
@@ -148,7 +153,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
             className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
           />
         </div>
-        <ViewSwitcher value={mode} onChange={setMode} />
+        <ViewSwitcher value={mode} onChange={setMode} modes={SCHEDULE_MODES} />
       </div>
 
       {error && (
@@ -174,7 +179,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                   <span className="font-mono text-[10.5px] text-zinc-500 w-24 shrink-0">
                     {new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                   </span>
-                  <span className="truncate text-xs font-bold text-white font-sans capitalize">{item.runType} audit</span>
+                  <span className="truncate text-xs font-bold text-white font-sans">{auditRunTypeLabel(item.runType)}</span>
                   <span className="shrink-0 font-mono text-[10px] text-zinc-500">
                     {item.topIssueCount} issue{item.topIssueCount === 1 ? "" : "s"} · {item.alertsFiredCount} alert{item.alertsFiredCount === 1 ? "" : "s"}
                   </span>
@@ -185,37 +190,6 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
               </button>
             ))
           )}
-        </div>
-      )}
-
-      {mode === "board" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-sans">
-          {SEVERITY_COLUMNS.map((sev) => (
-            <div key={sev} className="rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden">
-              <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-sans">{SEVERITY_LABEL[sev]}</span>
-                <span className="rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400">{board[sev].length}</span>
-              </div>
-              <div className="flex flex-col gap-1.5 p-2 min-h-[80px] max-h-[420px] overflow-y-auto">
-                {board[sev].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelectedId(item.id)}
-                    className="flex flex-col gap-1 rounded-lg border border-zinc-800 bg-zinc-900/90 p-2 text-left text-[11px] hover:border-zinc-700 cursor-pointer transition-all font-sans capitalize"
-                  >
-                    <span className="truncate font-bold text-white font-sans">{item.runType} audit</span>
-                    <span className="font-mono text-[9.5px] text-zinc-500 normal-case">
-                      {new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                    </span>
-                  </button>
-                ))}
-                {board[sev].length === 0 && (
-                  <div className="flex items-center justify-center py-6 text-[10.5px] text-zinc-700 font-sans">Nothing here</div>
-                )}
-              </div>
-            </div>
-          ))}
         </div>
       )}
 
@@ -288,7 +262,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                   <div className="mt-1 space-y-1 overflow-y-auto max-h-[60px] [scrollbar-width:none]">
                     {dayItems.map((item) => (
                       <button key={item.id} type="button" onClick={() => setSelectedId(item.id)} className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] font-sans hover:border-zinc-700 cursor-pointer capitalize">
-                        <span className="truncate font-bold text-white font-sans">{item.runType} audit</span>
+                        <span className="truncate font-bold text-white font-sans">{auditRunTypeLabel(item.runType)}</span>
                         <StatusPill tone={toneFromSeverity(item.overallSeverity)} className="w-fit normal-case">
                           {item.overallSeverity === "none" ? "Clean" : item.overallSeverity}
                         </StatusPill>
@@ -308,16 +282,51 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
 }
 
 function AuditDrawer({ item, onClose }: { item: AuditHistoryItem | null; onClose: () => void }) {
+  const [detail, setDetail] = useState<LeakMapDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  // Fetches the same skill-runs detail route the full run page reads, and
+  // renders it with the *actual* LeakMapView component below — the drawer
+  // shows the real severity-ranked report, gap list, and copyable
+  // markdown, not a link promising them on another page.
+  useEffect(() => {
+    if (!item?.runId) {
+      setDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetailError(null);
+    fetch(`/api/skill-runs/${item.runId}/detail`, { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load the full report.");
+        return res.json();
+      })
+      .then((body) => {
+        if (!cancelled) setDetail(body as LeakMapDetail);
+      })
+      .catch((err) => {
+        if (!cancelled) setDetailError(err instanceof Error ? err.message : "Failed to load the full report.");
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item?.runId]);
+
   return (
     <Sheet open={!!item} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent widthClassName="w-full sm:max-w-md font-sans antialiased text-zinc-100">
+      <SheetContent widthClassName="w-full sm:max-w-2xl font-sans antialiased text-zinc-100">
         {item && (
           <>
             <SheetHeader className="font-sans">
               <StatusPill tone={toneFromSeverity(item.overallSeverity)} className="w-fit capitalize">
                 {item.overallSeverity === "none" ? "Clean" : item.overallSeverity}
               </StatusPill>
-              <SheetTitle className="mt-2 text-lg font-bold font-sans text-white capitalize">{item.runType} Audit</SheetTitle>
+              <SheetTitle className="mt-2 text-lg font-bold font-sans text-white">{auditRunTypeLabel(item.runType)}</SheetTitle>
               <SheetDescription className="flex items-center gap-1 text-xs text-zinc-400 font-sans">
                 {new Date(item.createdAt).toLocaleString(undefined, { weekday: "long", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
               </SheetDescription>
@@ -339,14 +348,33 @@ function AuditDrawer({ item, onClose }: { item: AuditHistoryItem | null; onClose
               </div>
 
               {item.runId && (
-                <a
-                  href={`/dashboard/runs/${item.runId}`}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:border-zinc-700 transition-colors w-fit"
-                >
-                  <SquishySkillBadge skill="leak-map" size={14} enabled={true} />
-                  <span>View the full report</span>
-                  <ExternalLink size={11} className="text-zinc-500" />
-                </a>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                      <SquishySkillBadge skill="leak-map" size={14} enabled={true} />
+                      Full report
+                    </span>
+                    <a
+                      href={`/dashboard/runs/${item.runId}`}
+                      className="inline-flex items-center gap-1 text-[10.5px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                    >
+                      <span>Open full page</span>
+                      <ExternalLink size={10} />
+                    </a>
+                  </div>
+
+                  {detailLoading && (
+                    <div className="flex items-center justify-center py-8 text-zinc-600">
+                      <Loader2 size={16} className="animate-spin" />
+                    </div>
+                  )}
+                  {detailError && (
+                    <p className="text-[11px] text-rose-400 font-sans">{detailError}</p>
+                  )}
+                  {!detailLoading && !detailError && detail && "audit" in detail && (
+                    <LeakMapView detail={detail} />
+                  )}
+                </div>
               )}
             </SheetBody>
           </>

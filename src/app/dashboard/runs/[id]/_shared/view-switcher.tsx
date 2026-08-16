@@ -15,14 +15,20 @@ export function ViewSwitcher({
   value,
   onChange,
   className,
+  modes,
 }: {
   value: RunViewMode;
   onChange: (mode: RunViewMode) => void;
   className?: string;
+  /** Restrict which modes render as buttons — e.g. Win-Back and Leak-Map
+   * drop "board" entirely rather than ship a broken/redundant third view.
+   * Defaults to all three for every other call site. */
+  modes?: RunViewMode[];
 }) {
+  const visibleModes = modes ? MODES.filter((m) => modes.includes(m.key)) : MODES;
   return (
     <div className={cn("inline-flex items-center gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/80 p-0.5", className)}>
-      {MODES.map(({ key, label, icon: Icon }) => {
+      {visibleModes.map(({ key, label, icon: Icon }) => {
         const active = value === key;
         return (
           <button

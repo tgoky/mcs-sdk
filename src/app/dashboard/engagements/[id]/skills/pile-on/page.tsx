@@ -13,6 +13,7 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import { PileOnPipeline } from "../../pile-on-pipeline";
+import { PileOnAdCreativeBriefs } from "../../pile-on-ad-creative-briefs";
 
 export const revalidate = 0;
 
@@ -21,7 +22,7 @@ export default async function PileOnSkillPage({ params }: { params: Promise<{ id
   const session = await getSession();
 
   const [engagement] = await db
-    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
+    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, adCreativeBriefs: engagements.adCreativeBriefs })
     .from(engagements)
     .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session?.whopUserId ?? "")))
     .limit(1);
@@ -41,6 +42,8 @@ export default async function PileOnSkillPage({ params }: { params: Promise<{ id
       </div>
 
       <PileOnPipeline engagementId={id} />
+
+      <PileOnAdCreativeBriefs pack={engagement.adCreativeBriefs} />
     </div>
   );
 }

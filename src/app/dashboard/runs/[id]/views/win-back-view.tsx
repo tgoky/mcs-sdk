@@ -121,7 +121,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
   const windowEnd = new Date(enrolledAt.getTime() + recoveryWindowDays * 86_400_000);
 
   const handleManualStopCadence = () => {
-    if (confirm("Stop automated Win-Back sequence for this prospect? (Useful for off-platform or verbal rebooks)")) {
+    if (confirm("Stop the win-back messages for this prospect? Use this if they've already rebooked another way, or you'd rather follow up yourself.")) {
       setManualExited(true);
     }
   };
@@ -153,7 +153,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                 type="button"
                 onClick={handleManualStopCadence}
                 className="flex items-center gap-1.5 rounded-lg border border-rose-900/60 bg-rose-950/30 px-2.5 py-1.5 text-[11px] font-semibold text-rose-300 hover:bg-rose-900/40 cursor-pointer transition-colors font-sans"
-                title="Stop automated sequence for off-platform rebooks or direct replies"
+                title="Stop the automated sequence — use this if the prospect already rebooked elsewhere or replied directly"
               >
                 <SquareX size={12} /> Stop Cadence
               </button>
@@ -166,7 +166,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                 rel="noreferrer"
                 className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 transition-colors font-sans"
               >
-                <Link2 size={11} /> Reschedule URL
+                <Link2 size={11} /> Reschedule link
               </a>
             )}
           </div>
@@ -176,7 +176,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
           <div className="flex items-center gap-2 font-sans">
             <Sparkles size={15} className="text-amber-400 shrink-0" />
             <span className="font-sans">
-              <strong className="font-semibold text-amber-300 font-sans">Template Preview Mode:</strong> Displaying standard 30-day recovery cadence structure. No active prospect enrollment is bound to this run ID.
+              <strong className="font-semibold text-amber-300 font-sans">Preview mode:</strong> This shows your standard 30-day recovery sequence structure. No specific prospect is tied to this run.
             </span>
           </div>
         </div>
@@ -501,7 +501,7 @@ function CadenceCalendar({
       </div>
 
       <p className="border-t border-zinc-800 bg-zinc-900/30 px-4 py-2 text-[10px] text-zinc-500 font-sans">
-        Day 1 is confirmed sent by this system. Later touches are handed to the buyer's ESP/SMS platform as scheduled workflow steps — dates shown are when they're scheduled to fire.
+        The first message is confirmed sent directly. Later messages are queued in your email/SMS platform to go out automatically — the dates above are when they&apos;re scheduled to send.
       </p>
     </div>
   );
@@ -554,7 +554,7 @@ function TouchpointDrawer({
                 <div className="flex items-center gap-2 text-amber-400 font-sans">
                   {touchpoint.type === "email" ? <Mail size={15} /> : <MessageSquare size={15} />}
                   <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
-                    {touchpoint.type === "email" ? "Recovery Email Touchpoint" : "Recovery SMS Touchpoint"}
+                    {touchpoint.type === "email" ? "Recovery Email" : "Recovery Text Message"}
                   </span>
                 </div>
                 <button
@@ -563,13 +563,13 @@ function TouchpointDrawer({
                   className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white text-xs cursor-pointer transition-colors font-sans"
                 >
                   {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                  <span className="font-sans">{copied ? "Copied" : "Copy Copy"}</span>
+                  <span className="font-sans">{copied ? "Copied" : "Copy"}</span>
                 </button>
               </div>
 
               <SheetTitle className="mt-1.5 text-base font-bold text-white font-sans">{dayLabel(touchpoint.offsetDays)}</SheetTitle>
               <SheetDescription className="text-xs text-zinc-400 font-sans">
-                Scheduled firing date: {touchpoint.date.toLocaleDateString()}
+                Scheduled to send {touchpoint.date.toLocaleDateString()}
               </SheetDescription>
             </SheetHeader>
 
@@ -587,7 +587,7 @@ function TouchpointDrawer({
 
               <div className="space-y-2 font-sans">
                 <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400">
-                  {touchpoint.offsetDays === 0 ? "Standard Template Copy" : "Generated Copy"}
+                  {touchpoint.offsetDays === 0 ? "Standard Message" : "Message Content"}
                 </span>
                 {touchpoint.subject && (
                   <p className="text-xs font-semibold text-zinc-200 font-sans">Subject: {touchpoint.subject}</p>

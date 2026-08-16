@@ -7,7 +7,6 @@ import {
   Mail,
   MessageSquare,
   BarChart3,
-  Clock,
   User,
   ListChecks,
   Copy,
@@ -19,7 +18,8 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { emailPlatformLabel, smsPlatformLabel, adDataPlatformLabel } from "@/lib/copy";
+import { emailPlatformLabel, smsPlatformLabel, adDataPlatformLabel, sentViaLabel, runStatusLabel } from "@/lib/copy";
+import { classifyRunError } from "@/lib/error-classification";
 import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
 import { StatusPill } from "../_shared/status-pill";
 import { EmptyState } from "../_shared/empty-state";
@@ -89,12 +89,12 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
   const outcomeLabel = send?.error
     ? "Failed"
     : send?.sentVia === "hybrid"
-    ? "Personalized (hybrid)"
+    ? "Personalized message"
     : emailStep?.status === "success"
     ? "Standard Sequence Enrolled"
     : emailStep?.status === "failed"
     ? "Enrollment Failed"
-    : "Template fallback";
+    : "Standard template used";
 
   // Unroll individual dispatch channels into inspectable Asana-grade cards
   const boardColumns = useMemo(() => {
@@ -107,9 +107,9 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
       cards.push({
         id: "ai-intro",
         type: "ai_intro",
-        title: "AI Personalization Copy",
-        subtitle: send.personalizedIntro ?? (send.error ? `Error: ${send.error}` : "Standard template intro delivered"),
-        badge: send.sentVia === "hybrid" ? "Hybrid AI" : "Fallback Template",
+        title: "AI Personalization",
+        subtitle: send.personalizedIntro ?? (send.error ? `Didn't go out — ${classifyRunError(send.error)?.title ?? "hit an unexpected error"}` : "Standard template intro delivered"),
+        badge: sentViaLabel(send.sentVia),
         tone: send.sentVia === "hybrid" ? "success" : "info",
         icon: Sparkles,
         payload: { send },
@@ -125,7 +125,7 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
         subtitle: emailStep
           ? emailStep.detail ?? emailPlatformLabel(run.stack?.email_platform)
           : run.stack?.email_platform
-          ? `${emailPlatformLabel(run.stack.email_platform)} — no enrollment attempt recorded on this run`
+          ? `${emailPlatformLabel(run.stack.email_platform)} — wasn't attempted on this run`
           : "Not configured",
         badge: emailStep?.status === "success" ? "Enrolled" : emailStep?.status === "failed" ? "Failed" : emailStep?.status === "running" ? "In progress" : "Not attempted",
         tone: emailStep?.status === "success" ? "success" : emailStep?.status === "failed" ? "danger" : emailStep?.status === "running" ? "info" : "neutral",
@@ -176,11 +176,11 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
       {
         id: "ad-data-channel",
         type: "ad_data",
-        title: "Ad Attribution Cohort Sync",
+        title: "Ad Audience Update",
         subtitle: adDataStep
           ? adDataStep.detail ?? adDataPlatformLabel(run.stack?.ad_data_platform)
           : run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none"
-          ? `${adDataPlatformLabel(run.stack.ad_data_platform)} — no sync attempt recorded on this run`
+          ? `${adDataPlatformLabel(run.stack.ad_data_platform)} — not updated on this run`
           : "Not configured",
         badge: adDataStep?.status === "success" ? "Synced" : adDataStep?.status === "failed" ? "Failed" : adDataStep?.status === "running" ? "In progress" : "Not attempted",
         tone: adDataStep?.status === "success" ? "success" : adDataStep?.status === "failed" ? "danger" : adDataStep?.status === "running" ? "info" : "neutral",
@@ -268,11 +268,6 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
 
             <div className="flex items-center gap-2 font-sans">
               <StatusPill tone={outcomeTone}>{outcomeLabel}</StatusPill>
-              {send?.latencyMs != null && (
-                <span className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-[11px] font-mono text-zinc-400">
-                  <Clock size={11} /> {(send.latencyMs / 1000).toFixed(1)}s total
-                </span>
-              )}
             </div>
           </div>
 
@@ -285,8 +280,8 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
               <div className="flex items-center gap-2.5 rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-2.5">
                 <Zap size={14} className="text-emerald-400 shrink-0" />
                 <div className="min-w-0 text-xs font-sans">
-                  <p className="font-semibold text-zinc-200 font-sans">1. Webhook Received</p>
-                  <p className="text-[10px] text-zinc-500 font-mono">Instant Ack (200 OK)</p>
+                  <p className="font-semibold text-zinc-200 font-sans">1. Booking Received</p>
+                  <p className="text-[10px] text-zinc-500 font-sans">Confirmed instantly</p>
                 </div>
               </div>
 
@@ -300,8 +295,8 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
                 />
                 <div className="min-w-0 text-xs font-sans">
                   <p className="font-semibold text-zinc-200 font-sans">2. AI Personalization</p>
-                  <p className="text-[10px] text-zinc-500 font-mono">
-                    {send?.sentVia === "hybrid" ? "AI Intro Generated" : "Fallback Template Used"}
+                  <p className="text-[10px] text-zinc-500 font-sans">
+                    {send?.sentVia === "hybrid" ? "Personalized intro written" : "Standard template used"}
                   </p>
                 </div>
               </div>
@@ -309,8 +304,8 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
               <div className="flex items-center gap-2.5 rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-2.5">
                 <ShieldCheck size={14} className="text-sky-400 shrink-0" />
                 <div className="min-w-0 text-xs font-sans">
-                  <p className="font-semibold text-zinc-200 font-sans">3. Multi-Channel Sync</p>
-                  <p className="text-[10px] text-zinc-500 font-mono">ESP + SMS + Ad Cohort</p>
+                  <p className="font-semibold text-zinc-200 font-sans">3. Follow-Up Sequences</p>
+                  <p className="text-[10px] text-zinc-500 font-sans">Email, text & ad audience updated</p>
                 </div>
               </div>
             </div>
@@ -345,14 +340,24 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
               <p className="whitespace-pre-wrap rounded-xl border border-amber-900/30 bg-amber-950/10 p-3.5 text-xs leading-relaxed text-zinc-200 font-sans">
                 {send.personalizedIntro}
               </p>
-            ) : send?.error ? (
-              <div className="rounded-xl border border-rose-900/40 bg-rose-950/10 p-3.5 text-xs text-rose-400 flex items-start gap-2 font-sans">
-                <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                <span className="font-sans">Generation/delivery error: {send.error}</span>
-              </div>
-            ) : (
+            ) : send?.error ? (() => {
+              const diagnosis = classifyRunError(send.error);
+              return (
+                <div className="rounded-xl border border-rose-900/40 bg-rose-950/10 p-3.5 text-xs text-rose-400 flex items-start gap-2 font-sans">
+                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                  {diagnosis ? (
+                    <div>
+                      <span className="font-semibold block">{diagnosis.title}</span>
+                      <span className="font-sans">{diagnosis.explanation}</span>
+                    </div>
+                  ) : (
+                    <span className="font-sans">This didn&apos;t go out — it hit an unexpected error. If it keeps happening, let your account contact know.</span>
+                  )}
+                </div>
+              );
+            })() : (
               <p className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3.5 text-xs italic text-zinc-500 font-sans">
-                Standard sequence mode: Prospect was enrolled directly into your {emailPlatformLabel(run.stack?.email_platform)} workflow without dynamic AI intro synthesis.
+                This prospect got your standard {emailPlatformLabel(run.stack?.email_platform)} sequence — no AI-personalized intro was generated for this send.
               </p>
             )}
           </div>
@@ -367,8 +372,8 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
           <table className="w-full text-left text-xs font-sans">
             <thead>
               <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500 bg-zinc-900/50 font-sans">
-                <th className="px-4 py-2 font-semibold">Deliverable / Channel</th>
-                <th className="px-4 py-2 font-semibold">Platform / Summary</th>
+                <th className="px-4 py-2 font-semibold">Step</th>
+                <th className="px-4 py-2 font-semibold">Platform</th>
                 <th className="px-4 py-2 font-semibold">Prospect</th>
                 <th className="px-4 py-2 font-semibold">Status</th>
                 <th className="px-4 py-2 font-semibold" />
@@ -402,7 +407,7 @@ export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: Run
                           }}
                           className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer font-sans"
                         >
-                          Inspect
+                          View details
                         </button>
                       </td>
                     </tr>
@@ -555,8 +560,8 @@ function PileOnDetailDrawer({
               <div className="flex items-center justify-between font-sans">
                 <div className="flex items-center gap-2 text-amber-400 font-sans">
                   <SlidersHorizontal size={15} />
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
-                    Pile-On Channel Deliverable
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-sans">
+                    Pile-On
                   </span>
                 </div>
                 <StatusPill tone={card.tone}>{card.badge}</StatusPill>
@@ -572,7 +577,7 @@ function PileOnDetailDrawer({
                 <div className="space-y-3 font-sans">
                   <div className="flex justify-between items-center font-sans">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
-                      Generated Intro Copy
+                      AI-personalized intro
                     </span>
                     {card.payload.send.personalizedIntro && (
                       <button
@@ -596,14 +601,15 @@ function PileOnDetailDrawer({
                     </div>
                   ) : (
                     <p className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3.5 text-xs italic text-zinc-500 font-sans">
-                      Standard template intro delivered. AI synthesis did not generate custom text within allocation budget.
+                      This one went out with the standard template — a personalized intro wasn&apos;t generated for this send.
                     </p>
                   )}
 
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 font-mono text-xs text-zinc-400 space-y-1">
-                    <p>Recipient: {card.payload.send.prospectEmail}</p>
-                    <p>Booking ID: {card.payload.send.bookingId}</p>
-                    {card.payload.send.latencyMs && <p>Dispatch Latency: {(card.payload.send.latencyMs / 1000).toFixed(2)}s</p>}
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300 font-sans space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500">Recipient</span>
+                      <span>{card.payload.send.prospectEmail}</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -611,57 +617,78 @@ function PileOnDetailDrawer({
               {/* Email / SMS / Ad Data Drawer Body */}
               {card.type !== "ai_intro" && (
                 <div className="space-y-3 font-sans">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
-                    Integration Context
-                  </span>
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3.5 font-mono text-xs text-zinc-300 space-y-1.5">
-                    <p>Channel Name: {card.title}</p>
-                    <p>Connected Platform: {card.subtitle}</p>
-                    <p>Target Prospect: {send?.prospectEmail ?? "Booking event prospect"}</p>
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3.5 text-xs text-zinc-300 font-sans space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500">Connected platform</span>
+                      <span>{card.subtitle}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-zinc-500">Prospect</span>
+                      <span>{send?.prospectEmail ?? "This booking"}</span>
+                    </div>
                   </div>
 
                   {/* Detailed SMS Message History */}
                   {card.type === "sms" && card.payload.messages?.length > 0 ? (
                     <div className="space-y-2">
                       <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
-                        Send History ({card.payload.messages.length} attempted)
+                        Send history ({card.payload.messages.length})
                       </span>
-                      {card.payload.messages.map((m: SequenceMessage) => (
+                      {card.payload.messages.map((m: SequenceMessage, i: number) => (
                         <div
                           key={m.id}
-                          className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 font-mono text-xs space-y-1"
+                          className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 text-xs space-y-1 font-sans"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-zinc-300">{m.messageId}</span>
+                            <span className="text-zinc-300 font-semibold">Text message {i + 1}</span>
                             <StatusPill tone={m.status === "sent" ? "success" : "danger"}>
                               {m.status === "sent" ? "Sent" : "Failed"}
                             </StatusPill>
                           </div>
                           <p className="text-zinc-500">{new Date(m.sentAt).toLocaleString()}</p>
-                          {m.error && <p className="text-rose-400">{m.error}</p>}
+                          {m.error && (() => {
+                            const diagnosis = classifyRunError(m.error);
+                            return diagnosis ? (
+                              <p className="text-rose-400">{diagnosis.title}</p>
+                            ) : (
+                              <p className="text-rose-400">This message didn&apos;t send.</p>
+                            );
+                          })()}
                         </div>
                       ))}
                     </div>
                   ) : card.type === "sms" ? (
                     <p className="text-xs text-zinc-400 leading-relaxed font-sans bg-zinc-900/40 border border-zinc-800 p-3 rounded-xl">
-                      No individual messages have sent yet — they fire on the schedule generated for this booking, each logged here the moment it goes out.
+                      No individual messages have sent yet — they go out on the schedule set for this booking, each logged here the moment it sends.
                     </p>
                   ) : (card.type === "email" || card.type === "ad_data") && card.payload.step ? (
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3.5 font-mono text-xs text-zinc-300 space-y-1.5">
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3.5 text-xs text-zinc-300 space-y-1.5 font-sans">
                       <div className="flex items-center justify-between">
-                        <span>Last attempt outcome</span>
+                        <span className="text-zinc-500">Last attempt</span>
                         <StatusPill
                           tone={card.payload.step.status === "success" ? "success" : card.payload.step.status === "failed" ? "danger" : "info"}
                         >
-                          {card.payload.step.status}
+                          {runStatusLabel(card.payload.step.status)}
                         </StatusPill>
                       </div>
                       <p className="text-zinc-500">{new Date(card.payload.step.completedAt ?? card.payload.step.startedAt).toLocaleString()}</p>
-                      {card.payload.step.detail && <p className="text-zinc-400">{card.payload.step.detail}</p>}
+                      {card.payload.step.detail && card.payload.step.status === "failed" ? (() => {
+                        const diagnosis = classifyRunError(card.payload.step.detail);
+                        return diagnosis ? (
+                          <div className="pt-1">
+                            <p className="text-zinc-300 font-semibold">{diagnosis.title}</p>
+                            <p className="text-zinc-400 mt-0.5">{diagnosis.explanation}</p>
+                          </div>
+                        ) : (
+                          <p className="text-zinc-400 pt-1">This didn&apos;t go out — it hit an unexpected error.</p>
+                        );
+                      })() : card.payload.step.detail ? (
+                        <p className="text-zinc-400 pt-1">{card.payload.step.detail}</p>
+                      ) : null}
                     </div>
                   ) : (
                     <p className="text-xs text-zinc-400 leading-relaxed font-sans bg-zinc-900/40 border border-zinc-800 p-3 rounded-xl">
-                      No dispatch attempt is recorded for this channel on this run.
+                      Nothing has been attempted on this channel for this run yet.
                     </p>
                   )}
                 </div>

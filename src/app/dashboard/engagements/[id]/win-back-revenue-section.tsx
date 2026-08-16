@@ -9,14 +9,23 @@ import {
   CheckCircle2, 
   XCircle,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  Mail,
+  ExternalLink,
 } from "lucide-react";
 import { skillName } from "@/lib/copy";
+import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { StatusPill } from "../../runs/[id]/_shared/status-pill";
+import { RunActivityPanel } from "../../runs/[id]/_shared/run-activity-panel";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 
 export interface RecoveredEnrollment {
   prospectEmail: string;
   prospectName: string | null;
   rebookedAt: string;
+  runId: string | null;
+  recoveryWindowDays: number;
+  enrolledAt: string;
 }
 
 export interface WinBackRevenueSectionProps {
@@ -106,6 +115,7 @@ export function WinBackRevenueSection({
   const periods = getPeriodOptions();
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption>(periods[0]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [selectedDeal, setSelectedDeal] = useState<RecoveredEnrollment | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on click outside
@@ -334,18 +344,26 @@ export function WinBackRevenueSection({
                           )}
                         </div>
 
-                        {/* Deals / Telemetry Breakdown inside the Weekly Card */}
+                        {/* Deals / Telemetry Breakdown inside the Weekly Card — each
+                            row opens a drawer with the full enrollment (recovery
+                            window, enrolled date, and a link to the run), instead of
+                            being flat, unclickable text. */}
                         {weekDeals.length > 0 ? (
                           <div className="space-y-1 text-[11px] pt-0.5">
                             {weekDeals.map((d, dIdx) => (
-                              <div key={d.prospectEmail + dIdx} className="text-zinc-700 dark:text-zinc-300 leading-snug flex items-center justify-between">
+                              <button
+                                key={d.prospectEmail + dIdx}
+                                type="button"
+                                onClick={() => setSelectedDeal(d)}
+                                className="w-full text-zinc-700 dark:text-zinc-300 leading-snug flex items-center justify-between rounded-md px-1 -mx-1 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 cursor-pointer transition-colors text-left"
+                              >
                                 <span className="truncate max-w-[130px]" title={d.prospectEmail}>
                                   • {d.prospectName ?? d.prospectEmail}
                                 </span>
                                 <span className="text-[10px] font-mono text-zinc-400">
                                   {new Date(d.rebookedAt).getDate()} {shortMonthName}
                                 </span>
-                              </div>
+                              </button>
                             ))}
                           </div>
                         ) : (
@@ -380,6 +398,99 @@ export function WinBackRevenueSection({
           })}
         </div>
       </div>
+
+      <RecoveredDealDrawer deal={selectedDeal} offerPrice={offerPrice} onClose={() => setSelectedDeal(null)} />
     </div>
+  );
+}
+
+function RecoveredDealDrawer({
+  deal,
+  offerPrice,
+  onClose,
+}: {
+  deal: RecoveredEnrollment | null;
+  offerPrice: number;
+  onClose: () => void;
+}) {
+  const [showRunActivity, setShowRunActivity] = useState(false);
+
+  useEffect(() => {
+    setShowRunActivity(false);
+  }, [deal?.prospectEmail, deal?.rebookedAt]);
+
+  return (
+    <Sheet open={!!deal} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent widthClassName="w-full sm:max-w-md font-sans antialiased text-zinc-100">
+        {deal && (
+          <>
+            <SheetHeader className="font-sans">
+              <StatusPill tone="success" className="w-fit">Recovered</StatusPill>
+              <SheetTitle className="mt-2 text-lg font-bold font-sans text-white">{deal.prospectName ?? deal.prospectEmail}</SheetTitle>
+              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-400 font-sans">
+                Rebooked {new Date(deal.rebookedAt).toLocaleString(undefined, { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </SheetDescription>
+            </SheetHeader>
+            <SheetBody className="space-y-4 font-sans pt-2">
+              <div className="flex items-center gap-2 text-xs text-zinc-300 font-sans">
+                <Mail size={13} className="text-zinc-500 shrink-0" />
+                <span className="truncate">{deal.prospectEmail}</span>
+              </div>
+
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 space-y-2">
+                {offerPrice > 0 && (
+                  <div className="flex items-center justify-between text-xs font-sans">
+                    <span className="text-zinc-400">Revenue attributed</span>
+                    <span className="font-mono font-bold text-emerald-400">${offerPrice.toLocaleString()}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-xs font-sans pt-1">
+                  <span className="text-zinc-400">Enrolled in cadence</span>
+                  <span className="font-mono text-white">{new Date(deal.enrolledAt).toLocaleDateString(undefined, { month: "long", day: "numeric" })}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs font-sans pt-1">
+                  <span className="text-zinc-400">Recovery window</span>
+                  <span className="font-mono text-white">{deal.recoveryWindowDays} days</span>
+                </div>
+                <div className="flex items-center justify-between text-xs font-sans pt-1">
+                  <span className="text-zinc-400">Days to recover</span>
+                  <span className="font-mono text-white">
+                    {Math.max(0, Math.round((new Date(deal.rebookedAt).getTime() - new Date(deal.enrolledAt).getTime()) / (24 * 60 * 60 * 1000)))} days
+                  </span>
+                </div>
+              </div>
+
+              {deal.runId && (
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowRunActivity((p) => !p)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-900 transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                      <SquishySkillBadge skill="win-back" size={14} enabled={true} />
+                      Run activity
+                    </span>
+                    <ChevronDown size={13} className={`text-zinc-500 transition-transform ${showRunActivity ? "rotate-180" : ""}`} />
+                  </button>
+                  {showRunActivity && (
+                    <div className="px-3 pb-3 pt-1 border-t border-zinc-800/60">
+                      <RunActivityPanel runId={deal.runId} />
+                      <a
+                        href={`/dashboard/runs/${deal.runId}`}
+                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                      >
+                        <span>Open the full run page</span>
+                        <ExternalLink size={10} />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </SheetBody>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }

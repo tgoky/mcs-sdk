@@ -3,18 +3,23 @@
 // src/app/dashboard/engagements/[id]/win-back-pipeline.tsx
 //
 // Reads GET /api/engagements/[id]/win-back-pipeline — every enrollment for
-// this engagement, not one prospect's run page at a time. Board groups by
-// real enrollment.status; Calendar plots each active enrollment's real
-// next-unsent touchpoint (computed server-side from winBackSequenceAssetMap
-// minus sequenceMessageLog, not a scheduled-date guess); List is
-// chronological with real touch progress (X of Y sent).
+// this engagement, not one prospect's run page at a time. Calendar plots
+// every real event on an enrollment's timeline (enrolled / next touch due /
+// exited), not just currently-active next-unsent touchpoints (computed
+// server-side from winBackSequenceAssetMap minus sequenceMessageLog, not a
+// scheduled-date guess) — a month with only closed-out enrollments used to
+// render completely empty. List is chronological with real touch progress
+// (X of Y sent). Board was removed: it duplicated List's grouping with
+// less information and no real interactivity gain.
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Search, Mail, CalendarX2, Loader2, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Mail, CalendarX2, Loader2, ExternalLink, ChevronDown, Copy, Check, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "../../runs/[id]/_shared/view-switcher";
 import { StatusPill } from "../../runs/[id]/_shared/status-pill";
 import { getDaysInMonthGrid, dateKey } from "../../runs/[id]/_shared/calendar-grid";
+import { RunActivityPanel } from "../../runs/[id]/_shared/run-activity-panel";
+import { exitReasonLabel } from "@/lib/copy";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import type { WinBackPipelineItem, WinBackEnrollmentStatus } from "@/app/api/engagements/[id]/win-back-pipeline/route";
@@ -27,10 +32,20 @@ const STATUS_META: Record<WinBackEnrollmentStatus, { label: string; tone: "succe
   lost: { label: "Exited — window elapsed", tone: "neutral" },
   corrected: { label: "Exited — outcome corrected", tone: "neutral" },
 };
-const BOARD_COLUMNS: WinBackEnrollmentStatus[] = ["active", "rebooked", "reply_exited", "lost", "manual_override", "corrected"];
+
+// Board view removed — grouping by status added a third view that
+// duplicated List with less information. Calendar/List only now.
+const PIPELINE_MODES: RunViewMode[] = ["calendar", "list"];
+
+type WinBackCalendarKind = "enrolled" | "next_touch" | "exited";
+const CALENDAR_KIND_LABEL: Record<WinBackCalendarKind, string> = {
+  enrolled: "enrolled",
+  next_touch: "touch due",
+  exited: "exited",
+};
 
 export function WinBackPipeline({ engagementId }: { engagementId: string }) {
-  const [mode, setMode] = useState<RunViewMode>("board");
+  const [mode, setMode] = useState<RunViewMode>("calendar");
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [items, setItems] = useState<WinBackPipelineItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,20 +81,24 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
     return items.filter((i) => (i.prospectName ?? i.prospectEmail).toLowerCase().includes(q));
   }, [items, filterText]);
 
-  const board = useMemo(() => {
-    const cols: Record<WinBackEnrollmentStatus, WinBackPipelineItem[]> = {
-      active: [], rebooked: [], reply_exited: [], lost: [], manual_override: [], corrected: [],
-    };
-    for (const i of filtered) cols[i.status].push(i);
-    return cols;
-  }, [filtered]);
-
+  // Plots real history, not just pending future touches — an enrollment
+  // whose cadence has already finished (rebooked/lost/replied, no more
+  // future sends) used to never appear on the calendar at all, since
+  // nextTouchAt only exists for currently-active enrollments. Every
+  // enrollment now shows on the day it enrolled, on its next-touch day if
+  // one is still pending, and on the day it exited if it has — so a
+  // month with real activity actually shows something.
   const byDay = useMemo(() => {
-    const map = new Map<string, WinBackPipelineItem[]>();
-    for (const i of filtered.filter((i) => i.nextTouchAt)) {
-      const k = dateKey(i.nextTouchAt!);
+    const map = new Map<string, { item: WinBackPipelineItem; kind: WinBackCalendarKind }[]>();
+    const add = (iso: string, item: WinBackPipelineItem, kind: WinBackCalendarKind) => {
+      const k = dateKey(iso);
       if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(i);
+      map.get(k)!.push({ item, kind });
+    };
+    for (const i of filtered) {
+      add(i.enrolledAt, i, "enrolled");
+      if (i.nextTouchAt) add(i.nextTouchAt, i, "next_touch");
+      if (i.exitedAt) add(i.exitedAt, i, "exited");
     }
     return map;
   }, [filtered]);
@@ -114,49 +133,11 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
             className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
           />
         </div>
-        <ViewSwitcher value={mode} onChange={setMode} />
+        <ViewSwitcher value={mode} onChange={setMode} modes={PIPELINE_MODES} />
       </div>
 
       {error && (
         <div className="rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300 font-sans">{error}</div>
-      )}
-
-      {mode === "board" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 font-sans">
-          {BOARD_COLUMNS.map((status) => (
-            <div key={status} className="rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden">
-              <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                <span className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-400 font-sans">{STATUS_META[status].label}</span>
-                <span className="rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400">{board[status].length}</span>
-              </div>
-              <div className="flex flex-col gap-1.5 p-2 min-h-[80px] max-h-[420px] overflow-y-auto">
-                {board[status].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelectedId(item.id)}
-                    className="flex flex-col gap-1 rounded-lg border border-zinc-800 bg-zinc-900/90 p-2 text-left text-[11px] hover:border-zinc-700 cursor-pointer transition-all font-sans"
-                  >
-                    <span className="truncate font-bold text-white font-sans">{item.prospectName ?? item.prospectEmail}</span>
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-mono text-[9.5px] text-zinc-500">
-                        {item.touchesSent}/{item.touchesTotal} touches
-                      </span>
-                      {item.status === "active" && item.nextTouchAt && (
-                        <span className="font-mono text-[9.5px] text-amber-400/80">
-                          next {new Date(item.nextTouchAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                ))}
-                {board[status].length === 0 && (
-                  <div className="flex items-center justify-center py-6 text-[10.5px] text-zinc-700 font-sans">Nothing here</div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
       )}
 
       {mode === "list" && (
@@ -235,21 +216,26 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                       </div>
                     )}
                   </div>
-                  {dayItems.length > 1 && (
-                    <div className="mt-1 rounded-lg bg-rose-950/40 border border-rose-800/50 px-2 py-1 text-rose-200">
-                      <span className="text-[11px] font-bold block leading-none font-sans">
-                        {dayItems.length} touches due
-                      </span>
-                      <span className="text-[9.5px] text-rose-400/80 font-mono mt-0.5 block">
-                        {dayItems.filter((i) => i.status === "active").length} active enrollments
-                      </span>
-                    </div>
-                  )}
+                  {dayItems.length > 1 && (() => {
+                    const touchesDue = dayItems.filter((d) => d.kind === "next_touch").length;
+                    return (
+                      <div className="mt-1 rounded-lg bg-rose-950/40 border border-rose-800/50 px-2 py-1 text-rose-200">
+                        <span className="text-[11px] font-bold block leading-none font-sans">
+                          {dayItems.length} event{dayItems.length === 1 ? "" : "s"}
+                        </span>
+                        <span className="text-[9.5px] text-rose-400/80 font-mono mt-0.5 block">
+                          {touchesDue > 0 ? `${touchesDue} touch${touchesDue === 1 ? "" : "es"} due` : "enrollment activity"}
+                        </span>
+                      </div>
+                    );
+                  })()}
                   <div className="mt-1 space-y-1 overflow-y-auto max-h-[65px] [scrollbar-width:none]">
-                    {dayItems.map((item) => (
-                      <button key={item.id} type="button" onClick={() => setSelectedId(item.id)} className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] font-sans hover:border-zinc-700 cursor-pointer">
+                    {dayItems.map(({ item, kind }, idx) => (
+                      <button key={`${item.id}-${kind}-${idx}`} type="button" onClick={() => setSelectedId(item.id)} className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] font-sans hover:border-zinc-700 cursor-pointer">
                         <span className="truncate font-bold text-white font-sans">{item.prospectName ?? item.prospectEmail}</span>
-                        <span className="font-mono text-[9px] text-amber-400/80">next touch</span>
+                        <span className={cn("font-mono text-[9px]", kind === "next_touch" ? "text-amber-400/80" : kind === "exited" ? "text-emerald-400/80" : "text-sky-400/80")}>
+                          {CALENDAR_KIND_LABEL[kind]}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -266,6 +252,21 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
 }
 
 function WinBackDrawer({ item, onClose }: { item: WinBackPipelineItem | null; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const [showRunActivity, setShowRunActivity] = useState(false);
+
+  useEffect(() => {
+    setCopied(false);
+    setShowRunActivity(false);
+  }, [item?.id]);
+
+  const copyLink = useCallback(() => {
+    if (!item?.freshRescheduleLink) return;
+    navigator.clipboard.writeText(item.freshRescheduleLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [item]);
+
   return (
     <Sheet open={!!item} onOpenChange={(open) => !open && onClose()}>
       <SheetContent widthClassName="w-full sm:max-w-md font-sans antialiased text-zinc-100">
@@ -305,20 +306,57 @@ function WinBackDrawer({ item, onClose }: { item: WinBackPipelineItem | null; on
                 {item.exitedAt && (
                   <div className="flex items-center justify-between text-xs font-sans">
                     <span className="text-zinc-400">Exited</span>
-                    <span className="font-mono text-white">{new Date(item.exitedAt).toLocaleDateString(undefined, { month: "long", day: "numeric" })}{item.exitReason ? ` · ${item.exitReason}` : ""}</span>
+                    <span className="font-mono text-white">{new Date(item.exitedAt).toLocaleDateString(undefined, { month: "long", day: "numeric" })}{item.exitReason ? ` · ${exitReasonLabel(item.exitReason)}` : ""}</span>
                   </div>
                 )}
               </div>
 
+              {item.freshRescheduleLink && (
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 space-y-1.5">
+                  <span className="flex items-center gap-1.5 text-[10.5px] font-mono text-zinc-500 uppercase">
+                    <Link2 size={11} /> Single-use reschedule link
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 truncate rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-[11px] font-mono text-zinc-300">
+                      {item.freshRescheduleLink}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={copyLink}
+                      className="shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 p-1.5 text-zinc-400 hover:text-white hover:border-zinc-700 transition-colors cursor-pointer"
+                    >
+                      {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {item.runId && (
-                <a
-                  href={`/dashboard/runs/${item.runId}`}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:border-zinc-700 transition-colors w-fit"
-                >
-                  <SquishySkillBadge skill="win-back" size={14} enabled={true} />
-                  <span>View the run that created this enrollment</span>
-                  <ExternalLink size={11} className="text-zinc-500" />
-                </a>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowRunActivity((p) => !p)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-900 transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                      <SquishySkillBadge skill="win-back" size={14} enabled={true} />
+                      Run activity
+                    </span>
+                    <ChevronDown size={13} className={cn("text-zinc-500 transition-transform", showRunActivity && "rotate-180")} />
+                  </button>
+                  {showRunActivity && (
+                    <div className="px-3 pb-3 pt-1 border-t border-zinc-800/60">
+                      <RunActivityPanel runId={item.runId} />
+                      <a
+                        href={`/dashboard/runs/${item.runId}`}
+                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                      >
+                        <span>Open the full run page</span>
+                        <ExternalLink size={10} />
+                      </a>
+                    </div>
+                  )}
+                </div>
               )}
             </SheetBody>
           </>

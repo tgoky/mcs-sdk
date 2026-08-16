@@ -17,6 +17,15 @@ export interface RecoveredEnrollmentSummary {
   prospectEmail: string;
   prospectName: string | null;
   rebookedAt: string;
+  // The skillRuns row (cancellation/no-show run) that originally enrolled
+  // this prospect — added so the revenue dashboard can link a recovered
+  // deal straight to the run that started its recovery cadence, the same
+  // way the Win-Back Pipeline drawer already does. Previously this
+  // summary carried nothing to click through to, which is part of why the
+  // revenue section rendered as a flat, non-interactive list.
+  runId: string | null;
+  recoveryWindowDays: number;
+  enrolledAt: string;
 }
 
 export interface RevenueAttributionResult {
@@ -67,6 +76,9 @@ export async function computeWinBackRevenueAttribution(
       prospectEmail: winBackEnrollments.prospectEmail,
       prospectName: winBackEnrollments.prospectName,
       exitedAt: winBackEnrollments.exitedAt,
+      runId: winBackEnrollments.runId,
+      recoveryWindowDays: winBackEnrollments.recoveryWindowDays,
+      enrolledAt: winBackEnrollments.enrolledAt,
     })
     .from(winBackEnrollments)
     .where(
@@ -81,6 +93,9 @@ export async function computeWinBackRevenueAttribution(
     prospectEmail: r.prospectEmail,
     prospectName: r.prospectName,
     rebookedAt: (r.exitedAt ?? new Date()).toISOString(),
+    runId: r.runId,
+    recoveryWindowDays: r.recoveryWindowDays,
+    enrolledAt: r.enrolledAt.toISOString(),
   }));
 
   const recoveredCount = recoveredEnrollments.length;

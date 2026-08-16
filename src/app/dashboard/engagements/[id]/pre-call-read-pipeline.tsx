@@ -11,22 +11,43 @@
 // per-client skill page is for.
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Search, Mail, Phone, CalendarX2, Loader2, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Mail, Phone, CalendarX2, Loader2, ExternalLink, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "../../runs/[id]/_shared/view-switcher";
 import { StatusPill } from "../../runs/[id]/_shared/status-pill";
 import { getDaysInMonthGrid, dateKey } from "../../runs/[id]/_shared/calendar-grid";
+import { RunActivityPanel } from "../../runs/[id]/_shared/run-activity-panel";
+import { bookingPlatformLabel, briefDestinationLabel, outcomeSourceLabel } from "@/lib/copy";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import type { RosterEntry, RosterStatus } from "@/app/api/engagements/[id]/roster/route";
 
-const STATUS_META: Record<RosterStatus, { label: string; tone: "success" | "warning" | "danger" | "info" | "neutral" }> = {
+type Tone = "success" | "warning" | "danger" | "info" | "neutral";
+
+const STATUS_META: Record<RosterStatus, { label: string; tone: Tone }> = {
   scheduled: { label: "Scheduled", tone: "info" },
   brief_delivered: { label: "Brief delivered", tone: "success" },
   brief_failed: { label: "Brief failed", tone: "danger" },
   cancelled: { label: "Cancelled", tone: "neutral" },
 };
 const BOARD_COLUMNS: RosterStatus[] = ["scheduled", "brief_delivered", "brief_failed", "cancelled"];
+
+// Mirrors pre-call-read-view.tsx's matchLabel() so the engagement-level
+// roster and the single-run page describe identity verification the same
+// way instead of each inventing their own wording.
+function matchLabel(entry: RosterEntry): { text: string; tone: Tone } {
+  if (entry.researchStatus === "completed") return { text: "Verified", tone: "success" };
+  if (entry.researchStatus === "failed") return { text: "Research failed", tone: "warning" };
+  if (entry.researchStatus === "skipped_low_confidence") return { text: "Not verified", tone: "neutral" };
+  return { text: "Not scored", tone: "neutral" };
+}
+
+const OUTCOME_META: Record<string, { label: string; tone: Tone }> = {
+  showed: { label: "Showed", tone: "success" },
+  no_show: { label: "No-show", tone: "danger" },
+  rescheduled: { label: "Rescheduled", tone: "warning" },
+  cancelled: { label: "Cancelled", tone: "neutral" },
+};
 
 export function PreCallReadPipeline({ engagementId }: { engagementId: string }) {
   const [mode, setMode] = useState<RunViewMode>("calendar");
@@ -264,13 +285,30 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
 }
 
 function PreCallReadDrawer({ entry, onClose }: { entry: RosterEntry | null; onClose: () => void }) {
+  const [showRunActivity, setShowRunActivity] = useState(false);
+
+  // Collapse the run-activity panel back down whenever a different entry
+  // is opened, so it doesn't stay expanded (and mid-fetch for the wrong
+  // run) across selections.
+  useEffect(() => {
+    setShowRunActivity(false);
+  }, [entry?.id]);
+
   return (
     <Sheet open={!!entry} onOpenChange={(open) => !open && onClose()}>
       <SheetContent widthClassName="w-full sm:max-w-md font-sans antialiased text-zinc-100">
         {entry && (
           <>
             <SheetHeader className="font-sans">
-              <StatusPill tone={STATUS_META[entry.status].tone} className="w-fit">{STATUS_META[entry.status].label}</StatusPill>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <StatusPill tone={STATUS_META[entry.status].tone}>{STATUS_META[entry.status].label}</StatusPill>
+                <StatusPill tone={matchLabel(entry).tone}>{matchLabel(entry).text}</StatusPill>
+                {entry.actualOutcome && (
+                  <StatusPill tone={OUTCOME_META[entry.actualOutcome]?.tone ?? "neutral"}>
+                    {OUTCOME_META[entry.actualOutcome]?.label ?? entry.actualOutcome}
+                  </StatusPill>
+                )}
+              </div>
               <SheetTitle className="mt-2 text-lg font-bold font-sans text-white">{entry.prospectName ?? entry.prospectEmail}</SheetTitle>
               <SheetDescription className="flex items-center gap-1 text-xs text-zinc-400 font-sans">
                 Call {new Date(entry.callTime).toLocaleString(undefined, { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
@@ -291,16 +329,34 @@ function PreCallReadDrawer({ entry, onClose }: { entry: RosterEntry | null; onCl
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 space-y-2">
                 <div className="flex items-center justify-between text-xs font-sans">
                   <span className="text-zinc-400">Booking platform</span>
-                  <span className="font-mono text-white capitalize">{entry.bookingPlatform ?? "—"}</span>
+                  <span className="font-mono text-white">{entry.bookingPlatform ? bookingPlatformLabel(entry.bookingPlatform) : "—"}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs font-sans pt-1">
                   <span className="text-zinc-400">Delivered via</span>
-                  <span className="font-mono text-white capitalize">{entry.destinationDelivered ?? "—"}</span>
+                  <span className="font-mono text-white">{entry.destinationDelivered ? briefDestinationLabel(entry.destinationDelivered) : "—"}</span>
                 </div>
                 {entry.briefDeliveredAt && (
                   <div className="flex items-center justify-between text-xs font-sans pt-1">
                     <span className="text-zinc-400">Brief delivered</span>
                     <span className="font-mono text-white">{new Date(entry.briefDeliveredAt).toLocaleString(undefined, { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+                )}
+                {entry.personMatchScore !== null && (
+                  <div className="flex items-center justify-between text-xs font-sans pt-1">
+                    <span className="text-zinc-400">Identity match score</span>
+                    <span className="font-mono text-white">{entry.personMatchScore}/100</span>
+                  </div>
+                )}
+                {entry.predictedShowProbability !== null && (
+                  <div className="flex items-center justify-between text-xs font-sans pt-1">
+                    <span className="text-zinc-400">Predicted to show</span>
+                    <span className="font-mono text-white">{entry.predictedShowProbability}%</span>
+                  </div>
+                )}
+                {entry.outcomeSource && (
+                  <div className="flex items-center justify-between text-xs font-sans pt-1 gap-3">
+                    <span className="text-zinc-400 shrink-0">How we know</span>
+                    <span className="text-white text-right">{outcomeSourceLabel(entry.outcomeSource, entry.actualOutcome)}</span>
                   </div>
                 )}
               </div>
@@ -315,14 +371,31 @@ function PreCallReadDrawer({ entry, onClose }: { entry: RosterEntry | null; onCl
               )}
 
               {entry.runId && (
-                <a
-                  href={`/dashboard/runs/${entry.runId}`}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:border-zinc-700 transition-colors w-fit"
-                >
-                  <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
-                  <span>View the run that generated this brief</span>
-                  <ExternalLink size={11} className="text-zinc-500" />
-                </a>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowRunActivity((p) => !p)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-900 transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                      <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
+                      Run activity
+                    </span>
+                    <ChevronDown size={13} className={cn("text-zinc-500 transition-transform", showRunActivity && "rotate-180")} />
+                  </button>
+                  {showRunActivity && (
+                    <div className="px-3 pb-3 pt-1 border-t border-zinc-800/60">
+                      <RunActivityPanel runId={entry.runId} />
+                      <a
+                        href={`/dashboard/runs/${entry.runId}`}
+                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                      >
+                        <span>Open the full run page</span>
+                        <ExternalLink size={10} />
+                      </a>
+                    </div>
+                  )}
+                </div>
               )}
             </SheetBody>
           </>

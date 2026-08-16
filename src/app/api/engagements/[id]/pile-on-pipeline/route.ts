@@ -30,6 +30,25 @@ export interface PileOnPipelineItem {
   callTime: string | null;
   prospectName: string | null;
   stage: PileOnStage;
+  // pileOnSendLog already carried these two columns — `.select()` below
+  // pulls the full row, but the old mapping only copied 8 of its ~10
+  // fields into the response and silently dropped the rest. personalizedIntro
+  // is the actual Claude-generated intro paragraph delivered to the
+  // prospect (only set when sentVia === "hybrid"); sendError is set when
+  // Email 1 itself failed to send, distinct from a stalled SMS sequence.
+  personalizedIntro: string | null;
+  sendError: string | null;
+}
+
+// Cheap week-over-week booking trend, computed from the same `sends` rows
+// already fetched below — no extra query. Mirrors the "this week vs prior
+// week" signal weekly-metrics.ts computes for the Monday email, but as a
+// pure read the dashboard can show live rather than a cron-only side
+// effect (that module also hits Klaviyo and sends notifications, so it
+// isn't safe to call from a GET route).
+export interface PileOnWeeklyTrend {
+  thisWeek: number;
+  priorWeek: number;
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -116,12 +135,29 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         callTime: callTime ? callTime.toISOString() : null,
         prospectName: roster?.prospectName ?? null,
         stage,
+        personalizedIntro: s.personalizedIntro,
+        sendError: s.error,
       };
     });
 
-    return NextResponse.json({ items });
+    return NextResponse.json({ items, weeklyTrend: computeWeeklyTrend(sends) });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+function computeWeeklyTrend(sends: { createdAt: Date }[]): PileOnWeeklyTrend {
+  const now = Date.now();
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const weekAgo = now - weekMs;
+  const twoWeeksAgo = now - 2 * weekMs;
+  let thisWeek = 0;
+  let priorWeek = 0;
+  for (const s of sends) {
+    const t = s.createdAt.getTime();
+    if (t >= weekAgo) thisWeek++;
+    else if (t >= twoWeeksAgo) priorWeek++;
+  }
+  return { thisWeek, priorWeek };
 }

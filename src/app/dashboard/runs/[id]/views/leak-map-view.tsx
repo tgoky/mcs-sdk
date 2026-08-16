@@ -39,6 +39,7 @@ function humanizeGap(gap: string): string {
   return `${metricName} — not enough data yet to call a trend (${have} this period, need at least ${need}).`;
 }
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { auditRunTypeLabel } from "@/lib/copy";
 import type { AuditRow, LeakMapDetail } from "../_shared/types";
 
 type IssueType = AuditRow["topIssues"] extends (infer T)[] | null ? T : never;
@@ -147,7 +148,7 @@ export function LeakMapView({ detail }: { detail: LeakMapDetail }) {
                       {overallSeverity === "none" ? "Stable" : `${overallSeverity.toUpperCase()} Severity`}
                     </p>
                     <p className="text-xs text-zinc-500 font-sans">
-                      {audit.runType} audit · {issues.length} metric
+                      {auditRunTypeLabel(audit.runType)} · {issues.length} metric
                       {issues.length === 1 ? "" : "s"} evaluated
                     </p>
                   </div>

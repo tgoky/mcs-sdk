@@ -10,14 +10,17 @@
 // real call date; List shows real touch counts.
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Search, Mail, CalendarX2, Loader2, ExternalLink, PhoneCall } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Mail, CalendarX2, Loader2, ExternalLink, PhoneCall, TrendingUp, TrendingDown, Minus, ChevronDown, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "../../runs/[id]/_shared/view-switcher";
 import { StatusPill } from "../../runs/[id]/_shared/status-pill";
 import { getDaysInMonthGrid, dateKey } from "../../runs/[id]/_shared/calendar-grid";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
-import type { PileOnPipelineItem, PileOnStage } from "@/app/api/engagements/[id]/pile-on-pipeline/route";
+import { RunActivityPanel } from "../../runs/[id]/_shared/run-activity-panel";
+import { classifyRunError } from "@/lib/error-classification";
+import { sentViaLabel } from "@/lib/copy";
+import type { PileOnPipelineItem, PileOnStage, PileOnWeeklyTrend } from "@/app/api/engagements/[id]/pile-on-pipeline/route";
 
 const STAGE_META: Record<PileOnStage, { label: string; tone: "success" | "warning" | "danger" | "info" | "neutral" }> = {
   newly_booked: { label: "Newly booked", tone: "info" },
@@ -27,10 +30,14 @@ const STAGE_META: Record<PileOnStage, { label: string; tone: "success" | "warnin
 };
 const BOARD_COLUMNS: PileOnStage[] = ["newly_booked", "active_sequence", "sequence_complete", "call_today"];
 
+type PileOnCalendarKind = "booked" | "call";
+const CALENDAR_KIND_LABEL: Record<PileOnCalendarKind, string> = { booked: "booked", call: "call" };
+
 export function PileOnPipeline({ engagementId }: { engagementId: string }) {
   const [mode, setMode] = useState<RunViewMode>("board");
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [items, setItems] = useState<PileOnPipelineItem[]>([]);
+  const [weeklyTrend, setWeeklyTrend] = useState<PileOnWeeklyTrend | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
@@ -47,6 +54,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? "Failed to load pipeline.");
       const body = await res.json();
       setItems(body.items ?? []);
+      setWeeklyTrend(body.weeklyTrend ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load pipeline.");
     } finally {
@@ -70,12 +78,24 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
     return cols;
   }, [filtered]);
 
+  // Calendar previously plotted only callTime, which is only populated
+  // when the roster join (see the route's module comment) finds a
+  // matching booking_roster row for that externalCallId — so any
+  // engagement where roster sync was thin, or where bookings predate
+  // roster tracking, showed a permanently empty calendar despite the List
+  // and Board views having real items. createdAt (booking date) always
+  // exists on every item, so it's now the fallback plot; callTime is
+  // still plotted as a separate, distinguishable "call" event when known.
   const byDay = useMemo(() => {
-    const map = new Map<string, PileOnPipelineItem[]>();
-    for (const i of filtered.filter((i) => i.callTime)) {
-      const k = dateKey(i.callTime!);
+    const map = new Map<string, { item: PileOnPipelineItem; kind: PileOnCalendarKind }[]>();
+    const add = (iso: string, item: PileOnPipelineItem, kind: PileOnCalendarKind) => {
+      const k = dateKey(iso);
       if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(i);
+      map.get(k)!.push({ item, kind });
+    };
+    for (const i of filtered) {
+      add(i.createdAt, i, "booked");
+      if (i.callTime) add(i.callTime, i, "call");
     }
     return map;
   }, [filtered]);
@@ -103,6 +123,22 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
           </div>
         )}
       </div>
+
+      {!loading && weeklyTrend && (weeklyTrend.thisWeek > 0 || weeklyTrend.priorWeek > 0) && (() => {
+        const { thisWeek, priorWeek } = weeklyTrend;
+        const delta = thisWeek - priorWeek;
+        const Icon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
+        const tone = delta > 0 ? "text-emerald-400" : delta < 0 ? "text-rose-400" : "text-zinc-500";
+        return (
+          <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 font-sans">
+            <Icon size={13} className={tone} />
+            <span className="text-xs text-zinc-300 font-sans">
+              <span className="font-mono font-bold text-white">{thisWeek}</span> booked this week
+              <span className="text-zinc-500"> · {priorWeek} last week</span>
+            </span>
+          </div>
+        );
+      })()}
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-950 p-1.5 border border-zinc-800">
         <div className="relative w-64">
@@ -228,21 +264,29 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                       </div>
                     )}
                   </div>
-                  {dayItems.length > 1 && (
-                    <div className="mt-1 rounded-lg bg-purple-950/40 border border-purple-800/50 px-2 py-1 text-purple-200">
-                      <span className="text-[11px] font-bold block leading-none font-sans">
-                        {dayItems.length} calls
-                      </span>
-                      <span className="text-[9.5px] text-purple-400/80 font-mono mt-0.5 block">
-                        {dayItems.filter((i) => i.stage === "call_today").length} due today
-                      </span>
-                    </div>
-                  )}
+                  {dayItems.length > 1 && (() => {
+                    const callsToday = dayItems.filter((d) => d.kind === "call").length;
+                    return (
+                      <div className="mt-1 rounded-lg bg-purple-950/40 border border-purple-800/50 px-2 py-1 text-purple-200">
+                        <span className="text-[11px] font-bold block leading-none font-sans">
+                          {dayItems.length} event{dayItems.length === 1 ? "" : "s"}
+                        </span>
+                        <span className="text-[9.5px] text-purple-400/80 font-mono mt-0.5 block">
+                          {callsToday > 0 ? `${callsToday} call${callsToday === 1 ? "" : "s"}` : "bookings"}
+                        </span>
+                      </div>
+                    );
+                  })()}
                   <div className="mt-1 space-y-1 overflow-y-auto max-h-[65px] [scrollbar-width:none]">
-                    {dayItems.map((item) => (
-                      <button key={item.id} type="button" onClick={() => setSelectedId(item.id)} className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] font-sans hover:border-zinc-700 cursor-pointer">
+                    {dayItems.map(({ item, kind }, idx) => (
+                      <button key={`${item.id}-${kind}-${idx}`} type="button" onClick={() => setSelectedId(item.id)} className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] font-sans hover:border-zinc-700 cursor-pointer">
                         <span className="truncate font-bold text-white font-sans">{item.prospectName ?? item.prospectEmail}</span>
-                        <StatusPill tone={STAGE_META[item.stage].tone} className="w-fit">{STAGE_META[item.stage].label}</StatusPill>
+                        <div className="flex items-center justify-between gap-1">
+                          <span className={cn("font-mono text-[9px]", kind === "call" ? "text-red-400/80" : "text-zinc-500")}>
+                            {CALENDAR_KIND_LABEL[kind]}
+                          </span>
+                          <StatusPill tone={STAGE_META[item.stage].tone} className="w-fit">{STAGE_META[item.stage].label}</StatusPill>
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -259,6 +303,12 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
 }
 
 function PileOnDrawer({ item, onClose }: { item: PileOnPipelineItem | null; onClose: () => void }) {
+  const [showRunActivity, setShowRunActivity] = useState(false);
+
+  useEffect(() => {
+    setShowRunActivity(false);
+  }, [item?.id]);
+
   return (
     <Sheet open={!!item} onOpenChange={(open) => !open && onClose()}>
       <SheetContent widthClassName="w-full sm:max-w-md font-sans antialiased text-zinc-100">
@@ -279,8 +329,8 @@ function PileOnDrawer({ item, onClose }: { item: PileOnPipelineItem | null; onCl
 
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 space-y-2">
                 <div className="flex items-center justify-between text-xs font-sans">
-                  <span className="text-zinc-400">Email 1 sent via</span>
-                  <span className="font-mono text-white">{item.sentVia}</span>
+                  <span className="text-zinc-400">Email 1 personalization</span>
+                  <span className="font-mono text-white">{sentViaLabel(item.sentVia)}</span>
                 </div>
                 {item.touchesTotal > 0 && (
                   <>
@@ -301,15 +351,66 @@ function PileOnDrawer({ item, onClose }: { item: PileOnPipelineItem | null; onCl
                 )}
               </div>
 
+              {item.sendError && (() => {
+                const diagnosis = classifyRunError(item.sendError);
+                return (
+                  <div className="rounded-xl border border-rose-900/50 bg-rose-950/20 p-3 font-sans">
+                    <span className="block text-[10.5px] font-mono uppercase text-rose-400/80 mb-1">Email 1 didn&apos;t go out</span>
+                    {diagnosis ? (
+                      <>
+                        <p className="text-xs font-semibold text-rose-300">{diagnosis.title}</p>
+                        <p className="text-[11px] text-rose-300/90 mt-0.5">{diagnosis.explanation}</p>
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-rose-300/90">
+                        This hit an unexpected error and didn&apos;t send. If it keeps happening, let your account contact know.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {item.sentVia === "hybrid" && item.personalizedIntro && (
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 space-y-1.5">
+                  <span className="flex items-center gap-1.5 text-[10.5px] font-mono text-zinc-500 uppercase">
+                    <Sparkles size={11} /> AI-personalized intro
+                  </span>
+                  <p className="text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans">{item.personalizedIntro}</p>
+                </div>
+              )}
+
               {item.runId && (
-                <a
-                  href={`/dashboard/runs/${item.runId}`}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:border-zinc-700 transition-colors w-fit"
-                >
-                  <SquishySkillBadge skill="pile-on" size={14} enabled={true} />
-                  <span>View the run that sent Email 1</span>
-                  <ExternalLink size={11} className="text-zinc-500" />
-                </a>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowRunActivity((p) => !p)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-900 transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                      <SquishySkillBadge skill="pile-on" size={14} enabled={true} />
+                      Run activity
+                    </span>
+                    <ChevronDown size={13} className={cn("text-zinc-500 transition-transform", showRunActivity && "rotate-180")} />
+                  </button>
+                  {showRunActivity && (
+                    <div className="px-3 pb-3 pt-1 border-t border-zinc-800/60">
+                      {/* Includes the ad-audience sync step (adding/removing
+                          this prospect from the client's ad-platform
+                          exclusion cohort so ad spend isn't wasted
+                          retargeting someone who already booked) — that
+                          step has no separate persisted status field of
+                          its own, this run log is the actual record of it. */}
+                      <RunActivityPanel runId={item.runId} />
+                      <a
+                        href={`/dashboard/runs/${item.runId}`}
+                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                      >
+                        <span>Open the full run page</span>
+                        <ExternalLink size={10} />
+                      </a>
+                    </div>
+                  )}
+                </div>
               )}
             </SheetBody>
           </>

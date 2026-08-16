@@ -22,6 +22,7 @@ import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context"
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import { WinBackPipeline } from "../../win-back-pipeline";
 import { WinBackRevenueSection } from "../../win-back-revenue-section";
+import { WinBackCadencePreview } from "../../win-back-cadence-preview";
 
 export const revalidate = 0;
 
@@ -30,7 +31,7 @@ export default async function WinBackSkillPage({ params }: { params: Promise<{ i
   const session = await getSession();
 
   const [engagement] = await db
-    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
+    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, winBackSequenceAssetMap: engagements.winBackSequenceAssetMap })
     .from(engagements)
     .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session?.whopUserId ?? "")))
     .limit(1);
@@ -52,14 +53,16 @@ export default async function WinBackSkillPage({ params }: { params: Promise<{ i
         </p>
       </div>
 
+      <WinBackPipeline engagementId={id} />
+
+      <WinBackCadencePreview assetMap={engagement.winBackSequenceAssetMap} />
+
       <WinBackRevenueSection
         engagementId={id}
         offerPrice={revenue.offerPrice}
         initialEnrollments={revenue.recoveredEnrollments}
         initialPeriodLabel={revenue.periodLabel}
       />
-
-      <WinBackPipeline engagementId={id} />
     </div>
   );
 }

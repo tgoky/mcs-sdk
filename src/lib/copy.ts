@@ -186,31 +186,58 @@ export const PHASE_LABELS: Record<string, string> = {
   // Client Setup (pin-down)
   onboarding_start: "Starting setup",
   credential_storage: "Saving your account keys",
+  voice_scrape: "Reading your website for brand voice",
   voice_extraction: "Learning your brand voice",
   engagement_upsert: "Creating your account",
   webhook_registration: "Connecting your booking calendar",
   redirect_config: "Setting up your confirmation page",
+  script_pack: "Writing your video scripts",
+  sms_sequence: "Writing your SMS follow-up sequence",
+  ad_creative_briefs: "Generating your ad creative briefs",
+  pile_on_sequence_audit: "Reviewing your existing follow-up sequence",
+  leak_map_existing_audit: "Comparing your existing report against Leak Map",
+  notification_pack_activation: "Turning on your alerts",
+  existing_page_audit: "Reviewing your existing confirmation page",
+  confirmation_page_deploy: "Publishing your confirmation page",
 
   // Follow-Up Sequences (pile-on)
   pile_on_enrollment: "Adding lead to follow-up sequence",
   hybrid_synthesis: "Personalizing your follow-up message",
+  sms_enrollment: "Adding lead to SMS follow-up",
+  ad_data_cohort: "Updating your ad audience list",
+
+  // Win-Back (triggered from pile-on's enrollment flow, and its own
+  // recovery-service.ts)
   recovery_enrollment: "Adding lead to win-back sequence",
+  cadence_generation: "Building the recovery sequence",
+  reply_detection_setup: "Setting up reply tracking",
+  reschedule_link: "Creating a fresh booking link",
+  win_back_exit_signal: "Watching for a reply or new booking",
+  win_back_hybrid: "Personalizing the win-back message",
+  win_back_sms: "Sending the win-back text",
+  win_back_email_smtp: "Sending the win-back email",
+  recovered_tagger: "Tagging the recovered lead in your CRM",
 
   // Pre-Call Briefs (pre-call-read)
   roster_fetch: "Checking today's calls",
   duplicate_check: "Checking for a duplicate brief",
   rule_14_gate: "Reviewing call eligibility",
+  prospect_research: "Researching the prospect",
   brief_synthesis: "Writing your call brief",
   delivery: "Sending the brief to your team",
+  conversation_intelligence: "Setting up call recording",
 
   // Funnel Health Check (leak-map)
   stage_1_data_pull: "Pulling your account data",
   stage_2_compute: "Crunching the numbers",
   stage_4_severity: "Flagging the biggest issues",
   stage_5_report: "Writing your report",
+  report_delivery: "Sending your report",
 
   // Shared / webhooks
   webhook_received: "New booking received",
+  booking_roster: "Syncing your booking calendar",
+  skill_disabled: "Skipped — module turned off",
 };
 
 /** Friendly phase description for a raw phase string, with a safe fallback. */
@@ -268,6 +295,46 @@ export const AD_DATA_PLATFORM_LABELS: Record<string, string> = {
 export const BRIEF_DESTINATION_LABELS: Record<string, string> = {
   slack: "Slack message",
   crm_note: "Note in your CRM",
+};
+
+// Win-Back exitReason — winBackEnrollments.exitReason, "why did this
+// enrollment stop" as distinct from the status it stopped in. Previously
+// rendered raw ("window_elapsed", "outcome_corrected_to_showed") straight
+// from the database in the Win-Back drawer.
+export const EXIT_REASON_LABELS: Record<string, string> = {
+  rebooked: "Booked a new call",
+  reply_detected: "Replied to an outreach message",
+  window_elapsed: "Recovery window ended",
+  outcome_corrected_to_showed: "Marked as showed (correction)",
+};
+
+// Pile-On sentVia — pileOnSendLog.sentVia, which of the two internal
+// personalization paths handled Email 1: the AI path, or a safe
+// non-personalized fallback used when that path fails. "hybrid"/"fallback"
+// are implementation vocabulary, not something a buyer should have to
+// decode; this is the difference they actually care about.
+export const SENT_VIA_LABELS: Record<string, string> = {
+  hybrid: "AI-personalized",
+  fallback: "Standard template (AI personalization unavailable)",
+};
+
+// Leak-Map runType — auditRunsLog.runType, which cadence produced this
+// audit. Previously rendered raw ("weekly audit", "monthly audit" via CSS
+// capitalize) — capitalize only fixes the first letter, so this was
+// already mostly readable by luck, but goes through the same lookup
+// convention as everything else here now rather than relying on that.
+export const AUDIT_RUN_TYPE_LABELS: Record<string, string> = {
+  weekly: "Weekly audit",
+  monthly: "Monthly audit",
+};
+
+// Pile-On ad creative brief pillars — engagements.adCreativeBriefs.briefs[].pillar,
+// generated once by ad-creative-briefs.ts at Pin-Down onboarding.
+export const AD_CREATIVE_PILLAR_LABELS: Record<string, string> = {
+  common_questions: "Common Question",
+  deeper_questions: "Deeper Question",
+  success_proof: "Proof & Results",
+  objections: "Objection Handling",
 };
 
 export const CONVERSATION_INTELLIGENCE_PROVIDER_LABELS: Record<string, string> = {
@@ -424,6 +491,62 @@ export function adDataPlatformLabel(raw: string | null | undefined): string {
 export function conversationIntelligenceProviderLabel(raw: string | null | undefined): string {
   if (!raw || raw === "none") return "Not connected";
   return CONVERSATION_INTELLIGENCE_PROVIDER_LABELS[raw] ?? raw;
+}
+
+/** Friendly brief-delivery-destination name, with a safe fallback. */
+export function briefDestinationLabel(raw: string | null | undefined): string {
+  if (!raw) return "Not delivered yet";
+  return BRIEF_DESTINATION_LABELS[raw] ?? raw;
+}
+
+/** Friendly reason a Win-Back enrollment stopped, with a safe fallback. */
+export function exitReasonLabel(raw: string | null | undefined): string {
+  if (!raw) return "";
+  return EXIT_REASON_LABELS[raw] ?? raw;
+}
+
+/** Friendly description of which send path delivered a message, with a safe fallback. */
+export function sentViaLabel(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  return SENT_VIA_LABELS[raw] ?? raw;
+}
+
+/** Friendly audit cadence name, with a safe fallback. */
+export function auditRunTypeLabel(raw: string | null | undefined): string {
+  if (!raw) return "Audit";
+  return AUDIT_RUN_TYPE_LABELS[raw] ?? `${raw} audit`;
+}
+
+/** Friendly ad-creative-brief pillar name, with a safe fallback. */
+export function adCreativePillarLabel(raw: string | null | undefined): string {
+  if (!raw) return "Ad Brief";
+  return AD_CREATIVE_PILLAR_LABELS[raw] ?? raw;
+}
+
+// briefOutcomeLog.source — which of the four resolution paths confirmed a
+// call's outcome. "auto_sweep" is context-dependent: crons.ts's
+// assumed-no-show sweep defaults every unresolved call to "no_show" and
+// only flips to "showed" when crm-activity-check.ts's
+// hasPostCallCrmActivity finds real post-call CRM activity — so the same
+// source string means two different things depending on the outcome it's
+// paired with. Takes the outcome alongside the source rather than a flat
+// lookup, so this can't misrepresent an assumed no-show as a checked one.
+export function outcomeSourceLabel(source: string | null | undefined, outcome: string | null | undefined): string {
+  if (!source) return "";
+  switch (source) {
+    case "dashboard":
+      return "Confirmed by your team";
+    case "slack":
+      return "Confirmed via Slack";
+    case "recall_bot":
+      return "Confirmed automatically from the call recording";
+    case "auto_sweep":
+      return outcome === "showed"
+        ? "Confirmed automatically — activity found in your CRM"
+        : "Assumed no-show — no activity found after the scheduled time";
+    default:
+      return "Confirmed automatically";
+  }
 }
 
 // ---------------------------------------------------------------------------
