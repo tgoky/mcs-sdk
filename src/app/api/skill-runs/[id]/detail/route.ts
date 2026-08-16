@@ -1,27 +1,3 @@
-// src/app/api/skill-runs/[id]/detail/route.ts
-//
-// Skill-specific companion to GET /api/skill-runs/[id]. That route stays
-// as-is (generic steps/summary/tokens/cost — every skill needs those, and
-// existing callers depend on that exact shape). This route adds the
-// per-skill payload the five run-detail views need, correlated to this
-// specific run via the run_id columns added alongside it:
-//
-//   pre-call-read  -> every briefedCallsLog row this run wrote (a nightly
-//                      run loops over many calls under one runId)
-//   pile-on        -> the single pileOnSendLog row for this run's booking
-//   win-back       -> the single winBackEnrollments row this run created,
-//                      plus its winBackSendLog row and the engagement's
-//                      cadence template (winBackSequenceAssetMap) so the
-//                      30-day calendar can be computed
-//   leak-map       -> the single auditRunsLog row this run wrote
-//   pin-down       -> no per-run log table; reads straight off the
-//                      engagement (confirmation page, brand voice, script
-//                      pack, ad briefs) since pin-down is a one-time setup
-//                      receipt, not a repeating log
-//
-// Every skill-specific query is scoped to run_id = this run's id AND
-// (transitively, via the run's own engagementId) the caller's own
-// whopUserId — the same ownership check the base route already does.
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
@@ -35,6 +11,7 @@ import {
   sequenceMessageLog,
 } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq, asc } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -48,6 +25,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const [row] = await db
       .select({
@@ -71,7 +50,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-      .where(and(eq(skillRuns.id, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(skillRuns.id, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!row) {
@@ -94,11 +79,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           .from(pileOnSendLog)
           .where(eq(pileOnSendLog.runId, row.id))
           .limit(1);
-        // Real per-message SMS outcomes from the durable sequence sender
-        // (src/inngest/pile-on-sms.ts) — previously the only send data
-        // available for this run was the AI Personalization attempt
-        // above; the SMS/email/ad-attribution channel cards had nothing
-        // to read and fell back to showing configuration state instead.
         const smsMessages = await db
           .select()
           .from(sequenceMessageLog)
@@ -136,9 +116,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
       case "pin-down":
       default:
-        // Pin-Down has no per-run log table to join — everything it needs
-        // is already on `row` (confirmation page, brand voice, script
-        // pack, ad briefs), all pulled from the engagement above.
         return NextResponse.json({ run: row });
     }
   } catch (err) {

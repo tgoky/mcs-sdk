@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { startRun, failRun } from "@/lib/run-log";
 import { and, eq } from "drizzle-orm";
 import { inngest, skillRunExecute } from "@/lib/inngest";
@@ -11,13 +12,6 @@ import crypto from "crypto";
 
 export const runtime = "nodejs";
 
-/**
- * Unified manual trigger endpoint.
- * * DECOUPLED ARCHITECTURE:
- * Synchronously seeds the run execution record in Postgres to prevent frontend
- * 404 race conditions, dispatches the long-running task to the background queue,
- * and instantly releases the request loop thread with a 202 Accepted payload.
- */
 export async function POST(request: Request) {
   try {
     const session = await getSession();
@@ -38,6 +32,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     // Ownership check — validation lookup before execution
     const [tenant] = await db
       .select()
@@ -45,7 +41,8 @@ export async function POST(request: Request) {
       .where(
         and(
           eq(engagements.engagementId, engagementId),
-          eq(engagements.whopUserId, session.whopUserId)
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
         )
       )
       .limit(1);
@@ -83,7 +80,7 @@ export async function POST(request: Request) {
             runId,
             engagementId,
             skillName,
-            manualOverride: true, // <--- ADDED: Explicit operator triggers bypass background pause locks
+            manualOverride: true,
             ...(skillName === "leak-map" && { auditType: "weekly" as const }),
           })
         );

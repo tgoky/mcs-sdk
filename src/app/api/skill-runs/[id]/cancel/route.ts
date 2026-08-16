@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { inngest, skillRunCancel } from "@/lib/inngest";
 import { cancelRun } from "@/lib/run-log";
 import { and, eq } from "drizzle-orm";
@@ -21,11 +22,19 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const [row] = await db
       .select({ id: skillRuns.id, status: skillRuns.status })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-      .where(and(eq(skillRuns.id, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(skillRuns.id, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!row) {

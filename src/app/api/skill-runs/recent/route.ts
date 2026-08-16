@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq, desc, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { SKILL_IDS } from "@/lib/skill-manifest";
@@ -19,6 +20,8 @@ export async function GET(request: Request) {
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const { searchParams } = new URL(request.url);
 
@@ -60,10 +63,15 @@ export async function GET(request: Request) {
         skill
           ? and(
               eq(engagements.whopUserId, session.whopUserId),
+              eq(engagements.workspaceId, activeWorkspace.workspaceId),
               eq(skillRuns.skillName, skill),
               isNull(engagements.deletedAt)
             )
-          : and(eq(engagements.whopUserId, session.whopUserId), isNull(engagements.deletedAt))
+          : and(
+              eq(engagements.whopUserId, session.whopUserId),
+              eq(engagements.workspaceId, activeWorkspace.workspaceId),
+              isNull(engagements.deletedAt)
+            )
       )
       .orderBy(desc(skillRuns.startedAt))
       .limit(limit)
