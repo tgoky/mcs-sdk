@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, Check, LayoutGrid } from "lucide-react";
+import { ArrowUpRight, Download, LayoutGrid } from "lucide-react";
 import { SKILL_IDS, SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { StatChip } from "@/components/library/stat-chip";
@@ -23,11 +23,11 @@ export function PackageHeroCard({ overview }: { overview: PackageOverview }) {
                 <h2 className="text-base font-bold text-zinc-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
                   Showtime
                 </h2>
-                <span className="inline-flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-900 dark:text-zinc-100">
-                  <Check size={12} className="stroke-[2.5]" /> Installed
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-900 dark:text-zinc-100">
+                  <Download size={12} className="stroke-[2.5]" /> Installed
                 </span>
               </div>
-              <p className="text-[11px] font-mono text-zinc-500 mt-0.5">By Showtime Core • Verified</p>
+              <p className="text-[11px] font-mono text-zinc-500 mt-0.5">By Showtime Core</p>
             </div>
           </div>
           <ArrowUpRight
