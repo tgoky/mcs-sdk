@@ -1,8 +1,5 @@
-\// src/app/dashboard/engagements/[id]/skills/win-back/page.tsx
-//
-// The per-client, whole-history view for one skill — distinct from
-// runs/[id] (one run) and the master roster calendar (all skills, one
-// day).
+// src/app/dashboard/engagements/[id]/skills/win-back/page.tsx
+
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
