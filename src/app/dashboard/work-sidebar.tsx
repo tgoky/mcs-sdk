@@ -8,7 +8,6 @@ import {
   Inbox,
   ListTodo,
   Activity,
-  FolderKanban,
   ChevronDown,
 } from "lucide-react";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
@@ -44,10 +43,10 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
   // Group 1: Home & Inbox
   const group1Links: NavLinkItem[] = [
     { href: "/dashboard", label: "Home", icon: <Home className="w-4 h-4" /> },
-    { href: "/dashboard/inbox", label: "Notification", icon: <Inbox className="w-4 h-4" />, count: Number(unreadInboxCount[0]?.count ?? 0) },
+    { href: "/dashboard/inbox", label: "Inbox", icon: <Inbox className="w-4 h-4" />, count: Number(unreadInboxCount[0]?.count ?? 0) },
   ];
 
-  // Group 2: Queue, Executions, Projects
+  // Group 2: Queue & Executions
   const group2Links: NavLinkItem[] = [
     { href: "/dashboard/queue", label: "Queue", icon: <ListTodo className="w-4 h-4" />, count: queueCount },
     {
@@ -56,13 +55,8 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
       icon: <Activity className="w-4 h-4" />,
       count: Number(runningCountResult[0]?.count ?? 0),
       live: true,
-      // See LiveCountBadge's unseenCompleted doc — a run finishing between
-      // glances used to leave this badge back at 0 with no trace anything
-      // happened. This is the initial value only; the badge keeps polling
-      // both numbers from there.
       unseenCount: unseenCompletedCount,
     },
-    { href: "/dashboard/projects", label: "Projects", icon: <FolderKanban className="w-4 h-4" /> },
   ];
 
   return (
@@ -72,19 +66,16 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
 
       <div className="h-px bg-zinc-800/80 my-1 mx-1" />
 
-      {/* GROUP 2: QUEUE, EXECUTIONS, PROJECTS */}
+      {/* GROUP 2: QUEUE & EXECUTIONS */}
       <SidebarNavLinks links={group2Links} />
 
       <div className="h-px bg-zinc-800/80 my-1 mx-1" />
 
-      {/* SKILLS SECTION — quick jump into each skill's module hub
-          (/dashboard/modules/[skill]). Used to be a "Clients" list here,
-          which just duplicated the Engagements section one click away;
-          this is the thing that section couldn't already do. */}
+      {/* SKILLS SECTION */}
       <div className="space-y-1">
         <div className="flex items-center gap-1.5 px-2 py-1.5 text-[13px] font-bold text-zinc-300 tracking-tight">
           <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
-          <span>Installed Skills</span>
+          <span>Skills</span>
         </div>
 
         <SkillsNavList />
@@ -97,7 +88,7 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
 export function WorkSidebarSkeleton() {
   return (
     <div className="flex flex-col gap-1 animate-pulse">
-      {["Home", "Inbox", "Queue", "Executions", "Projects"].map((label) => (
+      {["Home", "Inbox", "Queue", "Executions"].map((label) => (
         <div key={label} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium">
           <div className="w-4 h-4 rounded bg-zinc-800 shrink-0" />
           <span className="text-zinc-600">{label}</span>
