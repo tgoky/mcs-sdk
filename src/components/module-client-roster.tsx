@@ -75,7 +75,7 @@ function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-sans tracking-wide select-none",
+        "inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-sans tracking-wide select-none shrink-0",
         styles
       )}
     >
@@ -158,7 +158,6 @@ export function ModuleClientRoster({
 
   const handleBackToClients = () => setStatusFilter("all");
 
-  // Injects onBack into the activity node
   const activityWithBack = useMemo(() => {
     if (!activity) return null;
     if (isValidElement(activity)) {
@@ -246,10 +245,8 @@ export function ModuleClientRoster({
   return (
     <div className="space-y-3 font-sans antialiased text-zinc-100">
       {statusFilter === "activity" ? (
-        /* Renders Activity directly, which now displays the glassy [< Clients] button inline in its own single toolbar row */
         activityWithBack
       ) : (
-        /* CLIENTS VIEW MODE */
         <>
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             <div className="flex items-center gap-2 overflow-x-auto py-0.5">
