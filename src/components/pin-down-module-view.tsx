@@ -15,10 +15,9 @@ import {
   PauseCircle,
   PlayCircle,
   Copy,
-  Plus,
-  Play,
-  Pause,
   Maximize2,
+  Pause,
+  Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SkillManifestEntry } from "@/lib/skill-manifest";
@@ -289,6 +288,7 @@ export function PinDownModuleView({
       {/* SINGLE TOOLBAR ROW */}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+          {/* Glassmorphism Back Button */}
           {onBack && (
             <button
               type="button"
