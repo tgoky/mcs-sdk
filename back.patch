@@ -1,0 +1,340 @@
+diff --git a/src/app/dashboard/modules/[skill]/page.tsx b/src/app/dashboard/modules/[skill]/page.tsx
+index ab124b3..2017dd6 100644
+--- a/src/app/dashboard/modules/[skill]/page.tsx
++++ b/src/app/dashboard/modules/[skill]/page.tsx
+@@ -8,12 +8,6 @@ import { type SkillName } from "@/lib/copy";
+ import { getModuleClientSummaries } from "@/lib/module-overview";
+ import { getActiveWorkspace } from "@/lib/workspace";
+ 
+-// Import Portfolio Views
+-import { PinDownModuleView } from "@/components/pin-down-module-view";
+-import { PileOnModuleView } from "@/components/pile-on-module-view";
+-import { PreCallReadModuleView } from "@/components/pre-call-read-module-view";
+-import { WinBackModuleView } from "@/components/win-back-module-view";
+-import { LeakMapModuleView } from "@/components/leak-map-module-views";
+ import { ModuleClientRoster } from "@/components/module-client-roster";
+ 
+ export const dynamic = "force-dynamic";
+@@ -76,23 +70,13 @@ export default async function ModulePage({
+ 
+   const manifest = SKILL_MANIFEST[skill];
+ 
+-  const activityView = (
+-    <>
+-      {skill === "pin-down" && <PinDownModuleView runs={recentRuns} manifest={manifest} />}
+-      {skill === "pile-on" && <PileOnModuleView runs={recentRuns} manifest={manifest} />}
+-      {skill === "pre-call-read" && <PreCallReadModuleView runs={recentRuns} manifest={manifest} />}
+-      {skill === "win-back" && <WinBackModuleView runs={recentRuns} manifest={manifest} />}
+-      {skill === "leak-map" && <LeakMapModuleView runs={recentRuns} manifest={manifest} />}
+-    </>
+-  );
+-
+   return (
+     <div className="w-full max-w-none -mt-6 -mx-2 sm:-mx-6 pt-0 px-2 sm:px-6 pb-6 font-sans antialiased text-zinc-100">
+       <ModuleClientRoster
+         summaries={clientSummaries}
+         manifest={manifest}
+         skill={skill}
+-        activity={activityView}
++        runs={recentRuns}
+       />
+     </div>
+   );
+diff --git a/src/components/leak-map-module-views.tsx b/src/components/leak-map-module-views.tsx
+index 0d2e6eb..b761b9d 100644
+--- a/src/components/leak-map-module-views.tsx
++++ b/src/components/leak-map-module-views.tsx
+@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
+ import {
+   List,
+   ChevronDown,
++  ChevronLeft,
+   LayoutList,
+   Kanban,
+   Clock,
+@@ -209,9 +210,11 @@ function buildRunSections(
+ export function LeakMapModuleView({
+   runs: initialRuns = [],
+   manifest,
++  onBack,
+ }: {
+   runs: SkillRun[];
+   manifest: SkillManifestEntry;
++  onBack?: () => void;
+ }) {
+   const router = useRouter();
+   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
+@@ -322,6 +325,19 @@ export function LeakMapModuleView({
+       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+         {/* Transparent Filter Pills */}
+         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
++          {/* Glassmorphism back-to-clients button — compact, icon-only, sits inline with the filter pills */}
++          {onBack && (
++            <button
++              type="button"
++              onClick={onBack}
++              aria-label="Back to all clients"
++              title="Back to all clients"
++              className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-zinc-200 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all cursor-pointer shadow-xs mr-1"
++            >
++              <ChevronLeft size={14} />
++            </button>
++          )}
++
+           {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
+             const isActive = statusFilter === tab;
+             const labels: Record<FilterStatus, string> = {
+diff --git a/src/components/module-client-roster.tsx b/src/components/module-client-roster.tsx
+index 7c6e4a9..f7b86f9 100644
+--- a/src/components/module-client-roster.tsx
++++ b/src/components/module-client-roster.tsx
+@@ -1,6 +1,6 @@
+ "use client";
+ 
+-import { useMemo, useState, Fragment, isValidElement, cloneElement, type ReactNode } from "react";
++import { useMemo, useState, Fragment, type ReactNode } from "react";
+ import { useRouter } from "next/navigation";
+ import {
+   Users,
+@@ -23,6 +23,11 @@ import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/compone
+ import { pauseEngagement, resumeEngagement, copyToClipboard } from "@/lib/quick-actions";
+ import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+ import { formatVerboseDate } from "@/components/relative-time";
++import { PinDownModuleView, type SkillRun } from "@/components/pin-down-module-view";
++import { PileOnModuleView } from "@/components/pile-on-module-view";
++import { PreCallReadModuleView } from "@/components/pre-call-read-module-view";
++import { WinBackModuleView } from "@/components/win-back-module-view";
++import { LeakMapModuleView } from "@/components/leak-map-module-views";
+ 
+ const HAS_SKILL_DETAIL_PAGE: Partial<Record<SkillId, true>> = {
+   "pile-on": true,
+@@ -139,12 +144,12 @@ export function ModuleClientRoster({
+   summaries = [],
+   manifest,
+   skill,
+-  activity,
++  runs,
+ }: {
+   summaries: ModuleClientSummary[];
+   manifest: SkillManifestEntry;
+   skill: SkillId;
+-  activity?: ReactNode;
++  runs?: SkillRun[];
+ }) {
+   const router = useRouter();
+   const [mode, setMode] = useState<"list" | "board">("list");
+@@ -158,29 +163,28 @@ export function ModuleClientRoster({
+ 
+   const handleBackToClients = () => setStatusFilter("all");
+ 
++  // Rendered directly on the client (not pre-rendered on the server and
++  // cloned into with extra props) so onBack reaches the module view
++  // reliably — props injected via cloneElement across a Server/Client
++  // boundary don't survive serialization.
+   const activityWithBack = useMemo(() => {
+-    if (!activity) return null;
+-    if (isValidElement(activity)) {
+-      if (activity.type === Fragment) {
+-        const children = (activity.props as any).children;
+-        return (
+-          <>
+-            {Array.isArray(children)
+-              ? children.map((child: any, i: number) =>
+-                  isValidElement(child)
+-                    ? cloneElement(child, { key: child.key ?? i, onBack: handleBackToClients } as any)
+-                    : child
+-                )
+-              : isValidElement(children)
+-              ? cloneElement(children, { onBack: handleBackToClients } as any)
+-              : children}
+-          </>
+-        );
+-      }
+-      return cloneElement(activity, { onBack: handleBackToClients } as any);
++    if (!runs) return null;
++    const props = { runs, manifest, onBack: handleBackToClients };
++    switch (skill) {
++      case "pin-down":
++        return <PinDownModuleView {...props} />;
++      case "pile-on":
++        return <PileOnModuleView {...props} />;
++      case "pre-call-read":
++        return <PreCallReadModuleView {...props} />;
++      case "win-back":
++        return <WinBackModuleView {...props} />;
++      case "leak-map":
++        return <LeakMapModuleView {...props} />;
++      default:
++        return null;
+     }
+-    return activity;
+-  }, [activity]);
++  }, [runs, manifest, skill]);
+ 
+   const counts = useMemo(() => {
+     let active = 0;
+@@ -280,7 +284,7 @@ export function ModuleClientRoster({
+                 );
+               })}
+ 
+-              {activity && (
++              {runs && (
+                 <button
+                   type="button"
+                   onClick={() => setStatusFilter("activity")}
+diff --git a/src/components/pile-on-module-view.tsx b/src/components/pile-on-module-view.tsx
+index 9bdd3a0..a87dfa8 100644
+--- a/src/components/pile-on-module-view.tsx
++++ b/src/components/pile-on-module-view.tsx
+@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
+ import {
+   List,
+   ChevronDown,
++  ChevronLeft,
+   LayoutList,
+   Kanban,
+   Clock,
+@@ -192,9 +193,11 @@ function buildRunSections(
+ export function PileOnModuleView({
+   runs: initialRuns = [],
+   manifest,
++  onBack,
+ }: {
+   runs: SkillRun[];
+   manifest: SkillManifestEntry;
++  onBack?: () => void;
+ }) {
+   const router = useRouter();
+   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
+@@ -294,6 +297,19 @@ export function PileOnModuleView({
+       {/* TOOLBAR */}
+       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
++          {/* Glassmorphism back-to-clients button — compact, icon-only, sits inline with the filter pills */}
++          {onBack && (
++            <button
++              type="button"
++              onClick={onBack}
++              aria-label="Back to all clients"
++              title="Back to all clients"
++              className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-zinc-200 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all cursor-pointer shadow-xs mr-1"
++            >
++              <ChevronLeft size={14} />
++            </button>
++          )}
++
+           {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
+             const isActive = statusFilter === tab;
+             const labels: Record<FilterStatus, string> = {
+diff --git a/src/components/pin-down-module-view.tsx b/src/components/pin-down-module-view.tsx
+index 1df8839..05fa3d2 100644
+--- a/src/components/pin-down-module-view.tsx
++++ b/src/components/pin-down-module-view.tsx
+@@ -288,15 +288,16 @@ export function PinDownModuleView({
+       {/* SINGLE TOOLBAR ROW */}
+       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+-          {/* Glassmorphism Back Button */}
++          {/* Glassmorphism back-to-clients button — compact, icon-only, sits inline with the filter pills */}
+           {onBack && (
+             <button
+               type="button"
+               onClick={onBack}
+-              className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 backdrop-blur-md px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all cursor-pointer whitespace-nowrap shadow-xs mr-1"
++              aria-label="Back to all clients"
++              title="Back to all clients"
++              className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-zinc-200 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all cursor-pointer shadow-xs mr-1"
+             >
+               <ChevronLeft size={14} />
+-              <span>Clients</span>
+             </button>
+           )}
+ 
+diff --git a/src/components/pre-call-read-module-view.tsx b/src/components/pre-call-read-module-view.tsx
+index 8897b87..9f3cb98 100644
+--- a/src/components/pre-call-read-module-view.tsx
++++ b/src/components/pre-call-read-module-view.tsx
+@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
+ import {
+   List,
+   ChevronDown,
++  ChevronLeft,
+   LayoutList,
+   Kanban,
+   Clock,
+@@ -209,9 +210,11 @@ function buildRunSections(
+ export function PreCallReadModuleView({
+   runs: initialRuns = [],
+   manifest,
++  onBack,
+ }: {
+   runs: SkillRun[];
+   manifest: SkillManifestEntry;
++  onBack?: () => void;
+ }) {
+   const router = useRouter();
+   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
+@@ -322,6 +325,19 @@ export function PreCallReadModuleView({
+       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+         {/* Transparent Filter Pills */}
+         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
++          {/* Glassmorphism back-to-clients button — compact, icon-only, sits inline with the filter pills */}
++          {onBack && (
++            <button
++              type="button"
++              onClick={onBack}
++              aria-label="Back to all clients"
++              title="Back to all clients"
++              className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-zinc-200 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all cursor-pointer shadow-xs mr-1"
++            >
++              <ChevronLeft size={14} />
++            </button>
++          )}
++
+           {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
+             const isActive = statusFilter === tab;
+             const labels: Record<FilterStatus, string> = {
+diff --git a/src/components/win-back-module-view.tsx b/src/components/win-back-module-view.tsx
+index 8bcf6b5..c0e8dd7 100644
+--- a/src/components/win-back-module-view.tsx
++++ b/src/components/win-back-module-view.tsx
+@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
+ import {
+   List,
+   ChevronDown,
++  ChevronLeft,
+   LayoutList,
+   Kanban,
+   Clock,
+@@ -209,9 +210,11 @@ function buildRunSections(
+ export function WinBackModuleView({
+   runs: initialRuns = [],
+   manifest,
++  onBack,
+ }: {
+   runs: SkillRun[];
+   manifest: SkillManifestEntry;
++  onBack?: () => void;
+ }) {
+   const router = useRouter();
+   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
+@@ -322,6 +325,19 @@ export function WinBackModuleView({
+       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+         {/* Transparent Filter Pills */}
+         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
++          {/* Glassmorphism back-to-clients button — compact, icon-only, sits inline with the filter pills */}
++          {onBack && (
++            <button
++              type="button"
++              onClick={onBack}
++              aria-label="Back to all clients"
++              title="Back to all clients"
++              className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-zinc-200 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all cursor-pointer shadow-xs mr-1"
++            >
++              <ChevronLeft size={14} />
++            </button>
++          )}
++
+           {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
+             const isActive = statusFilter === tab;
+             const labels: Record<FilterStatus, string> = {

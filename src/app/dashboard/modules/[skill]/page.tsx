@@ -8,12 +8,6 @@ import { type SkillName } from "@/lib/copy";
 import { getModuleClientSummaries } from "@/lib/module-overview";
 import { getActiveWorkspace } from "@/lib/workspace";
 
-// Import Portfolio Views
-import { PinDownModuleView } from "@/components/pin-down-module-view";
-import { PileOnModuleView } from "@/components/pile-on-module-view";
-import { PreCallReadModuleView } from "@/components/pre-call-read-module-view";
-import { WinBackModuleView } from "@/components/win-back-module-view";
-import { LeakMapModuleView } from "@/components/leak-map-module-views";
 import { ModuleClientRoster } from "@/components/module-client-roster";
 
 export const dynamic = "force-dynamic";
@@ -76,23 +70,13 @@ export default async function ModulePage({
 
   const manifest = SKILL_MANIFEST[skill];
 
-  const activityView = (
-    <>
-      {skill === "pin-down" && <PinDownModuleView runs={recentRuns} manifest={manifest} />}
-      {skill === "pile-on" && <PileOnModuleView runs={recentRuns} manifest={manifest} />}
-      {skill === "pre-call-read" && <PreCallReadModuleView runs={recentRuns} manifest={manifest} />}
-      {skill === "win-back" && <WinBackModuleView runs={recentRuns} manifest={manifest} />}
-      {skill === "leak-map" && <LeakMapModuleView runs={recentRuns} manifest={manifest} />}
-    </>
-  );
-
   return (
     <div className="w-full max-w-none -mt-6 -mx-2 sm:-mx-6 pt-0 px-2 sm:px-6 pb-6 font-sans antialiased text-zinc-100">
       <ModuleClientRoster
         summaries={clientSummaries}
         manifest={manifest}
         skill={skill}
-        activity={activityView}
+        runs={recentRuns}
       />
     </div>
   );

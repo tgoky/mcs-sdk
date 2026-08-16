@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   List,
   ChevronDown,
+  ChevronLeft,
   LayoutList,
   Kanban,
   Clock,
@@ -192,9 +193,11 @@ function buildRunSections(
 export function PileOnModuleView({
   runs: initialRuns = [],
   manifest,
+  onBack,
 }: {
   runs: SkillRun[];
   manifest: SkillManifestEntry;
+  onBack?: () => void;
 }) {
   const router = useRouter();
   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
@@ -294,6 +297,19 @@ export function PileOnModuleView({
       {/* TOOLBAR */}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+          {/* Glassmorphism back-to-clients button — compact, icon-only, sits inline with the filter pills */}
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back to all clients"
+              title="Back to all clients"
+              className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-zinc-200 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all cursor-pointer shadow-xs mr-1"
+            >
+              <ChevronLeft size={14} />
+            </button>
+          )}
+
           {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
             const isActive = statusFilter === tab;
             const labels: Record<FilterStatus, string> = {

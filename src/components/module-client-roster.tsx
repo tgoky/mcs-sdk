@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, Fragment, isValidElement, cloneElement, type ReactNode } from "react";
+import { useMemo, useState, Fragment, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Users,
@@ -23,6 +23,11 @@ import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/compone
 import { pauseEngagement, resumeEngagement, copyToClipboard } from "@/lib/quick-actions";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { formatVerboseDate } from "@/components/relative-time";
+import { PinDownModuleView, type SkillRun } from "@/components/pin-down-module-view";
+import { PileOnModuleView } from "@/components/pile-on-module-view";
+import { PreCallReadModuleView } from "@/components/pre-call-read-module-view";
+import { WinBackModuleView } from "@/components/win-back-module-view";
+import { LeakMapModuleView } from "@/components/leak-map-module-views";
 
 const HAS_SKILL_DETAIL_PAGE: Partial<Record<SkillId, true>> = {
   "pile-on": true,
@@ -139,12 +144,12 @@ export function ModuleClientRoster({
   summaries = [],
   manifest,
   skill,
-  activity,
+  runs,
 }: {
   summaries: ModuleClientSummary[];
   manifest: SkillManifestEntry;
   skill: SkillId;
-  activity?: ReactNode;
+  runs?: SkillRun[];
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"list" | "board">("list");
@@ -158,29 +163,28 @@ export function ModuleClientRoster({
 
   const handleBackToClients = () => setStatusFilter("all");
 
+  // Rendered directly on the client (not pre-rendered on the server and
+  // cloned into with extra props) so onBack reaches the module view
+  // reliably — props injected via cloneElement across a Server/Client
+  // boundary don't survive serialization.
   const activityWithBack = useMemo(() => {
-    if (!activity) return null;
-    if (isValidElement(activity)) {
-      if (activity.type === Fragment) {
-        const children = (activity.props as any).children;
-        return (
-          <>
-            {Array.isArray(children)
-              ? children.map((child: any, i: number) =>
-                  isValidElement(child)
-                    ? cloneElement(child, { key: child.key ?? i, onBack: handleBackToClients } as any)
-                    : child
-                )
-              : isValidElement(children)
-              ? cloneElement(children, { onBack: handleBackToClients } as any)
-              : children}
-          </>
-        );
-      }
-      return cloneElement(activity, { onBack: handleBackToClients } as any);
+    if (!runs) return null;
+    const props = { runs, manifest, onBack: handleBackToClients };
+    switch (skill) {
+      case "pin-down":
+        return <PinDownModuleView {...props} />;
+      case "pile-on":
+        return <PileOnModuleView {...props} />;
+      case "pre-call-read":
+        return <PreCallReadModuleView {...props} />;
+      case "win-back":
+        return <WinBackModuleView {...props} />;
+      case "leak-map":
+        return <LeakMapModuleView {...props} />;
+      default:
+        return null;
     }
-    return activity;
-  }, [activity]);
+  }, [runs, manifest, skill]);
 
   const counts = useMemo(() => {
     let active = 0;
@@ -280,7 +284,7 @@ export function ModuleClientRoster({
                 );
               })}
 
-              {activity && (
+              {runs && (
                 <button
                   type="button"
                   onClick={() => setStatusFilter("activity")}
