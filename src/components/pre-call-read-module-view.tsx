@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback, Fragment } from "react";
+import { useMemo, useState, useEffect, useCallback, Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,10 +16,10 @@ import {
   PauseCircle,
   PlayCircle,
   Copy,
-  Play, Pause
+  Play,
+  Pause,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import type { SkillManifestEntry } from "@/lib/skill-manifest";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { cancelSkillRun, pauseEngagement, resumeEngagement, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
@@ -27,9 +27,7 @@ import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
 import { phaseLabel } from "@/lib/copy";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
-
 import { formatVerboseDate } from "@/components/relative-time";
-
 
 export interface SkillRun {
   id: string;
@@ -78,6 +76,32 @@ function deriveLabel(status: string): string {
   if (s === "timed_out") return "Timed Out";
   if (s === "running" || s === "in_progress") return "Running";
   return "Pending";
+}
+
+function StatusBadge({
+  tone,
+  children,
+}: {
+  tone: "success" | "danger" | "warning" | "neutral";
+  children: ReactNode;
+}) {
+  const styles = {
+    success: "bg-emerald-400 text-zinc-950 font-bold",
+    warning: "bg-amber-400 text-zinc-950 font-bold",
+    danger: "bg-rose-400 text-zinc-950 font-bold",
+    neutral: "bg-zinc-700 text-zinc-100 font-medium",
+  }[tone];
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-sans tracking-wide select-none shrink-0",
+        styles
+      )}
+    >
+      {children}
+    </span>
+  );
 }
 
 function runSignature(run: SkillRun): string {
@@ -262,11 +286,8 @@ export function PreCallReadModuleView({
   }, [filteredRuns, groupRepeats]);
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  // Quick-action gear menu fix: this was hardcoded open={false} /
-  // onOpenChange={() => {}} — a controlled Popover that could never open.
-  // One openPanelId tracks which row's menu is open at a time (opening a
-  // second one closes the first, same as any menu-bar pattern).
   const [openPanelId, setOpenPanelId] = useState<string | null>(null);
+
   function toggleGroupExpanded(sig: string) {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -461,7 +482,7 @@ export function PreCallReadModuleView({
                       {/* Status + Group Count Toggle */}
                       <td className="px-4 py-3.5 text-right">
                         <div className="inline-flex items-center justify-end gap-2">
-                          <StatusPill tone={tone}>{statusLabel}</StatusPill>
+                          <StatusBadge tone={tone}>{statusLabel}</StatusBadge>
                           {group.count > 1 && (
                             <GroupCountToggle
                               count={group.count}
@@ -502,7 +523,7 @@ export function PreCallReadModuleView({
                             <span className="text-[10px] font-mono text-zinc-600">repeat</span>
                           </td>
                           <td className="px-4 py-2.5 text-right">
-                            <StatusPill tone={deriveTone(subRun.status)}>{deriveLabel(subRun.status)}</StatusPill>
+                            <StatusBadge tone={deriveTone(subRun.status)}>{deriveLabel(subRun.status)}</StatusBadge>
                           </td>
                           <td />
                         </tr>
@@ -603,11 +624,11 @@ export function PreCallReadModuleView({
                       </p>
 
                       <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/80 text-[10.5px] text-zinc-400 font-mono">
-                 <span title={formatVerboseDate(r.startedAt).full} className="text-[10.5px]">
-  {formatVerboseDate(r.startedAt).absolute}
-</span>
+                        <span title={formatVerboseDate(r.startedAt).full} className="text-[10.5px]">
+                          {formatVerboseDate(r.startedAt).absolute}
+                        </span>
 
-                        <StatusPill tone={deriveTone(r.status)}>{deriveLabel(r.status)}</StatusPill>
+                        <StatusBadge tone={deriveTone(r.status)}>{deriveLabel(r.status)}</StatusBadge>
                       </div>
                     </div>
                   ))}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback, Fragment } from "react";
+import { useMemo, useState, useEffect, useCallback, Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,12 +13,12 @@ import {
   ArrowUpRight,
   Ban,
   PauseCircle,
-  Play, Pause,
+  Play,
+  Pause,
   PlayCircle,
   Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import type { SkillManifestEntry } from "@/lib/skill-manifest";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { cancelSkillRun, pauseEngagement, resumeEngagement, copyToClipboard } from "@/lib/quick-actions";
@@ -45,9 +45,6 @@ export interface SkillRun {
 
 type FilterStatus = "all" | "running" | "needs_attention" | "completed";
 
-// ---------------------------------------------------------------------------
-// Action & Diagnostic Summaries for Pile-On
-// ---------------------------------------------------------------------------
 function actionSummary(run: SkillRun): string {
   const s = run.status.toLowerCase();
   if (s === "running" || s === "in_progress") return phaseLabel(run.phase);
@@ -77,6 +74,32 @@ function deriveLabel(status: string): string {
   return "Pending";
 }
 
+function StatusBadge({
+  tone,
+  children,
+}: {
+  tone: "success" | "danger" | "warning" | "neutral";
+  children: ReactNode;
+}) {
+  const styles = {
+    success: "bg-emerald-400 text-zinc-950 font-bold",
+    warning: "bg-amber-400 text-zinc-950 font-bold",
+    danger: "bg-rose-400 text-zinc-950 font-bold",
+    neutral: "bg-zinc-700 text-zinc-100 font-medium",
+  }[tone];
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-sans tracking-wide select-none shrink-0",
+        styles
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
 function runSignature(run: SkillRun): string {
   const detail = normalizeForSignature(run.errorMessage ?? run.subjectLabel);
   if (!detail) return `solo:${run.id}`;
@@ -102,9 +125,6 @@ function RelativeTime({ isoString }: { isoString: string }) {
   return <span>{label}</span>;
 }
 
-// ---------------------------------------------------------------------------
-// Quick-Action Builder
-// ---------------------------------------------------------------------------
 function buildRunSections(
   run: SkillRun,
   dispatch: ReturnType<typeof useQuickActions>["run"],
@@ -187,9 +207,6 @@ export function PileOnModuleView({
 
   const { busyKey, error, run: dispatch } = useQuickActions();
 
-  // ---------------------------------------------------------------------------
-  // Live Background Polling
-  // ---------------------------------------------------------------------------
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch("/api/skill-runs/recent?skill=pile-on&limit=100", { cache: "no-store", signal });
@@ -211,7 +228,6 @@ export function PileOnModuleView({
     };
   }, [polling, refresh]);
 
-  // Dynamic Real-time Status Counts
   const counts = useMemo(() => {
     let running = 0;
     let needsAttention = 0;
@@ -227,7 +243,6 @@ export function PileOnModuleView({
     return { all: runs.length, running, needs_attention: needsAttention, completed };
   }, [runs]);
 
-  // Filtered Runs
   const filteredRuns = useMemo(() => {
     return runs.filter((r) => {
       const s = r.status.toLowerCase();
@@ -240,7 +255,6 @@ export function PileOnModuleView({
     });
   }, [runs, statusFilter]);
 
-  // Grouping Repeats
   const runGroups = useMemo(() => {
     if (!groupRepeats) {
       return filteredRuns.map((r) => ({ signature: r.id, items: [r], latest: r, count: 1 }));
@@ -249,11 +263,8 @@ export function PileOnModuleView({
   }, [filteredRuns, groupRepeats]);
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  // Quick-action gear menu fix: this was hardcoded open={false} /
-  // onOpenChange={() => {}} — a controlled Popover that could never open.
-  // One openPanelId tracks which row's menu is open at a time (opening a
-  // second one closes the first, same as any menu-bar pattern).
   const [openPanelId, setOpenPanelId] = useState<string | null>(null);
+
   function toggleGroupExpanded(sig: string) {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -263,12 +274,10 @@ export function PileOnModuleView({
     });
   }
 
-  // Pagination
   const pageCount = Math.max(1, Math.ceil(runGroups.length / pageSize));
   const clampedPage = Math.min(page, pageCount - 1);
   const pagedGroups = runGroups.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
 
-  // Board Mode
   const board = useMemo(() => {
     const cols = { running: [] as SkillRun[], needs_attention: [] as SkillRun[], completed: [] as SkillRun[] };
     for (const r of filteredRuns) {
@@ -282,11 +291,8 @@ export function PileOnModuleView({
 
   return (
     <div className="space-y-3 font-sans antialiased text-zinc-100">
-      {/* ----------------------------------------------------------------- */}
-      {/* TOOLBAR: STATUS PILLS + LIVE CONTROLS                             */}
-      {/* ----------------------------------------------------------------- */}
+      {/* TOOLBAR */}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-        {/* Transparent Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
           {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
             const isActive = statusFilter === tab;
@@ -316,7 +322,6 @@ export function PileOnModuleView({
           })}
         </div>
 
-        {/* Live Controls + View Switcher */}
         <div className="flex items-center gap-2.5">
           <button
             type="button"
@@ -380,9 +385,7 @@ export function PileOnModuleView({
         </div>
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* TRANSPARENT LIST VIEW                                             */}
-      {/* ----------------------------------------------------------------- */}
+      {/* LIST VIEW */}
       {mode === "list" && (
         <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
           <table className="w-full text-left text-xs font-sans">
@@ -408,7 +411,6 @@ export function PileOnModuleView({
                       onClick={() => router.push(`/dashboard/runs/${r.id}`)}
                       className="group hover:bg-zinc-800/30 transition-colors cursor-pointer"
                     >
-                      {/* Name Column: Mint Container + Title + Green/Red Subtext */}
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-mint text-accent-mint-foreground shrink-0 font-bold">
@@ -431,23 +433,21 @@ export function PileOnModuleView({
                                 isFailed ? "text-rose-400 font-mono" : "text-emerald-400"
                               )}
                             >
-                           {actionSummary(r)} · <span title={formatVerboseDate(r.startedAt).full}>{formatVerboseDate(r.startedAt).absolute}</span>
+                              {actionSummary(r)} · <span title={formatVerboseDate(r.startedAt).full}>{formatVerboseDate(r.startedAt).absolute}</span>
                             </p>
                           </div>
                         </div>
                       </td>
 
-                      {/* Skill Member Badge: SquishySkillBadge for Pile-On */}
                       <td className="px-4 py-3.5 text-center">
                         <div className="flex justify-center">
                           <SquishySkillBadge skill="pile-on" size={24} enabled={true} />
                         </div>
                       </td>
 
-                      {/* Status + Group Count Toggle */}
                       <td className="px-4 py-3.5 text-right">
                         <div className="inline-flex items-center justify-end gap-2">
-                          <StatusPill tone={tone}>{statusLabel}</StatusPill>
+                          <StatusBadge tone={tone}>{statusLabel}</StatusBadge>
                           {group.count > 1 && (
                             <GroupCountToggle
                               count={group.count}
@@ -458,7 +458,6 @@ export function PileOnModuleView({
                         </div>
                       </td>
 
-                      {/* Quick-Action Gear Menu */}
                       <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <ActionPanel
                           open={openPanelId === r.id}
@@ -471,7 +470,6 @@ export function PileOnModuleView({
                       </td>
                     </tr>
 
-                    {/* Expanded Duplicate Group Rows */}
                     {expanded &&
                       group.items.slice(1).map((subRun) => (
                         <tr
@@ -481,14 +479,14 @@ export function PileOnModuleView({
                         >
                           <td className="px-4 py-2.5 pl-12">
                             <p className="text-[11px] font-mono text-zinc-400 truncate">
-                           {actionSummary(subRun)} · <span title={formatVerboseDate(subRun.startedAt).full}>{formatVerboseDate(subRun.startedAt).absolute}</span>
+                              {actionSummary(subRun)} · <span title={formatVerboseDate(subRun.startedAt).full}>{formatVerboseDate(subRun.startedAt).absolute}</span>
                             </p>
                           </td>
                           <td className="px-4 py-2.5 text-center">
                             <span className="text-[10px] font-mono text-zinc-600">repeat</span>
                           </td>
                           <td className="px-4 py-2.5 text-right">
-                            <StatusPill tone={deriveTone(subRun.status)}>{deriveLabel(subRun.status)}</StatusPill>
+                            <StatusBadge tone={deriveTone(subRun.status)}>{deriveLabel(subRun.status)}</StatusBadge>
                           </td>
                           <td />
                         </tr>
@@ -507,7 +505,7 @@ export function PileOnModuleView({
             </tbody>
           </table>
 
-          {/* Bottom Pagination Controls */}
+          {/* Pagination */}
           <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800/80">
             <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500">
               {([10, 25, 50] as const).map((size) => (
@@ -547,9 +545,7 @@ export function PileOnModuleView({
         </div>
       )}
 
-      {/* ----------------------------------------------------------------- */}
-      {/* KANBAN BOARD VIEW                                                 */}
-      {/* ----------------------------------------------------------------- */}
+      {/* KANBAN BOARD VIEW */}
       {mode === "board" && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 font-sans pt-2">
           {(["running", "needs_attention", "completed"] as const).map((colKey) => {
@@ -589,11 +585,11 @@ export function PileOnModuleView({
                       </p>
 
                       <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/80 text-[10.5px] text-zinc-400 font-mono">
-                     <span title={formatVerboseDate(r.startedAt).full} className="text-[10.5px]">
-  {formatVerboseDate(r.startedAt).absolute}
-</span>
+                        <span title={formatVerboseDate(r.startedAt).full} className="text-[10.5px]">
+                          {formatVerboseDate(r.startedAt).absolute}
+                        </span>
 
-                        <StatusPill tone={deriveTone(r.status)}>{deriveLabel(r.status)}</StatusPill>
+                        <StatusBadge tone={deriveTone(r.status)}>{deriveLabel(r.status)}</StatusBadge>
                       </div>
                     </div>
                   ))}
