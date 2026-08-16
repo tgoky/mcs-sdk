@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { engagements, credentialsRefs, skillRuns } from "@/models/schema";
 import { getQueueActionableCount } from "@/lib/queue";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { eq, and, sql } from "drizzle-orm";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 
@@ -57,36 +58,44 @@ const EXECUTIONS_ICON = (
   </svg>
 );
 
-/**
- * The sidebar's primary nav. Pulled out of DashboardLayout (same reasoning
- * as SidebarSkills below it): the counts each need a DB round trip, and
- * this is a shared ancestor for every /dashboard/* route, so those queries
- * shouldn't block the logo/sign-out/theme-toggle shell from painting.
- *
- * Queue previously had a full page (/dashboard/queue) and a badge-count
- * helper (getQueueActionableCount) with nothing in the sidebar linking to
- * either — this is the missing nav entry.
- */
 export async function SidebarNav({ whopUserId }: { whopUserId: string }) {
+  const activeWorkspace = await getActiveWorkspace(whopUserId);
+
   const [engagementRows, credentialRows, queueCount, runningCountResult] = await Promise.all([
     db
       .select({ engagementId: engagements.engagementId })
       .from(engagements)
-      .where(eq(engagements.whopUserId, whopUserId)),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      ),
 
     db
       .select({ id: credentialsRefs.id })
       .from(credentialsRefs)
       .innerJoin(engagements, eq(credentialsRefs.engagementId, engagements.engagementId))
-      .where(eq(engagements.whopUserId, whopUserId)),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      ),
 
-    getQueueActionableCount(whopUserId),
+    getQueueActionableCount(whopUserId, activeWorkspace.workspaceId),
 
     db
       .select({ count: sql<number>`count(*)` })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), eq(skillRuns.status, "running"))),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId),
+          eq(skillRuns.status, "running")
+        )
+      ),
   ]);
 
   const runningCount = Number(runningCountResult[0]?.count ?? 0);
@@ -104,7 +113,6 @@ export async function SidebarNav({ whopUserId }: { whopUserId: string }) {
   return <SidebarNavLinks links={links} />;
 }
 
-/** Static placeholder shown while SidebarNav resolves its counts. */
 export function SidebarNavSkeleton() {
   const links = [
     { label: "Dashboard", icon: DASHBOARD_ICON },
