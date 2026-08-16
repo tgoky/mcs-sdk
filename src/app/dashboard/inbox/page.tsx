@@ -10,21 +10,6 @@ import { skillName } from "@/lib/copy";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-/**
- * Inbox vs. Queue: Queue (lib/queue.ts's getQueueItems) is the actionable
- * subset — approvals, blockers, alerts that need a human decision. Inbox is
- * broader: everything notifyUser() has ever fanned out for this tenant,
- * read or not, actionable or not — run failures alongside win-back sweeps,
- * weekly digests, and conversation-intelligence highlights. Two different
- * jobs ("what needs me" vs. "what happened"), so they stay two different
- * pages instead of the same feed with a different filter.
- *
- * Every type here is one of the 7 real values in lib/notify.ts's
- * NotificationType — nothing fabricated. There's no synced-email/message
- * preview tab (yet): that would need a GHL/HubSpot Conversations API
- * integration this codebase doesn't have today, so rather than fake it,
- * it's left out until that integration exists.
- */
 const TABS: Array<{ key: string; label: string; types: NotificationType[] | null }> = [
   { key: "all", label: "All", types: null },
   {
@@ -84,7 +69,6 @@ export default async function InboxPage({
 
   const unreadTotal = rows.filter((r) => !r.read).length;
 
-  // Group into day buckets, preserving the newest-first order within each.
   const groups: Array<{ label: string; items: typeof filtered }> = [];
   for (const row of filtered) {
     const label = dayBucket(row.createdAt.toString());
@@ -97,24 +81,28 @@ export default async function InboxPage({
   }
 
   return (
-    <div className="max-w-3xl">
-      <div className="flex items-center justify-between mb-1">
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Inbox</h1>
+    <div className="w-full min-h-screen pb-12 font-sans antialiased text-zinc-900 dark:text-zinc-100">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Inbox</h1>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+            Everything Showtime has surfaced across your clients — run issues, win-back activity, and weekly digests.
+          </p>
+        </div>
         {unreadTotal > 0 && <MarkAllReadButton />}
       </div>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5">
-        Everything Showtime has surfaced across your clients — run issues, win-back activity, and weekly digests.
-      </p>
 
-      <div className="flex items-center gap-1 border-b border-zinc-200 dark:border-zinc-900 mb-5">
+      {/* Tabs Bar */}
+      <div className="flex items-center gap-1.5 border-b border-zinc-200 dark:border-zinc-800 pb-3 mb-6 overflow-x-auto">
         {TABS.map((tab) => (
           <a
             key={tab.key}
             href={tab.key === "all" ? "/dashboard/inbox" : `/dashboard/inbox?tab=${tab.key}`}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 whitespace-nowrap ${
               tab.key === activeTab.key
-                ? "border-ink text-zinc-900 dark:text-zinc-100"
-                : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-semibold shadow-xs"
+                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
             }`}
           >
             {tab.label}
@@ -122,18 +110,26 @@ export default async function InboxPage({
         ))}
       </div>
 
+      {/* Grouped Feed */}
       {groups.length === 0 ? (
-        <div className="text-center py-16 text-zinc-400 dark:text-zinc-600 text-sm">
-          Nothing here yet.
+        <div className="text-center py-20 text-zinc-400 dark:text-zinc-600 text-xs font-mono">
+          Nothing in your inbox right now.
         </div>
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="space-y-8 w-full">
           {groups.map((group) => (
-            <div key={group.label}>
-              <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600 mb-2 px-1">
-                {group.label}
-              </p>
-              <div className="rounded-xl border border-zinc-200 dark:border-zinc-900 divide-y divide-zinc-200 dark:divide-zinc-900 overflow-hidden bg-white dark:bg-zinc-900/30">
+            <div key={group.label} className="space-y-3 w-full">
+              {/* Centered Date Line */}
+              <div className="flex items-center my-6">
+                <div className="flex-1 h-px bg-zinc-200/80 dark:bg-zinc-800/80" />
+                <span className="px-4 text-xs font-medium text-zinc-500 dark:text-zinc-400 tracking-tight">
+                  {group.label}
+                </span>
+                <div className="flex-1 h-px bg-zinc-200/80 dark:bg-zinc-800/80" />
+              </div>
+
+              {/* Cards List */}
+              <div className="space-y-2.5 w-full">
                 {group.items.map((item) => (
                   <InboxRow
                     key={item.id}

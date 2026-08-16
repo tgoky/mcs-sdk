@@ -21,7 +21,6 @@ import { skillName, phaseLabel, SKILL_INFO, SKILLS, EXECUTIONS_TOOLBAR_COPY as t
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { cancelSkillRun, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
 import { SegmentedTabs, type SegmentedTabOption } from "@/components/segmented-tabs";
-import { TableSearchInput } from "@/components/table-search-input";
 import { TimeRangeMenu, computeTimeRangeBounds, isWithinTimeRange, type TimeRangeValue } from "@/components/time-range-menu";
 import { ViewCustomizer, FilterChipBar, type CustomizerSection } from "@/components/view-customizer";
 import { useLocalViewState } from "@/lib/use-local-view-state";
@@ -40,32 +39,17 @@ interface SkillRun {
   buyerName?: string | null;
   errorMessage?: string | null;
   stepCount?: number;
-  /** e.g. "Sarah Jenkins <sarah@acme.com>" — the prospect this run is about, when known. */
   subjectLabel?: string | null;
-  /** ISO timestamp if this run's client currently has automations paused, else null/undefined. */
   engagementPausedAt?: string | null;
 }
 
 interface LiveExecutionFeedProps {
   initialRuns: SkillRun[];
-  /** Defaults to "/api/skill-runs/recent". Pass e.g. "/api/skill-runs/recent?skill=pre-call-read" to scope the live poll to one module. */
   apiUrl?: string;
-  /** Defaults to "Live Executions". */
   title?: string;
-  /** Set when apiUrl is already scoped to one skill (see modules/[skill]/page.tsx) — hides the redundant per-module customize chips. */
   lockedSkill?: SkillName;
-  /** Scopes the persisted view-customization (pinned chips, page size, stat toggles) to this instance, so e.g. the dashboard-overview widget and a single module's history don't share one saved view. Defaults to "default". */
   storageKey?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Toolbar: tabs and customize chips
-//
-// Tabs bucket the real `status` column (see models/schema.ts skillRuns.status)
-// into four groups. "cancelled" deliberately doesn't map to any of the three
-// specific tabs — it's neither in-flight, broken, nor a normal completion —
-// so it only shows up under "All" or via the "Cancelled runs" customize chip.
-// ---------------------------------------------------------------------------
 
 type ExecutionsTab = "all" | "running" | "needs_attention" | "completed";
 
@@ -74,14 +58,13 @@ function tabOfStatus(status: string): ExecutionsTab | null {
   if (s === "running" || s === "in_progress") return "running";
   if (s === "failed" || s === "error" || s === "timed_out") return "needs_attention";
   if (s === "success" || s === "completed") return "completed";
-  return null; // cancelled, or anything unrecognized
+  return null;
 }
 
 interface ExecutionsChipDef {
   id: string;
   label: string;
   section: string;
-  /** Chips sharing a group OR together; different groups AND together. */
   group: string;
   predicate: (run: SkillRun) => boolean;
 }
@@ -124,17 +107,9 @@ const STAT_TOGGLE_IDS = {
   groupRepeats: "stat:group-repeats",
 } as const;
 
-/**
- * Two runs "are the same thing happening again" when they're for the same
- * client, the same skill, ended the same way, AND carry the same message —
- * e.g. a broken Klaviyo credential failing Pile-On for Acme every night
- * with the identical error text. Runs with no error/subject text at all
- * (nothing to compare) never collapse into each other — an empty
- * signature tail would otherwise group unrelated bare-status runs.
- */
 function runSignature(run: SkillRun): string {
   const detail = normalizeForSignature(run.errorMessage ?? run.subjectLabel);
-  if (!detail) return `solo:${run.id}`; // nothing to compare against — never merges with anything else
+  if (!detail) return `solo:${run.id}`;
   return [run.engagementId ?? "no-engagement", run.skillName, run.status.toLowerCase(), detail].join("|");
 }
 
@@ -157,7 +132,6 @@ const DEFAULT_EXECUTIONS_VIEW: ExecutionsViewState = {
 const TERMINAL_STATUSES = new Set(["success", "completed", "failed", "error", "timed_out"]);
 const SUCCESS_STATUSES = new Set(["success", "completed"]);
 
-/** Fetch window for the "live" poll — the most recent N runs across the tenant (or one skill, when apiUrl is scoped). Tabs/search/time-range/chips and pagination all then operate client-side over this window, which is why it's much bigger than any one page: "Live Executions" is this window's real scope, not a full historical archive. */
 const FETCH_WINDOW = 150;
 
 function actionSummary(run: SkillRun): string {
@@ -185,8 +159,8 @@ function actionSummary(run: SkillRun): string {
 
 function RunStatusIcon({ status }: { status: string }) {
   const s = status.toLowerCase();
-  if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />;
-  if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 text-rose-500 shrink-0" />;
+  if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 fill-emerald-500 text-zinc-950 shrink-0" />;
+  if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 fill-rose-500 text-zinc-950 shrink-0" />;
   if (s === "timed_out") return <Clock className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />;
   if (s === "cancelled") return <Ban className="w-4 h-4 text-amber-500 shrink-0" />;
   if (s === "running" || s === "in_progress") return <Loader2 className="w-4 h-4 text-zinc-500 dark:text-zinc-400 animate-spin shrink-0" />;
@@ -217,48 +191,16 @@ function ClientCell({ run }: { run: SkillRun }) {
   );
 }
 
-// function RelativeTime({ isoString }: { isoString: string }) {
-//   const compute = useCallback(() => {
-//     const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
-//     if (diff < 60) return `${diff}s`;
-//     if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-//     if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-//     return `${Math.floor(diff / 86400)}d`;
-//   }, [isoString]);
-
-//   const [label, setLabel] = useState(compute);
-
-//   useEffect(() => {
-//     const id = setInterval(() => setLabel(compute()), 1000);
-//     return () => clearInterval(id);
-//   }, [compute]);
-
-//   return (
-//     <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 tabular-nums">{label}</span>
-//   );
-// }
-
-/** Short run reference badge — identical styling to the one in queue-panel
- *  so the operator can eyeball-match `#a1b2c3d4` across both surfaces. */
-function RunRefBadge({ runId }: { runId: string }) {
-  return (
-    <span className="font-mono text-[10px] text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800/60 px-1.5 py-0.5 rounded border border-zinc-200/80 dark:border-zinc-800 shrink-0 select-all">
-      #{runId.slice(0, 8)}
-    </span>
-  );
-}
-
 function RunPreview({ run }: { run: SkillRun }) {
   const displayName = run.buyerName ?? run.engagementId ?? "Unknown client";
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <span className="font-semibold text-foreground truncate">{displayName}</span>
-       <VerboseTime isoString={run.startedAt} className="text-xs" />
+        <VerboseTime isoString={run.startedAt} className="text-xs" />
       </div>
       <div className="flex items-center gap-1.5 text-muted-foreground">
         <span className="font-mono font-bold uppercase tracking-wide text-[11px]">{skillName(run.skillName)}</span>
-        {/* <RunRefBadge runId={run.id} /> */}
         <span>·</span>
         <div className="flex items-center gap-1">
           <RunStatusIcon status={run.status} />
@@ -271,13 +213,6 @@ function RunPreview({ run }: { run: SkillRun }) {
   );
 }
 
-/**
- * Builds the contextual quick-action list for one run — what's offered
- * depends on whether the run is still in flight, which skill it is, and
- * whether we know the client's automations are currently paused. Every
- * entry maps to a real endpoint in src/lib/quick-actions.ts; nothing here
- * is decorative.
- */
 function buildRunSections(
   run: SkillRun,
   dispatch: ReturnType<typeof useQuickActions>["run"],
@@ -301,12 +236,6 @@ function buildRunSections(
     });
   }
 
-  // Deliberately only actions about *this run* — a cross-skill "Generate
-  // Leak Map for this client" and client-level Pause/Resume used to live
-  // here too, but pause/resume already have a real home on the client
-  // engagement page, and firing an unrelated skill from a specific run's
-  // menu is the same "wrong place for this" pattern the queue panel had.
-  // See Observation 6.
   const runControl: ActionPanelSection["items"] = [];
 
   if (isRunning) {
@@ -351,11 +280,9 @@ function RunRow({
   run: SkillRun;
   onOpen: () => void;
   onActionComplete: () => void;
-  /** >1 means this row is standing in for that many identical (same client/module/status/message) runs — see runSignature() below. */
   groupCount?: number;
   groupExpanded?: boolean;
   onToggleGroup?: () => void;
-  /** True for the older repeats revealed underneath a group's header row when expanded — dims and indents slightly so they read as "part of the group above," not new top-level rows. */
   nested?: boolean;
 }) {
   const isRunning = run.status.toLowerCase() === "running";
@@ -385,10 +312,9 @@ function RunRow({
           <span className="text-sm text-zinc-600 dark:text-zinc-400 font-semibold whitespace-nowrap">
             {skillName(run.skillName)}
           </span>
-          <RunRefBadge runId={run.id} />
         </div>
         {(run.stepCount ?? 0) > 0 && (
-          <span className="ml-2 text-[10px] font-mono text-zinc-400 dark:text-zinc-700">
+          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-700">
             {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
           </span>
         )}
@@ -418,9 +344,9 @@ function RunRow({
         </div>
       </td>
 
-    <td className="px-4 py-2.5 text-right whitespace-nowrap">
-  <VerboseTime isoString={run.startedAt} className="text-xs" />
-</td>
+      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+        <VerboseTime isoString={run.startedAt} className="text-xs font-bold text-zinc-900 dark:text-zinc-100 font-mono" />
+      </td>
 
       <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1">
@@ -443,14 +369,14 @@ function RunRow({
 export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, storageKey }: LiveExecutionFeedProps) {
   const router = useRouter();
   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
-  const [polling, setPolling] = useState(true);
+  const [polling] = useState(true);
 
   const [savedView, setSavedView] = useLocalViewState<ExecutionsViewState>(
     `mcs:executions:${storageKey ?? "default"}`,
     DEFAULT_EXECUTIONS_VIEW
   );
   const [tab, setTab] = useState<ExecutionsTab>("all");
-  const [search, setSearch] = useState("");
+  const [search] = useState("");
   const [timeRange, setTimeRange] = useState<TimeRangeValue>("all");
   const [activeChipIds, setActiveChipIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
@@ -461,7 +387,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
   const buildUrl = useCallback(() => {
     const url = new URL(apiUrl ?? "/api/skill-runs/recent", window.location.origin);
     url.searchParams.set("limit", String(FETCH_WINDOW));
-    url.searchParams.delete("offset"); // always the latest window — paging is client-side now
+    url.searchParams.delete("offset");
     return url.pathname + url.search;
   }, [apiUrl]);
 
@@ -494,7 +420,6 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
     };
   }, [polling, refresh]);
 
-  /** Fires a one-off refresh right after a quick action succeeds, so cancel/pause/resume/retrigger reflect immediately instead of waiting for the next poll tick. */
   const refreshNow = useCallback(() => {
     const controller = new AbortController();
     refresh(controller.signal);
@@ -581,9 +506,6 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   }, [searchFiltered, savedView.showModuleBreakdown, lockedSkill]);
 
-  // Collapse repeats *after* every filter has already narrowed visibleRuns
-  // down, so tab/chip counts above stay honest (they count real runs, not
-  // groups) while what actually renders collapses identical repeats.
   const runGroups = useMemo(() => {
     if (!savedView.groupRepeats) {
       return visibleRuns.map((r) => ({ signature: r.id, items: [r], latest: r, count: 1 }));
@@ -654,12 +576,11 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
 
   function clearFilters() {
     setTab("all");
-    setSearch("");
     setTimeRange("all");
     setActiveChipIds(new Set());
   }
 
-  const hasActiveFilters = tab !== "all" || search.trim() !== "" || timeRange !== "all" || activeChipIds.size > 0;
+  const hasActiveFilters = tab !== "all" || timeRange !== "all" || activeChipIds.size > 0;
 
   if (runs.length === 0) {
     return (
@@ -746,17 +667,19 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
             </div>
           )}
         </div>
+        {/*
         <button
           onClick={() => setPolling((p) => !p)}
           className="text-xs font-bold font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors cursor-pointer shrink-0"
         >
           {polling ? "[ Pause live ]" : "[ Resume live ]"}
         </button>
+        */}
       </div>
 
       <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800/60">
         <SegmentedTabs options={tabOptions} value={tab} onChange={setTab} />
-        <TableSearchInput value={search} onChange={setSearch} placeholder={toolbarCopy.searchPlaceholder} className="w-[190px]" />
+        {/* <TableSearchInput value={search} onChange={setSearch} placeholder={toolbarCopy.searchPlaceholder} className="w-[190px]" /> */}
         <TimeRangeMenu value={timeRange} onChange={setTimeRange} />
         <div className="ml-auto flex items-center gap-1.5">
           {hasActiveFilters && (

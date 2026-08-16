@@ -17,31 +17,84 @@ interface InboxRowProps {
   createdAt: string;
 }
 
-function iconFor(type: string) {
-  if (type === "run_failed") return <XCircle size={16} className="text-rose-600 dark:text-rose-400 shrink-0" />;
-  if (type === "run_timed_out") return <Clock size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />;
-  if (type === "credential_invalid" || type === "credential_check_error")
-    return <KeyRound size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />;
-  if (type === "lost_deal_swept") return <RotateCcw size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />;
-  if (type === "weekly_metrics") return <BarChart3 size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />;
-  if (type === "conversation_intelligence_objection_found")
-    return <Radio size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />;
-  return <AlertTriangle size={16} className="text-zinc-500 dark:text-zinc-400 shrink-0" />;
+function categoryMeta(type: string) {
+  switch (type) {
+    case "run_failed":
+      return {
+        label: "Execution Failed",
+        icon: <XCircle size={18} className="text-white shrink-0" />,
+        bg: "bg-rose-500",
+        dotBorder: "border-rose-500",
+        dotFill: "bg-rose-500",
+      };
+    case "run_timed_out":
+      return {
+        label: "Execution Timeout",
+        icon: <Clock size={18} className="text-white shrink-0" />,
+        bg: "bg-amber-500",
+        dotBorder: "border-amber-500",
+        dotFill: "bg-amber-500",
+      };
+    case "credential_invalid":
+    case "credential_check_error":
+      return {
+        label: "Credential Alert",
+        icon: <KeyRound size={18} className="text-white shrink-0" />,
+        bg: "bg-amber-500",
+        dotBorder: "border-amber-500",
+        dotFill: "bg-amber-500",
+      };
+    case "lost_deal_swept":
+      return {
+        label: "Win-Back Activity",
+        icon: <RotateCcw size={18} className="text-white shrink-0" />,
+        bg: "bg-emerald-500",
+        dotBorder: "border-emerald-500",
+        dotFill: "bg-emerald-500",
+      };
+    case "weekly_metrics":
+      return {
+        label: "Weekly Insight",
+        icon: <BarChart3 size={18} className="text-white shrink-0" />,
+        bg: "bg-sky-500",
+        dotBorder: "border-sky-500",
+        dotFill: "bg-sky-500",
+      };
+    case "conversation_intelligence_objection_found":
+      return {
+        label: "Call Intelligence",
+        icon: <Radio size={18} className="text-white shrink-0" />,
+        bg: "bg-sky-500",
+        dotBorder: "border-sky-500",
+        dotFill: "bg-sky-500",
+      };
+    default:
+      return {
+        label: "Notification",
+        icon: <AlertTriangle size={18} className="text-white shrink-0" />,
+        bg: "bg-zinc-600",
+        dotBorder: "border-zinc-500",
+        dotFill: "bg-zinc-500",
+      };
+  }
 }
 
 function relativeTime(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(ms / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} Minutes Ago`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return `${hours} ${hours === 1 ? "Hour" : "Hours"} Ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} ${days === 1 ? "Day" : "Days"} Ago`;
 }
 
 export function InboxRow(props: InboxRowProps) {
   const [read, setRead] = useState(props.read);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+
+  const meta = categoryMeta(props.type);
 
   const href = props.runId
     ? `/dashboard/runs/${props.runId}`
@@ -51,7 +104,7 @@ export function InboxRow(props: InboxRowProps) {
 
   function markRead() {
     if (read) return;
-    setRead(true); // optimistic — matches the bell's existing behavior
+    setRead(true);
     startTransition(async () => {
       try {
         await fetch(`/api/notifications/${props.id}/read`, { method: "POST" });
@@ -64,30 +117,60 @@ export function InboxRow(props: InboxRowProps) {
   const content = (
     <div
       onClick={markRead}
-      className={`flex items-start gap-3 px-4 py-3 text-sm transition-colors cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/60 ${
-        !read ? "bg-zinc-50/60 dark:bg-zinc-900/30" : ""
-      }`}
+      className={`group w-full flex items-center justify-between gap-4 p-4 rounded-2xl border transition-all duration-150 cursor-pointer ${
+        !read
+          ? "bg-zinc-100/90 dark:bg-zinc-900/80 border-zinc-200/80 dark:border-zinc-800 shadow-2xs"
+          : "bg-zinc-50/50 dark:bg-zinc-900/30 border-zinc-200/40 dark:border-zinc-800/40 opacity-80 hover:opacity-100"
+      } hover:bg-zinc-100 dark:hover:bg-zinc-900/90 hover:border-zinc-300 dark:hover:border-zinc-700/60`}
     >
-      <span className="mt-0.5">{iconFor(props.type)}</span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className={`truncate ${!read ? "font-semibold text-zinc-900 dark:text-zinc-100" : "font-medium text-zinc-700 dark:text-zinc-300"}`}>
-            {props.title}
-          </p>
-          {!read && <span className="w-1.5 h-1.5 rounded-full bg-ink shrink-0" aria-label="Unread" />}
+      {/* Left Icon & Body */}
+      <div className="flex items-start gap-3.5 min-w-0 flex-1">
+        <div
+          className={`w-10 h-10 rounded-full ${meta.bg} flex items-center justify-center shrink-0 shadow-xs mt-0.5`}
+        >
+          {meta.icon}
         </div>
-        <p className="text-zinc-500 dark:text-zinc-400 mt-0.5 line-clamp-2">{props.body}</p>
-        <div className="flex items-center gap-2 mt-1 text-[11px] text-zinc-400 dark:text-zinc-600 font-mono">
-          {props.buyer && <span>{props.buyer}</span>}
-          {props.buyer && <span>·</span>}
-          <span>{relativeTime(props.createdAt)}</span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 font-medium">
+            <span>{meta.label}</span>
+            <span>·</span>
+            <span>{relativeTime(props.createdAt)}</span>
+            {props.buyer && (
+              <>
+                <span>·</span>
+                <span className="font-semibold text-zinc-700 dark:text-zinc-300 truncate">
+                  {props.buyer}
+                </span>
+              </>
+            )}
+          </div>
+
+          <p
+            className={`text-sm tracking-tight mt-0.5 leading-snug line-clamp-2 ${
+              !read
+                ? "font-bold text-zinc-900 dark:text-zinc-100"
+                : "font-normal text-zinc-700 dark:text-zinc-300"
+            }`}
+          >
+            {props.title} {props.body && <span className="font-normal text-zinc-500 dark:text-zinc-400">— {props.body}</span>}
+          </p>
+        </div>
+      </div>
+
+      {/* Target Dot Indicator (Matching Screenshot) */}
+      <div className="shrink-0 pl-2">
+        <div
+          className={`w-5 h-5 rounded-full border-2 ${meta.dotBorder} flex items-center justify-center transition-transform group-hover:scale-110`}
+        >
+          <div className={`w-2 h-2 rounded-full ${meta.dotFill}`} />
         </div>
       </div>
     </div>
   );
 
   return href ? (
-    <Link href={href} className="block">
+    <Link href={href} className="block w-full">
       {content}
     </Link>
   ) : (
