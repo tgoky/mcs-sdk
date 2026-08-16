@@ -14,6 +14,8 @@ import {
   Search,
   Maximize2,
   AlertTriangle,
+  ArrowLeft,
+  Activity as ActivityIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SkillManifestEntry, SkillId } from "@/lib/skill-manifest";
@@ -155,7 +157,7 @@ export function ModuleClientRoster({
 
   const { busyKey, error, run: dispatch } = useQuickActions();
 
-  // Status Counts
+  // Client Status Counts
   const counts = useMemo(() => {
     let active = 0;
     let needsAttention = 0;
@@ -221,61 +223,75 @@ export function ModuleClientRoster({
 
   return (
     <div className="space-y-3 font-sans antialiased text-zinc-100">
-      {/* SINGLE TOOLBAR ROW */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-        {/* Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto py-0.5">
-          {(["all", "active", "needs_attention", "paused"] as const).map((tab) => {
-            const isActive = statusFilter === tab;
-            const labels = {
-              all: `All ${counts.all}`,
-              active: `Active ${counts.active}`,
-              needs_attention: `Needs attention ${counts.needs_attention}`,
-              paused: `Paused ${counts.paused}`,
-            };
-
-            return (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => {
-                  setStatusFilter(tab);
-                  setPage(0);
-                }}
-                className={cn(
-                  "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap bg-transparent",
-                  isActive
-                    ? "border-zinc-400 text-white font-semibold"
-                    : "border-zinc-800/90 text-zinc-400 hover:text-white hover:border-zinc-600"
-                )}
-              >
-                <span>{labels[tab]}</span>
-                <ChevronDown size={13} className="text-zinc-400 shrink-0" />
-              </button>
-            );
-          })}
-
-          {activity && (
+      {statusFilter === "activity" ? (
+        /* ACTIVITY VIEW MODE: Shows 'Back to Clients' header, then Activity's own execution toolbar & table */
+        <div className="space-y-3 pt-1">
+          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
             <button
               type="button"
-              onClick={() => setStatusFilter("activity")}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap bg-transparent",
-                statusFilter === "activity"
-                  ? "border-zinc-400 text-white font-semibold"
-                  : "border-zinc-800/90 text-zinc-400 hover:text-white hover:border-zinc-600"
-              )}
+              onClick={() => setStatusFilter("all")}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-semibold border border-zinc-700 bg-zinc-800/60 text-zinc-200 hover:bg-zinc-700/80 hover:text-white transition-all cursor-pointer"
             >
-              <span>Activity</span>
-              <ChevronDown size={13} className="text-zinc-400 shrink-0" />
+              <ArrowLeft size={13} /> Back to Clients ({counts.all})
             </button>
-          )}
-        </div>
+            <span className="text-xs font-mono text-zinc-400">
+              Live Executions Feed
+            </span>
+          </div>
 
-        {/* Right Side Controls */}
-        <div className="flex items-center gap-2.5">
-          {statusFilter !== "activity" && (
-            <>
+          {/* Renders Activity view which contains its own execution filters */}
+          {activity}
+        </div>
+      ) : (
+        /* CLIENTS VIEW MODE: Shows client status filter bar */
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+            {/* Filter Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+              {(["all", "active", "needs_attention", "paused"] as const).map((tab) => {
+                const isActive = statusFilter === tab;
+                const labels = {
+                  all: `All ${counts.all}`,
+                  active: `Active ${counts.active}`,
+                  needs_attention: `Needs attention ${counts.needs_attention}`,
+                  paused: `Paused ${counts.paused}`,
+                };
+
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => {
+                      setStatusFilter(tab);
+                      setPage(0);
+                    }}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap bg-transparent",
+                      isActive
+                        ? "border-zinc-400 text-white font-semibold"
+                        : "border-zinc-800/90 text-zinc-400 hover:text-white hover:border-zinc-600"
+                    )}
+                  >
+                    <span>{labels[tab]}</span>
+                    <ChevronDown size={13} className="text-zinc-400 shrink-0" />
+                  </button>
+                );
+              })}
+
+              {activity && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("activity")}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border border-zinc-800/90 text-zinc-400 hover:text-white hover:border-zinc-600 transition-all cursor-pointer whitespace-nowrap bg-transparent"
+                >
+                  <ActivityIcon size={13} className="text-zinc-400" />
+                  <span>Activity</span>
+                </button>
+              )}
+            </div>
+
+            {/* Search + List/Board Switcher */}
+            <div className="flex items-center gap-2.5">
               <div className="relative w-44 sm:w-56">
                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
                 <input
@@ -319,16 +335,9 @@ export function ModuleClientRoster({
                   <span>Board</span>
                 </button>
               </div>
-            </>
-          )}
-        </div>
-      </div>
+            </div>
+          </div>
 
-      {/* RENDER ACTIVITY OR ROSTER */}
-      {statusFilter === "activity" ? (
-        <div className="pt-2">{activity}</div>
-      ) : (
-        <>
           {/* LIST VIEW */}
           {mode === "list" && (
             <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
