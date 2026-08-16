@@ -1,25 +1,27 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback, Fragment, type ReactNode } from "react";
+import { useMemo, useState, useEffect, useCallback, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   List,
   ChevronDown,
-  ChevronLeft,
   LayoutList,
   Kanban,
+  Clock,
+  Maximize2,
   ArrowUpRight,
   Ban,
   RotateCcw,
   PauseCircle,
   PlayCircle,
   Copy,
-  Maximize2,
-  Pause,
+  Plus,
   Play,
+  Pause,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import type { SkillManifestEntry } from "@/lib/skill-manifest";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { cancelSkillRun, pauseEngagement, resumeEngagement, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
@@ -28,6 +30,7 @@ import { GroupCountToggle } from "@/components/group-toggle";
 import { phaseLabel } from "@/lib/copy";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { formatVerboseDate } from "@/components/relative-time";
+
 
 export interface SkillRun {
   id: string;
@@ -46,6 +49,9 @@ export interface SkillRun {
 
 type FilterStatus = "all" | "running" | "needs_attention" | "completed";
 
+// ---------------------------------------------------------------------------
+// Action & Diagnostic Summaries for Pin-Down
+// ---------------------------------------------------------------------------
 function actionSummary(run: SkillRun): string {
   const s = run.status.toLowerCase();
   if (s === "running" || s === "in_progress") return phaseLabel(run.phase);
@@ -75,38 +81,34 @@ function deriveLabel(status: string): string {
   return "Pending";
 }
 
-function StatusBadge({
-  tone,
-  children,
-}: {
-  tone: "success" | "danger" | "warning" | "neutral";
-  children: ReactNode;
-}) {
-  const styles = {
-    success: "bg-emerald-400 text-zinc-950 font-bold",
-    warning: "bg-amber-400 text-zinc-950 font-bold",
-    danger: "bg-rose-400 text-zinc-950 font-bold",
-    neutral: "bg-zinc-700 text-zinc-100 font-medium",
-  }[tone];
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-sans tracking-wide select-none shrink-0",
-        styles
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
 function runSignature(run: SkillRun): string {
   const detail = normalizeForSignature(run.errorMessage ?? run.subjectLabel);
   if (!detail) return `solo:${run.id}`;
   return [run.engagementId ?? "no-engagement", run.skillName, run.status.toLowerCase(), detail].join("|");
 }
 
+function RelativeTime({ isoString }: { isoString: string }) {
+  const compute = useCallback(() => {
+    const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  }, [isoString]);
+
+  const [label, setLabel] = useState(compute);
+
+  useEffect(() => {
+    const id = setInterval(() => setLabel(compute()), 1000);
+    return () => clearInterval(id);
+  }, [compute]);
+
+  return <span>{label}</span>;
+}
+
+// ---------------------------------------------------------------------------
+// Quick-Action Builder
+// ---------------------------------------------------------------------------
 function buildRunSections(
   run: SkillRun,
   dispatch: ReturnType<typeof useQuickActions>["run"],
@@ -184,11 +186,9 @@ function buildRunSections(
 export function PinDownModuleView({
   runs: initialRuns = [],
   manifest,
-  onBack,
 }: {
   runs: SkillRun[];
   manifest: SkillManifestEntry;
-  onBack?: () => void;
 }) {
   const router = useRouter();
   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
@@ -201,6 +201,9 @@ export function PinDownModuleView({
 
   const { busyKey, error, run: dispatch } = useQuickActions();
 
+  // ---------------------------------------------------------------------------
+  // Live Background Polling
+  // ---------------------------------------------------------------------------
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch("/api/skill-runs/recent?skill=pin-down&limit=100", { cache: "no-store", signal });
@@ -222,6 +225,7 @@ export function PinDownModuleView({
     };
   }, [polling, refresh]);
 
+  // Dynamic Real-time Status Counts
   const counts = useMemo(() => {
     let running = 0;
     let needsAttention = 0;
@@ -237,6 +241,7 @@ export function PinDownModuleView({
     return { all: runs.length, running, needs_attention: needsAttention, completed };
   }, [runs]);
 
+  // Filtered Runs
   const filteredRuns = useMemo(() => {
     return runs.filter((r) => {
       const s = r.status.toLowerCase();
@@ -249,6 +254,7 @@ export function PinDownModuleView({
     });
   }, [runs, statusFilter]);
 
+  // Grouping Repeats
   const runGroups = useMemo(() => {
     if (!groupRepeats) {
       return filteredRuns.map((r) => ({ signature: r.id, items: [r], latest: r, count: 1 }));
@@ -257,8 +263,11 @@ export function PinDownModuleView({
   }, [filteredRuns, groupRepeats]);
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  // Quick-action gear menu fix: this was hardcoded open={false} /
+  // onOpenChange={() => {}} — a controlled Popover that could never open.
+  // One openPanelId tracks which row's menu is open at a time (opening a
+  // second one closes the first, same as any menu-bar pattern).
   const [openPanelId, setOpenPanelId] = useState<string | null>(null);
-
   function toggleGroupExpanded(sig: string) {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -268,10 +277,12 @@ export function PinDownModuleView({
     });
   }
 
+  // Pagination
   const pageCount = Math.max(1, Math.ceil(runGroups.length / pageSize));
   const clampedPage = Math.min(page, pageCount - 1);
   const pagedGroups = runGroups.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
 
+  // Board Mode
   const board = useMemo(() => {
     const cols = { running: [] as SkillRun[], needs_attention: [] as SkillRun[], completed: [] as SkillRun[] };
     for (const r of filteredRuns) {
@@ -285,21 +296,12 @@ export function PinDownModuleView({
 
   return (
     <div className="space-y-3 font-sans antialiased text-zinc-100">
-      {/* SINGLE TOOLBAR ROW */}
+      {/* ----------------------------------------------------------------- */}
+      {/* TOOLBAR: STATUS PILLS + LIVE CONTROLS                             */}
+      {/* ----------------------------------------------------------------- */}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        {/* Transparent Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
-          {/* Glassmorphism Back Button */}
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 backdrop-blur-md px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all cursor-pointer whitespace-nowrap shadow-xs mr-1"
-            >
-              <ChevronLeft size={14} />
-              <span>Clients</span>
-            </button>
-          )}
-
           {(["all", "running", "needs_attention", "completed"] as FilterStatus[]).map((tab) => {
             const isActive = statusFilter === tab;
             const labels: Record<FilterStatus, string> = {
@@ -328,7 +330,15 @@ export function PinDownModuleView({
           })}
         </div>
 
+        {/* Live Controls + Onboard Button + View Switcher */}
         <div className="flex items-center gap-2.5">
+          <Link
+            href="/dashboard/engagements/new"
+            className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-3 py-1 text-xs font-bold text-zinc-950 hover:bg-amber-300 transition-colors shadow-xs"
+          >
+            <Plus size={13} /> Onboard Client
+          </Link>
+
           <button
             type="button"
             onClick={() => setPolling((p) => !p)}
@@ -392,7 +402,9 @@ export function PinDownModuleView({
         </div>
       </div>
 
-      {/* TABLE / LIST VIEW */}
+      {/* ----------------------------------------------------------------- */}
+      {/* TRANSPARENT LIST VIEW                                             */}
+      {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
         <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
           <table className="w-full text-left text-xs font-sans">
@@ -418,6 +430,7 @@ export function PinDownModuleView({
                       onClick={() => router.push(`/dashboard/runs/${r.id}`)}
                       className="group hover:bg-zinc-800/30 transition-colors cursor-pointer"
                     >
+                      {/* Name Column: Mint Container + Title + Green/Red Subtext */}
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-mint text-accent-mint-foreground shrink-0 font-bold">
@@ -440,21 +453,23 @@ export function PinDownModuleView({
                                 isFailed ? "text-rose-400 font-mono" : "text-emerald-400"
                               )}
                             >
-                              {actionSummary(r)} · <span title={formatVerboseDate(r.startedAt).full}>{formatVerboseDate(r.startedAt).absolute}</span>
+                            {actionSummary(r)} · <span title={formatVerboseDate(r.startedAt).full}>{formatVerboseDate(r.startedAt).absolute}</span>
                             </p>
                           </div>
                         </div>
                       </td>
 
+                      {/* Skill Member Badge: SquishySkillBadge for Pin-Down */}
                       <td className="px-4 py-3.5 text-center">
                         <div className="flex justify-center">
                           <SquishySkillBadge skill="pin-down" size={24} enabled={true} />
                         </div>
                       </td>
 
+                      {/* Status + Group Count Toggle */}
                       <td className="px-4 py-3.5 text-right">
                         <div className="inline-flex items-center justify-end gap-2">
-                          <StatusBadge tone={tone}>{statusLabel}</StatusBadge>
+                          <StatusPill tone={tone}>{statusLabel}</StatusPill>
                           {group.count > 1 && (
                             <GroupCountToggle
                               count={group.count}
@@ -465,6 +480,7 @@ export function PinDownModuleView({
                         </div>
                       </td>
 
+                      {/* Quick-Action Gear Menu */}
                       <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <ActionPanel
                           open={openPanelId === r.id}
@@ -477,6 +493,7 @@ export function PinDownModuleView({
                       </td>
                     </tr>
 
+                    {/* Expanded Duplicate Group Rows */}
                     {expanded &&
                       group.items.slice(1).map((subRun) => (
                         <tr
@@ -486,14 +503,14 @@ export function PinDownModuleView({
                         >
                           <td className="px-4 py-2.5 pl-12">
                             <p className="text-[11px] font-mono text-zinc-400 truncate">
-                              {actionSummary(subRun)} · <span title={formatVerboseDate(subRun.startedAt).full}>{formatVerboseDate(subRun.startedAt).absolute}</span>
+                          {actionSummary(subRun)} · <span title={formatVerboseDate(subRun.startedAt).full}>{formatVerboseDate(subRun.startedAt).absolute}</span>
                             </p>
                           </td>
                           <td className="px-4 py-2.5 text-center">
                             <span className="text-[10px] font-mono text-zinc-600">repeat</span>
                           </td>
                           <td className="px-4 py-2.5 text-right">
-                            <StatusBadge tone={deriveTone(subRun.status)}>{deriveLabel(subRun.status)}</StatusBadge>
+                            <StatusPill tone={deriveTone(subRun.status)}>{deriveLabel(subRun.status)}</StatusPill>
                           </td>
                           <td />
                         </tr>
@@ -512,7 +529,7 @@ export function PinDownModuleView({
             </tbody>
           </table>
 
-          {/* Pagination */}
+          {/* Bottom Pagination Controls */}
           <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800/80">
             <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500">
               {([10, 25, 50] as const).map((size) => (
@@ -544,7 +561,7 @@ export function PinDownModuleView({
                   disabled={clampedPage >= pageCount - 1}
                   className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  Next
+                  Next 
                 </button>
               </div>
             </div>
@@ -552,7 +569,9 @@ export function PinDownModuleView({
         </div>
       )}
 
-      {/* KANBAN BOARD VIEW */}
+      {/* ----------------------------------------------------------------- */}
+      {/* KANBAN BOARD VIEW                                                 */}
+      {/* ----------------------------------------------------------------- */}
       {mode === "board" && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 font-sans pt-2">
           {(["running", "needs_attention", "completed"] as const).map((colKey) => {
@@ -592,11 +611,11 @@ export function PinDownModuleView({
                       </p>
 
                       <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/80 text-[10.5px] text-zinc-400 font-mono">
-                        <span title={formatVerboseDate(r.startedAt).full} className="text-[10.5px]">
-                          {formatVerboseDate(r.startedAt).absolute}
-                        </span>
+                     <span title={formatVerboseDate(r.startedAt).full} className="text-[10.5px]">
+  {formatVerboseDate(r.startedAt).absolute}
+</span>
 
-                        <StatusBadge tone={deriveTone(r.status)}>{deriveLabel(r.status)}</StatusBadge>
+                        <StatusPill tone={deriveTone(r.status)}>{deriveLabel(r.status)}</StatusPill>
                       </div>
                     </div>
                   ))}
