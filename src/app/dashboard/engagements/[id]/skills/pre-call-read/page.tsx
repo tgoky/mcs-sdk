@@ -5,7 +5,8 @@ import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import { BackLink } from "@/components/back-link";
+import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import { PreCallReadPipeline } from "../../pre-call-read-pipeline";
 
@@ -37,7 +38,7 @@ export default async function PreCallReadSkillPage({
 
   if (!engagement) notFound();
 
-  // Dynamic back link resolution
+  // Dynamic back link destination and aria label
   const isFromModule = from && from.startsWith("/dashboard/modules");
   const backHref = isFromModule ? from : `/dashboard/engagements/${id}`;
   const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
@@ -45,13 +46,26 @@ export default async function PreCallReadSkillPage({
   return (
     <div className="space-y-4 font-sans antialiased">
       <SetBreadcrumbLabel label={`${engagement.buyer} · Pre-Call Read`} />
-      <BackLink href={backHref} label={backLabel} />
 
-      <div>
-        <h1 className="text-lg font-bold text-white">Pre-Call Read — {engagement.buyer}</h1>
-        <p className="text-xs text-zinc-500 mt-0.5">
-          Every call this engagement has ever had, not just today&apos;s calendar.
-        </p>
+      {/* Circular Back Button & Title in the same horizontal row */}
+      <div className="flex items-center gap-3">
+        <Link
+          href={backHref}
+          className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
+          aria-label={backLabel}
+          title={backLabel}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </Link>
+
+        <div>
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
+            Pre-Call Read — {engagement.buyer}
+          </h1>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Every call this engagement has ever had, not just today&apos;s calendar.
+          </p>
+        </div>
       </div>
 
       <PreCallReadPipeline engagementId={id} />
