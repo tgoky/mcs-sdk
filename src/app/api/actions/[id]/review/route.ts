@@ -1,27 +1,14 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { isAuthorizedForEngagement } from "@/lib/whop-access";
+import { getActiveWorkspace } from "@/lib/workspace";
+import { isAdminEmail, isAuthorizedForEngagement } from "@/lib/whop-access";
 import { db } from "@/lib/db";
-import { pendingActions } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { pendingActions, engagements } from "@/models/schema";
+import { and, eq } from "drizzle-orm";
 import { decidePendingAction } from "@/lib/approval-gate";
 
 /**
- * Cross-cutting recovery gap 22 — explicit human-approval gates. This is
- * the "human decides" side of gateOrExecute: the engagement's own tenant
- * (or an admin) approves (runs the deferred action now, via
- * ACTION_EXECUTORS) or rejects (marks it decided, no-op) a queued
- * pending_actions row. The actual decide/execute logic lives in
- * decidePendingAction (src/lib/approval-gate.ts) — shared with the Slack
- * interactions route, so an Approve/Reject click from Slack runs the
- * identical path a dashboard click does. This route's job is just auth:
- * load the action, confirm the caller owns its engagement, then delegate.
- *
- * Tenant-scoping fix: this used to be admin-only, but the Queue UI shows
- * pending actions to every tenant on their own engagement — non-admin
- * buyers hit a 403 trying to approve/reject their own queue items. The
- * action is loaded first so we can check ownership of *its* engagement,
- * not just authenticate the request.
+ * Cross-cutting recovery gap 22 — explicit human-approval gates.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -38,6 +25,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if (!(await isAuthorizedForEngagement(session, action.engagementId))) {
     return NextResponse.json({ error: "You don't have access to this engagement." }, { status: 403 });
+  }
+
+  // Ensure engagement belongs to the active workspace for non-admin users
+  if (!isAdminEmail(session.email)) {
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+    const [inWorkspace] = await db
+      .select({ id: engagements.id })
+      .from(engagements)
+      .where(
+        and(
+          eq(engagements.engagementId, action.engagementId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
+      .limit(1);
+
+    if (!inWorkspace) {
+      return NextResponse.json({ error: "Engagement not found in active workspace." }, { status: 404 });
+    }
   }
 
   let body: { decision?: "approved" | "rejected" };

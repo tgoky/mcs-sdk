@@ -1,19 +1,14 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { isAuthorizedForEngagement } from "@/lib/whop-access";
+import { getActiveWorkspace } from "@/lib/workspace";
+import { isAdminEmail, isAuthorizedForEngagement } from "@/lib/whop-access";
 import { resolveBlocker, abandonBlocker, getBlockerEngagementId } from "@/lib/human-blockers";
+import { db } from "@/lib/db";
+import { engagements } from "@/models/schema";
+import { and, eq } from "drizzle-orm";
 
 /**
- * Cross-cutting recovery gap 17 — human-only-blocker resume. This is the
- * "human resumes it" side of waitForBlockerResolution: the engagement's
- * own tenant (or an admin) marks a blocker resolved (optionally supplying
- * whatever data the blocked step needs — a video URL, an approval
- * timestamp, a credential reference), which wakes the exact Inngest step
- * durably waiting on it. See src/lib/human-blockers.ts for the full
- * mechanism.
- *
- * Tenant-scoping fix: this used to be admin-only, but the Queue UI shows
- * open blockers to every tenant on their own engagement.
+ * Cross-cutting recovery gap 17 — human-only-blocker resume.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -30,6 +25,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if (!(await isAuthorizedForEngagement(session, engagementId))) {
     return NextResponse.json({ error: "You don't have access to this engagement." }, { status: 403 });
+  }
+
+  // Ensure engagement belongs to the active workspace for non-admin users
+  if (!isAdminEmail(session.email)) {
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+    const [inWorkspace] = await db
+      .select({ id: engagements.id })
+      .from(engagements)
+      .where(
+        and(
+          eq(engagements.engagementId, engagementId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
+      .limit(1);
+
+    if (!inWorkspace) {
+      return NextResponse.json({ error: "Engagement not found in active workspace." }, { status: 404 });
+    }
   }
 
   let body: { decision?: "resolved" | "abandoned"; resumePayload?: Record<string, unknown> };
