@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { storeCredential } from "@/lib/credentials";
 
 export const runtime = "nodejs";
@@ -10,16 +11,7 @@ export const revalidate = 0;
 
 /**
  * Pre-Call Read's hinges — brief_trigger_type (nightly vs dynamic), video
- * engagement tracking, and Apollo/PDL prospect-research BYOK. All four
- * verified via their real snake_case stack key: brief_trigger_type is
- * read by src/inngest/crons.ts (a shared cron file, but the only bridge
- * it affects is Pre-Call Read's nightly batch — same pattern as
- * Leak-Map's schedule), and the video-engagement and prospect-research
- * fields resolve to src/features/pre-call-read/server alone.
- *
- * Like Win-Back, not a gate: every field defaults to a sane value
- * ("nightly", "none", []) and Pre-Call Read already waits on its own
- * cron. Optional review/edit screen, reachable anytime.
+ * engagement tracking, and Apollo/PDL prospect-research BYOK.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -27,11 +19,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
+  const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
   const [row] = await db
     .select({ buyer: engagements.buyer, stack: engagements.stack })
     .from(engagements)
-    .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+    .where(
+      and(
+        eq(engagements.engagementId, id),
+        eq(engagements.whopUserId, session.whopUserId),
+        eq(engagements.workspaceId, activeWorkspace.workspaceId)
+      )
+    )
     .limit(1);
 
   if (!row) {
@@ -46,11 +45,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     videoEngagementWistiaVideoId: row.stack?.video_engagement_meta?.wistia_video_id ?? "",
     videoEngagementYoutubeChannelId: row.stack?.video_engagement_meta?.youtube_channel_id ?? "",
     prospectResearchSourcesUsed: row.stack?.prospect_research_sources_used ?? [],
-    // Credential values (video engagement / Apollo / PDL API keys) are
-    // never returned, encrypted or not — same as any password field.
-    // hasVideoEngagementCredential etc. would need resolveCredential; not
-    // added here to keep this route read-only on secrets, matching how
-    // the general wizard never showed existing credentials back either.
   });
 }
 
@@ -61,6 +55,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const body = await req.json().catch(() => ({}));
     const briefTriggerType: "nightly" | "dynamic_webhook" =
@@ -83,7 +79,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const [row] = await db
       .select({ engagementId: engagements.engagementId, stack: engagements.stack })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!row) {

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
-import { getSession } from "@/lib/session";
 import { and, eq } from "drizzle-orm";
+import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -22,13 +23,21 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const body = await req.json().catch(() => ({}));
     const reason = typeof body?.reason === "string" ? body.reason.slice(0, 500) : null;
 
     const [row] = await db
       .select({ engagementId: engagements.engagementId, pausedAt: engagements.pausedAt })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!row) {
@@ -41,7 +50,6 @@ export async function POST(
 
     const now = new Date();
     
-    // 🌟 THIS IS THE LINE THAT WAS MISSING FROM YOUR FILE:
     await db
       .update(engagements)
       .set({ 
@@ -69,10 +77,18 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const [row] = await db
       .select({ engagementId: engagements.engagementId, pausedAt: engagements.pausedAt })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!row) {
@@ -83,7 +99,6 @@ export async function DELETE(
       return NextResponse.json({ error: "Not paused." }, { status: 409 });
     }
 
-    // 🌟 CLEAR THE PAUSE STATE:
     await db
       .update(engagements)
       .set({ 

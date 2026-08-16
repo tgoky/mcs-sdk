@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { storeCredential } from "@/lib/credentials";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
@@ -21,14 +22,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify the engagement belongs to this user before storing
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
+    // Verify the engagement belongs to this user and active workspace before storing
     const engagement = await db
       .select({ id: engagements.id })
       .from(engagements)
       .where(
         and(
           eq(engagements.engagementId, engagementId),
-          eq(engagements.whopUserId, session.whopUserId)
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
         )
       )
       .limit(1);

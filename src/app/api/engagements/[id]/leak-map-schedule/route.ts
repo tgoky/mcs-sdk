@@ -1,21 +1,8 @@
-// src/app/api/engagements/[id]/leak-map-schedule/route.ts
-//
-// Leak-Map's shape is genuinely different from the other three: it's
-// cron-scheduled (weekly/monthly per-engagement), not booking-driven, so
-// it doesn't touch booking_roster at all. The gap here isn't a frozen
-// single-run view (each Leak-Map run already = one complete audit,
-// LeakMapDetail.audit is singular) — it's that there's no way to see audit
-// history across time, or when the next audit is actually coming, without
-// opening runs one at a time. auditRunsLog is already engagement-scoped;
-// this aggregates it and adds the one thing that's never existed anywhere:
-// the actual next-scheduled-audit date, computed via the same
-// nextWeeklyOccurrence/nextMonthlyOccurrence logic the real cron uses (see
-// schedule-matcher.ts) so it can't drift from when the audit will really
-// fire.
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements, auditRunsLog, activeAlerts } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq, desc } from "drizzle-orm";
 import { nextWeeklyOccurrence, nextMonthlyOccurrence } from "@/features/leak-map/server/schedule-matcher";
 import type { EngagementStack } from "@/models/schema";
@@ -62,10 +49,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const [tenant] = await db
       .select({ engagementId: engagements.engagementId, stack: engagements.stack })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, engagementId), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, engagementId),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!tenant) {

@@ -1,9 +1,9 @@
-// src/app/api/engagements/[id]/skills/[skillId]/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { isSkillId, SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 
@@ -40,10 +40,18 @@ export async function POST(
       );
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const [row] = await db
       .select({ engagementId: engagements.engagementId })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!row) {

@@ -1,16 +1,8 @@
-// src/app/api/engagements/[id]/pile-on-pipeline/route.ts
-//
-// Same rationale as win-back-pipeline/route.ts: Pile-On runs are already
-// one-per-booking (PileOnDetail.send is singular), so this isn't a
-// freeze/stale-data fix — it's an aggregate that doesn't exist yet. Reads
-// every pileOnSendLog row (the initial Email 1 send) for the engagement,
-// computes real SMS-sequence progress from sequenceMessageLog, and joins
-// against bookingRoster to know each booking's actual call time — which is
-// what "Call Today" needs and previously had no source at all.
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements, pileOnSendLog, sequenceMessageLog, bookingRoster } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq, inArray } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -30,22 +22,10 @@ export interface PileOnPipelineItem {
   callTime: string | null;
   prospectName: string | null;
   stage: PileOnStage;
-  // pileOnSendLog already carried these two columns — `.select()` below
-  // pulls the full row, but the old mapping only copied 8 of its ~10
-  // fields into the response and silently dropped the rest. personalizedIntro
-  // is the actual Claude-generated intro paragraph delivered to the
-  // prospect (only set when sentVia === "hybrid"); sendError is set when
-  // Email 1 itself failed to send, distinct from a stalled SMS sequence.
   personalizedIntro: string | null;
   sendError: string | null;
 }
 
-// Cheap week-over-week booking trend, computed from the same `sends` rows
-// already fetched below — no extra query. Mirrors the "this week vs prior
-// week" signal weekly-metrics.ts computes for the Monday email, but as a
-// pure read the dashboard can show live rather than a cron-only side
-// effect (that module also hits Klaviyo and sends notifications, so it
-// isn't safe to call from a GET route).
 export interface PileOnWeeklyTrend {
   thisWeek: number;
   priorWeek: number;
@@ -59,10 +39,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const [tenant] = await db
       .select({ engagementId: engagements.engagementId, pileOnSmsAssetMap: engagements.pileOnSmsAssetMap })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, engagementId), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, engagementId),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!tenant) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -31,6 +32,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const body = await req.json().catch(() => ({}));
     const skillName = typeof body?.skillName === "string" ? body.skillName : null;
     if (!skillName) {
@@ -40,7 +43,13 @@ export async function PATCH(
     const [row] = await db
       .select({ stack: engagements.stack })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!row) {

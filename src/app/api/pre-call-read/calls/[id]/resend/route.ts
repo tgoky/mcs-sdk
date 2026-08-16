@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { briefedCallsLog, engagements, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import { deliverBrief } from "@/lib/platforms/email";
 
@@ -9,20 +10,7 @@ export const runtime = "nodejs";
 
 /**
  * Backs the run-detail page's "Re-send Brief to Slack" control
- * (src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx). Previously
- * that button only flipped local component state — clicking it never
- * called any endpoint, because none existed. deliverBrief() itself has
- * always supported being called more than once; the gap was purely that
- * nothing on the operator-facing side let you call it again for a
- * specific already-briefed call.
- *
- * Deliberately Slack-only, matching what the button actually says. A
- * general "redeliver to whatever destination this was configured for"
- * route would need the prospect's email for the crm_note case and for
- * the Slack interactive-button context — briefed_calls_log doesn't store
- * it (see the module comment on that table in schema.ts), so silently
- * degrading a resend for a non-Slack engagement, or reconstructing a
- * fake email, would be worse than failing loudly here.
+ * (src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx).
  */
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -33,6 +21,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const [row] = await db
       .select({
         id: briefedCallsLog.id,
@@ -41,7 +31,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       })
       .from(briefedCallsLog)
       .innerJoin(engagements, eq(briefedCallsLog.engagementId, engagements.engagementId))
-      .where(and(eq(briefedCallsLog.id, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(briefedCallsLog.id, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!row) {

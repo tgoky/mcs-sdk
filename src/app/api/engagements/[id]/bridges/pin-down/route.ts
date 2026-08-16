@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { setSkillEnabledForEngagement, isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
 
@@ -15,21 +16,7 @@ export const revalidate = 0;
  * design to ship), as opposed to shared client-profile data (offer,
  * ICP, testimonials, top questions/objections) that the general wizard
  * still collects because Pile-On, Win-Back, Pre-Call Read, and Leak-Map
- * all read it too. Verified by grepping every server-side feature module
- * for each field before drawing this line — see the phase-2
- * writeup. marketingDomain, rawVoiceCorpus, confirmationPageTemplate,
- * existingConfirmationPageUrl, existingPileOnSequenceFlagged,
- * existingAuditFlagged/Description, and notificationPackSelections all
- * resolved to onboarding-service.ts (Pin-Down) alone as their real
- * reader — the last three despite being labeled "Pre-Call Sequence"/
- * "Funnel Audit" in
- * the wizard's own inline comments, which describe which gap a field
- * closes, not which bridge's code actually consumes it today.
- *
- * POST both saves this config AND dispatches the run — Pin-Down has no
- * other trigger, so "save the hinges" and "turn the bridge on" are the
- * same action here, unlike every other bridge where enabling and
- * configuring are separate.
+ * all read it too.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -37,6 +24,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
+  const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
   const [row] = await db
     .select({
@@ -47,7 +35,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       offerDetails: engagements.offerDetails,
     })
     .from(engagements)
-    .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+    .where(
+      and(
+        eq(engagements.engagementId, id),
+        eq(engagements.whopUserId, session.whopUserId),
+        eq(engagements.workspaceId, activeWorkspace.workspaceId)
+      )
+    )
     .limit(1);
 
   if (!row) {
@@ -63,25 +57,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     existingConfirmationPageUrl: row.stack?.existing_confirmation_page_url ?? "",
     rawVoiceCorpus: row.rawVoiceCorpus ?? "",
     confirmationPageTemplate: row.confirmationPageTemplate ?? "signal",
-    // These three run as courtesy audits during Pin-Down's own onboarding
-    // pass (see onboarding-service.ts) — despite reading as Pile-On/Leak-Map
-    // fields by name, they're genuinely Pin-Down's: it's the one auditing
-    // the existing sequence/report and activating the notification packs,
-    // once, during its own run. Their *output* feeds those other bridges,
-    // but the input belongs here.
     existingPileOnSequenceFlagged: row.stack?.existing_pile_on_sequence_flagged ?? false,
     existingAuditFlagged: row.stack?.existing_audit_flagged ?? false,
     existingAuditDescription: row.stack?.existing_audit_description ?? "",
     notificationPackSelections: row.stack?.notification_pack_selections ?? [],
-    // When true, this run skips building/publishing a new confirmation
-    // page and just runs the existing-page audit above.
     existingConfirmationPageReuse: row.stack?.existing_confirmation_page_reuse ?? false,
-    // For the "sequence running on {platform}" label's context only —
-    // emailPlatform itself is a shared connection, owned by the general
-    // wizard / edit-stack-settings, not this route.
     emailPlatform: row.stack?.email_platform ?? "",
-    // Offer/testimonial/question fields feed TemplatePicker's live preview
-    // but are owned by the general wizard, not this route — read-only here.
     offerDetails: row.offerDetails,
   });
 }
@@ -93,6 +74,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const body = await req.json().catch(() => ({}));
     const voiceSource: "scrape" | "manual" = body.voiceSource === "manual" ? "manual" : "scrape";
@@ -127,27 +110,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const [row] = await db
       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, stack: engagements.stack })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!row) {
       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
     }
 
-    // stack holds a lot of unrelated fields (booking/email/hosting
-    // platform + credentials refs, etc.) written during the general
-    // wizard's Save Setup — merge into it, never overwrite it. Cast is
-    // safe: by the time this screen is reachable, the general wizard's
-    // Save Setup has already run and stack.booking_platform/email_platform
-    // are required there — see /api/engagements/setup's own validation.
     const mergedStack = {
       ...(row.stack ?? {}),
       ...(marketingDomain ? { buyer_domain: marketingDomain } : {}),
       ...(existingConfirmationPageUrl ? { existing_confirmation_page_url: existingConfirmationPageUrl } : {}),
-      // Boolean, always set (not conditionally spread) — mirrors
-      // existing_pile_on_sequence_flagged/existing_audit_flagged below, so
-      // clearing the URL and resaving also clears a stale reuse flag
-      // rather than leaving it silently true with nothing to point at.
       existing_confirmation_page_reuse: existingConfirmationPageUrl ? existingConfirmationPageReuse : false,
       existing_pile_on_sequence_flagged: existingPileOnSequenceFlagged,
       existing_audit_flagged: existingAuditFlagged,

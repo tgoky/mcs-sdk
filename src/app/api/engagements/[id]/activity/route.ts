@@ -30,6 +30,7 @@ import {
 } from "@/models/schema";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq, gte, lt, inArray, isNotNull } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -97,10 +98,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const [tenant] = await db
       .select({ engagementId: engagements.engagementId })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, engagementId), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, engagementId),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!tenant) {

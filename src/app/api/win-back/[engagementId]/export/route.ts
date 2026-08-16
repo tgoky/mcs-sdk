@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { isAdminEmail } from "@/lib/whop-access";
+import { and, eq } from "drizzle-orm";
 import { exportWinBackToSkillPack, markWinBackExported } from "@/features/win-back/server/export-to-skill-pack";
 
 /**
  * Tier 4 #29 / Win-Back recovery gap 1 option 2 — export path.
- *
- * GET returns the export bundle (read-only, safe to call repeatedly —
- * preview it before committing). POST confirms the export and flips
- * runtime_ownership_model, which stops this app's own SMS dispatch and
- * hybrid personalization for the engagement — see export-to-skill-pack.ts
- * for exactly what does and doesn't stop running.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ engagementId: string }> }) {
   const session = await getSession();
@@ -19,6 +17,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ engageme
   }
 
   const { engagementId } = await params;
+  const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
+  const [engagement] = await db
+    .select({ id: engagements.id })
+    .from(engagements)
+    .where(
+      and(
+        eq(engagements.engagementId, engagementId),
+        eq(engagements.whopUserId, session.whopUserId),
+        eq(engagements.workspaceId, activeWorkspace.workspaceId)
+      )
+    )
+    .limit(1);
+
+  if (!engagement) {
+    return NextResponse.json({ error: "Engagement not found or access denied." }, { status: 404 });
+  }
 
   try {
     const bundle = await exportWinBackToSkillPack(engagementId);
@@ -35,6 +50,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
   }
 
   const { engagementId } = await params;
+  const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
+  const [engagement] = await db
+    .select({ id: engagements.id })
+    .from(engagements)
+    .where(
+      and(
+        eq(engagements.engagementId, engagementId),
+        eq(engagements.whopUserId, session.whopUserId),
+        eq(engagements.workspaceId, activeWorkspace.workspaceId)
+      )
+    )
+    .limit(1);
+
+  if (!engagement) {
+    return NextResponse.json({ error: "Engagement not found or access denied." }, { status: 404 });
+  }
 
   try {
     const bundle = await exportWinBackToSkillPack(engagementId);

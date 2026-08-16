@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -28,11 +29,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
+  const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
   const [row] = await db
     .select({ buyer: engagements.buyer, stack: engagements.stack })
     .from(engagements)
-    .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+    .where(
+      and(
+        eq(engagements.engagementId, id),
+        eq(engagements.whopUserId, session.whopUserId),
+        eq(engagements.workspaceId, activeWorkspace.workspaceId)
+      )
+    )
     .limit(1);
 
   if (!row) {
@@ -60,6 +68,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const body = await req.json().catch(() => ({}));
     const rescheduleMode: "fresh_link" | "time_slots" = body.rescheduleMode === "fresh_link" ? "fresh_link" : "time_slots";
     const recoveredFromNoShowTaggingEnabled: boolean = body.recoveredFromNoShowTaggingEnabled !== false;
@@ -70,7 +80,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const [row] = await db
       .select({ engagementId: engagements.engagementId, stack: engagements.stack })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!row) {

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { eq, and } from "drizzle-orm";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
 
@@ -34,10 +35,18 @@ export async function POST(request: Request) {
       return new Response("Missing required field: engagementId", { status: 400 });
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const [row] = await db
       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, engagementId), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, engagementId),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!row) {

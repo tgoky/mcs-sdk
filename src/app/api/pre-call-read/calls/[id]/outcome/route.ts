@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { briefedCallsLog, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
 
@@ -11,24 +12,7 @@ const VALID_OUTCOMES = new Set(["showed", "no_show", "rescheduled"]);
 
 /**
  * Backs the run-detail page's "Log Sales Call Outcome" control
- * (src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx). Previously
- * that button only set local component state — nothing was ever
- * persisted, even though a real outcome-logging system already existed
- * via the Slack interactive buttons (src/app/api/slack/interactions/route.ts),
- * which write to this exact same brief_outcome_log table. This route just
- * gives the dashboard the same write path, keyed the same way
- * (bookingId === briefedCallsLog.callId, not briefedCallsLog.id — see the
- * module comment on brief_outcome_log in schema.ts), so an outcome logged
- * from Slack and one logged from the dashboard converge on one source of
- * truth instead of two disconnected copies.
- *
- * Win-Back no-show gap fix — this now goes through
- * resolveCallOutcome (outcome-resolution.ts) instead of a bare insert.
- * Previously a "no_show" logged here (or from Slack) only ever wrote this
- * log row; nothing enrolled the prospect in Win-Back and nothing removed
- * them from the ad-data cohort. See that module for the full picture —
- * this route no longer needs to know the prospect's email itself,
- * resolveCallOutcome looks it up from briefedCallsLog.
+ * (src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx).
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -38,6 +22,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     let body: { outcome?: string };
     try {
@@ -60,7 +46,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       })
       .from(briefedCallsLog)
       .innerJoin(engagements, eq(briefedCallsLog.engagementId, engagements.engagementId))
-      .where(and(eq(briefedCallsLog.id, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(briefedCallsLog.id, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!row) {
@@ -86,4 +78,3 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Failed to log call outcome." }, { status: 500 });
   }
 }
-
