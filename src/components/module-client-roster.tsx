@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, Fragment, type ReactNode } from "react";
+import { useMemo, useState, Fragment, isValidElement, cloneElement, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Users,
@@ -14,7 +14,6 @@ import {
   Search,
   Maximize2,
   AlertTriangle,
-  ArrowLeft,
   Activity as ActivityIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -157,7 +156,33 @@ export function ModuleClientRoster({
 
   const { busyKey, error, run: dispatch } = useQuickActions();
 
-  // Client Status Counts
+  const handleBackToClients = () => setStatusFilter("all");
+
+  // Injects onBack into the activity node
+  const activityWithBack = useMemo(() => {
+    if (!activity) return null;
+    if (isValidElement(activity)) {
+      if (activity.type === Fragment) {
+        const children = (activity.props as any).children;
+        return (
+          <>
+            {Array.isArray(children)
+              ? children.map((child: any, i: number) =>
+                  isValidElement(child)
+                    ? cloneElement(child, { key: child.key ?? i, onBack: handleBackToClients } as any)
+                    : child
+                )
+              : isValidElement(children)
+              ? cloneElement(children, { onBack: handleBackToClients } as any)
+              : children}
+          </>
+        );
+      }
+      return cloneElement(activity, { onBack: handleBackToClients } as any);
+    }
+    return activity;
+  }, [activity]);
+
   const counts = useMemo(() => {
     let active = 0;
     let needsAttention = 0;
@@ -173,7 +198,6 @@ export function ModuleClientRoster({
     return { all: summaries.length, active, needs_attention: needsAttention, paused };
   }, [summaries]);
 
-  // Filtered Roster
   const filteredClients = useMemo(() => {
     return summaries.filter((c) => {
       const isPaused = !!c.pausedAt;
@@ -196,7 +220,6 @@ export function ModuleClientRoster({
     });
   }, [summaries, statusFilter, searchQuery]);
 
-  // Pagination
   const pageCount = Math.max(1, Math.ceil(filteredClients.length / pageSize));
   const clampedPage = Math.min(page, pageCount - 1);
   const pagedClients = filteredClients.slice(
@@ -204,7 +227,6 @@ export function ModuleClientRoster({
     clampedPage * pageSize + pageSize
   );
 
-  // Board View Columns
   const board = useMemo(() => {
     const cols = {
       active: [] as ModuleClientSummary[],
@@ -224,29 +246,12 @@ export function ModuleClientRoster({
   return (
     <div className="space-y-3 font-sans antialiased text-zinc-100">
       {statusFilter === "activity" ? (
-        /* ACTIVITY VIEW MODE: Shows 'Back to Clients' header, then Activity's own execution toolbar & table */
-        <div className="space-y-3 pt-1">
-          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
-            <button
-              type="button"
-              onClick={() => setStatusFilter("all")}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-semibold border border-zinc-700 bg-zinc-800/60 text-zinc-200 hover:bg-zinc-700/80 hover:text-white transition-all cursor-pointer"
-            >
-              <ArrowLeft size={13} /> Back to Clients ({counts.all})
-            </button>
-            <span className="text-xs font-mono text-zinc-400">
-              Live Executions Feed
-            </span>
-          </div>
-
-          {/* Renders Activity view which contains its own execution filters */}
-          {activity}
-        </div>
+        /* Renders Activity directly, which now displays the glassy [< Clients] button inline in its own single toolbar row */
+        activityWithBack
       ) : (
-        /* CLIENTS VIEW MODE: Shows client status filter bar */
+        /* CLIENTS VIEW MODE */
         <>
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-            {/* Filter Pills */}
             <div className="flex items-center gap-2 overflow-x-auto py-0.5">
               {(["all", "active", "needs_attention", "paused"] as const).map((tab) => {
                 const isActive = statusFilter === tab;
@@ -290,7 +295,6 @@ export function ModuleClientRoster({
               )}
             </div>
 
-            {/* Search + List/Board Switcher */}
             <div className="flex items-center gap-2.5">
               <div className="relative w-44 sm:w-56">
                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
