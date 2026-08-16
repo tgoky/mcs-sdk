@@ -1,20 +1,12 @@
-// src/app/dashboard/engagements/[id]/skills/win-back/page.tsx
+\// src/app/dashboard/engagements/[id]/skills/win-back/page.tsx
 //
-// Same pattern as the Pile-On skill page, but Win-Back had two orphaned
-// pieces to reconnect instead of one: WinBackPipeline (full pipeline,
-// never mounted) and WinBackRevenueSection (never mounted, and its data
-// dependency — computeWinBackRevenueAttribution — was already being
-// called on the main engagement page but its result was discarded
-// in-place: `await computeWinBackRevenueAttribution(id);` with no
-// assignment. This page is what that call was actually for.
-//
-// WinBackRevenueSection filters its `initialEnrollments` prop client-side
-// across four hardcoded 2026 quarters (see win-back-revenue-section.tsx),
-// so the initial fetch needs to cover the full year rather than
-// computeWinBackRevenueAttribution's own default of "current quarter."
+// The per-client, whole-history view for one skill — distinct from
+// runs/[id] (one run) and the master roster calendar (all skills, one
+// day).
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
@@ -29,11 +21,22 @@ export const revalidate = 0;
 export default async function WinBackSkillPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getSession();
+  const activeWorkspace = await getActiveWorkspace(session?.whopUserId ?? "");
 
   const [engagement] = await db
-    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, winBackSequenceAssetMap: engagements.winBackSequenceAssetMap })
+    .select({
+      engagementId: engagements.engagementId,
+      buyer: engagements.buyer,
+      winBackSequenceAssetMap: engagements.winBackSequenceAssetMap,
+    })
     .from(engagements)
-    .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session?.whopUserId ?? "")))
+    .where(
+      and(
+        eq(engagements.engagementId, id),
+        eq(engagements.whopUserId, session?.whopUserId ?? ""),
+        eq(engagements.workspaceId, activeWorkspace.workspaceId)
+      )
+    )
     .limit(1);
 
   if (!engagement) notFound();

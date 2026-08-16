@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getQueueItems } from "@/lib/queue";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { QueuePanel } from "../queue-panel";
 import { eq, and, isNull } from "drizzle-orm";
 
@@ -11,13 +12,20 @@ export const revalidate = 0;
 export default async function QueuePage() {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
+  const activeWorkspace = await getActiveWorkspace(whopUserId);
 
   const [items, clientRows] = await Promise.all([
-    getQueueItems(whopUserId),
+    getQueueItems(whopUserId, activeWorkspace.workspaceId),
     db
       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, pausedAt: engagements.pausedAt })
       .from(engagements)
-      .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId),
+          isNull(engagements.deletedAt)
+        )
+      ),
   ]);
 
   const clients = clientRows.map((c) => ({

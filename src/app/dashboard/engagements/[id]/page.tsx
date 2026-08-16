@@ -27,6 +27,7 @@ import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
 import { BookingSyncChip } from "@/components/booking-sync-chip";
 import { BackLink } from "@/components/back-link";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
+import { getActiveWorkspace } from "@/lib/workspace";
 import {
 
   SKILLS,
@@ -70,11 +71,22 @@ export default async function EngagementDetailPage({
 }) {
   const session = await getSession();
   const { id } = await params;
+  const activeWorkspace = await getActiveWorkspace(session.whopUserId!);
 
   const [engagement] = await db
     .select()
     .from(engagements)
-    .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId!)));
+    .where(
+      and(
+        eq(engagements.engagementId, id),
+        eq(engagements.whopUserId, session.whopUserId!),
+        // A client from a *different* workspace shouldn't be directly
+        // reachable just because someone has an old link or bookmark to
+        // it — 404s the same as if it belonged to another account, rather
+        // than silently rendering across the workspace boundary.
+        eq(engagements.workspaceId, activeWorkspace.workspaceId)
+      )
+    );
 
   if (!engagement) notFound();
 

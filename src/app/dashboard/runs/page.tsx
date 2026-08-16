@@ -2,7 +2,8 @@ import { db } from "@/lib/db";
 import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getQueueItems } from "@/lib/queue";
-import { eq, desc, sql } from "drizzle-orm";
+import { getActiveWorkspace } from "@/lib/workspace";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { LiveExecutionFeed } from "../live-execution-feed";
 import { latestStepLabel } from "@/lib/run-display";
 import { markExecutionsSeen } from "@/lib/run-log";
@@ -24,6 +25,8 @@ export const revalidate = 0;
 export default async function RunsPage() {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
+  const activeWorkspace = await getActiveWorkspace(whopUserId);
+  const workspaceId = activeWorkspace.workspaceId;
 
   const [rows, , queueItems] = await Promise.all([
     db
@@ -43,7 +46,7 @@ export default async function RunsPage() {
       })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-      .where(eq(engagements.whopUserId, whopUserId))
+      .where(and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId)))
       .orderBy(desc(skillRuns.startedAt))
       .limit(150),
     // Clears the Executions nav badge's unseen-completed count — see
@@ -51,7 +54,7 @@ export default async function RunsPage() {
     // the row fetch rather than after it so visiting this page doesn't
     // pick up any extra latency for it.
     markExecutionsSeen(whopUserId),
-    getQueueItems(whopUserId),
+    getQueueItems(whopUserId, workspaceId),
   ]);
 
   const runs = rows.map(({ steps, startedAt, completedAt, ...rest }) => ({

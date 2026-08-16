@@ -483,11 +483,64 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ── Workspaces ───────────────────────────────────────────────────────────
+// A whopUserId can hold several of these; each is a fully independent
+// container of its own clients (engagements) and installed skill packages.
+// Every account that existed before this table shipped gets exactly one
+// auto-created "legacy" workspace (see ensureLegacyWorkspace in
+// lib/workspace.ts) with all of its existing engagements backfilled onto
+// it, so nothing a user already built goes missing.
+export const workspaces = pgTable("workspaces", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: text("workspace_id").notNull().unique(),
+  whopUserId: text("whop_user_id").notNull(),
+  name: text("name").notNull(),
+  // True only for the one auto-created backfill workspace per account (see
+  // ensureLegacyWorkspace). Its workspaceId is a deterministic
+  // `ws_legacy_${whopUserId}` value rather than a random one specifically
+  // so concurrent first-visit requests race on a Postgres unique-constraint
+  // conflict instead of a check-then-insert read/write race — see that
+  // function's comment for why.
+  isLegacy: boolean("is_legacy").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Which skill packages (see copy.ts's WORKSPACE_PRODUCTS) are installed in
+// a given workspace — chosen from the library-kit step of workspace
+// creation, or later from /dashboard/library. "showtime" is the only real
+// package today; the table exists so future packages (counter-claim, etc.)
+// slot in without another migration.
+export const workspacePackages = pgTable(
+  "workspace_packages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.workspaceId),
+    packageId: text("package_id").notNull(),
+    installedAt: timestamp("installed_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspacePackageUnique: uniqueIndex("workspace_package_unique").on(
+      table.workspaceId,
+      table.packageId
+    ),
+  })
+);
+
 // ── Engagements ───────────────────────────────────────────────────────────
 export const engagements = pgTable("engagements", {
   id: uuid("id").defaultRandom().primaryKey(),
   engagementId: text("engagement_id").notNull().unique(),
   whopUserId: text("whop_user_id").notNull(),
+  // Nullable only for rows written before workspaces existed — every read
+  // path that lists/creates engagements resolves the caller's active
+  // workspace first (see lib/workspace.ts) and every such pre-existing row
+  // gets backfilled onto that account's legacy workspace the first time
+  // ensureLegacyWorkspace runs for it, so in practice this is only ever
+  // NULL for a few moments post-migration, pre-first-visit.
+  workspaceId: text("workspace_id").references(() => workspaces.workspaceId),
   buyer: text("buyer").notNull(),
   // Sidebar client-rail squircle color, set from the "..." row menu's
   // "Add tag color" submenu (src/app/dashboard/client-sidebar-list.tsx).

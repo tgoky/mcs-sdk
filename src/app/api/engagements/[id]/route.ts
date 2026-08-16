@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements, credentialsRefs, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import { isValidTagColorId } from "@/lib/engagement-tag-colors";
 
@@ -43,6 +44,8 @@ export async function GET(
 
   const { id } = await params;
 
+  const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
   const [row] = await db
     .select({
       engagementId: engagements.engagementId,
@@ -58,7 +61,13 @@ export async function GET(
       pausedReason: engagements.pausedReason,
     })
     .from(engagements)
-    .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+    .where(
+      and(
+        eq(engagements.engagementId, id),
+        eq(engagements.whopUserId, session.whopUserId),
+        eq(engagements.workspaceId, activeWorkspace.workspaceId)
+      )
+    )
     .limit(1);
 
   if (!row) {
@@ -164,10 +173,18 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
     }
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const [existing] = await db
       .select({ stack: engagements.stack, deletedAt: engagements.deletedAt })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!existing) {
@@ -387,10 +404,18 @@ export async function DELETE(
     const body = await req.json().catch(() => ({}));
     const confirmBuyerName = typeof body?.confirmBuyerName === "string" ? body.confirmBuyerName.trim() : "";
 
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
     const [existing] = await db
       .select({ buyer: engagements.buyer, deletedAt: engagements.deletedAt })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!existing) {

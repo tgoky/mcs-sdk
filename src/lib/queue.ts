@@ -242,7 +242,7 @@ async function failedRunQueueItems(
   return items;
 }
 
-export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
+export async function getQueueItems(whopUserId: string, workspaceId: string): Promise<QueueItem[]> {
   const [actionRows, blockerRows, notificationRows, engagementStackRows] = await Promise.all([
     db
       .select({
@@ -268,6 +268,7 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
       .where(
         and(
           eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
           eq(pendingActions.status, "pending"),
           // A soft-deleted/offboarded client's leftover pending actions
           // shouldn't keep showing up in the Queue panel.
@@ -295,6 +296,7 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
       .where(
         and(
           eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
           eq(humanBlockers.status, "open"),
           isNull(engagements.deletedAt)
         )
@@ -316,8 +318,23 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
         createdAt: engagements.createdAt,
       })
       .from(engagements)
-      .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
+          isNull(engagements.deletedAt)
+        )
+      ),
   ]);
+
+  // Notifications aren't tagged with a workspace column of their own — a
+  // global one (engagementId null, e.g. an account-level alert) always
+  // shows, an engagement-scoped one only shows if that engagement belongs
+  // to the current workspace's already-workspace-filtered roster above.
+  const workspaceEngagementIds = new Set(engagementStackRows.map((r) => r.engagementId));
+  const scopedNotificationRows = notificationRows.filter(
+    (n) => !n.engagementId || workspaceEngagementIds.has(n.engagementId)
+  );
 
   const pausedByEngagement = new Map(
     engagementStackRows.map((r) => [r.engagementId, r.pausedAt ? r.pausedAt.toISOString() : null])
@@ -357,7 +374,7 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
       runId: b.runId ?? null,
       createdAt: b.createdAt.toISOString(),
     })),
-    ...notificationRows.map((n): QueueItem => ({
+    ...scopedNotificationRows.map((n): QueueItem => ({
       id: n.id,
       source: "notification",
       category: n.severity === "critical" || n.severity === "warning" ? "alert" : "fyi",
@@ -392,7 +409,7 @@ export async function getQueueItems(whopUserId: string): Promise<QueueItem[]> {
  * count on the notification bell, so folding them in here too would just
  * double-count the same number in two places on screen at once.
  */
-export async function getQueueActionableCount(whopUserId: string): Promise<number> {
+export async function getQueueActionableCount(whopUserId: string, workspaceId: string): Promise<number> {
   const [pendingCount, blockerCount, engagementStackRows] = await Promise.all([
     db
       .select({ id: pendingActions.id })
@@ -401,6 +418,7 @@ export async function getQueueActionableCount(whopUserId: string): Promise<numbe
       .where(
         and(
           eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
           eq(pendingActions.status, "pending"),
           isNull(engagements.deletedAt)
         )
@@ -412,6 +430,7 @@ export async function getQueueActionableCount(whopUserId: string): Promise<numbe
       .where(
         and(
           eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
           eq(humanBlockers.status, "open"),
           isNull(engagements.deletedAt)
         )
@@ -419,7 +438,13 @@ export async function getQueueActionableCount(whopUserId: string): Promise<numbe
     db
       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, stack: engagements.stack })
       .from(engagements)
-      .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
+          isNull(engagements.deletedAt)
+        )
+      ),
   ]);
 
   const syncSetupCount = engagementStackRows.filter((r) =>

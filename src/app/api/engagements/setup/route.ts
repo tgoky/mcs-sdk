@@ -4,6 +4,7 @@ import { engagements, credentialsRefs } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { storeCredential } from "@/lib/credentials";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import crypto from "crypto";
 
 export const maxDuration = 30;
@@ -23,6 +24,11 @@ export async function POST(request: Request) {
       return new Response("Unauthorized", { status: 401 });
     }
     const whopUserId = session.whopUserId;
+    // New clients belong to whichever workspace is currently active — the
+    // same resolution every /dashboard page uses, so a client created here
+    // shows up in the same workspace the person was looking at when they
+    // clicked "Add Client".
+    const activeWorkspace = await getActiveWorkspace(whopUserId);
 
     const body = await request.json();
     const {
@@ -111,6 +117,7 @@ export async function POST(request: Request) {
         id: crypto.randomUUID(),
         engagementId,
         whopUserId,
+        workspaceId: activeWorkspace.workspaceId,
         buyer: buyerName,
         schemaVersion: "1.0",
         createdAt: new Date(),

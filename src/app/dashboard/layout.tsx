@@ -8,6 +8,7 @@ import { WorkSidebar, WorkSidebarSkeleton } from "./work-sidebar";
 import { EngagementsSidebar, EngagementsSidebarSkeleton } from "./engagements-sidebar";
 import { AnalyticsSidebar } from "./analytics-sidebar";
 import { MeetingsSidebar } from "./meetings-sidebar";
+import { getActiveWorkspace, listWorkspaces } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -28,6 +29,18 @@ export default async function DashboardLayout({
   const userEmail = session.email || "user@showtime.app";
   const displayName = session.email?.split("@")[0] ?? "Member";
 
+  // Resolves (and, for a brand-new-to-workspaces account, self-heals) the
+  // active workspace for every request under /dashboard — including a
+  // direct/bookmarked hit that skipped /home entirely, so there's no route
+  // under here that can render without one. getActiveWorkspace is
+  // React-cache()'d, so WorkSidebar/EngagementsSidebar/page.tsx resolving
+  // it again below this in the tree reuse this same lookup instead of
+  // re-querying.
+  const [activeWorkspace, workspaceList] = await Promise.all([
+    getActiveWorkspace(whopUserId),
+    listWorkspaces(whopUserId),
+  ]);
+
   return (
     <BreadcrumbProvider>
       {/* Real-time booking toast listener */}
@@ -47,14 +60,16 @@ export default async function DashboardLayout({
       <ShellLayout
         displayName={displayName}
         userEmail={userEmail}
+        workspaces={workspaceList}
+        activeWorkspaceId={activeWorkspace.workspaceId}
         work={
           <Suspense fallback={<WorkSidebarSkeleton />}>
-            <WorkSidebar whopUserId={whopUserId} />
+            <WorkSidebar whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} />
           </Suspense>
         }
         engagements={
           <Suspense fallback={<EngagementsSidebarSkeleton />}>
-            <EngagementsSidebar whopUserId={whopUserId} />
+            <EngagementsSidebar whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} />
           </Suspense>
         }
         analytics={<AnalyticsSidebar />}

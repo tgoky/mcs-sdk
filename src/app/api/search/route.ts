@@ -16,6 +16,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements, skillRuns, projects } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { and, asc, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { skillName, runStatusLabel } from "@/lib/copy";
 import { getQueueItems } from "@/lib/queue";
@@ -38,6 +39,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const whopUserId = session.whopUserId;
+    // Clients and Executions are both engagement-derived, so both get
+    // scoped to the active workspace too — otherwise search would surface
+    // (and let you click into) a client that belongs to a *different*
+    // workspace than the one you're currently in. Projects has no
+    // workspace_id column of its own yet, so it stays whopUserId-wide for
+    // now (a deliberately narrower scope than the others, not an oversight).
+    const activeWorkspace = await getActiveWorkspace(whopUserId);
+    const workspaceId = activeWorkspace.workspaceId;
 
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get("q") ?? "").trim();
@@ -67,6 +76,7 @@ export async function GET(request: Request) {
         .where(
           and(
             eq(engagements.whopUserId, whopUserId),
+            eq(engagements.workspaceId, workspaceId),
             isNull(engagements.deletedAt),
             or(
               ilike(engagements.buyer, like),
@@ -91,6 +101,7 @@ export async function GET(request: Request) {
         .where(
           and(
             eq(engagements.whopUserId, whopUserId),
+            eq(engagements.workspaceId, workspaceId),
             or(
               ilike(engagements.buyer, like),
               ilike(skillRuns.skillName, like),
@@ -120,7 +131,7 @@ export async function GET(request: Request) {
       // helper the Queue page and sidebar badge already call keeps this
       // in sync with however that merge logic evolves, instead of
       // re-deriving a second, competing version of it here.
-      getQueueItems(whopUserId),
+      getQueueItems(whopUserId, workspaceId),
     ]);
 
     const qLower = q.toLowerCase();

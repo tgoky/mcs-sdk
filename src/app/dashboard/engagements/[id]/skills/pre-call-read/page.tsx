@@ -2,6 +2,7 @@
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
@@ -13,11 +14,18 @@ export const revalidate = 0;
 export default async function PreCallReadSkillPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getSession();
+  const activeWorkspace = await getActiveWorkspace(session?.whopUserId ?? "");
 
   const [engagement] = await db
     .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
     .from(engagements)
-    .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session?.whopUserId ?? "")))
+    .where(
+      and(
+        eq(engagements.engagementId, id),
+        eq(engagements.whopUserId, session?.whopUserId ?? ""),
+        eq(engagements.workspaceId, activeWorkspace.workspaceId)
+      )
+    )
     .limit(1);
 
   if (!engagement) notFound();

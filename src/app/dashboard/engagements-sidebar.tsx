@@ -14,11 +14,17 @@ import { RecentEngagementsSection } from "./recent-engagements-section";
  * Actions block below routes straight into the flows those actions
  * actually live at today.
  */
-export async function EngagementsSidebar({ whopUserId }: { whopUserId: string }) {
+export async function EngagementsSidebar({ whopUserId, workspaceId }: { whopUserId: string; workspaceId: string }) {
   const recent = await db
     .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
     .from(engagements)
-    .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)))
+    .where(
+      and(
+        eq(engagements.whopUserId, whopUserId),
+        eq(engagements.workspaceId, workspaceId),
+        isNull(engagements.deletedAt)
+      )
+    )
     .orderBy(desc(engagements.createdAt))
     .limit(5);
 

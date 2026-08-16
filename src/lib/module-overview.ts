@@ -20,6 +20,11 @@ import { engagements, engagementSkills, skillRuns } from "@/models/schema";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { SkillId } from "@/lib/skill-manifest";
 
+export type SkillSidebarClient = {
+  engagementId: string;
+  buyer: string;
+};
+
 export type ModuleClientSummary = {
   engagementId: string;
   buyerName: string;
@@ -51,6 +56,7 @@ const FAILURE_STATUSES = new Set(["failed", "timed_out"]);
  */
 export async function getModuleClientSummaries(
   whopUserId: string,
+  workspaceId: string,
   skill: SkillId
 ): Promise<ModuleClientSummary[]> {
   const allEngagements = await db
@@ -61,7 +67,13 @@ export async function getModuleClientSummaries(
       pausedReason: engagements.pausedReason,
     })
     .from(engagements)
-    .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)));
+    .where(
+      and(
+        eq(engagements.whopUserId, whopUserId),
+        eq(engagements.workspaceId, workspaceId),
+        isNull(engagements.deletedAt)
+      )
+    );
 
   if (allEngagements.length === 0) return [];
 
@@ -141,4 +153,60 @@ export async function getModuleClientSummaries(
     const bTime = b.lastRunAt ? new Date(b.lastRunAt).getTime() : 0;
     return bTime - aTime;
   });
+}
+
+/**
+ * Lean client list for one skill — same "no row means enabled" rule as
+ * getModuleClientSummaries above, but without the run-history/failure-streak
+ * work that page needs and this one doesn't. Backs the Engagements secondary
+ * sidebar's "other clients on this skill" section (see
+ * recent-engagements-section.tsx): landing on
+ * /dashboard/engagements/[id]/skills/[skill] used to fall back to the
+ * generic most-recently-created client list regardless of skill, so jumping
+ * from the sidebar could land on a client that doesn't even have this skill
+ * active. Only queries the (usually short) list of explicit disables
+ * instead of pulling every engagement_skills row.
+ */
+export async function getSkillActiveClients(
+  whopUserId: string,
+  workspaceId: string,
+  skill: SkillId,
+  excludeEngagementId?: string
+): Promise<SkillSidebarClient[]> {
+  const allEngagements = await db
+    .select({
+      engagementId: engagements.engagementId,
+      buyer: engagements.buyer,
+      createdAt: engagements.createdAt,
+    })
+    .from(engagements)
+    .where(
+      and(
+        eq(engagements.whopUserId, whopUserId),
+        eq(engagements.workspaceId, workspaceId),
+        isNull(engagements.deletedAt)
+      )
+    );
+
+  if (allEngagements.length === 0) return [];
+
+  const engagementIds = allEngagements.map((e) => e.engagementId);
+
+  const disabledRows = await db
+    .select({ engagementId: engagementSkills.engagementId })
+    .from(engagementSkills)
+    .where(
+      and(
+        eq(engagementSkills.skillId, skill),
+        eq(engagementSkills.enabled, false),
+        inArray(engagementSkills.engagementId, engagementIds)
+      )
+    );
+
+  const disabled = new Set(disabledRows.map((r) => r.engagementId));
+
+  return allEngagements
+    .filter((e) => !disabled.has(e.engagementId) && e.engagementId !== excludeEngagementId)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .map((e) => ({ engagementId: e.engagementId, buyer: e.buyer }));
 }

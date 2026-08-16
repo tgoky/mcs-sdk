@@ -1,110 +1,98 @@
 import { getSession } from "@/lib/session";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { LayoutGrid, Gavel } from "lucide-react";
+import { LayoutGrid, Gavel, Plus } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { HOME_COPY, WORKSPACE_PRODUCTS, type WorkspaceProduct } from "@/lib/copy";
+import { HOME_COPY, WORKSPACE_PRODUCTS } from "@/lib/copy";
+import { listWorkspaces, getInstalledPackagesByWorkspace, type Workspace } from "@/lib/workspace";
 
 // Rendered fresh on every request — session-scoped, never statically cached.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-/**
- * Asana-Style Squishy Product Identity Icon Badges
- */
-function ProductSquishyBadge({ productId }: { productId: string }) {
-  if (productId === "counter-claim") {
+const PACKAGE_NAMES = new Map(WORKSPACE_PRODUCTS.map((p) => [p.id, p.name] as const));
+
+/** Same squishy circular badge used across the app for a workspace's
+ * installed packages — Showtime's teal grid, Counter Claim's amber gavel. */
+function PackageBadge({ packageId }: { packageId: string }) {
+  if (packageId === "counter-claim") {
     return (
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-400 dark:bg-amber-500 shadow-xs select-none">
-        <Gavel
-          size={20}
-          className="text-zinc-950 stroke-[2.3px] fill-white"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 dark:bg-amber-500 select-none">
+        <Gavel size={11} className="text-zinc-950 stroke-[2.5px] fill-white" strokeLinecap="round" strokeLinejoin="round" />
       </div>
     );
   }
-
-  // Default / Showtime
   return (
-    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-500 dark:bg-teal-400 shadow-xs select-none">
-      <LayoutGrid
-        size={20}
-        className="text-zinc-950 stroke-[2.3px] fill-white"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-500 dark:bg-teal-400 select-none">
+      <LayoutGrid size={11} className="text-zinc-950 stroke-[2.5px] fill-white" strokeLinecap="round" strokeLinejoin="round" />
     </div>
   );
 }
 
-function ProductCard({ product }: { product: WorkspaceProduct }) {
-  const isAvailable = product.status === "available";
-
-  const card = (
-    <div
-      className={`group flex h-full flex-col justify-between rounded-2xl border p-6 transition-all duration-200 select-none ${
-        isAvailable
-          ? "border-zinc-200/90 bg-white/80 hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md dark:border-zinc-800/90 dark:bg-zinc-900/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/80 backdrop-blur-xs"
-          : "border-zinc-200/60 bg-zinc-50/50 opacity-75 dark:border-zinc-800/40 dark:bg-zinc-950/20"
-      }`}
-    >
-      <div className="space-y-5">
-        {/* Card Header: Squishy Icon */}
-        <div className="flex items-center justify-between gap-3">
-          <ProductSquishyBadge productId={product.id} />
-
-          {/* Status pill shown only when NOT available */}
-          {!isAvailable && (
-            <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[11px] font-bold tracking-tight border border-zinc-200 bg-zinc-100 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500">
-              {HOME_COPY.statusLabels[product.status]}
-            </span>
-          )}
-        </div>
-
-        {/* Product Details */}
-        <div className="space-y-1.5">
-          <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
-            {product.name}
-          </h2>
-          <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400 font-sans">
-            {product.description}
-          </p>
-        </div>
-      </div>
-
-      {/* Action Footer Button */}
-      <div className="pt-6">
-        {isAvailable ? (
-          <Button className="w-full cursor-pointer bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 font-bold text-xs shadow-xs transition-all">
-            <span>{HOME_COPY.openLabel} {product.name}</span>
-
-          </Button>
-        ) : (
-          <Button variant="outline" disabled className="w-full font-medium text-xs opacity-60">
-            {HOME_COPY.comingSoonLabel}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-
-  if (!isAvailable) {
-    return card;
-  }
-
+function WorkspaceCard({ workspace, packageIds }: { workspace: Workspace; packageIds: string[] }) {
   return (
-    <Link href={product.href} prefetch={false} className="block h-full">
-      {card}
+    <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="h-full">
+      <button
+        type="submit"
+        className="group flex h-full w-full flex-col justify-between rounded-2xl border border-zinc-200/90 bg-white/80 p-6 text-left transition-all duration-200 select-none hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md dark:border-zinc-800/90 dark:bg-zinc-900/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/80 backdrop-blur-xs cursor-pointer"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-1.5">
+            {packageIds.length > 0 ? (
+              packageIds.map((id) => <PackageBadge key={id} packageId={id} />)
+            ) : (
+              <span className="font-mono text-[10px] font-medium text-zinc-400 dark:text-zinc-600">
+                Nothing installed
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+              {workspace.name}
+            </h2>
+            <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400 font-sans">
+              {packageIds.length > 0
+                ? packageIds.map((id) => PACKAGE_NAMES.get(id) ?? id).join(" · ")
+                : "No packages installed yet"}
+            </p>
+          </div>
+        </div>
+
+        <div className="pt-6">
+          <span className="inline-flex w-full items-center justify-center rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-bold text-white shadow-xs transition-all group-hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:group-hover:bg-zinc-200">
+            {HOME_COPY.openLabel} {workspace.name}
+          </span>
+        </div>
+      </button>
+    </form>
+  );
+}
+
+function CreateWorkspaceCard() {
+  return (
+    <Link
+      href="/home/new"
+      prefetch={false}
+      className="flex h-full flex-col items-center justify-center gap-2.5 rounded-2xl border border-dashed border-zinc-300 bg-transparent p-6 text-center transition-all duration-200 hover:-translate-y-1 hover:border-zinc-400 hover:bg-white/60 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-900/40 min-h-[176px]"
+    >
+      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500">
+        <Plus size={16} />
+      </div>
+      <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Create workspace</span>
     </Link>
   );
 }
 
 export default async function WorkspaceHomePage() {
   const session = await getSession();
+  const whopUserId = session.whopUserId!;
   const displayName = session.email?.split("@")[0] ?? "there";
   const initials = displayName.slice(0, 2).toUpperCase();
+
+  const workspaceList = await listWorkspaces(whopUserId);
+  const installedByWorkspace = await getInstalledPackagesByWorkspace(
+    workspaceList.map((w) => w.workspaceId)
+  );
 
   return (
     <div className="relative min-h-screen bg-zinc-50/50 font-sans text-zinc-600 antialiased dark:bg-zinc-950 dark:text-zinc-400 transition-colors duration-200 overflow-hidden">
@@ -146,23 +134,28 @@ export default async function WorkspaceHomePage() {
           </div>
         </header>
 
-        {/* Products Grid */}
+        {/* Workspaces Grid */}
         <main className="flex-1 py-10">
           <div className="mb-8 space-y-1">
             <div className="flex items-center gap-1.5">
               <h1 className="font-mono text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                {HOME_COPY.title}
+                Your workspaces
               </h1>
             </div>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">
-              {HOME_COPY.subtitle}
+              Each workspace has its own clients and installed packages. Enter one, or create a new one.
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {WORKSPACE_PRODUCTS.map((product) => (
-              <ProductCard key={product.id} product={product} />
+            {workspaceList.map((workspace) => (
+              <WorkspaceCard
+                key={workspace.workspaceId}
+                workspace={workspace}
+                packageIds={installedByWorkspace.get(workspace.workspaceId) ?? []}
+              />
             ))}
+            <CreateWorkspaceCard />
           </div>
         </main>
 

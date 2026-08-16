@@ -5,11 +5,14 @@ import { TopNav } from "@/components/top-nav";
 import { PrimaryRail } from "@/components/primary-rail";
 import { SecondarySidebar } from "@/components/secondary-sidebar";
 import { SettingsSidebar } from "@/app/dashboard/settings/settings-sidebar";
+import type { Workspace } from "@/lib/workspace";
 
 export function ShellLayout({
   children,
   displayName,
   userEmail,
+  workspaces,
+  activeWorkspaceId,
   work,
   engagements,
   analytics,
@@ -19,6 +22,8 @@ export function ShellLayout({
   children: ReactNode;
   displayName: string;
   userEmail: string;
+  workspaces: Workspace[];
+  activeWorkspaceId: string;
   work: ReactNode;
   engagements: ReactNode;
   analytics: ReactNode;
@@ -39,7 +44,12 @@ export function ShellLayout({
       <div className="flex-1 flex overflow-hidden">
         {/* Column 1: Primary Narrow Icon Rail */}
         <div className="hidden md:flex">
-          <PrimaryRail displayName={displayName} userEmail={userEmail} />
+          <PrimaryRail
+            displayName={displayName}
+            userEmail={userEmail}
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+          />
         </div>
 
         {/* Column 2: Secondary Collapsible Sidebar — its content swaps

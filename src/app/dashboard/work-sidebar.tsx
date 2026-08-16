@@ -1,9 +1,8 @@
 import { db } from "@/lib/db";
-import { engagements, notifications, skillRuns, projects as projectsTable } from "@/models/schema";
+import { engagements, notifications, skillRuns } from "@/models/schema";
 import { getQueueActionableCount } from "@/lib/queue";
 import { getUnseenCompletedExecutionCount } from "@/lib/run-log";
-import { eq, and, sql, isNull, desc } from "drizzle-orm";
-import Link from "next/link";
+import { eq, and, sql } from "drizzle-orm";
 import {
   Home,
   Inbox,
@@ -11,14 +10,13 @@ import {
   Activity,
   FolderKanban,
   ChevronDown,
-  Plus,
 } from "lucide-react";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
-import { ClientSidebarList } from "./client-sidebar-list";
+import { SkillsNavList } from "@/components/skills-nav-list";
 
-export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
-  const [queueCount, unreadInboxCount, runningCountResult, unseenCompletedCount, clientRows] = await Promise.all([
-    getQueueActionableCount(whopUserId),
+export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: string; workspaceId: string }) {
+  const [queueCount, unreadInboxCount, runningCountResult, unseenCompletedCount] = await Promise.all([
+    getQueueActionableCount(whopUserId, workspaceId),
 
     db
       .select({ count: sql<number>`count(*)` })
@@ -29,19 +27,18 @@ export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
       .select({ count: sql<number>`count(*)` })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), eq(skillRuns.status, "running"))),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
+          eq(skillRuns.status, "running")
+        )
+      ),
 
     getUnseenCompletedExecutionCount(whopUserId),
-
-    db
-      .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, tagColor: engagements.tagColor })
-      .from(engagements)
-      .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)))
-      .orderBy(desc(engagements.createdAt))
-      .limit(10),
   ]).catch((err) => {
     console.error("[WorkSidebar] query failed:", err);
-    return [0, [{ count: 0 }], [{ count: 0 }], 0, []] as const;
+    return [0, [{ count: 0 }], [{ count: 0 }], 0] as const;
   });
 
   // Group 1: Home & Inbox
@@ -80,25 +77,17 @@ export async function WorkSidebar({ whopUserId }: { whopUserId: string }) {
 
       <div className="h-px bg-zinc-800/80 my-1 mx-1" />
 
-      {/* CLIENTS SECTION */}
+      {/* SKILLS SECTION — quick jump into each skill's module hub
+          (/dashboard/modules/[skill]). Used to be a "Clients" list here,
+          which just duplicated the Engagements section one click away;
+          this is the thing that section couldn't already do. */}
       <div className="space-y-1">
-        <div className="flex items-center justify-between px-2 py-1.5 group">
-          <div className="flex items-center gap-1.5 text-[13px] font-bold text-zinc-300 tracking-tight">
-            <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
-            <span>Clients</span>
-          </div>
-
-          <Link
-            href="/dashboard/engagements/new"
-            title="Add client"
-            className="p-1 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-          </Link>
+        <div className="flex items-center gap-1.5 px-2 py-1.5 text-[13px] font-bold text-zinc-300 tracking-tight">
+          <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+          <span>Skills</span>
         </div>
 
-        {/* CLIENTS LIST — inline rename + tag-color picker, see client-sidebar-list.tsx */}
-        <ClientSidebarList clients={clientRows} />
+        <SkillsNavList />
       </div>
     </div>
   );

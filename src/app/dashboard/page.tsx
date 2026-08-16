@@ -3,6 +3,7 @@ import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getQueueItems } from "@/lib/queue";
 import { eq, desc, sql, and, isNull, gte, lt } from "drizzle-orm";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { LiveExecutionFeed } from "./live-execution-feed";
 import { QueuePanel } from "./queue-panel";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
@@ -16,6 +17,8 @@ export const revalidate = 0;
 export default async function DashboardPage() {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
+  const activeWorkspace = await getActiveWorkspace(whopUserId);
+  const workspaceId = activeWorkspace.workspaceId;
 
   const { thisWeekStart, lastWeekStart, lastWeekEnd } = getWeekWindows();
 
@@ -31,7 +34,13 @@ export default async function DashboardPage() {
     db
       .select()
       .from(engagements)
-      .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt))),
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
+          isNull(engagements.deletedAt)
+        )
+      ),
 
     // All-time total — kept as quiet secondary context under the weekly
     // number below, not the headline anymore (see automatedActionsAllTime).
@@ -42,6 +51,7 @@ export default async function DashboardPage() {
       .where(
         and(
           eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
           eq(skillRuns.status, "success")
         )
       ),
@@ -56,6 +66,7 @@ export default async function DashboardPage() {
       .where(
         and(
           eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
           eq(skillRuns.status, "success"),
           gte(skillRuns.completedAt, thisWeekStart)
         )
@@ -70,6 +81,7 @@ export default async function DashboardPage() {
       .where(
         and(
           eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
           eq(skillRuns.status, "success"),
           gte(skillRuns.completedAt, lastWeekStart),
           lt(skillRuns.completedAt, lastWeekEnd)
@@ -83,6 +95,7 @@ export default async function DashboardPage() {
       .where(
         and(
           eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
           eq(skillRuns.status, "running")
         )
       ),
@@ -97,7 +110,7 @@ export default async function DashboardPage() {
       })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-      .where(eq(engagements.whopUserId, whopUserId))
+      .where(and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId)))
       .orderBy(desc(skillRuns.startedAt))
       .limit(8),
 
@@ -105,7 +118,7 @@ export default async function DashboardPage() {
     // open blockers, run failures, credential-health alerts) — reused
     // below for the Issues stat instead of the near-always-empty
     // active_alerts rule-definitions table. See summarizeIssues().
-    getQueueItems(whopUserId),
+    getQueueItems(whopUserId, workspaceId),
   ]);
 
   const completedThisWeek = Number(thisWeekResult[0]?.count ?? 0);

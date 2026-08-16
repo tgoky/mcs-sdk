@@ -6,6 +6,7 @@ import { skillRuns, engagements } from "@/models/schema";
 import { and, eq, desc, sql } from "drizzle-orm";
 import { type SkillName } from "@/lib/copy";
 import { getModuleClientSummaries } from "@/lib/module-overview";
+import { getActiveWorkspace } from "@/lib/workspace";
 
 // Import Portfolio Views
 import { PinDownModuleView } from "@/components/pin-down-module-view";
@@ -33,6 +34,8 @@ export default async function ModulePage({
 
   const session = await getSession();
   const whopUserId = session.whopUserId!;
+  const activeWorkspace = await getActiveWorkspace(whopUserId);
+  const workspaceId = activeWorkspace.workspaceId;
 
   // Fetch recent executions directly for the requested skill
   const recentRunsRaw = await db
@@ -50,7 +53,13 @@ export default async function ModulePage({
     })
     .from(skillRuns)
     .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-    .where(and(eq(engagements.whopUserId, whopUserId), eq(skillRuns.skillName, skill)))
+    .where(
+      and(
+        eq(engagements.whopUserId, whopUserId),
+        eq(engagements.workspaceId, workspaceId),
+        eq(skillRuns.skillName, skill)
+      )
+    )
     .orderBy(desc(skillRuns.startedAt))
     .limit(50);
 
@@ -60,7 +69,11 @@ export default async function ModulePage({
     completedAt: r.completedAt ? r.completedAt.toISOString() : null,
   }));
 
-  const clientSummaries = await getModuleClientSummaries(whopUserId, skill);
+  // One row per CLIENT for this skill — every client that has this skill
+  // available, not just whoever happened to land in the 50 most recent
+  // runs above.
+  const clientSummaries = await getModuleClientSummaries(whopUserId, workspaceId, skill);
+
   const manifest = SKILL_MANIFEST[skill];
 
   const activityView = (

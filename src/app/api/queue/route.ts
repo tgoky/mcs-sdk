@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getQueueItems } from "@/lib/queue";
+import { getActiveWorkspace } from "@/lib/workspace";
 
 export const revalidate = 0;
 
@@ -22,7 +23,8 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const items = await getQueueItems(session.whopUserId);
+  const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+  const items = await getQueueItems(session.whopUserId, activeWorkspace.workspaceId);
 
   return NextResponse.json({ items });
 }
