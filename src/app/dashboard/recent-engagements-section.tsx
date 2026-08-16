@@ -3,10 +3,9 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, ArrowRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ArrowRight, ChevronDown, List } from "lucide-react";
 import { isSkillId, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
 import { SkillsNavList } from "@/components/skills-nav-list";
-import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 
 interface RecentEngagement {
   engagementId: string;
@@ -54,15 +53,17 @@ export function RecentEngagementsSection({ recent }: { recent: RecentEngagement[
             <Link
               key={client.engagementId}
               href={`/dashboard/engagements/${client.engagementId}`}
-              className="group flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 transition-all duration-150"
+              className="group flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800/60 transition-all duration-150"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="w-4 h-4 shrink-0 rounded-[5px] bg-teal-500/90 flex items-center justify-center text-[8px] font-bold text-white">
-                  {client.buyer.slice(0, 1).toUpperCase()}
+                <div className="w-5 h-5 rounded-[5px] bg-zinc-800 text-zinc-200 border border-zinc-700/60 flex items-center justify-center shrink-0 shadow-xs">
+                  <List className="w-3 h-3 stroke-[2.5]" />
+                </div>
+                <span className="text-xs font-semibold text-zinc-200 group-hover:text-white truncate">
+                  {client.buyer}
                 </span>
-                <span className="truncate">{client.buyer}</span>
               </div>
-              <ChevronRight className="w-3.5 h-3.5 text-zinc-600 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-hover:text-zinc-300 transition-all shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-500 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-hover:text-zinc-200 transition-all shrink-0" />
             </Link>
           ))}
         </nav>
@@ -100,8 +101,8 @@ function SkillSiblingClients({ skillId, currentEngagementId }: { skillId: SkillI
     <>
       <div className="my-3 border-t border-sidebar-border" />
 
-      {/* Borderless Header with Down Arrow */}
-      <div className="px-2.5 pb-2 text-[11px] font-semibold text-zinc-500 font-mono tracking-wider flex items-center justify-between">
+      {/* Header */}
+      <div className="px-2.5 pb-2 text-[11px] font-mono font-semibold text-zinc-400 tracking-wider flex items-center justify-between">
         <span>Clients · {manifest.name}</span>
         <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
       </div>
@@ -118,13 +119,17 @@ function SkillSiblingClients({ skillId, currentEngagementId }: { skillId: SkillI
             <Link
               key={client.engagementId}
               href={`/dashboard/engagements/${client.engagementId}/skills/${skillId}`}
-              className="group flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 transition-all duration-150"
+              className="group flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800/60 transition-all duration-150"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <SquishySkillBadge skill={skillId} size={20} enabled={true} />
-                <span className="truncate">{client.buyer}</span>
+                <div className="w-5 h-5 rounded-[5px] bg-zinc-800 text-zinc-200 border border-zinc-700/60 flex items-center justify-center shrink-0 shadow-xs">
+                  <List className="w-3 h-3 stroke-[2.5]" />
+                </div>
+                <span className="text-xs font-semibold text-zinc-200 group-hover:text-white truncate">
+                  {client.buyer}
+                </span>
               </div>
-              <ChevronRight className="w-3.5 h-3.5 text-zinc-600 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-hover:text-zinc-300 transition-all shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-500 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-hover:text-zinc-200 transition-all shrink-0" />
             </Link>
           ))}
         </nav>
@@ -135,12 +140,18 @@ function SkillSiblingClients({ skillId, currentEngagementId }: { skillId: SkillI
       )}
 
       <div className="my-3 border-t border-sidebar-border" />
+
+      {/* View All CTA */}
       <Link
         href={`/dashboard/modules/${skillId}`}
-        className="group flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 transition-all duration-150"
+        className="group flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 bg-zinc-900/60 hover:bg-zinc-800/80 border border-zinc-800/80 hover:border-zinc-700/80 transition-all duration-200 shadow-2xs"
       >
-        <span>View all</span>
-        <ArrowRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-200 group-hover:translate-x-0.5 transition-all shrink-0" />
+        <span className="text-[11px] font-mono tracking-tight text-zinc-400 group-hover:text-zinc-200 transition-colors">
+          View all
+        </span>
+        <div className="flex items-center justify-center w-5 h-5 rounded-md bg-zinc-800/60 group-hover:bg-zinc-700/60 border border-zinc-700/50 transition-colors">
+          <ArrowRight className="w-3 h-3 text-zinc-400 group-hover:text-zinc-100 group-hover:translate-x-0.5 transition-all duration-200 shrink-0" />
+        </div>
       </Link>
     </>
   );
