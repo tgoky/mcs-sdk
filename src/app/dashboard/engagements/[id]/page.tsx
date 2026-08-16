@@ -168,16 +168,21 @@ export default async function EngagementDetailPage({
       <div className="relative z-10 space-y-6">
 
         {/* Header Section */}
+      {/* Header Section */}
         <div className="space-y-4 border-b border-zinc-200 dark:border-zinc-800/80 pb-5">
           <SetBreadcrumbLabel label={engagement.buyer} />
-          <BackLink href="/dashboard/engagements" label="All Clients" />
 
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div className="space-y-2">
-              <div className="space-y-1">
-                <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">{engagement.buyer}</h1>
-                <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">{engagement.engagementId}</p>
+            <div className="space-y-3">
+              {/* Back Button & Client Name in the same horizontal line */}
+              <div className="flex items-center gap-3">
+                <BackLink href="/dashboard/engagements" label="All Clients" />
+                <div>
+                  <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">{engagement.buyer}</h1>
+                  <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">{engagement.engagementId}</p>
+                </div>
               </div>
+
               <div className="flex flex-wrap items-center gap-1.5 font-mono">
                 <span className="text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/60 px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800">
                   {bookingPlatformLabel(stack?.booking_platform)}
