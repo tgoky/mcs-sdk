@@ -241,12 +241,12 @@ export default async function DashboardPage() {
               {copy.activityLogSectionTitle}
             </p>
             {recentRuns.length > 0 && (
-              <Link
-                href="/dashboard/runs"
-                className="text-xs font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
-              >
-                View all →
-              </Link>
+         <Link
+  href="/dashboard/runs"
+  className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 transition-colors"
+>
+  View all
+</Link>
             )}
           </div>
 
