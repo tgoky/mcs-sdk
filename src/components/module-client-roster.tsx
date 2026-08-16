@@ -16,7 +16,6 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import type { SkillManifestEntry, SkillId } from "@/lib/skill-manifest";
 import type { ModuleClientSummary } from "@/lib/module-overview";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
@@ -56,6 +55,32 @@ function deriveLabel(client: ModuleClientSummary): string {
   if (client.lastStatus === "running") return "Running";
   if (!client.lastStatus) return "Not run yet";
   return client.lastStatus;
+}
+
+function StatusBadge({
+  tone,
+  children,
+}: {
+  tone: "success" | "danger" | "warning" | "neutral";
+  children: ReactNode;
+}) {
+  const styles = {
+    success: "bg-emerald-400 text-zinc-950 font-bold",
+    warning: "bg-amber-400 text-zinc-950 font-bold",
+    danger: "bg-rose-400 text-zinc-950 font-bold",
+    neutral: "bg-zinc-700 text-zinc-100 font-medium",
+  }[tone];
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-sans tracking-wide select-none",
+        styles
+      )}
+    >
+      {children}
+    </span>
+  );
 }
 
 function buildClientSections(
@@ -198,7 +223,7 @@ export function ModuleClientRoster({
     <div className="space-y-3 font-sans antialiased text-zinc-100">
       {/* SINGLE TOOLBAR ROW */}
       <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-        {/* Filter Pills including Activity */}
+        {/* Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
           {(["all", "active", "needs_attention", "paused"] as const).map((tab) => {
             const isActive = statusFilter === tab;
@@ -247,7 +272,7 @@ export function ModuleClientRoster({
           )}
         </div>
 
-        {/* Right Side Controls: Search + List/Board Switcher */}
+        {/* Right Side Controls */}
         <div className="flex items-center gap-2.5">
           {statusFilter !== "activity" && (
             <>
@@ -384,7 +409,7 @@ export function ModuleClientRoster({
                                   {client.consecutiveFailures}
                                 </span>
                               )}
-                              <StatusPill tone={tone}>{statusText}</StatusPill>
+                              <StatusBadge tone={tone}>{statusText}</StatusBadge>
                             </div>
                           </td>
 
@@ -522,7 +547,7 @@ export function ModuleClientRoster({
                               <span>No runs yet</span>
                             )}
 
-                            <StatusPill tone={deriveTone(c)}>{deriveLabel(c)}</StatusPill>
+                            <StatusBadge tone={deriveTone(c)}>{deriveLabel(c)}</StatusBadge>
                           </div>
                         </div>
                       ))}
