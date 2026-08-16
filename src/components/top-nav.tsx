@@ -65,14 +65,14 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
                     <span className="truncate">New Client Engagement</span>
                   </Link>
 
-                  <Link
+                  {/* <Link
                     href="/dashboard/projects/new"
                     onClick={() => setCreateOpen(false)}
                     className="group flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   >
                     <FolderPlus className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
                     <span className="truncate">New Project</span>
-                  </Link>
+                  </Link> */}
 
                   <Link
                     href="/dashboard/queue?action=trigger-skill"

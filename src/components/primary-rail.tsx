@@ -337,14 +337,14 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                         <span>Profile</span>
                       </Link>
 
-                      <Link
+                      {/* <Link
                         href="/dashboard/settings"
                         onClick={() => setPopoverOpen(false)}
                         className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
                       >
                         <Settings className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
                         <span>Settings</span>
-                      </Link>
+                      </Link> */}
 
                       <Link
                         href="/api/auth/login"

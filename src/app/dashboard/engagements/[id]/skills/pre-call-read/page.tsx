@@ -11,8 +11,15 @@ import { PreCallReadPipeline } from "../../pre-call-read-pipeline";
 
 export const revalidate = 0;
 
-export default async function PreCallReadSkillPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PreCallReadSkillPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
+}) {
   const { id } = await params;
+  const { from } = await searchParams;
   const session = await getSession();
   const activeWorkspace = await getActiveWorkspace(session?.whopUserId ?? "");
 
@@ -30,10 +37,15 @@ export default async function PreCallReadSkillPage({ params }: { params: Promise
 
   if (!engagement) notFound();
 
+  // Dynamic back link resolution
+  const isFromModule = from && from.startsWith("/dashboard/modules");
+  const backHref = isFromModule ? from : `/dashboard/engagements/${id}`;
+  const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
+
   return (
     <div className="space-y-4 font-sans antialiased">
       <SetBreadcrumbLabel label={`${engagement.buyer} · Pre-Call Read`} />
-      <BackLink href={`/dashboard/engagements/${id}`} label="Back to engagement" />
+      <BackLink href={backHref} label={backLabel} />
 
       <div>
         <h1 className="text-lg font-bold text-white">Pre-Call Read — {engagement.buyer}</h1>

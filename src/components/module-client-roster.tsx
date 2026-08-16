@@ -37,11 +37,12 @@ const HAS_SKILL_DETAIL_PAGE: Partial<Record<SkillId, true>> = {
 };
 
 function hrefFor(skill: SkillId, engagementId: string): string {
-  return HAS_SKILL_DETAIL_PAGE[skill]
+  const basePath = HAS_SKILL_DETAIL_PAGE[skill]
     ? `/dashboard/engagements/${engagementId}/skills/${skill}`
     : `/dashboard/engagements/${engagementId}`;
-}
 
+  return `${basePath}?from=/dashboard/modules/${skill}`;
+}
 type FilterStatus = "all" | "active" | "needs_attention" | "paused" | "activity";
 
 function deriveTone(client: ModuleClientSummary): "success" | "danger" | "warning" | "neutral" {
