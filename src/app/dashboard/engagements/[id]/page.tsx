@@ -26,11 +26,9 @@ import {
 } from "lucide-react";
 import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
 import { BookingSyncChip } from "@/components/booking-sync-chip";
-import { BackLink } from "@/components/back-link";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import { getActiveWorkspace } from "@/lib/workspace";
 import {
-
   SKILLS,
   skillName,
   phaseLabel,
@@ -38,11 +36,9 @@ import {
   bookingPlatformLabel,
   emailPlatformLabel,
   type SkillName,
-
 } from "@/lib/copy";
 
 export const revalidate = 0;
-
 
 function RunStatusIcon({ status }: { status: string }) {
   const s = status.toLowerCase();
@@ -59,11 +55,10 @@ function relativeTime(iso: string): string {
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
+  const days = Math.floor(minutes / 24);
   if (days < 7) return `${days}d ago`;
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
-
 
 export default async function EngagementDetailPage({
   params,
@@ -81,10 +76,6 @@ export default async function EngagementDetailPage({
       and(
         eq(engagements.engagementId, id),
         eq(engagements.whopUserId, session.whopUserId!),
-        // A client from a *different* workspace shouldn't be directly
-        // reachable just because someone has an old link or bookmark to
-        // it — 404s the same as if it belonged to another account, rather
-        // than silently rendering across the workspace boundary.
         eq(engagements.workspaceId, activeWorkspace.workspaceId)
       )
     );
@@ -151,7 +142,6 @@ export default async function EngagementDetailPage({
     buyer: "Exported to buyer's infra",
   };
 
-  // Cleaned Offer Metadata values
   const offerName = String(offerDetails?.name || "").trim() || "Unspecified Offer";
   const offerPrice = String(offerDetails?.price || "").trim();
   const offerIcp = String(offerDetails?.icp || "").trim();
@@ -159,141 +149,140 @@ export default async function EngagementDetailPage({
   return (
     <div className="relative min-h-screen w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200 overflow-hidden pb-10">
       
-      {/* --- HYPER-MICRO TIGHT DOT GRID (0.5px / 6px grid) --- */}
+      {/* Dot Grid Background */}
       <div 
         className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" 
         aria-hidden="true"
       />
 
-      {/* --- PAGE CONTENT --- */}
+      {/* Page Content */}
       <div className="relative z-10 space-y-6">
 
-        {/* Header Section */}
-     {/* Header Section */}
-        <div className="space-y-4 border-b border-zinc-200 dark:border-zinc-800/80 pb-5">
+        {/* Flat Header Section */}
+        <div className="space-y-5 border-b border-zinc-200 dark:border-zinc-800/80 pb-5">
           <SetBreadcrumbLabel label={engagement.buyer} />
 
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div className="space-y-3">
-              {/* Circular Back Button & Client Name in the same horizontal row */}
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/dashboard/engagements"
-                  className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
-                  aria-label="Back to All Clients"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Link>
-                <div>
-                  <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">{engagement.buyer}</h1>
-                  <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">{engagement.engagementId}</p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-1.5 font-mono">
-                <span className="text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/60 px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800">
-                  {bookingPlatformLabel(stack?.booking_platform)}
-                </span>
-                <span className="text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/60 px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800">
-                  {emailPlatformLabel(stack?.email_platform)}
-                </span>
-                {offerDetails?.traffic_temperature && (
-                  <span className="text-[11px] text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/60 px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800 capitalize">
-                    {String(offerDetails.traffic_temperature)} traffic
+          {/* Title & Action Buttons Row */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <Link
+                href="/dashboard/engagements"
+                className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
+                aria-label="Back to All Clients"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Link>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
+                    {engagement.buyer}
+                  </h1>
+                  <span className="text-xs font-mono text-zinc-400 dark:text-zinc-500 shrink-0">
+                    {engagement.engagementId}
                   </span>
-                )}
+                </div>
 
-                {/* Status Chip */}
-                {stack?.booking_platform && (
-                  <BookingSyncChip
-                    status={computeBookingSyncStatus(engagement.engagementId, engagement.stack as EngagementStack | null)}
-                    className="ml-1"
-                  />
-                )}
+                {/* Clean Meta Row (Platforms, Traffic & Sync Status) */}
+                <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+                    {bookingPlatformLabel(stack?.booking_platform)}
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+                    {emailPlatformLabel(stack?.email_platform)}
+                  </span>
+                  {offerDetails?.traffic_temperature && (
+                    <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px] capitalize">
+                      {String(offerDetails.traffic_temperature)} traffic
+                    </span>
+                  )}
+
+                  {stack?.booking_platform && (
+                    <>
+                      <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                      <BookingSyncChip
+                        status={computeBookingSyncStatus(engagement.engagementId, engagement.stack as EngagementStack | null)}
+                      />
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
-              <div className="flex items-center gap-2">
-                <EngagementPauseControl
-                  engagementId={engagement.engagementId}
-                  initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
-                  initialPausedReason={engagement.pausedReason}
-                />
-                <EngagementActionsMenu
-                  engagementId={engagement.engagementId}
-                  buyerName={engagement.buyer}
-                  initialStack={engagement.stack as EngagementStack | null}
-                  bookingPlatform={stack?.booking_platform}
-                  emailPlatform={stack?.email_platform}
-                  vaultLinksByProvider={vaultLinksByProvider}
-                  initialRequireApproval={requireApproval}
-                  initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
-                  clientDetails={{
-                    offerDetails: engagement.offerDetails ?? null,
-                    topCallQuestions: engagement.topCallQuestions ?? null,
-                    topObjections: engagement.topObjections ?? null,
-                    prospectMeets: engagement.prospectMeets,
-                    castingChoice: engagement.castingChoice,
-                    rawVoiceCorpus: engagement.rawVoiceCorpus,
-                    existingProof: engagement.existingProof ?? null,
-                    confirmationPageTemplate: engagement.confirmationPageTemplate,
-                    notificationPackSelections: (engagement.stack as EngagementStack | null)?.notification_pack_selections ?? [],
-                    hasAdCreativeBriefs: Boolean(engagement.adCreativeBriefs),
-                    hasScriptPack: Boolean(engagement.pinDownScriptPack),
-                  }}
-                />
-              </div>
+            {/* Top Action Controls */}
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+              <EngagementPauseControl
+                engagementId={engagement.engagementId}
+                initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
+                initialPausedReason={engagement.pausedReason}
+              />
+              <EngagementActionsMenu
+                engagementId={engagement.engagementId}
+                buyerName={engagement.buyer}
+                initialStack={engagement.stack as EngagementStack | null}
+                bookingPlatform={stack?.booking_platform}
+                emailPlatform={stack?.email_platform}
+                vaultLinksByProvider={vaultLinksByProvider}
+                initialRequireApproval={requireApproval}
+                initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
+                clientDetails={{
+                  offerDetails: engagement.offerDetails ?? null,
+                  topCallQuestions: engagement.topCallQuestions ?? null,
+                  topObjections: engagement.topObjections ?? null,
+                  prospectMeets: engagement.prospectMeets,
+                  castingChoice: engagement.castingChoice,
+                  rawVoiceCorpus: engagement.rawVoiceCorpus,
+                  existingProof: engagement.existingProof ?? null,
+                  confirmationPageTemplate: engagement.confirmationPageTemplate,
+                  notificationPackSelections: (engagement.stack as EngagementStack | null)?.notification_pack_selections ?? [],
+                  hasAdCreativeBriefs: Boolean(engagement.adCreativeBriefs),
+                  hasScriptPack: Boolean(engagement.pinDownScriptPack),
+                }}
+              />
             </div>
           </div>
 
-          {/* Offer Details */}
+          {/* Flat Offer, Price & Targeting Section (No Card Wrapper) */}
           {offerDetails && (
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-xs p-5 shadow-xs overflow-hidden">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
-                <div className="flex-1 space-y-4 min-w-0">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
-                      Offer
-                    </p>
-                    <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
-                      {offerName}
-                    </h2>
-                  </div>
-
-                  {offerIcp && (
-                    <div className="space-y-1 pt-1.5 border-t border-zinc-100 dark:border-zinc-800/60">
-                      <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
-                        Targeting
-                      </p>
-                      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed">
-                        {offerIcp}
-                      </p>
-                    </div>
-                  )}
+            <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800/80 space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-0.5 min-w-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500 block">
+                    Offer
+                  </span>
+                  <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                    {offerName}
+                  </h2>
                 </div>
-
-                <div className="shrink-0 self-start">
-                  <div className="flex flex-col items-center justify-center px-5 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/40 min-w-[100px]">
-                    <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
-                      Price
-                    </span>
-                    <span className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tabular-nums mt-0.5">
-                      {offerPrice ? `$${offerPrice}` : "—"}
-                    </span>
-                  </div>
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500 block">
+                    Price
+                  </span>
+                  <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-mono">
+                    {offerPrice ? `$${offerPrice}` : "—"}
+                  </span>
                 </div>
               </div>
+
+              {offerIcp && (
+                <div className="space-y-1 pt-2.5 border-t border-zinc-100 dark:border-zinc-800/50">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500 block">
+                    Targeting
+                  </span>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-3xl">
+                    {offerIcp}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-       <SkillsPanel
-  engagementId={engagement.engagementId}
-  initialStates={skillStates}
-  runsBySkill={runsBySkill}
-  isPaused={Boolean(engagement.pausedAt)}
-/>
+        <SkillsPanel
+          engagementId={engagement.engagementId}
+          initialStates={skillStates}
+          runsBySkill={runsBySkill}
+          isPaused={Boolean(engagement.pausedAt)}
+        />
 
         {engagement.pausedAt && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-xs font-mono text-amber-800 dark:text-amber-400">
@@ -303,10 +292,7 @@ export default async function EngagementDetailPage({
           </div>
         )}
 
-        {/* Modules Selector Grid */}
-       
-
-        {/* SINGLE UNIFIED SCHEDULE HUB (Month, Day Timeline, List, Board) */}
+        {/* Master Roster Calendar */}
         <MasterRosterCalendar engagementId={id} />
 
         <DeliverablesPanel

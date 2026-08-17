@@ -75,13 +75,13 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
             Explore automation suites and integrate them into your client workspace.
           </p>
         </div>
-
+{/* 
         <button
           type="button"
           className="inline-flex items-center gap-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm transition-colors cursor-pointer self-start sm:self-auto"
         >
           <Settings size={14} /> Settings
-        </button>
+        </button> */}
       </div>
 
       {/* Tabs */}
