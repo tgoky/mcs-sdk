@@ -1,148 +1,198 @@
 "use client";
 
 import { useState } from "react";
-import { User, ShieldAlert, LogOut, Trash2, Camera } from "lucide-react";
+import { User, Plus } from "lucide-react";
 
 export default function ProfileSettingsPage({ session }: { session?: any }) {
   const [supportAccess, setSupportAccess] = useState(true);
-  const [firstName, setFirstName] = useState("Brian");
-  const [lastName, setLastName] = useState("Frederin");
+  const [twoStepAuth, setTwoStepAuth] = useState(false);
+
+  // Derive initial names from real session data if present
+  const fullName = session?.name || "";
+  const nameParts = fullName.trim().split(" ");
+  const [firstName, setFirstName] = useState(nameParts[0] || "");
+  const [lastName, setLastName] = useState(nameParts.slice(1).join(" ") || "");
 
   return (
-    <div className="max-w-3xl space-y-8 font-sans text-xs">
+    <div className="w-full h-full space-y-8 font-sans text-sm text-zinc-900 dark:text-zinc-100 pb-12">
+      {/* Header */}
       <div>
-        <h1 className="text-lg font-bold text-zinc-100 tracking-tight">My Profile</h1>
-        <p className="text-zinc-400 mt-0.5">Manage your user identity, avatar, and account access permissions.</p>
+        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
+          My Profile
+        </h1>
       </div>
 
-      {/* Avatar Section */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
-        <span className="text-zinc-300 font-semibold block">Profile Avatar</span>
+      {/* Profile Image Row */}
+      <div className="space-y-3 pb-6 border-b border-zinc-200 dark:border-zinc-800/80">
         <div className="flex items-center gap-4">
-          <div className="relative h-16 w-16 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
-            <User size={32} className="text-zinc-400" />
+          <div className="relative h-16 w-16 rounded-full bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
+            <User size={32} className="text-zinc-500 dark:text-zinc-400" />
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <label className="cursor-pointer px-3 py-1.5 bg-zinc-100 hover:bg-white text-zinc-950 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5">
-                <Camera size={14} />
-                <span>Change Image</span>
-                <input type="file" accept="image/png, image/jpeg, image/gif" className="hidden" />
-              </label>
-              <button 
-                type="button" 
-                className="px-3 py-1.5 border border-zinc-700 hover:bg-zinc-800 text-zinc-300 rounded-lg transition-colors"
-              >
-                Remove Image
-              </button>
-            </div>
-            <p className="text-[11px] text-zinc-500">Supports PNG, JPEG, and GIF under 2MB.</p>
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer px-3 py-1.5 bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-950 rounded-md text-xs font-medium hover:bg-zinc-800 dark:hover:bg-white transition-colors flex items-center gap-1">
+              <Plus size={14} />
+              <span>Change Image</span>
+              <input type="file" accept="image/png, image/jpeg, image/gif" className="hidden" />
+            </label>
+            <button
+              type="button"
+              className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 rounded-md text-xs font-medium transition-colors"
+            >
+              Remove Image
+            </button>
           </div>
+        </div>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          We support PNGs, JPEGs and GIFs under 2MB
+        </p>
+      </div>
+
+      {/* Name Inputs */}
+      <div className="grid grid-cols-2 gap-4 pb-8 border-b border-zinc-200 dark:border-zinc-800/80">
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            First Name
+          </label>
+          <input
+            type="text"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            placeholder="First name"
+            className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-md text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-500 dark:focus:border-zinc-600 transition-colors"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            Last Name
+          </label>
+          <input
+            type="text"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            placeholder="Last name"
+            className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-md text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-500 dark:focus:border-zinc-600 transition-colors"
+          />
         </div>
       </div>
 
-      {/* Identity Fields */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
-        <span className="text-zinc-300 font-semibold block">Personal Identity</span>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-zinc-400 font-medium">First Name</label>
+      {/* Account Security */}
+      <div className="space-y-6 pb-8 border-b border-zinc-200 dark:border-zinc-800/80">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          Account Security
+        </h2>
+
+        {/* Email */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            Email
+          </label>
+          <div className="flex items-center gap-3">
             <input
               type="text"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none focus:border-zinc-700"
+              readOnly
+              value={session?.email || "No email linked"}
+              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 rounded-md text-sm text-zinc-500 dark:text-zinc-400 focus:outline-none cursor-not-allowed"
             />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-zinc-400 font-medium">Last Name</label>
-            <input
-              type="text"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none focus:border-zinc-700"
-            />
+            <button
+              type="button"
+              className="shrink-0 px-3 py-2 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 rounded-md text-xs font-medium transition-colors"
+            >
+              Change email
+            </button>
           </div>
         </div>
 
-        <div className="pt-2 border-t border-zinc-800/60 grid grid-cols-3 gap-4 items-center">
-          <span className="text-zinc-400 font-medium">Email</span>
-          <span className="col-span-2 text-zinc-200 font-mono">{session?.email || "user@domain.com"}</span>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4 items-center">
-          <span className="text-zinc-400 font-medium">Whop User ID</span>
-          <span className="col-span-2 text-zinc-200 font-mono">{session?.whopUserId || "usr_whop_linked"}</span>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4 items-center">
-          <span className="text-zinc-400 font-medium">Subscription Status</span>
-          <span className="col-span-2 text-emerald-400 font-mono capitalize">
-            {session?.subscriptionStatus || "Active"}
-          </span>
-        </div>
-      </div>
-
-      {/* Support Access & Security */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-5">
-        <div>
-          <span className="text-zinc-300 font-semibold block">Support Access</span>
-          <p className="text-[11px] text-zinc-500 mt-0.5">
-            Grant temporary access to support staff for troubleshooting without sharing auth tokens.
-          </p>
-        </div>
-
-        <div className="flex items-center justify-between py-2 border-t border-b border-zinc-800/60">
-          <div>
-            <span className="text-zinc-200 font-medium block">Allow Support Access</span>
-            <span className="text-[11px] text-zinc-500">
-              {supportAccess ? "Access granted until revoked or access period expires." : "Support access disabled."}
+        {/* 2-Step Verifications */}
+        <div className="flex items-center justify-between pt-2">
+          <div className="space-y-0.5">
+            <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 block">
+              2-Step Verifications
             </span>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Add an additional layer of security to your account during login.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTwoStepAuth(!twoStepAuth)}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              twoStepAuth ? "bg-zinc-900 dark:bg-zinc-100" : "bg-zinc-300 dark:bg-zinc-700"
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white dark:bg-zinc-900 shadow-sm transition duration-200 ease-in-out ${
+                twoStepAuth ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* Support Access Section */}
+      <div className="space-y-6">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          Support Access
+        </h2>
+
+        {/* Toggle Support Access */}
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 block">
+              Support access
+            </span>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-xl">
+              You have granted us access to your account for support purposes until Aug 31, 2026, 9:40 PM.
+            </p>
           </div>
           <button
             type="button"
             onClick={() => setSupportAccess(!supportAccess)}
             className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-              supportAccess ? "bg-emerald-500" : "bg-zinc-700"
+              supportAccess ? "bg-zinc-900 dark:bg-zinc-100" : "bg-zinc-300 dark:bg-zinc-700"
             }`}
           >
             <span
-              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white dark:bg-zinc-900 shadow-sm transition duration-200 ease-in-out ${
                 supportAccess ? "translate-x-4" : "translate-x-0"
               }`}
             />
           </button>
         </div>
 
-        {/* Sessions & Danger Zone */}
-        <div className="space-y-4 pt-1">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-zinc-200 font-medium block">Active Sessions</span>
-              <span className="text-[11px] text-zinc-500">Log out of all other devices and revoke active session cookies.</span>
-            </div>
-            <button
-              type="button"
-              className="px-3 py-1.5 border border-zinc-700 hover:bg-zinc-800 text-zinc-300 rounded-lg font-medium transition-colors flex items-center gap-1.5"
-            >
-              <LogOut size={13} />
-              <span>Log Out All</span>
-            </button>
+        {/* Log out of all devices */}
+        <div className="flex items-center justify-between pt-4 border-t border-zinc-200 dark:border-zinc-800/60">
+          <div className="space-y-0.5">
+            <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 block">
+              Log out of all devices
+            </span>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Log out of all other active sessions on other devices besides this one.
+            </p>
           </div>
+          <button
+            type="button"
+            className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 rounded-md text-xs font-medium transition-colors"
+          >
+            Log out
+          </button>
+        </div>
 
-          <div className="flex items-center justify-between pt-4 border-t border-zinc-800/60">
-            <div>
-              <span className="text-rose-400 font-semibold block">Delete Account</span>
-              <span className="text-[11px] text-zinc-500">Permanently remove your account, workspace data, and integrations.</span>
-            </div>
-            <button
-              type="button"
-              className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg font-medium transition-colors flex items-center gap-1.5"
-            >
-              <Trash2 size={13} />
-              <span>Delete Account</span>
-            </button>
+        {/* Delete my account */}
+        <div className="flex items-center justify-between pt-4 border-t border-zinc-200 dark:border-zinc-800/60">
+          <div className="space-y-0.5">
+            <span className="text-sm font-medium text-rose-600 dark:text-rose-400 block">
+              Delete my account
+            </span>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Permanently delete the account and remove access from all workspaces.
+            </p>
           </div>
+          <button
+            type="button"
+            className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-600 dark:text-rose-400 rounded-md text-xs font-medium transition-colors"
+          >
+            Delete Account
+          </button>
         </div>
       </div>
     </div>
