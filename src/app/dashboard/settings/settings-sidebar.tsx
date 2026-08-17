@@ -29,8 +29,8 @@ const SETTINGS_NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Apps", href: "/dashboard/settings/apps", icon: Wrench },
       { label: "Account", href: "/dashboard/settings/profile", icon: User },
-      { label: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
-      { label: "Language & Region", href: "/dashboard/settings/language", icon: Globe },
+      // { label: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
+      { label: "Timezones & Region", href: "/dashboard/settings/language", icon: Globe },
       { label: "Connections", href: "/dashboard/settings/connections", icon: KeyRound },
       { label: "Booking Sync", href: "/dashboard/settings/booking-sync", icon: RefreshCw },
     ],
