@@ -5,6 +5,7 @@ import { getQueueItems } from "@/lib/queue";
 import { eq, desc, sql, and, isNull, gte, lt } from "drizzle-orm";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { LiveExecutionFeed } from "./live-execution-feed";
+import { latestStepLabel } from "@/lib/run-display";
 import { QueuePanel } from "./queue-panel";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
@@ -101,6 +102,12 @@ export default async function DashboardPage() {
         )
       ),
 
+    // Same LiveExecutionFeed table as /dashboard/runs, just the newest 8 —
+    // needs the same fields that page selects (buyerName/engagementId were
+    // missing here before, so this widget showed "Unknown client" on every
+    // row; errorMessage/steps/summary were missing too, so failed runs
+    // couldn't show why and successful runs fell back to static per-skill
+    // copy regardless of outcome — see actionSummary() in live-execution-feed.tsx).
     db
       .select({
         id: skillRuns.id,
@@ -108,6 +115,13 @@ export default async function DashboardPage() {
         status: skillRuns.status,
         phase: skillRuns.phase,
         startedAt: skillRuns.startedAt,
+        engagementId: skillRuns.engagementId,
+        buyerName: engagements.buyer,
+        engagementPausedAt: engagements.pausedAt,
+        errorMessage: skillRuns.errorMessage,
+        steps: skillRuns.steps,
+        stepCount: sql<number>`coalesce(jsonb_array_length(${skillRuns.steps}), 0)`,
+        summary: skillRuns.summary,
       })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
@@ -136,9 +150,11 @@ export default async function DashboardPage() {
     pausedAt: e.pausedAt ? e.pausedAt.toISOString() : null,
   }));
 
-  const recentRuns = recentRunsRaw.map((r) => ({
-    ...r,
-    startedAt: r.startedAt.toISOString(),
+  const recentRuns = recentRunsRaw.map(({ steps, startedAt, engagementPausedAt, ...rest }) => ({
+    ...rest,
+    startedAt: startedAt.toISOString(),
+    engagementPausedAt: engagementPausedAt ? engagementPausedAt.toISOString() : null,
+    subjectLabel: latestStepLabel(steps),
   }));
 
   const formattedDate = new Date().toLocaleDateString("en-US", {

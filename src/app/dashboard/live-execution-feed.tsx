@@ -16,8 +16,11 @@ import {
   RotateCcw,
   Waves,
   Copy,
+  SkipForward,
 } from "lucide-react";
 import { skillName, phaseLabel, SKILL_INFO, SKILLS, EXECUTIONS_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, type SkillName } from "@/lib/copy";
+import { classifyRunError } from "@/lib/error-classification";
+import type { RunSummary } from "@/models/schema";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { cancelSkillRun, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
 import { SegmentedTabs, type SegmentedTabOption } from "@/components/segmented-tabs";
@@ -41,6 +44,10 @@ interface SkillRun {
   stepCount?: number;
   subjectLabel?: string | null;
   engagementPausedAt?: string | null;
+  // The 5-field "what happened" record every skill writes at finishRun().
+  // Not present on rows completed before this column existed — actionSummary()
+  // falls back to the generic per-skill copy when it's absent.
+  summary?: RunSummary | null;
 }
 
 interface LiveExecutionFeedProps {
@@ -134,27 +141,63 @@ const SUCCESS_STATUSES = new Set(["success", "completed"]);
 
 const FETCH_WINDOW = 150;
 
+// Last-resort copy — only used for terminal-success runs that have no
+// `summary` at all (rows written before the summary column existed).
+// Every current finishRun() call site writes a summary, so this should be
+// rare going forward; it exists so old rows don't render a blank Action cell.
+const LEGACY_SUCCESS_FALLBACK: Partial<Record<SkillName, string>> = {
+  "pin-down":      "Client account set up and confirmation page live",
+  "pile-on":       "Pre-call sequence queued for this booking",
+  "pre-call-read": "Call brief sent to your team",
+  "win-back":      "Win-back sequence triggered for no-show",
+  "leak-map":      "Funnel health report generated",
+};
+
+/**
+ * What the Action cell shows for a run. For terminal-success runs this
+ * used to be one hardcoded sentence per skill regardless of what actually
+ * happened — a "Call brief sent" run and a "found zero calls, sent
+ * nothing" run read identically. Every skill now writes a 5-field
+ * RunSummary at finishRun() (whatWasAttempted/whatWorked/whatFailed/
+ * openItems/decisionsMade — see src/models/schema.ts), so this reads that
+ * instead: a partial failure surfaces first, then what actually worked
+ * (which already covers the "nothing to brief" / "funnel is healthy"
+ * cases, since each skill pushes those exact outcomes there), then any
+ * open item. The static line below only fires for runs with no summary
+ * at all.
+ */
 function actionSummary(run: SkillRun): string {
   const s = run.status.toLowerCase();
   const skill = run.skillName as SkillName;
 
   if (s === "running") return phaseLabel(run.phase);
+
   if (s === "failed") {
+    const diagnosis = classifyRunError(run.errorMessage);
+    if (diagnosis) return diagnosis.title;
     if (run.errorMessage && run.errorMessage.length < 80) return run.errorMessage;
     return "Failed — click to view run telemetry";
   }
+
   if (s === "timed_out") return "Timed out — exceeded max runtime, click to view";
   if (s === "cancelled") return "Cancelled by user request";
 
-  const summaries: Partial<Record<SkillName, string>> = {
-    "pin-down":      "Client account set up and confirmation page live",
-    "pile-on":       "Pre-call sequence queued for this booking",
-    "pre-call-read": "Call brief sent to your team",
-    "win-back":      "Win-back sequence triggered for no-show",
-    "leak-map":      "Funnel health report generated",
-  };
+  if (s === "skipped") {
+    // The one status finishRun() sets without a summary (paused/deleted
+    // engagement, or the skill toggled off for this client) — the run's
+    // own step log already recorded the specific reason, surfaced via
+    // subjectLabel (see latestStepLabel in lib/run-display.ts).
+    return run.subjectLabel ?? "Skipped — engagement paused, deleted, or this skill is off";
+  }
 
-  return summaries[skill] ?? SKILL_INFO[skill]?.description ?? "Completed";
+  const summary = run.summary;
+  if (summary) {
+    if (summary.whatFailed.length > 0) return summary.whatFailed[0];
+    if (summary.whatWorked.length > 0) return summary.whatWorked[0];
+    if (summary.openItems.length > 0) return summary.openItems[0];
+  }
+
+  return LEGACY_SUCCESS_FALLBACK[skill] ?? SKILL_INFO[skill]?.description ?? "Completed";
 }
 
 function RunStatusIcon({ status }: { status: string }) {
@@ -164,6 +207,7 @@ function RunStatusIcon({ status }: { status: string }) {
   if (s === "timed_out") return <Clock className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />;
   if (s === "cancelled") return <Ban className="w-4 h-4 text-amber-500 shrink-0" />;
   if (s === "running" || s === "in_progress") return <Loader2 className="w-4 h-4 text-zinc-500 dark:text-zinc-400 animate-spin shrink-0" />;
+  if (s === "skipped") return <SkipForward className="w-4 h-4 text-zinc-400 dark:text-zinc-600 shrink-0" />;
   return <AlertCircle className="w-4 h-4 text-zinc-400 dark:text-zinc-600 shrink-0" />;
 }
 
@@ -174,6 +218,7 @@ function StatusLabel({ status }: { status: string }) {
   if (s === "timed_out") return <span className="text-xs font-semibold text-rose-600 dark:text-rose-400 font-mono">Timed out</span>;
   if (s === "cancelled") return <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 font-mono">Cancelled</span>;
   if (s === "running" || s === "in_progress") return <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 italic font-mono">Running</span>;
+  if (s === "skipped") return <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-600 font-mono">Skipped</span>;
   return <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-600 font-mono">Pending</span>;
 }
 

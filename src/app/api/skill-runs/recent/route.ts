@@ -51,6 +51,9 @@ export async function GET(request: Request) {
         steps: skillRuns.steps,
         // jsonb_array_length returns NULL when the column is NULL, so coalesce to 0
         stepCount: sql<number>`coalesce(jsonb_array_length(${skillRuns.steps}), 0)`,
+        // 5-field "what happened" record — lets the Action cell show the
+        // run's real outcome instead of one static sentence per skill.
+        summary: skillRuns.summary,
       })
       .from(skillRuns)
       .innerJoin(
