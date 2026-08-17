@@ -666,15 +666,17 @@ export default function ConnectionsSettingsPage() {
         >
           Slack webhook
         </p>
-        <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-          Your call briefs and alerts are delivered to a Slack channel of your
-          choice. Set this up during your account setup — it lives on your
-          engagement config, not here.
-        </p>
-        <p className="text-xs font-mono opacity-80" style={{ color: "var(--text-muted)" }}>
-          To add it: api.slack.com → Your Apps → Incoming Webhooks → Add New
-          Webhook to Workspace
-        </p>
+        <p className="text-xs font-mono opacity-80 flex items-center gap-1.5 flex-wrap" style={{ color: "var(--text-muted)" }}>
+  To add it:
+  <span className="inline-flex items-center gap-1.5">
+    {["api.slack.com", "Your Apps", "Incoming Webhooks", "Add New Webhook to Workspace"].map((step, i, arr) => (
+      <span key={step} className="inline-flex items-center gap-1.5">
+        <span>{step}</span>
+        {i < arr.length - 1 && <span className="opacity-50">/</span>}
+      </span>
+    ))}
+  </span>
+</p>
       </div>
     </div>
   );
