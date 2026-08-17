@@ -1,154 +1,89 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { db } from "@/lib/db";
+import { engagements } from "@/models/schema";
+import { eq, and, isNull, desc } from "drizzle-orm";
 import Link from "next/link";
-import { ChevronRight, ArrowRight, ChevronDown, List } from "lucide-react";
-import { isSkillId, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
-import { SkillsNavList } from "@/components/skills-nav-list";
+import { Building2, Plus, Radio } from "lucide-react";
+import { RecentEngagementsSection } from "./recent-engagements-section";
 
-interface RecentEngagement {
-  engagementId: string;
-  buyer: string;
-}
-
-const SKILL_PAGE_PATTERN = /^\/dashboard\/engagements\/([^/]+)\/skills\/([^/]+)$/;
-
-export function RecentEngagementsSection({ recent }: { recent: RecentEngagement[] }) {
-  const pathname = usePathname();
-
-  if (pathname === "/dashboard/engagements") {
-    return (
-      <>
-        <div className="my-3 border-t border-sidebar-border" />
-        <div className="px-2.5 pb-2 text-[11px] font-semibold text-zinc-500 font-mono tracking-wider uppercase">
-          Skills
-        </div>
-        <SkillsNavList />
-      </>
-    );
-  }
-
-  const skillMatch = SKILL_PAGE_PATTERN.exec(pathname);
-  const skillIdParam = skillMatch?.[2];
-  if (skillMatch && skillIdParam && isSkillId(skillIdParam)) {
-    return (
-      <SkillSiblingClients
-        key={`${skillMatch[1]}:${skillIdParam}`}
-        skillId={skillIdParam}
-        currentEngagementId={skillMatch[1]}
-      />
-    );
-  }
+/**
+ * The Engagements section's secondary sidebar.
+ * Queries recent client engagements and provides action links.
+ */
+export async function EngagementsSidebar({
+  whopUserId,
+  workspaceId,
+}: {
+  whopUserId: string;
+  workspaceId: string;
+}) {
+  const recent = await db
+    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
+    .from(engagements)
+    .where(
+      and(
+        eq(engagements.whopUserId, whopUserId),
+        eq(engagements.workspaceId, workspaceId),
+        isNull(engagements.deletedAt)
+      )
+    )
+    .orderBy(desc(engagements.createdAt))
+    .limit(5);
 
   return (
-    <>
+    <div className="flex flex-col gap-1">
+      <Link
+        href="/dashboard/engagements"
+        className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold bg-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-900 transition-all"
+      >
+        <Building2 className="w-4 h-4 text-ink dark:text-ink-hover" />
+        <span>All Engagements</span>
+      </Link>
+
       <div className="my-3 border-t border-sidebar-border" />
+
       <div className="px-2.5 pb-2 text-[11px] font-semibold text-zinc-500 font-mono tracking-wider uppercase">
-        Recent
+        Actions
       </div>
-      {recent.length > 0 ? (
-        <nav className="flex flex-col gap-1">
-          {recent.map((client) => (
-            <Link
-              key={client.engagementId}
-              href={`/dashboard/engagements/${client.engagementId}`}
-              className="group flex items-center justify-between gap-3 rounded-xl px-2.5 py-2 hover:bg-zinc-800/60 transition-all duration-150"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-7 h-7 rounded-[8px] bg-teal-300 dark:bg-[#6ee7b7] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
-                  <List className="w-4 h-4 stroke-[2.5]" />
-                </div>
-                <span className="text-sm font-medium text-zinc-100 group-hover:text-white truncate">
-                  {client.buyer}
-                </span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-zinc-500 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-hover:text-zinc-200 transition-all shrink-0" />
-            </Link>
-          ))}
-        </nav>
-      ) : (
-        <p className="px-2.5 py-1 text-xs text-zinc-500">No engagements yet.</p>
-      )}
-    </>
+
+      <nav className="flex flex-col gap-0.5">
+        <Link
+          href="/dashboard/engagements/new"
+          className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100 transition-all"
+        >
+          <Plus className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+          <span>Create a client</span>
+        </Link>
+
+        <Link
+          href="/dashboard/engagements"
+          title="Recall.ai is connected per-client from their Call Intelligence tab — open a client to connect it"
+          className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100 transition-all"
+        >
+          <Radio className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+          <span className="flex flex-col">
+            <span>Connect provider</span>
+            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-normal">per client</span>
+          </span>
+        </Link>
+      </nav>
+
+      <RecentEngagementsSection recent={recent} />
+    </div>
   );
 }
 
-function SkillSiblingClients({ skillId, currentEngagementId }: { skillId: SkillId; currentEngagementId: string }) {
-  const [clients, setClients] = useState<RecentEngagement[] | null>(null);
-  const manifest = SKILL_MANIFEST[skillId];
-
-  useEffect(() => {
-    let cancelled = false;
-
-    fetch(`/api/modules/${skillId}/clients?exclude=${encodeURIComponent(currentEngagementId)}`, {
-      cache: "no-store",
-    })
-      .then((res) => (res.ok ? res.json() : { clients: [] }))
-      .then((data) => {
-        if (!cancelled) setClients(Array.isArray(data.clients) ? data.clients : []);
-      })
-      .catch(() => {
-        if (!cancelled) setClients([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [skillId, currentEngagementId]);
-
+/** Static skeleton fallback for Suspense boundary */
+export function EngagementsSidebarSkeleton() {
   return (
-    <>
+    <div className="flex flex-col gap-1 animate-pulse">
+      <div className="h-9 rounded-lg bg-zinc-100 dark:bg-zinc-900" />
       <div className="my-3 border-t border-sidebar-border" />
-
-      {/* Header */}
-      <div className="px-2.5 pb-2 text-[11px] font-mono font-semibold text-zinc-400 tracking-wider flex items-center justify-between">
-        <span>{manifest.name} Clients</span>
-        <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-      </div>
-
-      {clients === null ? (
-        <div className="flex flex-col gap-1.5 px-2.5 py-1">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-8 rounded-xl bg-zinc-800/40 animate-pulse" />
-          ))}
+      {["Create a client", "Connect provider"].map((label) => (
+        <div key={label} className="flex items-center gap-2.5 px-2.5 py-2 text-sm">
+          <div className="w-4 h-4 rounded bg-zinc-200 dark:bg-zinc-800 shrink-0" />
+          <span className="text-zinc-300 dark:text-zinc-700">{label}</span>
         </div>
-      ) : clients.length > 0 ? (
-        <nav className="flex flex-col gap-1">
-          {clients.map((client) => (
-            <Link
-              key={client.engagementId}
-              href={`/dashboard/engagements/${client.engagementId}/skills/${skillId}`}
-              className="group flex items-center justify-between gap-3 rounded-xl px-2.5 py-2 hover:bg-zinc-800/60 transition-all duration-150"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-7 h-7 rounded-[8px] bg-teal-300 dark:bg-[#6ee7b7] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
-                  <List className="w-4 h-4 stroke-[2.5]" />
-                </div>
-                <span className="text-sm font-medium text-zinc-100 group-hover:text-white truncate">
-                  {client.buyer}
-                </span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-zinc-500 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-hover:text-zinc-200 transition-all shrink-0" />
-            </Link>
-          ))}
-        </nav>
-      ) : (
-        <p className="px-2.5 py-1 text-xs text-zinc-500 italic font-mono">
-          No active clients.
-        </p>
-      )}
-
-      <div className="my-3 border-t border-sidebar-border" />
-
-      {/* Centered Borderless View All Link */}
-      <Link
-        href={`/dashboard/modules/${skillId}`}
-        className="group flex items-center justify-center gap-1.5 py-1.5 text-xs font-mono font-medium text-zinc-400 hover:text-zinc-100 transition-colors"
-      >
-        <span>View all</span>
-        <ArrowRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-100 group-hover:translate-x-0.5 transition-all duration-200 shrink-0" />
-      </Link>
-    </>
+      ))}
+    </div>
   );
 }
