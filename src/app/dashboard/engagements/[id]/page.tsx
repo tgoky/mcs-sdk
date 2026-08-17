@@ -186,7 +186,7 @@ export default async function EngagementDetailPage({
       </div>
 
       {/* Clean Meta Row (Platforms & Traffic) */}
-   <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 translate-y-3.5 -mb-3 z-10 relative">
+   <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 translate-y-3.5 -mb-3 -ml-11 z-10 relative">
   <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
     {bookingPlatformLabel(stack?.booking_platform)}
   </span>

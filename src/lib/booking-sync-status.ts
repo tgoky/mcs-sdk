@@ -115,7 +115,7 @@ export function computeBookingSyncStatus(
       health = "warning";
       headline = supportsAutoWebhook ? "Auto-polling (fallback)" : "Auto-polling · instant sync available";
       detail = lastPollAt
-        ? `Checking ${platform} every ${pollIntervalMinutes} min for new bookings.`
+        ? `Checking every ${pollIntervalMinutes} min for new bookings.`
         : "Will start checking on the next 5-minute cycle.";
     } else if (mode === "none") {
       health = "warning";
