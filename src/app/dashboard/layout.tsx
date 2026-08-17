@@ -9,6 +9,7 @@ import { EngagementsSidebar, EngagementsSidebarSkeleton } from "./engagements-si
 import { AnalyticsSidebar } from "./analytics-sidebar";
 import { MeetingsSidebar } from "./meetings-sidebar";
 import { getActiveWorkspace, listWorkspaces } from "@/lib/workspace";
+import { MobileNavPill } from "@/components/mobile-nav-pill";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -77,6 +78,9 @@ export default async function DashboardLayout({
       >
         {children}
       </ShellLayout>
+
+      {/* Floating Mobile Nav Pill & Accordion Navigation */}
+      <MobileNavPill />
     </BreadcrumbProvider>
   );
 }
