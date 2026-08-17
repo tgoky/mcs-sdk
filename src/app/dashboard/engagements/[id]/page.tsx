@@ -163,83 +163,84 @@ export default async function EngagementDetailPage({
           <SetBreadcrumbLabel label={engagement.buyer} />
 
           {/* Title & Action Buttons Row */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <Link
-                href="/dashboard/engagements"
-                className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
-                aria-label="Back to All Clients"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Link>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
-                    {engagement.buyer}
-                  </h1>
-                  <span className="text-xs font-mono text-zinc-400 dark:text-zinc-500 shrink-0">
-                    {engagement.engagementId}
-                  </span>
-                </div>
+      {/* Title & Action Buttons Row */}
+<div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+  {/* Left Column: Back Button, Title, ID, and Stack Badges */}
+  <div className="flex items-start gap-3 min-w-0">
+    <Link
+      href="/dashboard/engagements"
+      className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mt-0.5"
+      aria-label="Back to All Clients"
+    >
+      <ChevronLeft className="w-4 h-4" />
+    </Link>
+    
+    <div className="min-w-0 space-y-1.5">
+      <div>
+        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
+          {engagement.buyer}
+        </h1>
+        <p className="text-xs font-mono text-zinc-400 dark:text-zinc-500 mt-0.5">
+          {engagement.engagementId}
+        </p>
+      </div>
 
-                {/* Clean Meta Row (Platforms, Traffic & Sync Status) */}
-                <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
-                    {bookingPlatformLabel(stack?.booking_platform)}
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
-                    {emailPlatformLabel(stack?.email_platform)}
-                  </span>
-                  {offerDetails?.traffic_temperature && (
-                    <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px] capitalize">
-                      {String(offerDetails.traffic_temperature)} traffic
-                    </span>
-                  )}
+      {/* Clean Meta Row (Platforms & Traffic) */}
+      <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+        <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+          {bookingPlatformLabel(stack?.booking_platform)}
+        </span>
+        <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+          {emailPlatformLabel(stack?.email_platform)}
+        </span>
+        {offerDetails?.traffic_temperature && (
+          <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px] capitalize">
+            {String(offerDetails.traffic_temperature)} traffic
+          </span>
+        )}
+      </div>
+    </div>
+  </div>
 
-                  {stack?.booking_platform && (
-                    <>
-                      <span className="text-zinc-300 dark:text-zinc-700">·</span>
-                      <BookingSyncChip
-                        status={computeBookingSyncStatus(engagement.engagementId, engagement.stack as EngagementStack | null)}
-                      />
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Top Action Controls */}
-            <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-              <EngagementPauseControl
-                engagementId={engagement.engagementId}
-                initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
-                initialPausedReason={engagement.pausedReason}
-              />
-              <EngagementActionsMenu
-                engagementId={engagement.engagementId}
-                buyerName={engagement.buyer}
-                initialStack={engagement.stack as EngagementStack | null}
-                bookingPlatform={stack?.booking_platform}
-                emailPlatform={stack?.email_platform}
-                vaultLinksByProvider={vaultLinksByProvider}
-                initialRequireApproval={requireApproval}
-                initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
-                clientDetails={{
-                  offerDetails: engagement.offerDetails ?? null,
-                  topCallQuestions: engagement.topCallQuestions ?? null,
-                  topObjections: engagement.topObjections ?? null,
-                  prospectMeets: engagement.prospectMeets,
-                  castingChoice: engagement.castingChoice,
-                  rawVoiceCorpus: engagement.rawVoiceCorpus,
-                  existingProof: engagement.existingProof ?? null,
-                  confirmationPageTemplate: engagement.confirmationPageTemplate,
-                  notificationPackSelections: (engagement.stack as EngagementStack | null)?.notification_pack_selections ?? [],
-                  hasAdCreativeBriefs: Boolean(engagement.adCreativeBriefs),
-                  hasScriptPack: Boolean(engagement.pinDownScriptPack),
-                }}
-              />
-            </div>
-          </div>
+  {/* Right Column: Sync Status & Top Action Controls */}
+  <div className="flex flex-col sm:items-end gap-2.5 shrink-0 self-start sm:self-auto">
+    {stack?.booking_platform && (
+      <BookingSyncChip
+        status={computeBookingSyncStatus(engagement.engagementId, engagement.stack as EngagementStack | null)}
+      />
+    )}
+    <div className="flex items-center gap-2">
+      <EngagementPauseControl
+        engagementId={engagement.engagementId}
+        initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
+        initialPausedReason={engagement.pausedReason}
+      />
+      <EngagementActionsMenu
+        engagementId={engagement.engagementId}
+        buyerName={engagement.buyer}
+        initialStack={engagement.stack as EngagementStack | null}
+        bookingPlatform={stack?.booking_platform}
+        emailPlatform={stack?.email_platform}
+        vaultLinksByProvider={vaultLinksByProvider}
+        initialRequireApproval={requireApproval}
+        initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
+        clientDetails={{
+          offerDetails: engagement.offerDetails ?? null,
+          topCallQuestions: engagement.topCallQuestions ?? null,
+          topObjections: engagement.topObjections ?? null,
+          prospectMeets: engagement.prospectMeets,
+          castingChoice: engagement.castingChoice,
+          rawVoiceCorpus: engagement.rawVoiceCorpus,
+          existingProof: engagement.existingProof ?? null,
+          confirmationPageTemplate: engagement.confirmationPageTemplate,
+          notificationPackSelections: (engagement.stack as EngagementStack | null)?.notification_pack_selections ?? [],
+          hasAdCreativeBriefs: Boolean(engagement.adCreativeBriefs),
+          hasScriptPack: Boolean(engagement.pinDownScriptPack),
+        }}
+      />
+    </div>
+  </div>
+</div>
 
           {/* Flat Offer, Price & Targeting Section (No Card Wrapper) */}
           {offerDetails && (
