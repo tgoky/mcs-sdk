@@ -75,7 +75,7 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
       <div className="space-y-1">
         <div className="flex items-center gap-1.5 px-2 py-1.5 text-[13px] font-bold text-zinc-300 tracking-tight">
           <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
-          <span>Skills</span>
+          <span>Installed Skills</span>
         </div>
 
         <SkillsNavList />
