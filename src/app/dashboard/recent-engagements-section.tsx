@@ -45,7 +45,7 @@ export function RecentEngagementsSection({ recent }: { recent: RecentEngagement[
     <>
       <div className="my-3 border-t border-sidebar-border" />
       <div className="px-2.5 pb-2 text-[11px] font-semibold text-zinc-500 font-mono tracking-wider uppercase">
-        Recent
+        Recently Opened Clients
       </div>
       {recent.length > 0 ? (
         <nav className="flex flex-col gap-1">
