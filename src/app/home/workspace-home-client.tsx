@@ -244,7 +244,7 @@ export function WorkspaceHomeClient({
   workspaceList,
   installedByWorkspace,
 }: WorkspaceHomeClientProps) {
-  const [viewMode, setViewMode] = useLocalViewState<"card" | "list">("mcs:home:view-mode", "list");
+  const [viewMode, setViewMode] = useLocalViewState<"card" | "list">("mcs:home:view-mode", "card");
 
   return (
     <main className="flex-1 py-8">
