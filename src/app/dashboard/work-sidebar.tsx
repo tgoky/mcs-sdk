@@ -43,7 +43,7 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
   // Group 1: Home & Inbox
   const group1Links: NavLinkItem[] = [
     { href: "/dashboard", label: "Home", icon: <Home className="w-4 h-4" /> },
-    { href: "/dashboard/inbox", label: "Inbox", icon: <Inbox className="w-4 h-4" />, count: Number(unreadInboxCount[0]?.count ?? 0) },
+    { href: "/dashboard/inbox", label: "Notification", icon: <Inbox className="w-4 h-4" />, count: Number(unreadInboxCount[0]?.count ?? 0) },
   ];
 
   // Group 2: Queue & Executions
