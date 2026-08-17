@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements, credentialsRefs } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
-import { storeCredential } from "@/lib/credentials";
+import { storeCredential, linkEngagementToVault, vaultCredentialBelongsToTenant } from "@/lib/credentials";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import crypto from "crypto";
@@ -42,6 +42,14 @@ export async function POST(request: Request) {
       rawVoiceCorpus,
       confirmationPageTemplate,
       credentials,
+      // { booking?, email?, hosting?, sms?, adData? } — vaultId per slot
+      // when the wizard's "Reuse saved" toggle was used instead of
+      // pasting a fresh value (see credential-field.tsx and
+      // submit-payload.ts). Whichever of credentials.X /
+      // credentialVaultLinks.X is present for a slot wins; a slot should
+      // never have both, but if it somehow does, the vault link takes
+      // priority below.
+      credentialVaultLinks,
     } = body;
 
     if (!engagementId || !buyerName) {
@@ -49,6 +57,23 @@ export async function POST(request: Request) {
     }
     if (!stack?.booking_platform || !stack?.email_platform) {
       return new Response("Missing required stack config: booking_platform and email_platform", { status: 400 });
+    }
+
+    // Verify every referenced vault credential belongs to this workspace
+    // BEFORE touching the database — fail the whole request up front
+    // rather than partially creating an engagement with some providers
+    // linked and others rejected mid-transaction.
+    if (credentialVaultLinks && typeof credentialVaultLinks === "object") {
+      for (const [slot, vaultId] of Object.entries(credentialVaultLinks)) {
+        if (!vaultId) continue;
+        if (typeof vaultId !== "string") {
+          return new Response(`credentialVaultLinks.${slot} must be a string vault id.`, { status: 400 });
+        }
+        const owned = await vaultCredentialBelongsToTenant(vaultId, activeWorkspace.workspaceId);
+        if (!owned) {
+          return new Response(`Saved credential for "${slot}" not found or access denied.`, { status: 404 });
+        }
+      }
     }
 
     // ── Email/CRM Platform Meta Flattening ──────────────────────────────
@@ -127,7 +152,9 @@ export async function POST(request: Request) {
 
     // ── Step 2: Store encrypted credentials and update stack in transaction ──
     await db.transaction(async (tx) => {
-      if (credentials?.booking) {
+      if (credentialVaultLinks?.booking) {
+        await linkEngagementToVault(engagementId, finalStack.booking_platform, credentialVaultLinks.booking, tx);
+      } else if (credentials?.booking) {
         await storeCredential(
           engagementId,
           finalStack.booking_platform,
@@ -168,7 +195,9 @@ export async function POST(request: Request) {
         ? `secrets://${engagementId}/${finalStack.booking_platform}_pat`
         : undefined;
 
-      if (credentials?.email) {
+      if (credentialVaultLinks?.email) {
+        await linkEngagementToVault(engagementId, finalStack.email_platform, credentialVaultLinks.email, tx);
+      } else if (credentials?.email) {
         await storeCredential(
           engagementId,
           finalStack.email_platform,
@@ -177,7 +206,9 @@ export async function POST(request: Request) {
           tx
         );
       }
-      if (credentials?.hosting) {
+      if (credentialVaultLinks?.hosting) {
+        await linkEngagementToVault(engagementId, finalStack.hosting_platform, credentialVaultLinks.hosting, tx);
+      } else if (credentials?.hosting) {
         await storeCredential(
           engagementId,
           finalStack.hosting_platform,
@@ -186,28 +217,35 @@ export async function POST(request: Request) {
           tx
         );
       }
-      if (credentials?.sms && finalStack.sms_platform && finalStack.sms_platform !== "none") {
-        await storeCredential(
-          engagementId,
-          finalStack.sms_platform,
-          `secrets://${engagementId}/${finalStack.sms_platform}_key`,
-          credentials.sms,
-          tx
-        );
+      if (finalStack.sms_platform && finalStack.sms_platform !== "none") {
+        if (credentialVaultLinks?.sms) {
+          await linkEngagementToVault(engagementId, finalStack.sms_platform, credentialVaultLinks.sms, tx);
+        } else if (credentials?.sms) {
+          await storeCredential(
+            engagementId,
+            finalStack.sms_platform,
+            `secrets://${engagementId}/${finalStack.sms_platform}_key`,
+            credentials.sms,
+            tx
+          );
+        }
       }
       if (
-        credentials?.adData &&
         finalStack.ad_data_platform &&
         finalStack.ad_data_platform !== "none" &&
         finalStack.ad_data_platform !== "native_crm"
       ) {
-        await storeCredential(
-          engagementId,
-          finalStack.ad_data_platform,
-          `secrets://${engagementId}/${finalStack.ad_data_platform}_key`,
-          credentials.adData,
-          tx
-        );
+        if (credentialVaultLinks?.adData) {
+          await linkEngagementToVault(engagementId, finalStack.ad_data_platform, credentialVaultLinks.adData, tx);
+        } else if (credentials?.adData) {
+          await storeCredential(
+            engagementId,
+            finalStack.ad_data_platform,
+            `secrets://${engagementId}/${finalStack.ad_data_platform}_key`,
+            credentials.adData,
+            tx
+          );
+        }
       }
       if (
         credentials?.videoEngagement &&

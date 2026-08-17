@@ -1,4 +1,5 @@
 import { InputField, SelectField } from "../form-fields";
+import { CredentialField } from "../credential-field";
 import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS, HOSTING_PLATFORM_LABELS } from "@/lib/copy";
 import type { FormData, RemoteOption } from "../types";
 import type { BookingOption } from "../use-email-integrations";
@@ -72,12 +73,14 @@ export function CredentialsStep({
             {[bookingIsGhl && "booking", emailIsGhl && "email workflows", smsIsGhl && "SMS"].filter(Boolean).join(", ")}.
             One Private Integration Token covers all of these for its sub-account, so you only enter it once here.
           </div>
-          <InputField
+          <CredentialField
+            provider="ghl_calendar"
             providerLogo="ghl_calendar"
             label="GoHighLevel Private Integration Token"
             value={form.ghlApiKey}
-            onChange={(v) => set("ghlApiKey", v)}
-            type="password"
+            onValueChange={(v) => set("ghlApiKey", v)}
+            vaultId={form.ghlCredentialVaultId}
+            onVaultIdChange={(v) => set("ghlCredentialVaultId", v)}
             placeholder="Paste your Private Integration Token here..."
             helpText="Sub-account Settings → Private Integrations → create one with Calendars, Workflows, and/or Conversations scopes as needed."
             required
@@ -109,12 +112,14 @@ export function CredentialsStep({
 
       {/* ── Non-GHL Booking API Key ── */}
       {!bookingIsGhl && (
-        <InputField
+        <CredentialField
+          provider={form.bookingPlatform}
           providerLogo={form.bookingPlatform}
           label={`${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform} API Key / Token`}
           value={form.bookingApiKey}
-          onChange={(v) => set("bookingApiKey", v)}
-          type="password"
+          onValueChange={(v) => set("bookingApiKey", v)}
+          vaultId={form.bookingCredentialVaultId}
+          onVaultIdChange={(v) => set("bookingCredentialVaultId", v)}
           placeholder="Paste your API key here..."
           helpText={
             form.bookingPlatform === "calendly"
@@ -248,12 +253,14 @@ export function CredentialsStep({
       ) : (
         <>
           {!emailIsGhl && (
-            <InputField
+            <CredentialField
+              provider={form.emailPlatform}
               providerLogo={form.emailPlatform}
               label={`${EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform} API Key`}
               value={form.emailApiKey}
-              onChange={(v) => set("emailApiKey", v)}
-              type="password"
+              onValueChange={(v) => set("emailApiKey", v)}
+              vaultId={form.emailCredentialVaultId}
+              onVaultIdChange={(v) => set("emailCredentialVaultId", v)}
               placeholder="Paste your API key here..."
               required
             />
@@ -464,14 +471,16 @@ export function CredentialsStep({
 
       {/* ── Hosting Platform Credentials ── */}
       {form.hostingPlatform !== "ghl" && form.hostingPlatform !== "plain_html" && (
-        <InputField
+        <CredentialField
+          provider={form.hostingPlatform}
           providerLogo={form.hostingPlatform}
           label={`${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform} ${
             form.hostingPlatform === "wordpress" ? "Application Password (user:password)" : "API Token"
           }`}
           value={form.hostingApiKey}
-          onChange={(v) => set("hostingApiKey", v)}
-          type="password"
+          onValueChange={(v) => set("hostingApiKey", v)}
+          vaultId={form.hostingCredentialVaultId}
+          onVaultIdChange={(v) => set("hostingCredentialVaultId", v)}
           placeholder="Paste your API key or token here..."
           helpText={
             form.hostingPlatform === "wordpress"

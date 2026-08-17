@@ -1,0 +1,2 @@
+ALTER TABLE "credential_vault" ADD COLUMN "workspace_id" text NOT NULL;--> statement-breakpoint
+ALTER TABLE "credential_vault" ADD CONSTRAINT "credential_vault_workspace_id_workspaces_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("workspace_id") ON DELETE no action ON UPDATE no action;

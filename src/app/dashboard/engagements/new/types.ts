@@ -59,11 +59,16 @@ export interface FormData {
   hostingVercelProjectName: string;
   hostingVercelTeamId: string;
   hostingApiKey: string;
+  // Set instead of hostingApiKey when the operator reuses a saved
+  // credential-vault entry rather than pasting a fresh key — see
+  // credential-field.tsx and submit-payload.ts's credentialVaultLinks.
+  hostingCredentialVaultId: string;
   briefDestination: string;
   slackWebhookUrl: string;
   // Pile-On recovery gap 1 — SMS
   smsPlatform: string;
   smsApiKey: string;
+  smsCredentialVaultId: string;
   smsTwilioAccountSid: string;
   smsTwilioMessagingServiceSid: string;
   smsTwilioFromNumber: string;
@@ -73,6 +78,7 @@ export interface FormData {
   // Pile-On recovery gap 2 — ad-data cohort sync
   adDataPlatform: string;
   adDataApiKey: string;
+  adDataCredentialVaultId: string;
   adDataHyrosAccountId: string;
   adDataGoogleSheetsSpreadsheetId: string;
   adDataGoogleSheetsSheetName: string;
@@ -98,7 +104,9 @@ export interface FormData {
   marketingDomain: string;
   rawVoiceCorpus: string;
   bookingApiKey: string;
+  bookingCredentialVaultId: string;
   emailApiKey: string;
+  emailCredentialVaultId: string;
   // Single shared GoHighLevel credential pair. GHL Private Integration
   // Tokens are scoped to one sub-account and cover calendars, workflows,
   // and SMS all at once — so whenever bookingPlatform is "ghl_calendar",
@@ -108,6 +116,7 @@ export interface FormData {
   // effect in use-email-integrations.ts) rather than asking for the same
   // token 2-3 times across the wizard.
   ghlApiKey: string;
+  ghlCredentialVaultId: string;
   ghlLocationId: string;
   testimonials: Testimonial[];
   // Pin-Down recovery gap 6 — populated when bookingPlatform or

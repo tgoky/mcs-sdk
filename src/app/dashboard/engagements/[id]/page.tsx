@@ -229,6 +229,19 @@ export default async function EngagementDetailPage({
                   vaultLinksByProvider={vaultLinksByProvider}
                   initialRequireApproval={requireApproval}
                   initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
+                  clientDetails={{
+                    offerDetails: engagement.offerDetails ?? null,
+                    topCallQuestions: engagement.topCallQuestions ?? null,
+                    topObjections: engagement.topObjections ?? null,
+                    prospectMeets: engagement.prospectMeets,
+                    castingChoice: engagement.castingChoice,
+                    rawVoiceCorpus: engagement.rawVoiceCorpus,
+                    existingProof: engagement.existingProof ?? null,
+                    confirmationPageTemplate: engagement.confirmationPageTemplate,
+                    notificationPackSelections: (engagement.stack as EngagementStack | null)?.notification_pack_selections ?? [],
+                    hasAdCreativeBriefs: Boolean(engagement.adCreativeBriefs),
+                    hasScriptPack: Boolean(engagement.pinDownScriptPack),
+                  }}
                 />
               </div>
             </div>

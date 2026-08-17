@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { listVaultCredentials, storeVaultCredential } from "@/lib/credentials";
 
 /**
  * The operator's reusable credentials — "how n8n does it," per the
- * original request this feature came from. Scoped to whopUserId, not to
- * any one engagement: see credential_vault in src/models/schema.ts and
- * the resolution logic in src/lib/credentials.ts.
+ * original request this feature came from. Scoped to the caller's active
+ * workspace, not pooled across every workspace a whopUserId owns: see
+ * credential_vault in src/models/schema.ts and the resolution logic in
+ * src/lib/credentials.ts.
  */
 export async function GET(request: Request) {
   try {
@@ -14,11 +16,12 @@ export async function GET(request: Request) {
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const { searchParams } = new URL(request.url);
     const provider = searchParams.get("provider") ?? undefined;
 
-    const items = await listVaultCredentials(session.whopUserId, provider);
+    const items = await listVaultCredentials(activeWorkspace.workspaceId, provider);
     return NextResponse.json({ items });
   } catch (err) {
     console.error("[credential-vault GET]", err);
@@ -33,6 +36,7 @@ export async function POST(request: Request) {
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const { provider, label, value } = await request.json();
     if (!provider || !label || !value) {
@@ -46,10 +50,11 @@ export async function POST(request: Request) {
     }
 
     const id = await storeVaultCredential(
+      activeWorkspace.workspaceId,
       session.whopUserId,
       provider,
       label.trim(),
-      `secrets://vault/${session.whopUserId}/${provider}/${Date.now()}`,
+      `secrets://vault/${activeWorkspace.workspaceId}/${provider}/${Date.now()}`,
       value
     );
 

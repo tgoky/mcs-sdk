@@ -204,8 +204,13 @@ export async function linkEngagementToVault(
  * Saves a new reusable credential to the operator's vault. Call this from
  * the "save this so I can reuse it for other clients" checkbox — separate
  * from storeCredential, which writes an engagement-local value.
+ *
+ * Scoped to workspaceId — reuse only offers credentials saved in the
+ * *current* workspace, never pooled across every workspace a whopUserId
+ * happens to own. whopUserId is still recorded (audit trail only).
  */
 export async function storeVaultCredential(
+  workspaceId: string,
   whopUserId: string,
   provider: string,
   label: string,
@@ -217,6 +222,7 @@ export async function storeVaultCredential(
   await db.insert(credentialVault).values({
     id,
     whopUserId,
+    workspaceId,
     provider,
     label,
     refKey,
@@ -329,9 +335,15 @@ export async function hasCredential(
   return rows.length > 0;
 }
 
-/** For the "reuse a saved credential" picker — never returns decrypted values, just enough to render a labeled option list. */
+/**
+ * For the "reuse a saved credential" picker — never returns decrypted
+ * values, just enough to render a labeled option list. Scoped to
+ * workspaceId, not whopUserId: an account with multiple workspaces only
+ * sees the current workspace's saved credentials, never another
+ * workspace's.
+ */
 export async function listVaultCredentials(
-  whopUserId: string,
+  workspaceId: string,
   provider?: string
 ): Promise<Array<{ id: string; provider: string; label: string; healthStatus: string; createdAt: Date }>> {
   const rows = await db
@@ -345,18 +357,23 @@ export async function listVaultCredentials(
     .from(credentialVault)
     .where(
       provider
-        ? and(eq(credentialVault.whopUserId, whopUserId), eq(credentialVault.provider, provider))
-        : eq(credentialVault.whopUserId, whopUserId)
+        ? and(eq(credentialVault.workspaceId, workspaceId), eq(credentialVault.provider, provider))
+        : eq(credentialVault.workspaceId, workspaceId)
     );
   return rows;
 }
 
-/** Confirms a vault row belongs to the given tenant before any mutating call touches it — every vault API route checks this first. */
-export async function vaultCredentialBelongsToTenant(vaultId: string, whopUserId: string): Promise<boolean> {
+/**
+ * Confirms a vault row belongs to the given workspace before any mutating
+ * call touches it — every vault API route checks this first. Scoped to
+ * workspaceId (not whopUserId) for the same cross-workspace-leak reason
+ * as listVaultCredentials above.
+ */
+export async function vaultCredentialBelongsToTenant(vaultId: string, workspaceId: string): Promise<boolean> {
   const rows = await db
     .select({ id: credentialVault.id })
     .from(credentialVault)
-    .where(and(eq(credentialVault.id, vaultId), eq(credentialVault.whopUserId, whopUserId)))
+    .where(and(eq(credentialVault.id, vaultId), eq(credentialVault.workspaceId, workspaceId)))
     .limit(1);
   return rows.length > 0;
 }

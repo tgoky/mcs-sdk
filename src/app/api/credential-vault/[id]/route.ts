@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import {
   deleteVaultCredential,
   rotateVaultCredential,
@@ -17,8 +18,9 @@ export async function PATCH(
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
-    const owned = await vaultCredentialBelongsToTenant(id, session.whopUserId);
+    const owned = await vaultCredentialBelongsToTenant(id, activeWorkspace.workspaceId);
     if (!owned) {
       return NextResponse.json({ error: "Credential not found or access denied." }, { status: 404 });
     }
@@ -54,8 +56,9 @@ export async function DELETE(
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
-    const owned = await vaultCredentialBelongsToTenant(id, session.whopUserId);
+    const owned = await vaultCredentialBelongsToTenant(id, activeWorkspace.workspaceId);
     if (!owned) {
       return NextResponse.json({ error: "Credential not found or access denied." }, { status: 404 });
     }

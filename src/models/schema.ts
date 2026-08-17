@@ -1113,6 +1113,17 @@ export const activeAlerts = pgTable("active_alerts", {
 export const credentialVault = pgTable("credential_vault", {
   id: uuid("id").defaultRandom().primaryKey(),
   whopUserId: text("whop_user_id").notNull(),
+  // Scopes a saved credential to one workspace — added after workspaces
+  // shipped (see workspaces table above). Before this column existed, a
+  // vault row was reusable across every workspace a whopUserId owned,
+  // which leaks a credential from Workspace A into the reuse picker for
+  // an unrelated Workspace B. Every vault query now filters on this
+  // instead of (or in addition to) whopUserId — see the backfill in
+  // drizzle/migrations for how pre-existing rows were assigned to that
+  // account's legacy workspace. whopUserId is kept alongside for audit
+  // trail ("who created this") only, never used alone for access control
+  // anymore.
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.workspaceId),
   provider: text("provider").notNull(),
   // Operator-chosen nickname so a picker showing "GoHighLevel" three times
   // over is actually useful — e.g. "Acme's GHL sub-account" vs "Widget Co

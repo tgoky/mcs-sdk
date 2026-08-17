@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
@@ -31,11 +32,23 @@ export async function POST(
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const [engagement] = await db
       .select({ id: engagements.id })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, engagementId), eq(engagements.whopUserId, session.whopUserId)))
+      .where(
+        and(
+          eq(engagements.engagementId, engagementId),
+          eq(engagements.whopUserId, session.whopUserId),
+          // FIX: this lookup previously only checked whopUserId, so a
+          // link/unlink call could reach an engagement belonging to a
+          // *different* workspace under the same account, same gap the
+          // page.tsx detail route and skill-runs/trigger route both
+          // guard against. Matches their pattern now.
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
     if (!engagement) {
       return NextResponse.json({ error: "Engagement not found or access denied." }, { status: 404 });
@@ -55,7 +68,7 @@ export async function POST(
       return NextResponse.json({ error: "vaultId is required (or null to unlink)." }, { status: 400 });
     }
 
-    const owned = await vaultCredentialBelongsToTenant(vaultId, session.whopUserId);
+    const owned = await vaultCredentialBelongsToTenant(vaultId, activeWorkspace.workspaceId);
     if (!owned) {
       return NextResponse.json({ error: "Saved credential not found or access denied." }, { status: 404 });
     }

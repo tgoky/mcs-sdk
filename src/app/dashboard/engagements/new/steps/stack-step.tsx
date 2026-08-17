@@ -1,4 +1,5 @@
 import { InputField, SelectField } from "../form-fields";
+import { CredentialField } from "../credential-field";
 import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS, HOSTING_PLATFORM_LABELS } from "@/lib/copy";
 import type { FormData } from "../types";
 
@@ -35,7 +36,7 @@ export function StackStep({
       {form.bookingPlatform === "discover_from_docs" && (
         <>
           <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
-            We'll research this platform's public developer docs and draft an integration proposal for review — it won't touch your client's account until an admin approves it. Bookings on this platform won't auto-enroll until then.
+            We will research this platforms public developer docs and draft an integration proposal for review — it won't touch your client's account until an admin approves it. Bookings on this platform won't auto-enroll until then.
           </div>
           <InputField
             label="Platform name"
@@ -205,11 +206,13 @@ export function StackStep({
         </div>
       )}
       {form.smsPlatform !== "none" && form.smsPlatform !== "ghl_sms" && (
-        <InputField
+        <CredentialField
+          provider={form.smsPlatform}
           label={form.smsPlatform === "twilio" ? "Twilio Auth Token" : "HubSpot API Key"}
           value={form.smsApiKey}
-          onChange={(v) => set("smsApiKey", v)}
-          type="password"
+          onValueChange={(v) => set("smsApiKey", v)}
+          vaultId={form.smsCredentialVaultId}
+          onVaultIdChange={(v) => set("smsCredentialVaultId", v)}
         />
       )}
       {form.smsPlatform === "twilio" && (
@@ -284,11 +287,13 @@ export function StackStep({
         ]}
       />
       {form.adDataPlatform !== "none" && form.adDataPlatform !== "native_crm" && (
-        <InputField
+        <CredentialField
+          provider={form.adDataPlatform}
           label={form.adDataPlatform === "hyros" ? "Hyros API Key" : "Google Sheets Access Token"}
           value={form.adDataApiKey}
-          onChange={(v) => set("adDataApiKey", v)}
-          type="password"
+          onValueChange={(v) => set("adDataApiKey", v)}
+          vaultId={form.adDataCredentialVaultId}
+          onVaultIdChange={(v) => set("adDataCredentialVaultId", v)}
         />
       )}
       {form.adDataPlatform === "hyros" && (

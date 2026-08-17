@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { SquarePen, Settings2, KeyRound, Trash2 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { SquarePen, Settings2, KeyRound, Trash2, FileEdit } from "lucide-react";
 import { ActionMenu, ActionMenuSection, ActionMenuDivider, ActionMenuItem } from "@/components/action-menu";
 import { Modal } from "@/components/modal";
 import { ApprovalModeToggle } from "./approval-mode/approval-mode-toggle";
@@ -10,13 +10,15 @@ import { CallIntelligenceToggle } from "./call-intelligence-toggle";
 import { EditStackSettings } from "./edit-stack-settings";
 import { UpdateCredentialsForm } from "./update-credentials-form";
 import { DeleteClientSection } from "./delete-client-section";
+import { ClientDetailsDrawer, type ClientDetailsDrawerData } from "./client-details-drawer";
 import type { EngagementStack } from "@/models/schema";
 
-type ActiveModal = "stack" | "credentials" | "delete" | null;
+type ActiveModal = "stack" | "credentials" | "delete" | "details" | null;
 
 /**
  * Single "Modify" entry point for client configuration: automation mode,
- * stack settings, credentials, call intelligence, and client deletion.
+ * stack settings, credentials, call intelligence, client details, and
+ * client deletion.
  */
 export function EngagementActionsMenu({
   engagementId,
@@ -27,6 +29,7 @@ export function EngagementActionsMenu({
   vaultLinksByProvider,
   initialRequireApproval,
   initialDeletedAt,
+  clientDetails,
 }: {
   engagementId: string;
   buyerName: string;
@@ -36,8 +39,10 @@ export function EngagementActionsMenu({
   vaultLinksByProvider: Record<string, string | null>;
   initialRequireApproval: boolean;
   initialDeletedAt: string | null;
+  clientDetails: Omit<ClientDetailsDrawerData, "engagementId" | "buyer">;
 }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [activeModal, setActiveModal] = useState<ActiveModal>(() => {
     if (searchParams.get("fixCredential") === "1") return "credentials";
     if (searchParams.get("fixSection")) return "stack";
@@ -98,6 +103,15 @@ export function EngagementActionsMenu({
             <ActionMenuDivider />
 
             <ActionMenuSection label="Client management">
+              <ActionMenuItem
+                icon={FileEdit}
+                label="Edit client details"
+                description="Offer, voice, prospect research, notifications"
+                onClick={() => {
+                  setActiveModal("details");
+                  close();
+                }}
+              />
               <ActionMenuItem
                 icon={Settings2}
                 label="Edit stack settings"
@@ -169,6 +183,15 @@ export function EngagementActionsMenu({
             onRequestClose={() => setActiveModal(null)}
           />
         </Modal>
+      )}
+
+      {activeModal === "details" && (
+        <ClientDetailsDrawer
+          data={{ engagementId, buyer: buyerName, ...clientDetails }}
+          isOpen
+          onClose={() => setActiveModal(null)}
+          onSaved={() => router.refresh()}
+        />
       )}
     </>
   );

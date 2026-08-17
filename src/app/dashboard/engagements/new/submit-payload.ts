@@ -34,6 +34,12 @@ export function buildEngagementPayload(form: FormData) {
   // Helper to resolve the correct GHL API key across any slot
   const resolvedGhlApiKey = form.ghlApiKey || form.bookingApiKey || form.emailApiKey || undefined;
 
+  // Same mirroring as resolvedGhlApiKey above, but for a reused vault
+  // credential: one "Reuse saved" pick on the shared GHL field covers
+  // booking/email/sms too, exactly like pasting the token once does.
+  const resolvedGhlVaultId =
+    form.ghlCredentialVaultId || form.bookingCredentialVaultId || form.emailCredentialVaultId || undefined;
+
   // 🌟 FIX: Unified Calendar ID resolver across all possible form state keys
   const resolvedCalendarId =
     form.bookingCalendarId || form.ghlCalendarId || form.calendarId || undefined;
@@ -206,6 +212,26 @@ export function buildEngagementPayload(form: FormData) {
       apollo: form.prospectResearchSourcesUsed.includes("apollo") ? form.apolloApiKey || undefined : undefined,
       pdl: form.prospectResearchSourcesUsed.includes("pdl") ? form.pdlApiKey || undefined : undefined,
       slack_webhook_url: form.slackWebhookUrl,
+    },
+
+    // 13. Reused-credential links — see credential-field.tsx. Only ever
+    // populated for a slot when the wizard's "Reuse saved" toggle was
+    // used there instead of pasting a fresh value; a slot with a pasted
+    // value has no entry here at all (undefined, not an empty string).
+    credentialVaultLinks: {
+      booking: form.bookingPlatform === "ghl_calendar" ? resolvedGhlVaultId : form.bookingCredentialVaultId || undefined,
+      email: form.emailPlatform === "ghl" ? resolvedGhlVaultId : form.emailCredentialVaultId || undefined,
+      hosting: form.hostingCredentialVaultId || undefined,
+      sms:
+        form.smsPlatform === "ghl_sms"
+          ? resolvedGhlVaultId
+          : form.smsPlatform !== "none"
+            ? form.smsCredentialVaultId || undefined
+            : undefined,
+      adData:
+        form.adDataPlatform !== "none" && form.adDataPlatform !== "native_crm"
+          ? form.adDataCredentialVaultId || undefined
+          : undefined,
     },
   };
 
