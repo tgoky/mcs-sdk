@@ -3,15 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
+  Wrench, 
   User, 
-  KeyRound, 
-  RefreshCw, 
-  Grid, 
   Bell, 
   Globe, 
-  Settings2, 
+  Settings, 
   Users, 
-  CreditCard 
+  CreditCard,
+  KeyRound,
+  RefreshCw
 } from "lucide-react";
 
 interface NavGroup {
@@ -25,19 +25,20 @@ interface NavGroup {
 
 const SETTINGS_NAV_GROUPS: NavGroup[] = [
   {
-    title: "General Settings",
+    title: "GENERAL SETTINGS",
     items: [
-      { label: "Apps", href: "/dashboard/settings/apps", icon: Grid },
+      { label: "Apps", href: "/dashboard/settings/apps", icon: Wrench },
       { label: "Account", href: "/dashboard/settings/profile", icon: User },
       { label: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
+      { label: "Language & Region", href: "/dashboard/settings/language", icon: Globe },
       { label: "Connections", href: "/dashboard/settings/connections", icon: KeyRound },
       { label: "Booking Sync", href: "/dashboard/settings/booking-sync", icon: RefreshCw },
     ],
   },
   {
-    title: "Workspace Settings",
+    title: "WORKSPACE SETTINGS",
     items: [
-      { label: "General", href: "/dashboard/settings/workspace", icon: Settings2 },
+      { label: "General", href: "/dashboard/settings/workspace", icon: Settings },
       { label: "Members", href: "/dashboard/settings/members", icon: Users },
       { label: "Billing", href: "/dashboard/settings/billing", icon: CreditCard },
     ],
@@ -48,10 +49,10 @@ export function SettingsSidebar() {
   const pathname = usePathname();
 
   return (
-    <nav className="w-56 space-y-6 py-2">
+    <nav className="w-60 shrink-0 space-y-6 py-1 border-r border-zinc-200 dark:border-zinc-800/60 pr-4 min-h-screen">
       {SETTINGS_NAV_GROUPS.map((group) => (
-        <div key={group.title} className="space-y-1.5">
-          <h3 className="px-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        <div key={group.title} className="space-y-2">
+          <h3 className="px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
             {group.title}
           </h3>
           <div className="space-y-0.5">
@@ -65,16 +66,18 @@ export function SettingsSidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 text-xs rounded-lg transition-all ${
+                  className={`flex items-center gap-2.5 px-2 py-1.5 text-sm rounded-md transition-colors ${
                     isActive
-                      ? "bg-zinc-800/80 text-zinc-100 font-medium shadow-xs border border-zinc-700/50"
-                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60"
+                      ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium"
+                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
                   }`}
                 >
                   <Icon
                     size={16}
                     className={`shrink-0 ${
-                      isActive ? "text-zinc-100" : "text-zinc-400"
+                      isActive
+                        ? "text-zinc-900 dark:text-zinc-100"
+                        : "text-zinc-500 dark:text-zinc-400"
                     }`}
                   />
                   <span>{item.label}</span>
