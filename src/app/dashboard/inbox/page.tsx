@@ -81,12 +81,12 @@ export default async function InboxPage({
   }
 
   return (
-    <div className="w-full min-h-screen pb-12 font-sans antialiased text-zinc-900 dark:text-zinc-100">
+    <div className="w-full h-full min-h-screen pb-12 font-sans antialiased text-zinc-900 dark:text-zinc-100">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Inbox</h1>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Inbox</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
             Everything Showtime has surfaced across your clients — run issues, win-back activity, and weekly digests.
           </p>
         </div>
@@ -94,15 +94,15 @@ export default async function InboxPage({
       </div>
 
       {/* Tabs Bar */}
-      <div className="flex items-center gap-1.5 border-b border-zinc-200 dark:border-zinc-800 pb-3 mb-6 overflow-x-auto">
+      <div className="flex items-center gap-1 border-b border-zinc-200 dark:border-zinc-800/80 mb-6 overflow-x-auto">
         {TABS.map((tab) => (
           <a
             key={tab.key}
             href={tab.key === "all" ? "/dashboard/inbox" : `/dashboard/inbox?tab=${tab.key}`}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 whitespace-nowrap ${
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
               tab.key === activeTab.key
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-semibold shadow-xs"
-                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                ? "border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
+                : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
             }`}
           >
             {tab.label}
@@ -110,26 +110,24 @@ export default async function InboxPage({
         ))}
       </div>
 
-      {/* Grouped Feed */}
+      {/* Grouped Line-Divided Feed */}
       {groups.length === 0 ? (
-        <div className="text-center py-20 text-zinc-400 dark:text-zinc-600 text-xs font-mono">
+        <div className="text-center py-16 text-zinc-400 dark:text-zinc-600 text-sm">
           Nothing in your inbox right now.
         </div>
       ) : (
-        <div className="space-y-8 w-full">
+        <div className="w-full space-y-8">
           {groups.map((group) => (
-            <div key={group.label} className="space-y-3 w-full">
-              {/* Centered Date Line */}
-              <div className="flex items-center my-6">
-                <div className="flex-1 h-px bg-zinc-200/80 dark:bg-zinc-800/80" />
-                <span className="px-4 text-xs font-medium text-zinc-500 dark:text-zinc-400 tracking-tight">
+            <div key={group.label} className="w-full space-y-1">
+              {/* Date Header */}
+              <div className="py-2 border-b border-zinc-200 dark:border-zinc-800/80">
+                <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-500 uppercase tracking-wider">
                   {group.label}
                 </span>
-                <div className="flex-1 h-px bg-zinc-200/80 dark:bg-zinc-800/80" />
               </div>
 
-              {/* Cards List */}
-              <div className="space-y-2.5 w-full">
+              {/* Line Items */}
+              <div className="w-full">
                 {group.items.map((item) => (
                   <InboxRow
                     key={item.id}
