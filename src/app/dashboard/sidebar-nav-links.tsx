@@ -35,7 +35,7 @@ export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
             className={`group relative flex items-center justify-between rounded-[10px] px-3 py-2 text-[13px] font-medium transition-all ${
               active
                 ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs border border-zinc-200/60 dark:border-transparent"
-                : "text-zinc-600 dark:text-zinc-300 hover:bg-[#e7e7eb] dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white border border-transparent"
+                : "text-zinc-600 dark:text-zinc-300 hover:bg-[#f0edf6] dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white border border-transparent"
             }`}
           >
             <div className="flex items-center gap-3 min-w-0">
@@ -58,7 +58,7 @@ export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
                   className={`ml-auto shrink-0 px-2 py-[1px] rounded-full text-[11px] font-mono font-medium transition-colors ${
                     active
                       ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
-                      : "bg-[#e7e7eb] dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-200"
+                      : "bg-[#f0edf6] dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-200"
                   }`}
                 >
                   {link.count}

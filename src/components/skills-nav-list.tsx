@@ -30,7 +30,7 @@ export function SkillsNavList() {
             className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all truncate ${
               active
                 ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-semibold shadow-xs border border-zinc-200/60 dark:border-transparent"
-                : "text-zinc-600 dark:text-zinc-400 hover:bg-[#e7e7eb] dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100"
+                : "text-zinc-600 dark:text-zinc-400 hover:bg-[#f0edf6] dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100 border border-transparent"
             }`}
           >
             <SquishySkillBadge skill={skillId} size={18} />
