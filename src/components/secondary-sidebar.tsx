@@ -44,7 +44,6 @@ export function SecondarySidebar({
 }: SecondarySidebarProps) {
   const pathname = usePathname();
 
-  // Observation 4: Library gets no secondary sidebar (single-page destination)
   if (pathname === "/dashboard/library" || pathname.startsWith("/dashboard/library/")) {
     return null;
   }
@@ -60,8 +59,7 @@ export function SecondarySidebar({
   };
 
   return (
-    <aside className="w-60 bg-[#f8f7fa] dark:bg-sidebar border-r border-zinc-200/80 dark:border-sidebar-border flex flex-col shrink-0 select-none py-3 px-2 overflow-y-auto font-sans antialiased text-zinc-700 dark:text-zinc-300">
-      {/* Dynamic Section Header Title with theme support */}
+    <aside className="w-60 bg-[#eae4f2] dark:bg-sidebar border-r border-zinc-300/60 dark:border-sidebar-border flex flex-col shrink-0 select-none py-3 px-2 overflow-y-auto font-sans antialiased text-zinc-700 dark:text-zinc-300">
       <div className="px-3 pt-1 pb-2 text-[14px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
         {SECTION_LABELS[section]}
       </div>
