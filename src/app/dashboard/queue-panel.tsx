@@ -370,7 +370,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={() => onDecide("rejected")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
             >
               <X size={12} /> {copy.actions.reject}
             </button>
@@ -383,7 +383,7 @@ function QueueRow({
               <Link
                 href={repair?.kind === "link" ? repair.href : (href as string)}
                 onClick={handleFixLinkClick}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-white transition-colors shadow-2xs"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-zinc-950 hover:bg-amber-500 transition-colors shadow-2xs"
               >
                 <ArrowUpRight size={12} /> {repair?.label ?? "Review"}
               </Link>
@@ -391,7 +391,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={onDismissSyncSetup}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
             >
               <X size={12} /> Not now
             </button>
@@ -406,7 +406,7 @@ function QueueRow({
                 onClick={() =>
                   dispatch(repair.key, () => triggerSkillRun(repair.engagementId, repair.skillName), onActionComplete)
                 }
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-white transition-colors disabled:opacity-60 shadow-2xs"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-zinc-950 hover:bg-amber-500 transition-colors disabled:opacity-60 shadow-2xs"
               >
                 <RotateCcw size={12} /> {busyKey === repair.key ? "Running…" : repair.label}
               </button>
@@ -414,7 +414,7 @@ function QueueRow({
               <Link
                 href={repair?.kind === "link" ? repair.href : (href as string)}
                 onClick={handleFixLinkClick}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-white transition-colors shadow-2xs"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-zinc-950 hover:bg-amber-500 transition-colors shadow-2xs"
               >
                 <ArrowUpRight size={12} /> {repair?.label ?? "Fix now"}
               </Link>
@@ -422,7 +422,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={onDismissRunFailure}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
             >
               <X size={12} /> Not now
             </button>
@@ -441,7 +441,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={() => onDecide("abandoned")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
             >
               <X size={12} /> {copy.actions.dismiss}
             </button>
@@ -454,7 +454,7 @@ function QueueRow({
               <Link
                 href={href}
                 onClick={onLinkNavigate}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-white transition-colors shadow-2xs"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-zinc-950 hover:bg-amber-500 transition-colors shadow-2xs"
               >
                 <ArrowUpRight size={12} /> {copy.actions.open}
               </Link>
@@ -462,7 +462,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={() => onRunMutation(`/api/notifications/${item.id}/read`)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
             >
               <X size={12} /> {copy.actions.dismiss}
             </button>
@@ -1544,7 +1544,7 @@ export function QueuePanel({
                 type="button"
                 onClick={handleCreateTag}
                 disabled={!newTagName.trim()}
-                className="w-full py-2 text-xs font-semibold rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-white disabled:opacity-40 cursor-pointer transition-colors shadow-xs"
+                className="w-full py-2 text-xs font-semibold rounded-xl bg-amber-400 text-zinc-950 hover:bg-amber-500 disabled:opacity-40 cursor-pointer transition-colors shadow-xs"
               >
                 Create Tag
               </button>
