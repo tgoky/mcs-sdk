@@ -60,20 +60,20 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
   ];
 
   return (
-    <div className="flex flex-col space-y-3 font-sans antialiased text-zinc-300">
+    <div className="flex flex-col space-y-3 font-sans antialiased text-zinc-700">
       {/* GROUP 1: HOME & INBOX */}
       <SidebarNavLinks links={group1Links} />
 
-      <div className="h-px bg-zinc-800/80 my-1 mx-1" />
+      <div className="h-px bg-zinc-200/80 my-1 mx-1" />
 
       {/* GROUP 2: QUEUE & EXECUTIONS */}
       <SidebarNavLinks links={group2Links} />
 
-      <div className="h-px bg-zinc-800/80 my-1 mx-1" />
+      <div className="h-px bg-zinc-200/80 my-1 mx-1" />
 
       {/* SKILLS SECTION */}
       <div className="space-y-1">
-        <div className="flex items-center gap-1.5 px-2 py-1.5 text-[13px] font-bold text-zinc-300 tracking-tight">
+        <div className="flex items-center gap-1.5 px-2 py-1.5 text-[13px] font-bold text-zinc-500 tracking-tight">
           <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
           <span>Installed Skills</span>
         </div>
@@ -90,8 +90,8 @@ export function WorkSidebarSkeleton() {
     <div className="flex flex-col gap-1 animate-pulse">
       {["Home", "Inbox", "Queue", "Executions"].map((label) => (
         <div key={label} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium">
-          <div className="w-4 h-4 rounded bg-zinc-800 shrink-0" />
-          <span className="text-zinc-600">{label}</span>
+          <div className="w-4 h-4 rounded bg-zinc-200 shrink-0" />
+          <span className="text-zinc-400">{label}</span>
         </div>
       ))}
     </div>

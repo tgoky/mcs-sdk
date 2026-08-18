@@ -34,16 +34,16 @@ export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
             aria-current={active ? "page" : undefined}
             className={`group relative flex items-center justify-between rounded-[10px] px-3 py-2 text-[13px] font-medium transition-all ${
               active
-                ? "bg-zinc-700 text-white font-semibold shadow-xs"
-                : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                ? "bg-white text-zinc-900 font-semibold shadow-xs"
+                : "text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
           >
             <div className="flex items-center gap-3 min-w-0">
               <span
                 className={
                   active
-                    ? "text-white shrink-0"
-                    : "text-zinc-400 group-hover:text-zinc-200 shrink-0"
+                    ? "text-zinc-900 shrink-0"
+                    : "text-zinc-500 group-hover:text-zinc-800 shrink-0"
                 }
               >
                 {link.icon}
@@ -55,10 +55,10 @@ export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
             ) : (
               link.count !== undefined && link.count > 0 && (
                 <span
-                  className={`ml-auto shrink-0 px-1.5 py-[1px] rounded-full text-[11px] font-mono font-medium transition-colors ${
+                  className={`ml-auto shrink-0 px-2 py-[1px] rounded-full text-[11px] font-mono font-medium transition-colors ${
                     active
-                      ? "bg-zinc-700 text-white"
-                      : "bg-zinc-800 text-zinc-400 group-hover:text-zinc-200"
+                      ? "bg-zinc-100 text-zinc-900"
+                      : "bg-zinc-200/80 text-zinc-700 group-hover:bg-zinc-200 group-hover:text-zinc-900"
                   }`}
                 >
                   {link.count}
