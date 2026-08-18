@@ -1151,7 +1151,7 @@ export function QueuePanel({
                   )}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-5 h-5 rounded-[5px] bg-amber-400 dark:bg-[#b4a7f5] text-zinc-950 flex items-center justify-center shrink-0">
+<div className="w-5 h-5 rounded-[5px] bg-amber-400 text-zinc-950 flex items-center justify-center shrink-0">                
                       <List className="w-3 h-3 stroke-[2.5]" />
                     </div>
                     <span className="truncate">All clients</span>
@@ -1180,7 +1180,7 @@ export function QueuePanel({
                       )}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-<div className="w-5 h-5 rounded-[5px] bg-amber-400 dark:bg-[#b4a7f5] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">                        
+<div className="w-5 h-5 rounded-[5px] bg-amber-400 text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">                    
                           <List className="w-3 h-3 stroke-[2.5]" />
                         </div>
                         <span className="truncate">{client.buyer}</span>
@@ -1336,7 +1336,7 @@ export function QueuePanel({
                     className="w-full flex items-center justify-between px-4 py-3 text-left text-xs font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-        <div className="w-5 h-5 rounded-[5px] bg-amber-400 dark:bg-[#b4a7f5] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+<div className="w-5 h-5 rounded-[5px] bg-amber-400 text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
                         <List className="w-3 h-3 stroke-[2.5]" />
                       </div>
                       <span className="truncate font-semibold">{client.buyer}</span>
