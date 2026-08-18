@@ -30,22 +30,14 @@ interface PrimaryRailProps {
   activeWorkspaceId: string;
 }
 
-/**
- * Main rail navigation items.
- */
 const RAIL_SECTIONS: Array<{ href: string; title: string; icon: LucideIcon }> = [
   { href: "/dashboard", title: "Work", icon: LayoutGrid },
   { href: "/dashboard/engagements", title: "Engagements", icon: Building2 },
   { href: "/dashboard/analytics", title: "Analytics", icon: BarChart3 },
-  // { href: "/dashboard/strategy", title: "Strategy", icon: Target },
-  // { href: "/dashboard/settings", title: "Settings", icon: Settings },
   { href: "/dashboard/library", title: "Library", icon: BookOpen },
   { href: "/dashboard/meetings", title: "Meetings", icon: CalendarClock },
 ];
 
-/**
- * Custom Squishy Counter Claim Badge (Gavel)
- */
 function SquishyCounterClaimBadge({ active }: { active: boolean }) {
   return (
     <div
@@ -68,9 +60,6 @@ function SquishyCounterClaimBadge({ active }: { active: boolean }) {
   );
 }
 
-/**
- * Product suite section (segmented below main nav).
- */
 const PRODUCT_SECTIONS = [
   { href: "/counter-claim", title: "Counter Claim" },
 ];
@@ -96,9 +85,8 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
 
   return (
     <aside className="w-[76px] bg-background border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1.5 shrink-0 select-none z-20 transition-colors duration-200">
-      {/* Top Section: Primary Navigation & Secondary Product Segment */}
+      {/* Top Section */}
       <div className="flex flex-col items-center gap-1.5 w-full">
-        {/* Main Rail Links */}
         <nav className="flex flex-col items-center gap-1 w-full">
           {RAIL_SECTIONS.map((section) => {
             const isActive = section.href === activeHref;
@@ -111,8 +99,8 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 aria-current={isActive ? "page" : undefined}
                 className={
                   isActive
-                    ? "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-border rounded-xl transition-all shadow-xs"
-                    : "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
+                    ? "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl transition-all shadow-xs font-semibold"
+                    : "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
                 }
               >
                 <Icon className="w-4 h-4 shrink-0" />
@@ -124,10 +112,8 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
           })}
         </nav>
 
-        {/* Full Edge-to-Edge Divider across the 76px rail */}
         <div className="-mx-1.5 w-[76px] border-t border-zinc-200 dark:border-zinc-800/80 my-2 shrink-0" />
 
-        {/* Product Suite Section with Counter Claim Squishy Badge */}
         <nav className="flex flex-col items-center gap-1 w-full">
           {PRODUCT_SECTIONS.map((product) => {
             const isActive = product.href === activeHref;
@@ -139,8 +125,8 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 aria-current={isActive ? "page" : undefined}
                 className={
                   isActive
-                    ? "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-border rounded-xl transition-all shadow-xs"
-                    : "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
+                    ? "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl transition-all shadow-xs font-semibold"
+                    : "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
                 }
               >
                 <SquishyCounterClaimBadge active={isActive} />
@@ -153,22 +139,22 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
         </nav>
       </div>
 
-      {/* Bottom Section: Back to Home & Profile Avatar Popover */}
+      {/* Bottom Section */}
       <div className="flex flex-col items-center gap-2 w-full relative">
         <a
           href="/home"
           title="Back to account"
-          className="w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-colors"
+          className="w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-colors"
         >
           <Home className="w-4 h-4 shrink-0" />
           <span className="text-[9.5px] font-medium leading-normal pt-0.5 pb-1">Home</span>
         </a>
 
-        {/* User Profile Avatar Trigger */}
+        {/* User Profile Avatar Trigger: Replaced Teal with Near-Black */}
         <button
           type="button"
           onClick={() => setPopoverOpen((prev) => !prev)}
-          className="w-8 h-8 rounded-full bg-teal-600 dark:bg-teal-500 text-[11px] font-bold text-white font-mono flex items-center justify-center hover:ring-2 hover:ring-teal-500/40 transition-all cursor-pointer shadow-xs"
+          className="w-8 h-8 rounded-full bg-zinc-900 dark:bg-zinc-100 text-[11px] font-bold text-white dark:text-zinc-900 font-mono flex items-center justify-center hover:ring-2 hover:ring-zinc-900/20 dark:hover:ring-zinc-100/20 transition-all cursor-pointer shadow-xs"
         >
           {initials}
         </button>
@@ -178,25 +164,20 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
           <>
             <div className="fixed inset-0 z-40" onClick={() => setPopoverOpen(false)} />
 
-            <div className="absolute left-full bottom-0 ml-2 z-50 w-[640px] sm:w-[680px] bg-white dark:bg-zinc-900 border border-border text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
-              <div className="flex min-h-[360px] divide-x divide-zinc-200 dark:divide-zinc-800">
-                {/* LEFT PANE (Black background in Dark Theme) */}
-                <div className="w-72 sm:w-80 p-4 bg-zinc-50 dark:bg-black flex flex-col justify-between shrink-0">
+            <div className="absolute left-full bottom-0 ml-2 z-50 w-[640px] sm:w-[680px] bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-2xl overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+              <div className="flex min-h-[360px] divide-x divide-zinc-200/80 dark:divide-zinc-800">
+                {/* LEFT PANE */}
+                <div className="w-72 sm:w-80 p-4 bg-[#f8f7fa] dark:bg-black flex flex-col justify-between shrink-0">
                   <div className="space-y-3">
                     <div className="px-1">
                       <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                         Workspaces
                       </h3>
-                      <p className="text-[11px] text-zinc-500 dark:text-zinc-500 truncate" title={userEmail || displayName}>
+                      <p className="text-[11px] text-zinc-500 truncate" title={userEmail || displayName}>
                         {userEmail || displayName}
                       </p>
                     </div>
 
-                    {/* WORKSPACE SWITCHER — each row is its own form POSTing
-                        to /api/workspaces/[id]/switch (mirrors the Log out
-                        form below): a plain server round trip that sets the
-                        active-workspace cookie and redirects, so switching
-                        has no client fetch/state/useEffect to race. */}
                     <div className="space-y-0.5 max-h-64 overflow-y-auto">
                       {workspaces.map((workspace) => {
                         const isActive = workspace.workspaceId === activeWorkspaceId;
@@ -205,13 +186,14 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                             <button
                               type="submit"
                               disabled={isActive}
-                              className={`w-full flex items-center gap-2.5 py-1.5 px-1 rounded-md min-w-0 transition-colors ${
+                              className={`w-full flex items-center gap-2.5 py-1.5 px-2 rounded-xl min-w-0 transition-colors ${
                                 isActive
-                                  ? "cursor-default"
+                                  ? "bg-white dark:bg-zinc-900/80 shadow-xs cursor-default"
                                   : "cursor-pointer hover:bg-zinc-200/60 dark:hover:bg-zinc-900"
                               }`}
                             >
-                              <div className="w-6 h-6 rounded-full bg-teal-600 dark:bg-teal-500 text-white font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
+                              {/* Workspace Avatar: Near-Black */}
+                              <div className="w-6 h-6 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
                                 {workspace.name.slice(0, 2).toUpperCase()}
                               </div>
                               <span
@@ -221,7 +203,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                                 {workspace.name}
                               </span>
                               {isActive && (
-                                <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0 ml-auto" />
+                                <Check className="w-3.5 h-3.5 text-zinc-900 dark:text-zinc-100 shrink-0 ml-auto" />
                               )}
                             </button>
                           </form>
@@ -232,14 +214,14 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                     <Link
                       href="/home/new"
                       onClick={() => setPopoverOpen(false)}
-                      className="flex items-center gap-2.5 px-1 py-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
+                      className="flex items-center gap-2.5 px-1 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
                     >
                       <Plus className="w-4 h-4 shrink-0" />
                       <span>New workspace</span>
                     </Link>
                   </div>
 
-                  <div className="pt-3 border-t border-border space-y-3">
+                  <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
                     <div className="flex items-center justify-between px-1">
                       <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Theme</span>
                       <ThemeToggle />
@@ -261,7 +243,8 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900">
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-full bg-teal-600 dark:bg-teal-500 text-white font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-sm">
+                      {/* User Header Avatar: Near-Black */}
+                      <div className="w-11 h-11 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-xs">
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -276,7 +259,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
 
                     <button
                       type="button"
-                      className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 border border-border hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md transition-colors"
+                      className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer"
                     >
                       <Calendar className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
                       <span>Set out of office</span>
@@ -288,20 +271,16 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                       <Link
                         href="/dashboard/settings"
                         onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
+                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
                       >
                         <Sliders className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
                         <span>Admin console</span>
                       </Link>
 
-                      {/* Was mislabeled "New workspace" while pointing here
-                          (this creates a client, not a workspace) — real
-                          workspace creation now lives in the left pane's
-                          switcher, so this just gets its correct label. */}
                       <Link
                         href="/dashboard/engagements/new"
                         onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
+                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
                       >
                         <Plus className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
                         <span>New client</span>
@@ -310,17 +289,17 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                       <Link
                         href="/dashboard/settings"
                         onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
+                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
                       >
                         <UserPlus className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
                         <span>Invite to Showtime</span>
                       </Link>
                     </div>
 
-                    {/* Upgrade button without icon */}
+                    {/* Upgrade button: System Forest Green Token (#006738) */}
                     <button
                       type="button"
-                      className="w-full mt-1 flex items-center justify-center px-3 py-2 text-xs font-semibold bg-teal-500/10 hover:bg-teal-500/20 dark:bg-teal-500/20 dark:hover:bg-teal-500/30 text-teal-800 dark:text-teal-200 border border-teal-500/30 dark:border-teal-500/40 rounded-md transition-colors"
+                      className="w-full mt-1 flex items-center justify-center px-3 py-2 text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-[#006738] dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 rounded-xl transition-colors cursor-pointer"
                     >
                       <span>Upgrade account</span>
                     </button>
@@ -331,7 +310,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                       <Link
                         href="/dashboard/settings"
                         onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
+                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
                       >
                         <User className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
                         <span>Profile</span>
@@ -340,7 +319,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                       <Link
                         href="/dashboard/settings"
                         onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
+                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
                       >
                         <Settings className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
                         <span>Settings</span>
@@ -349,7 +328,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                       <Link
                         href="/api/auth/login"
                         onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-md"
+                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
                       >
                         <Plus className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
                         <span>Add another account</span>
