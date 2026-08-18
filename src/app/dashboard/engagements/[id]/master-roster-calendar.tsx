@@ -547,16 +547,16 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   )}
 
                   <div className="my-auto py-1 font-sans">
-               {metric && metric.totalCalls > 0 ? (
-  <div className="rounded-lg bg-amber-400 px-2 py-1.5 transition-opacity hover:opacity-90 shadow-xs">
-    <span className="text-[11px] font-bold block leading-none text-zinc-950 font-sans">
-      {metric.totalCalls} call{metric.totalCalls === 1 ? "" : "s"}
-    </span>
-    <span className="text-[9.5px] font-mono mt-0.5 block font-semibold text-amber-950/90">
-      {metric.briefDelivered}/{metric.totalCalls} briefed
-    </span>
-  </div>
-): metric && (["pile-on", "win-back", "leak-map"] as ActivitySkill[]).some((s) => metric.activityBySkill[s] > 0) ? (
+                    {metric && metric.totalCalls > 0 ? (
+                      <div className="rounded-lg bg-sky-100/80 dark:bg-sky-950/40 border border-sky-300 dark:border-sky-800/50 px-2 py-1 text-sky-900 dark:text-sky-200">
+                        <span className="text-[11px] font-bold block leading-none font-sans">
+                          {metric.totalCalls} call{metric.totalCalls === 1 ? "" : "s"}
+                        </span>
+                        <span className="text-[9.5px] text-sky-700 dark:text-sky-400/80 font-mono mt-0.5 block">
+                          {metric.briefDelivered}/{metric.totalCalls} briefed
+                        </span>
+                      </div>
+                    ) : metric && (["pile-on", "win-back", "leak-map"] as ActivitySkill[]).some((s) => metric.activityBySkill[s] > 0) ? (
                       <span className="text-[10px] text-zinc-600 dark:text-zinc-400 font-mono block">
                         {(["pile-on", "win-back", "leak-map"] as ActivitySkill[])
                           .filter((s) => metric.activityBySkill[s] > 0)
