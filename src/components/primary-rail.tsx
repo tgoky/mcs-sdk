@@ -150,11 +150,11 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
           <span className="text-[9.5px] font-medium leading-normal pt-0.5 pb-1">Home</span>
         </a>
 
-        {/* User Profile Avatar Trigger: Replaced Teal with Near-Black */}
+        {/* User Profile Avatar Trigger: Plum / Purple Accent */}
         <button
           type="button"
           onClick={() => setPopoverOpen((prev) => !prev)}
-          className="w-8 h-8 rounded-full bg-zinc-900 dark:bg-zinc-100 text-[11px] font-bold text-white dark:text-zinc-900 font-mono flex items-center justify-center hover:ring-2 hover:ring-zinc-900/20 dark:hover:ring-zinc-100/20 transition-all cursor-pointer shadow-xs"
+          className="w-8 h-8 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-[11px] font-bold text-white dark:text-[#1f1a2e] font-mono flex items-center justify-center hover:ring-2 hover:ring-[#2a233c]/30 dark:hover:ring-[#e4dff2]/30 transition-all cursor-pointer shadow-xs"
         >
           {initials}
         </button>
@@ -192,8 +192,8 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                                   : "cursor-pointer hover:bg-zinc-200/60 dark:hover:bg-zinc-900"
                               }`}
                             >
-                              {/* Workspace Avatar: Near-Black */}
-                              <div className="w-6 h-6 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
+                              {/* Workspace Avatar: Plum / Purple Accent */}
+                              <div className="w-6 h-6 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
                                 {workspace.name.slice(0, 2).toUpperCase()}
                               </div>
                               <span
@@ -203,7 +203,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                                 {workspace.name}
                               </span>
                               {isActive && (
-                                <Check className="w-3.5 h-3.5 text-zinc-900 dark:text-zinc-100 shrink-0 ml-auto" />
+                                <Check className="w-3.5 h-3.5 text-[#2a233c] dark:text-[#e4dff2] shrink-0 ml-auto" />
                               )}
                             </button>
                           </form>
@@ -243,8 +243,8 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900">
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      {/* User Header Avatar: Near-Black */}
-                      <div className="w-11 h-11 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-xs">
+                      {/* User Header Avatar: Plum / Purple Accent */}
+                      <div className="w-11 h-11 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-xs">
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -296,10 +296,10 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                       </Link>
                     </div>
 
-                    {/* Upgrade button: System Forest Green Token (#006738) */}
+                    {/* Upgrade button: Soft Plum / Purple Accent */}
                     <button
                       type="button"
-                      className="w-full mt-1 flex items-center justify-center px-3 py-2 text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-[#006738] dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 rounded-xl transition-colors cursor-pointer"
+                      className="w-full mt-1 flex items-center justify-center px-3 py-2 text-xs font-semibold bg-[#f0ebf8] hover:bg-[#e3dcf3] dark:bg-purple-950/50 dark:hover:bg-purple-900/60 text-[#2a233c] dark:text-purple-200 border border-[#d6caec] dark:border-purple-800/60 rounded-xl transition-colors cursor-pointer"
                     >
                       <span>Upgrade account</span>
                     </button>
