@@ -578,7 +578,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
 
                   <div className="my-auto py-1 font-sans">
                     {metric && metric.totalCalls > 0 ? (
-                      <div className="rounded-lg bg-[#fde2e8] dark:bg-amber-400 px-2 py-1.5 transition-colors group-hover:bg-[#fbcfe8] dark:group-hover:bg-pink-500/30">
+                      <div className="rounded-lg bg-[#fde2e8] dark:bg-pink-500/20 px-2 py-1.5 transition-colors group-hover:bg-[#fbcfe8] dark:group-hover:bg-pink-500/30">
                         <span className="text-[11px] font-bold block leading-none text-pink-950 dark:text-pink-200 font-sans">
                           {metric.totalCalls} call{metric.totalCalls === 1 ? "" : "s"}
                         </span>
