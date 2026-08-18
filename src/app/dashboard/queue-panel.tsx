@@ -161,16 +161,6 @@ function queueSignature(item: QueueItemDTO): string {
   ].join("|");
 }
 
-// function relativeTime(iso: string): string {
-//   const ms = Date.now() - new Date(iso).getTime();
-//   const mins = Math.floor(ms / 60_000);
-//   if (mins < 1) return "just now";
-//   if (mins < 60) return `${mins}m ago`;
-//   const hours = Math.floor(mins / 60);
-//   if (hours < 24) return `${hours}h ago`;
-//   return `${Math.floor(hours / 24)}d ago`;
-// }
-
 function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
   const isGold = category !== "fyi";
   const icon =
@@ -193,38 +183,20 @@ function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
   );
 }
 
-/** Shared short-run-ref badge — same visual on both Queue and Live Executions
- *  so the operator can eyeball-match a queue item to its run in < 1 second. */
-
 function QueueItemPreview({ item }: { item: QueueItemDTO }) {
   return (
     <div className="space-y-2">
-    <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap">
         <CategoryBadge category={item.category} />
       </div>
       <p className="font-semibold text-foreground leading-snug">{item.title}</p>
       <p className="text-muted-foreground leading-snug">{item.subtitle}</p>
       {item.buyer && <p className="font-mono text-muted-foreground/80">{item.buyer}</p>}
-     <VerboseTime isoString={item.createdAt} className="text-muted-foreground/70 text-[11px]" />
+      <VerboseTime isoString={item.createdAt} className="text-muted-foreground/70 text-[11px]" />
     </div>
   );
 }
 
-/**
- * Turns a getRepairAction() result into the one ActionPanelItem the menu
- * shows for it — the same repair the row button offers, so the two
- * surfaces can't disagree. No "Client automations" section here anymore:
- * pause/resume are client-level and already live on the engagement page,
- * and a queue row about one failure is the wrong place to stop a client's
- * whole automation stack or fire off an unrelated skill. See Observation 6.
- *
- * A "link" repair with a `drawer` target (credential fix, stack-settings
- * fix, webhook setup) opens QueueFixDrawer in place instead of navigating
- * away — the same rule QueueRow's handleFixLinkClick applies to the row
- * button, both reading getRepairAction's `drawer` field so this menu can
- * never fall back to a full-page nav for a fix the row button handles
- * inline.
- */
 function repairActionItem(
   item: QueueItemDTO,
   repair: RepairAction,
@@ -345,18 +317,8 @@ function QueueRow({
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const { busyKey, error, run: dispatch } = useQuickActions();
-  // Same derived repair the quick-actions menu below uses — see
-  // Observation 6. The row button renders whatever this returns instead
-  // of a hardcoded "Fix now"/"Review" label, so the two can't disagree.
   const repair = getRepairAction(item);
 
-  // Smart link router — reads getRepairAction's `drawer` field (the one
-  // source of truth, shared with the "..." quick-actions menu below) to
-  // decide whether to open a drawer (stack settings or credentials) in
-  // place or allow normal navigation. Only 2 of the 5 queue workflows hit
-  // this path; the other 3 (trigger, approve/reject, resolve/abandon) are
-  // handled by their own dedicated buttons above and never reach this
-  // function.
   const handleFixLinkClick = (e: React.MouseEvent) => {
     if (item.engagementId && repair?.kind === "link" && repair.drawer) {
       e.preventDefault();
@@ -379,32 +341,19 @@ function QueueRow({
               {matchedTag.name}
             </span>
           )}
-             <p className="text-xs font-bold text-zinc-100 truncate">{item.title}</p>
+          <p className="text-xs font-bold text-zinc-100 truncate">{item.title}</p>
           {onToggleGroup && (
             <GroupCountToggle count={groupCount} expanded={groupExpanded} onToggle={onToggleGroup} />
           )}
         </div>
-        {/*
-          Reasoning fix — this used to be one truncated line cramming
-          buyer name + subtitle + relative time together, so a real
-          sentence (queue.ts already computes the sweep's actual
-          reasoning into `subtitle` — e.g. "Sarah missed Thursday's call,
-          nobody logged an outcome, and there's no CRM activity") got cut
-          off mid-thought. The reasoning now gets its own line with room
-          to read (clamped at 2 lines, not 1, for the rare longer one);
-          buyer/timestamp move to a separate compact metadata line below it.
-        */}
         <p className="text-xs text-zinc-300 line-clamp-2 leading-relaxed">{item.subtitle}</p>
-     <p className="text-[11px] text-zinc-500 truncate">
-  {item.buyer ? `${item.buyer} · ` : ""}
-  <VerboseTime isoString={item.createdAt} className="text-[11px] text-zinc-500" />
-</p>
+        <p className="text-[11px] text-zinc-500 truncate">
+          {item.buyer ? `${item.buyer} · ` : ""}
+          <VerboseTime isoString={item.createdAt} className="text-[11px] text-zinc-500" />
+        </p>
         {errorText && (
           <p className="text-xs text-rose-400 font-mono">{errorText}</p>
         )}
-        {/* Local dispatch error (e.g. a failed row-level "Run again")
-            wouldn't otherwise be visible unless the quick-actions popover
-            happens to be open — surface it here too. */}
         {error && !errorText && (
           <p className="text-xs text-rose-400 font-mono">{error}</p>
         )}
@@ -503,7 +452,6 @@ function QueueRow({
 
         {(item.category === "alert" || item.category === "fyi") && (
           <>
-   
             {href ? (
               <Link
                 href={href}
@@ -553,7 +501,7 @@ export function QueuePanel({
   const [errorId, setErrorId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string>(copy.errors.generic);
 
-    const [activeFix, setActiveFix] = useState<{
+  const [activeFix, setActiveFix] = useState<{
     engagementId: string;
     type: "stack" | "credentials";
     section?: string | null;
@@ -781,12 +729,6 @@ export function QueuePanel({
     });
   }, [searchFiltered, activeChipIds, priorityById]);
 
-  /** Roster shown in place of the item list when Clients scope is active
-   * and nothing's been picked yet — one row per client, rolled up from
-   * visibleItems. When selectedClientId is null, the railView==="clients"
-   * branch below doesn't filter visibleItems by client at all, so this
-   * naturally reflects the full (tab/search/chip-filtered) item set, not
-   * a stale scoped one. */
   const rosterCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of visibleItems) {
@@ -986,10 +928,6 @@ export function QueuePanel({
     preset: "By Smart Presets",
   };
 
-  // Finding A fix (2026-08-07 handoff) — was its own hardcoded copy of
-  // the 5 skill names, one of the three sources that had drifted out of
-  // sync. Derived from SKILLS/skillDisplayName (copy.ts) now, same as
-  // everywhere else in this file already reads skill names from.
   const skillTargetLabels: Record<string, string> = {
     all: "Any Skill",
     ...Object.fromEntries(SKILLS.map((id) => [id, skillDisplayName(id)])),
@@ -1005,54 +943,52 @@ export function QueuePanel({
 
   return (
     <div className="space-y-3 w-full font-sans antialiased text-zinc-300 select-none">
-      {/* ----------------------------------------------------------------- */}
       {/* TOP ROW (NORTH): [ All | Clients ] Toggle on Left | Title on Right */}
-      {/* ----------------------------------------------------------------- */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-        {/* Left Side: [ All | Clients ] Toggle — only meaningful once a client roster is actually offered */}
+        {/* Left Side: [ All | Clients ] Toggle */}
         <div className="w-full md:w-64 shrink-0">
           {clients.length > 0 && (
-          <div role="tablist" className="grid grid-cols-2 p-1 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-medium">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={railView === "all"}
-              onClick={() => {
-                setRailView("all");
-                setSelectedCategory(null);
-                setSelectedClientId(null);
-                setPage(0);
-              }}
-              className={cn(
-                "py-1.5 rounded-lg text-center transition-all cursor-pointer",
-                railView === "all"
-                  ? "bg-zinc-700 text-white font-semibold shadow-xs"
-                  : "text-zinc-400 hover:text-zinc-200"
-              )}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={railView === "clients"}
-              onClick={() => {
-                setRailView("clients");
-                setSelectedCategory(null);
-                setSelectedClientId(null);
-                setIsRailSearchOpen(true);
-                setPage(0);
-              }}
-              className={cn(
-                "py-1.5 rounded-lg text-center transition-all cursor-pointer",
-                railView === "clients"
-                  ? "bg-zinc-700 text-white font-semibold shadow-xs"
-                  : "text-zinc-400 hover:text-zinc-200"
-              )}
-            >
-              Clients
-            </button>
-          </div>
+            <div role="tablist" className="grid grid-cols-2 p-1 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-medium">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={railView === "all"}
+                onClick={() => {
+                  setRailView("all");
+                  setSelectedCategory(null);
+                  setSelectedClientId(null);
+                  setPage(0);
+                }}
+                className={cn(
+                  "py-1.5 rounded-lg text-center transition-all cursor-pointer",
+                  railView === "all"
+                    ? "bg-white text-zinc-900 font-semibold shadow-xs"
+                    : "text-zinc-400 hover:text-zinc-200"
+                )}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={railView === "clients"}
+                onClick={() => {
+                  setRailView("clients");
+                  setSelectedCategory(null);
+                  setSelectedClientId(null);
+                  setIsRailSearchOpen(true);
+                  setPage(0);
+                }}
+                className={cn(
+                  "py-1.5 rounded-lg text-center transition-all cursor-pointer",
+                  railView === "clients"
+                    ? "bg-white text-zinc-900 font-semibold shadow-xs"
+                    : "text-zinc-400 hover:text-zinc-200"
+                )}
+              >
+                Clients
+              </button>
+            </div>
           )}
         </div>
 
@@ -1074,9 +1010,7 @@ export function QueuePanel({
         </div>
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* MAIN CONTAINER FRAME (Integrated Rail + Table)                   */}
-      {/* ----------------------------------------------------------------- */}
+      {/* MAIN CONTAINER FRAME (Integrated Rail + Table) */}
       <div className="border border-sidebar-border rounded-2xl bg-sidebar overflow-visible flex flex-col md:flex-row min-h-[400px] w-full">
         {/* 1. SEAMLESS INTEGRATED LEFT RAIL */}
         <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-sidebar-border bg-sidebar p-3 flex flex-col shrink-0 space-y-3 select-none">
@@ -1121,12 +1055,12 @@ export function QueuePanel({
                         className={cn(
                           "w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors cursor-pointer",
                           groupingMode === mode
-                            ? "bg-zinc-800 text-white font-semibold"
+                            ? "bg-white text-zinc-900 font-semibold shadow-xs"
                             : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
                         )}
                       >
                         <span>{groupingModeLabels[mode]}</span>
-                        {groupingMode === mode && <Check size={12} className="text-emerald-400" />}
+                        {groupingMode === mode && <Check size={12} className="text-emerald-500" />}
                       </button>
                     ))}
                   </div>
@@ -1182,40 +1116,49 @@ export function QueuePanel({
                   className={cn(
                     "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
                     selectedCategory === null && !selectedTagId
-                      ? "bg-zinc-700 text-white font-semibold"
+                      ? "bg-white text-zinc-900 font-semibold shadow-xs"
                       : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                   )}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <Layers size={14} className="text-zinc-400 shrink-0" />
+                    <Layers size={14} className={selectedCategory === null && !selectedTagId ? "text-zinc-900 shrink-0" : "text-zinc-400 shrink-0"} />
                     <span className="truncate">Every item</span>
                   </div>
-                  <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                  <span className={cn(
+                    "text-[11px] font-mono tabular-nums font-bold",
+                    selectedCategory === null && !selectedTagId ? "text-zinc-900" : "text-zinc-400"
+                  )}>
                     {items.length}
                   </span>
                 </button>
 
-                {filteredRailCategories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => { setSelectedCategory(cat.id); setSelectedTagId(null); setPage(0); }}
-                    className={cn(
-                      "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
-                      selectedCategory === cat.id && !selectedTagId
-                        ? "bg-zinc-700 text-white font-semibold"
-                        : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Layers size={14} className="text-zinc-400 shrink-0" />
-                      <span className="truncate">{cat.label}</span>
-                    </div>
-                    <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
-                      {cat.count}
-                    </span>
-                  </button>
-                ))}
+                {filteredRailCategories.map((cat) => {
+                  const active = selectedCategory === cat.id && !selectedTagId;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => { setSelectedCategory(cat.id); setSelectedTagId(null); setPage(0); }}
+                      className={cn(
+                        "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
+                        active
+                          ? "bg-white text-zinc-900 font-semibold shadow-xs"
+                          : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Layers size={14} className={active ? "text-zinc-900 shrink-0" : "text-zinc-400 shrink-0"} />
+                        <span className="truncate">{cat.label}</span>
+                      </div>
+                      <span className={cn(
+                        "text-[11px] font-mono tabular-nums font-bold",
+                        active ? "text-zinc-900" : "text-zinc-400"
+                      )}>
+                        {cat.count}
+                      </span>
+                    </button>
+                  );
+                })}
               </>
             ) : (
               <>
@@ -1225,7 +1168,7 @@ export function QueuePanel({
                   className={cn(
                     "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
                     selectedClientId === null
-                      ? "bg-zinc-700 text-white font-semibold"
+                      ? "bg-white text-zinc-900 font-semibold shadow-xs"
                       : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                   )}
                 >
@@ -1235,44 +1178,51 @@ export function QueuePanel({
                     </div>
                     <span className="truncate">All clients</span>
                   </div>
-                  <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                  <span className={cn(
+                    "text-[11px] font-mono tabular-nums font-bold",
+                    selectedClientId === null ? "text-zinc-900" : "text-zinc-400"
+                  )}>
                     {clients.length}
                   </span>
                 </button>
 
-                {filteredRailClients.map((client) => (
-                  <button
-                    key={client.engagementId}
-                    type="button"
-                    data-testid={`rail-client-${client.engagementId}`}
-                    onClick={() => { setSelectedClientId(client.engagementId); setPage(0); }}
-                    className={cn(
-                      "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
-                      selectedClientId === client.engagementId
-                        ? "bg-zinc-700 text-white font-semibold"
-                        : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-5 h-5 rounded-[5px] bg-accent-client text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
-                        <List className="w-3 h-3 stroke-[2.5]" />
+                {filteredRailClients.map((client) => {
+                  const active = selectedClientId === client.engagementId;
+                  return (
+                    <button
+                      key={client.engagementId}
+                      type="button"
+                      data-testid={`rail-client-${client.engagementId}`}
+                      onClick={() => { setSelectedClientId(client.engagementId); setPage(0); }}
+                      className={cn(
+                        "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
+                        active
+                          ? "bg-white text-zinc-900 font-semibold shadow-xs"
+                          : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-5 h-5 rounded-[5px] bg-accent-client text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                          <List className="w-3 h-3 stroke-[2.5]" />
+                        </div>
+                        <span className="truncate">{client.buyer}</span>
                       </div>
-                      <span className="truncate">{client.buyer}</span>
-                    </div>
-                    {client.count !== undefined && client.count > 0 && (
-                      <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
-                        {client.count}
-                      </span>
-                    )}
-                  </button>
-                ))}
+                      {client.count !== undefined && client.count > 0 && (
+                        <span className={cn(
+                          "text-[11px] font-mono tabular-nums font-bold",
+                          active ? "text-zinc-900" : "text-zinc-400"
+                        )}>
+                          {client.count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </>
             )}
           </div>
 
-          {/* ----------------------------------------------------------------- */}
-          {/* TAGS SECTION                                                      */}
-          {/* ----------------------------------------------------------------- */}
+          {/* TAGS SECTION */}
           <div className="pt-2 border-t border-sidebar-border/60 space-y-2">
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-bold text-zinc-300 tracking-tight flex items-center gap-1.5">
@@ -1308,7 +1258,9 @@ export function QueuePanel({
                         }}
                         className={cn(
                           "w-full flex items-center justify-between px-2.5 py-1.5 rounded-[10px] text-xs font-medium transition-colors cursor-pointer pr-6",
-                          active ? "bg-zinc-700 text-white font-semibold" : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                          active
+                            ? "bg-white text-zinc-900 font-semibold shadow-xs"
+                            : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
                         )}
                       >
                         <div className="flex items-center gap-2 min-w-0">
@@ -1318,7 +1270,10 @@ export function QueuePanel({
                           />
                           <span className="truncate font-semibold">{tag.name}</span>
                         </div>
-                        <span className="text-[11px] font-mono text-zinc-400 font-bold tabular-nums">
+                        <span className={cn(
+                          "text-[11px] font-mono tabular-nums font-bold",
+                          active ? "text-zinc-900" : "text-zinc-400"
+                        )}>
                           {count}
                         </span>
                       </button>
@@ -1493,15 +1448,11 @@ export function QueuePanel({
         </div>
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* CENTER-FIXED CREATE TAG MODAL DIALOG                              */}
-      {/* ----------------------------------------------------------------- */}
+      {/* CENTER-FIXED CREATE TAG MODAL DIALOG */}
       {isAddTagOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
-          {/* Dark backdrop click-to-close */}
           <div className="absolute inset-0" onClick={() => setIsAddTagOpen(false)} />
 
-          {/* Centered Modal Card */}
           <div className="relative z-10 w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl text-xs space-y-3.5 font-sans [scrollbar-width:none]">
             <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
               <span className="font-bold text-zinc-100 text-sm">Create New Tag</span>
@@ -1514,7 +1465,6 @@ export function QueuePanel({
               </button>
             </div>
 
-            {/* Tag Name Input */}
             <div className="space-y-1">
               <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Tag Name</label>
               <input
@@ -1527,9 +1477,7 @@ export function QueuePanel({
               />
             </div>
 
-            {/* Custom Styled Dropdowns for Rules */}
             <div className="grid grid-cols-2 gap-2">
-              {/* Skill Selector */}
               <div className="space-y-1 relative">
                 <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Skill Target</label>
                 <button
@@ -1557,7 +1505,6 @@ export function QueuePanel({
                 )}
               </div>
 
-              {/* Category Selector */}
               <div className="space-y-1 relative">
                 <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Category</label>
                 <button
@@ -1586,7 +1533,6 @@ export function QueuePanel({
               </div>
             </div>
 
-            {/* 12 Color Swatches Grid (2 rows x 6 cols) */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Select Color</label>
               <div className="grid grid-cols-6 gap-2 pt-1 justify-items-center">
@@ -1616,7 +1562,6 @@ export function QueuePanel({
               </div>
             </div>
 
-            {/* Save Action Button */}
             <div className="pt-2">
               <button
                 type="button"
@@ -1628,10 +1573,10 @@ export function QueuePanel({
               </button>
             </div>
           </div>
-          
         </div>
       )}
-       <QueueFixDrawer
+
+      <QueueFixDrawer
         isOpen={!!activeFix}
         engagementId={activeFix?.engagementId ?? null}
         type={activeFix?.type ?? null}
