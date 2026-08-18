@@ -56,7 +56,7 @@ export function RecentEngagementsSection({ recent }: { recent: RecentEngagement[
               className="group flex items-center justify-between gap-3 rounded-xl px-2.5 py-2 hover:bg-[#e7e7eb] dark:hover:bg-zinc-800/60 transition-all duration-150"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-7 h-7 rounded-[8px] bg-amber-400 dark:bg-[#6ee7b7] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                <div className="w-7 h-7 rounded-[8px] bg-amber-400 dark:bg-[#b4a7f5] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
                   <List className="w-4 h-4 stroke-[2.5]" />
                 </div>
                 <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100 group-hover:text-zinc-950 dark:group-hover:text-white truncate">
@@ -122,7 +122,7 @@ function SkillSiblingClients({ skillId, currentEngagementId }: { skillId: SkillI
               className="group flex items-center justify-between gap-3 rounded-xl px-2.5 py-2 hover:bg-[#e7e7eb] dark:hover:bg-zinc-800/60 transition-all duration-150"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-7 h-7 rounded-[8px] bg-amber-400 dark:bg-[#6ee7b7] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                <div className="w-7 h-7 rounded-[8px] bg-amber-400 dark:bg-[#b4a7f5] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
                   <List className="w-4 h-4 stroke-[2.5]" />
                 </div>
                 <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100 group-hover:text-zinc-950 dark:group-hover:text-white truncate">
