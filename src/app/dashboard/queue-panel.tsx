@@ -72,7 +72,6 @@ export interface CustomTag {
   targetCategory?: string;
 }
 
-// 12 Exact Colors from Swatch (2 rows x 6 columns)
 const TAG_SWATCHES = [
   { hex: "#5e0d39", label: "Plum" },
   { hex: "#e59a2f", label: "Amber" },
@@ -88,7 +87,6 @@ const TAG_SWATCHES = [
   { hex: "#1c1c1c", label: "Dark Charcoal", hasBorder: true },
 ];
 
-// Preset Tags available in rail list
 const DEFAULT_TAGS: CustomTag[] = [
   { id: "tag-lime-alerts", name: "alerts", colorHex: "#a0d646", targetCategory: "alert" },
   { id: "tag-pindown", name: "tasks", colorHex: "#3b71e8", targetSkill: "pin-down" },
@@ -173,8 +171,8 @@ function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
     <span
       className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 ${
         isGold
-          ? "bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50"
-          : "bg-muted text-muted-foreground border border-border"
+          ? "bg-rose-50 text-rose-600 border border-rose-200"
+          : "bg-zinc-100 text-zinc-600 border border-zinc-200"
       }`}
     >
       {icon}
@@ -189,10 +187,10 @@ function QueueItemPreview({ item }: { item: QueueItemDTO }) {
       <div className="flex items-center gap-2 flex-wrap">
         <CategoryBadge category={item.category} />
       </div>
-      <p className="font-semibold text-foreground leading-snug">{item.title}</p>
-      <p className="text-muted-foreground leading-snug">{item.subtitle}</p>
-      {item.buyer && <p className="font-mono text-muted-foreground/80">{item.buyer}</p>}
-      <VerboseTime isoString={item.createdAt} className="text-muted-foreground/70 text-[11px]" />
+      <p className="font-semibold text-zinc-900 leading-snug">{item.title}</p>
+      <p className="text-zinc-600 leading-snug">{item.subtitle}</p>
+      {item.buyer && <p className="font-mono text-zinc-500">{item.buyer}</p>}
+      <VerboseTime isoString={item.createdAt} className="text-zinc-400 text-[11px]" />
     </div>
   );
 }
@@ -329,7 +327,7 @@ function QueueRow({
   };
 
   return (
-    <div className={`group flex items-center gap-3 py-3 px-3 border-b border-sidebar-border/60 last:border-b-0 hover:bg-zinc-800/40 transition-colors ${nested ? "pl-6 bg-zinc-900/20" : ""}`}>
+    <div className={`group flex items-center gap-3 py-3 px-3.5 border-b border-zinc-100 last:border-b-0 hover:bg-zinc-50/80 transition-colors ${nested ? "pl-6 bg-zinc-50/40" : "bg-white"}`}>
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <CategoryBadge category={item.category} />
@@ -341,21 +339,21 @@ function QueueRow({
               {matchedTag.name}
             </span>
           )}
-          <p className="text-xs font-bold text-zinc-100 truncate">{item.title}</p>
+          <p className="text-xs font-bold text-zinc-900 truncate">{item.title}</p>
           {onToggleGroup && (
             <GroupCountToggle count={groupCount} expanded={groupExpanded} onToggle={onToggleGroup} />
           )}
         </div>
-        <p className="text-xs text-zinc-300 line-clamp-2 leading-relaxed">{item.subtitle}</p>
-        <p className="text-[11px] text-zinc-500 truncate">
+        <p className="text-xs text-zinc-600 line-clamp-2 leading-relaxed">{item.subtitle}</p>
+        <p className="text-[11px] text-zinc-400 truncate">
           {item.buyer ? `${item.buyer} · ` : ""}
-          <VerboseTime isoString={item.createdAt} className="text-[11px] text-zinc-500" />
+          <VerboseTime isoString={item.createdAt} className="text-[11px] text-zinc-400" />
         </p>
         {errorText && (
-          <p className="text-xs text-rose-400 font-mono">{errorText}</p>
+          <p className="text-xs text-rose-600 font-mono">{errorText}</p>
         )}
         {error && !errorText && (
-          <p className="text-xs text-rose-400 font-mono">{error}</p>
+          <p className="text-xs text-rose-600 font-mono">{error}</p>
         )}
       </div>
 
@@ -365,14 +363,14 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={() => onDecide("approved")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-500 text-zinc-950 hover:bg-emerald-400 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer shadow-2xs"
             >
               <Check size={12} /> {copy.actions.approve}
             </button>
             <button
               disabled={isBusy}
               onClick={() => onDecide("rejected")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900 transition-colors cursor-pointer shadow-2xs"
             >
               <X size={12} /> {copy.actions.reject}
             </button>
@@ -385,7 +383,7 @@ function QueueRow({
               <Link
                 href={repair?.kind === "link" ? repair.href : (href as string)}
                 onClick={handleFixLinkClick}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 transition-colors shadow-2xs"
               >
                 <ArrowUpRight size={12} /> {repair?.label ?? "Review"}
               </Link>
@@ -393,7 +391,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={onDismissSyncSetup}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900 transition-colors cursor-pointer shadow-2xs"
             >
               <X size={12} /> Not now
             </button>
@@ -408,7 +406,7 @@ function QueueRow({
                 onClick={() =>
                   dispatch(repair.key, () => triggerSkillRun(repair.engagementId, repair.skillName), onActionComplete)
                 }
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors disabled:opacity-60"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 transition-colors disabled:opacity-60 shadow-2xs"
               >
                 <RotateCcw size={12} /> {busyKey === repair.key ? "Running…" : repair.label}
               </button>
@@ -416,7 +414,7 @@ function QueueRow({
               <Link
                 href={repair?.kind === "link" ? repair.href : (href as string)}
                 onClick={handleFixLinkClick}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 transition-colors shadow-2xs"
               >
                 <ArrowUpRight size={12} /> {repair?.label ?? "Fix now"}
               </Link>
@@ -424,7 +422,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={onDismissRunFailure}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900 transition-colors cursor-pointer shadow-2xs"
             >
               <X size={12} /> Not now
             </button>
@@ -436,14 +434,14 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={() => onDecide("resolved")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-500 text-zinc-950 hover:bg-emerald-400 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer shadow-2xs"
             >
               <Check size={12} /> {copy.actions.resolve}
             </button>
             <button
               disabled={isBusy}
               onClick={() => onDecide("abandoned")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900 transition-colors cursor-pointer shadow-2xs"
             >
               <X size={12} /> {copy.actions.dismiss}
             </button>
@@ -456,7 +454,7 @@ function QueueRow({
               <Link
                 href={href}
                 onClick={onLinkNavigate}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 text-zinc-950 hover:bg-white transition-colors"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 transition-colors shadow-2xs"
               >
                 <ArrowUpRight size={12} /> {copy.actions.open}
               </Link>
@@ -464,7 +462,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={() => onRunMutation(`/api/notifications/${item.id}/read`)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900 transition-colors cursor-pointer shadow-2xs"
             >
               <X size={12} /> {copy.actions.dismiss}
             </button>
@@ -507,27 +505,23 @@ export function QueuePanel({
     section?: string | null;
   } | null>(null);
 
-  // Rail Scope State
   const [railView, setRailView] = useState<ClientScopeView>("all");
   const [groupingMode, setGroupingMode] = useState<RailGroupingMode>("platform");
   const [isGroupingPopoverOpen, setIsGroupingPopoverOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
-  // Tags State
   const [tags, setTags] = useLocalViewState<CustomTag[]>("mcs:queue:tags", DEFAULT_TAGS);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [isAddTagOpen, setIsAddTagOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
-  const [newTagColor, setNewTagColor] = useState(TAG_SWATCHES[2].hex); // Lime default
+  const [newTagColor, setNewTagColor] = useState(TAG_SWATCHES[2].hex);
   const [newTagTargetSkill, setNewTagTargetSkill] = useState<string>("all");
   const [newTagTargetCategory, setNewTagTargetCategory] = useState<string>("all");
 
-  // Custom Dropdown Open States for Tag Creator Rules
   const [isSkillDropdownOpen, setIsSkillDropdownOpen] = useState(false);
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
 
-  // Table State
   const [savedView, setSavedView] = useLocalViewState<QueueViewState>("mcs:queue:view", DEFAULT_QUEUE_VIEW);
   const [tab, setTab] = useState<QueueTab>("all");
   const [search, setSearch] = useState("");
@@ -538,7 +532,6 @@ export function QueuePanel({
   const pinnedChipIds = new Set(savedView.pinnedChipIds);
   const pageSize = savedView.pageSize ?? 5;
 
-  // Rail Categories (Platforms/CRMs/Modules)
   const categories = useMemo(() => {
     const counts: Record<string, { label: string; count: number }> = {};
 
@@ -575,7 +568,6 @@ export function QueuePanel({
     return Object.entries(counts).map(([id, { label, count }]) => ({ id, label, count }));
   }, [items, groupingMode]);
 
-  // Rail Clients
   const clientRailItems = useMemo(() => {
     const countsByClient: Record<string, number> = {};
     for (const item of items) {
@@ -591,14 +583,12 @@ export function QueuePanel({
     }));
   }, [items, clients]);
 
-  // Compute Priorities
   const priorityById = useMemo(() => {
     const map = new Map<string, QueuePriority>();
     for (const item of items) map.set(item.id, computeQueuePriority(item));
     return map;
   }, [items]);
 
-  // Helper to match item to a tag
   const itemMatchesTag = useCallback((item: QueueItemDTO, tag: CustomTag) => {
     if (tag.targetSkill && tag.targetSkill !== "all") {
       if (item.skillName !== tag.targetSkill) return false;
@@ -613,7 +603,6 @@ export function QueuePanel({
     return true;
   }, []);
 
-  // Tag Counts
   const tagCounts = useMemo(() => {
     const map: Record<string, number> = {};
     for (const tag of tags) {
@@ -622,7 +611,6 @@ export function QueuePanel({
     return map;
   }, [items, tags, itemMatchesTag]);
 
-  // 1. Rail & Tag level Filtered Set
   const railFilteredItems = useMemo(() => {
     return items.filter((item) => {
       if (selectedTagId) {
@@ -657,7 +645,6 @@ export function QueuePanel({
     });
   }, [items, railView, selectedClientId, selectedCategory, categories, groupingMode, selectedTagId, tags, itemMatchesTag]);
 
-  // Tab Counts based on current Rail scope
   const tabCounts = useMemo(() => {
     const counts: Record<QueueTab, number> = { all: railFilteredItems.length, approve: 0, action_needed: 0, alerts: 0 };
     for (const item of railFilteredItems) {
@@ -668,21 +655,18 @@ export function QueuePanel({
     return counts;
   }, [railFilteredItems]);
 
-  // 2. Tab Filtered Set
   const tabFiltered = useMemo(() => {
     if (tab === "all") return railFilteredItems;
     if (tab === "alerts") return railFilteredItems.filter((i) => i.category === "alert" || i.category === "fyi");
     return railFilteredItems.filter((i) => i.category === tab);
   }, [railFilteredItems, tab]);
 
-  // 3. Time Range Filtered
   const rangeFiltered = useMemo(() => {
     if (timeRange === "all") return tabFiltered;
     const bounds = computeTimeRangeBounds(timeRange);
     return tabFiltered.filter((i) => isWithinTimeRange(i.createdAt, bounds));
   }, [tabFiltered, timeRange]);
 
-  // 4. Search Filtered
   const searchFiltered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rangeFiltered;
@@ -697,7 +681,6 @@ export function QueuePanel({
     });
   }, [rangeFiltered, search]);
 
-  // Chip Counts
   const chipCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const def of QUEUE_CHIP_DEFS) {
@@ -710,7 +693,6 @@ export function QueuePanel({
     return counts;
   }, [searchFiltered, priorityById]);
 
-  // 5. Chips Filtered
   const visibleItems = useMemo(() => {
     if (activeChipIds.size === 0) return searchFiltered;
     const activeDefs = QUEUE_CHIP_DEFS.filter((d) => activeChipIds.has(d.id));
@@ -738,7 +720,6 @@ export function QueuePanel({
     return counts;
   }, [visibleItems]);
 
-  // 6. Grouped Repeats
   const queueGroups = useMemo(() => {
     if (!savedView.groupRepeats) {
       return visibleItems.map((it) => ({ signature: it.id, items: [it], latest: it, count: 1 }));
@@ -761,7 +742,6 @@ export function QueuePanel({
   const clampedPage = Math.min(page, pageCount - 1);
   const pagedGroups = queueGroups.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
 
-  // Add Tag Handler
   function handleCreateTag() {
     if (!newTagName.trim()) return;
     const swatch = TAG_SWATCHES.find((s) => s.hex === newTagColor);
@@ -784,7 +764,6 @@ export function QueuePanel({
     if (selectedTagId === id) setSelectedTagId(null);
   }
 
-  // Auto-refresh polling
   const load = useCallback(async (signal: AbortSignal) => {
     try {
       const res = await fetch("/api/queue", { cache: "no-store", signal });
@@ -907,7 +886,6 @@ export function QueuePanel({
     count: chipCounts.get(d.id) ?? 0,
   }));
 
-  // Rail Search
   const [railSearch, setRailSearch] = useState("");
   const [isRailSearchOpen, setIsRailSearchOpen] = useState(false);
 
@@ -942,13 +920,12 @@ export function QueuePanel({
   };
 
   return (
-    <div className="space-y-3 w-full font-sans antialiased text-zinc-300 select-none">
-      {/* TOP ROW (NORTH): [ All | Clients ] Toggle on Left | Title on Right */}
+    <div className="space-y-3 w-full font-sans antialiased text-zinc-800 select-none">
+      {/* TOP ROW (NORTH) */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-        {/* Left Side: [ All | Clients ] Toggle */}
         <div className="w-full md:w-64 shrink-0">
           {clients.length > 0 && (
-            <div role="tablist" className="grid grid-cols-2 p-1 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-medium">
+            <div role="tablist" className="grid grid-cols-2 p-1 rounded-xl bg-zinc-200/60 border border-zinc-300/60 text-xs font-medium">
               <button
                 type="button"
                 role="tab"
@@ -963,7 +940,7 @@ export function QueuePanel({
                   "py-1.5 rounded-lg text-center transition-all cursor-pointer",
                   railView === "all"
                     ? "bg-white text-zinc-900 font-semibold shadow-xs"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    : "text-zinc-600 hover:text-zinc-900"
                 )}
               >
                 All
@@ -983,7 +960,7 @@ export function QueuePanel({
                   "py-1.5 rounded-lg text-center transition-all cursor-pointer",
                   railView === "clients"
                     ? "bg-white text-zinc-900 font-semibold shadow-xs"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    : "text-zinc-600 hover:text-zinc-900"
                 )}
               >
                 Clients
@@ -992,56 +969,54 @@ export function QueuePanel({
           )}
         </div>
 
-        {/* Right Side: Bold Title & Action Link */}
         <div className="flex-1 flex items-center justify-between w-full min-w-0 pl-1">
-          <h2 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+          <h2 className="text-lg font-bold tracking-tight text-zinc-900">
             {title}
           </h2>
           {viewAllHref && items.length > 0 && (
             <Link
               href={viewAllHref}
               title="Open full Queue"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-zinc-400 hover:text-zinc-100 bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800 transition-all duration-150 shadow-2xs group"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-zinc-600 hover:text-zinc-900 bg-white hover:bg-zinc-50 border border-zinc-200/80 transition-all duration-150 shadow-2xs group"
             >
               <span>View all</span>
-              <ArrowUpRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-200 transition-colors" />
+              <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-700 transition-colors" />
             </Link>
           )}
         </div>
       </div>
 
-      {/* MAIN CONTAINER FRAME (Integrated Rail + Table) */}
-      <div className="border border-sidebar-border rounded-2xl bg-sidebar overflow-visible flex flex-col md:flex-row min-h-[400px] w-full">
-        {/* 1. SEAMLESS INTEGRATED LEFT RAIL */}
-        <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-sidebar-border bg-sidebar p-3 flex flex-col shrink-0 space-y-3 select-none">
-          {/* GREY SCOPE CARD */}
-          <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700/50 text-xs font-semibold text-zinc-100 shadow-xs">
+      {/* MAIN CONTAINER FRAME */}
+      <div className="border border-zinc-200/80 rounded-2xl bg-white/60 shadow-xs overflow-visible flex flex-col md:flex-row min-h-[400px] w-full">
+        {/* LEFT RAIL */}
+        <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-zinc-200/80 bg-[#f8f7fa] p-3 flex flex-col shrink-0 space-y-3 select-none rounded-t-2xl md:rounded-tr-none md:rounded-l-2xl">
+          {/* SCOPE CARD */}
+          <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white border border-zinc-200/80 text-xs font-semibold text-zinc-900 shadow-xs">
             <span>{railView === "all" ? "All queues" : "All clients"}</span>
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-700/80 text-zinc-200 font-bold tabular-nums">
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-700 font-bold tabular-nums">
               {railView === "all" ? items.length : clients.length}
             </span>
           </div>
 
-          {/* CUSTOM HIGH-END MODE SELECTOR DROPDOWN */}
+          {/* GROUPING MODE SELECTOR */}
           {railView === "all" && (
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setIsGroupingPopoverOpen((p) => !p)}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-900/80 hover:bg-zinc-800/80 border border-zinc-800 text-xs text-zinc-200 font-medium transition-colors cursor-pointer"
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-white hover:bg-zinc-50 border border-zinc-200/80 text-xs text-zinc-800 font-medium transition-colors cursor-pointer shadow-2xs"
               >
                 <div className="flex items-center gap-2 truncate">
-                  <GripVertical size={13} className="text-zinc-500 shrink-0" />
+                  <GripVertical size={13} className="text-zinc-400 shrink-0" />
                   <span className="truncate">{groupingModeLabels[groupingMode]}</span>
                 </div>
-                <ChevronDown size={13} className="text-zinc-500 shrink-0" />
+                <ChevronDown size={13} className="text-zinc-400 shrink-0" />
               </button>
 
-              {/* Custom Dropdown Popover */}
               {isGroupingPopoverOpen && (
                 <>
                   <div className="fixed inset-0 z-30" onClick={() => setIsGroupingPopoverOpen(false)} />
-                  <div className="absolute top-full left-0 mt-1 w-full z-40 p-1 rounded-xl bg-zinc-900 border border-zinc-800 shadow-xl space-y-0.5 text-xs">
+                  <div className="absolute top-full left-0 mt-1 w-full z-40 p-1 rounded-xl bg-white border border-zinc-200 shadow-xl space-y-0.5 text-xs">
                     {(Object.keys(groupingModeLabels) as RailGroupingMode[]).map((mode) => (
                       <button
                         key={mode}
@@ -1055,12 +1030,12 @@ export function QueuePanel({
                         className={cn(
                           "w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors cursor-pointer",
                           groupingMode === mode
-                            ? "bg-white text-zinc-900 font-semibold shadow-xs"
-                            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                            ? "bg-zinc-100 text-zinc-900 font-semibold"
+                            : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50"
                         )}
                       >
                         <span>{groupingModeLabels[mode]}</span>
-                        {groupingMode === mode && <Check size={12} className="text-emerald-500" />}
+                        {groupingMode === mode && <Check size={12} className="text-emerald-600" />}
                       </button>
                     ))}
                   </div>
@@ -1069,24 +1044,24 @@ export function QueuePanel({
             </div>
           )}
 
-          {/* LISTS / CLIENTS HEADER */}
+          {/* HEADER */}
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between px-1">
-              <span className="text-xs font-bold text-zinc-300 tracking-tight">
+              <span className="text-[10.5px] font-bold text-zinc-500 uppercase tracking-wider">
                 {railView === "all" ? "Lists" : "Clients"}
               </span>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setIsRailSearchOpen((p) => !p)}
-                  className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                  className="p-1 rounded-md text-zinc-400 hover:text-zinc-800 hover:bg-zinc-200/50 transition-colors cursor-pointer"
                   title="Search"
                 >
                   <Search size={13} />
                 </button>
                 <Link
                   href="/dashboard/engagements/new"
-                  className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  className="p-1 rounded-md text-zinc-400 hover:text-zinc-800 hover:bg-zinc-200/50 transition-colors"
                   title="Add client"
                 >
                   <Plus size={13} />
@@ -1100,7 +1075,7 @@ export function QueuePanel({
                 value={railSearch}
                 onChange={(e) => setRailSearch(e.target.value)}
                 placeholder={railView === "all" ? "Search lists..." : "Search clients..."}
-                className="w-full px-2.5 py-1 text-xs bg-zinc-900 border border-zinc-800 rounded-md text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-700"
+                className="w-full px-2.5 py-1 text-xs bg-white border border-zinc-200/80 rounded-lg text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400"
                 autoFocus
               />
             )}
@@ -1117,7 +1092,7 @@ export function QueuePanel({
                     "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
                     selectedCategory === null && !selectedTagId
                       ? "bg-white text-zinc-900 font-semibold shadow-xs"
-                      : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                      : "text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900"
                   )}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -1143,7 +1118,7 @@ export function QueuePanel({
                         "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
                         active
                           ? "bg-white text-zinc-900 font-semibold shadow-xs"
-                          : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                          : "text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900"
                       )}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -1169,11 +1144,11 @@ export function QueuePanel({
                     "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
                     selectedClientId === null
                       ? "bg-white text-zinc-900 font-semibold shadow-xs"
-                      : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                      : "text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900"
                   )}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-5 h-5 rounded-[5px] bg-accent-client text-zinc-950 flex items-center justify-center shrink-0">
+                    <div className="w-5 h-5 rounded-[5px] bg-amber-400 text-zinc-950 flex items-center justify-center shrink-0">
                       <List className="w-3 h-3 stroke-[2.5]" />
                     </div>
                     <span className="truncate">All clients</span>
@@ -1198,11 +1173,11 @@ export function QueuePanel({
                         "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
                         active
                           ? "bg-white text-zinc-900 font-semibold shadow-xs"
-                          : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                          : "text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900"
                       )}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-5 h-5 rounded-[5px] bg-accent-client text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                        <div className="w-5 h-5 rounded-[5px] bg-amber-400 text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
                           <List className="w-3 h-3 stroke-[2.5]" />
                         </div>
                         <span className="truncate">{client.buyer}</span>
@@ -1223,25 +1198,24 @@ export function QueuePanel({
           </div>
 
           {/* TAGS SECTION */}
-          <div className="pt-2 border-t border-sidebar-border/60 space-y-2">
+          <div className="pt-2 border-t border-zinc-200/80 space-y-2">
             <div className="flex items-center justify-between px-1">
-              <span className="text-xs font-bold text-zinc-300 tracking-tight flex items-center gap-1.5">
+              <span className="text-[10.5px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
                 <TagIcon size={12} className="text-zinc-400" />
                 Tags
               </span>
               <button
                 type="button"
                 onClick={() => setIsAddTagOpen((p) => !p)}
-                className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                className="p-1 rounded-md text-zinc-400 hover:text-zinc-800 hover:bg-zinc-200/50 transition-colors cursor-pointer"
                 title="Create tag"
               >
                 <Plus size={13} />
               </button>
             </div>
 
-            {/* List of Created Tags */}
             {tags.length === 0 ? (
-              <p className="text-[11px] text-zinc-500 italic px-1 font-sans">No custom tags created yet.</p>
+              <p className="text-[11px] text-zinc-400 italic px-1 font-sans">No custom tags created yet.</p>
             ) : (
               <div className="space-y-1 max-h-[160px] overflow-y-auto [scrollbar-width:none]">
                 {tags.map((tag) => {
@@ -1260,12 +1234,12 @@ export function QueuePanel({
                           "w-full flex items-center justify-between px-2.5 py-1.5 rounded-[10px] text-xs font-medium transition-colors cursor-pointer pr-6",
                           active
                             ? "bg-white text-zinc-900 font-semibold shadow-xs"
-                            : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                            : "text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900"
                         )}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <span
-                            className="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs border border-white/20"
+                            className="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs border border-black/10"
                             style={{ backgroundColor: tag.colorHex }}
                           />
                           <span className="truncate font-semibold">{tag.name}</span>
@@ -1280,7 +1254,7 @@ export function QueuePanel({
                       <button
                         type="button"
                         onClick={() => handleDeleteTag(tag.id)}
-                        className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-rose-400 transition-opacity cursor-pointer"
+                        className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-rose-600 transition-opacity cursor-pointer"
                         title="Delete tag"
                       >
                         <Trash2 size={11} />
@@ -1293,9 +1267,9 @@ export function QueuePanel({
           </div>
         </div>
 
-        {/* 2. FULL TABLE AREA */}
-        <div className="flex-1 flex flex-col min-w-0 bg-sidebar p-3 space-y-3">
-          {/* TABLE TOOLBAR */}
+        {/* TABLE AREA */}
+        <div className="flex-1 flex flex-col min-w-0 p-3 space-y-3">
+          {/* TOOLBAR */}
           <div className="flex items-center gap-2 flex-wrap">
             <SegmentedTabs options={tabOptions} value={tab} onChange={(t) => { setTab(t); setPage(0); }} />
             <TableSearchInput value={search} onChange={(s) => { setSearch(s); setPage(0); }} placeholder={toolbarCopy.searchPlaceholder} className="w-[180px]" />
@@ -1305,7 +1279,7 @@ export function QueuePanel({
                 <button
                   type="button"
                   onClick={() => { setTab("all"); setSearch(""); setTimeRange("all"); setActiveChipIds(new Set()); setSelectedTagId(null); setPage(0); }}
-                  className="text-[11px] font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  className="text-[11px] font-mono text-zinc-500 hover:text-zinc-900 transition-colors cursor-pointer"
                 >
                   {sharedToolbarCopy.clearFiltersButton}
                 </button>
@@ -1341,25 +1315,25 @@ export function QueuePanel({
             />
           )}
 
-          {/* ROWS */}
+          {/* ROWS CONTAINER */}
           {railView === "clients" && !selectedClientId ? (
             clients.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-zinc-500 space-y-1">
                 <p className="text-sm font-medium">{sharedToolbarCopy.noResultsTitle}</p>
-                <p className="text-xs font-mono text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>
+                <p className="text-xs font-mono text-zinc-400">{sharedToolbarCopy.noResultsSubtitle}</p>
               </div>
             ) : (
-              <div className="flex-1 divide-y divide-sidebar-border border border-sidebar-border rounded-xl overflow-hidden bg-zinc-900/30">
+              <div className="flex-1 divide-y divide-zinc-100 border border-zinc-200/80 rounded-xl overflow-hidden bg-white shadow-xs">
                 {clients.map((client) => (
                   <button
                     key={client.engagementId}
                     type="button"
                     data-testid={`roster-row-${client.engagementId}`}
                     onClick={() => { setSelectedClientId(client.engagementId); setPage(0); }}
-                    className="w-full flex items-center justify-between px-4 py-3 text-left text-xs font-medium text-zinc-200 hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                    className="w-full flex items-center justify-between px-4 py-3 text-left text-xs font-medium text-zinc-800 hover:bg-zinc-50 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-5 h-5 rounded-[5px] bg-accent-client text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+                      <div className="w-5 h-5 rounded-[5px] bg-amber-400 text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
                         <List className="w-3 h-3 stroke-[2.5]" />
                       </div>
                       <span className="truncate font-semibold">{client.buyer}</span>
@@ -1374,10 +1348,10 @@ export function QueuePanel({
           ) : visibleItems.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-zinc-500 space-y-1">
               <p className="text-sm font-medium">{sharedToolbarCopy.noResultsTitle}</p>
-              <p className="text-xs font-mono text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>
+              <p className="text-xs font-mono text-zinc-400">{sharedToolbarCopy.noResultsSubtitle}</p>
             </div>
           ) : (
-            <div className="flex-1 divide-y divide-sidebar-border border border-sidebar-border rounded-xl overflow-hidden bg-zinc-900/30">
+            <div className="flex-1 divide-y divide-zinc-100 border border-zinc-200/80 rounded-xl overflow-hidden bg-white shadow-xs">
               {pagedGroups.map((group) => {
                 const expanded = expandedGroups.has(group.signature);
                 return (
@@ -1394,13 +1368,13 @@ export function QueuePanel({
             </div>
           )}
 
-          {/* PAGINATION / EXPAND VIEW MORE */}
-          <div className="flex items-center justify-between pt-2 border-t border-sidebar-border text-xs text-zinc-400">
+          {/* PAGINATION */}
+          <div className="flex items-center justify-between pt-2 border-t border-zinc-100 text-xs text-zinc-500">
             {pageSize === 5 && queueGroups.length > 5 ? (
               <button
                 type="button"
                 onClick={() => setSavedView((p) => ({ ...p, pageSize: 10 }))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 text-zinc-200 border border-zinc-700/60 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white hover:bg-zinc-50 text-zinc-800 border border-zinc-200/80 transition-colors cursor-pointer shadow-2xs"
               >
                 <span>View more</span>
                 <span className="font-mono text-[11px] text-zinc-400">({queueGroups.length - 5} remaining)</span>
@@ -1415,8 +1389,8 @@ export function QueuePanel({
                     className={cn(
                       "px-1.5 py-0.5 rounded border transition-colors cursor-pointer",
                       pageSize === size
-                        ? "border-zinc-600 bg-zinc-800 text-zinc-200"
-                        : "border-transparent hover:text-white"
+                        ? "border-zinc-300 bg-zinc-100 text-zinc-900 font-bold"
+                        : "border-transparent text-zinc-500 hover:text-zinc-900"
                     )}
                   >
                     {sharedToolbarCopy.pageSizeLabel(size)}
@@ -1431,14 +1405,14 @@ export function QueuePanel({
                 <button
                   onClick={() => setPage(Math.max(0, clampedPage - 1))}
                   disabled={clampedPage === 0}
-                  className="px-2 py-1 rounded border border-sidebar-border text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                  className="px-2 py-1 rounded border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 disabled:opacity-40 cursor-pointer shadow-2xs"
                 >
                   ← Prev
                 </button>
                 <button
                   onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}
                   disabled={clampedPage >= pageCount - 1}
-                  className="px-2 py-1 rounded border border-sidebar-border text-zinc-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                  className="px-2 py-1 rounded border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 disabled:opacity-40 cursor-pointer shadow-2xs"
                 >
                   Next →
                 </button>
@@ -1448,55 +1422,55 @@ export function QueuePanel({
         </div>
       </div>
 
-      {/* CENTER-FIXED CREATE TAG MODAL DIALOG */}
+      {/* CREATE TAG MODAL */}
       {isAddTagOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="absolute inset-0" onClick={() => setIsAddTagOpen(false)} />
 
-          <div className="relative z-10 w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl text-xs space-y-3.5 font-sans [scrollbar-width:none]">
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
-              <span className="font-bold text-zinc-100 text-sm">Create New Tag</span>
+          <div className="relative z-10 w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 rounded-2xl bg-white border border-zinc-200 shadow-2xl text-xs space-y-3.5 font-sans [scrollbar-width:none]">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5">
+              <span className="font-bold text-zinc-900 text-sm">Create New Tag</span>
               <button
                 type="button"
                 onClick={() => setIsAddTagOpen(false)}
-                className="p-1 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer"
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
               >
                 <X size={14} />
               </button>
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Tag Name</label>
+              <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Tag Name</label>
               <input
                 type="text"
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
                 placeholder="e.g. alerts"
-                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 text-xs"
+                className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 text-xs"
                 autoFocus
               />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1 relative">
-                <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Skill Target</label>
+                <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Skill Target</label>
                 <button
                   type="button"
                   onClick={() => { setIsSkillDropdownOpen((p) => !p); setIsCategoryDropdownOpen(false); }}
-                  className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-300 text-[11px] hover:bg-zinc-800/80 cursor-pointer"
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-800 text-[11px] hover:bg-zinc-100 cursor-pointer"
                 >
                   <span className="truncate">{skillTargetLabels[newTagTargetSkill]}</span>
-                  <ChevronDown size={11} className="text-zinc-500 shrink-0" />
+                  <ChevronDown size={11} className="text-zinc-400 shrink-0" />
                 </button>
 
                 {isSkillDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 rounded-xl bg-zinc-900 border border-zinc-800 shadow-xl space-y-0.5">
+                  <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 rounded-xl bg-white border border-zinc-200 shadow-xl space-y-0.5">
                     {Object.entries(skillTargetLabels).map(([k, label]) => (
                       <button
                         key={k}
                         type="button"
                         onClick={() => { setNewTagTargetSkill(k); setIsSkillDropdownOpen(false); }}
-                        className={cn("w-full text-left px-2 py-1 rounded-lg text-[11px] cursor-pointer", newTagTargetSkill === k ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-zinc-200")}
+                        className={cn("w-full text-left px-2 py-1 rounded-lg text-[11px] cursor-pointer", newTagTargetSkill === k ? "bg-zinc-100 text-zinc-900 font-semibold" : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50")}
                       >
                         {label}
                       </button>
@@ -1506,24 +1480,24 @@ export function QueuePanel({
               </div>
 
               <div className="space-y-1 relative">
-                <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Category</label>
+                <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Category</label>
                 <button
                   type="button"
                   onClick={() => { setIsCategoryDropdownOpen((p) => !p); setIsSkillDropdownOpen(false); }}
-                  className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-300 text-[11px] hover:bg-zinc-800/80 cursor-pointer"
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-800 text-[11px] hover:bg-zinc-100 cursor-pointer"
                 >
                   <span className="truncate">{categoryTargetLabels[newTagTargetCategory]}</span>
-                  <ChevronDown size={11} className="text-zinc-500 shrink-0" />
+                  <ChevronDown size={11} className="text-zinc-400 shrink-0" />
                 </button>
 
                 {isCategoryDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 rounded-xl bg-zinc-900 border border-zinc-800 shadow-xl space-y-0.5">
+                  <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 rounded-xl bg-white border border-zinc-200 shadow-xl space-y-0.5">
                     {Object.entries(categoryTargetLabels).map(([k, label]) => (
                       <button
                         key={k}
                         type="button"
                         onClick={() => { setNewTagTargetCategory(k); setIsCategoryDropdownOpen(false); }}
-                        className={cn("w-full text-left px-2 py-1 rounded-lg text-[11px] cursor-pointer", newTagTargetCategory === k ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-zinc-200")}
+                        className={cn("w-full text-left px-2 py-1 rounded-lg text-[11px] cursor-pointer", newTagTargetCategory === k ? "bg-zinc-100 text-zinc-900 font-semibold" : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50")}
                       >
                         {label}
                       </button>
@@ -1534,7 +1508,7 @@ export function QueuePanel({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Select Color</label>
+              <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Select Color</label>
               <div className="grid grid-cols-6 gap-2 pt-1 justify-items-center">
                 {TAG_SWATCHES.map((swatch) => {
                   const selected = newTagColor === swatch.hex;
@@ -1545,7 +1519,7 @@ export function QueuePanel({
                       onClick={() => setNewTagColor(swatch.hex)}
                       className={cn(
                         "w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110 cursor-pointer relative",
-                        swatch.hasBorder ? "border border-zinc-700" : ""
+                        swatch.hasBorder ? "border border-zinc-300" : ""
                       )}
                       style={{ backgroundColor: swatch.hex }}
                       title={swatch.label}
@@ -1567,7 +1541,7 @@ export function QueuePanel({
                 type="button"
                 onClick={handleCreateTag}
                 disabled={!newTagName.trim()}
-                className="w-full py-2 text-xs font-semibold rounded-xl bg-zinc-100 text-zinc-950 hover:bg-white disabled:opacity-40 cursor-pointer transition-colors shadow-xs"
+                className="w-full py-2 text-xs font-semibold rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 disabled:opacity-40 cursor-pointer transition-colors shadow-xs"
               >
                 Create Tag
               </button>
