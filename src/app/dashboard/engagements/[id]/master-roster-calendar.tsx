@@ -415,7 +415,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
   };
 
   return (
-    <div className="space-y-3 font-sans antialiased bg-amber-400 text-zinc-950 dark:bg-transparent dark:text-inherit rounded-2xl p-2">
+    <div className="space-y-3 font-sans antialiased">
       {/* Explicit Error Banners */}
       {roster.error && <ErrorBanner message={roster.error} onRetry={fetchRoster} />}
       {pileOn.error && (mode === "day" || mode === "board" || mode === "list") && (
@@ -427,7 +427,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
       {activity.error && <ErrorBanner message={activity.error} onRetry={fetchActivity} />}
 
       {/* Toolbar & View Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-300 bg-white p-2 shadow-sm font-sans dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-2 shadow-sm font-sans">
         <div className="flex items-center gap-2">
           <div className="relative w-64">
             <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500" />
@@ -435,7 +435,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               placeholder="Search bookings, emails, or phone..."
-              className="w-full rounded-xl border border-zinc-300 bg-zinc-50 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none font-sans dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:placeholder:text-zinc-500 dark:focus:border-zinc-700"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none font-sans"
             />
           </div>
 
@@ -443,13 +443,13 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
             type="button"
             onClick={fetchRoster}
             disabled={roster.loading}
-            className="flex items-center gap-1 rounded-xl border border-zinc-300 bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-600 hover:text-zinc-950 transition-colors cursor-pointer font-sans dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:text-white"
+            className="flex items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer font-sans"
           >
             <RefreshCw size={13} className={cn(roster.loading && "animate-spin")} />
           </button>
         </div>
 
-        <div className="flex items-center gap-1 rounded-xl bg-zinc-100 p-1 border border-zinc-300 text-xs font-sans dark:bg-zinc-900 dark:border-zinc-800">
+        <div className="flex items-center gap-1 rounded-xl bg-zinc-900 p-1 border border-zinc-800 text-xs font-sans">
           {([["month", CalendarIcon, "Month"], ["day", Clock, "Day View"], ["list", List, "Master List"], ["board", LayoutGrid, "Pipelines Board"]] as const).map(
             ([viewMode, Icon, label]) => (
               <button
@@ -458,7 +458,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 onClick={() => setMode(viewMode)}
                 className={cn(
                   "flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-semibold transition-colors cursor-pointer font-sans",
-                  mode === viewMode ? "bg-zinc-950 text-white shadow-sm dark:bg-zinc-800" : "text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-200"
+                  mode === viewMode ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-400 hover:text-zinc-200"
                 )}
               >
                 <Icon size={13} />
@@ -481,7 +481,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
       {/* 1. Month View */}
       {mode === "month" && !roster.loading && (
         <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl font-sans">
-          <div className="flex items-center justify-between border-b border-zinc-300 bg-zinc-100/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+          <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-4 py-3">
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer font-sans">
                 <ChevronLeft size={15} />
@@ -489,7 +489,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               <button type="button" onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer font-sans">
                 <ChevronRight size={15} />
               </button>
-              <h3 className="text-sm font-bold text-zinc-950 min-w-[130px] font-sans dark:text-white">{monthName} {year}</h3>
+              <h3 className="text-sm font-bold text-white min-w-[130px] font-sans">{monthName} {year}</h3>
               <button
                 type="button"
                 onClick={() => { setCurrentDate(new Date()); setSelectedDate(new Date()); }}
@@ -503,7 +503,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
             </div>
           </div>
 
-          <div className="grid grid-cols-7 border-b border-zinc-300 bg-zinc-100/60 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-600 font-sans dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-500">
+          <div className="grid grid-cols-7 border-b border-zinc-800 bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-800/60 py-2 last:border-r-0">{d}</div>
             ))}
@@ -597,8 +597,8 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
       {mode === "day" && !roster.loading && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
           {/* LEFT 7 COLUMNS: HOURLY TIMELINE GRID */}
-          <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-300 bg-white shadow-xl flex flex-col font-sans dark:border-zinc-800 dark:bg-zinc-950">
-            <div className="flex items-center justify-between border-b border-zinc-300 bg-zinc-100/80 px-4 py-3 font-sans dark:border-zinc-800 dark:bg-zinc-900/60">
+          <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl flex flex-col font-sans">
+            <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-4 py-3 font-sans">
               <div className="flex items-center gap-2 font-sans">
                 <button type="button" onClick={() => setSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer font-sans">
                   <ChevronLeft size={15} />
@@ -606,7 +606,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 <button type="button" onClick={() => setSelectedDate(new Date(selectedDate.getTime() + 86400000))} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer font-sans">
                   <ChevronRight size={15} />
                 </button>
-                <h3 className="text-sm font-bold text-zinc-950 font-sans dark:text-white">
+                <h3 className="text-sm font-bold text-white font-sans">
                   {selectedDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
                 </h3>
               </div>
@@ -682,7 +682,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           >
                             <div className="space-y-1 min-w-0 font-sans">
                               <div className="flex items-center gap-2 font-sans">
-                                <span className="font-bold text-zinc-950 text-xs font-sans dark:text-white">{entry.prospectName ?? "Unnamed"}</span>
+                                <span className="font-bold text-white text-xs font-sans">{entry.prospectName ?? "Unnamed"}</span>
                                 <span className="text-[10px] font-mono text-sky-400 bg-sky-950 px-1.5 py-0.5 rounded border border-sky-800/50">
                                   {timeStr(entry.callTime)}
                                 </span>
@@ -719,7 +719,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
           {/* RIGHT 5 COLUMNS: MINI CALENDAR + PROSPECT INSPECTOR PANEL */}
           <div className="lg:col-span-5 space-y-3 font-sans">
             {/* MINI CALENDAR NAVIGATOR */}
-            <div className="rounded-2xl border border-zinc-300 bg-white p-3 space-y-2 shadow-lg font-sans dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 space-y-2 shadow-lg font-sans">
               <span className="text-[11px] font-bold text-white block px-1 font-sans">{monthName} {year}</span>
               <div className="grid grid-cols-7 text-center text-[9px] font-mono text-zinc-500 font-bold uppercase font-sans">
                 {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <div key={i}>{d}</div>)}
@@ -745,7 +745,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
             </div>
 
             {/* FULL PROSPECT INSPECTOR PANEL */}
-            <div className="rounded-2xl border border-zinc-300 bg-white p-4 space-y-4 shadow-xl font-sans dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
               {selectedEntry ? (
                 <>
                   <div className="space-y-2 border-b border-zinc-800 pb-3 font-sans">
@@ -781,13 +781,13 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 rounded-xl bg-zinc-100 p-1 border border-zinc-300 text-xs font-sans dark:bg-zinc-900 dark:border-zinc-800">
+                  <div className="flex items-center gap-1 rounded-xl bg-zinc-900 p-1 border border-zinc-800 text-xs font-sans">
                     <button
                       type="button"
                       onClick={() => setActiveTab("brief")}
                       className={cn(
                         "flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
-                        activeTab === "brief" ? "bg-zinc-950 text-white shadow-xs dark:bg-zinc-800" : "text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-200"
+                        activeTab === "brief" ? "bg-zinc-800 text-white shadow-xs" : "text-zinc-400 hover:text-zinc-200"
                       )}
                     >
                       Brief
@@ -977,7 +977,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
         <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl font-sans">
           <table className="w-full text-left text-xs font-sans">
             <thead>
-              <tr className="border-b border-zinc-300 bg-zinc-100/80 text-[10px] uppercase tracking-wider text-zinc-600 font-mono dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-500">
+              <tr className="border-b border-zinc-800 bg-zinc-900/60 text-[10px] uppercase tracking-wider text-zinc-500 font-mono">
                 <th className="px-4 py-2.5">Date & Time</th>
                 <th className="px-4 py-2.5">Skill</th>
                 <th className="px-4 py-2.5">Prospect</th>
@@ -1032,7 +1032,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
           <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5 px-1 font-sans">
             <div className="flex items-center gap-1.5 font-sans">
               <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">Pipeline Lens:</span>
-              <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl border border-zinc-300 font-sans text-xs dark:bg-zinc-900 dark:border-zinc-800">
+              <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800 font-sans text-xs">
                 {([
                   ["all", "All Automations"],
                   ["pile_on", "⚡ Pile-On"],
@@ -1061,14 +1061,14 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               {(["newly_booked", "active_sequence", "sequence_complete", "call_today"] as PileOnStage[]).map((stage) => {
                 const stageItems = pileOn.data.filter((i) => i.stage === stage);
                 return (
-                  <div key={stage} className="rounded-2xl border border-zinc-300 bg-white p-3 space-y-2 font-sans dark:border-zinc-800 dark:bg-zinc-950">
+                  <div key={stage} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 space-y-2 font-sans">
                     <div className="flex items-center justify-between border-b border-zinc-800 pb-2 px-1 font-sans">
                       <span className="text-xs font-bold text-zinc-200 uppercase tracking-wider font-sans">{stage.replace("_", " ")}</span>
                       <span className="rounded-md bg-zinc-900 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-400">{stageItems.length}</span>
                     </div>
                     <div className="space-y-2 max-h-[500px] overflow-y-auto font-sans">
                       {stageItems.map((item) => (
-                        <div key={item.id} className="rounded-xl border border-zinc-300 bg-zinc-50 p-3 space-y-1 font-sans dark:border-zinc-800 dark:bg-zinc-900">
+                        <div key={item.id} className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 space-y-1 font-sans">
                           <span className="font-bold text-white text-xs block truncate font-sans">{item.prospectName ?? item.prospectEmail}</span>
                           <span className="block text-[10.5px] font-mono text-zinc-400 truncate">{item.prospectEmail}</span>
                           <StatusPill tone="info" className="mt-1">
@@ -1089,7 +1089,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               {(["active", "rebooked", "reply_exited", "lost", "manual_override", "corrected"] as WinBackEnrollmentStatus[]).map((status) => {
                 const statusItems = winBack.data.filter((i) => i.status === status);
                 return (
-                  <div key={status} className="rounded-2xl border border-zinc-300 bg-white p-3 space-y-2 font-sans dark:border-zinc-800 dark:bg-zinc-950">
+                  <div key={status} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 space-y-2 font-sans">
                     <div className="flex items-center justify-between border-b border-zinc-800 pb-2 px-1 font-sans">
                       <span className="text-[11px] font-bold text-zinc-200 uppercase tracking-wider font-sans">{status.replace("_", " ")}</span>
                       <span className="rounded-md bg-zinc-900 px-1.5 py-0.5 text-[10px] font-mono font-bold text-zinc-400">{statusItems.length}</span>
@@ -1124,14 +1124,14 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               ]).map(({ severity, tone }) => {
                 const audits = activityAll.data.filter((e) => e.skill === "leak-map" && e.tone === tone);
                 return (
-                  <div key={severity} className="rounded-2xl border border-zinc-300 bg-white p-3 space-y-2 font-sans dark:border-zinc-800 dark:bg-zinc-950">
+                  <div key={severity} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 space-y-2 font-sans">
                     <div className="flex items-center justify-between border-b border-zinc-800 pb-2 px-1 font-sans">
                       <span className="text-xs font-bold text-zinc-200 uppercase tracking-wider font-sans">{severity === "none" ? "Clean" : `${severity} severity`}</span>
                       <span className="rounded-md bg-zinc-900 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-400">{audits.length}</span>
                     </div>
                     <div className="space-y-2 max-h-[500px] overflow-y-auto font-sans">
                       {audits.map((item) => (
-                        <div key={item.id} className="rounded-xl border border-zinc-300 bg-zinc-50 p-3 space-y-1 font-sans dark:border-zinc-800 dark:bg-zinc-900">
+                        <div key={item.id} className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 space-y-1 font-sans">
                           <span className="font-bold text-white text-xs block capitalize font-sans">{item.title}</span>
                           <span className="block text-[10px] font-mono text-zinc-400">
                             {new Date(item.occurredAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
