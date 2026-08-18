@@ -40,13 +40,11 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
     return [0, [{ count: 0 }], [{ count: 0 }], 0] as const;
   });
 
-  // Group 1: Home & Inbox
   const group1Links: NavLinkItem[] = [
     { href: "/dashboard", label: "Home", icon: <Home className="w-4 h-4" /> },
     { href: "/dashboard/inbox", label: "Notification", icon: <Inbox className="w-4 h-4" />, count: Number(unreadInboxCount[0]?.count ?? 0) },
   ];
 
-  // Group 2: Queue & Executions
   const group2Links: NavLinkItem[] = [
     { href: "/dashboard/queue", label: "Queue", icon: <ListTodo className="w-4 h-4" />, count: queueCount },
     {
@@ -61,6 +59,11 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
 
   return (
     <div className="flex flex-col space-y-3 font-sans antialiased text-zinc-700 dark:text-zinc-300">
+      {/* SECTION HEADER TITLE */}
+      <div className="px-2 pt-1 text-sm font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+        Work
+      </div>
+
       {/* GROUP 1: HOME & INBOX */}
       <SidebarNavLinks links={group1Links} />
 
@@ -73,7 +76,7 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
 
       {/* SKILLS SECTION */}
       <div className="space-y-1">
-        <div className="flex items-center gap-1.5 px-2 py-1.5 text-[13px] font-bold text-zinc-600 dark:text-zinc-300 tracking-tight">
+        <div className="flex items-center gap-1.5 px-2 py-1.5 text-[13px] font-bold text-zinc-700 dark:text-zinc-300 tracking-tight">
           <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
           <span>Installed Skills</span>
         </div>
@@ -84,7 +87,6 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
   );
 }
 
-/** Static placeholder shown while WorkSidebar resolves its counts/lists. */
 export function WorkSidebarSkeleton() {
   return (
     <div className="flex flex-col gap-1 animate-pulse">
