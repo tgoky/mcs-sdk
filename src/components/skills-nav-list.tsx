@@ -5,6 +5,14 @@ import { usePathname } from "next/navigation";
 import { SKILL_IDS, SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 
+/**
+ * "Jump to a skill's module hub" list — every skill this workspace has,
+ * linking to /dashboard/modules/[skill]. Single source of truth so the
+ * dashboard-home sidebar, the modules pages' sidebar, and the Engagements
+ * list sidebar can't drift into three independently-hardcoded copies (the
+ * same class of bug skill-manifest.ts's own display-name comment calls
+ * out). Highlights whichever skill's module hub is currently open.
+ */
 export function SkillsNavList() {
   const pathname = usePathname();
 
@@ -22,7 +30,7 @@ export function SkillsNavList() {
             className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all truncate ${
               active
                 ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-semibold shadow-xs border border-zinc-200/60 dark:border-transparent"
-                : "text-zinc-700 dark:text-zinc-400 hover:bg-[#e5e4e6] dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100"
+                : "text-zinc-600 dark:text-zinc-400 hover:bg-[#e7e7eb] dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100"
             }`}
           >
             <SquishySkillBadge skill={skillId} size={18} />
