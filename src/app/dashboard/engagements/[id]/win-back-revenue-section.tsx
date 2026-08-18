@@ -164,7 +164,7 @@ export function WinBackRevenueSection({
 
           {/* Screenshot 1 Popup Styling */}
           {dropdownOpen && (
-            <div className="absolute right-0 mt-1.5 w-72 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl dark:shadow-2xl z-50 p-1.5 space-y-0.5 animate-in fade-in-50 zoom-in-95 duration-100">
+            <div className="absolute right-0 mt-1.5 w-72 rounded-2xl border border-border bg-white dark:bg-zinc-900 shadow-xl dark:shadow-2xl z-50 p-1.5 space-y-0.5 animate-in fade-in-50 zoom-in-95 duration-100">
               <div className="px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                 Select Reporting Period
               </div>
@@ -308,7 +308,7 @@ export function WinBackRevenueSection({
                       /* WEEKLY RECTANGLE CARD (Matching Screenshot 2: White "Task 1" Card) */
                       <div
                         key={w.weekNum}
-                        className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5 space-y-2.5 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-all group"
+                        className="rounded-xl border border-border bg-white dark:bg-zinc-900 p-3.5 space-y-2.5 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-all group"
                       >
                         {/* Title Row with Check Icon (Matching Screenshot 2: "(✓) Task 1") */}
                         <div className="flex items-start justify-between gap-2">

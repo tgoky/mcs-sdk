@@ -127,7 +127,7 @@ export function DeleteClientSection({
           value={confirmText}
           onChange={(e) => setConfirmText(e.target.value)}
           placeholder={buyerName}
-          className="flex-1 text-xs font-mono px-2 py-1.5 rounded border border-rose-300 dark:border-rose-900/60 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 placeholder:text-rose-300 dark:placeholder:text-rose-900/60"
+          className="flex-1 text-xs font-mono px-2 py-1.5 rounded border border-rose-300 dark:border-rose-900/60 bg-background text-zinc-700 dark:text-zinc-300 placeholder:text-rose-300 dark:placeholder:text-rose-900/60"
           onKeyDown={(e) => e.key === "Enter" && confirmText === buyerName && confirmDelete()}
         />
         <button

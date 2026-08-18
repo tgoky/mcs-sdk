@@ -42,7 +42,7 @@ export function AddClientToProject({ projectId, availableClients }: { projectId:
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-1 w-56 max-h-64 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg z-10 py-1">
+        <div className="absolute right-0 mt-1 w-56 max-h-64 overflow-y-auto rounded-lg border border-border bg-white dark:bg-zinc-900 shadow-lg z-10 py-1">
           {availableClients.map((client) => (
             <button
               key={client.engagementId}

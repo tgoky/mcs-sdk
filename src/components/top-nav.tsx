@@ -24,7 +24,7 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
-    <header className="relative h-12 w-full bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800/80 px-3 flex items-center justify-between shrink-0 select-none z-30 gap-3 transition-colors duration-200">
+    <header className="relative h-12 w-full bg-background border-b border-zinc-200 dark:border-zinc-800/80 px-3 flex items-center justify-between shrink-0 select-none z-30 gap-3 transition-colors duration-200">
       {/* Left: Sidebar Toggle + Create Button */}
       <div className="flex items-center gap-2 sm:gap-3">
         <button
@@ -41,7 +41,7 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
           <button
             type="button"
             onClick={() => setCreateOpen((prev) => !prev)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-full transition-all shadow-xs active:scale-95 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#e40014] hover:bg-[#e40014]/90 dark:bg-rose-600 dark:hover:bg-rose-500 text-white rounded-full transition-all shadow-xs active:scale-95 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Create</span>
@@ -54,7 +54,7 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
 
               {/* Asana-Style Sharp Rectangular Dropdown Card */}
               {/* Mobile: Opens below (left-0 top-full) | Desktop: Opens to the right (md:left-full md:top-0 md:ml-2) */}
-              <div className="absolute left-0 top-full mt-1.5 md:left-full md:top-0 md:mt-0 md:ml-2 w-52 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-sm shadow-xl z-50 py-1 text-zinc-900 dark:text-zinc-100 font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute left-0 top-full mt-1.5 md:left-full md:top-0 md:mt-0 md:ml-2 w-52 bg-white dark:bg-zinc-900 border border-border rounded-sm shadow-xl z-50 py-1 text-zinc-900 dark:text-zinc-100 font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
                 <div className="space-y-0.5">
                   <Link
                     href="/dashboard/engagements/new"

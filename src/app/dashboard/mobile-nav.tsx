@@ -45,7 +45,7 @@ export function MobileNav({ links, displayName }: { links: NavLink[]; displayNam
             onClick={() => setOpen(false)}
           />
           {/* Menu panel */}
-          <div className="fixed top-14 left-0 right-0 z-50 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-900 py-3 px-4 space-y-1 shadow-md dark:shadow-xl transition-all duration-200 animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="fixed top-14 left-0 right-0 z-50 bg-background border-b border-zinc-200 dark:border-zinc-900 py-3 px-4 space-y-1 shadow-md dark:shadow-xl transition-all duration-200 animate-in fade-in slide-in-from-top-2 duration-150">
             <a
               href="/home"
               onClick={() => setOpen(false)}

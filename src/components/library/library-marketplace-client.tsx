@@ -78,14 +78,14 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
 {/* 
         <button
           type="button"
-          className="inline-flex items-center gap-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm transition-colors cursor-pointer self-start sm:self-auto"
+          className="inline-flex items-center gap-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white px-3 py-2 rounded-xl border border-border bg-white dark:bg-zinc-900 shadow-sm transition-colors cursor-pointer self-start sm:self-auto"
         >
           <Settings size={14} /> Settings
         </button> */}
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto scrollbar-none text-xs font-semibold">
+      <div className="flex items-center gap-6 border-b border-border overflow-x-auto scrollbar-none text-xs font-semibold">
         <button
           type="button"
           onClick={() => setActiveTab("all")}
@@ -126,7 +126,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
         {/* Sidebar Filters - 3 Sections */}
         <div className="lg:col-span-3 space-y-6 text-xs text-zinc-600 dark:text-zinc-400">
           {/* Section 1: Collections */}
-          <div className="space-y-3 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="space-y-3 pb-4 border-b border-border">
             <button
               type="button"
               onClick={() => toggleSection("collections")}
@@ -162,7 +162,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
           </div>
 
           {/* Section 2: Categories */}
-          <div className="space-y-3 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="space-y-3 pb-4 border-b border-border">
             <button
               type="button"
               onClick={() => toggleSection("categories")}
@@ -198,7 +198,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
           </div>
 
           {/* Section 3: Execution Mode */}
-          <div className="space-y-3 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="space-y-3 pb-4 border-b border-border">
             <button
               type="button"
               onClick={() => toggleSection("executionMode")}
@@ -248,7 +248,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search Suites..."
-                className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:outline-none focus:border-teal-500 dark:focus:border-teal-400 text-zinc-900 dark:text-white placeholder-zinc-400 shadow-sm"
+                className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-teal-500 dark:focus:border-teal-400 text-zinc-900 dark:text-white placeholder-zinc-400 shadow-sm"
               />
             </div>
           </div>

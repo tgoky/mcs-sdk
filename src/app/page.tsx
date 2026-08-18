@@ -188,7 +188,7 @@ export default async function LandingIndexPage({
             </div>
 
             {/* The Login Card Grid Box Container */}
-            <div className="relative border border-zinc-200 dark:border-zinc-800 bg-card/80 backdrop-blur-md p-8 rounded-none shadow-[20px_20px_0px_0px_rgba(200,200,200,0.3)] dark:shadow-[20px_20px_0px_0px_rgba(9,9,11,0.6)] min-h-[352px] flex flex-col justify-between z-10">
+            <div className="relative border border-border bg-card/80 backdrop-blur-md p-8 rounded-none shadow-[20px_20px_0px_0px_rgba(200,200,200,0.3)] dark:shadow-[20px_20px_0px_0px_rgba(9,9,11,0.6)] min-h-[352px] flex flex-col justify-between z-10">
               
               {/* ────────────────────────────────────────────────────────────────────── */}
               {/* SKILL HOVER INTERACTIVE SUITE: Pure CSS Graphics Mapping */}

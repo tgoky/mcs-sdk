@@ -37,8 +37,8 @@ export default function DashboardLoading() {
       {/* Activity feed */}
       <div className="pt-2">
         <div className="h-3 w-32 rounded-sm bg-zinc-100 dark:bg-zinc-900 mb-4" />
-        <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
-          <div className="h-9 bg-zinc-50 dark:bg-zinc-950/50 border-b border-zinc-200 dark:border-zinc-800" />
+        <div className="border border-border rounded-lg overflow-hidden">
+          <div className="h-9 bg-zinc-50 dark:bg-zinc-950/50 border-b border-border" />
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}

@@ -43,7 +43,7 @@ export function SkillOrbitalRing({
       />
 
       {/* Center Core Hub */}
-      <div className="z-10 flex flex-col items-center justify-center w-12 h-12 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-md">
+      <div className="z-10 flex flex-col items-center justify-center w-12 h-12 rounded-full bg-white dark:bg-zinc-900 border border-border shadow-md">
         <Layers className="w-5 h-5 text-teal-600 dark:text-teal-400" />
       </div>
 

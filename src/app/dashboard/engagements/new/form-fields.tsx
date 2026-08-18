@@ -92,7 +92,7 @@ export function InputField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs"
+        className="w-full bg-background border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs"
       />
       {helpText && (
         <p className="text-[11px] font-normal leading-normal text-zinc-500 dark:text-zinc-400">
@@ -138,7 +138,7 @@ export function TextAreaField({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed resize-y"
+        className="w-full bg-background border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed resize-y"
       />
       {helpText && (
         <p className="text-[11px] font-normal leading-normal text-zinc-500 dark:text-zinc-400">
@@ -188,8 +188,8 @@ export function SelectField({
         onSelect={onChange}
         disabled={disabled}
         placeholder={selectedOption?.label ?? "Select option..."}
-        triggerClassName="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 transition-colors shadow-xs hover:border-zinc-400 dark:hover:border-zinc-700"
-        panelClassName="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xl"
+        triggerClassName="w-full bg-background border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 transition-colors shadow-xs hover:border-zinc-400 dark:hover:border-zinc-700"
+        panelClassName="bg-background border border-border shadow-xl"
       />
       {helpText && (
         <p className="text-[11px] font-normal leading-normal text-zinc-500 dark:text-zinc-400">

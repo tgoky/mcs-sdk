@@ -56,7 +56,7 @@ export default function StrategyPage() {
             <div
               key={section.id}
               id={section.id}
-              className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-4 scroll-mt-4"
+              className="rounded-xl border border-dashed border-border p-4 scroll-mt-4"
             >
               <div className="flex items-center gap-2 mb-1.5">
                 <Icon className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />

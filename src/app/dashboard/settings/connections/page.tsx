@@ -233,7 +233,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
               Which account is this for?
             </label>
             <input
-              className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs"
+              className="w-full bg-background border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs"
               value={engagementId}
               onChange={(e) => setEngagementId(e.target.value)}
               placeholder="e.g. eng_acme_corp_001"
@@ -282,7 +282,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <input
-                      className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 pr-8 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs"
+                      className="w-full bg-background border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 pr-8 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs"
                       type={visible[platform.provider] ? "text" : "password"}
                       value={values[platform.provider] ?? ""}
                       onChange={(e) =>
@@ -452,7 +452,7 @@ function SmtpCredentialCard() {
   }
 
   const inputClass =
-    "w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs";
+    "w-full bg-background border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs";
 
   return (
     <div

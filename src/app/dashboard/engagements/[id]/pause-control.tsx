@@ -107,13 +107,13 @@ export function EngagementPauseControl({
   // 2. Expanded Reason Input Form
   if (showReasonInput) {
     return (
-      <div className="inline-flex items-center gap-2.5 p-1.5 bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+      <div className="inline-flex items-center gap-2.5 p-1.5 bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 rounded-xl border border-border shadow-xl animate-in fade-in zoom-in-95 duration-150">
         <input
           autoFocus
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="Reason for pausing? (optional)"
-          className="text-sm px-3.5 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-amber-500/60 w-64 sm:w-80 transition-all"
+          className="text-sm px-3.5 py-2 rounded-lg border border-border bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-amber-500/60 w-64 sm:w-80 transition-all"
           onKeyDown={(e) => e.key === "Enter" && pause()}
         />
 
@@ -146,7 +146,7 @@ export function EngagementPauseControl({
       <button
         type="button"
         onClick={() => setShowReasonInput(true)}
-        className="group inline-flex items-center gap-2.5 text-sm font-semibold px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/90 text-zinc-800 dark:text-zinc-200 hover:text-amber-600 dark:hover:text-amber-400 hover:border-amber-500/40 shadow-xs transition-all active:scale-95 cursor-pointer"
+        className="group inline-flex items-center gap-2.5 text-sm font-semibold px-4 py-2.5 rounded-xl border border-border bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/90 text-zinc-800 dark:text-zinc-200 hover:text-amber-600 dark:hover:text-amber-400 hover:border-amber-500/40 shadow-xs transition-all active:scale-95 cursor-pointer"
       >
         <PauseCircle className="w-4.5 h-4.5 text-zinc-500 dark:text-zinc-400 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" />
         <span>Pause automation</span>

@@ -58,7 +58,7 @@ export default function ProfileSettingsPage({ session }: { session?: any }) {
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
             placeholder="First name"
-            className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-md text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-500 dark:focus:border-zinc-600 transition-colors"
+            className="w-full px-2.5 py-1.5 bg-background border border-zinc-300 dark:border-zinc-800 rounded-md text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-500 dark:focus:border-zinc-600 transition-colors"
           />
         </div>
         <div className="space-y-1">
@@ -70,7 +70,7 @@ export default function ProfileSettingsPage({ session }: { session?: any }) {
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
             placeholder="Last name"
-            className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-md text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-500 dark:focus:border-zinc-600 transition-colors"
+            className="w-full px-2.5 py-1.5 bg-background border border-zinc-300 dark:border-zinc-800 rounded-md text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-500 dark:focus:border-zinc-600 transition-colors"
           />
         </div>
       </div>

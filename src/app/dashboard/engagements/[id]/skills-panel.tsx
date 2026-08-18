@@ -230,7 +230,7 @@ export function SkillsPanel({
                       </span>
                     ) : (
                       <span
-                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 ${MODULE_STATUS_COLORS[status]}`}
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border bg-zinc-100 dark:bg-zinc-900 border-border ${MODULE_STATUS_COLORS[status]}`}
                       >
                         {MODULE_STATUS_LABELS[status]}
                       </span>

@@ -53,7 +53,7 @@ export function ViewCustomizer({
             "inline-flex items-center justify-center w-7 h-7 rounded-lg border shrink-0 transition-colors duration-150 cursor-pointer active:scale-95",
             open
               ? "border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
-              : "border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-zinc-200"
+              : "border-border text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-zinc-200"
           )}
         >
           <Plus size={14} />
@@ -61,7 +61,7 @@ export function ViewCustomizer({
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        className="w-[260px] p-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-black/95 backdrop-blur-xl text-zinc-900 dark:text-zinc-100 shadow-xl dark:shadow-2xl dark:shadow-black overflow-hidden font-sans tracking-tight antialiased"
+        className="w-[260px] p-1.5 rounded-2xl border border-border bg-white/95 dark:bg-black/95 backdrop-blur-xl text-zinc-900 dark:text-zinc-100 shadow-xl dark:shadow-2xl dark:shadow-black overflow-hidden font-sans tracking-tight antialiased"
       >
         {menuTitle && (
           <p className="px-2.5 pt-2 pb-1.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
@@ -142,7 +142,7 @@ export function FilterChipBar({
               "inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer",
               active
                 ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white"
-                : "bg-transparent text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:text-zinc-700 dark:hover:text-zinc-200"
+                : "bg-transparent text-zinc-500 dark:text-zinc-400 border-border hover:border-zinc-300 dark:hover:border-zinc-700 hover:text-zinc-700 dark:hover:text-zinc-200"
             )}
           >
             {chip.label}

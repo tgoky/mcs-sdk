@@ -57,7 +57,7 @@ export function VoiceStep({
         {form.testimonials.map((t, i) => (
           <div 
             key={i} 
-            className="grid gap-3 grid-cols-1 md:grid-cols-2 rounded-lg p-3 shadow-xs bg-zinc-100/40 dark:bg-zinc-900/30 backdrop-blur-md border border-zinc-200 dark:border-zinc-800"
+            className="grid gap-3 grid-cols-1 md:grid-cols-2 rounded-lg p-3 shadow-xs bg-zinc-100/40 dark:bg-zinc-900/30 backdrop-blur-md border border-border"
           >
             <InputField
               label="Name"

@@ -33,7 +33,7 @@ export function ShellLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 font-sans antialiased overflow-hidden transition-colors duration-200">
+    <div className="h-screen w-screen flex flex-col bg-background text-zinc-600 dark:text-zinc-400 font-sans antialiased overflow-hidden transition-colors duration-200">
       {/* 1. Global Top Navigation Header */}
       <TopNav 
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)} 
@@ -67,7 +67,7 @@ export function ShellLayout({
         )}
 
         {/* Column 3: Main Page Area */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 w-full bg-white dark:bg-zinc-950 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <main className="flex-1 overflow-y-auto p-6 md:p-8 w-full bg-background [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {children}
         </main>
       </div>

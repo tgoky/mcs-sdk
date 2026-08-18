@@ -92,7 +92,7 @@ export function CallIntelligenceLog({ sessions }: { sessions: ConversationIntell
                   {objections.map((o, i) => (
                     <span
                       key={i}
-                      className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400"
+                      className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-border bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400"
                     >
                       {o}
                     </span>

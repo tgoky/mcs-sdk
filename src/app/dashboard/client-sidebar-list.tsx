@@ -28,7 +28,7 @@ export interface ClientRailRow {
  * request that the client row's "..." menu look like that exact dropdown,
  * not the rounded ActionPanel style used for run-row menus elsewhere.
  */
-const MENU_CARD = "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-sm shadow-xl text-zinc-900 dark:text-zinc-100 font-sans antialiased";
+const MENU_CARD = "bg-white dark:bg-zinc-900 border border-border rounded-sm shadow-xl text-zinc-900 dark:text-zinc-100 font-sans antialiased";
 const MENU_ITEM = "group/item flex items-center gap-2.5 px-2.5 py-1.5 rounded-none text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white focus:bg-zinc-100 dark:focus:bg-zinc-800 data-open:bg-zinc-100 dark:data-open:bg-zinc-800 cursor-pointer outline-none";
 const MENU_ICON = "w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 group-hover/item:text-zinc-900 dark:group-hover/item:text-zinc-100 transition-colors shrink-0";
 

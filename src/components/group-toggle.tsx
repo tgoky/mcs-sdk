@@ -32,7 +32,7 @@ export function GroupCountToggle({
       aria-label={`${expanded ? "Collapse" : "Expand"} ${count} occurrences of this`}
       title={`Happened ${count} times — click to ${expanded ? "collapse" : "see each occurrence"}`}
       className={cn(
-        "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800 text-[10px] font-mono font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors cursor-pointer shrink-0 tabular-nums",
+        "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border border-border text-[10px] font-mono font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors cursor-pointer shrink-0 tabular-nums",
         className
       )}
     >

@@ -109,7 +109,7 @@ export function TimeRangeMenu({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors cursor-pointer shrink-0"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors cursor-pointer shrink-0"
         >
           <Clock size={12} />
           {timeRangeLabel(value)}
@@ -118,7 +118,7 @@ export function TimeRangeMenu({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[220px] p-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-black/95 backdrop-blur-xl shadow-xl overflow-hidden font-sans"
+        className="w-[220px] p-1.5 rounded-2xl border border-border bg-white/95 dark:bg-black/95 backdrop-blur-xl shadow-xl overflow-hidden font-sans"
       >
         <div className="space-y-0.5">
           <button

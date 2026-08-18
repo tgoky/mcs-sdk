@@ -74,7 +74,7 @@ export function EngagementActionsMenu({
             aria-expanded={open}
             aria-haspopup="menu"
             aria-label={`Modify settings for ${buyerName}`}
-            className="inline-flex items-center gap-2.5 text-sm font-semibold px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/90 text-zinc-800 dark:text-zinc-200 transition-all active:scale-95 cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-2.5 text-sm font-semibold px-4 py-2.5 rounded-xl border border-border bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/90 text-zinc-800 dark:text-zinc-200 transition-all active:scale-95 cursor-pointer shadow-xs"
           >
             <SquarePen className="w-4.5 h-4.5 text-zinc-500 dark:text-zinc-400" />
             <span>Modify</span>

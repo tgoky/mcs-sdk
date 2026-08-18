@@ -44,7 +44,7 @@ export interface RosterRun {
 }
 
 const MENU_CARD =
-  "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-sm shadow-xl text-zinc-900 dark:text-zinc-100 font-sans antialiased";
+  "bg-white dark:bg-zinc-900 border border-border rounded-sm shadow-xl text-zinc-900 dark:text-zinc-100 font-sans antialiased";
 const MENU_ITEM =
   "group/item flex items-center gap-2.5 px-2.5 py-1.5 rounded-none text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white focus:bg-zinc-100 dark:focus:bg-zinc-800 data-open:bg-zinc-100 dark:data-open:bg-zinc-800 cursor-pointer outline-none";
 const MENU_ICON =
@@ -324,14 +324,14 @@ export function ClientRosterTable({
               <Link href={`/dashboard/engagements/${eng.engagementId}`} className="flex-1 flex flex-col md:flex-row md:items-center gap-2.5 min-w-0">
                 {/* Connected Platform Badges */}
                 <div className="flex-1 flex flex-wrap items-center gap-1.5 md:px-4 font-mono text-[10.5px]">
-                  <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800">
+                  <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 border border-border">
                     {bookingLabel}
                   </span>
-                  <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800">
+                  <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 border border-border">
                     {emailLabel}
                   </span>
                   {smsActive && (
-                    <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800">
+                    <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 border border-border">
                       SMS
                     </span>
                   )}

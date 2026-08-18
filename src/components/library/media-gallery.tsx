@@ -79,7 +79,7 @@ export function MediaGallery({ items }: { items: PlaybookItem[] }) {
           const manifest = SKILL_MANIFEST[pb.id];
           return (
             <div key={pb.id} className="shrink-0 w-[300px] sm:w-[420px] snap-start space-y-2 group">
-              <div className="relative aspect-video w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 overflow-hidden shadow-sm group-hover:border-zinc-400 dark:group-hover:border-zinc-700 transition-all">
+              <div className="relative aspect-video w-full rounded-2xl border border-border bg-zinc-100 dark:bg-zinc-900 overflow-hidden shadow-sm group-hover:border-zinc-400 dark:group-hover:border-zinc-700 transition-all">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={pb.image}

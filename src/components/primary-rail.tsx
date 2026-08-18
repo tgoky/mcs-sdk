@@ -95,7 +95,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
-    <aside className="w-[76px] bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1.5 shrink-0 select-none z-20 transition-colors duration-200">
+    <aside className="w-[76px] bg-background border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1.5 shrink-0 select-none z-20 transition-colors duration-200">
       {/* Top Section: Primary Navigation & Secondary Product Segment */}
       <div className="flex flex-col items-center gap-1.5 w-full">
         {/* Main Rail Links */}
@@ -111,7 +111,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 aria-current={isActive ? "page" : undefined}
                 className={
                   isActive
-                    ? "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all shadow-xs"
+                    ? "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-border rounded-xl transition-all shadow-xs"
                     : "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
                 }
               >
@@ -139,7 +139,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 aria-current={isActive ? "page" : undefined}
                 className={
                   isActive
-                    ? "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all shadow-xs"
+                    ? "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-900 border border-border rounded-xl transition-all shadow-xs"
                     : "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
                 }
               >
@@ -178,7 +178,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
           <>
             <div className="fixed inset-0 z-40" onClick={() => setPopoverOpen(false)} />
 
-            <div className="absolute left-full bottom-0 ml-2 z-50 w-[640px] sm:w-[680px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute left-full bottom-0 ml-2 z-50 w-[640px] sm:w-[680px] bg-white dark:bg-zinc-900 border border-border text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-sm overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
               <div className="flex min-h-[360px] divide-x divide-zinc-200 dark:divide-zinc-800">
                 {/* LEFT PANE (Black background in Dark Theme) */}
                 <div className="w-72 sm:w-80 p-4 bg-zinc-50 dark:bg-black flex flex-col justify-between shrink-0">
@@ -239,7 +239,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                     </Link>
                   </div>
 
-                  <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
+                  <div className="pt-3 border-t border-border space-y-3">
                     <div className="flex items-center justify-between px-1">
                       <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Theme</span>
                       <ThemeToggle />
@@ -276,7 +276,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
 
                     <button
                       type="button"
-                      className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md transition-colors"
+                      className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 border border-border hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md transition-colors"
                     >
                       <Calendar className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
                       <span>Set out of office</span>

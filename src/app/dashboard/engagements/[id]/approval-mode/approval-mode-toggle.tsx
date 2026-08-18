@@ -53,7 +53,7 @@ export function ApprovalModeToggle({
   // 1. Confirmation state when switching to Autopilot
   if (confirming) {
     return (
-      <div className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 space-y-2 select-none">
+      <div className="p-2.5 rounded-xl border border-border bg-zinc-50 dark:bg-zinc-900/50 space-y-2 select-none">
         <p className="text-xs font-sans text-zinc-700 dark:text-zinc-300 leading-normal">
           Switch to Autopilot? Actions will publish immediately without manual approval.
         </p>

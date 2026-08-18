@@ -28,7 +28,7 @@ export default async function NewProjectPage() {
 
       {/* --- PAGE CONTENT (Left-Aligned max-w-2xl) --- */}
       <div className="relative z-10 max-w-2xl space-y-4">
-        <div className="border-b border-zinc-200 dark:border-zinc-800 pb-3 flex items-center justify-between">
+        <div className="border-b border-border pb-3 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
               Create New Project Archetype

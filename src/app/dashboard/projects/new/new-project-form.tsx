@@ -79,7 +79,7 @@ export function NewProjectForm({ clients }: { clients: Client[] }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Core SaaS Client Stack"
-          className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/60 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500/40"
+          className="rounded-xl border border-border bg-white/80 dark:bg-zinc-900/60 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500/40"
         />
       </div>
 
@@ -93,7 +93,7 @@ export function NewProjectForm({ clients }: { clients: Client[] }) {
           onChange={(e) => setDescription(e.target.value)}
           rows={2}
           placeholder="Brief overview of this archetype's target offer or workflow..."
-          className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/60 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500/40 resize-none"
+          className="rounded-xl border border-border bg-white/80 dark:bg-zinc-900/60 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500/40 resize-none"
         />
       </div>
 
@@ -113,7 +113,7 @@ export function NewProjectForm({ clients }: { clients: Client[] }) {
                 onClick={() => toggleSkill(skillId)}
                 className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
                   isEnabled
-                    ? "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 shadow-2xs"
+                    ? "border-border bg-white dark:bg-zinc-900/80 shadow-2xs"
                     : "border-zinc-200/50 dark:border-zinc-800/40 bg-zinc-50/40 dark:bg-zinc-950/20 opacity-60"
                 }`}
               >
@@ -151,7 +151,7 @@ export function NewProjectForm({ clients }: { clients: Client[] }) {
             No clients created yet. You can assign clients later.
           </p>
         ) : (
-          <div className="max-h-48 overflow-y-auto flex flex-col gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 p-2 bg-white/50 dark:bg-zinc-900/30">
+          <div className="max-h-48 overflow-y-auto flex flex-col gap-1 rounded-xl border border-border p-2 bg-white/50 dark:bg-zinc-900/30">
             {clients.map((client) => {
               const isSelected = selectedClients.has(client.engagementId);
               return (

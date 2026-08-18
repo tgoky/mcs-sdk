@@ -685,8 +685,8 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
     .map((d) => ({ id: d.id, label: d.label, count: chipCounts.get(d.id) ?? 0 }));
 
   return (
-    <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white/60 dark:bg-zinc-900/50 backdrop-blur-md overflow-hidden shadow-sm transition-colors duration-200">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-3">
+    <div className="border border-border rounded-lg bg-white/60 dark:bg-zinc-900/50 backdrop-blur-md overflow-hidden shadow-sm transition-colors duration-200">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-zinc-50/50 dark:bg-zinc-950/50 gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <h3 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider font-mono shrink-0">
             {title ?? toolbarCopy.title}
@@ -800,7 +800,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
         </div>
       )}
 
-      <div className="flex items-center justify-between px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-transparent">
+      <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-zinc-50/30 dark:bg-transparent">
         <div className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
           {([10, 25, 50] as const).map((size) => (
             <button
@@ -822,14 +822,14 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
             <button
               onClick={() => setPage(Math.max(0, clampedPage - 1))}
               disabled={clampedPage === 0}
-              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               ← Prev
             </button>
             <button
               onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}
               disabled={clampedPage >= pageCount - 1}
-              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               Next →
             </button>

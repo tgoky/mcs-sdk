@@ -183,7 +183,7 @@ function MetaFieldInputs({
             value={values[f.key] ?? ""}
             onChange={(e) => onChange(f.key, e.target.value)}
             placeholder={f.placeholder}
-            className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+            className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
           />
         </label>
       ))}
@@ -242,7 +242,7 @@ function GhlCalendarPicker({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={loading || options.length === 0}
-        className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 disabled:opacity-50"
+        className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300 disabled:opacity-50"
       >
         <option value="">
           {loading
@@ -505,7 +505,7 @@ export function EditStackSettings({
             <select
               value={bookingPlatform}
               onChange={(e) => setBookingPlatform(e.target.value)}
-              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
               <option value="">— not set —</option>
               {BOOKING_PLATFORM_OPTIONS.map((p) => (
@@ -519,7 +519,7 @@ export function EditStackSettings({
             <select
               value={webhookMode}
               onChange={(e) => setWebhookMode(e.target.value as typeof webhookMode)}
-              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
               <option value="">— not set —</option>
               <option value="webhook">
@@ -586,7 +586,7 @@ export function EditStackSettings({
             <select
               value={hostingPlatform}
               onChange={(e) => setHostingPlatform(e.target.value)}
-              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
               <option value="">— not set —</option>
               {HOSTING_PLATFORM_OPTIONS.map((p) => (
@@ -610,7 +610,7 @@ export function EditStackSettings({
             <select
               value={emailPlatform}
               onChange={(e) => setEmailPlatform(e.target.value as typeof emailPlatform)}
-              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
               <option value="">— not set —</option>
               {EMAIL_PLATFORM_OPTIONS.map((p) => (
@@ -649,7 +649,7 @@ export function EditStackSettings({
             <select
               value={smsPlatform}
               onChange={(e) => setSmsPlatform(e.target.value as typeof smsPlatform)}
-              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
               <option value="">— not set —</option>
               {SMS_PLATFORM_OPTIONS.map((p) => (
@@ -673,7 +673,7 @@ export function EditStackSettings({
             <select
               value={adDataPlatform}
               onChange={(e) => setAdDataPlatform(e.target.value as typeof adDataPlatform)}
-              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
               <option value="">— not set —</option>
               {AD_DATA_PLATFORM_OPTIONS.map((p) => (
@@ -697,7 +697,7 @@ export function EditStackSettings({
             <select
               value={conversationIntelligenceProvider}
               onChange={(e) => setConversationIntelligenceProvider(e.target.value as typeof conversationIntelligenceProvider)}
-              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
               <option value="">— not set —</option>
               {CONVERSATION_INTELLIGENCE_PROVIDER_OPTIONS.map((p) => (
@@ -714,7 +714,7 @@ export function EditStackSettings({
                 <select
                   value={recallRegion}
                   onChange={(e) => setRecallRegion(e.target.value)}
-                  className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+                  className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
                 >
                   <option value="">— defaults to US East —</option>
                   {RECALL_REGION_OPTIONS.map((r) => (
@@ -732,7 +732,7 @@ export function EditStackSettings({
                   value={recallBotName}
                   onChange={(e) => setRecallBotName(e.target.value)}
                   placeholder="Notetaker"
-                  className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+                  className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
                 />
               </label>
 
@@ -743,7 +743,7 @@ export function EditStackSettings({
                   value={recallSigningSecret}
                   onChange={(e) => setRecallSigningSecret(e.target.value)}
                   placeholder="whsec_..."
-                  className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+                  className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
                 />
                 <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
                   From this client&apos;s Recall.ai dashboard → Webhooks. Point that webhook at{" "}

@@ -152,7 +152,7 @@ export function ActionPanel({
         side={side}
         align={align}
         onClick={(e) => e.stopPropagation()}
-        className="w-[280px] sm:w-[300px] p-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-black/95 backdrop-blur-xl text-zinc-900 dark:text-zinc-100 shadow-xl dark:shadow-2xl dark:shadow-black overflow-hidden font-sans tracking-tight antialiased"
+        className="w-[280px] sm:w-[300px] p-1.5 rounded-2xl border border-border bg-white/95 dark:bg-black/95 backdrop-blur-xl text-zinc-900 dark:text-zinc-100 shadow-xl dark:shadow-2xl dark:shadow-black overflow-hidden font-sans tracking-tight antialiased"
       >
         {header && (
           <div className="px-3 pt-2.5 pb-2 border-b border-zinc-100 dark:border-zinc-800/80 text-xs font-sans leading-normal text-zinc-600 dark:text-zinc-300">

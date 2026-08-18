@@ -220,7 +220,7 @@ function WorkspaceRow({
         <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="inline-block">
           <button
             type="submit"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer shadow-2xs"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer shadow-2xs"
           >
             <span>Enter</span>
             <ArrowRight size={13} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />

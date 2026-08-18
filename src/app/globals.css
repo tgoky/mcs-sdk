@@ -45,8 +45,6 @@
   --color-accent-client: var(--accent-client);
   --color-accent-mint: var(--accent-mint);
   --color-accent-mint-foreground: var(--accent-mint-foreground);
-  --color-danger-cta: var(--danger-cta);
-  --color-danger-cta-hover: var(--danger-cta-hover);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -107,9 +105,13 @@
   --background: oklch(0.985 0.003 290);
   --foreground: oklch(0.145 0 0);
 
-  --card: color-mix(in oklch, var(--background) 92%, #1f1a2e 8%);
+  /* Card/popover fill matches page bg exactly (2026-08-09 light-mode audit) —
+     separation from the page comes from --border and shadow, not a fill tint.
+     Was color-mix(in oklch, var(--background) 92%, #1f1a2e 8%), which
+     resolved to a visibly grey ~#e6e6ea instead of the flat #fafafc target. */
+  --card: var(--background);
   --card-foreground: oklch(0.145 0 0);
-  --popover: color-mix(in oklch, var(--background) 92%, #1f1a2e 8%);
+  --popover: var(--background);
   --popover-foreground: oklch(0.145 0 0);
 
   --primary: var(--ink);
@@ -120,9 +122,16 @@
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: color-mix(in oklch, var(--background) 90%, #1f1a2e 10%);
-  --input: color-mix(in oklch, var(--background) 88%, #1f1a2e 12%);
+  /* 2026-08-09 light-mode audit target: #e40014 (bright true red — this is
+     the platform's "+ Create" button color). Was oklch(0.577 0.245 27.325),
+     which resolved to #e7000b, a slightly more orange red. */
+  --destructive: #e40014;
+  /* 2026-08-09 light-mode audit target: translucent black border, mirroring
+     dark mode's rgba(255,255,255,0.10) approach. Was color-mix(in oklch,
+     var(--background) 90%, #1f1a2e 10%), a flat opaque grey (~#e1e1e5) that
+     didn't composite correctly over non-background surfaces. */
+  --border: rgba(10, 10, 10, 0.10);
+  --input: rgba(10, 10, 10, 0.10);
   --ring: #0066cc;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
@@ -140,13 +149,19 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
-  --surface: color-mix(in oklch, var(--background) 92%, #1f1a2e 8%);
-  --surface-2: color-mix(in oklch, var(--background) 85%, #1f1a2e 15%);
+  /* Surface tiers collapse to the page bg in light mode, same reasoning as
+     --card above (2026-08-09 light-mode audit). Was color-mix toward
+     #1f1a2e at 8%/15%, resolving to ~#e6e6ea / ~#d5d4da instead of #fafafc. */
+  --surface: var(--background);
+  --surface-2: var(--background);
   --text-primary: oklch(0.145 0 0);
   --text-secondary: oklch(0.35 0.005 285);
   --text-muted: oklch(0.55 0.005 285);
   --error: oklch(0.6 0.18 15);
-  --success: oklch(0.45 0.15 155);
+  /* 2026-08-09 light-mode audit target: #006738 (deep forest green, needed
+     for legibility on a near-white bg). Was oklch(0.45 0.15 155), which
+     resolved to #006b2c — close, but not the exact audited value. */
+  --success: #006738;
   --accent-dim: color-mix(in oklch, var(--foreground) 6%, transparent);
 
   --ink: #1c1a22;
@@ -164,12 +179,6 @@
      themed, same reasoning as --accent-client above. */
   --accent-mint: #82e6d4;
   --accent-mint-foreground: #05221d;
-  /* Defect #4 fix — was bg-[#f15153] hover:bg-[#e0484a] in top-nav.tsx's
-     one destructive/urgent CTA. Named for its role since it isn't part
-     of the rose/error scale (it's a brighter, more saturated red used
-     specifically for this one high-visibility button). */
-  --danger-cta: #f15153;
-  --danger-cta-hover: #e0484a;
 }
 
 /* ────────────────────────────────────────────────────────────────────── */

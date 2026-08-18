@@ -52,7 +52,7 @@ function relativeTime(iso: string | null): string {
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1.5 space-y-0.5">
+    <div className="rounded border border-zinc-300 dark:border-zinc-800 bg-background px-2.5 py-1.5 space-y-0.5">
       <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">
         {label}
       </p>
@@ -81,7 +81,7 @@ function CopyField({ label, value, mask }: { label: string; value: string; mask?
         {label}
       </span>
       <div className="flex items-center gap-1.5">
-        <code className="flex-1 min-w-0 truncate text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300">
+        <code className="flex-1 min-w-0 truncate text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300">
           {revealed ? value : "•".repeat(Math.min(value.length, 40))}
         </code>
         {mask && (

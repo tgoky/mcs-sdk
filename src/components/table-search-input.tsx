@@ -25,7 +25,7 @@ export function TableSearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder ?? "Search..."}
-        className="w-full pl-7 pr-6 py-1.5 text-xs font-sans rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 transition-colors"
+        className="w-full pl-7 pr-6 py-1.5 text-xs font-sans rounded-lg border border-border bg-white dark:bg-zinc-900/60 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 transition-colors"
       />
       {value && (
         <button

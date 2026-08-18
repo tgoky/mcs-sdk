@@ -33,7 +33,7 @@ export function SegmentedTabs<T extends string>({
     <div
       role="tablist"
       className={cn(
-        "inline-flex items-center gap-0.5 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/40 shrink-0",
+        "inline-flex items-center gap-0.5 p-0.5 rounded-lg border border-border bg-zinc-50/70 dark:bg-zinc-950/40 shrink-0",
         className
       )}
     >

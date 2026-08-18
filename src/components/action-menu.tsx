@@ -100,7 +100,7 @@ export function ActionMenu({
             <div
               ref={panelRef}
               role="menu"
-              className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 shadow-xl dark:shadow-2xl dark:shadow-black p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5"
+              className="rounded-2xl border border-border bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 shadow-xl dark:shadow-2xl dark:shadow-black p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5"
             >
               {typeof children === "function" ? children(close) : children}
             </div>

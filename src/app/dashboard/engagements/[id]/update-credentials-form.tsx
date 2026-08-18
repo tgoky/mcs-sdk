@@ -176,7 +176,7 @@ function CredentialRow({
               value={value}
               onChange={(e) => { setValue(e.target.value); setSaved(false); }}
               placeholder="Paste new key / token"
-              className="flex-1 min-w-0 text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+              className="flex-1 min-w-0 text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
               onKeyDown={(e) => e.key === "Enter" && !saveForReuse && update()}
             />
             <button
@@ -201,7 +201,7 @@ function CredentialRow({
               value={reuseLabel}
               onChange={(e) => setReuseLabel(e.target.value)}
               placeholder={`Name it, e.g. "Acme's ${label.replace(/ key$/i, "")} account"`}
-              className="w-full text-[11px] font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+              className="w-full text-[11px] font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
             />
           )}
           {saved && <span className="text-[11px] font-mono text-ink-hover dark:text-ink">Saved</span>}
@@ -221,7 +221,7 @@ function CredentialRow({
               <select
                 value={selectedVaultId}
                 onChange={(e) => { setSelectedVaultId(e.target.value); setLinked(false); }}
-                className="flex-1 min-w-0 text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"
+                className="flex-1 min-w-0 text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
               >
                 <option value="">choose a saved credential</option>
                 {vaultOptions.map((v) => (

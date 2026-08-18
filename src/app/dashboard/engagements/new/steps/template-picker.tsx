@@ -82,10 +82,10 @@ export function TemplatePicker({ form, onSelect }: Props) {
             <div
               key={id}
               onClick={() => onSelect(id)}
-              className={`group relative rounded-lg border overflow-hidden cursor-pointer transition-all bg-white dark:bg-zinc-950 ${
+              className={`group relative rounded-lg border overflow-hidden cursor-pointer transition-all bg-background ${
                 selected
                   ? "border-indigo-500 ring-2 ring-indigo-500/25"
-                  : "border-zinc-200 dark:border-zinc-800 hover:border-indigo-400/60"
+                  : "border-border hover:border-indigo-400/60"
               }`}
             >
               <div
@@ -158,10 +158,10 @@ export function TemplatePicker({ form, onSelect }: Props) {
           onClick={() => setPreviewOpen(null)}
         >
           <div
-            className="bg-white dark:bg-zinc-950 rounded-lg overflow-hidden max-w-2xl w-full h-[85vh] shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col"
+            className="bg-background rounded-lg overflow-hidden max-w-2xl w-full h-[85vh] shadow-2xl border border-border flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
               <div>
                 <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
                   {TEMPLATE_META[previewOpen].name}

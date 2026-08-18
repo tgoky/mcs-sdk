@@ -205,12 +205,12 @@ export function GlobalSearch() {
     <>
       <button
         type="button"
-className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-800 rounded-md transition-colors w-72 md:w-96 cursor-pointer"     onClick={() => setOpen(true)}
+className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/80 border border-border rounded-md transition-colors w-72 md:w-96 cursor-pointer"     onClick={() => setOpen(true)}
         
       >
         <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
         <span className="flex-1 text-left truncate">Search...</span>
-        <kbd className="text-[10px] font-mono bg-white dark:bg-zinc-950 px-1 rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 shrink-0">
+        <kbd className="text-[10px] font-mono bg-background px-1 rounded border border-border text-zinc-400 dark:text-zinc-500 shrink-0">
           ⌘K
         </kbd>
       </button>
@@ -219,10 +219,10 @@ className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-z
         <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/40 backdrop-blur-[2px] pt-[12vh] px-4">
           <div
             ref={containerRef}
-            className="w-full max-w-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden font-sans antialiased"
+            className="w-full max-w-xl bg-background border border-border rounded-xl shadow-2xl overflow-hidden font-sans antialiased"
           >
             {/* Input row */}
-            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border">
               <Search className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
               <input
                 ref={inputRef}
@@ -233,7 +233,7 @@ className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-z
                 className="flex-1 bg-transparent text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none"
               />
               {loading && <Loader2 className="w-3.5 h-3.5 text-zinc-400 animate-spin shrink-0" />}
-              <kbd className="text-[10px] font-mono bg-zinc-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 shrink-0">
+              <kbd className="text-[10px] font-mono bg-zinc-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded border border-border text-zinc-400 dark:text-zinc-500 shrink-0">
                 ESC
               </kbd>
             </div>
@@ -347,7 +347,7 @@ className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-z
             </div>
 
             {/* Footer hint bar */}
-            <div className="flex items-center gap-3 px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
+            <div className="flex items-center gap-3 px-4 py-2 border-t border-border text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
               <span className="flex items-center gap-1">
                 <ArrowUp className="w-2.5 h-2.5" />
                 <ArrowDown className="w-2.5 h-2.5" /> Navigate

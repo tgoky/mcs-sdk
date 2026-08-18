@@ -169,7 +169,7 @@ export default async function EngagementDetailPage({
   <div className="flex items-start gap-3 min-w-0">
     <Link
       href="/dashboard/engagements"
-      className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mt-0.5"
+      className="flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mt-0.5"
       aria-label="Back to All Clients"
     >
       <ChevronLeft className="w-4 h-4" />
@@ -187,14 +187,14 @@ export default async function EngagementDetailPage({
 
       {/* Clean Meta Row (Platforms & Traffic) */}
    <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 translate-y-3.5 -mb-3 -ml-11 z-10 relative">
-  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
     {bookingPlatformLabel(stack?.booking_platform)}
   </span>
-  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
     {emailPlatformLabel(stack?.email_platform)}
   </span>
   {offerDetails?.traffic_temperature && (
-    <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[11px] capitalize">
+    <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px] capitalize">
       {String(offerDetails.traffic_temperature)} traffic
     </span>
   )}
@@ -331,7 +331,7 @@ export default async function EngagementDetailPage({
                       className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-md border ${
                         a.owner === "buyer"
                           ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40"
-                          : "text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800"
+                          : "text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 border-border"
                       }`}
                     >
                       {OWNER_LABELS[a.owner] ?? a.owner}
