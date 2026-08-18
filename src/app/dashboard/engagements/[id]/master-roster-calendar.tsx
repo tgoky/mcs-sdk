@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { skillName } from "@/lib/copy";
-import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import { getDaysInMonthGrid, dateKey, timeStr } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import type { RosterEntry } from "@/app/api/engagements/[id]/roster/route";
@@ -56,6 +55,37 @@ interface StreamState<T> {
 
 function emptyStream<T>(): StreamState<T> {
   return { data: [], loading: false, fetched: false, error: null };
+}
+
+function StatusPill({
+  tone,
+  children,
+  className,
+}: {
+  tone: "success" | "warning" | "danger" | "info" | "neutral" | string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const toneClasses =
+    {
+      success: "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300",
+      danger: "bg-rose-100 text-rose-900 dark:bg-rose-500/20 dark:text-rose-300",
+      warning: "bg-amber-100 text-amber-950 dark:bg-amber-500/20 dark:text-amber-300",
+      info: "bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-300",
+      neutral: "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300",
+    }[tone] ?? "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-tight transition-colors border-0",
+        toneClasses,
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
 }
 
 function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -547,16 +577,16 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   )}
 
                   <div className="my-auto py-1 font-sans">
-{metric && metric.totalCalls > 0 ? (
-  <div className="rounded-lg bg-[#fde2e8] dark:bg-pink-500/20 px-2 py-1.5 transition-colors group-hover:bg-[#fbcfe8] dark:group-hover:bg-pink-500/30">
-    <span className="text-[11px] font-bold block leading-none text-pink-950 dark:text-pink-200 font-sans">
-      {metric.totalCalls} call{metric.totalCalls === 1 ? "" : "s"}
-    </span>
-    <span className="text-[9.5px] font-mono mt-0.5 block font-semibold text-pink-800 dark:text-pink-300/90">
-      {metric.briefDelivered}/{metric.totalCalls} briefed
-    </span>
-  </div>
-) : metric && (["pile-on", "win-back", "leak-map"] as ActivitySkill[]).some((s) => metric.activityBySkill[s] > 0) ? (
+                    {metric && metric.totalCalls > 0 ? (
+                      <div className="rounded-lg bg-[#fde2e8] dark:bg-pink-500/20 px-2 py-1.5 transition-colors group-hover:bg-[#fbcfe8] dark:group-hover:bg-pink-500/30">
+                        <span className="text-[11px] font-bold block leading-none text-pink-950 dark:text-pink-200 font-sans">
+                          {metric.totalCalls} call{metric.totalCalls === 1 ? "" : "s"}
+                        </span>
+                        <span className="text-[9.5px] font-mono mt-0.5 block font-semibold text-pink-800 dark:text-pink-300/90">
+                          {metric.briefDelivered}/{metric.totalCalls} briefed
+                        </span>
+                      </div>
+                    ) : metric && (["pile-on", "win-back", "leak-map"] as ActivitySkill[]).some((s) => metric.activityBySkill[s] > 0) ? (
                       <span className="text-[10px] text-zinc-600 dark:text-zinc-400 font-mono block">
                         {(["pile-on", "win-back", "leak-map"] as ActivitySkill[])
                           .filter((s) => metric.activityBySkill[s] > 0)
