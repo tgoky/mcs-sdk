@@ -69,7 +69,7 @@ function StatusPill({
   const toneClasses =
     {
       success: "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300",
-      danger: "bg-rose-100 text-rose-900 dark:bg-rose-500/20 dark:text-rose-300",
+      danger: "bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200",
       warning: "bg-amber-100 text-amber-950 dark:bg-amber-500/20 dark:text-amber-300",
       info: "bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-300",
       neutral: "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300",
@@ -625,12 +625,12 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               <div className="flex items-center gap-1.5 font-mono text-[11px]">
                 <span className="text-zinc-600 dark:text-zinc-400 font-semibold">{selectedDayEntries.length} meeting{selectedDayEntries.length === 1 ? "" : "s"}</span>
                 {selectedDayMetric.briefDelivered > 0 && (
-                  <span className="text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800/50 px-1.5 py-0.5 rounded text-[10px]">
+                  <span className="text-emerald-900 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold border-0">
                     {selectedDayMetric.briefDelivered} briefed
                   </span>
                 )}
                 {selectedDayMetric.winBackActive > 0 && (
-                  <span className="text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800/50 px-1.5 py-0.5 rounded text-[10px]">
+                  <span className="text-amber-950 dark:text-amber-300 bg-amber-100 dark:bg-amber-500/20 px-2 py-0.5 rounded text-[10px] font-bold border-0">
                     {selectedDayMetric.winBackActive} win-back
                   </span>
                 )}
@@ -680,16 +680,16 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             type="button"
                             onClick={() => setSelectedEntryId(entry.id)}
                             className={cn(
-                              "w-full rounded-xl border p-2.5 text-left transition-all cursor-pointer flex items-start justify-between gap-2 shadow-xs font-sans",
+                              "w-full rounded-xl p-2.5 text-left transition-all cursor-pointer flex items-start justify-between gap-2 shadow-xs font-sans border-0",
                               isSelected
-                                ? "border-sky-500 bg-sky-50/80 dark:bg-sky-950/40 ring-1 ring-sky-500/50"
-                                : "border-sky-200 dark:border-sky-800/60 bg-sky-50/40 dark:bg-sky-950/20 hover:border-sky-300 dark:hover:border-sky-700"
+                                ? "bg-zinc-200/90 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                                : "bg-white dark:bg-zinc-900/90 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
                             )}
                           >
                             <div className="space-y-1 min-w-0 font-sans">
                               <div className="flex items-center gap-2 font-sans">
                                 <span className="font-bold text-zinc-900 dark:text-white text-xs font-sans">{entry.prospectName ?? "Unnamed"}</span>
-                                <span className="text-[10px] font-mono text-sky-700 dark:text-sky-400 bg-sky-100 dark:bg-sky-950 px-1.5 py-0.5 rounded border border-sky-300 dark:border-sky-800/50">
+                                <span className="text-[10px] font-mono text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded font-bold border-0">
                                   {timeStr(entry.callTime)}
                                 </span>
                               </div>
@@ -708,7 +708,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                 e.stopPropagation();
                                 handleCopyText(entry.prospectEmail ?? "", "email");
                               }}
-                              className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-1.5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white shrink-0 font-sans"
+                              className="rounded-lg bg-zinc-100 dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white shrink-0 font-sans border-0"
                             >
                               {copiedEmail ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                             </button>
