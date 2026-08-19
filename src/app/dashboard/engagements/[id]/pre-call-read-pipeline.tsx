@@ -21,8 +21,7 @@ import {
   Check, 
   Clock,
   RefreshCw,
-  Building2,
-  PhoneCall
+  Building2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getDaysInMonthGrid, dateKey, timeStr } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
@@ -89,6 +88,31 @@ function StatusPill({
   );
 }
 
+function formatDayHeader(dateStr: string) {
+  const todayKey = dateKey(new Date());
+
+  const yesterdayObj = new Date();
+  yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+  const yesterdayKey = dateKey(yesterdayObj);
+
+  const tomorrowObj = new Date();
+  tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+  const tomorrowKey = dateKey(tomorrowObj);
+
+  if (dateStr === todayKey) return "Today";
+  if (dateStr === yesterdayKey) return "Yesterday";
+  if (dateStr === tomorrowKey) return "Tomorrow";
+  
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+function formatTimeBadge(isoString: string | null | undefined) {
+  if (!isoString) return null;
+  return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export function PreCallReadPipeline({ engagementId }: { engagementId: string }) {
   const [mode, setMode] = useState<ViewMode>("month");
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -109,7 +133,9 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/engagements/${engagementId}/roster?month=${monthString}`);
+      // List and Board views fetch full roster history so day scrolling crosses month boundaries
+      const query = (mode === "month" || mode === "day") ? `month=${monthString}` : `all=1`;
+      const res = await fetch(`/api/engagements/${engagementId}/roster?${query}`);
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? "Failed to load calls.");
       const body = await res.json();
       const loadedEntries: RosterEntry[] = body.entries ?? [];
@@ -119,7 +145,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
     } finally {
       setLoading(false);
     }
-  }, [engagementId, monthString]);
+  }, [engagementId, mode, monthString]);
 
   useEffect(() => {
     load();
@@ -144,6 +170,18 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
       (map[k] ??= []).push(entry);
     }
     return map;
+  }, [filtered]);
+
+  const listByDate = useMemo(() => {
+    const map = new Map<string, RosterEntry[]>();
+    for (const item of filtered) {
+      const k = dateKey(new Date(item.callTime));
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(item);
+    }
+    return Array.from(map.entries()).sort(
+      ([a], [b]) => new Date(b).getTime() - new Date(a).getTime()
+    );
   }, [filtered]);
 
   const dayMetrics = useMemo(() => {
@@ -171,7 +209,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
   }, [selectedDayKey, selectedDayEntries, selectedEntryId]);
 
   const selectedEntry = useMemo(
-    () => filtered.find((e) => e.id === selectedEntryId) ?? selectedDayEntries[0] ?? null,
+    () => filtered.find((e) => e.id === selectedEntryId) ?? selectedDayEntries[0] ?? filtered[0] ?? null,
     [filtered, selectedEntryId, selectedDayEntries]
   );
 
@@ -512,7 +550,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                       )}
                       <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-300 pt-0.5">
                         <Clock size={12} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                        <span>{new Date(selectedEntry.callTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span>{new Date(selectedEntry.callTime).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                       </div>
                     </div>
                   </div>
@@ -598,7 +636,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
               ) : (
                 <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
                   <Clock size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-                  <p className="text-xs font-sans">No call or skill activity for this day.</p>
+                  <p className="text-xs font-sans">No call selected or found for this date.</p>
                 </div>
               )}
             </div>
@@ -606,55 +644,224 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
         </div>
       )}
 
-      {/* 3. LIST VIEW */}
+      {/* 3. SPLIT-PANE LIST VIEW (STICKY DAY HEADERS + UNBOUNDED DAY SCROLLING) */}
       {mode === "list" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
-          <table className="w-full text-left text-xs font-sans">
-            <thead>
-              <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 text-[10px] uppercase tracking-wider text-zinc-500 font-mono">
-                <th className="px-4 py-2.5">Date & Time</th>
-                <th className="px-4 py-2.5">Prospect</th>
-                <th className="px-4 py-2.5">Platform</th>
-                <th className="px-4 py-2.5">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-sans">
-              {filtered.map((entry) => (
-                <tr
-                  key={entry.id}
-                  onClick={() => {
-                    setSelectedEntryId(entry.id);
-                    setSelectedDate(new Date(entry.callTime));
-                    setMode("day");
-                  }}
-                  className="hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 cursor-pointer transition-colors font-sans"
-                >
-                  <td className="px-4 py-3 font-mono text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-                    {new Date(entry.callTime).toLocaleDateString()} {timeStr(entry.callTime)}
-                  </td>
-                  <td className="px-4 py-3 font-bold text-zinc-900 dark:text-white font-sans">
-                    {entry.prospectName ?? entry.prospectEmail ?? <span className="text-zinc-400 dark:text-zinc-600 font-normal font-mono">—</span>}
-                    {entry.prospectName && entry.prospectEmail && (
-                      <span className="block text-[11px] font-normal text-zinc-500 font-mono">{entry.prospectEmail}</span>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
+          {/* LEFT 7 COLUMNS: LIST FEED WITH STICKY DAY HEADERS */}
+          <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
+            {listByDate.length === 0 && !loading ? (
+              <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
+                <CalendarX2 size={22} />
+                <span className="text-xs">No calls on file.</span>
+              </div>
+            ) : (
+              <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 max-h-[620px] overflow-y-auto">
+                {listByDate.map(([dateStr, dayItems]) => (
+                  <div key={dateStr} className="space-y-0 font-sans">
+                    {/* Sticky Day Header */}
+                    <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">
+                      <span>{formatDayHeader(dateStr)}</span>
+                      <span className="text-zinc-400 font-normal">
+                        {dayItems.length} call{dayItems.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
+
+                    {/* Day Items Feed */}
+                    <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
+                      {dayItems.map((entry) => {
+                        const isSelected = selectedEntry?.id === entry.id;
+                        const isFailed = entry.status === "brief_failed";
+                        const appointmentHour = formatTimeBadge(entry.callTime);
+
+                        return (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedEntryId(entry.id);
+                              setSelectedDate(new Date(entry.callTime));
+                            }}
+                            className={cn(
+                              "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer font-sans border-0",
+                              isFailed && "bg-[#ffcfd2]/40 dark:bg-rose-950/30",
+                              isSelected
+                                ? "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                                : "bg-white dark:bg-transparent hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50"
+                            )}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <span className="font-mono text-[10px] font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0 border-0">
+                                {appointmentHour}
+                              </span>
+
+                              <div className="min-w-0 space-y-0.5">
+                                <span className="truncate text-xs font-bold text-zinc-900 dark:text-white block font-sans">
+                                  {entry.prospectName ?? entry.prospectEmail}
+                                </span>
+                                {entry.prospectEmail && (
+                                  <span className="text-[11px] text-zinc-500 font-mono block truncate">
+                                    {entry.prospectEmail}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <StatusPill tone={STATUS_META[entry.status].tone} className="shrink-0">
+                                {STATUS_META[entry.status].label}
+                              </StatusPill>
+
+                              {entry.prospectEmail && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCopyEmail(entry.prospectEmail!);
+                                  }}
+                                  className="p-1 rounded-md text-zinc-400 hover:text-zinc-800 dark:hover:text-white transition-colors"
+                                >
+                                  {copiedEmail ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                                </button>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT 5 COLUMNS: PERSISTENT PROSPECT INSPECTOR PANEL */}
+          <div className="lg:col-span-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
+            {selectedEntry ? (
+              <>
+                <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
+                  <div className="flex items-center justify-between font-sans flex-wrap gap-1">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-sky-600 dark:text-sky-400 font-bold flex items-center gap-1 font-sans">
+                      <Building2 size={12} /> {selectedEntry.bookingPlatform ?? "Calendar"}
+                    </span>
+                    {selectedEntry.prospectEmail && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyEmail(selectedEntry.prospectEmail!)}
+                        className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
+                      >
+                        {copiedEmail ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                        <span>Copy Email</span>
+                      </button>
                     )}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-zinc-800 dark:text-zinc-300">
-                    {entry.bookingPlatform ? bookingPlatformLabel(entry.bookingPlatform) : "Calendar"}
-                  </td>
-                  <td className="px-4 py-3 font-sans">
-                    <StatusPill tone={STATUS_META[entry.status].tone}>{STATUS_META[entry.status].label}</StatusPill>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-zinc-500 font-sans text-xs">
-                    No calls on file for this month{filterText ? " matching your search" : ""}.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  </div>
+
+                  <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selectedEntry.prospectName ?? "Unnamed Prospect"}</h4>
+
+                  <div className="space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                    {selectedEntry.prospectEmail && (
+                      <div className="flex items-center gap-2">
+                        <Mail size={12} className="text-zinc-500 shrink-0" />
+                        <span className="truncate">{selectedEntry.prospectEmail}</span>
+                      </div>
+                    )}
+                    {selectedEntry.prospectPhone && (
+                      <div className="flex items-center gap-2">
+                        <Phone size={12} className="text-zinc-500 shrink-0" />
+                        <span className="truncate">{selectedEntry.prospectPhone}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-300 pt-0.5">
+                      <Clock size={12} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                      <span>{new Date(selectedEntry.callTime).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <StatusPill tone={STATUS_META[selectedEntry.status].tone}>{STATUS_META[selectedEntry.status].label}</StatusPill>
+                  <StatusPill tone={matchLabel(selectedEntry).tone}>{matchLabel(selectedEntry).text}</StatusPill>
+                  {selectedEntry.actualOutcome && (
+                    <StatusPill tone={OUTCOME_META[selectedEntry.actualOutcome]?.tone ?? "neutral"}>
+                      {OUTCOME_META[selectedEntry.actualOutcome]?.label ?? selectedEntry.actualOutcome}
+                    </StatusPill>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                  <div className="flex items-center justify-between font-sans">
+                    <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
+                    <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ? briefDestinationLabel(selectedEntry.destinationDelivered) : "Slack"}</span>
+                  </div>
+                  {selectedEntry.briefDeliveredAt && (
+                    <div className="flex items-center justify-between font-sans pt-1">
+                      <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Brief Delivered</span>
+                      <span className="font-mono text-zinc-900 dark:text-white">{new Date(selectedEntry.briefDeliveredAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                    </div>
+                  )}
+                  {selectedEntry.personMatchScore !== null && (
+                    <div className="flex items-center justify-between font-sans pt-1">
+                      <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Identity Match Score</span>
+                      <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.personMatchScore}/100</span>
+                    </div>
+                  )}
+                  {selectedEntry.predictedShowProbability !== null && (
+                    <div className="flex items-center justify-between font-sans pt-1">
+                      <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Predicted Show Rate</span>
+                      <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.predictedShowProbability}%</span>
+                    </div>
+                  )}
+                  {selectedEntry.outcomeSource && (
+                    <div className="flex items-center justify-between font-sans pt-1 gap-3">
+                      <span className="text-zinc-600 dark:text-zinc-400 font-semibold shrink-0">Outcome Source</span>
+                      <span className="text-zinc-900 dark:text-white text-right font-mono">{outcomeSourceLabel(selectedEntry.outcomeSource, selectedEntry.actualOutcome)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {selectedEntry.briefText ? (
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1.5 text-xs font-sans">
+                    <span className="text-[10.5px] font-mono text-zinc-500 uppercase block">Brief Content</span>
+                    <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap max-h-[160px] overflow-y-auto text-[11.5px]">{selectedEntry.briefText}</p>
+                  </div>
+                ) : (
+                  <p className="text-zinc-500 italic text-[11px] font-sans">No brief text on file for this call.</p>
+                )}
+
+                {selectedEntry.runId && (
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-xs font-sans">
+                    <button
+                      type="button"
+                      onClick={() => setShowRunActivity((p) => !p)}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
+                    >
+                      <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
+                        <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
+                        Run activity
+                      </span>
+                      <ChevronDown size={13} className={cn("text-zinc-500 transition-transform", showRunActivity && "rotate-180")} />
+                    </button>
+                    {showRunActivity && (
+                      <div className="px-3 pb-3 pt-1 border-t border-zinc-200 dark:border-zinc-800/60">
+                        <RunActivityPanel runId={selectedEntry.runId} />
+                        <a
+                          href={`/dashboard/runs/${selectedEntry.runId}`}
+                          className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
+                        >
+                          <span>Open full research run</span>
+                          <ExternalLink size={10} />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
+                <Clock size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
+                <p className="text-xs font-sans">Select a call from the list to inspect brief details.</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
