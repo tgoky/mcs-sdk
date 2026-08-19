@@ -3,9 +3,26 @@
 // src/app/dashboard/engagements/[id]/pile-on-pipeline.tsx
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Search, Mail, CalendarX2, Loader2, ExternalLink, PhoneCall, TrendingUp, TrendingDown, Minus, ChevronDown, Sparkles } from "lucide-react";
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Search, 
+  Mail, 
+  CalendarX2, 
+  Loader2, 
+  ExternalLink, 
+  PhoneCall, 
+  TrendingUp, 
+  TrendingDown, 
+  Minus, 
+  ChevronDown, 
+  Sparkles,
+  Calendar as CalendarIcon,
+  List as ListIcon,
+  LayoutGrid
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ViewSwitcher, type RunViewMode } from "../../runs/[id]/_shared/view-switcher";
+import type { RunViewMode } from "../../runs/[id]/_shared/view-switcher";
 import { getDaysInMonthGrid, dateKey } from "../../runs/[id]/_shared/calendar-grid";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
@@ -57,7 +74,7 @@ function StatusPill({
 }
 
 export function PileOnPipeline({ engagementId }: { engagementId: string }) {
-  const [mode, setMode] = useState<RunViewMode>("board");
+  const [mode, setMode] = useState<RunViewMode>("calendar");
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [items, setItems] = useState<PileOnPipelineItem[]>([]);
   const [weeklyTrend, setWeeklyTrend] = useState<PileOnWeeklyTrend | null>(null);
@@ -155,7 +172,28 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             </span>
           )}
         </div>
-        <ViewSwitcher value={mode} onChange={setMode} />
+
+        {/* Theme-aware view switcher */}
+        <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
+          {([["calendar", CalendarIcon, "Calendar"], ["list", ListIcon, "List"], ["board", LayoutGrid, "Board"]] as const).map(
+            ([viewMode, Icon, label]) => (
+              <button
+                key={viewMode}
+                type="button"
+                onClick={() => setMode(viewMode)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-semibold transition-colors cursor-pointer font-sans",
+                  mode === viewMode
+                    ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                )}
+              >
+                <Icon size={13} />
+                <span>{label}</span>
+              </button>
+            )
+          )}
+        </div>
       </div>
 
       {error && (
