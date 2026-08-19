@@ -10,12 +10,10 @@ import {
   CalendarClock, 
   AlertTriangle, 
   Loader2, 
-  ExternalLink, 
   CalendarX2,
   RefreshCw,
   CalendarDays,
   Clock,
-  Sparkles,
   ArrowUpRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -74,7 +72,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/engagements/${engagementId}/leak-map-schedule`);
+      const res = await fetch(`/api/engagements/${engagementId}/leak-map-schedule?month=${monthString}`);
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? "Failed to load audit schedule.");
       const body = await res.json();
       setHistory(body.history ?? []);
@@ -85,7 +83,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [engagementId]);
+  }, [engagementId, monthString]);
 
   useEffect(() => {
     load();
@@ -126,7 +124,6 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
 
   const todayK = dateKey(new Date());
 
-  // Filters out empty days so 6 empty days between weekly audits don't clog the feed
   const currentWeekDays = useMemo(() => {
     const anchor = selectedDate || new Date();
     const d = new Date(anchor);
@@ -190,7 +187,6 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
     [history, selectedId, selectedDayAudits]
   );
 
-  // Fetch full report detail for selected audit
   useEffect(() => {
     if (!selected?.runId) {
       setDetail(null);
@@ -473,7 +469,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                 </div>
               </div>
 
-              {/* Embedded Report Content */}
+              {/* Embedded Report Content with Hidden Search/View-Switcher & Clean Light-Theme Styling */}
               {selected.runId && (
                 <div className="space-y-2 font-sans">
                   <div className="flex items-center justify-between">
@@ -489,7 +485,23 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                     </a>
                   </div>
 
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 p-3 max-h-[320px] overflow-y-auto text-xs font-sans">
+                  <div className={cn(
+                    "rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 max-h-[340px] overflow-y-auto text-xs font-sans transition-colors",
+                    "bg-white text-zinc-900 dark:bg-zinc-900/50 dark:text-zinc-100",
+                    // Hide the search bar and view-mode buttons inside embedded LeakMapView
+                    "[&_div:has(>input[placeholder*='Search'])]:hidden",
+                    "[&_div:has(>input)]:hidden",
+                    "[&_button:has(svg)]:hidden",
+                    // Theme color overrides for light mode (prevents dark gray box overflows)
+                    "[html:not(.dark)_&]:bg-white [html:not(.dark)_&]:text-zinc-900",
+                    "[html:not(.dark)_&_*]:border-zinc-200",
+                    "[html:not(.dark)_&_.bg-zinc-800]:!bg-zinc-100/80 [html:not(.dark)_&_.bg-zinc-800]:!text-zinc-900",
+                    "[html:not(.dark)_&_.bg-zinc-900]:!bg-zinc-50 [html:not(.dark)_&_.bg-zinc-900]:!text-zinc-900",
+                    "[html:not(.dark)_&_.bg-zinc-950]:!bg-white [html:not(.dark)_&_.bg-zinc-950]:!text-zinc-900",
+                    "[html:not(.dark)_&_.text-zinc-400]:!text-zinc-600",
+                    "[html:not(.dark)_&_.text-zinc-300]:!text-zinc-800",
+                    "[html:not(.dark)_&_.text-white]:!text-zinc-900"
+                  )}>
                     {detailLoading && (
                       <div className="flex items-center justify-center py-8 text-zinc-500">
                         <Loader2 size={16} className="animate-spin" />
@@ -499,13 +511,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                       <p className="text-[11px] text-rose-600 dark:text-rose-400 font-sans">{detailError}</p>
                     )}
                     {!detailLoading && !detailError && detail && "audit" in detail && (
-                      <div className={cn(
-                        "font-sans text-xs transition-colors",
-                        "[html:not(.dark)_&_*]:!text-zinc-900 [html:not(.dark)_&_*]:!border-zinc-200",
-                        "[html:not(.dark)_&_div]:!bg-zinc-100/60"
-                      )}>
-                        <LeakMapView detail={detail} />
-                      </div>
+                      <LeakMapView detail={detail} />
                     )}
                   </div>
                 </div>
