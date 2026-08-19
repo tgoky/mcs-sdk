@@ -3,6 +3,7 @@
 // src/app/dashboard/engagements/[id]/pre-call-read-pipeline.tsx
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import Link from "next/link";
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -18,18 +19,22 @@ import {
   LayoutGrid, 
   Copy, 
   Check, 
-  Clock 
+  Clock,
+  RefreshCw,
+  Building2,
+  PhoneCall
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { RunViewMode } from "../../runs/[id]/_shared/view-switcher";
-import { getDaysInMonthGrid, dateKey } from "../../runs/[id]/_shared/calendar-grid";
-import { RunActivityPanel } from "../../runs/[id]/_shared/run-activity-panel";
+import { getDaysInMonthGrid, dateKey, timeStr } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
+import { RunActivityPanel } from "@/app/dashboard/runs/[id]/_shared/run-activity-panel";
 import { bookingPlatformLabel, briefDestinationLabel, outcomeSourceLabel } from "@/lib/copy";
-import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import type { RosterEntry, RosterStatus } from "@/app/api/engagements/[id]/roster/route";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
+type ViewMode = "month" | "day" | "list" | "board";
+
+const HOURS = Array.from({ length: 15 }, (_, i) => i + 8);
 
 const STATUS_META: Record<RosterStatus, { label: string; tone: Tone }> = {
   scheduled: { label: "Scheduled", tone: "info" },
@@ -84,33 +89,15 @@ function StatusPill({
   );
 }
 
-function formatDayHeader(dateStr: string) {
-  const todayKey = dateKey(new Date());
-  const yesterdayObj = new Date();
-  yesterdayObj.setDate(yesterdayObj.getDate() - 1);
-  const yesterdayKey = dateKey(yesterdayObj);
-
-  if (dateStr === todayKey) return "Today";
-  if (dateStr === yesterdayKey) return "Yesterday";
-  
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
-function formatTimeBadge(isoString: string | null | undefined) {
-  if (!isoString) return null;
-  return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
 export function PreCallReadPipeline({ engagementId }: { engagementId: string }) {
-  const [mode, setMode] = useState<RunViewMode>("calendar");
+  const [mode, setMode] = useState<ViewMode>("month");
   const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [entries, setEntries] = useState<RosterEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [showRunActivity, setShowRunActivity] = useState(false);
 
@@ -122,21 +109,17 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
     setLoading(true);
     setError(null);
     try {
-      const query = mode === "calendar" ? `month=${monthString}` : `all=1`;
-      const res = await fetch(`/api/engagements/${engagementId}/roster?${query}`);
+      const res = await fetch(`/api/engagements/${engagementId}/roster?month=${monthString}`);
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? "Failed to load calls.");
       const body = await res.json();
       const loadedEntries: RosterEntry[] = body.entries ?? [];
       setEntries(loadedEntries);
-      if (loadedEntries.length > 0 && !selectedId) {
-        setSelectedId(loadedEntries[0].id);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load calls.");
     } finally {
       setLoading(false);
     }
-  }, [engagementId, mode, monthString, selectedId]);
+  }, [engagementId, monthString]);
 
   useEffect(() => {
     load();
@@ -154,6 +137,44 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
     return entries.filter((e) => (e.prospectName ?? e.prospectEmail ?? "").toLowerCase().includes(q));
   }, [entries, filterText]);
 
+  const entriesByDate = useMemo(() => {
+    const map: Record<string, RosterEntry[]> = {};
+    for (const entry of filtered) {
+      const k = dateKey(new Date(entry.callTime));
+      (map[k] ??= []).push(entry);
+    }
+    return map;
+  }, [filtered]);
+
+  const dayMetrics = useMemo(() => {
+    const metrics: Record<string, { totalCalls: number; briefDelivered: number }> = {};
+    for (const entry of filtered) {
+      const k = dateKey(new Date(entry.callTime));
+      if (!metrics[k]) metrics[k] = { totalCalls: 0, briefDelivered: 0 };
+      metrics[k].totalCalls++;
+      if (entry.status === "brief_delivered") metrics[k].briefDelivered++;
+    }
+    return metrics;
+  }, [filtered]);
+
+  const selectedDayKey = dateKey(selectedDate);
+  const selectedDayEntries = entriesByDate[selectedDayKey] ?? [];
+
+  useEffect(() => {
+    if (selectedDayEntries.length > 0) {
+      if (!selectedEntryId || !selectedDayEntries.some((e) => e.id === selectedEntryId)) {
+        setSelectedEntryId(selectedDayEntries[0].id);
+      }
+    } else {
+      setSelectedEntryId(null);
+    }
+  }, [selectedDayKey, selectedDayEntries, selectedEntryId]);
+
+  const selectedEntry = useMemo(
+    () => filtered.find((e) => e.id === selectedEntryId) ?? selectedDayEntries[0] ?? null,
+    [filtered, selectedEntryId, selectedDayEntries]
+  );
+
   const board = useMemo(() => {
     const cols: Record<RosterStatus, RosterEntry[]> = { scheduled: [], brief_delivered: [], brief_failed: [], cancelled: [] };
     for (const e of filtered) cols[e.status].push(e);
@@ -163,31 +184,9 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
     return cols;
   }, [filtered]);
 
-  const byDay = useMemo(() => {
-    const map = new Map<string, RosterEntry[]>();
-    for (const e of filtered) {
-      const k = dateKey(e.callTime);
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(e);
-    }
-    return map;
-  }, [filtered]);
-
-  const listByDate = useMemo(() => {
-    const map = new Map<string, RosterEntry[]>();
-    for (const item of filtered) {
-      const k = dateKey(item.callTime);
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(item);
-    }
-    return Array.from(map.entries()).sort(
-      ([a], [b]) => new Date(b).getTime() - new Date(a).getTime()
-    );
-  }, [filtered]);
-
   const gridDays = useMemo(() => getDaysInMonthGrid(year, month), [year, month]);
   const monthName = currentDate.toLocaleString("default", { month: "long" });
-  const selected = useMemo(() => entries.find((e) => e.id === selectedId) ?? filtered[0] ?? null, [entries, selectedId, filtered]);
+  const briefedCount = filtered.filter((e) => e.status === "brief_delivered").length;
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
@@ -215,7 +214,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
             </button>
             <button
               type="button"
-              onClick={() => setCurrentDate(new Date())}
+              onClick={() => { setCurrentDate(new Date()); setSelectedDate(new Date()); }}
               className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
             >
               Today
@@ -227,32 +226,50 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
             <input
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
-              placeholder="Search prospect name..."
+              placeholder="Search prospect name or email..."
               className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
             />
           </div>
+
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+          >
+            <RefreshCw size={13} className={cn(loading && "animate-spin")} />
+          </button>
+
+          {!loading && (
+            <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 font-semibold px-1">
+              {briefedCount}/{filtered.length} briefed
+            </span>
+          )}
         </div>
 
         {/* Theme-aware view switcher */}
         <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
-          {([["calendar", CalendarIcon, "Calendar"], ["list", ListIcon, "List"], ["board", LayoutGrid, "Board"]] as const).map(
-            ([viewMode, Icon, label]) => (
-              <button
-                key={viewMode}
-                type="button"
-                onClick={() => setMode(viewMode)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-semibold transition-colors cursor-pointer font-sans",
-                  mode === viewMode
-                    ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-                )}
-              >
-                <Icon size={13} />
-                <span>{label}</span>
-              </button>
-            )
-          )}
+          {([
+            ["month", CalendarIcon, "Month"],
+            ["day", Clock, "Day View"],
+            ["list", ListIcon, "List"],
+            ["board", LayoutGrid, "Board"]
+          ] as const).map(([viewMode, Icon, label]) => (
+            <button
+              key={viewMode}
+              type="button"
+              onClick={() => setMode(viewMode)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-semibold transition-colors cursor-pointer font-sans",
+                mode === viewMode
+                  ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
+                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+              )}
+            >
+              <Icon size={13} />
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -260,259 +277,8 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
         <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
       )}
 
-      {/* 1. BOARD VIEW */}
-      {mode === "board" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-sans">
-          {BOARD_COLUMNS.map((status) => (
-            <div key={status} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 overflow-hidden shadow-sm">
-              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-3 py-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 font-sans">{STATUS_META[status].label}</span>
-                <span className="rounded-md bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{board[status].length}</span>
-              </div>
-              <div className="flex flex-col gap-1.5 p-2 min-h-[80px] max-h-[500px] overflow-y-auto">
-                {board[status].map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() => setSelectedId(entry.id)}
-                    className="flex flex-col gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-2.5 text-left text-[11px] hover:border-zinc-300 dark:hover:border-zinc-700 cursor-pointer transition-all font-sans shadow-xs"
-                  >
-                    <div className="flex items-center justify-between gap-1 w-full">
-                      <span className="truncate font-bold text-zinc-900 dark:text-white font-sans">{entry.prospectName ?? entry.prospectEmail}</span>
-                      <span className="font-mono text-[9px] text-zinc-400 shrink-0">
-                        {new Date(entry.callTime).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                        {` · ${formatTimeBadge(entry.callTime)}`}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-                {board[status].length === 0 && (
-                  <div className="flex items-center justify-center py-6 text-[10.5px] text-zinc-400 dark:text-zinc-600 font-sans">Nothing here</div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 2. SPLIT-PANE LIST VIEW (LIST + PERSISTENT INSPECTOR PANEL) */}
-      {mode === "list" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
-          {/* LEFT 7 COLUMNS: LIST FEED WITH STICKY HEADERS */}
-          <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
-            {listByDate.length === 0 && !loading ? (
-              <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
-                <CalendarX2 size={22} />
-                <span className="text-xs">No calls yet.</span>
-              </div>
-            ) : (
-              <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 max-h-[620px] overflow-y-auto">
-                {listByDate.map(([dateStr, dayItems]) => (
-                  <div key={dateStr} className="space-y-0 font-sans">
-                    {/* Sticky Day Header */}
-                    <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">
-                      <span>{formatDayHeader(dateStr)}</span>
-                      <span className="text-zinc-400 font-normal">
-                        {dayItems.length} call{dayItems.length === 1 ? "" : "s"}
-                      </span>
-                    </div>
-
-                    {/* Day Items Feed */}
-                    <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
-                      {dayItems.map((entry) => {
-                        const isSelected = selected?.id === entry.id;
-                        const isFailed = entry.status === "brief_failed";
-                        const appointmentHour = formatTimeBadge(entry.callTime);
-
-                        return (
-                          <button
-                            key={entry.id}
-                            type="button"
-                            onClick={() => setSelectedId(entry.id)}
-                            className={cn(
-                              "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer font-sans border-0",
-                              isFailed && "bg-[#ffcfd2]/40 dark:bg-rose-950/30",
-                              isSelected
-                                ? "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-white"
-                                : "bg-white dark:bg-transparent hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50"
-                            )}
-                          >
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <span className="font-mono text-[10px] font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0 border-0">
-                                {appointmentHour}
-                              </span>
-
-                              <div className="min-w-0 space-y-0.5">
-                                <span className="truncate text-xs font-bold text-zinc-900 dark:text-white block font-sans">
-                                  {entry.prospectName ?? entry.prospectEmail}
-                                </span>
-                                {entry.prospectEmail && (
-                                  <span className="text-[11px] text-zinc-500 font-mono block truncate">
-                                    {entry.prospectEmail}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              <StatusPill tone={STATUS_META[entry.status].tone} className="shrink-0">
-                                {STATUS_META[entry.status].label}
-                              </StatusPill>
-
-                              {entry.prospectEmail && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleCopyEmail(entry.prospectEmail!);
-                                  }}
-                                  className="p-1 rounded-md text-zinc-400 hover:text-zinc-800 dark:hover:text-white transition-colors"
-                                >
-                                  {copiedEmail ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                                </button>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT 5 COLUMNS: PERSISTENT PROSPECT INSPECTOR PANEL */}
-          <div className="lg:col-span-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
-            {selected ? (
-              <>
-                <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
-                  <div className="flex items-center justify-between font-sans flex-wrap gap-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <StatusPill tone={STATUS_META[selected.status].tone}>{STATUS_META[selected.status].label}</StatusPill>
-                      <StatusPill tone={matchLabel(selected).tone}>{matchLabel(selected).text}</StatusPill>
-                    </div>
-
-                    {selected.prospectEmail && (
-                      <button
-                        type="button"
-                        onClick={() => handleCopyEmail(selected.prospectEmail!)}
-                        className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
-                      >
-                        {copiedEmail ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
-                        <span>Copy Email</span>
-                      </button>
-                    )}
-                  </div>
-
-                  <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">
-                    {selected.prospectName ?? selected.prospectEmail ?? "Unnamed Prospect"}
-                  </h4>
-
-                  <div className="space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
-                    {selected.prospectEmail && (
-                      <div className="flex items-center gap-2">
-                        <Mail size={12} className="text-zinc-500 shrink-0" />
-                        <span className="truncate">{selected.prospectEmail}</span>
-                      </div>
-                    )}
-                    {selected.prospectPhone && (
-                      <div className="flex items-center gap-2">
-                        <Phone size={12} className="text-zinc-500 shrink-0" />
-                        <span className="truncate">{selected.prospectPhone}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-300 pt-0.5">
-                      <Clock size={12} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                      <span>Call {new Date(selected.callTime).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
-                  <div className="flex items-center justify-between font-sans">
-                    <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Booking Platform</span>
-                    <span className="font-mono text-zinc-900 dark:text-white">{selected.bookingPlatform ? bookingPlatformLabel(selected.bookingPlatform) : "—"}</span>
-                  </div>
-                  <div className="flex items-center justify-between font-sans pt-1">
-                    <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
-                    <span className="font-mono text-zinc-900 dark:text-white">{selected.destinationDelivered ? briefDestinationLabel(selected.destinationDelivered) : "—"}</span>
-                  </div>
-                  {selected.briefDeliveredAt && (
-                    <div className="flex items-center justify-between font-sans pt-1">
-                      <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Brief Delivered</span>
-                      <span className="font-mono text-zinc-900 dark:text-white">{new Date(selected.briefDeliveredAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                    </div>
-                  )}
-                  {selected.personMatchScore !== null && (
-                    <div className="flex items-center justify-between font-sans pt-1">
-                      <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Identity Match Score</span>
-                      <span className="font-mono text-zinc-900 dark:text-white">{selected.personMatchScore}/100</span>
-                    </div>
-                  )}
-                  {selected.predictedShowProbability !== null && (
-                    <div className="flex items-center justify-between font-sans pt-1">
-                      <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Predicted Show Rate</span>
-                      <span className="font-mono text-zinc-900 dark:text-white">{selected.predictedShowProbability}%</span>
-                    </div>
-                  )}
-                  {selected.outcomeSource && (
-                    <div className="flex items-center justify-between font-sans pt-1 gap-3">
-                      <span className="text-zinc-600 dark:text-zinc-400 font-semibold shrink-0">Outcome Source</span>
-                      <span className="text-zinc-900 dark:text-white text-right font-mono">{outcomeSourceLabel(selected.outcomeSource, selected.actualOutcome)}</span>
-                    </div>
-                  )}
-                </div>
-
-                {selected.briefText ? (
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1.5 text-xs font-sans">
-                    <span className="text-[10.5px] font-mono text-zinc-500 uppercase block">Brief Content</span>
-                    <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap max-h-[160px] overflow-y-auto text-[11.5px]">{selected.briefText}</p>
-                  </div>
-                ) : (
-                  <p className="text-zinc-500 italic text-[11px] font-sans">No brief text on file for this call.</p>
-                )}
-
-                {selected.runId && (
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-xs font-sans">
-                    <button
-                      type="button"
-                      onClick={() => setShowRunActivity((p) => !p)}
-                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
-                    >
-                      <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
-                        <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
-                        Run activity
-                      </span>
-                      <ChevronDown size={13} className={cn("text-zinc-500 transition-transform", showRunActivity && "rotate-180")} />
-                    </button>
-                    {showRunActivity && (
-                      <div className="px-3 pb-3 pt-1 border-t border-zinc-200 dark:border-zinc-800/60">
-                        <RunActivityPanel runId={selected.runId} />
-                        <a
-                          href={`/dashboard/runs/${selected.runId}`}
-                          className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
-                        >
-                          <span>Open full run details</span>
-                          <ExternalLink size={10} />
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
-                <Clock size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-                <p className="text-xs font-sans">Select a call from the list to inspect brief details.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 3. CALENDAR VIEW WITH HIGH-VOLUME OVERFLOW & TIME BADGES */}
-      {mode === "calendar" && (
+      {/* 1. MONTH VIEW */}
+      {mode === "month" && !loading && (
         <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
@@ -523,7 +289,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
           <div className="grid grid-cols-7 auto-rows-fr bg-[#f8f7fa] dark:bg-zinc-950 font-sans">
             {gridDays.map(({ date, isCurrentMonth }, idx) => {
               const k = dateKey(date);
-              const dayItems = byDay.get(k) ?? [];
+              const metric = dayMetrics[k];
 
               const today = new Date();
               today.setHours(0, 0, 0, 0);
@@ -534,13 +300,17 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
               const isPast = cellDate < today;
 
               return (
-                <div key={idx} className={cn(
-                  "flex min-h-[95px] flex-col border-b border-r border-zinc-200 dark:border-zinc-800/60 p-1.5 font-sans transition-all",
-                  !isCurrentMonth && "bg-zinc-100/50 dark:bg-zinc-900/20 text-zinc-400 dark:text-zinc-600 opacity-40",
-                  isCurrentMonth && isPast && "bg-zinc-200/35 dark:bg-zinc-900/60",
-                  isCurrentMonth && !isPast && !isToday && "bg-white dark:bg-zinc-950",
-                  isCurrentMonth && "hover:bg-zinc-200/60 dark:hover:bg-zinc-800/80"
-                )}>
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => { setSelectedDate(date); setMode("day"); }}
+                  className={cn(
+                    "group relative flex min-h-[105px] flex-col justify-between border-b border-r border-zinc-200 dark:border-zinc-800/60 p-2 text-left transition-all hover:bg-zinc-200/60 dark:hover:bg-zinc-800/80 cursor-pointer font-sans",
+                    !isCurrentMonth && "bg-zinc-100/50 dark:bg-zinc-900/20 opacity-40",
+                    isCurrentMonth && isPast && "bg-zinc-200/35 dark:bg-zinc-900/60",
+                    isCurrentMonth && !isPast && !isToday && "bg-white dark:bg-zinc-950"
+                  )}
+                >
                   <div className="flex items-start justify-between gap-1 w-full">
                     <span className={cn(
                       "flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold shrink-0",
@@ -552,52 +322,376 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                     )}>
                       {date.getDate()}
                     </span>
-                    {dayItems.length > 0 && (
-                      <div className="relative shrink-0">
-                        <SquishySkillBadge skill="pre-call-read" size={16} enabled={true} />
-                        <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-sky-500 text-[8px] font-bold text-zinc-950 font-mono">
-                          {dayItems.length}
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {metric && metric.totalCalls > 0 && (
+                        <div className="relative">
+                          <SquishySkillBadge skill="pre-call-read" size={16} enabled={true} />
+                          <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-sky-500 text-[8px] font-bold text-zinc-950 font-mono">
+                            {metric.totalCalls}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="my-auto py-1 font-sans">
+                    {metric && metric.totalCalls > 0 ? (
+                      <div className="rounded-lg bg-[#fde2e8] dark:bg-pink-500/20 px-2 py-1.5 transition-colors group-hover:bg-[#fbcfe8] dark:group-hover:bg-pink-500/30">
+                        <span className="text-[11px] font-bold block leading-none text-pink-950 dark:text-pink-200 font-sans">
+                          {metric.totalCalls} call{metric.totalCalls === 1 ? "" : "s"}
                         </span>
+                        <span className="text-[9.5px] font-mono mt-0.5 block font-semibold text-pink-800 dark:text-pink-300/90">
+                          {metric.briefDelivered}/{metric.totalCalls} briefed
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono italic block">No calls</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 2. DAY VIEW (HOURLY TIMELINE + PERSISTENT INSPECTOR PANEL) */}
+      {mode === "day" && !loading && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
+          {/* LEFT 7 COLUMNS: HOURLY TIMELINE GRID */}
+          <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl flex flex-col font-sans">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-4 py-3 font-sans">
+              <div className="flex items-center gap-2 font-sans">
+                <button type="button" onClick={() => setSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
+                  <ChevronLeft size={15} />
+                </button>
+                <button type="button" onClick={() => setSelectedDate(new Date(selectedDate.getTime() + 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
+                  <ChevronRight size={15} />
+                </button>
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
+                  {selectedDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                <span className="text-zinc-600 dark:text-zinc-400 font-semibold">{selectedDayEntries.length} meeting{selectedDayEntries.length === 1 ? "" : "s"}</span>
+                {selectedDayEntries.filter((e) => e.status === "brief_delivered").length > 0 && (
+                  <span className="text-emerald-900 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold border-0">
+                    {selectedDayEntries.filter((e) => e.status === "brief_delivered").length} briefed
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Hourly Timeline */}
+            <div className="divide-y divide-zinc-200 dark:divide-zinc-900 overflow-y-auto max-h-[620px] p-2 font-sans">
+              {HOURS.map((hour) => {
+                const hourEntries = selectedDayEntries.filter((e) => new Date(e.callTime).getHours() === hour);
+                return (
+                  <div key={hour} className="flex min-h-[60px] gap-3 py-1.5 border-b border-zinc-200 dark:border-zinc-900/80 last:border-b-0 font-sans">
+                    <span className="w-14 shrink-0 font-mono text-[11px] text-zinc-500 text-right pt-0.5">
+                      {hour.toString().padStart(2, "0")}:00
+                    </span>
+                    <div className="flex-1 space-y-1.5 font-sans">
+                      {hourEntries.map((entry) => {
+                        const isSelected = selectedEntry?.id === entry.id;
+                        return (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            onClick={() => setSelectedEntryId(entry.id)}
+                            className={cn(
+                              "w-full rounded-xl p-2.5 text-left transition-all cursor-pointer flex items-start justify-between gap-2 shadow-xs font-sans border-0",
+                              isSelected
+                                ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-white ring-1 ring-zinc-400 dark:ring-zinc-600"
+                                : "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white hover:bg-zinc-100 dark:hover:bg-zinc-700/80"
+                            )}
+                          >
+                            <div className="space-y-1 min-w-0 font-sans">
+                              <div className="flex items-center gap-2 font-sans">
+                                <span className="font-bold text-zinc-900 dark:text-white text-xs font-sans">{entry.prospectName ?? "Unnamed"}</span>
+                                <span className="text-[10px] font-mono text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded font-bold border-0">
+                                  {timeStr(entry.callTime)}
+                                </span>
+                              </div>
+                              <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 truncate">{entry.prospectEmail}</p>
+
+                              <div className="flex flex-wrap gap-1 pt-1 font-sans">
+                                <StatusPill tone={STATUS_META[entry.status].tone}>
+                                  Brief: {STATUS_META[entry.status].label}
+                                </StatusPill>
+                              </div>
+                            </div>
+
+                            {entry.prospectEmail && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyEmail(entry.prospectEmail!);
+                                }}
+                                className="rounded-lg bg-zinc-100 dark:bg-zinc-700/80 p-1.5 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white shrink-0 font-sans border-0"
+                              >
+                                {copiedEmail ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                              </button>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* RIGHT 5 COLUMNS: MINI CALENDAR + PROSPECT INSPECTOR PANEL */}
+          <div className="lg:col-span-5 space-y-3 font-sans">
+            {/* MINI CALENDAR NAVIGATOR */}
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 shadow-lg font-sans">
+              <span className="text-[11px] font-bold text-zinc-900 dark:text-white block px-1 font-sans">{monthName} {year}</span>
+              <div className="grid grid-cols-7 text-center text-[9px] font-mono text-zinc-500 font-bold uppercase font-sans">
+                {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <div key={i}>{d}</div>)}
+              </div>
+              <div className="grid grid-cols-7 text-center text-xs gap-1 font-sans">
+                {gridDays.map(({ date, isCurrentMonth }, idx) => {
+                  const isSelected = dateKey(date) === selectedDayKey;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setSelectedDate(date)}
+                      className={cn(
+                        "h-6 w-6 mx-auto flex items-center justify-center rounded-full font-mono text-[10px] transition-colors cursor-pointer font-sans",
+                        isSelected ? "bg-emerald-500 text-zinc-950 font-bold" : isCurrentMonth ? "text-zinc-800 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800" : "text-zinc-400 dark:text-zinc-700"
+                      )}
+                    >
+                      {date.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* FULL PROSPECT INSPECTOR PANEL */}
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
+              {selectedEntry ? (
+                <>
+                  <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
+                    <div className="flex items-center justify-between font-sans flex-wrap gap-1">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-sky-600 dark:text-sky-400 font-bold flex items-center gap-1 font-sans">
+                        <Building2 size={12} /> {selectedEntry.bookingPlatform ?? "Calendar"}
+                      </span>
+                      {selectedEntry.prospectEmail && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopyEmail(selectedEntry.prospectEmail!)}
+                          className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
+                        >
+                          {copiedEmail ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                          <span>Copy Email</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selectedEntry.prospectName ?? "Unnamed Prospect"}</h4>
+
+                    <div className="space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                      {selectedEntry.prospectEmail && (
+                        <div className="flex items-center gap-2">
+                          <Mail size={12} className="text-zinc-500 shrink-0" />
+                          <span className="truncate">{selectedEntry.prospectEmail}</span>
+                        </div>
+                      )}
+                      {selectedEntry.prospectPhone && (
+                        <div className="flex items-center gap-2">
+                          <Phone size={12} className="text-zinc-500 shrink-0" />
+                          <span className="truncate">{selectedEntry.prospectPhone}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-300 pt-0.5">
+                        <Clock size={12} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                        <span>{new Date(selectedEntry.callTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <StatusPill tone={STATUS_META[selectedEntry.status].tone}>{STATUS_META[selectedEntry.status].label}</StatusPill>
+                    <StatusPill tone={matchLabel(selectedEntry).tone}>{matchLabel(selectedEntry).text}</StatusPill>
+                    {selectedEntry.actualOutcome && (
+                      <StatusPill tone={OUTCOME_META[selectedEntry.actualOutcome]?.tone ?? "neutral"}>
+                        {OUTCOME_META[selectedEntry.actualOutcome]?.label ?? selectedEntry.actualOutcome}
+                      </StatusPill>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                    <div className="flex items-center justify-between font-sans">
+                      <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
+                      <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ? briefDestinationLabel(selectedEntry.destinationDelivered) : "Slack"}</span>
+                    </div>
+                    {selectedEntry.briefDeliveredAt && (
+                      <div className="flex items-center justify-between font-sans pt-1">
+                        <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Brief Delivered</span>
+                        <span className="font-mono text-zinc-900 dark:text-white">{new Date(selectedEntry.briefDeliveredAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                      </div>
+                    )}
+                    {selectedEntry.personMatchScore !== null && (
+                      <div className="flex items-center justify-between font-sans pt-1">
+                        <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Identity Match Score</span>
+                        <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.personMatchScore}/100</span>
+                      </div>
+                    )}
+                    {selectedEntry.predictedShowProbability !== null && (
+                      <div className="flex items-center justify-between font-sans pt-1">
+                        <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Predicted Show Rate</span>
+                        <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.predictedShowProbability}%</span>
+                      </div>
+                    )}
+                    {selectedEntry.outcomeSource && (
+                      <div className="flex items-center justify-between font-sans pt-1 gap-3">
+                        <span className="text-zinc-600 dark:text-zinc-400 font-semibold shrink-0">Outcome Source</span>
+                        <span className="text-zinc-900 dark:text-white text-right font-mono">{outcomeSourceLabel(selectedEntry.outcomeSource, selectedEntry.actualOutcome)}</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="mt-1 space-y-1 overflow-hidden font-sans">
-                    {/* Render capped top 2 items with appointment time badge */}
-                    {dayItems.slice(0, 2).map((entry, idx) => (
-                      <button
-                        key={`${entry.id}-${idx}`}
-                        type="button"
-                        onClick={() => setSelectedId(entry.id)}
-                        className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-1.5 text-left text-[11px] font-sans hover:border-zinc-300 dark:hover:border-zinc-700 cursor-pointer shadow-xs"
-                      >
-                        <span className="truncate font-bold text-zinc-900 dark:text-white font-sans">
-                          {entry.prospectName ?? entry.prospectEmail}
-                        </span>
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-[9.5px] font-mono text-zinc-950 bg-[#ffcfd2] px-1 py-0.2 rounded font-bold border-0">
-                            {formatTimeBadge(entry.callTime)}
-                          </span>
-                          <StatusPill tone={STATUS_META[entry.status].tone} className="w-fit">{STATUS_META[entry.status].label}</StatusPill>
-                        </div>
-                      </button>
-                    ))}
+                  {selectedEntry.briefText ? (
+                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1.5 text-xs font-sans">
+                      <span className="text-[10.5px] font-mono text-zinc-500 uppercase block">Brief Content</span>
+                      <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap max-h-[160px] overflow-y-auto text-[11.5px]">{selectedEntry.briefText}</p>
+                    </div>
+                  ) : (
+                    <p className="text-zinc-500 italic text-[11px] font-sans">No brief text on file for this call.</p>
+                  )}
 
-                    {/* High Volume Overflow Pill */}
-                    {dayItems.length > 2 && (
+                  {selectedEntry.runId && (
+                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-xs font-sans">
                       <button
                         type="button"
-                        onClick={() => setMode("list")}
-                        className="w-full text-center py-1 text-[10px] font-bold font-mono text-zinc-700 dark:text-zinc-300 bg-zinc-200/60 dark:bg-zinc-800/80 rounded-md hover:bg-zinc-300/60 dark:hover:bg-zinc-700 cursor-pointer transition-colors"
+                        onClick={() => setShowRunActivity((p) => !p)}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
                       >
-                        +{dayItems.length - 2} more
+                        <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
+                          <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
+                          Run activity
+                        </span>
+                        <ChevronDown size={13} className={cn("text-zinc-500 transition-transform", showRunActivity && "rotate-180")} />
                       </button>
-                    )}
-                  </div>
+                      {showRunActivity && (
+                        <div className="px-3 pb-3 pt-1 border-t border-zinc-200 dark:border-zinc-800/60">
+                          <RunActivityPanel runId={selectedEntry.runId} />
+                          <a
+                            href={`/dashboard/runs/${selectedEntry.runId}`}
+                            className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
+                          >
+                            <span>Open full research run</span>
+                            <ExternalLink size={10} />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
+                  <Clock size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
+                  <p className="text-xs font-sans">No call or skill activity for this day.</p>
                 </div>
-              );
-            })}
+              )}
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* 3. LIST VIEW */}
+      {mode === "list" && (
+        <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
+          <table className="w-full text-left text-xs font-sans">
+            <thead>
+              <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 text-[10px] uppercase tracking-wider text-zinc-500 font-mono">
+                <th className="px-4 py-2.5">Date & Time</th>
+                <th className="px-4 py-2.5">Prospect</th>
+                <th className="px-4 py-2.5">Platform</th>
+                <th className="px-4 py-2.5">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-sans">
+              {filtered.map((entry) => (
+                <tr
+                  key={entry.id}
+                  onClick={() => {
+                    setSelectedEntryId(entry.id);
+                    setSelectedDate(new Date(entry.callTime));
+                    setMode("day");
+                  }}
+                  className="hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 cursor-pointer transition-colors font-sans"
+                >
+                  <td className="px-4 py-3 font-mono text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
+                    {new Date(entry.callTime).toLocaleDateString()} {timeStr(entry.callTime)}
+                  </td>
+                  <td className="px-4 py-3 font-bold text-zinc-900 dark:text-white font-sans">
+                    {entry.prospectName ?? entry.prospectEmail ?? <span className="text-zinc-400 dark:text-zinc-600 font-normal font-mono">—</span>}
+                    {entry.prospectName && entry.prospectEmail && (
+                      <span className="block text-[11px] font-normal text-zinc-500 font-mono">{entry.prospectEmail}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-zinc-800 dark:text-zinc-300">
+                    {entry.bookingPlatform ? bookingPlatformLabel(entry.bookingPlatform) : "Calendar"}
+                  </td>
+                  <td className="px-4 py-3 font-sans">
+                    <StatusPill tone={STATUS_META[entry.status].tone}>{STATUS_META[entry.status].label}</StatusPill>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-10 text-center text-zinc-500 font-sans text-xs">
+                    No calls on file for this month{filterText ? " matching your search" : ""}.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 4. BOARD VIEW */}
+      {mode === "board" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-sans">
+          {BOARD_COLUMNS.map((status) => (
+            <div key={status} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 overflow-hidden shadow-sm font-sans">
+              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-3 py-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 font-sans">{STATUS_META[status].label}</span>
+                <span className="rounded-md bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{board[status].length}</span>
+              </div>
+              <div className="flex flex-col gap-1.5 p-2 min-h-[80px] max-h-[500px] overflow-y-auto font-sans">
+                {board[status].map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedEntryId(entry.id);
+                      setSelectedDate(new Date(entry.callTime));
+                      setMode("day");
+                    }}
+                    className="flex flex-col gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-2.5 text-left text-[11px] hover:border-zinc-300 dark:hover:border-zinc-700 cursor-pointer transition-all font-sans shadow-xs"
+                  >
+                    <span className="truncate font-bold text-zinc-900 dark:text-white font-sans">{entry.prospectName ?? entry.prospectEmail}</span>
+                    <div className="flex items-center justify-between gap-1 w-full font-mono text-[9.5px] text-zinc-500 dark:text-zinc-400">
+                      <span>{new Date(entry.callTime).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                      <span>{timeStr(entry.callTime)}</span>
+                    </div>
+                  </button>
+                ))}
+                {board[status].length === 0 && (
+                  <div className="flex items-center justify-center py-6 text-[10.5px] text-zinc-400 dark:text-zinc-600 font-sans">Nothing here</div>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
