@@ -66,13 +66,12 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-  const monthString = `${year}-${String(month + 1).padStart(2, "0")}`;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/engagements/${engagementId}/leak-map-schedule?month=${monthString}`);
+      const res = await fetch(`/api/engagements/${engagementId}/leak-map-schedule`);
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? "Failed to load audit schedule.");
       const body = await res.json();
       setHistory(body.history ?? []);
@@ -83,7 +82,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [engagementId, monthString]);
+  }, [engagementId]);
 
   useEffect(() => {
     load();
@@ -219,13 +218,13 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       {/* Shared Toolbar & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-2 shadow-sm font-sans">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2 shadow-xs font-sans">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
+          <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800/80 rounded-xl border border-zinc-200/80 dark:border-zinc-800 p-1">
             <button
               type="button"
               onClick={() => handleMonthChange(new Date(year, month - 1, 1))}
-              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
             >
               <ChevronLeft size={14} />
             </button>
@@ -235,14 +234,14 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
             <button
               type="button"
               onClick={() => handleMonthChange(new Date(year, month + 1, 1))}
-              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
             >
               <ChevronRight size={14} />
             </button>
             <button
               type="button"
               onClick={handleTodayClick}
-              className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
+              className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
             >
               Today
             </button>
@@ -259,7 +258,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
           </div>
         </div>
 
-        {/* Pushed to Extreme Right: Refresh Button */}
+        {/* Refresh Button */}
         <div className="flex items-center gap-3 font-sans">
           <button
             type="button"
@@ -273,7 +272,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
+        <div className="rounded-xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
       )}
 
       {/* SMART SPLIT-PANE AUDIT FEED */}
@@ -286,9 +285,9 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
               {scheduled.map((s) => (
                 <div
                   key={s.auditType}
-                  className="flex items-center gap-2.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 shadow-sm font-sans"
+                  className="flex items-center gap-2.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 shadow-xs font-sans"
                 >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#aab8d8] dark:bg-[#c5b7ea] text-zinc-950 font-bold shrink-0">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold shrink-0">
                     <CalendarClock size={16} />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -307,7 +306,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
 
           {/* Active Alerts Strip */}
           {!loading && alerts.length > 0 && (
-            <div className="rounded-2xl border border-rose-300 dark:border-rose-900/50 bg-rose-100/60 dark:bg-rose-950/20 p-3.5 font-sans space-y-2">
+            <div className="rounded-2xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/80 dark:bg-rose-950/20 p-3.5 font-sans space-y-2">
               <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-rose-900 dark:text-rose-300">
                 <AlertTriangle size={14} className="text-rose-600 dark:text-rose-400" />
                 <span>{alerts.length} active funnel alert{alerts.length === 1 ? "" : "s"}</span>
@@ -326,8 +325,8 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
           )}
 
           {/* Chronological Audit Feed */}
-          <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans flex flex-col">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
+          <div className="overflow-hidden rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xs font-sans flex flex-col">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60 font-sans">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
                 <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
@@ -335,7 +334,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                 </span>
               </div>
 
-              <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px] font-sans">
+              <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px] font-sans">
                 <button
                   type="button"
                   onClick={() => setListScope("week")}
@@ -365,15 +364,15 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                 <span className="text-xs">No audits recorded in this period.</span>
               </div>
             ) : (
-              <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 max-h-[500px] overflow-y-auto">
+              <div className="divide-y divide-zinc-200/80 dark:divide-zinc-800/60 max-h-[500px] overflow-y-auto">
                 {listDaysToRender.map(({ dateStr, audits }) => (
                   <div key={dateStr} className="space-y-0 font-sans">
-                    <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">
+                    <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-50/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">
                       <span>{formatDayHeader(dateStr)}</span>
                       <span>{audits.length} audit{audits.length === 1 ? "" : "s"}</span>
                     </div>
 
-                    <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
+                    <div className="divide-y divide-zinc-100 dark:divide-zinc-800/40">
                       {audits.map((item) => {
                         const isSelected = selected?.id === item.id;
                         const timeBadge = formatTimeBadge(item.createdAt);
@@ -389,12 +388,12 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                             className={cn(
                               "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer font-sans border-0",
                               isSelected
-                                ? "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-white"
-                                : "bg-white dark:bg-transparent hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50"
+                                ? "bg-zinc-100/80 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                                : "bg-white dark:bg-transparent hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                             )}
                           >
                             <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#aab8d8] dark:bg-[#c5b7ea] px-1.5 py-0.5 rounded shrink-0">
+                              <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-1.5 py-0.5 rounded shrink-0">
                                 <Clock size={9} />
                                 {timeBadge}
                               </span>
@@ -427,7 +426,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
         </div>
 
         {/* RIGHT 5 COLUMNS: PERSISTENT AUDIT INSPECTOR PANEL */}
-        <div className="lg:col-span-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
+        <div className="lg:col-span-5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 space-y-4 shadow-xs font-sans">
           {selected ? (
             <>
               <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
@@ -455,21 +454,21 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
 
               {/* Metric Breakdown Cards */}
               <div className="grid grid-cols-3 gap-2 font-sans text-center">
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-2 space-y-0.5">
+                <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 p-2 space-y-0.5">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Issues</span>
                   <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.topIssueCount}</span>
                 </div>
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-2 space-y-0.5">
+                <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 p-2 space-y-0.5">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Alerts</span>
                   <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.alertsFiredCount}</span>
                 </div>
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-2 space-y-0.5">
+                <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 p-2 space-y-0.5">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Gaps</span>
                   <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.gapsCount}</span>
                 </div>
               </div>
 
-              {/* Embedded Report Content with Hidden Search/View-Switcher & Clean Light-Theme Styling */}
+              {/* Embedded Report Content */}
               {selected.runId && (
                 <div className="space-y-2 font-sans">
                   <div className="flex items-center justify-between">
@@ -485,23 +484,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                     </a>
                   </div>
 
-                  <div className={cn(
-                    "rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 max-h-[340px] overflow-y-auto text-xs font-sans transition-colors",
-                    "bg-white text-zinc-900 dark:bg-zinc-900/50 dark:text-zinc-100",
-                    // Hide the search bar and view-mode buttons inside embedded LeakMapView
-                    "[&_div:has(>input[placeholder*='Search'])]:hidden",
-                    "[&_div:has(>input)]:hidden",
-                    "[&_button:has(svg)]:hidden",
-                    // Theme color overrides for light mode (prevents dark gray box overflows)
-                    "[html:not(.dark)_&]:bg-white [html:not(.dark)_&]:text-zinc-900",
-                    "[html:not(.dark)_&_*]:border-zinc-200",
-                    "[html:not(.dark)_&_.bg-zinc-800]:!bg-zinc-100/80 [html:not(.dark)_&_.bg-zinc-800]:!text-zinc-900",
-                    "[html:not(.dark)_&_.bg-zinc-900]:!bg-zinc-50 [html:not(.dark)_&_.bg-zinc-900]:!text-zinc-900",
-                    "[html:not(.dark)_&_.bg-zinc-950]:!bg-white [html:not(.dark)_&_.bg-zinc-950]:!text-zinc-900",
-                    "[html:not(.dark)_&_.text-zinc-400]:!text-zinc-600",
-                    "[html:not(.dark)_&_.text-zinc-300]:!text-zinc-800",
-                    "[html:not(.dark)_&_.text-white]:!text-zinc-900"
-                  )}>
+                  <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 p-3 max-h-[320px] overflow-y-auto text-xs font-sans relative">
                     {detailLoading && (
                       <div className="flex items-center justify-center py-8 text-zinc-500">
                         <Loader2 size={16} className="animate-spin" />
@@ -511,7 +494,27 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                       <p className="text-[11px] text-rose-600 dark:text-rose-400 font-sans">{detailError}</p>
                     )}
                     {!detailLoading && !detailError && detail && "audit" in detail && (
-                      <LeakMapView detail={detail} />
+                      <div className="embedded-leak-map font-sans text-xs">
+                        <style>{`
+                          /* Hide Search Bar inside embedded LeakMapView */
+                          .embedded-leak-map input[placeholder*="Search"],
+                          .embedded-leak-map input[placeholder*="search"],
+                          .embedded-leak-map div:has(> input) {
+                            display: none !important;
+                          }
+                          /* Hide Board button in view switcher (3rd child button or containing Board) */
+                          .embedded-leak-map button:nth-child(3) {
+                            display: none !important;
+                          }
+                          /* Clean light mode tile colors */
+                          html:not(.dark) .embedded-leak-map div {
+                            background-color: #ffffff !important;
+                            border-color: #e4e4e7 !important;
+                            color: #09090b !important;
+                          }
+                        `}</style>
+                        <LeakMapView detail={detail} />
+                      </div>
                     )}
                   </div>
                 </div>
