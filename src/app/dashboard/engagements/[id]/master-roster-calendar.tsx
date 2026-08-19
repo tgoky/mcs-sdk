@@ -661,7 +661,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     <Link
                       key={ev.id}
                       href={`/dashboard/engagements/${engagementId}/skills/${ev.skill}`}
-                      className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-800 dark:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors font-sans"
+                      className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-xs text-zinc-800 dark:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors font-sans"
                     >
                       <SquishySkillBadge skill={ev.skill} size={14} enabled={true} />
                       <span className="font-bold">
@@ -775,7 +775,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       <button
                         type="button"
                         onClick={() => handleCopyText(selectedEntry.prospectEmail ?? "", "email")}
-                        className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
+                        className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
                       >
                         {copiedEmail ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                         <span>Copy Email</span>
@@ -842,7 +842,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                         </StatusPill>
                       </div>
 
-                      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-2 font-sans">
+                      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 font-sans">
                         <div className="flex items-center justify-between text-[11px] font-sans">
                           <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
                           <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ?? "Slack"}</span>
@@ -859,7 +859,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       {selectedEntry.runId && (
                         <a
                           href={`/dashboard/runs/${selectedEntry.runId}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
                         >
                           <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
                           <span>View research execution run</span>
@@ -868,7 +868,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       )}
                       <Link
                         href={`/dashboard/engagements/${engagementId}/skills/pre-call-read`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
                       >
                         <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
                         <span>View full Pre-Call Read history for this client</span>
@@ -888,7 +888,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             </StatusPill>
                           </div>
 
-                          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-2 font-sans">
+                          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 font-sans">
                             <div className="flex items-center justify-between text-[11px] font-sans">
                               <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
                               <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.pileOnData.sentVia ?? "hybrid"}</span>
@@ -904,7 +904,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       )}
                       <Link
                         href={`/dashboard/engagements/${engagementId}/skills/pile-on`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
                       >
                         <SquishySkillBadge skill="pile-on" size={14} enabled={true} />
                         <span>View full Pile-On history for this client</span>
@@ -924,7 +924,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             </StatusPill>
                           </div>
 
-                          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-2 font-sans">
+                          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 font-sans">
                             <div className="flex items-center justify-between text-[11px] font-sans">
                               <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
                               <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.winBackData.touchesSent} / {selectedEntry.winBackData.touchesTotal}</span>
@@ -953,7 +953,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       )}
                       <Link
                         href={`/dashboard/engagements/${engagementId}/skills/win-back`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
                       >
                         <SquishySkillBadge skill="win-back" size={14} enabled={true} />
                         <span>View full Win-Back history for this client</span>
@@ -972,7 +972,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       <Link
                         key={s}
                         href={`/dashboard/engagements/${engagementId}/skills/${s}`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
                       >
                         <SquishySkillBadge skill={s} size={13} enabled={true} />
                         {ACTIVITY_SKILL_LABEL[s]}
