@@ -10,6 +10,7 @@ import {
   Search, 
   Mail, 
   Phone, 
+  PhoneCall,
   CalendarX2, 
   ExternalLink, 
   ChevronDown, 
@@ -150,6 +151,25 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
     load();
   }, [load]);
 
+  // Synchronized Month & Day Navigation Handlers
+  const handleMonthChange = (newDate: Date) => {
+    setCurrentDate(newDate);
+    setSelectedDate(newDate);
+  };
+
+  const handleTodayClick = () => {
+    const now = new Date();
+    setCurrentDate(now);
+    setSelectedDate(now);
+  };
+
+  const handleUpdateSelectedDate = (newDate: Date) => {
+    setSelectedDate(newDate);
+    if (newDate.getFullYear() !== currentDate.getFullYear() || newDate.getMonth() !== currentDate.getMonth()) {
+      setCurrentDate(newDate);
+    }
+  };
+
   const handleCopyEmail = (email: string) => {
     navigator.clipboard.writeText(email);
     setCopiedEmail(true);
@@ -171,12 +191,14 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
     return map;
   }, [filtered]);
 
-  // SMART WEEK GENERATOR: 7 Days centered on active week (Mon -> Sun)
+  const todayK = dateKey(new Date());
+
+  // SMART WEEK GENERATOR: 7 Days centered on active week (Mon -> Sun), hiding empty future days
   const currentWeekDays = useMemo(() => {
     const anchor = selectedDate || new Date();
     const d = new Date(anchor);
     const day = d.getDay();
-    const diffToMon = day === 0 ? -6 : 1 - day; // Adjust for Sunday
+    const diffToMon = day === 0 ? -6 : 1 - day;
     const monday = new Date(d);
     monday.setDate(d.getDate() + diffToMon);
 
@@ -186,15 +208,17 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
       dateObj.setDate(monday.getDate() + i);
       const k = dateKey(dateObj);
       const calls = entriesByDate[k] ?? [];
-      days.push({ dateStr: k, dateObj, calls });
+      
+      // Only include day if it is today/past OR if it actually has calls
+      if (k <= todayK || calls.length > 0) {
+        days.push({ dateStr: k, dateObj, calls });
+      }
     }
-    // Sort descending so Today/Latest days in week appear first
     return days.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
-  }, [selectedDate, entriesByDate]);
+  }, [selectedDate, entriesByDate, todayK]);
 
-  // SMART MONTH FEED: Today & Past first (descending), Future days separate
+  // SMART MONTH FEED: Today & Past first (descending), Future days with calls separated
   const monthDaysSmart = useMemo(() => {
-    const todayK = dateKey(new Date());
     const days: { dateStr: string; dateObj: Date; calls: RosterEntry[]; isFuture: boolean }[] = [];
     const numDays = new Date(year, month + 1, 0).getDate();
 
@@ -206,16 +230,18 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
       days.push({ dateStr: k, dateObj, calls, isFuture });
     }
 
+    // Only render past & today in main feed (e.g. Aug 19 down to Aug 1)
     const pastAndToday = days
       .filter((d) => !d.isFuture)
       .sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
 
+    // Only include future days IF they actually have booked calls
     const future = days
-      .filter((d) => d.isFuture)
+      .filter((d) => d.isFuture && d.calls.length > 0)
       .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
 
     return { pastAndToday, future };
-  }, [year, month, entriesByDate]);
+  }, [year, month, entriesByDate, todayK]);
 
   const listDaysToRender = useMemo(() => {
     if (listScope === "week") {
@@ -266,7 +292,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
           <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
             <button
               type="button"
-              onClick={() => setCurrentDate(new Date(year, month - 1, 1))}
+              onClick={() => handleMonthChange(new Date(year, month - 1, 1))}
               className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
             >
               <ChevronLeft size={14} />
@@ -276,14 +302,14 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
             </span>
             <button
               type="button"
-              onClick={() => setCurrentDate(new Date(year, month + 1, 1))}
+              onClick={() => handleMonthChange(new Date(year, month + 1, 1))}
               className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
             >
               <ChevronRight size={14} />
             </button>
             <button
               type="button"
-              onClick={() => { setCurrentDate(new Date()); setSelectedDate(new Date()); }}
+              onClick={handleTodayClick}
               className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
             >
               Today
@@ -310,7 +336,10 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
           </button>
 
           {!loading && (
-            <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 font-semibold px-1">
+            <span className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-700 dark:text-zinc-300 font-semibold px-1">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200 shrink-0">
+                <PhoneCall size={10} className="fill-current" />
+              </span>
               {briefedCount}/{filtered.length} briefed
             </span>
           )}
@@ -405,13 +434,18 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
 
                   <div className="my-auto py-1 font-sans">
                     {metric && metric.totalCalls > 0 ? (
-                      <div className="rounded-lg bg-[#fde2e8] dark:bg-pink-500/20 px-2 py-1.5 transition-colors group-hover:bg-[#fbcfe8] dark:group-hover:bg-pink-500/30">
-                        <span className="text-[11px] font-bold block leading-none text-pink-950 dark:text-pink-200 font-sans">
-                          {metric.totalCalls} call{metric.totalCalls === 1 ? "" : "s"}
+                      <div className="rounded-lg bg-[#fde2e8] dark:bg-pink-500/20 px-2 py-1.5 transition-colors group-hover:bg-[#fbcfe8] dark:group-hover:bg-pink-500/30 flex items-center gap-1.5">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-900/60 dark:text-rose-200 shrink-0">
+                          <PhoneCall size={10} className="fill-current" />
                         </span>
-                        <span className="text-[9.5px] font-mono mt-0.5 block font-semibold text-pink-800 dark:text-pink-300/90">
-                          {metric.briefDelivered}/{metric.totalCalls} briefed
-                        </span>
+                        <div>
+                          <span className="text-[11px] font-bold block leading-none text-pink-950 dark:text-pink-200 font-sans">
+                            {metric.totalCalls} call{metric.totalCalls === 1 ? "" : "s"}
+                          </span>
+                          <span className="text-[9.5px] font-mono mt-0.5 block font-semibold text-pink-800 dark:text-pink-300/90">
+                            {metric.briefDelivered}/{metric.totalCalls} briefed
+                          </span>
+                        </div>
                       </div>
                     ) : (
                       <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono italic block">No calls</span>
@@ -431,10 +465,10 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
           <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl flex flex-col font-sans">
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-4 py-3 font-sans">
               <div className="flex items-center gap-2 font-sans">
-                <button type="button" onClick={() => setSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
+                <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
                   <ChevronLeft size={15} />
                 </button>
-                <button type="button" onClick={() => setSelectedDate(new Date(selectedDate.getTime() + 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
+                <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() + 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
                   <ChevronRight size={15} />
                 </button>
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
@@ -443,7 +477,12 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
               </div>
 
               <div className="flex items-center gap-1.5 font-mono text-[11px]">
-                <span className="text-zinc-600 dark:text-zinc-400 font-semibold">{selectedDayEntries.length} meeting{selectedDayEntries.length === 1 ? "" : "s"}</span>
+                <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400 font-semibold">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200 shrink-0">
+                    <PhoneCall size={10} className="fill-current" />
+                  </span>
+                  {selectedDayEntries.length} call{selectedDayEntries.length === 1 ? "" : "s"}
+                </span>
                 {selectedDayEntries.filter((e) => e.status === "brief_delivered").length > 0 && (
                   <span className="text-emerald-900 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold border-0">
                     {selectedDayEntries.filter((e) => e.status === "brief_delivered").length} briefed
@@ -479,7 +518,8 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                             <div className="space-y-1 min-w-0 font-sans">
                               <div className="flex items-center gap-2 font-sans">
                                 <span className="font-bold text-zinc-900 dark:text-white text-xs font-sans">{entry.prospectName ?? "Unnamed"}</span>
-                                <span className="text-[10px] font-mono text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded font-bold border-0">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-mono text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded font-bold border-0">
+                                  <PhoneCall size={9} className="fill-current text-rose-950" />
                                   {timeStr(entry.callTime)}
                                 </span>
                               </div>
@@ -529,7 +569,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                     <button
                       key={idx}
                       type="button"
-                      onClick={() => setSelectedDate(date)}
+                      onClick={() => handleUpdateSelectedDate(date)}
                       className={cn(
                         "h-6 w-6 mx-auto flex items-center justify-center rounded-full font-mono text-[10px] transition-colors cursor-pointer font-sans",
                         isSelected ? "bg-emerald-500 text-zinc-950 font-bold" : isCurrentMonth ? "text-zinc-800 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800" : "text-zinc-400 dark:text-zinc-700"
@@ -693,7 +733,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                   <div className="flex items-center gap-1 font-mono text-xs text-zinc-500">
                     <button
                       type="button"
-                      onClick={() => setSelectedDate(new Date(selectedDate.getTime() - 7 * 86400000))}
+                      onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 7 * 86400000))}
                       className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
                       title="Previous Week"
                     >
@@ -701,14 +741,14 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                     </button>
                     <button
                       type="button"
-                      onClick={() => setSelectedDate(new Date())}
+                      onClick={handleTodayClick}
                       className="text-[10.5px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
                     >
                       Today
                     </button>
                     <button
                       type="button"
-                      onClick={() => setSelectedDate(new Date(selectedDate.getTime() + 7 * 86400000))}
+                      onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() + 7 * 86400000))}
                       className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
                       title="Next Week"
                     >
@@ -757,7 +797,12 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                     <div key={dateStr} className="space-y-0 font-sans">
                       {/* Sticky Day Header */}
                       <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">
-                        <span>{formatDayHeader(dateStr)}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200 shrink-0">
+                            <PhoneCall size={9} className="fill-current" />
+                          </span>
+                          {formatDayHeader(dateStr)}
+                        </span>
                         <span className={cn("font-normal", calls.length > 0 ? "text-zinc-700 dark:text-zinc-300 font-bold" : "text-zinc-400")}>
                           {calls.length} call{calls.length === 1 ? "" : "s"}
                         </span>
@@ -777,7 +822,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                                 type="button"
                                 onClick={() => {
                                   setSelectedEntryId(entry.id);
-                                  setSelectedDate(new Date(entry.callTime));
+                                  handleUpdateSelectedDate(new Date(entry.callTime));
                                 }}
                                 className={cn(
                                   "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer font-sans border-0",
@@ -788,7 +833,8 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                                 )}
                               >
                                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                                  <span className="font-mono text-[10px] font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0 border-0">
+                                  <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0 border-0">
+                                    <PhoneCall size={9} className="fill-current text-rose-950" />
                                     {appointmentHour}
                                   </span>
 
@@ -830,7 +876,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedDate(dateObj);
+                              handleUpdateSelectedDate(dateObj);
                               setSelectedEntryId(null);
                             }}
                             className={cn(
@@ -840,7 +886,12 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                                 : "text-zinc-400 dark:text-zinc-600 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40"
                             )}
                           >
-                            <span>No calls scheduled</span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-400 shrink-0">
+                                <PhoneCall size={8} />
+                              </span>
+                              No calls scheduled
+                            </span>
                             <span className="text-[10px] text-zinc-400 dark:text-zinc-600">0 / 0</span>
                           </button>
                         )}
@@ -849,7 +900,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                   );
                 })}
 
-                {/* Collapsible Upcoming Days Section (Only in Full Month mode) */}
+                {/* Collapsible Upcoming Days Section (Only in Full Month mode when future calls exist) */}
                 {listScope === "month" && monthDaysSmart.future.length > 0 && (
                   <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 font-sans">
                     <button
@@ -857,46 +908,48 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                       onClick={() => setShowUpcomingInMonth((p) => !p)}
                       className="flex w-full items-center justify-between px-4 py-2 text-[11px] font-mono font-bold text-zinc-500 uppercase tracking-wider hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer font-sans"
                     >
-                      <span>Upcoming Days in {monthName} ({monthDaysSmart.future.length})</span>
+                      <span>Upcoming Calls in {monthName} ({monthDaysSmart.future.reduce((acc, d) => acc + d.calls.length, 0)})</span>
                       <ChevronDown size={13} className={cn("transition-transform", showUpcomingInMonth && "rotate-180")} />
                     </button>
 
                     {showUpcomingInMonth && (
                       <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-sans">
-                        {monthDaysSmart.future.map(({ dateStr, dateObj, calls }) => (
+                        {monthDaysSmart.future.map(({ dateStr, calls }) => (
                           <div key={dateStr} className="space-y-0 font-sans">
                             <div className="bg-zinc-100/90 dark:bg-zinc-900/90 px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500 flex justify-between">
-                              <span>{formatDayHeader(dateStr)}</span>
+                              <span className="flex items-center gap-1.5">
+                                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-300 shrink-0">
+                                  <PhoneCall size={9} className="fill-current" />
+                                </span>
+                                {formatDayHeader(dateStr)}
+                              </span>
                               <span>{calls.length} calls</span>
                             </div>
                             <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
-                              {calls.length > 0 ? (
-                                calls.map((entry) => (
-                                  <button
-                                    key={entry.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedEntryId(entry.id);
-                                      setSelectedDate(new Date(entry.callTime));
-                                    }}
-                                    className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50 cursor-pointer font-sans border-0"
-                                  >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <span className="font-mono text-[10px] font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0">
-                                        {formatTimeBadge(entry.callTime)}
-                                      </span>
-                                      <span className="truncate text-xs font-bold text-zinc-900 dark:text-white">
-                                        {entry.prospectName ?? entry.prospectEmail}
-                                      </span>
-                                    </div>
-                                    <StatusPill tone={STATUS_META[entry.status].tone}>
-                                      {STATUS_META[entry.status].label}
-                                    </StatusPill>
-                                  </button>
-                                ))
-                              ) : (
-                                <div className="px-4 py-2 text-xs font-mono text-zinc-400 dark:text-zinc-600">No calls scheduled</div>
-                              )}
+                              {calls.map((entry) => (
+                                <button
+                                  key={entry.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedEntryId(entry.id);
+                                    handleUpdateSelectedDate(new Date(entry.callTime));
+                                  }}
+                                  className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50 cursor-pointer font-sans border-0"
+                                >
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0">
+                                      <PhoneCall size={9} className="fill-current text-rose-950" />
+                                      {formatTimeBadge(entry.callTime)}
+                                    </span>
+                                    <span className="truncate text-xs font-bold text-zinc-900 dark:text-white">
+                                      {entry.prospectName ?? entry.prospectEmail}
+                                    </span>
+                                  </div>
+                                  <StatusPill tone={STATUS_META[entry.status].tone}>
+                                    {STATUS_META[entry.status].label}
+                                  </StatusPill>
+                                </button>
+                              ))}
                             </div>
                           </div>
                         ))}
