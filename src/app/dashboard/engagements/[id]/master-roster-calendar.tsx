@@ -143,6 +143,9 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const [inspectionType, setInspectionType] = useState<"call" | "activity">("call");
+  
   const [mode, setMode] = useState<ViewMode>("month");
   const [listScope, setListScope] = useState<ListScope>("week");
   const [filterText, setFilterText] = useState("");
@@ -407,24 +410,35 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
 
   const selectedDayKey = dateKey(selectedDate);
   const selectedDayEntries = entriesByDate[selectedDayKey] ?? [];
+  const selectedDayActivity = activityByDate[selectedDayKey] ?? [];
   const selectedDayMetric = dayMetrics[selectedDayKey] ?? EMPTY_METRIC;
 
   useEffect(() => {
     if (selectedDayEntries.length > 0) {
       if (!selectedEntryId || !selectedDayEntries.some((e) => e.id === selectedEntryId)) {
         setSelectedEntryId(selectedDayEntries[0].id);
+        setInspectionType("call");
+      }
+    } else if (selectedDayActivity.length > 0) {
+      if (!selectedActivityId || !selectedDayActivity.some((a) => a.id === selectedActivityId)) {
+        setSelectedActivityId(selectedDayActivity[0].id);
+        setInspectionType("activity");
       }
     } else {
       setSelectedEntryId(null);
+      setSelectedActivityId(null);
     }
-  }, [selectedDayKey, selectedDayEntries, selectedEntryId]);
+  }, [selectedDayKey, selectedDayEntries, selectedDayActivity, selectedEntryId, selectedActivityId]);
 
   const selectedEntry = useMemo(
     () => filteredEntries.find((e) => e.id === selectedEntryId) ?? selectedDayEntries[0] ?? null,
     [filteredEntries, selectedEntryId, selectedDayEntries]
   );
 
-  const selectedDayActivity = activityByDate[selectedDayKey] ?? [];
+  const selectedActivity = useMemo(
+    () => filteredActivity.find((a) => a.id === selectedActivityId) ?? selectedDayActivity[0] ?? null,
+    [filteredActivity, selectedActivityId, selectedDayActivity]
+  );
 
   const gridDays = useMemo(() => getDaysInMonthGrid(year, month), [year, month]);
   const monthName = currentDate.toLocaleString("default", { month: "long" });
@@ -681,10 +695,19 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 </span>
                 <div className="flex flex-wrap gap-1.5 font-sans">
                   {selectedDayActivity.map((ev) => (
-                    <Link
+                    <button
                       key={ev.id}
-                      href={`/dashboard/engagements/${engagementId}/skills/${ev.skill}`}
-                      className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-xs text-zinc-800 dark:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors font-sans"
+                      type="button"
+                      onClick={() => {
+                        setSelectedActivityId(ev.id);
+                        setInspectionType("activity");
+                      }}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs cursor-pointer transition-colors font-sans",
+                        inspectionType === "activity" && selectedActivityId === ev.id
+                          ? "border-amber-400 bg-amber-100/80 dark:bg-amber-950/60 text-zinc-900 dark:text-white font-bold"
+                          : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent text-zinc-800 dark:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700"
+                      )}
                     >
                       <SquishySkillBadge skill={ev.skill} size={14} enabled={true} />
                       <span className="font-bold">
@@ -692,7 +715,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       </span>
                       <span className="text-zinc-500 dark:text-zinc-400">{ev.title}</span>
                       <StatusPill tone={ev.tone}>{timeStr(ev.occurredAt)}</StatusPill>
-                    </Link>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -709,12 +732,15 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     </span>
                     <div className="flex-1 space-y-1.5 font-sans">
                       {hourEntries.map((entry) => {
-                        const isSelected = selectedEntry?.id === entry.id;
+                        const isSelected = inspectionType === "call" && selectedEntry?.id === entry.id;
                         return (
                           <button
                             key={entry.id}
                             type="button"
-                            onClick={() => setSelectedEntryId(entry.id)}
+                            onClick={() => {
+                              setSelectedEntryId(entry.id);
+                              setInspectionType("call");
+                            }}
                             className={cn(
                               "w-full rounded-xl p-2.5 text-left transition-all cursor-pointer flex items-start justify-between gap-2 shadow-xs font-sans border-0",
                               isSelected
@@ -787,9 +813,57 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               </div>
             </div>
 
-            {/* FULL PROSPECT INSPECTOR PANEL */}
+            {/* FULL INSPECTOR PANEL (CALL INSPECTION vs ACTIVITY INSPECTION) */}
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
-              {selectedEntry ? (
+              {inspectionType === "activity" && selectedActivity ? (
+                /* SYSTEM EVENT / LEAK-MAP AUDIT PREVIEW */
+                <div className="space-y-4 font-sans">
+                  <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
+                    <div className="flex items-center justify-between font-sans">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1.5 font-sans">
+                        <SquishySkillBadge skill={selectedActivity.skill} size={16} enabled={true} />
+                        {ACTIVITY_SKILL_LABEL[selectedActivity.skill]}
+                      </span>
+                      <StatusPill tone={selectedActivity.tone}>
+                        {TONE_TO_SEVERITY_LABEL[selectedActivity.tone] ?? selectedActivity.tone}
+                      </StatusPill>
+                    </div>
+
+                    <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selectedActivity.title}</h4>
+
+                    <div className="flex items-center gap-2 font-mono text-xs text-zinc-600 dark:text-zinc-400 pt-0.5">
+                      <Clock size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span>{new Date(selectedActivity.occurredAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Audit Findings & Diagnostic</span>
+                    <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans text-xs">
+                      {selectedActivity.detail || "Automated audit scan completed."}
+                    </p>
+                  </div>
+
+                  {selectedActivity.prospectEmail && (
+                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1 text-xs font-sans">
+                      <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Associated Lead</span>
+                      <p className="font-bold text-zinc-900 dark:text-white">{selectedActivity.prospectName ?? selectedActivity.prospectEmail}</p>
+                      <p className="font-mono text-zinc-500 text-[11px]">{selectedActivity.prospectEmail}</p>
+                    </div>
+                  )}
+
+                  <div className="pt-2 font-sans">
+                    <Link
+                      href={`/dashboard/engagements/${engagementId}/skills/${selectedActivity.skill}`}
+                      className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center shadow-xs"
+                    >
+                      <span>Open Full {ACTIVITY_SKILL_LABEL[selectedActivity.skill]} Skill Page</span>
+                      <ExternalLink size={12} />
+                    </Link>
+                  </div>
+                </div>
+              ) : selectedEntry ? (
+                /* PROSPECT CALL INSPECTIONS WITH TABS */
                 <>
                   <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
                     <div className="flex items-center justify-between font-sans">
@@ -819,7 +893,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       </div>
                       <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-300 pt-0.5">
                         <Clock size={12} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                        <span>{new Date(selectedEntry.callTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span>{new Date(selectedEntry.callTime).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                       </div>
                     </div>
                   </div>
@@ -944,6 +1018,17 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                               </div>
                             )}
                           </div>
+
+                          {selectedEntry.winBackData.freshRescheduleLink && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(selectedEntry.winBackData!.freshRescheduleLink!, "link")}
+                              className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 dark:border-amber-800/50 bg-amber-100/60 dark:bg-amber-950/30 px-3 py-2 text-xs font-semibold text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/40 cursor-pointer transition-colors font-sans"
+                            >
+                              {copiedLink ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                              <span>{copiedLink ? "Link Copied!" : "Copy Fresh Reschedule Link"}</span>
+                            </button>
+                          )}
                         </>
                       ) : (
                         <p className="text-zinc-500 italic text-[11px] py-4 text-center font-sans">Prospect is active/scheduled — not enrolled in Win-Back recovery.</p>
@@ -959,8 +1044,19 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 </div>
               ) : (
                 <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
-                  <Clock size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-                  <p className="text-xs font-sans">No call or skill activity for this day.</p>
+                  <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
+                  <p className="text-xs font-sans">
+                    {selectedDate ? (
+                      <>
+                        <span className="font-bold text-zinc-800 dark:text-zinc-200 block mb-0.5">
+                          {selectedDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                        Zero calls or skill activity for this date.
+                      </>
+                    ) : (
+                      "Select a date or lead from the list to inspect sequence details."
+                    )}
+                  </p>
                 </div>
               )}
             </div>
@@ -1067,28 +1163,44 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       {/* Day Feed Entries */}
                       <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
                         {/* 1. System Events Banner (e.g., Leak-Map Audits) */}
-                        {systemAudits.map((audit) => (
-                          <div
-                            key={audit.id}
-                            onClick={() => handleUpdateSelectedDate(dateObj)}
-                            className="flex items-center justify-between px-4 py-2 bg-amber-500/10 dark:bg-amber-950/30 border-b border-amber-500/20 text-xs font-sans cursor-pointer hover:bg-amber-500/15"
-                          >
-                            <div className="flex items-center gap-2 font-sans">
-                              <span className="font-mono text-[10px] font-bold text-amber-950 dark:text-amber-200 bg-amber-200 dark:bg-amber-900/60 px-1.5 py-0.5 rounded shrink-0">
-                                {timeStr(audit.occurredAt)}
-                              </span>
-                              <SquishySkillBadge skill="leak-map" size={14} enabled={true} />
-                              <span className="font-bold text-zinc-900 dark:text-white font-sans">{audit.title}</span>
-                              {audit.detail && <span className="text-zinc-500 font-mono text-[11px]">{audit.detail}</span>}
-                            </div>
-                            <StatusPill tone={audit.tone}>{TONE_TO_SEVERITY_LABEL[audit.tone] ?? audit.tone}</StatusPill>
-                          </div>
-                        ))}
+                        {systemAudits.map((audit) => {
+                          const isSelectedAudit = inspectionType === "activity" && selectedActivityId === audit.id;
+
+                          return (
+                            <button
+                              key={audit.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedActivityId(audit.id);
+                                setInspectionType("activity");
+                                handleUpdateSelectedDate(dateObj);
+                              }}
+                              className={cn(
+                                "w-full flex items-center justify-between px-4 py-2 text-xs font-sans cursor-pointer transition-colors border-0 border-b border-amber-500/20 text-left",
+                                isSelectedAudit
+                                  ? "bg-amber-500/25 dark:bg-amber-950/60 ring-1 ring-amber-400"
+                                  : "bg-amber-500/10 dark:bg-amber-950/30 hover:bg-amber-500/15"
+                              )}
+                            >
+                              <div className="flex items-center gap-2 font-sans min-w-0 flex-1">
+                                <span className="font-mono text-[10px] font-bold text-amber-950 dark:text-amber-200 bg-amber-200 dark:bg-amber-900/60 px-1.5 py-0.5 rounded shrink-0">
+                                  {timeStr(audit.occurredAt)}
+                                </span>
+                                <SquishySkillBadge skill="leak-map" size={14} enabled={true} />
+                                <span className="font-bold text-zinc-900 dark:text-white font-sans truncate">{audit.title}</span>
+                                {audit.detail && <span className="text-zinc-500 font-mono text-[11px] truncate hidden sm:inline">{audit.detail}</span>}
+                              </div>
+                              <StatusPill tone={audit.tone} className="shrink-0 ml-2">
+                                {TONE_TO_SEVERITY_LABEL[audit.tone] ?? audit.tone}
+                              </StatusPill>
+                            </button>
+                          );
+                        })}
 
                         {/* 2. Prospect Calls with Combined Skill Badges */}
                         {calls.length > 0 ? (
                           calls.map((entry) => {
-                            const isSelected = selectedEntry?.id === entry.id;
+                            const isSelected = inspectionType === "call" && selectedEntry?.id === entry.id;
                             const isFailed = entry.status === "brief_failed";
                             const appointmentHour = formatTimeBadge(entry.callTime);
 
@@ -1098,6 +1210,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                 type="button"
                                 onClick={() => {
                                   setSelectedEntryId(entry.id);
+                                  setInspectionType("call");
                                   handleUpdateSelectedDate(new Date(entry.callTime));
                                 }}
                                 className={cn(
@@ -1161,6 +1274,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             onClick={() => {
                               handleUpdateSelectedDate(dateObj);
                               setSelectedEntryId(null);
+                              setSelectedActivityId(null);
                             }}
                             className={cn(
                               "w-full px-4 py-2.5 text-left text-xs font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
@@ -1215,6 +1329,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                   type="button"
                                   onClick={() => {
                                     setSelectedEntryId(entry.id);
+                                    setInspectionType("call");
                                     handleUpdateSelectedDate(new Date(entry.callTime));
                                   }}
                                   className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50 cursor-pointer font-sans border-0"
@@ -1246,7 +1361,55 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
 
           {/* RIGHT 5 COLUMNS: MULTI-SKILL INSPECTOR PANEL */}
           <div className="lg:col-span-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
-            {selectedEntry ? (
+            {inspectionType === "activity" && selectedActivity ? (
+              /* SYSTEM EVENT / LEAK-MAP AUDIT PREVIEW */
+              <div className="space-y-4 font-sans">
+                <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
+                  <div className="flex items-center justify-between font-sans">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1.5 font-sans">
+                      <SquishySkillBadge skill={selectedActivity.skill} size={16} enabled={true} />
+                      {ACTIVITY_SKILL_LABEL[selectedActivity.skill]}
+                    </span>
+                    <StatusPill tone={selectedActivity.tone}>
+                      {TONE_TO_SEVERITY_LABEL[selectedActivity.tone] ?? selectedActivity.tone}
+                    </StatusPill>
+                  </div>
+
+                  <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selectedActivity.title}</h4>
+
+                  <div className="flex items-center gap-2 font-mono text-xs text-zinc-600 dark:text-zinc-400 pt-0.5">
+                    <Clock size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>{new Date(selectedActivity.occurredAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                  <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Audit Findings & Diagnostic</span>
+                  <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans text-xs">
+                    {selectedActivity.detail || "Automated audit scan completed."}
+                  </p>
+                </div>
+
+                {selectedActivity.prospectEmail && (
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1 text-xs font-sans">
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Associated Lead</span>
+                    <p className="font-bold text-zinc-900 dark:text-white">{selectedActivity.prospectName ?? selectedActivity.prospectEmail}</p>
+                    <p className="font-mono text-zinc-500 text-[11px]">{selectedActivity.prospectEmail}</p>
+                  </div>
+                )}
+
+                <div className="pt-2 font-sans">
+                  <Link
+                    href={`/dashboard/engagements/${engagementId}/skills/${selectedActivity.skill}`}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center shadow-xs font-sans"
+                  >
+                    <span>Open Full {ACTIVITY_SKILL_LABEL[selectedActivity.skill]} Skill Page</span>
+                    <ExternalLink size={12} />
+                  </Link>
+                </div>
+              </div>
+            ) : selectedEntry ? (
+              /* PROSPECT CALL INSPECTION WITH TABS */
               <>
                 <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
                   <div className="flex items-center justify-between font-sans">
@@ -1420,12 +1583,6 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   </div>
                 )}
               </>
-            ) : selectedDayActivity.length > 0 ? (
-              <div className="py-6 space-y-2 font-sans">
-                <p className="text-[11px] text-zinc-500 text-center font-sans">
-                  No call today, but {selectedDayActivity.length} other skill event{selectedDayActivity.length === 1 ? "" : "s"} happened — see the Skill Activity strip above.
-                </p>
-              </div>
             ) : (
               <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
                 <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
