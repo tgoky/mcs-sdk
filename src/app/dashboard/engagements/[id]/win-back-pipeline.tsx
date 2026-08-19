@@ -51,8 +51,8 @@ function StatusPill({
     {
       success: "bg-emerald-100 text-emerald-950 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800",
       danger: "bg-rose-100 text-rose-950 border border-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:border-rose-800",
-      // HIGH-CONTRAST #9fabdb (LIGHT) & #b7eacd (DARK) STYLING WITHOUT GLOWING DOT
-      warning: "bg-[#9fabdb] text-zinc-950 dark:bg-[#b7eacd] dark:text-zinc-950 font-bold border-0 shadow-xs",
+      // HIGH-CONTRAST #aab3d8 (LIGHT) & #b7eacd (DARK) STYLING WITHOUT GLOWING DOT
+      warning: "bg-[#afb9e1] text-zinc-950 dark:bg-[#b7eacd] dark:text-zinc-950 font-bold border-0 shadow-xs",
       info: "bg-sky-100 text-sky-950 border border-sky-300 dark:bg-sky-950/70 dark:text-sky-300 dark:border-sky-800",
       neutral: "bg-zinc-200/80 text-zinc-800 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700",
     }[tone] ?? "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300";
@@ -418,13 +418,13 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                               className={cn(
                                 "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer font-sans border-0",
                                 // FAINT BACKGROUND HIGHLIGHT FOR ACTIVE ITEMS WITHOUT VERTICAL ACCENT BAR
-                                isActive && !isSelected && "bg-[#9fabdb]/20 dark:bg-[#b7eacd]/10",
-                                isSelected && "bg-[#9fabdb]/35 dark:bg-[#b7eacd]/25 ring-1 ring-[#9fabdb] dark:ring-[#b7eacd]",
+                                isActive && !isSelected && "bg-[#aab3d8]/20 dark:bg-[#b7eacd]/10",
+                                isSelected && "bg-[#aab3d8]/35 dark:bg-[#b7eacd]/25 ring-1 ring-[#aab3d8] dark:ring-[#b7eacd]",
                                 !isActive && !isSelected && "bg-white dark:bg-transparent hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50"
                               )}
                             >
                               <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#9fabdb] dark:bg-[#b7eacd] px-1.5 py-0.5 rounded shrink-0">
+                                <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#aab3d8] dark:bg-[#b7eacd] px-1.5 py-0.5 rounded shrink-0">
                                   <Clock size={9} />
                                   {enrollmentTime}
                                 </span>
@@ -510,7 +510,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                   <span className="font-mono text-zinc-900 dark:text-white">{selected.touchesSent} / {selected.touchesTotal}</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
-                  <div className="h-full bg-[#9fabdb] dark:bg-[#b7eacd]" style={{ width: `${selected.touchesTotal ? (selected.touchesSent / selected.touchesTotal) * 100 : 0}%` }} />
+                  <div className="h-full bg-[#aab3d8] dark:bg-[#b7eacd]" style={{ width: `${selected.touchesTotal ? (selected.touchesSent / selected.touchesTotal) * 100 : 0}%` }} />
                 </div>
                 <div className="flex items-center justify-between font-sans pt-1">
                   <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Recovery Window</span>
@@ -547,7 +547,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                     <button
                       type="button"
                       onClick={() => handleCopyLink(selected.freshRescheduleLink!)}
-                      className="flex items-center gap-1 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#9fabdb] dark:bg-[#b7eacd] text-zinc-950 px-2 py-1 text-[11px] hover:opacity-90 cursor-pointer font-sans font-bold"
+                      className="flex items-center gap-1 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#aab3d8] dark:bg-[#b7eacd] text-zinc-950 px-2 py-1 text-[11px] hover:opacity-90 cursor-pointer font-sans font-bold"
                     >
                       {copiedLink ? <Check size={12} className="text-emerald-950" /> : <Copy size={12} />}
                       <span>{copiedLink ? "Copied" : "Copy"}</span>
