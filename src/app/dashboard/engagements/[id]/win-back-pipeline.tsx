@@ -49,12 +49,11 @@ function StatusPill({
 }) {
   const toneClasses =
     {
-      success: "bg-emerald-100 text-emerald-950 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800",
-      danger: "bg-rose-100 text-rose-950 border border-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:border-rose-800",
-      // HIGH-CONTRAST VIBRANT AMBER PILL FOR ACTIVE CADENCE
-      warning: "bg-amber-200/90 text-amber-950 border border-amber-400 dark:bg-amber-950/90 dark:text-amber-200 dark:border-amber-500/70 font-bold shadow-xs",
-      info: "bg-sky-100 text-sky-950 border border-sky-300 dark:bg-sky-950/70 dark:text-sky-300 dark:border-sky-800",
-      neutral: "bg-zinc-200/80 text-zinc-800 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700",
+      success: "bg-emerald-100 text-emerald-950 border border-emerald-300/80 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800/80",
+      danger: "bg-[#ffcfd2] text-rose-950 border border-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:border-rose-800/80",
+      warning: "bg-amber-200/90 text-amber-950 border border-amber-400/90 dark:bg-amber-950/90 dark:text-amber-200 dark:border-amber-500/70 font-bold shadow-xs",
+      info: "bg-sky-100 text-sky-950 border border-sky-300/80 dark:bg-sky-950/70 dark:text-sky-300 dark:border-sky-800/80",
+      neutral: "bg-zinc-200/80 text-zinc-900 border border-zinc-300/60 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700/60",
     }[tone] ?? "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300";
 
   return (
@@ -68,7 +67,7 @@ function StatusPill({
       {tone === "warning" && (
         <span className="relative flex h-2 w-2 shrink-0">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-600 dark:bg-amber-400"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
         </span>
       )}
       {children}
@@ -303,12 +302,8 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
 
-          {!loading && activeCount > 0 && (
-            <span className="flex items-center gap-1.5 text-[11px] font-mono font-bold text-amber-950 dark:text-amber-200 bg-amber-200/80 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-800/80 px-2.5 py-0.5 rounded-full shrink-0">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-              </span>
+          {!loading && (
+            <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 font-semibold px-1">
               {activeCount} active in recovery
             </span>
           )}
@@ -411,7 +406,6 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                       {calls.length > 0 ? (
                         calls.map((item) => {
                           const isSelected = selected?.id === item.id;
-                          const isActive = item.status === "active";
                           const enrollmentTime = formatTimeBadge(item.enrolledAt);
 
                           return (
@@ -424,14 +418,13 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                               }}
                               className={cn(
                                 "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer font-sans border-0",
-                                // ACTIVE TINT: WARM AMBER BG + AMBER LEFT INDICATOR BAR
-                                isActive && !isSelected && "bg-amber-500/10 dark:bg-amber-950/30 border-l-4 border-l-amber-500",
-                                isSelected && "bg-amber-500/20 dark:bg-amber-900/50 border-l-4 border-l-amber-600 ring-1 ring-amber-500/40",
-                                !isActive && !isSelected && "bg-white dark:bg-transparent hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50"
+                                isSelected
+                                  ? "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                                  : "bg-white dark:bg-transparent hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50"
                               )}
                             >
                               <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-amber-950 bg-amber-200 border border-amber-300 px-1.5 py-0.5 rounded shrink-0">
+                                <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-amber-200 dark:bg-amber-900/60 px-1.5 py-0.5 rounded shrink-0 border-0">
                                   <Clock size={9} />
                                   {enrollmentTime}
                                 </span>
@@ -447,7 +440,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-[9.5px] font-mono text-zinc-600 dark:text-zinc-400 font-bold">
+                                <span className="text-[9.5px] font-mono text-zinc-500 font-bold">
                                   {item.touchesSent}/{item.touchesTotal} Touches
                                 </span>
 
