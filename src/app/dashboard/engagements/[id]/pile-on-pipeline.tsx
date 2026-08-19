@@ -1,19 +1,11 @@
 "use client";
 
 // src/app/dashboard/engagements/[id]/pile-on-pipeline.tsx
-//
-// Reads GET /api/engagements/[id]/pile-on-pipeline. Board groups by real
-// sequence progress + a genuine "Call Today" bucket sourced from
-// booking_roster (the only reason that bucket is even possible — before
-// the roster table existed, nothing durably tracked a booking's call time
-// outside of brief-send-time processing). Calendar plots each booking's
-// real call date; List shows real touch counts.
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Search, Mail, CalendarX2, Loader2, ExternalLink, PhoneCall, TrendingUp, TrendingDown, Minus, ChevronDown, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "../../runs/[id]/_shared/view-switcher";
-import { StatusPill } from "../../runs/[id]/_shared/status-pill";
 import { getDaysInMonthGrid, dateKey } from "../../runs/[id]/_shared/calendar-grid";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
@@ -32,6 +24,37 @@ const BOARD_COLUMNS: PileOnStage[] = ["newly_booked", "active_sequence", "sequen
 
 type PileOnCalendarKind = "booked" | "call";
 const CALENDAR_KIND_LABEL: Record<PileOnCalendarKind, string> = { booked: "booked", call: "call" };
+
+function StatusPill({
+  tone,
+  children,
+  className,
+}: {
+  tone: "success" | "warning" | "danger" | "info" | "neutral" | string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const toneClasses =
+    {
+      success: "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300",
+      danger: "bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200",
+      warning: "bg-amber-100 text-amber-950 dark:bg-amber-500/20 dark:text-amber-300",
+      info: "bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-300",
+      neutral: "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300",
+    }[tone] ?? "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-tight transition-colors border-0",
+        toneClasses,
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
+}
 
 export function PileOnPipeline({ engagementId }: { engagementId: string }) {
   const [mode, setMode] = useState<RunViewMode>("board");
@@ -78,14 +101,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
     return cols;
   }, [filtered]);
 
-  // Calendar previously plotted only callTime, which is only populated
-  // when the roster join (see the route's module comment) finds a
-  // matching booking_roster row for that externalCallId — so any
-  // engagement where roster sync was thin, or where bookings predate
-  // roster tracking, showed a permanently empty calendar despite the List
-  // and Board views having real items. createdAt (booking date) always
-  // exists on every item, so it's now the fallback plot; callTime is
-  // still plotted as a separate, distinguishable "call" event when known.
   const byDay = useMemo(() => {
     const map = new Map<string, { item: PileOnPipelineItem; kind: PileOnCalendarKind }[]>();
     const add = (iso: string, item: PileOnPipelineItem, kind: PileOnCalendarKind) => {
@@ -107,63 +122,53 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
-      <div className="flex items-center justify-between gap-2 px-0.5">
-        <div className="flex items-center gap-2.5">
-          <SquishySkillBadge skill="pile-on" size={28} enabled={true} />
-          <div>
-            <h3 className="text-sm font-bold text-white font-sans">Pile-On Pipeline</h3>
-            <p className="text-[11px] text-zinc-500 font-sans mt-0.5">
-              Every booked lead's speed-to-lead sequence, in one board — not one run page per booking.
-            </p>
-          </div>
-        </div>
-        {!loading && callTodayCount > 0 && (
-          <div className="flex items-center gap-1 text-[11px] font-mono text-red-400 shrink-0">
-            <PhoneCall size={11} /> {callTodayCount} call{callTodayCount === 1 ? "" : "s"} today
-          </div>
-        )}
-      </div>
-
       {!loading && weeklyTrend && (weeklyTrend.thisWeek > 0 || weeklyTrend.priorWeek > 0) && (() => {
         const { thisWeek, priorWeek } = weeklyTrend;
         const delta = thisWeek - priorWeek;
         const Icon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
-        const tone = delta > 0 ? "text-emerald-400" : delta < 0 ? "text-rose-400" : "text-zinc-500";
+        const tone = delta > 0 ? "text-emerald-600 dark:text-emerald-400" : delta < 0 ? "text-rose-600 dark:text-rose-400" : "text-zinc-500";
         return (
-          <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 font-sans">
+          <div className="flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 px-3 py-2 font-sans shadow-xs">
             <Icon size={13} className={tone} />
-            <span className="text-xs text-zinc-300 font-sans">
-              <span className="font-mono font-bold text-white">{thisWeek}</span> booked this week
+            <span className="text-xs text-zinc-700 dark:text-zinc-300 font-sans">
+              <span className="font-mono font-bold text-zinc-900 dark:text-white">{thisWeek}</span> booked this week
               <span className="text-zinc-500"> · {priorWeek} last week</span>
             </span>
           </div>
         );
       })()}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-950 p-1.5 border border-zinc-800">
-        <div className="relative w-64">
-          <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500" />
-          <input
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
-            placeholder="Search prospect name..."
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
-          />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-2 shadow-sm font-sans">
+        <div className="flex items-center gap-2">
+          <div className="relative w-64">
+            <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-400 dark:text-zinc-500" />
+            <input
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="Search prospect name..."
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
+            />
+          </div>
+          {!loading && callTodayCount > 0 && (
+            <span className="flex items-center gap-1 text-xs font-semibold text-rose-950 dark:text-rose-200 bg-[#ffcfd2] dark:bg-rose-950/60 px-2.5 py-1 rounded-full shrink-0">
+              <PhoneCall size={12} /> {callTodayCount} call{callTodayCount === 1 ? "" : "s"} today
+            </span>
+          )}
         </div>
         <ViewSwitcher value={mode} onChange={setMode} />
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300 font-sans">{error}</div>
+        <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
       )}
 
       {mode === "board" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-sans">
           {BOARD_COLUMNS.map((stage) => (
-            <div key={stage} className="rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden">
-              <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-sans">{STAGE_META[stage].label}</span>
-                <span className="rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400">{board[stage].length}</span>
+            <div key={stage} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-3 py-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 font-sans">{STAGE_META[stage].label}</span>
+                <span className="rounded-md bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{board[stage].length}</span>
               </div>
               <div className="flex flex-col gap-1.5 p-2 min-h-[80px] max-h-[420px] overflow-y-auto">
                 {board[stage].map((item) => (
@@ -171,16 +176,16 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                     key={item.id}
                     type="button"
                     onClick={() => setSelectedId(item.id)}
-                    className="flex flex-col gap-1 rounded-lg border border-zinc-800 bg-zinc-900/90 p-2 text-left text-[11px] hover:border-zinc-700 cursor-pointer transition-all font-sans"
+                    className="flex flex-col gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-2.5 text-left text-[11px] hover:border-zinc-300 dark:hover:border-zinc-700 cursor-pointer transition-all font-sans shadow-xs"
                   >
-                    <span className="truncate font-bold text-white font-sans">{item.prospectName ?? item.prospectEmail}</span>
-                    <span className="font-mono text-[9.5px] text-zinc-500">
+                    <span className="truncate font-bold text-zinc-900 dark:text-white font-sans">{item.prospectName ?? item.prospectEmail}</span>
+                    <span className="font-mono text-[9.5px] text-zinc-500 dark:text-zinc-400">
                       {item.touchesTotal > 0 ? `${item.touchesSent}/${item.touchesTotal} SMS touches` : "No SMS sequence configured"}
                     </span>
                   </button>
                 ))}
                 {board[stage].length === 0 && (
-                  <div className="flex items-center justify-center py-6 text-[10.5px] text-zinc-700 font-sans">Nothing here</div>
+                  <div className="flex items-center justify-center py-6 text-[10.5px] text-zinc-400 dark:text-zinc-600 font-sans">Nothing here</div>
                 )}
               </div>
             </div>
@@ -189,9 +194,9 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       )}
 
       {mode === "list" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl font-sans">
+        <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
           {filtered.length === 0 && !loading ? (
-            <div className="flex flex-col items-center gap-2 py-12 text-zinc-600 font-sans">
+            <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
               <CalendarX2 size={22} />
               <span className="text-xs">No bookings yet.</span>
             </div>
@@ -201,13 +206,13 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 key={item.id}
                 type="button"
                 onClick={() => setSelectedId(item.id)}
-                className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-zinc-900/50 cursor-pointer border-b border-zinc-900/60 last:border-b-0 font-sans"
+                className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 cursor-pointer border-b border-zinc-200 dark:border-zinc-800/60 last:border-b-0 font-sans transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="font-mono text-[10.5px] text-zinc-500 w-20 shrink-0">
                     {new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                   </span>
-                  <span className="truncate text-xs font-bold text-white font-sans">{item.prospectName ?? item.prospectEmail}</span>
+                  <span className="truncate text-xs font-bold text-zinc-900 dark:text-white font-sans">{item.prospectName ?? item.prospectEmail}</span>
                   <span className="shrink-0 font-mono text-[10px] text-zinc-500">
                     {item.touchesTotal > 0 ? `${item.touchesSent}/${item.touchesTotal}` : "—"}
                   </span>
@@ -220,39 +225,59 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       )}
 
       {mode === "calendar" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl font-sans">
-          <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-4 py-2.5">
+        <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
+          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-4 py-2.5">
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer">
+              <button type="button" onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
                 <ChevronLeft size={15} />
               </button>
-              <button type="button" onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer">
+              <button type="button" onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
                 <ChevronRight size={15} />
               </button>
-              <h3 className="text-sm font-bold text-white min-w-[120px] font-sans">{monthName} {year}</h3>
-              <button type="button" onClick={() => setCurrentDate(new Date())} className="rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700 cursor-pointer font-sans">
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white min-w-[120px] font-sans">{monthName} {year}</h3>
+              <button type="button" onClick={() => setCurrentDate(new Date())} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans">
                 Today
               </button>
             </div>
             {loading && <Loader2 size={14} className="animate-spin text-zinc-500" />}
           </div>
 
-          <div className="grid grid-cols-7 border-b border-zinc-800 bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
+          <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-              <div key={d} className="border-r border-zinc-800/60 py-2 last:border-r-0">{d}</div>
+              <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7 auto-rows-fr bg-zinc-950 font-sans">
+          <div className="grid grid-cols-7 auto-rows-fr bg-[#f8f7fa] dark:bg-zinc-950 font-sans">
             {gridDays.map(({ date, isCurrentMonth }, idx) => {
               const k = dateKey(date);
               const dayItems = byDay.get(k) ?? [];
-              const isToday = dateKey(new Date()) === k;
+
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const cellDate = new Date(date);
+              cellDate.setHours(0, 0, 0, 0);
+
+              const isToday = cellDate.getTime() === today.getTime();
+              const isPast = cellDate < today;
 
               return (
-                <div key={idx} className={cn("flex min-h-[90px] flex-col border-b border-r border-zinc-800/60 p-1.5 font-sans", !isCurrentMonth && "bg-zinc-900/20 text-zinc-600", isCurrentMonth && "hover:bg-zinc-900/30")}>
+                <div key={idx} className={cn(
+                  "flex min-h-[90px] flex-col border-b border-r border-zinc-200 dark:border-zinc-800/60 p-1.5 font-sans transition-all",
+                  !isCurrentMonth && "bg-zinc-100/50 dark:bg-zinc-900/20 text-zinc-400 dark:text-zinc-600 opacity-40",
+                  isCurrentMonth && isPast && "bg-zinc-200/35 dark:bg-zinc-900/60",
+                  isCurrentMonth && !isPast && !isToday && "bg-white dark:bg-zinc-950",
+                  isCurrentMonth && "hover:bg-zinc-200/60 dark:hover:bg-zinc-800/80"
+                )}>
                   <div className="flex items-start justify-between gap-1 w-full">
-                    <span className={cn("flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold shrink-0", isToday ? "bg-emerald-500 text-zinc-950 font-bold" : isCurrentMonth ? "text-zinc-300" : "text-zinc-600")}>
+                    <span className={cn(
+                      "flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold shrink-0",
+                      isToday
+                        ? "bg-emerald-500 text-zinc-950 font-bold"
+                        : isPast
+                        ? "text-zinc-400 dark:text-zinc-500"
+                        : "text-zinc-700 dark:text-zinc-300"
+                    )}>
                       {date.getDate()}
                     </span>
                     {dayItems.length > 0 && (
@@ -267,11 +292,11 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   {dayItems.length > 1 && (() => {
                     const callsToday = dayItems.filter((d) => d.kind === "call").length;
                     return (
-                      <div className="mt-1 rounded-lg bg-purple-950/40 border border-purple-800/50 px-2 py-1 text-purple-200">
+                      <div className="mt-1 rounded-lg bg-purple-100/80 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/50 px-2 py-1 text-purple-900 dark:text-purple-200">
                         <span className="text-[11px] font-bold block leading-none font-sans">
                           {dayItems.length} event{dayItems.length === 1 ? "" : "s"}
                         </span>
-                        <span className="text-[9.5px] text-purple-400/80 font-mono mt-0.5 block">
+                        <span className="text-[9.5px] text-purple-700 dark:text-purple-400/80 font-mono mt-0.5 block">
                           {callsToday > 0 ? `${callsToday} call${callsToday === 1 ? "" : "s"}` : "bookings"}
                         </span>
                       </div>
@@ -279,10 +304,10 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   })()}
                   <div className="mt-1 space-y-1 overflow-y-auto max-h-[65px] [scrollbar-width:none]">
                     {dayItems.map(({ item, kind }, idx) => (
-                      <button key={`${item.id}-${kind}-${idx}`} type="button" onClick={() => setSelectedId(item.id)} className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] font-sans hover:border-zinc-700 cursor-pointer">
-                        <span className="truncate font-bold text-white font-sans">{item.prospectName ?? item.prospectEmail}</span>
+                      <button key={`${item.id}-${kind}-${idx}`} type="button" onClick={() => setSelectedId(item.id)} className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-1.5 text-left text-[11px] font-sans hover:border-zinc-300 dark:hover:border-zinc-700 cursor-pointer shadow-xs">
+                        <span className="truncate font-bold text-zinc-900 dark:text-white font-sans">{item.prospectName ?? item.prospectEmail}</span>
                         <div className="flex items-center justify-between gap-1">
-                          <span className={cn("font-mono text-[9px]", kind === "call" ? "text-red-400/80" : "text-zinc-500")}>
+                          <span className={cn("font-mono text-[9px]", kind === "call" ? "text-rose-600 dark:text-rose-400 font-semibold" : "text-zinc-500")}>
                             {CALENDAR_KIND_LABEL[kind]}
                           </span>
                           <StatusPill tone={STAGE_META[item.stage].tone} className="w-fit">{STAGE_META[item.stage].label}</StatusPill>
@@ -311,42 +336,42 @@ function PileOnDrawer({ item, onClose }: { item: PileOnPipelineItem | null; onCl
 
   return (
     <Sheet open={!!item} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent widthClassName="w-full sm:max-w-md font-sans antialiased text-zinc-100">
+      <SheetContent widthClassName="w-full sm:max-w-md font-sans antialiased bg-[#f8f7fa] dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
         {item && (
           <>
             <SheetHeader className="font-sans">
               <StatusPill tone={STAGE_META[item.stage].tone} className="w-fit">{STAGE_META[item.stage].label}</StatusPill>
-              <SheetTitle className="mt-2 text-lg font-bold font-sans text-white">{item.prospectName ?? item.prospectEmail}</SheetTitle>
-              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-400 font-sans">
+              <SheetTitle className="mt-2 text-lg font-bold font-sans text-zinc-900 dark:text-white">{item.prospectName ?? item.prospectEmail}</SheetTitle>
+              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400 font-sans">
                 Booked {new Date(item.createdAt).toLocaleString(undefined, { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
               </SheetDescription>
             </SheetHeader>
             <SheetBody className="space-y-4 font-sans pt-2">
-              <div className="flex items-center gap-2 text-xs text-zinc-300 font-sans">
+              <div className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300 font-sans">
                 <Mail size={13} className="text-zinc-500 shrink-0" />
                 <span className="truncate">{item.prospectEmail}</span>
               </div>
 
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 space-y-2">
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-2">
                 <div className="flex items-center justify-between text-xs font-sans">
-                  <span className="text-zinc-400">Email 1 personalization</span>
-                  <span className="font-mono text-white">{sentViaLabel(item.sentVia)}</span>
+                  <span className="text-zinc-600 dark:text-zinc-400">Email 1 personalization</span>
+                  <span className="font-mono text-zinc-900 dark:text-white">{sentViaLabel(item.sentVia)}</span>
                 </div>
                 {item.touchesTotal > 0 && (
                   <>
                     <div className="flex items-center justify-between text-xs font-sans pt-1">
-                      <span className="text-zinc-400">SMS touches</span>
-                      <span className="font-mono text-white">{item.touchesSent} / {item.touchesTotal}</span>
+                      <span className="text-zinc-600 dark:text-zinc-400">SMS touches</span>
+                      <span className="font-mono text-zinc-900 dark:text-white">{item.touchesSent} / {item.touchesTotal}</span>
                     </div>
-                    <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                    <div className="h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
                       <div className="h-full bg-amber-500" style={{ width: `${(item.touchesSent / item.touchesTotal) * 100}%` }} />
                     </div>
                   </>
                 )}
                 {item.callTime && (
                   <div className="flex items-center justify-between text-xs font-sans pt-1">
-                    <span className="text-zinc-400">Call time</span>
-                    <span className="font-mono text-white">{new Date(item.callTime).toLocaleString(undefined, { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">Call time</span>
+                    <span className="font-mono text-zinc-900 dark:text-white">{new Date(item.callTime).toLocaleString(undefined, { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                   </div>
                 )}
               </div>
@@ -354,15 +379,15 @@ function PileOnDrawer({ item, onClose }: { item: PileOnPipelineItem | null; onCl
               {item.sendError && (() => {
                 const diagnosis = classifyRunError(item.sendError);
                 return (
-                  <div className="rounded-xl border border-rose-900/50 bg-rose-950/20 p-3 font-sans">
-                    <span className="block text-[10.5px] font-mono uppercase text-rose-400/80 mb-1">Email 1 didn&apos;t go out</span>
+                  <div className="rounded-xl border border-rose-300 dark:border-rose-900/50 bg-rose-100 dark:bg-rose-950/20 p-3 font-sans">
+                    <span className="block text-[10.5px] font-mono uppercase text-rose-700 dark:text-rose-400/80 mb-1">Email 1 didn&apos;t go out</span>
                     {diagnosis ? (
                       <>
-                        <p className="text-xs font-semibold text-rose-300">{diagnosis.title}</p>
-                        <p className="text-[11px] text-rose-300/90 mt-0.5">{diagnosis.explanation}</p>
+                        <p className="text-xs font-semibold text-rose-900 dark:text-rose-300">{diagnosis.title}</p>
+                        <p className="text-[11px] text-rose-800 dark:text-rose-300/90 mt-0.5">{diagnosis.explanation}</p>
                       </>
                     ) : (
-                      <p className="text-[11px] text-rose-300/90">
+                      <p className="text-[11px] text-rose-800 dark:text-rose-300/90">
                         This hit an unexpected error and didn&apos;t send. If it keeps happening, let your account contact know.
                       </p>
                     )}
@@ -371,39 +396,33 @@ function PileOnDrawer({ item, onClose }: { item: PileOnPipelineItem | null; onCl
               })()}
 
               {item.sentVia === "hybrid" && item.personalizedIntro && (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 space-y-1.5">
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-1.5">
                   <span className="flex items-center gap-1.5 text-[10.5px] font-mono text-zinc-500 uppercase">
                     <Sparkles size={11} /> AI-personalized intro
                   </span>
-                  <p className="text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans">{item.personalizedIntro}</p>
+                  <p className="text-xs text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans">{item.personalizedIntro}</p>
                 </div>
               )}
 
               {item.runId && (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setShowRunActivity((p) => !p)}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-900 transition-colors"
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700/60 transition-colors"
                   >
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
                       <SquishySkillBadge skill="pile-on" size={14} enabled={true} />
                       Run activity
                     </span>
                     <ChevronDown size={13} className={cn("text-zinc-500 transition-transform", showRunActivity && "rotate-180")} />
                   </button>
                   {showRunActivity && (
-                    <div className="px-3 pb-3 pt-1 border-t border-zinc-800/60">
-                      {/* Includes the ad-audience sync step (adding/removing
-                          this prospect from the client's ad-platform
-                          exclusion cohort so ad spend isn't wasted
-                          retargeting someone who already booked) — that
-                          step has no separate persisted status field of
-                          its own, this run log is the actual record of it. */}
+                    <div className="px-3 pb-3 pt-1 border-t border-zinc-200 dark:border-zinc-700/60">
                       <RunActivityPanel runId={item.runId} />
                       <a
                         href={`/dashboard/runs/${item.runId}`}
-                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
                       >
                         <span>Open the full run page</span>
                         <ExternalLink size={10} />
