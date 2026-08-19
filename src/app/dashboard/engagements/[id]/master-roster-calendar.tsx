@@ -1,5 +1,7 @@
 "use client";
 
+// src/app/dashboard/engagements/[id]/master-roster-calendar.tsx
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -147,6 +149,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [activeTab, setActiveTab] = useState<"brief" | "pile_on" | "win_back">("brief");
+  const [showUpcomingInMonth, setShowUpcomingInMonth] = useState(false);
 
   // Per-Stream State
   const [roster, setRoster] = useState<StreamState<RosterEntry>>(emptyStream());
@@ -286,62 +289,6 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     return map;
   }, [filteredEntries]);
 
-  const todayK = dateKey(new Date());
-
-  // SMART WEEK GENERATOR: 7 Days centered on active week
-  const currentWeekDays = useMemo(() => {
-    const anchor = selectedDate || new Date();
-    const d = new Date(anchor);
-    const day = d.getDay();
-    const diffToMon = day === 0 ? -6 : 1 - day;
-    const monday = new Date(d);
-    monday.setDate(d.getDate() + diffToMon);
-
-    const days: { dateStr: string; dateObj: Date; calls: EnrichedEntry[] }[] = [];
-    for (let i = 0; i < 7; i++) {
-      const dateObj = new Date(monday);
-      dateObj.setDate(monday.getDate() + i);
-      const k = dateKey(dateObj);
-      const calls = entriesByDate[k] ?? [];
-
-      if (k <= todayK || calls.length > 0) {
-        days.push({ dateStr: k, dateObj, calls });
-      }
-    }
-    return days.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
-  }, [selectedDate, entriesByDate, todayK]);
-
-  // SMART MONTH FEED: Today & Past first (descending), Future days separate
-  const monthDaysSmart = useMemo(() => {
-    const days: { dateStr: string; dateObj: Date; calls: EnrichedEntry[]; isFuture: boolean }[] = [];
-    const numDays = new Date(year, month + 1, 0).getDate();
-
-    for (let d = 1; d <= numDays; d++) {
-      const dateObj = new Date(year, month, d);
-      const k = dateKey(dateObj);
-      const calls = entriesByDate[k] ?? [];
-      const isFuture = k > todayK;
-      days.push({ dateStr: k, dateObj, calls, isFuture });
-    }
-
-    const pastAndToday = days
-      .filter((d) => !d.isFuture)
-      .sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
-
-    const future = days
-      .filter((d) => d.isFuture && d.calls.length > 0)
-      .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
-
-    return { pastAndToday, future };
-  }, [year, month, entriesByDate, todayK]);
-
-  const listDaysToRender = useMemo(() => {
-    if (listScope === "week") {
-      return currentWeekDays;
-    }
-    return monthDaysSmart.pastAndToday;
-  }, [listScope, currentWeekDays, monthDaysSmart]);
-
   const filteredActivity = useMemo(() => {
     if (!filterText.trim()) return activity.data;
     const q = filterText.toLowerCase();
@@ -358,6 +305,64 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     }
     return map;
   }, [filteredActivity]);
+
+  const todayK = dateKey(new Date());
+
+  // SMART WEEK GENERATOR: 7 Days centered on active week (Mon -> Sun)
+  const currentWeekDays = useMemo(() => {
+    const anchor = selectedDate || new Date();
+    const d = new Date(anchor);
+    const day = d.getDay();
+    const diffToMon = day === 0 ? -6 : 1 - day;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diffToMon);
+
+    const days: { dateStr: string; dateObj: Date; calls: EnrichedEntry[]; activities: ActivityEvent[] }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const dateObj = new Date(monday);
+      dateObj.setDate(monday.getDate() + i);
+      const k = dateKey(dateObj);
+      const calls = entriesByDate[k] ?? [];
+      const activities = activityByDate[k] ?? [];
+
+      if (k <= todayK || calls.length > 0 || activities.length > 0) {
+        days.push({ dateStr: k, dateObj, calls, activities });
+      }
+    }
+    return days.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+  }, [selectedDate, entriesByDate, activityByDate, todayK]);
+
+  // SMART MONTH FEED: Today & Past first (descending), Future days separate
+  const monthDaysSmart = useMemo(() => {
+    const days: { dateStr: string; dateObj: Date; calls: EnrichedEntry[]; activities: ActivityEvent[]; isFuture: boolean }[] = [];
+    const numDays = new Date(year, month + 1, 0).getDate();
+
+    for (let d = 1; d <= numDays; d++) {
+      const dateObj = new Date(year, month, d);
+      const k = dateKey(dateObj);
+      const calls = entriesByDate[k] ?? [];
+      const activities = activityByDate[k] ?? [];
+      const isFuture = k > todayK;
+      days.push({ dateStr: k, dateObj, calls, activities, isFuture });
+    }
+
+    const pastAndToday = days
+      .filter((d) => !d.isFuture)
+      .sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+
+    const future = days
+      .filter((d) => d.isFuture && (d.calls.length > 0 || d.activities.length > 0))
+      .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
+
+    return { pastAndToday, future };
+  }, [year, month, entriesByDate, activityByDate, todayK]);
+
+  const listDaysToRender = useMemo(() => {
+    if (listScope === "week") {
+      return currentWeekDays;
+    }
+    return monthDaysSmart.pastAndToday;
+  }, [listScope, currentWeekDays, monthDaysSmart]);
 
   const dayMetrics = useMemo(() => {
     const metrics: Record<string, {
@@ -449,7 +454,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
 
       {/* Toolbar & View Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-2 shadow-sm font-sans">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           {/* Universal Month Navigation */}
           <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
             <button
@@ -1039,8 +1044,9 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               </div>
             ) : (
               <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 max-h-[580px] overflow-y-auto">
-                {listDaysToRender.map(({ dateStr, dateObj, calls }) => {
+                {listDaysToRender.map(({ dateStr, dateObj, calls, activities }) => {
                   const isSelectedDay = dateKey(selectedDate) === dateStr;
+                  const systemAudits = activities.filter((ev) => ev.skill === "leak-map");
 
                   return (
                     <div key={dateStr} className="space-y-0 font-sans">
@@ -1054,11 +1060,32 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                         </span>
                         <span className={cn("font-normal", calls.length > 0 ? "text-zinc-700 dark:text-zinc-300 font-bold" : "text-zinc-400")}>
                           {calls.length} booking{calls.length === 1 ? "" : "s"}
+                          {systemAudits.length > 0 && ` · ${systemAudits.length} audit${systemAudits.length === 1 ? "" : "s"}`}
                         </span>
                       </div>
 
                       {/* Day Feed Entries */}
                       <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
+                        {/* 1. System Events Banner (e.g., Leak-Map Audits) */}
+                        {systemAudits.map((audit) => (
+                          <div
+                            key={audit.id}
+                            onClick={() => handleUpdateSelectedDate(dateObj)}
+                            className="flex items-center justify-between px-4 py-2 bg-amber-500/10 dark:bg-amber-950/30 border-b border-amber-500/20 text-xs font-sans cursor-pointer hover:bg-amber-500/15"
+                          >
+                            <div className="flex items-center gap-2 font-sans">
+                              <span className="font-mono text-[10px] font-bold text-amber-950 dark:text-amber-200 bg-amber-200 dark:bg-amber-900/60 px-1.5 py-0.5 rounded shrink-0">
+                                {timeStr(audit.occurredAt)}
+                              </span>
+                              <SquishySkillBadge skill="leak-map" size={14} enabled={true} />
+                              <span className="font-bold text-zinc-900 dark:text-white font-sans">{audit.title}</span>
+                              {audit.detail && <span className="text-zinc-500 font-mono text-[11px]">{audit.detail}</span>}
+                            </div>
+                            <StatusPill tone={audit.tone}>{TONE_TO_SEVERITY_LABEL[audit.tone] ?? audit.tone}</StatusPill>
+                          </div>
+                        ))}
+
+                        {/* 2. Prospect Calls with Combined Skill Badges */}
                         {calls.length > 0 ? (
                           calls.map((entry) => {
                             const isSelected = selectedEntry?.id === entry.id;
@@ -1100,8 +1127,8 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                 </div>
 
                                 <div className="flex items-center gap-2 shrink-0">
-                                  {/* Skill Badges indicator */}
-                                  <div className="flex items-center gap-1">
+                                  {/* Combined Active Skill Badges */}
+                                  <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/80 p-1 rounded-lg border border-zinc-200 dark:border-zinc-700/60">
                                     <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
                                     {entry.pileOnData && <SquishySkillBadge skill="pile-on" size={14} enabled={true} />}
                                     {entry.winBackData && <SquishySkillBadge skill="win-back" size={14} enabled={true} />}
@@ -1127,8 +1154,8 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                               </button>
                             );
                           })
-                        ) : (
-                          /* Explicit empty day row when 0 bookings took place */
+                        ) : systemAudits.length === 0 ? (
+                          /* Explicit empty day row when 0 bookings/activity took place */
                           <button
                             type="button"
                             onClick={() => {
@@ -1150,7 +1177,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             </span>
                             <span className="text-[10px] text-zinc-400 dark:text-zinc-600">0 / 0</span>
                           </button>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   );
