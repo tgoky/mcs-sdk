@@ -10,55 +10,24 @@ import {
   CalendarClock, 
   AlertTriangle, 
   Loader2, 
+  ExternalLink, 
   CalendarX2,
   RefreshCw,
   CalendarDays,
   Clock,
-  ArrowUpRight,
-  ShieldAlert,
-  CheckCircle2
+  Sparkles,
+  ArrowUpRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dateKey } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
-import { toneFromSeverity } from "@/app/dashboard/runs/[id]/_shared/status-pill";
+import { StatusPill, toneFromSeverity } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { auditRunTypeLabel } from "@/lib/copy";
+import { LeakMapView } from "@/app/dashboard/runs/[id]/views/leak-map-view";
 import type { LeakMapDetail } from "@/app/dashboard/runs/[id]/_shared/types";
 import type { AuditHistoryItem, ScheduledAudit, ActiveAlertItem } from "@/app/api/engagements/[id]/leak-map-schedule/route";
 
 type ListScope = "week" | "month";
-type Tone = "success" | "warning" | "danger" | "info" | "neutral";
-
-function StatusPill({
-  tone,
-  children,
-  className,
-}: {
-  tone: Tone | string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const toneClasses =
-    {
-      success: "bg-emerald-100 text-emerald-950 border border-emerald-300/80 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800/80",
-      danger: "bg-rose-100 text-rose-950 border border-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:border-rose-800/80",
-      warning: "bg-amber-100 text-amber-950 border border-amber-300 dark:bg-amber-950/90 dark:text-amber-200 dark:border-amber-800/80 font-bold",
-      info: "bg-sky-100 text-sky-950 border border-sky-300/80 dark:bg-sky-950/70 dark:text-sky-300 dark:border-sky-800/80",
-      neutral: "bg-zinc-100 text-zinc-800 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700",
-    }[tone] ?? "bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300";
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-tight transition-colors border-0",
-        toneClasses,
-        className
-      )}
-    >
-      {children}
-    </span>
-  );
-}
 
 function formatDayHeader(dateStr: string) {
   const todayKey = dateKey(new Date());
@@ -101,12 +70,11 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
   const month = currentDate.getMonth();
   const monthString = `${year}-${String(month + 1).padStart(2, "0")}`;
 
-  // Scalable Month Query Fetching
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/engagements/${engagementId}/leak-map-schedule?month=${monthString}`);
+      const res = await fetch(`/api/engagements/${engagementId}/leak-map-schedule`);
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? "Failed to load audit schedule.");
       const body = await res.json();
       setHistory(body.history ?? []);
@@ -117,7 +85,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [engagementId, monthString]);
+  }, [engagementId]);
 
   useEffect(() => {
     load();
@@ -158,6 +126,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
 
   const todayK = dateKey(new Date());
 
+  // Filters out empty days so 6 empty days between weekly audits don't clog the feed
   const currentWeekDays = useMemo(() => {
     const anchor = selectedDate || new Date();
     const d = new Date(anchor);
@@ -188,13 +157,13 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
       const dateObj = new Date(year, month, d);
       const k = dateKey(dateObj);
       const audits = historyByDate[k] ?? [];
-      if (audits.length > 0) {
+      if (k <= todayK && audits.length > 0) {
         days.push({ dateStr: k, dateObj, audits });
       }
     }
 
     return days.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
-  }, [year, month, historyByDate]);
+  }, [year, month, historyByDate, todayK]);
 
   const listDaysToRender = useMemo(() => {
     if (listScope === "week") {
@@ -330,7 +299,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                     <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
                       Next {s.auditType} audit
                     </span>
-                    <span className="text-xs font-bold text-zinc-900 dark:text-white block truncate font-sans">
+                    <span className="text-xs font-bold text-zinc-900 dark:text-white block truncate">
                       {new Date(s.nextRunAt).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                     </span>
                     <span className="text-[10px] text-zinc-400 font-mono block">({s.timezone})</span>
@@ -343,7 +312,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
           {/* Active Alerts Strip */}
           {!loading && alerts.length > 0 && (
             <div className="rounded-2xl border border-rose-300 dark:border-rose-900/50 bg-rose-100/60 dark:bg-rose-950/20 p-3.5 font-sans space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-rose-900 dark:text-rose-300 font-sans">
+              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-rose-900 dark:text-rose-300">
                 <AlertTriangle size={14} className="text-rose-600 dark:text-rose-400" />
                 <span>{alerts.length} active funnel alert{alerts.length === 1 ? "" : "s"}</span>
               </div>
@@ -504,7 +473,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                 </div>
               </div>
 
-              {/* Stripped-Down Vertical Diagnostic Report */}
+              {/* Embedded Report Content */}
               {selected.runId && (
                 <div className="space-y-2 font-sans">
                   <div className="flex items-center justify-between">
@@ -520,7 +489,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                     </a>
                   </div>
 
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-3 max-h-[360px] overflow-y-auto text-xs font-sans">
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 p-3 max-h-[320px] overflow-y-auto text-xs font-sans">
                     {detailLoading && (
                       <div className="flex items-center justify-center py-8 text-zinc-500">
                         <Loader2 size={16} className="animate-spin" />
@@ -529,8 +498,14 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                     {detailError && (
                       <p className="text-[11px] text-rose-600 dark:text-rose-400 font-sans">{detailError}</p>
                     )}
-                    {!detailLoading && !detailError && detail && (
-                      <LeakMapInspectorReport detail={detail} />
+                    {!detailLoading && !detailError && detail && "audit" in detail && (
+                      <div className={cn(
+                        "font-sans text-xs transition-colors",
+                        "[html:not(.dark)_&_*]:!text-zinc-900 [html:not(.dark)_&_*]:!border-zinc-200",
+                        "[html:not(.dark)_&_div]:!bg-zinc-100/60"
+                      )}>
+                        <LeakMapView detail={detail} />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -544,167 +519,6 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-/**
- * Stripped-down, theme-aware vertical report renderer for the Inspector Panel.
- * Eliminates nested view switchers, dark boxes, and redundant card grids.
- */
-function LeakMapInspectorReport({ detail }: { detail: LeakMapDetail }) {
-  const audit = (detail as any).audit;
-  if (!audit) {
-    return (
-      <p className="text-xs text-zinc-500 font-sans italic py-2">
-        No detailed audit payload available for this run.
-      </p>
-    );
-  }
-
-  const overallHealth = audit.overallHealth || audit.summary?.overallHealth || "Stable";
-  const healthTone =
-    overallHealth.toLowerCase().includes("critical") || overallHealth.toLowerCase().includes("high")
-      ? "danger"
-      : overallHealth.toLowerCase().includes("warning") || overallHealth.toLowerCase().includes("medium")
-      ? "warning"
-      : "success";
-
-  const metrics = audit.metrics || audit.evaluatedMetrics || [];
-  const issues = audit.issues || audit.topIssues || [];
-  const gaps = audit.gaps || audit.identifiedGaps || [];
-
-  return (
-    <div className="space-y-3 font-sans text-xs">
-      {/* Funnel Health Status Banner */}
-      <div className={cn(
-        "p-3 rounded-xl border flex items-center justify-between gap-2 font-sans",
-        healthTone === "danger" && "bg-rose-100/80 border-rose-300 text-rose-950 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-200",
-        healthTone === "warning" && "bg-amber-100/80 border-amber-300 text-amber-950 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200",
-        healthTone === "success" && "bg-emerald-100/80 border-emerald-300 text-emerald-950 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200"
-      )}>
-        <div className="flex items-center gap-2">
-          {healthTone === "danger" ? (
-            <ShieldAlert size={16} className="text-rose-600 dark:text-rose-400 shrink-0" />
-          ) : (
-            <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-          )}
-          <div>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider block opacity-70">
-              Overall Funnel Health
-            </span>
-            <span className="font-bold text-xs block leading-snug">
-              {overallHealth}
-            </span>
-          </div>
-        </div>
-        <StatusPill tone={healthTone} className="capitalize shrink-0">
-          {healthTone === "danger" ? "Critical" : healthTone === "warning" ? "Attention" : "Healthy"}
-        </StatusPill>
-      </div>
-
-      {/* Executive Summary */}
-      {audit.summaryText && (
-        <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-zinc-800 dark:text-zinc-200 leading-relaxed font-sans text-[11.5px]">
-          {audit.summaryText}
-        </div>
-      )}
-
-      {/* Flagged Leaks & Fix Recommendations (Vertical Stack) */}
-      {issues.length > 0 && (
-        <div className="space-y-2">
-          <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
-            Flagged Leaks ({issues.length})
-          </span>
-          <div className="space-y-2 font-sans">
-            {issues.map((issue: any, idx: number) => {
-              const severity = issue.severity || issue.level || "medium";
-              return (
-                <div
-                  key={idx}
-                  className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 space-y-1.5 shadow-xs font-sans"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-zinc-900 dark:text-white text-xs">
-                      {issue.title || issue.name || issue.metricName}
-                    </span>
-                    <StatusPill tone={toneFromSeverity(severity)} className="capitalize shrink-0">
-                      {severity}
-                    </StatusPill>
-                  </div>
-
-                  {issue.description && (
-                    <p className="text-zinc-600 dark:text-zinc-400 text-[11.5px] leading-relaxed">
-                      {issue.description}
-                    </p>
-                  )}
-
-                  {issue.recommendation && (
-                    <div className="mt-1 pt-1.5 border-t border-zinc-100 dark:border-zinc-800/80 text-[11px] text-zinc-700 dark:text-zinc-300">
-                      <span className="font-bold font-mono text-[10px] text-zinc-400 uppercase block mb-0.5">
-                        Fix Recommendation:
-                      </span>
-                      {issue.recommendation}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Evaluated Metrics Summary */}
-      {metrics.length > 0 && (
-        <div className="space-y-2 font-sans">
-          <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
-            Evaluated Metrics ({metrics.length})
-          </span>
-          <div className="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 overflow-hidden font-sans">
-            {metrics.map((m: any, idx: number) => (
-              <div key={idx} className="p-2.5 flex items-center justify-between gap-2 font-sans">
-                <div>
-                  <span className="font-bold text-zinc-900 dark:text-white block text-xs">
-                    {m.name || m.label || m.metric}
-                  </span>
-                  {m.delta !== undefined && (
-                    <span className="text-[10px] font-mono text-zinc-500 block">
-                      Change: {m.delta > 0 ? `+${m.delta}` : m.delta}
-                    </span>
-                  )}
-                </div>
-                <div className="text-right font-sans">
-                  <span className="font-mono font-bold text-zinc-900 dark:text-white text-xs block">
-                    {m.value ?? m.currentValue ?? "—"}
-                  </span>
-                  {m.status && (
-                    <StatusPill tone={toneFromSeverity(m.status)} className="capitalize text-[9.5px] py-0 px-1.5 mt-0.5">
-                      {m.status}
-                    </StatusPill>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Identified Setup Gaps */}
-      {gaps.length > 0 && (
-        <div className="space-y-2 font-sans">
-          <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
-            Identified Setup Gaps ({gaps.length})
-          </span>
-          <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 space-y-1.5 font-sans">
-            {gaps.map((gap: any, idx: number) => (
-              <div key={idx} className="flex items-start gap-2 text-zinc-700 dark:text-zinc-300 text-[11.5px] font-sans">
-                <span className="text-amber-500 font-bold shrink-0">•</span>
-                <span>{typeof gap === "string" ? gap : gap.description || gap.title || gap.name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
