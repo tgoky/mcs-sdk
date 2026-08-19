@@ -49,12 +49,12 @@ function StatusPill({
 }) {
   const toneClasses =
     {
-      success: "bg-emerald-100 text-emerald-950 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800",
-      danger: "bg-rose-100 text-rose-950 border border-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:border-rose-800",
+      success: "bg-emerald-100 text-emerald-950 border border-emerald-300/80 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800/80",
+      danger: "bg-[#ffcfd2] text-rose-950 border border-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:border-rose-800/80",
       // HIGH-CONTRAST #aab3d8 (LIGHT) & #b7eacd (DARK) STYLING WITHOUT GLOWING DOT
-      warning: "bg-[#afb9e1] text-zinc-950 dark:bg-[#b7eacd] dark:text-zinc-950 font-bold border-0 shadow-xs",
-      info: "bg-sky-100 text-sky-950 border border-sky-300 dark:bg-sky-950/70 dark:text-sky-300 dark:border-sky-800",
-      neutral: "bg-zinc-200/80 text-zinc-800 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700",
+      warning: "bg-[#aab3d8] text-zinc-950 dark:bg-[#b7eacd] dark:text-zinc-950 font-bold border-0 shadow-xs",
+      info: "bg-sky-100 text-sky-950 border border-sky-300/80 dark:bg-sky-950/70 dark:text-sky-300 dark:border-sky-800/80",
+      neutral: "bg-zinc-200/80 text-zinc-900 border border-zinc-300/60 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700/60",
     }[tone] ?? "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300";
 
   return (
@@ -106,7 +106,6 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
   const [filterText, setFilterText] = useState("");
   const [copiedLink, setCopiedLink] = useState(false);
   const [showRunActivity, setShowRunActivity] = useState(false);
-  const [showUpcomingInMonth, setShowUpcomingInMonth] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -417,7 +416,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                               }}
                               className={cn(
                                 "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer font-sans border-0",
-                                // FAINT BACKGROUND HIGHLIGHT FOR ACTIVE ITEMS WITHOUT VERTICAL ACCENT BAR
+                                // FAINT BACKGROUND HIGHLIGHT FOR ACTIVE ITEMS
                                 isActive && !isSelected && "bg-[#aab3d8]/20 dark:bg-[#b7eacd]/10",
                                 isSelected && "bg-[#aab3d8]/35 dark:bg-[#b7eacd]/25 ring-1 ring-[#aab3d8] dark:ring-[#b7eacd]",
                                 !isActive && !isSelected && "bg-white dark:bg-transparent hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50"
@@ -444,9 +443,8 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                                   {item.touchesSent}/{item.touchesTotal} Touches
                                 </span>
 
-                                <StatusPill tone={STATUS_META[item.status].tone} className="shrink-0">
-                                  {STATUS_META[item.status].label}
-                                </StatusPill>
+                                {/* REPLACED STATUS PILL WITH SQUISHY SKILL BADGE */}
+                                <SquishySkillBadge skill="win-back" size={18} enabled={true} />
                               </div>
                             </button>
                           );
@@ -557,7 +555,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
               )}
 
               {selected.runId && (
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-xs font-sans">
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 overflow-hidden text-xs font-sans">
                   <button
                     type="button"
                     onClick={() => setShowRunActivity((p) => !p)}
@@ -570,11 +568,11 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                     <ChevronDown size={13} className={cn("text-zinc-500 transition-transform", showRunActivity && "rotate-180")} />
                   </button>
                   {showRunActivity && (
-                    <div className="px-3 pb-3 pt-1 border-t border-zinc-200 dark:border-zinc-800/60">
+                    <div className="px-3 pb-3 pt-2 border-t border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 rounded-b-xl">
                       <RunActivityPanel runId={selected.runId} />
                       <a
                         href={`/dashboard/runs/${selected.runId}`}
-                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
+                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors font-medium"
                       >
                         <span>Open full run page</span>
                         <ExternalLink size={10} />
