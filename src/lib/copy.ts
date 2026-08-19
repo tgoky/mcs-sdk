@@ -265,7 +265,7 @@ export const EMAIL_PLATFORM_LABELS: Record<string, string> = {
   ghl: "GoHighLevel",
   mailchimp: "Mailchimp",
   convertkit: "ConvertKit",
-  smtp: "Custom SMTP",
+  smtp: "Direct Send — no CRM (Resend or SMTP)",
 };
 
 export const HOSTING_PLATFORM_LABELS: Record<string, string> = {

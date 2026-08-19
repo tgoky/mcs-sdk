@@ -3,7 +3,7 @@ import { credentialsRefs, engagements, type EngagementStack } from "@/models/sch
 import { eq, isNull } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { CalendlyClient, CalComClient, GHLCalendarClient } from "@/lib/platforms/booking";
-import { MailchimpClient, ConvertKitClient, SMTPClient, parseSmtpCredential } from "@/lib/platforms/email";
+import { MailchimpClient, ConvertKitClient, createDirectSendClient } from "@/lib/platforms/email";
 import { notifyUser } from "@/lib/notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
@@ -31,6 +31,13 @@ const CREDENTIAL_HEALTH_LOCAL_HOUR = 13;
  * catching a real outage. Extend this map only after doing that same
  * doc-check for the new provider.
  *
+ * smtp's check now goes through createDirectSendClient, which also covers
+ * Resend-flavored "smtp" credential blobs (see email.ts) — Resend's own
+ * checkCredentialHealth is intentionally more cautious than the others
+ * here (see its doc comment) since a domain-restricted "sending_access"
+ * key's ability to call the check endpoint isn't independently confirmed,
+ * only its ability to send.
+ *
  * ghl_calendar reuses GET /calendars/?locationId= (the same endpoint
  * resolveCalendarId() already depends on) as its "am I still
  * authenticated" probe — verified against GHL's own docs, see the doc
@@ -45,7 +52,7 @@ const VALIDATORS: Record<string, (secret: string, ctx: { locationId?: string }) 
   cal_com: (token) => new CalComClient(token).checkCredentialHealth(),
   mailchimp: (key) => new MailchimpClient(key).checkCredentialHealth(),
   convertkit: (secret) => new ConvertKitClient(secret).checkCredentialHealth(),
-  smtp: (raw) => new SMTPClient(parseSmtpCredential(raw)).checkCredentialHealth(),
+  smtp: (raw) => createDirectSendClient(raw).checkCredentialHealth(),
   ghl_calendar: (token, ctx) => {
     if (!ctx.locationId?.trim()) {
       // No Location ID on file — nothing to check yet rather than a false

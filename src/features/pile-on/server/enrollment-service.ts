@@ -7,7 +7,7 @@ import { enrollInPreCallSequence, enrollInWinBackSequence, exitWinBackSequence, 
 import { logStep, finishRun, type RunSummary } from "@/lib/run-log";
 import { runHybridPersonalization } from "./hybrid-personalizer";
 import { enrollSmsSequenceForTenant } from "@/lib/platforms/sms";
-import { inngest, pileOnSmsSequenceStart, winBackSmsSequenceStart, winBackEmailSmtpSequenceStart } from "@/lib/inngest";
+import { inngest, pileOnSmsSequenceStart, winBackSmsSequenceStart, winBackEmailSmtpSequenceStart, winBackSequenceStop } from "@/lib/inngest";
 import { addProspectToAdDataCohort, removeProspectFromAdDataCohort } from "./cohort-sync";
 import { tagRecoveredFromNoShow } from "@/lib/platforms/crm-tagger";
 import { extractFreshRescheduleLink } from "@/lib/platforms/reschedule";
@@ -231,6 +231,22 @@ export async function handleInboundBookingEvent(
 
         return rows;
       }));
+
+      // Hard-cancel signal for any of the rebooked enrollments that were
+      // mid-sleep in a direct-send (SMTP/Resend or SMS) win-back run — see
+      // winBackSequenceStop's doc comment in inngest.ts. Best-effort: the
+      // DB update above already recorded the rebook durably, so a failure
+      // here just means the soft status-check catches it at the run's
+      // next scheduled step instead of immediately.
+      if (rebookedRows.length > 0) {
+        try {
+          await run("win-back-exit-cancel-signal", () =>
+            inngest.send(rebookedRows.map((r) => winBackSequenceStop.create({ enrollmentId: r.id })))
+          );
+        } catch (cancelErr) {
+          console.error("[enrollment-service] win-back cancelOn signal failed:", cancelErr);
+        }
+      }
 
       // Log line moved here (was previously written before we knew the
       // outcome) and now says what actually happened: the exit signal

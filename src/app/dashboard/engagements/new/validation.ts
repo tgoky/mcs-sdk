@@ -63,6 +63,7 @@ export function getValidationErrors(form: FormData): ValidationError[] {
   }
 
   // Step 3: Account Keys
+  // Booking key validation - accepts either API key OR credential vault ID (or GHL shared vault)
   if (
     !form.bookingApiKey.trim() &&
     !form.bookingCredentialVaultId.trim() &&
@@ -70,7 +71,13 @@ export function getValidationErrors(form: FormData): ValidationError[] {
   ) {
     errors.push({ step: "credentials", stepLabel: "Account Keys", issue: `Booking Platform (${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform}) API Key is missing` });
   }
-  if (form.emailPlatform === "smtp") {
+
+  // Email key validation - handles SMTP/Resend separately from ESP platforms
+  if (form.emailPlatform === "smtp" && form.directSendProvider === "resend") {
+    if (!form.resendApiKey.trim() || !form.smtpFromAddress.trim()) {
+      errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "Resend API key and From address are required" });
+    }
+  } else if (form.emailPlatform === "smtp") {
     if (!form.smtpHost.trim() || !form.smtpPort.trim() || !form.smtpUsername.trim() || !form.smtpPassword.trim() || !form.smtpFromAddress.trim()) {
       errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "Complete SMTP server credentials are required (host, port, username, password, from address)" });
     }

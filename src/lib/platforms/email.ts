@@ -1518,6 +1518,146 @@ export class SMTPClient {
   }
 }
 
+// ── Resend (direct-send, no CRM required) ───────────────────────────────────
+//
+// Same role as SMTPClient above — a transport for buyers with no ESP/CRM
+// account at all — but over Resend's HTTP API instead of raw SMTP. The
+// gap raw SMTP doesn't close is deliverability: a brand-new SMTP relay has
+// no sending reputation and lands in spam far more than a service built
+// specifically around inbox placement (verified domain DKIM/SPF, shared
+// reputation infrastructure). This is a drop-in alternative transport, not
+// a new email_platform value — it's selected via the "provider" field
+// inside the same "smtp" stack.email_platform credential blob (see
+// parseDirectSendCredential/createDirectSendClient below), so every piece
+// of code that already gates on `stack.email_platform === "smtp"`
+// (enrollment-service.ts, onboarding-service.ts, the win-back stop route,
+// the setup wizard's validation) keeps working unchanged.
+//
+// API shape confirmed against Resend's own docs
+// (resend.com/docs/api-reference/emails/send-email and
+// resend.com/docs/api-reference/api-keys/list-api-keys) — not assumed from
+// memory: POST /emails takes {from, to, subject, html|text} with a Bearer
+// API key, and GET /api-keys is a real, lightweight authenticated
+// endpoint.
+
+export interface ResendConfig {
+  apiKey: string;
+  fromAddress: string;
+  fromName?: string;
+}
+
+/**
+ * Parses the "resend" variant of the direct-send credential blob. Errors
+ * name the specific missing field, matching parseSmtpCredential's pattern.
+ */
+export function parseResendCredential(raw: string): ResendConfig {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      'Resend credential is not valid JSON — expected {"provider":"resend","apiKey","fromAddress"}.'
+    );
+  }
+  for (const key of ["apiKey", "fromAddress"] as const) {
+    if (parsed?.[key] === undefined || parsed[key] === null || parsed[key] === "") {
+      throw new Error(`Resend credential is missing "${key}".`);
+    }
+  }
+  return {
+    apiKey: String(parsed.apiKey),
+    fromAddress: String(parsed.fromAddress),
+    fromName: parsed.fromName ? String(parsed.fromName) : undefined,
+  };
+}
+
+export class ResendClient {
+  private apiKey: string;
+  private fromHeader: string;
+
+  constructor(config: ResendConfig) {
+    this.apiKey = config.apiKey;
+    this.fromHeader = config.fromName ? `${config.fromName} <${config.fromAddress}>` : config.fromAddress;
+  }
+
+  /** Same content-authoring expectation as SMTPClient.sendEmail — see its doc comment. */
+  async sendEmail(to: string, subject: string, body: string): Promise<void> {
+    const isHtml = /<[a-z][\s\S]*>/i.test(body);
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: this.fromHeader,
+        to: [to],
+        subject,
+        ...(isHtml ? { html: body } : { text: body }),
+      }),
+    });
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "");
+      throw new Error(`Resend send failed [${response.status}]: ${errorBody.slice(0, 300)}`);
+    }
+  }
+
+  /**
+   * Confirms the Resend API key actually authenticates. Deliberately NOT
+   * wired into credential-health.ts's automatic cron VALIDATORS map — that
+   * file's own stated policy (see its module comment) is to only add a
+   * provider once its "am I still authenticated" endpoint is confirmed
+   * safe against every key permission level, and Resend keys can be scoped
+   * to "sending_access" (domain-restricted) rather than "full_access"; it's
+   * not confirmed here whether a sending-scoped key can call GET
+   * /api-keys, so auto-flagging a healthy sending-only key as broken is a
+   * real risk. This method still exists for direct/manual use.
+   */
+  async checkCredentialHealth(): Promise<void> {
+    const response = await fetch("https://api.resend.com/api-keys", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    if (!response.ok) {
+      throw new Error(`Resend credential check failed [${response.status}]`);
+    }
+  }
+}
+
+/** Either transport a "smtp"-platform credential blob can describe. */
+type DirectSendClient = {
+  sendEmail(to: string, subject: string, body: string): Promise<void>;
+  checkCredentialHealth(): Promise<void>;
+};
+
+/**
+ * Reads the "provider" discriminator out of a stack.email_platform ===
+ * "smtp" credential blob. Defaults to "smtp" when the field is absent so
+ * every credential stored before this field existed keeps working exactly
+ * as before — this is additive, not a breaking migration.
+ */
+function directSendProviderOf(raw: string): "smtp" | "resend" {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return parsed?.provider === "resend" ? "resend" : "smtp";
+  } catch {
+    return "smtp";
+  }
+}
+
+/**
+ * Builds the right direct-send client (SMTP or Resend) for a "smtp"
+ * stack.email_platform credential blob. This is the one place
+ * win-back-email-smtp.ts and credential-health.ts need to call instead of
+ * constructing SMTPClient directly, so both transports ride the exact
+ * same owned Inngest cadence and health-check wiring.
+ */
+export function createDirectSendClient(raw: string): DirectSendClient {
+  return directSendProviderOf(raw) === "resend"
+    ? new ResendClient(parseResendCredential(raw))
+    : new SMTPClient(parseSmtpCredential(raw));
+}
+
 // ── Router ────────────────────────────────────────────────────────────────
 
 /**

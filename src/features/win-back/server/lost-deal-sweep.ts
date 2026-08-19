@@ -8,6 +8,7 @@ import { resolveCredential } from "@/lib/credentials";
 import { notifyUser } from "@/lib/notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
+import { inngest, winBackSequenceStop } from "@/lib/inngest";
 import type { GetStepTools, Inngest } from "inngest";
 
 // Verified-defect fix (2026-08-08 handoff, defect #2). Was driven by a
@@ -96,6 +97,21 @@ export async function markElapsedEnrollmentsLost(): Promise<
     const list = byEngagementMap.get(row.engagementId) ?? [];
     list.push(row.id);
     byEngagementMap.set(row.engagementId, list);
+  }
+
+  // Hard-cancel signal for any of these enrollments still mid-sleep in a
+  // direct-send win-back run — see winBackSequenceStop's doc comment in
+  // inngest.ts. Best-effort: the DB update above already recorded "lost"
+  // durably; a failure here just means the run's own soft status-check
+  // catches it at its next scheduled step instead (which, since the
+  // recovery window has already elapsed, is usually imminent or already
+  // passed anyway).
+  if (elapsed.length > 0) {
+    try {
+      await inngest.send(elapsed.map((row) => winBackSequenceStop.create({ enrollmentId: row.id })));
+    } catch (cancelErr) {
+      console.error("[lost-deal-sweep] win-back cancelOn signal failed:", cancelErr);
+    }
   }
 
   return {

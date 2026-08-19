@@ -166,16 +166,9 @@ export default function RunDetailPage() {
   
   const techDetailsRef = useRef<HTMLDivElement>(null);
 
-  const fetchRun = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const response = await fetch(`/api/skill-runs/${runId}`, { cache: "no-store", signal });
-      if (!response.ok) return;
-      const data = await response.json();
-      setRun(data.run);
-    } catch {
-      // Polling failure gracefully ignored
-    }
-  }, [runId]);
+  // Tracks the previously observed run status so fetchRun can detect the
+  // exact moment a run leaves "running" (see fetchRun below).
+  const prevStatusRef = useRef<string | null>(null);
 
   const fetchDetail = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -187,6 +180,35 @@ export default function RunDetailPage() {
       // gracefully ignored
     }
   }, [runId]);
+
+  const fetchRun = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const response = await fetch(`/api/skill-runs/${runId}`, { cache: "no-store", signal });
+      if (!response.ok) return;
+      const data = await response.json();
+      setRun(data.run);
+
+      // Live-refresh fix: `fetchDetail` only ran once, on mount, so the
+      // skill views (PinDownView/PileOnView/etc) kept showing whatever
+      // partial `detail` existed while the run was still going — the
+      // person had to manually refresh the page to see the finished
+      // result. The 3s status poll below already tells us the instant a
+      // run finishes, so use that same tick to pull the final detail
+      // payload once, right here. Deliberately called WITHOUT `signal`:
+      // this fires from inside the isRunning-gated polling effect, and
+      // the moment setRun() above flips isRunning to false, that effect's
+      // cleanup aborts its own controller — reusing that same signal here
+      // would risk the final detail fetch getting cancelled right as it's
+      // needed.
+      const newStatus: string | null = data.run?.status ?? null;
+      if (prevStatusRef.current === "running" && newStatus && newStatus !== "running") {
+        fetchDetail();
+      }
+      prevStatusRef.current = newStatus;
+    } catch {
+      // Polling failure gracefully ignored
+    }
+  }, [runId, fetchDetail]);
 
   useEffect(() => {
     if (!runId) return;
@@ -202,6 +224,7 @@ export default function RunDetailPage() {
         }
         const data = await response.json();
         setRun(data.run);
+        prevStatusRef.current = data.run?.status ?? null;
       } catch (cause: unknown) {
         if (cause instanceof Error && cause.name !== "AbortError") setError(cause.message);
       } finally {

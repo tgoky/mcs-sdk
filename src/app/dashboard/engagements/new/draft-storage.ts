@@ -29,7 +29,7 @@ export function loadDraftStep(): Step | null {
 export function saveDraft(form: FormData, step: Step) {
   if (typeof window === "undefined") return;
   try {
-    const { bookingApiKey, emailApiKey, hostingApiKey, smsApiKey, adDataApiKey, videoEngagementApiKey, apolloApiKey, pdlApiKey, ...safeToStore } = form;
+    const { bookingApiKey, emailApiKey, hostingApiKey, smsApiKey, adDataApiKey, videoEngagementApiKey, apolloApiKey, pdlApiKey, resendApiKey, ...safeToStore } = form;
     void bookingApiKey;
     void emailApiKey;
     void hostingApiKey;
@@ -38,6 +38,7 @@ export function saveDraft(form: FormData, step: Step) {
     void videoEngagementApiKey;
     void apolloApiKey;
     void pdlApiKey;
+    void resendApiKey;
     window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(safeToStore));
     window.sessionStorage.setItem(DRAFT_STEP_KEY, step);
   } catch {

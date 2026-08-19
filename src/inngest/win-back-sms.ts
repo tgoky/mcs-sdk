@@ -1,4 +1,4 @@
-import { inngest, winBackSmsSequenceStart } from "@/lib/inngest";
+import { inngest, winBackSmsSequenceStart, winBackSequenceStop } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements, winBackEnrollments, sequenceMessageLog, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
@@ -21,7 +21,11 @@ import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
  * to guard against here.
  */
 export const processWinBackSmsSequence = inngest.createFunction(
-  { id: "process-win-back-sms-sequence", triggers: [winBackSmsSequenceStart] },
+  {
+    id: "process-win-back-sms-sequence",
+    triggers: [winBackSmsSequenceStart],
+    cancelOn: [{ event: winBackSequenceStop, match: "data.enrollmentId" }],
+  },
   async ({ event, step }) => {
     const { engagementId, runId, enrollmentId, prospectEmail, prospectPhone } = event.data;
 

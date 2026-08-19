@@ -2,8 +2,9 @@ import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import Link from "next/link";
-import { Building2, Plus, Radio } from "lucide-react";
+import { Building2, Plus } from "lucide-react";
 import { RecentEngagementsSection } from "./recent-engagements-section";
+import { ConnectProviderMenu } from "./connect-provider-menu";
 
 /**
  * The Engagements section's secondary sidebar.
@@ -54,17 +55,7 @@ export async function EngagementsSidebar({
           <span>Create a client</span>
         </Link>
 
-        <Link
-          href="/dashboard/engagements"
-          title="Recall.ai is connected per-client from their Call Intelligence tab — open a client to connect it"
-          className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-[#dfd7ea] dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100 transition-all"
-        >
-          <Radio className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
-          <span className="flex flex-col">
-            <span>Connect provider</span>
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">per client</span>
-          </span>
-        </Link>
+        <ConnectProviderMenu recent={recent} />
       </nav>
 
       <RecentEngagementsSection recent={recent} />

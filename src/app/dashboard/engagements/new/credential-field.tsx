@@ -1,294 +1,573 @@
-"use client";
+import { InputField, SelectField } from "../form-fields";
+import { CredentialField } from "../credential-field";
+import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS, HOSTING_PLATFORM_LABELS } from "@/lib/copy";
+import type { FormData, RemoteOption } from "../types";
+import type { BookingOption } from "../use-email-integrations";
 
-import { useEffect, useState } from "react";
-import { PlatformLogo } from "./form-fields";
-import { Dropdown, type DropdownItem } from "@/components/ui/dropdown";
-import { isComposioManagedProvider } from "@/lib/composio-providers";
-
-interface VaultCredentialOption {
-  id: string;
-  provider: string;
-  label: string;
-  healthStatus: string;
-  createdAt: string;
-}
-
-/**
- * A credential input that can take a freshly-pasted value, reuse one
- * already saved to the operator's vault, or (for the handful of providers
- * Composio has real OAuth for) connect the account directly with no key to
- * copy/paste at all — the same paste/reuse split `CredentialRow` offers
- * post-onboarding in update-credentials-form.tsx, brought forward into the
- * "new client" wizard so a second, third, fifth client using the same
- * GHL/ESP/hosting account doesn't need that key pasted in again.
- *
- * `value`/`onValueChange` is the raw pasted key (used verbatim in paste
- * mode, cleared in the other two). `vaultId`/`onVaultIdChange` is which
- * saved credential is selected (used verbatim in reuse mode, cleared in
- * paste mode; also set from outside by page.tsx right after a Composio
- * connect completes — see the mode-sync effect below) — submit-payload.ts
- * sends whichever one is populated per field, and the setup route links
- * the engagement to the vault row instead of writing a fresh secret when a
- * vaultId is present.
- *
- * `saveForReuse`/`reuseLabel` are only meaningful in paste mode: checking
- * the box asks the setup route to also save this pasted value into the
- * vault (see submit-payload.ts's credentialSaveForReuse and the matching
- * block in /api/engagements/setup) so it shows up in "Reuse saved" for the
- * next client — independent of, and in addition to, storing it for this
- * one engagement.
- */
-export function CredentialField({
-  provider,
-  label,
-  value,
-  onValueChange,
-  vaultId,
-  onVaultIdChange,
-  saveForReuse,
-  onSaveForReuseChange,
-  reuseLabel,
-  onReuseLabelChange,
-  placeholder,
-  helpText,
-  required,
-  providerLogo,
+export function CredentialsStep({
+  form,
+  set,
+  bookingOptions,
+  fetchingBookingOptions,
+  bookingOptionsError,
+  klaviyoLists,
+  fetchingLists,
+  listsFetchError,
+  klaviyoMissingKeyMessage,
+  acLists,
+  fetchingAcLists,
+  acListsError,
+  ghlLocations,
+  fetchingGhlLocations,
+  ghlLocationsError,
+  ghlWorkflows,
+  fetchingGhlWorkflows,
+  ghlWorkflowsError,
 }: {
-  provider: string;
-  label: string;
-  value: string;
-  onValueChange: (v: string) => void;
-  vaultId: string;
-  onVaultIdChange: (v: string) => void;
-  saveForReuse: boolean;
-  onSaveForReuseChange: (v: boolean) => void;
-  reuseLabel: string;
-  onReuseLabelChange: (v: string) => void;
-  placeholder?: string;
-  helpText?: string;
-  required?: boolean;
-  providerLogo?: string;
+  form: FormData;
+  set: (field: keyof FormData, value: string | boolean) => void;
+  bookingOptions: BookingOption[];
+  fetchingBookingOptions: boolean;
+  bookingOptionsError: string | null;
+  klaviyoLists: RemoteOption[];
+  fetchingLists: boolean;
+  listsFetchError: string | null;
+  klaviyoMissingKeyMessage: string | null;
+  acLists: RemoteOption[];
+  fetchingAcLists: boolean;
+  acListsError: string | null;
+  ghlLocations: RemoteOption[];
+  fetchingGhlLocations: boolean;
+  ghlLocationsError: string | null;
+  ghlWorkflows: RemoteOption[];
+  fetchingGhlWorkflows: boolean;
+  ghlWorkflowsError: string | null;
 }) {
-  const composioAvailable = isComposioManagedProvider(provider);
-  const [mode, setMode] = useState<"paste" | "reuse" | "connect">(vaultId ? "reuse" : "paste");
-  const [options, setOptions] = useState<VaultCredentialOption[] | null>(null);
-  const [loadError, setLoadError] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [connectError, setConnectError] = useState<string | null>(null);
+  const bookingIsGhl = form.bookingPlatform === "ghl_calendar";
+  const emailIsGhl = form.emailPlatform === "ghl";
+  const smsIsGhl = form.smsPlatform === "ghl_sms";
+  const usesGhl = bookingIsGhl || emailIsGhl || smsIsGhl;
+  const verifiedGhlLocation = ghlLocations[0];
 
-  useEffect(() => {
-    if (mode !== "reuse" || options !== null || !provider) return;
-    let cancelled = false;
-    fetch(`/api/credential-vault?provider=${encodeURIComponent(provider)}`)
-      .then((r) => {
-        if (!r.ok) throw new Error("Failed to load saved credentials");
-        return r.json();
-      })
-      .then((data) => {
-        if (!cancelled) setOptions(data.items ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setOptions([]);
-          setLoadError(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [mode, provider, options]);
-
-  const [prevVaultId, setPrevVaultId] = useState(vaultId);
-  // A parent can set vaultId from outside (page.tsx does this the moment
-  // it detects the wizard just landed back from a completed Composio
-  // connect for this provider — see the composio-return effect there).
-  // When that happens this field should visibly reflect "reuse," not sit
-  // on whatever tab the user last had open. Adjusted during render rather
-  // than in a useEffect — React's documented pattern for "reset/derive
-  // state when a prop changes" (see
-  // react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes)
-  // — since a post-commit effect would cost an extra visible render pass
-  // for a change that should show up immediately. Never fires the other
-  // direction: clearing vaultId locally always goes through switchMode,
-  // which already keeps mode in sync itself.
-  if (vaultId !== prevVaultId) {
-    setPrevVaultId(vaultId);
-    if (vaultId) setMode("reuse");
-  }
-
-  function switchMode(next: "paste" | "reuse" | "connect") {
-    setMode(next);
-    setConnectError(null);
-    if (next === "paste") {
-      onVaultIdChange("");
-    } else if (next === "reuse") {
-      onValueChange("");
-    }
-    // "connect" clears neither — it's an action tab, not a value holder;
-    // the actual vaultId only ever gets set once a connection completes.
-  }
-
-  function toggleSaveForReuse(checked: boolean) {
-    onSaveForReuseChange(checked);
-    if (checked && !reuseLabel.trim()) {
-      onReuseLabelChange(label);
-    }
-  }
-
-  async function connect() {
-    setConnecting(true);
-    setConnectError(null);
-    try {
-      const res = await fetch("/api/composio/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, returnTo: "/dashboard/engagements/new" }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setConnectError(data.error ?? "Couldn't start the connection.");
-        setConnecting(false);
-        return;
-      }
-      // Full navigation, not a popup — Composio's hosted page redirects
-      // straight back to /api/composio/callback, which lands the browser
-      // back on this wizard (see the returnTo it was given above).
-      window.location.assign(data.redirectUrl);
-    } catch {
-      setConnectError("Network error. Try again.");
-      setConnecting(false);
-    }
-  }
-
-  const dropdownItems: DropdownItem<string>[] = (options ?? []).map((o) => ({
-    key: o.id,
-    label: o.label,
-    description: o.healthStatus === "invalid" ? "Needs attention" : undefined,
-  }));
+  // Determines whether we have a valid key or vault ID to trigger calendar option fetching
+  const hasBookingAuth = bookingIsGhl
+    ? Boolean((form.ghlApiKey?.trim() || form.ghlCredentialVaultId?.trim()) && form.ghlLocationId?.trim())
+    : Boolean(form.bookingApiKey?.trim() || form.bookingCredentialVaultId?.trim());
 
   return (
-    <div className="space-y-1.5 w-full">
-      <div className="flex items-center justify-between gap-2">
-        <label className="text-xs font-semibold block text-zinc-900 dark:text-zinc-100">
-          <span className="inline-flex items-center gap-1.5">
-            {providerLogo && <PlatformLogo provider={providerLogo} />}
-            {label}
-          </span>
-          {required && mode === "paste" && (
-            <span className="ml-1 font-mono text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">
-              (REQUIRED)
-            </span>
-          )}
-        </label>
-        <div className="flex items-center rounded-md border border-zinc-300 dark:border-zinc-800 p-0.5 text-[11px] font-medium">
-          <button
-            type="button"
-            onClick={() => switchMode("paste")}
-            className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
-              mode === "paste"
-                ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-                : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-            }`}
-          >
-            Paste new
-          </button>
-          <button
-            type="button"
-            onClick={() => switchMode("reuse")}
-            className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
-              mode === "reuse"
-                ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-                : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-            }`}
-          >
-            Reuse saved
-          </button>
-          {composioAvailable && (
-            <button
-              type="button"
-              onClick={() => switchMode("connect")}
-              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
-                mode === "connect"
-                  ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-              }`}
-            >
-              Connect
-            </button>
-          )}
-        </div>
+    <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+      <div className="md:col-span-2 text-xs font-mono">
+        <p className="font-bold uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+          How we keep this secure
+        </p>
+        <p className="font-medium mt-0.5" style={{ color: "var(--text-muted)" }}>
+          Your keys are encrypted before they&apos;re stored, and aren&apos;t shown again once saved.
+        </p>
       </div>
 
-      {mode === "paste" ? (
-        <div className="space-y-1.5">
-          <input
-            type="password"
-            value={value}
-            onChange={(e) => onValueChange(e.target.value)}
-            placeholder={placeholder}
-            className="w-full bg-background border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-xs"
+      {/* ── Shared GoHighLevel Account ── */}
+      {usesGhl && (
+        <>
+          <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
+            GoHighLevel Account — used below for{" "}
+            {[bookingIsGhl && "booking", emailIsGhl && "email workflows", smsIsGhl && "SMS"].filter(Boolean).join(", ")}.
+            One Private Integration Token covers all of these for its sub-account, so you only enter it once here.
+          </div>
+          <CredentialField
+            provider="ghl_calendar"
+            providerLogo="ghl_calendar"
+            label="GoHighLevel Private Integration Token"
+            value={form.ghlApiKey}
+            onValueChange={(v) => set("ghlApiKey", v)}
+            vaultId={form.ghlCredentialVaultId}
+            onVaultIdChange={(v) => set("ghlCredentialVaultId", v)}
+            saveForReuse={form.ghlSaveForReuse}
+            onSaveForReuseChange={(v) => set("ghlSaveForReuse", v)}
+            reuseLabel={form.ghlReuseLabel}
+            onReuseLabelChange={(v) => set("ghlReuseLabel", v)}
+            placeholder="Paste your Private Integration Token here..."
+            helpText="Sub-account Settings → Private Integrations → create one with Calendars, Workflows, and/or Conversations scopes as needed."
+            required
           />
-          <label className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-500 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={saveForReuse}
-              onChange={(e) => toggleSaveForReuse(e.target.checked)}
-              className="cursor-pointer"
-            />
-            Save this so I can reuse it for other clients
-          </label>
-          {saveForReuse && (
-            <input
-              value={reuseLabel}
-              onChange={(e) => onReuseLabelChange(e.target.value)}
-              placeholder={`Name it, e.g. "${label}"`}
-              className="w-full text-xs px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
-            />
+          <InputField
+            providerLogo="ghl_calendar"
+            label="GoHighLevel Location ID"
+            value={form.ghlLocationId}
+            onChange={(v) => set("ghlLocationId", v)}
+            placeholder="e.g. ve9EPM428h8vShlRW1KT"
+            helpText="Sub-account Settings → Business Profile → Location ID. This token can only see this one location."
+            required
+          />
+          {form.ghlApiKey.trim() && form.ghlLocationId.trim() && (
+            <div className="md:col-span-2 text-xs font-mono">
+              {fetchingGhlLocations && <span className="italic text-zinc-500 dark:text-zinc-400 animate-pulse">⚡ Verifying against GoHighLevel...</span>}
+              {ghlLocationsError && (
+                <div className="rounded-sm p-3 border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
+                  ⚠ Warning: {ghlLocationsError}
+                </div>
+              )}
+              {!fetchingGhlLocations && verifiedGhlLocation && (
+                <span className="text-emerald-600 dark:text-emerald-400">✓ Verified: {verifiedGhlLocation.name}</span>
+              )}
+            </div>
           )}
-        </div>
-      ) : mode === "reuse" ? (
-        options === null ? (
-          <div className="w-full rounded-lg border border-zinc-300 dark:border-zinc-800 px-3 py-2 text-sm text-zinc-400 dark:text-zinc-600">
-            Loading saved credentials…
-          </div>
-        ) : options.length === 0 ? (
-          <div className="w-full rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 px-3 py-2 text-xs text-zinc-500 dark:text-zinc-500">
-            {loadError
-              ? "Couldn't load saved credentials — try pasting a new one instead."
-              : `No saved ${label.toLowerCase()} credentials yet for this workspace. Paste one now and it'll be offered here next time.`}
-          </div>
-        ) : (
-          <Dropdown
-            items={dropdownItems}
-            selectedKey={vaultId || null}
-            onSelect={(key) => onVaultIdChange(key)}
-            placeholder="Select a saved credential…"
+        </>
+      )}
+
+      {/* ── Non-GHL Booking API Key ── */}
+      {!bookingIsGhl && (
+        <CredentialField
+          provider={form.bookingPlatform}
+          providerLogo={form.bookingPlatform}
+          label={`${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform} API Key / Token`}
+          value={form.bookingApiKey}
+          onValueChange={(v) => set("bookingApiKey", v)}
+          vaultId={form.bookingCredentialVaultId}
+          onVaultIdChange={(v) => set("bookingCredentialVaultId", v)}
+          saveForReuse={form.bookingSaveForReuse}
+          onSaveForReuseChange={(v) => set("bookingSaveForReuse", v)}
+          reuseLabel={form.bookingReuseLabel}
+          onReuseLabelChange={(v) => set("bookingReuseLabel", v)}
+          placeholder="Paste your API key here..."
+          helpText={
+            form.bookingPlatform === "calendly"
+              ? "From Calendly → Integrations & Apps → API & Webhooks → Personal Access Tokens."
+              : undefined
+          }
+          required
+        />
+      )}
+
+      {/* ── Live Booking Calendar Selection Dropdown ── */}
+      {hasBookingAuth && (
+        <div className="md:col-span-2 space-y-2">
+          {fetchingBookingOptions && (
+            <div className="text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">
+              Contacting {BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform}... Fetching live calendar options...
+            </div>
+          )}
+          {bookingOptionsError && (
+            <div className="rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
+              Warning: {bookingOptionsError}
+            </div>
+          )}
+          <SelectField
+            label="Target Booking Calendar / Event Page"
+            value={form.bookingCalendarId || form.ghlCalendarId || form.calendarId || ""}
+            onChange={(selectedId) => {
+              set("bookingCalendarId", selectedId);
+              const matchedOpt = bookingOptions.find((b) => b.id === selectedId);
+              if (matchedOpt?.link) {
+                set("bookingStandingLink", matchedOpt.link);
+              }
+            }}
+            required
+            disabled={fetchingBookingOptions}
+            options={[
+              { value: "", label: fetchingBookingOptions ? "-- Loading..." : "-- Choose an Active Calendar --" },
+              ...bookingOptions.map((b) => ({
+                value: b.id,
+                label: `${b.name} (${b.link || b.id})`,
+              })),
+            ]}
+            helpText="Selecting your calendar automatically binds its ID and standing booking link."
           />
-        )
-      ) : (
-        <div className="space-y-2 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 px-3 py-2.5">
-          <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-            Connect {label.replace(/\s*(API )?(Key|Token).*$/i, "") || label} securely through Composio — no key to
-            copy or paste, and it&apos;s saved for reuse on future clients automatically.
-          </p>
-          <button
-            type="button"
-            onClick={connect}
-            disabled={connecting}
-            className="text-[11px] font-mono font-bold px-2.5 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600 disabled:opacity-50 transition-all cursor-pointer"
-          >
-            {connecting ? "Connecting…" : "Connect via Composio"}
-          </button>
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-600 leading-relaxed">
-            This briefly leaves this page to connect, then brings you back here. Your progress on this step is kept,
-            but any other unsaved API keys will need to be re-entered.
-          </p>
-          {connectError && <p className="text-[11px] text-rose-600 dark:text-rose-400">{connectError}</p>}
         </div>
       )}
 
-      {helpText && mode === "paste" && (
-        <p className="text-[11px] font-normal leading-normal text-zinc-500 dark:text-zinc-400">{helpText}</p>
+      {/* ── Manual fallback for the standing booking link ── */}
+      {!bookingIsGhl && (form.bookingPlatform === "calendly" || form.bookingPlatform === "cal_com") && (bookingOptionsError || (!fetchingBookingOptions && hasBookingAuth && bookingOptions.length === 0)) && (
+        <InputField
+          providerLogo={form.bookingPlatform}
+          label="Standing Booking Page Link (manual)"
+          value={form.bookingStandingLink}
+          onChange={(v) => set("bookingStandingLink", v)}
+          placeholder={form.bookingPlatform === "calendly" ? "https://calendly.com/your-handle/event" : "https://cal.com/your-handle/event"}
+          helpText="The dropdown above couldn't pull your calendars automatically — paste your public booking page link here instead."
+        />
+      )}
+
+      {/* ── Email Platform / Credentials ── */}
+      {form.emailPlatform === "smtp" ? (
+        <>
+          <div
+            className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium"
+            style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
+          >
+            No CRM or ESP account? This is the direct-send option — the app emails prospects itself, on its own schedule, using either Resend&apos;s API or your own mail server. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
+          </div>
+
+          <div className="md:col-span-2 flex gap-2 rounded-lg p-1" style={{ background: "var(--surface-2)" }}>
+            <button
+              type="button"
+              onClick={() => set("directSendProvider", "resend")}
+              className="flex-1 rounded-md px-3 py-2 text-xs font-semibold transition-colors cursor-pointer"
+              style={
+                form.directSendProvider === "resend"
+                  ? { background: "var(--accent)", color: "var(--accent-contrast, #fff)" }
+                  : { color: "var(--text-secondary)" }
+              }
+            >
+              Resend (recommended)
+              <span className="block font-normal opacity-80 mt-0.5">Just an API key — better inbox deliverability, no server to run</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => set("directSendProvider", "smtp")}
+              className="flex-1 rounded-md px-3 py-2 text-xs font-semibold transition-colors cursor-pointer"
+              style={
+                form.directSendProvider === "smtp"
+                  ? { background: "var(--accent)", color: "var(--accent-contrast, #fff)" }
+                  : { color: "var(--text-secondary)" }
+              }
+            >
+              Custom SMTP
+              <span className="block font-normal opacity-80 mt-0.5">Bring your own mail server&apos;s connection details</span>
+            </button>
+          </div>
+        </>
+      ) : null}
+
+      {form.emailPlatform === "smtp" && form.directSendProvider === "resend" ? (
+        <>
+          <InputField
+            providerLogo="resend"
+            label="Resend API Key"
+            value={form.resendApiKey}
+            onChange={(v) => set("resendApiKey", v)}
+            type="password"
+            placeholder="re_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            required
+          />
+          <InputField
+            providerLogo="resend"
+            label="From address"
+            value={form.smtpFromAddress}
+            onChange={(v) => set("smtpFromAddress", v)}
+            placeholder="hello@yourdomain.com"
+            helpText="Must be on a domain you've verified in Resend."
+            required
+          />
+          <InputField
+            providerLogo="resend"
+            label="From name (optional)"
+            value={form.smtpFromName}
+            onChange={(v) => set("smtpFromName", v)}
+            placeholder="Your Company"
+          />
+        </>
+      ) : null}
+
+      {form.emailPlatform === "smtp" && form.directSendProvider === "smtp" ? (
+        <>
+          <InputField
+            providerLogo="smtp"
+            label="SMTP Host"
+            value={form.smtpHost}
+            onChange={(v) => set("smtpHost", v)}
+            placeholder="smtp.yourprovider.com"
+            required
+          />
+          <InputField
+            providerLogo="smtp"
+            label="SMTP Port"
+            value={form.smtpPort}
+            onChange={(v) => set("smtpPort", v)}
+            placeholder="587"
+            required
+          />
+          <InputField
+            providerLogo="smtp"
+            label="SMTP Username"
+            value={form.smtpUsername}
+            onChange={(v) => set("smtpUsername", v)}
+            placeholder="mailer@yourdomain.com"
+            required
+          />
+          <InputField
+            providerLogo="smtp"
+            label="SMTP Password"
+            value={form.smtpPassword}
+            onChange={(v) => set("smtpPassword", v)}
+            type="password"
+            placeholder="••••••••"
+            required
+          />
+          <InputField
+            providerLogo="smtp"
+            label="From address"
+            value={form.smtpFromAddress}
+            onChange={(v) => set("smtpFromAddress", v)}
+            placeholder="hello@yourdomain.com"
+            required
+          />
+          <InputField
+            providerLogo="smtp"
+            label="From name (optional)"
+            value={form.smtpFromName}
+            onChange={(v) => set("smtpFromName", v)}
+            placeholder="Your Company"
+          />
+          <div className="flex items-start space-x-3 md:col-span-2 select-none">
+            <input
+              type="checkbox"
+              id="smtpSecure"
+              checked={form.smtpSecure}
+              onChange={(e) => set("smtpSecure", e.target.checked)}
+              className="w-4 h-4 rounded-sm cursor-pointer mt-0.5 border border-zinc-300 dark:border-zinc-800"
+              style={{ accentColor: "var(--accent)" }}
+            />
+            <label htmlFor="smtpSecure" className="text-xs cursor-pointer leading-normal" style={{ color: "var(--text-secondary)" }}>
+              Use implicit TLS (typically port 465). Leave unchecked for STARTTLS on 587.
+            </label>
+          </div>
+        </>
+      ) : (
+        <>
+          {!emailIsGhl && (
+            <CredentialField
+              provider={form.emailPlatform}
+              providerLogo={form.emailPlatform}
+              label={`${EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform} API Key`}
+              value={form.emailApiKey}
+              onValueChange={(v) => set("emailApiKey", v)}
+              vaultId={form.emailCredentialVaultId}
+              onVaultIdChange={(v) => set("emailCredentialVaultId", v)}
+              saveForReuse={form.emailSaveForReuse}
+              onSaveForReuseChange={(v) => set("emailSaveForReuse", v)}
+              reuseLabel={form.emailReuseLabel}
+              onReuseLabelChange={(v) => set("emailReuseLabel", v)}
+              placeholder="Paste your API key here..."
+              required
+            />
+          )}
+
+          {/* ── Klaviyo ── */}
+          {form.emailPlatform === "klaviyo" && (
+            <>
+              {fetchingLists && (
+                <div className="md:col-span-2 text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">
+                  ⚡ Contacting Klaviyo... Synchronizing list profile parameters...
+                </div>
+              )}
+              {(klaviyoMissingKeyMessage ?? listsFetchError) && (
+                <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
+                  ⚠ Warning: {klaviyoMissingKeyMessage ?? listsFetchError}
+                </div>
+              )}
+
+              <SelectField
+                label="Klaviyo Target List (Pile-On)"
+                value={form.emailTargetListId}
+                onChange={(v) => set("emailTargetListId", v)}
+                required
+                options={[
+                  { value: "", label: "-- Choose an Active Klaviyo Audience --" },
+                  ...klaviyoLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` })),
+                ]}
+                helpText="Select the target list that houses your main pre-call nurture follow-up flow configuration."
+              />
+              <SelectField
+                label="Klaviyo Recovery List (Win-Back)"
+                value={form.emailRecoveryListId}
+                onChange={(v) => set("emailRecoveryListId", v)}
+                required
+                options={[
+                  { value: "", label: "-- Choose an Active Klaviyo Audience --" },
+                  ...klaviyoLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` })),
+                ]}
+                helpText="Select the audience list configured to lock in canceled no-show recoveries."
+              />
+              <SelectField
+                label="Klaviyo Long-Term Nurture List"
+                value={form.longTermNurtureListId}
+                onChange={(v) => set("longTermNurtureListId", v)}
+                options={[
+                  { value: "", label: "-- Choose a Long-Term Nurture List (Optional) --" },
+                  ...klaviyoLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` })),
+                ]}
+                helpText="Select the list where prospects should be auto-enrolled when their 30-day win-back window expires."
+              />
+            </>
+          )}
+
+          {/* ── ActiveCampaign ── */}
+          {form.emailPlatform === "activecampaign" && (
+            <>
+              <InputField
+                providerLogo="activecampaign"
+                label="ActiveCampaign API Access URL"
+                value={form.emailActiveCampaignBaseUrl}
+                onChange={(v) => set("emailActiveCampaignBaseUrl", v)}
+                placeholder="https://account.api-us1.com/api/3"
+                helpText="Your unique tracking endpoint link. Found under Settings → Developer → API Access. Lists will auto-populate below once entered."
+                required
+              />
+
+              {fetchingAcLists && (
+                <div className="md:col-span-2 text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">
+                  ⚡ Contacting ActiveCampaign... Fetching audience lists...
+                </div>
+              )}
+              {acListsError && (
+                <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
+                  ⚠ Warning: {acListsError}
+                </div>
+              )}
+
+              <SelectField
+                label="ActiveCampaign Target List"
+                value={form.emailTargetListId}
+                onChange={(v) => set("emailTargetListId", v)}
+                required
+                disabled={!form.emailActiveCampaignBaseUrl.trim() || fetchingAcLists}
+                options={[
+                  { value: "", label: form.emailActiveCampaignBaseUrl.trim() ? "-- Choose a List --" : "-- Enter API URL above first --" },
+                  ...acLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` })),
+                ]}
+                helpText="The audience for your main follow-up sequence."
+              />
+              <SelectField
+                label="ActiveCampaign Recovery List"
+                value={form.emailRecoveryListId}
+                onChange={(v) => set("emailRecoveryListId", v)}
+                required
+                disabled={!form.emailActiveCampaignBaseUrl.trim() || fetchingAcLists}
+                options={[
+                  { value: "", label: form.emailActiveCampaignBaseUrl.trim() ? "-- Choose a List --" : "-- Enter API URL above first --" },
+                  ...acLists.map((l) => ({ value: l.id, label: `${l.name} (${l.id})` })),
+                ]}
+                helpText="The audience for your win-back recovery sequence."
+              />
+              <InputField
+                providerLogo="activecampaign"
+                label="ActiveCampaign Recovery Automation ID"
+                value={form.recoveryAutomationId}
+                onChange={(v) => set("recoveryAutomationId", v)}
+                placeholder="e.g. 12"
+                helpText="The numeric ID of your win-back automation flow inside ActiveCampaign, used for direct API exits."
+              />
+            </>
+          )}
+
+          {/* ── Mailchimp ── */}
+          {form.emailPlatform === "mailchimp" && (
+            <>
+              <InputField
+                providerLogo="mailchimp"
+                label="Mailchimp Target Audience ID (Pile-On)"
+                value={form.emailTargetListId}
+                onChange={(v) => set("emailTargetListId", v)}
+                placeholder="e.g. a1b2c3d4e5"
+                helpText="Audience ID housing your pre-call nurture flow. Found under Audience → Settings → Audience name and defaults."
+                required
+              />
+              <InputField
+                providerLogo="mailchimp"
+                label="Mailchimp Recovery Audience ID (Win-Back)"
+                value={form.emailRecoveryListId}
+                onChange={(v) => set("emailRecoveryListId", v)}
+                placeholder="e.g. f6g7h8i9j0"
+                helpText="Audience configured to run your no-show recovery journey."
+                required
+              />
+            </>
+          )}
+
+          {/* ── ConvertKit ── */}
+          {form.emailPlatform === "convertkit" && (
+            <>
+              <InputField
+                providerLogo="convertkit"
+                label="ConvertKit Target Form ID (Pile-On)"
+                value={form.emailTargetListId}
+                onChange={(v) => set("emailTargetListId", v)}
+                placeholder="e.g. 1234567"
+                helpText="The form that triggers your pre-call nurture sequence. Found under Grow → Landing Pages & Forms."
+                required
+              />
+              <InputField
+                providerLogo="convertkit"
+                label="ConvertKit Recovery Tag ID (Win-Back)"
+                value={form.emailRecoveryListId}
+                onChange={(v) => set("emailRecoveryListId", v)}
+                placeholder="e.g. 7654321"
+                helpText="The tag that triggers your win-back recovery automation. Found under Subscribers → Tags."
+                required
+              />
+            </>
+          )}
+
+          {/* ── GoHighLevel Email Workflows ── */}
+          {form.emailPlatform === "ghl" && (
+            <>
+              {(form.ghlLocationId || form.emailGhlLocationId) && verifiedGhlLocation && (
+                <>
+                  {fetchingGhlWorkflows && (
+                    <div className="md:col-span-2 text-xs italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">
+                      ⚡ Loading workflows for selected location...
+                    </div>
+                  )}
+                  {ghlWorkflowsError && (
+                    <div className="md:col-span-2 rounded-sm p-3 text-xs font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm animate-in fade-in-40">
+                      ⚠ Warning: {ghlWorkflowsError}
+                    </div>
+                  )}
+
+                  <SelectField
+                    label="GHL Target Workflow"
+                    value={form.emailGhlTargetWorkflowId}
+                    onChange={(v) => set("emailGhlTargetWorkflowId", v)}
+                    required
+                    disabled={fetchingGhlWorkflows}
+                    options={[
+                      { value: "", label: fetchingGhlWorkflows ? "-- Loading..." : "-- Choose a Workflow --" },
+                      ...ghlWorkflows.map((w) => ({ value: w.id, label: w.name })),
+                    ]}
+                    helpText="The workflow for your pre-call automation."
+                  />
+                  <SelectField
+                    label="GHL Recovery Workflow"
+                    value={form.emailGhlRecoveryWorkflowId}
+                    onChange={(v) => set("emailGhlRecoveryWorkflowId", v)}
+                    required
+                    disabled={fetchingGhlWorkflows}
+                    options={[
+                      { value: "", label: fetchingGhlWorkflows ? "-- Loading..." : "-- Choose a Workflow --" },
+                      ...ghlWorkflows.map((w) => ({ value: w.id, label: w.name })),
+                    ]}
+                    helpText="The workflow for your win-back cancellation sequence."
+                  />
+                </>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {/* ── Hosting Platform Credentials ── */}
+      {form.hostingPlatform !== "ghl" && form.hostingPlatform !== "plain_html" && (
+        <CredentialField
+          provider={form.hostingPlatform}
+          providerLogo={form.hostingPlatform}
+          label={`${HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform} ${
+            form.hostingPlatform === "wordpress" ? "Application Password (user:password)" : "API Token"
+          }`}
+          value={form.hostingApiKey}
+          onValueChange={(v) => set("hostingApiKey", v)}
+          vaultId={form.hostingCredentialVaultId}
+          onVaultIdChange={(v) => set("hostingCredentialVaultId", v)}
+          saveForReuse={form.hostingSaveForReuse}
+          onSaveForReuseChange={(v) => set("hostingSaveForReuse", v)}
+          reuseLabel={form.hostingReuseLabel}
+          onReuseLabelChange={(v) => set("hostingReuseLabel", v)}
+          placeholder="Paste your API key or token here..."
+          helpText={
+            form.hostingPlatform === "wordpress"
+              ? "WordPress → Users → Profile → Application Passwords. Format: username:password."
+              : "If this isn't available yet, we'll generate the page as ready-to-paste HTML."
+          }
+        />
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import { inngest, inboundReplyReceived } from "@/lib/inngest";
+import { inngest, inboundReplyReceived, winBackSequenceStop } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements, winBackEnrollments, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
@@ -78,6 +78,15 @@ export const processInboundReply = inngest.createFunction(
         .update(winBackEnrollments)
         .set({ status: "reply_exited", exitReason: "reply_detected", exitedAt: new Date() })
         .where(eq(winBackEnrollments.id, activeEnrollment.id));
+
+      // Hard-cancel signal — see winBackSequenceStop's doc comment in
+      // inngest.ts. Best-effort, same reasoning as every other exit-signal
+      // call site: the DB update above is the durable record either way.
+      try {
+        await inngest.send(winBackSequenceStop.create({ enrollmentId: activeEnrollment.id }));
+      } catch (cancelErr) {
+        console.error("[win-back-reply] cancelOn signal failed:", cancelErr);
+      }
     });
 
     return { halted: true, source };

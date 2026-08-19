@@ -9,7 +9,7 @@ export interface BookingOption {
 
 /**
  * Live-fetches Klaviyo lists / ActiveCampaign lists / GHL locations & workflows / Booking calendars
- * as soon as the relevant API key is present in `form`.
+ * as soon as the relevant API key or credential vault ID is present in `form`.
  * Uses a 500ms debounce timer so fetch requests aren't wasted while typing.
  */
 export function useEmailIntegrations(
@@ -276,15 +276,37 @@ export function useEmailIntegrations(
     };
   }, [form.emailPlatform, form.emailApiKey, form.emailCredentialVaultId, form.emailActiveCampaignBaseUrl]);
 
-  // 4. Custom SMTP: Compose JSON credential blob into emailApiKey
+  // 4. Direct send (email_platform === "smtp"): compose the JSON credential
+  // blob into emailApiKey. Two shapes share this one slot, picked by
+  // directSendProvider and tagged with a "provider" field so
+  // parseDirectSendCredential/createDirectSendClient (src/lib/platforms/email.ts)
+  // know which transport to build at send time.
   useEffect(() => {
     if (form.emailPlatform !== "smtp") return;
+
+    if (form.directSendProvider === "resend") {
+      const required = [form.resendApiKey, form.smtpFromAddress];
+      if (required.some((v) => !v?.trim())) {
+        if (form.emailApiKey) setForm((f) => ({ ...f, emailApiKey: "" }));
+        return;
+      }
+      const blob = JSON.stringify({
+        provider: "resend",
+        apiKey: form.resendApiKey.trim(),
+        fromAddress: form.smtpFromAddress.trim(),
+        fromName: form.smtpFromName?.trim() || undefined,
+      });
+      if (blob !== form.emailApiKey) setForm((f) => ({ ...f, emailApiKey: blob }));
+      return;
+    }
+
     const required = [form.smtpHost, form.smtpPort, form.smtpUsername, form.smtpPassword, form.smtpFromAddress];
     if (required.some((v) => !v?.trim())) {
       if (form.emailApiKey) setForm((f) => ({ ...f, emailApiKey: "" }));
       return;
     }
     const blob = JSON.stringify({
+      provider: "smtp",
       host: form.smtpHost.trim(),
       port: Number(form.smtpPort),
       secure: form.smtpSecure,
@@ -296,6 +318,8 @@ export function useEmailIntegrations(
     if (blob !== form.emailApiKey) setForm((f) => ({ ...f, emailApiKey: blob }));
   }, [
     form.emailPlatform,
+    form.directSendProvider,
+    form.resendApiKey,
     form.smtpHost,
     form.smtpPort,
     form.smtpSecure,
@@ -377,7 +401,7 @@ export function useEmailIntegrations(
     let cancelled = false;
 
     const ghlKey = (form.ghlApiKey || form.emailApiKey)?.trim();
-    const hasKeyOrVault = Boolean(ghlKey || form.ghlCredentialVaultId?.trim());
+    const hasKeyOrVault = Boolean(ghlKey || form.ghlCredentialVaultId?.trim() || form.emailCredentialVaultId?.trim());
     if (
       form.emailPlatform === "ghl" &&
       form.emailGhlLocationId &&
@@ -392,7 +416,7 @@ export function useEmailIntegrations(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           key: ghlKey || undefined,
-          vaultId: !ghlKey ? form.ghlCredentialVaultId || undefined : undefined,
+          vaultId: !ghlKey ? (form.ghlCredentialVaultId || form.emailCredentialVaultId) || undefined : undefined,
           locationId: form.emailGhlLocationId,
         }),
       })
@@ -427,9 +451,9 @@ export function useEmailIntegrations(
     return () => {
       cancelled = true;
     };
-  }, [form.emailPlatform, form.emailGhlLocationId, form.emailApiKey, form.ghlApiKey, form.ghlCredentialVaultId, ghlLocations]);
+  }, [form.emailPlatform, form.emailGhlLocationId, form.emailApiKey, form.ghlApiKey, form.ghlCredentialVaultId, form.emailCredentialVaultId, ghlLocations]);
 
-  // "Start over" needs to wipe this too. The five fetch effects above are
+  // "Start over" needs to wipe this too. The fetch effects above are
   // reactive to form fields and do clear themselves once those fields go
   // back to their defaults, but a request already in flight at the moment
   // of reset would still land afterward and repopulate a list right after

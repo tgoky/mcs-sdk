@@ -162,6 +162,27 @@ export const winBackEmailSmtpSequenceStart = eventType("win-back/email-smtp-sequ
   schema: staticSchema<WinBackEmailSmtpSequenceStartData>(),
 });
 
+// Hard-cancellation signal for the two direct-send win-back cadences above
+// (processWinBackSmsSequence, processWinBackEmailSmtpSequence). Both
+// already stop correctly on their own — they check winBackEnrollments.status
+// before every send — but that check only runs at the next scheduled
+// step.sleep wakeup, which on day-scale offsets can be hours away. Every
+// place an enrollment's status flips away from "active" (the manual Stop
+// Cadence button, a rebook, a reply-exit, the lost-deal sweep, an outcome
+// correction) sends this alongside the DB update so cancelOn below can
+// interrupt an in-progress sleep immediately instead. Same
+// skillRunCancel/cancelOn pattern already used for the manual Cancel Run
+// button (see skillRunExecute above) — not a new mechanism, applied to a
+// second place it was missing. Firing this for an enrollment that isn't
+// currently mid-sleep (already finished, or never used a direct-send
+// platform) is a harmless no-op — cancelOn simply finds no matching run.
+export type WinBackSequenceStopData = {
+  enrollmentId: string;
+};
+export const winBackSequenceStop = eventType("win-back/sequence.stop", {
+  schema: staticSchema<WinBackSequenceStopData>(),
+});
+
 // Pre-Call Read recovery gap 1 — dynamic brief trigger. Same fan-out shape
 // as bookingPollEngagement above: dynamicBriefCron does a cheap DB-only
 // scan for engagements with stack.brief_trigger_type === "dynamic_webhook",

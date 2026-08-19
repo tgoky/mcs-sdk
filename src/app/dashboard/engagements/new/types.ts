@@ -41,9 +41,13 @@ export interface FormData {
   emailGhlLocationId: string;
   emailGhlTargetWorkflowId: string;
   emailGhlRecoveryWorkflowId: string;
-  // Custom SMTP — direct-send win-back email channel. Bundled into a
+  // Direct-send win-back email channel (email_platform === "smtp") — for
+  // buyers with no ESP/CRM account at all. Two transports share this one
+  // section: raw SMTP, or Resend's API for buyers who'd rather not run a
+  // mail server. directSendProvider picks which; both bundle into a
   // single JSON string (emailApiKey) at submit time rather than adding
   // new stack schema columns — see the useEffect that composes it below.
+  directSendProvider: "smtp" | "resend";
   smtpHost: string;
   smtpPort: string;
   smtpSecure: boolean;
@@ -51,6 +55,7 @@ export interface FormData {
   smtpPassword: string;
   smtpFromAddress: string;
   smtpFromName: string;
+  resendApiKey: string;
   hostingPlatform: string;
   publishDomain: string;
   hostingWebflowSiteId: string;
@@ -63,6 +68,10 @@ export interface FormData {
   // credential-vault entry rather than pasting a fresh key — see
   // credential-field.tsx and submit-payload.ts's credentialVaultLinks.
   hostingCredentialVaultId: string;
+  // Set when the operator checks "save this so I can reuse it for other
+  // clients" while pasting a fresh hostingApiKey — see credential-field.tsx
+  // and submit-payload.ts's credentialSaveForReuse. Never set at the same
+  // time as hostingCredentialVaultId (reuse mode has nothing new to save).
   hostingSaveForReuse: boolean;
   hostingReuseLabel: string;
   briefDestination: string;

@@ -40,7 +40,7 @@ import {
   pendingActions,
   type EngagementStack,
 } from "@/models/schema";
-import { inngest, bookingWebhookProcess } from "@/lib/inngest";
+import { inngest, bookingWebhookProcess, winBackSequenceStop } from "@/lib/inngest";
 import { startRun } from "@/lib/run-log";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
@@ -314,6 +314,15 @@ async function exitCorrectedNoShow(
         eq(winBackEnrollments.status, "active")
       )
     );
+
+  // Hard-cancel signal for the enrollment(s) just corrected — see
+  // winBackSequenceStop's doc comment in inngest.ts. Best-effort, same
+  // reasoning as the exitWinBackSequence try/catch above.
+  try {
+    await inngest.send(active.map((row) => winBackSequenceStop.create({ enrollmentId: row.id })));
+  } catch (cancelErr) {
+    console.error("[outcome-resolution] win-back cancelOn signal failed:", cancelErr);
+  }
 }
 
 /**

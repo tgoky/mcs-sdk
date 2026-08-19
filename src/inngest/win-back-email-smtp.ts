@@ -1,26 +1,33 @@
-import { inngest, winBackEmailSmtpSequenceStart } from "@/lib/inngest";
+import { inngest, winBackEmailSmtpSequenceStart, winBackSequenceStop } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements, winBackEnrollments, sequenceMessageLog, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
-import { SMTPClient, parseSmtpCredential } from "@/lib/platforms/email";
+import { createDirectSendClient } from "@/lib/platforms/email";
 import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
 
 /**
- * Durable win-back email sender for the SMTP direct-send platform —
- * mirrors win-back-sms.ts's structure exactly (day-scale relative
- * step.sleep offsets, an active-status check before every send), but for
- * email_platform === "smtp" instead of the direct-send SMS platforms.
+ * Durable win-back email sender for the direct-send platform (email_platform
+ * === "smtp") — mirrors win-back-sms.ts's structure exactly (day-scale
+ * relative step.sleep offsets, an active-status check before every send).
  *
- * SMTP has no ESP-side list/automation to enroll a prospect into (see the
- * module comment in src/lib/platforms/email.ts's SMTPClient section), so
- * this app owns the send schedule itself, using the same
- * `winBackSequenceAssetMap.emails` content that's already generated for
- * every email_platform — for the four ESP platforms that content feeds a
- * merge-tag; for SMTP it becomes the literal outbound email.
+ * "smtp" covers two transports, chosen by the credential blob's own
+ * "provider" field (see createDirectSendClient in
+ * src/lib/platforms/email.ts): raw SMTP, or Resend's HTTP API for buyers
+ * who want direct sending without standing up a mail server. Neither has
+ * an ESP-side list/automation to enroll a prospect into (see the module
+ * comment on SMTPClient in email.ts), so this app owns the send schedule
+ * itself, using the same `winBackSequenceAssetMap.emails` content that's
+ * already generated for every email_platform — for the four ESP platforms
+ * that content feeds a merge-tag; here it becomes the literal outbound
+ * email.
  */
 export const processWinBackEmailSmtpSequence = inngest.createFunction(
-  { id: "process-win-back-email-smtp-sequence", triggers: [winBackEmailSmtpSequenceStart] },
+  {
+    id: "process-win-back-email-smtp-sequence",
+    triggers: [winBackEmailSmtpSequenceStart],
+    cancelOn: [{ event: winBackSequenceStop, match: "data.enrollmentId" }],
+  },
   async ({ event, step }) => {
     const { engagementId, runId, enrollmentId, prospectEmail, prospectName } = event.data;
 
@@ -82,8 +89,7 @@ export const processWinBackEmailSmtpSequence = inngest.createFunction(
       try {
         await step.run(`send-${message.id}`, async () => {
           const raw = await resolveCredential(engagementId, "smtp");
-          const config = parseSmtpCredential(raw);
-          await new SMTPClient(config).sendEmail(
+          await createDirectSendClient(raw).sendEmail(
             prospectEmail,
             message.subject ?? `A quick note for ${prospectName}`,
             message.body
