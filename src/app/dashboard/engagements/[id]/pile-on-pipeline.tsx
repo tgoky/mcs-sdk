@@ -2,15 +2,14 @@
 
 // src/app/dashboard/engagements/[id]/pile-on-pipeline.tsx
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { 
   ChevronLeft, 
   ChevronRight, 
   Search, 
   Mail, 
-  CalendarX2, 
-  ExternalLink, 
+  Phone,
   PhoneCall, 
   TrendingUp, 
   TrendingDown, 
@@ -23,7 +22,9 @@ import {
   Check,
   Clock,
   RefreshCw,
-  CalendarDays
+  CalendarDays,
+  CalendarX2,
+  ExternalLink
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getDaysInMonthGrid, dateKey, timeStr } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
@@ -116,6 +117,8 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [showRunActivity, setShowRunActivity] = useState(false);
   const [showUpcomingInMonth, setShowUpcomingInMonth] = useState(false);
+
+  const firstMeetingRef = useRef<HTMLDivElement | null>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -265,9 +268,22 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
     [filtered, selectedId, selectedDayItems]
   );
 
+  // Auto-scroll timeline to earliest meeting when Day View opens or selected date changes
+  useEffect(() => {
+    if (mode === "day" && firstMeetingRef.current) {
+      firstMeetingRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [mode, selectedDayKey]);
+
   const gridDays = useMemo(() => getDaysInMonthGrid(year, month), [year, month]);
   const monthName = currentDate.toLocaleString("default", { month: "long" });
   const callTodayCount = filtered.filter((i) => i.stage === "call_today").length;
+
+  const earliestHourWithCall = useMemo(() => {
+    if (selectedDayItems.length === 0) return null;
+    const hours = selectedDayItems.map((i) => new Date(i.callTime ?? i.createdAt).getHours());
+    return Math.min(...hours);
+  }, [selectedDayItems]);
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
@@ -489,8 +505,14 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             <div className="divide-y divide-zinc-200 dark:divide-zinc-900 overflow-y-auto max-h-[620px] p-2 font-sans">
               {HOURS.map((hour) => {
                 const hourItems = selectedDayItems.filter((i) => new Date(i.callTime ?? i.createdAt).getHours() === hour);
+                const isEarliestHour = earliestHourWithCall === hour;
+
                 return (
-                  <div key={hour} className="flex min-h-[60px] gap-3 py-1.5 border-b border-zinc-200 dark:border-zinc-900/80 last:border-b-0 font-sans">
+                  <div
+                    key={hour}
+                    ref={isEarliestHour ? firstMeetingRef : null}
+                    className="flex min-h-[60px] gap-3 py-1.5 border-b border-zinc-200 dark:border-zinc-900/80 last:border-b-0 font-sans"
+                  >
                     <span className="w-14 shrink-0 font-mono text-[11px] text-zinc-500 text-right pt-0.5">
                       {hour.toString().padStart(2, "0")}:00
                     </span>
@@ -690,8 +712,19 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 </>
               ) : (
                 <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
-                  <Clock size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-                  <p className="text-xs font-sans">No lead selected or found for this date.</p>
+                  <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
+                  <p className="text-xs font-sans">
+                    {selectedDate ? (
+                      <>
+                        <span className="font-bold text-zinc-800 dark:text-zinc-200 block mb-0.5">
+                          {selectedDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                        Zero speed-to-lead runs for this date.
+                      </>
+                    ) : (
+                      "Select a date or lead from the list to inspect sequence details."
+                    )}
+                  </p>
                 </div>
               )}
             </div>

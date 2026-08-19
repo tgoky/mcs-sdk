@@ -2,7 +2,7 @@
 
 // src/app/dashboard/engagements/[id]/pre-call-read-pipeline.tsx
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { 
   ChevronLeft, 
@@ -102,7 +102,7 @@ function formatDayHeader(dateStr: string) {
   if (dateStr === todayKey) return "Today";
   if (dateStr === yesterdayKey) return "Yesterday";
   if (dateStr === tomorrowKey) return "Tomorrow";
-  
+
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -126,6 +126,8 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [showRunActivity, setShowRunActivity] = useState(false);
   const [showUpcomingInMonth, setShowUpcomingInMonth] = useState(false);
+
+  const firstMeetingRef = useRef<HTMLDivElement | null>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -208,8 +210,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
       dateObj.setDate(monday.getDate() + i);
       const k = dateKey(dateObj);
       const calls = entriesByDate[k] ?? [];
-      
-      // Only include day if it is today/past OR if it actually has calls
+
       if (k <= todayK || calls.length > 0) {
         days.push({ dateStr: k, dateObj, calls });
       }
@@ -230,12 +231,10 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
       days.push({ dateStr: k, dateObj, calls, isFuture });
     }
 
-    // Only render past & today in main feed (e.g. Aug 19 down to Aug 1)
     const pastAndToday = days
       .filter((d) => !d.isFuture)
       .sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
 
-    // Only include future days IF they actually have booked calls
     const future = days
       .filter((d) => d.isFuture && d.calls.length > 0)
       .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
@@ -279,9 +278,22 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
     [filtered, selectedEntryId, selectedDayEntries]
   );
 
+  // Auto-scroll timeline to earliest call when Day View opens or selected date changes
+  useEffect(() => {
+    if (mode === "day" && firstMeetingRef.current) {
+      firstMeetingRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [mode, selectedDayKey]);
+
   const gridDays = useMemo(() => getDaysInMonthGrid(year, month), [year, month]);
   const monthName = currentDate.toLocaleString("default", { month: "long" });
   const briefedCount = filtered.filter((e) => e.status === "brief_delivered").length;
+
+  const earliestHourWithCall = useMemo(() => {
+    if (selectedDayEntries.length === 0) return null;
+    const hours = selectedDayEntries.map((e) => new Date(e.callTime).getHours());
+    return Math.min(...hours);
+  }, [selectedDayEntries]);
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
@@ -495,8 +507,14 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
             <div className="divide-y divide-zinc-200 dark:divide-zinc-900 overflow-y-auto max-h-[620px] p-2 font-sans">
               {HOURS.map((hour) => {
                 const hourEntries = selectedDayEntries.filter((e) => new Date(e.callTime).getHours() === hour);
+                const isEarliestHour = earliestHourWithCall === hour;
+
                 return (
-                  <div key={hour} className="flex min-h-[60px] gap-3 py-1.5 border-b border-zinc-200 dark:border-zinc-900/80 last:border-b-0 font-sans">
+                  <div
+                    key={hour}
+                    ref={isEarliestHour ? firstMeetingRef : null}
+                    className="flex min-h-[60px] gap-3 py-1.5 border-b border-zinc-200 dark:border-zinc-900/80 last:border-b-0 font-sans"
+                  >
                     <span className="w-14 shrink-0 font-mono text-[11px] text-zinc-500 text-right pt-0.5">
                       {hour.toString().padStart(2, "0")}:00
                     </span>
