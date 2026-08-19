@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { credentialsRefs, credentialVault } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
+import { connectedAccountIdFromRefKey, deleteComposioConnection, getComposioCredentialValue } from "@/lib/composio";
 
 // Either the module-level pooled db, or the `tx` handle inside a
 // db.transaction() callback — both expose the same select/insert/update
@@ -252,6 +253,27 @@ export async function rotateVaultCredential(
 }
 
 /**
+ * Saves a Composio-managed connection into the vault. Distinct from
+ * storeVaultCredential: refKey is a "composio:<connectedAccountId>"
+ * pointer, not a rotatable encrypted secret — the placeholder plaintext
+ * satisfies the encryptedValue/iv NOT NULL columns but is never read back
+ * (resolveCredential's composio: branch bypasses decrypt() entirely).
+ * Rotating a Composio-managed row doesn't make sense the same way a
+ * pasted key does — Composio refreshes the underlying token itself;
+ * "reconnect" (a fresh startComposioConnect call, then delete the old
+ * row) is the equivalent action, not rotateVaultCredential.
+ */
+export async function storeComposioVaultCredential(
+  workspaceId: string,
+  whopUserId: string,
+  provider: string,
+  label: string,
+  refKey: string
+): Promise<string> {
+  return storeVaultCredential(workspaceId, whopUserId, provider, label, refKey, "managed-via-composio");
+}
+
+/**
  * Resolves a credential for runtime use.
  * Looks up by engagementId + provider, decrypts, returns plaintext value.
  * Throws clearly if the credential hasn't been set up.
@@ -301,6 +323,18 @@ export async function resolveCredential(
       );
     }
     const v = vaultRows[0];
+
+    // Composio-managed connection: the vault row's encryptedValue is a
+    // harmless placeholder (see storeComposioVaultCredential in
+    // composio.ts) — the real credential lives at Composio and is
+    // fetched live on every resolve, never cached locally. Every caller
+    // of resolveCredential() stays unaware this branch exists at all,
+    // same as it's unaware of the vault itself.
+    const connectedAccountId = connectedAccountIdFromRefKey(v.refKey);
+    if (connectedAccountId) {
+      return getComposioCredentialValue(connectedAccountId);
+    }
+
     return decrypt(v.encryptedValue, v.iv, v.keyVersion);
   }
 
@@ -345,7 +379,7 @@ export async function hasCredential(
 export async function listVaultCredentials(
   workspaceId: string,
   provider?: string
-): Promise<Array<{ id: string; provider: string; label: string; healthStatus: string; createdAt: Date }>> {
+): Promise<Array<{ id: string; provider: string; label: string; healthStatus: string; createdAt: Date; isComposioManaged: boolean }>> {
   const rows = await db
     .select({
       id: credentialVault.id,
@@ -353,6 +387,7 @@ export async function listVaultCredentials(
       label: credentialVault.label,
       healthStatus: credentialVault.healthStatus,
       createdAt: credentialVault.createdAt,
+      refKey: credentialVault.refKey,
     })
     .from(credentialVault)
     .where(
@@ -360,7 +395,7 @@ export async function listVaultCredentials(
         ? and(eq(credentialVault.workspaceId, workspaceId), eq(credentialVault.provider, provider))
         : eq(credentialVault.workspaceId, workspaceId)
     );
-  return rows;
+  return rows.map(({ refKey, ...rest }) => ({ ...rest, isComposioManaged: connectedAccountIdFromRefKey(refKey) !== null }));
 }
 
 /**
@@ -401,12 +436,35 @@ export async function unlinkEngagementFromVault(engagementId: string, provider: 
     .where(and(eq(credentialsRefs.engagementId, engagementId), eq(credentialsRefs.provider, provider)));
 }
 
-/** Deletes a vault credential — refuses if any engagement is still linked to it, since that would silently break their next run rather than fail loudly at delete time. */
+/**
+ * Deletes a vault credential — refuses if any engagement is still linked
+ * to it, since that would silently break their next run rather than fail
+ * loudly at delete time. For a Composio-managed row, also revokes the
+ * connection at Composio (and therefore at the underlying platform)
+ * before removing the local pointer — this is the actual "revoke access"
+ * action, not just forgetting our own reference to it. The upstream
+ * revoke failing doesn't block the local delete: if Composio's API is
+ * briefly unavailable, the person clicking Delete should still be able to
+ * remove the credential locally rather than getting stuck, and a
+ * Composio-side connection with no local pointer left anywhere is inert
+ * (nothing in this app can resolve to it again).
+ */
 export async function deleteVaultCredential(vaultId: string): Promise<{ ok: true } | { ok: false; usedBy: string[] }> {
   const usedBy = await listEngagementsUsingVaultCredential(vaultId);
   if (usedBy.length > 0) {
     return { ok: false, usedBy };
   }
+
+  const [row] = await db.select({ refKey: credentialVault.refKey }).from(credentialVault).where(eq(credentialVault.id, vaultId)).limit(1);
+  const connectedAccountId = row ? connectedAccountIdFromRefKey(row.refKey) : null;
+  if (connectedAccountId) {
+    try {
+      await deleteComposioConnection(connectedAccountId);
+    } catch (err) {
+      console.error(`[credential-vault] Failed to revoke Composio connection ${connectedAccountId} before deleting vault row ${vaultId}:`, err);
+    }
+  }
+
   await db.delete(credentialVault).where(eq(credentialVault.id, vaultId));
   return { ok: true };
 }

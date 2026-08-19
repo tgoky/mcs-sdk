@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { engagements, workspacePackages, workspaces } from "@/models/schema";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
+import { isValidTimezone, isValidLocale, DEFAULT_TIMEZONE, DEFAULT_LOCALE } from "@/lib/timezones";
 
 export const ACTIVE_WORKSPACE_COOKIE = "active_workspace_id";
 
@@ -12,6 +13,8 @@ export type Workspace = {
   workspaceId: string;
   name: string;
   isLegacy: boolean;
+  timezone: string;
+  locale: string;
   createdAt: Date;
 };
 
@@ -19,6 +22,8 @@ const WORKSPACE_SELECT = {
   workspaceId: workspaces.workspaceId,
   name: workspaces.name,
   isLegacy: workspaces.isLegacy,
+  timezone: workspaces.timezone,
+  locale: workspaces.locale,
   createdAt: workspaces.createdAt,
 } as const;
 
@@ -201,7 +206,14 @@ export async function createWorkspace(
   );
 
   return {
-    workspace: { workspaceId: id, name: trimmedName, isLegacy: false, createdAt },
+    workspace: {
+      workspaceId: id,
+      name: trimmedName,
+      isLegacy: false,
+      timezone: DEFAULT_TIMEZONE,
+      locale: DEFAULT_LOCALE,
+      createdAt,
+    },
     installedPackageIds: validPackageIds,
   };
 }
@@ -225,4 +237,41 @@ export async function getInstalledPackagesByWorkspace(
     byWorkspace.set(row.workspaceId, list);
   }
   return byWorkspace;
+}
+
+/**
+ * Persists the workspace-level default timezone/locale — the write path
+ * for Settings > Timezones & Region. Ownership is enforced the same way
+ * as getOwnedWorkspace: the WHERE clause matches on whopUserId too, so a
+ * tampered workspaceId can silently no-op rather than update someone
+ * else's workspace.
+ *
+ * This is a *default*, not the value the crons read: new engagements are
+ * seeded from it (see engagements/new/submit-payload.ts) but each
+ * engagement's own stack.timezone is what
+ * matchesDailyLocalHour/matchesWeeklyLocalHour actually consult, and that
+ * can be changed per-client afterward without touching this.
+ */
+export async function updateWorkspaceRegionSettings(
+  whopUserId: string,
+  workspaceId: string,
+  input: { timezone: string; locale: string }
+): Promise<Workspace | { error: string }> {
+  if (!isValidTimezone(input.timezone)) {
+    return { error: "Unrecognized timezone." };
+  }
+  if (!isValidLocale(input.locale)) {
+    return { error: "Unsupported locale." };
+  }
+
+  const [updated] = await db
+    .update(workspaces)
+    .set({ timezone: input.timezone, locale: input.locale, updatedAt: new Date() })
+    .where(and(eq(workspaces.workspaceId, workspaceId), eq(workspaces.whopUserId, whopUserId)))
+    .returning(WORKSPACE_SELECT);
+
+  if (!updated) {
+    return { error: "Workspace not found." };
+  }
+  return updated;
 }

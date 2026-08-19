@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.86",
+    "@composio/core": "^0.16.0",
     "@t3-oss/env-nextjs": "^0.13.11",
     "@vercel/functions": "^3.7.3",
     "@whop/sdk": "^0.0.40",

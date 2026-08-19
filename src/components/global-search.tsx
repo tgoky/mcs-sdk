@@ -79,7 +79,7 @@ type FlatRow =
   | { kind: "queue"; href: string; item: QueueResult }
   | { kind: "quick"; href: string; item: (typeof QUICK_LINKS)[number] };
 
-export function GlobalSearch() {
+export function GlobalSearch({ triggerClassName }: { triggerClassName?: string } = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -115,6 +115,19 @@ export function GlobalSearch() {
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Mobile entry point — the floating nav pill's "Find" button has no
+  // ⌘K-capable keyboard to dispatch from, so it opens the palette by
+  // firing this custom event instead. See mobile-nav-pill.tsx. This
+  // listener is registered unconditionally (not gated behind any
+  // viewport-based rendering) so it works regardless of screen size.
+  useEffect(() => {
+    function handleOpenRequest() {
+      setOpen(true);
+    }
+    window.addEventListener("open-global-search", handleOpenRequest);
+    return () => window.removeEventListener("open-global-search", handleOpenRequest);
   }, []);
 
   useEffect(() => {
@@ -205,8 +218,10 @@ export function GlobalSearch() {
     <>
       <button
         type="button"
-className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/80 border border-border rounded-md transition-colors w-72 md:w-96 cursor-pointer"     onClick={() => setOpen(true)}
-        
+        onClick={() => setOpen(true)}
+        aria-label="Open global search"
+        data-global-search-trigger
+        className={`${triggerClassName ?? "flex"} items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/80 border border-border rounded-md transition-colors w-72 md:w-96 cursor-pointer`}
       >
         <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
         <span className="flex-1 text-left truncate">Search...</span>

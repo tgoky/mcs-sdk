@@ -294,13 +294,15 @@ export type EngagementStack = {
   // via matchesDailyLocalHour (schedule-matcher.ts) so nightly briefs land
   // at 20:00 in the buyer's own time instead of a fixed 20:00 UTC.
   // Undefined defaults to "UTC" — identical behavior to today until an
-  // engagement actually sets one. No Settings UI writes this yet (see
-  // 2026-08-07 handoff, Observation 1 — deferred until the first non-UTC
-  // operator makes it urgent); credentialHealthCron, lostDealSweepCron, and
-  // weeklyMetricsCron still need the equivalent per-engagement timezone
-  // check added inside their own service functions (credential-health.ts,
-  // lost-deal-sweep.ts, weekly-metrics.ts) since those crons don't iterate
-  // engagements directly the way nightlyBriefsCron does.
+  // engagement actually sets one. credentialHealthCron, lostDealSweepCron,
+  // and weeklyMetricsCron already consume this too (via
+  // matchesDailyLocalHour / matchesWeeklyLocalHour in their own service
+  // functions — credential-health.ts, lost-deal-sweep.ts,
+  // weekly-metrics.ts), not just nightlyBriefsCron. The Settings UI that
+  // writes this now exists: per-engagement, under Edit stack settings >
+  // Scheduling (edit-stack-settings.tsx); a workspace-level default that
+  // seeds new engagements lives at Settings > Timezones & Region
+  // (workspaces.timezone, applied in engagements/new's submit flow).
   timezone?: string;
   // ── Leak Map recovery gap 2: report delivery format ─────────────────────
   // "dashboard_only" (default) — report lands in auditRunsLog, viewable in
@@ -502,6 +504,19 @@ export const workspaces = pgTable("workspaces", {
   // conflict instead of a check-then-insert read/write race — see that
   // function's comment for why.
   isLegacy: boolean("is_legacy").notNull().default(false),
+  // ── Settings > Timezones & Region ───────────────────────────────────────
+  // Workspace-level defaults, surfaced at /dashboard/settings/language.
+  // `timezone` is an IANA zone (e.g. "America/New_York") applied as the
+  // starting value for a new engagement's own stack.timezone at creation
+  // (see engagements/new/submit-payload.ts) — the per-engagement value on
+  // `engagements.stack.timezone` is what the crons actually read
+  // (matchesDailyLocalHour / matchesWeeklyLocalHour in schedule-matcher.ts),
+  // this is just the sane starting point for an operator whose buyers are
+  // mostly in one region, editable per-client afterward. `locale` is a
+  // BCP-47 tag (e.g. "en-US") used for date/number formatting in the
+  // dashboard header and elsewhere — see lib/workspace-format.ts.
+  timezone: text("timezone").notNull().default("UTC"),
+  locale: text("locale").notNull().default("en-US"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

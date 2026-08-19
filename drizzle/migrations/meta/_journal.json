@@ -162,6 +162,13 @@
       "when": 1786961430359,
       "tag": "0022_rich_shiver_man",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787099507132,
+      "tag": "0023_far_supreme_intelligence",
+      "breakpoints": true
     }
   ]
 }

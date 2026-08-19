@@ -186,6 +186,13 @@ export function buildEngagementPayload(form: FormData) {
       hubspot_portal_id: form.inboundReplyMode === "native" && form.emailPlatform === "hubspot" ? form.hubspotPortalId || undefined : undefined,
       weekly_summary_schedule: { dayOfWeek: form.weeklyScheduleDayOfWeek, hourLocal: form.weeklyScheduleHour, timezone: form.leakMapTimezone },
       monthly_deep_dive_schedule: { dayOfMonth: form.monthlyScheduleDayOfMonth, hourLocal: form.weeklyScheduleHour, timezone: form.leakMapTimezone },
+      // Same value as the two schedules above, applied as this engagement's
+      // general timezone too — matchesDailyLocalHour/matchesWeeklyLocalHour
+      // (schedule-matcher.ts) read this for nightly briefs, credential-health
+      // checks, the lost-deal sweep, and weekly metrics. Editable afterward,
+      // independently of the Leak-Map schedule, via Edit stack settings >
+      // Scheduling.
+      timezone: form.leakMapTimezone,
       audit_output_format: form.auditOutputFormat,
       leak_map_report_email: form.auditOutputFormat === "email" ? form.leakMapReportEmail || undefined : undefined,
       existing_audit_flagged: form.existingAuditFlagged || undefined,

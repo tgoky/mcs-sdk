@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Settings2, Save } from "lucide-react";
 import {
@@ -14,6 +14,7 @@ import {
 import type { EngagementStack } from "@/models/schema";
 import { BookingSyncStatusCard } from "@/components/booking-sync-status-card";
 import { computeBookingSyncStatus, platformSupportsAutoWebhook } from "@/lib/booking-sync-status";
+import { COMMON_TIMEZONES, allTimezones } from "@/lib/timezones";
 
 const BOOKING_PLATFORM_OPTIONS = Object.keys(BOOKING_PLATFORM_LABELS) as Array<keyof typeof BOOKING_PLATFORM_LABELS>;
 const EMAIL_PLATFORM_OPTIONS = Object.keys(EMAIL_PLATFORM_LABELS) as Array<keyof typeof EMAIL_PLATFORM_LABELS>;
@@ -342,6 +343,15 @@ export function EditStackSettings({
 
   const [webhookMode, setWebhookMode] = useState(initialStack?.webhook_receiver_mode ?? "");
 
+  // What matchesDailyLocalHour / matchesWeeklyLocalHour (schedule-matcher.ts)
+  // actually read to decide this client's local hour for nightly briefs,
+  // credential-health checks, the lost-deal sweep, and weekly metrics.
+  const [timezone, setTimezone] = useState(initialStack?.timezone ?? "UTC");
+  const otherTimezones = useMemo(
+    () => allTimezones().filter((tz) => !COMMON_TIMEZONES.some((c) => c.value === tz)),
+    []
+  );
+
   const [recallRegion, setRecallRegion] = useState(initialStack?.conversation_intelligence_meta?.recall_region ?? "");
   const [recallBotName, setRecallBotName] = useState(initialStack?.conversation_intelligence_meta?.recall_bot_name ?? "");
   const [recallSigningSecret, setRecallSigningSecret] = useState(
@@ -428,6 +438,7 @@ export function EditStackSettings({
             ...(adDataPlatform ? { ad_data_platform: adDataPlatform } : {}),
             ...(conversationIntelligenceProvider ? { conversation_intelligence_provider: conversationIntelligenceProvider } : {}),
             ...(effectiveWebhookMode ? { webhook_receiver_mode: effectiveWebhookMode } : {}),
+            ...(timezone ? { timezone } : {}),
             ...(Object.keys(conversationIntelligenceMetaPayload).length > 0
               ? { conversation_intelligence_meta: conversationIntelligenceMetaPayload }
               : {}),
@@ -492,6 +503,37 @@ export function EditStackSettings({
       </p>
 
       <div className="space-y-4">
+        {/* Scheduling */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <GroupHeading>Scheduling</GroupHeading>
+          <div />
+          <label className="space-y-1 block sm:col-span-2">
+            <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">
+              Client timezone
+            </span>
+            <select
+              value={timezone}
+              onChange={(e) => { setTimezone(e.target.value); setSaved(false); }}
+              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
+            >
+              <optgroup label="Common">
+                {COMMON_TIMEZONES.map((tz) => (
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
+                ))}
+              </optgroup>
+              <optgroup label="All timezones">
+                {otherTimezones.map((tz) => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </optgroup>
+            </select>
+            <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
+              Drives when nightly briefs, credential-health checks, the lost-deal sweep, and weekly metrics fire for
+              this client — each runs at this client&apos;s local hour, not the server&apos;s.
+            </p>
+          </label>
+        </div>
+
         {/* Booking */}
         <div
           ref={bookingSectionRef}

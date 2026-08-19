@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import { isValidTagColorId } from "@/lib/engagement-tag-colors";
+import { isValidTimezone } from "@/lib/timezones";
 
 export const revalidate = 0;
 
@@ -156,6 +157,15 @@ const EDITABLE_FLAT_STRING_FIELDS = [
  *
  * Also handles restoring a soft-deleted engagement (`{ restore: true }`) —
  * see DELETE below for why deletion is soft.
+ *
+ * `timezone` (an IANA zone string, validated against the runtime's own tz
+ * database — see lib/timezones.ts) is the one exception to "structural IDs
+ * only": it's what schedule-matcher.ts's matchesDailyLocalHour /
+ * matchesWeeklyLocalHour read to decide whether it's currently this
+ * client's configured local hour for nightly briefs, credential-health
+ * checks, the lost-deal sweep, and weekly metrics. Undefined/omitted
+ * leaves it untouched; explicit null is not accepted (falls through to
+ * "UTC" by convention elsewhere, so there's no ambiguity to encode).
  */
 export async function PATCH(
   req: Request,
@@ -323,6 +333,13 @@ export async function PATCH(
     if (incoming.ad_data_platform_meta !== undefined && typeof incoming.ad_data_platform_meta !== "object") {
       return NextResponse.json({ error: "ad_data_platform_meta must be an object." }, { status: 400 });
     }
+    if (
+      incoming.timezone !== undefined &&
+      incoming.timezone !== null &&
+      !isValidTimezone(incoming.timezone)
+    ) {
+      return NextResponse.json({ error: `Invalid timezone: ${incoming.timezone}` }, { status: 400 });
+    }
     for (const field of EDITABLE_FLAT_STRING_FIELDS) {
       if (incoming[field] !== undefined && incoming[field] !== null && typeof incoming[field] !== "string") {
         return NextResponse.json({ error: `${field} must be a string.` }, { status: 400 });
@@ -356,6 +373,7 @@ export async function PATCH(
       ...(incoming.ad_data_platform_meta !== undefined
         ? { ad_data_platform_meta: { ...currentStack.ad_data_platform_meta, ...incoming.ad_data_platform_meta } }
         : {}),
+      ...(incoming.timezone !== undefined ? { timezone: incoming.timezone } : {}),
       ...Object.fromEntries(
         EDITABLE_FLAT_STRING_FIELDS
           .filter((f) => incoming[f] !== undefined)

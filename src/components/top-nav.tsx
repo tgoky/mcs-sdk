@@ -112,10 +112,13 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
         <Breadcrumbs />
       </div>
 
-      {/* True center: Search */}
-      <div className="hidden sm:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-        <GlobalSearch />
-      </div>
+      {/* True center: Search. Only the trigger button is hidden below the
+          sm breakpoint (the mobile nav pill's "Find" button opens the same
+          palette instead — see global-search.tsx's open-global-search
+          listener) — the palette itself must NOT be nested inside any
+          hidden ancestor, or it silently fails to render on mobile even
+          when open. */}
+      <GlobalSearch triggerClassName="hidden sm:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
 
       {/* Right: Notification bell */}
       <div className="flex items-center gap-2 ml-auto shrink-0">
