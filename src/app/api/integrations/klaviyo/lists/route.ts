@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
+import { resolveVaultCredentialValue, vaultCredentialBelongsToTenant } from "@/lib/credentials";
 
 export const runtime = "nodejs";
 
@@ -9,15 +11,29 @@ export const runtime = "nodejs";
 // request happens to send. Body isn't logged the same way, so the key
 // moves there instead. Client caller updated in
 // src/app/dashboard/engagements/new/page.tsx to match.
+//
+// Also accepts `vaultId` in place of `key` — the wizard's "reuse a saved
+// credential" mode never has the plaintext, only the saved row's id.
 export async function POST(request: Request) {
   try {
     const session = await getSession();
     if (!session?.whopUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const body = await request.json().catch(() => ({}));
-    const apiKey = typeof body?.key === "string" ? body.key : null;
+    const rawKey = typeof body?.key === "string" ? body.key : null;
+    const vaultId = typeof body?.vaultId === "string" ? body.vaultId : null;
+
+    let apiKey: string | null = rawKey;
+    if (!apiKey && vaultId) {
+      const owned = await vaultCredentialBelongsToTenant(vaultId, activeWorkspace.workspaceId);
+      if (!owned) {
+        return NextResponse.json({ error: "Saved credential not found or access denied." }, { status: 404 });
+      }
+      apiKey = await resolveVaultCredentialValue(vaultId);
+    }
 
     if (!apiKey) {
       return NextResponse.json({ error: "Missing API Key parameter" }, { status: 400 });

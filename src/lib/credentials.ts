@@ -349,6 +349,40 @@ export async function resolveCredential(
 }
 
 /**
+ * Resolves a saved vault credential's plaintext value for a live,
+ * client-triggered lookup during onboarding — the "new engagement" wizard
+ * only ever has a vaultId in reuse mode, never the plaintext (that's the
+ * point of the vault), so the wizard's calendar/list/workflow lookup
+ * routes (src/app/api/integrations/*) need a way to get a usable value
+ * themselves instead of requiring the buyer to re-paste a key that's
+ * already saved. Mirrors resolveCredential's vault branch exactly —
+ * Composio-managed rows resolve live via getComposioCredentialValue,
+ * everything else decrypts locally — so the two never drift apart.
+ *
+ * Always verify vaultCredentialBelongsToTenant(vaultId, workspaceId)
+ * before calling this; it does not re-check ownership itself, matching
+ * every other function in this file that trusts its caller to have
+ * already scoped the request to the right workspace.
+ */
+export async function resolveVaultCredentialValue(vaultId: string): Promise<string> {
+  const rows = await db.select().from(credentialVault).where(eq(credentialVault.id, vaultId)).limit(1);
+  if (rows.length === 0) {
+    throw new Error("Saved credential not found.");
+  }
+  const v = rows[0];
+
+  const connectedAccountId = connectedAccountIdFromRefKey(v.refKey);
+  if (connectedAccountId) {
+    return getComposioCredentialValue(connectedAccountId);
+  }
+
+  if (!v.encryptedValue || !v.iv) {
+    throw new Error("Saved credential has no usable value.");
+  }
+  return decrypt(v.encryptedValue, v.iv, v.keyVersion);
+}
+
+/**
  * Checks whether a credential exists without throwing.
  * Use this for conditional platform support checks.
  */

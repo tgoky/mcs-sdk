@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { STEPS, DEFAULT_FORM } from "./constants";
 import { clearDraft, deleteServerDraft } from "./draft-storage";
 import { useDraftPersistence } from "./use-draft-persistence";
@@ -18,11 +19,14 @@ import { LaunchStep } from "./steps/launch-step";
 import type { FormData, Step, Testimonial } from "./types";
 
 export default function NewEngagementPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>("offer");
   const [form, setForm] = useState<FormData>(DEFAULT_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [readyToLaunch, setReadyToLaunch] = useState<{ engagementId: string; buyerName: string } | null>(null);
+  const [composioBanner, setComposioBanner] = useState<{ kind: "ok" | "error"; message: string } | null>(null);
 
   const { showRestoredBanner, setShowRestoredBanner, discardDraft } = useDraftPersistence(
     form,
@@ -33,6 +37,84 @@ export default function NewEngagementPage() {
 
   const emailIntegrations = useEmailIntegrations(form, setForm);
   const smartPrefill = useSmartPrefill(setForm);
+
+  // Landed back here after a Composio "Connect" (see credential-field.tsx)
+  // — /api/composio/callback appends composio_connected=<provider> or
+  // composio_error=<message> to this page's URL. Runs once on mount only:
+  // this only ever matters right after that specific redirect, and the
+  // URL cleanup below removes the params before any re-render could
+  // re-trigger it anyway.
+  useEffect(() => {
+    const connected = searchParams.get("composio_connected");
+    const composioError = searchParams.get("composio_error");
+    if (!connected && !composioError) return;
+
+    if (composioError) {
+      // Deferred, not called directly here: a setState call synchronous
+      // with the effect body itself is what react-hooks/set-state-in-effect
+      // flags — the async branch just below already avoids this the same
+      // way, since its setState calls only ever run inside the IIFE's
+      // callback, never at the effect's top level.
+      queueMicrotask(() => setComposioBanner({ kind: "error", message: composioError }));
+    }
+
+    if (connected) {
+      (async () => {
+        try {
+          const res = await fetch(`/api/credential-vault?provider=${encodeURIComponent(connected)}`);
+          if (res.ok) {
+            const data = await res.json();
+            const items: { id: string; createdAt: string }[] = data.items ?? [];
+            if (items.length > 0) {
+              const newest = [...items].sort(
+                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              )[0];
+              // Functional update: whichever slot(s) currently point at
+              // this provider get the freshly-connected credential
+              // selected automatically, so returning from Composio drops
+              // the buyer straight into "reuse saved" with it pre-picked
+              // instead of an extra manual dropdown step. Reads `f` fresh
+              // rather than the `form` closure captured at mount, since
+              // the draft-restore effect (useDraftPersistence) may not
+              // have finished hydrating yet by the time this resolves.
+              setForm((f) => {
+                const next = { ...f };
+                let changed = false;
+                if (connected === "ghl_calendar") {
+                  if (f.bookingPlatform === "ghl_calendar" || f.emailPlatform === "ghl" || f.smsPlatform === "ghl_sms") {
+                    next.ghlCredentialVaultId = newest.id;
+                    changed = true;
+                  }
+                } else {
+                  if (f.bookingPlatform === connected) {
+                    next.bookingCredentialVaultId = newest.id;
+                    changed = true;
+                  }
+                  if (f.emailPlatform === connected) {
+                    next.emailCredentialVaultId = newest.id;
+                    changed = true;
+                  }
+                }
+                return changed ? next : f;
+              });
+            }
+          }
+          setComposioBanner({ kind: "ok", message: `${connected} connected.` });
+        } catch {
+          setComposioBanner({
+            kind: "error",
+            message: `${connected} connected, but couldn't auto-select it here — pick it from "Reuse saved" instead.`,
+          });
+        }
+      })();
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("composio_connected");
+    url.searchParams.delete("composio_error");
+    router.replace(`${url.pathname}${url.search}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function set(field: keyof FormData, value: string | boolean) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -138,6 +220,25 @@ export default function NewEngagementPage() {
         </div>
 
         <StepIndicator steps={STEPS} current={step} />
+
+        {composioBanner && (
+          <div
+            className={`rounded-lg p-3 flex items-center justify-between gap-3 text-xs shadow-xs border ${
+              composioBanner.kind === "ok"
+                ? "border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400"
+                : "border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400"
+            }`}
+          >
+            <span>{composioBanner.message}</span>
+            <button
+              type="button"
+              onClick={() => setComposioBanner(null)}
+              className="shrink-0 opacity-70 hover:opacity-100 cursor-pointer font-mono"
+            >
+              [ Dismiss ]
+            </button>
+          </div>
+        )}
 
         {showRestoredBanner && (
           <div

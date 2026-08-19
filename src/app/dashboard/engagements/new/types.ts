@@ -63,12 +63,16 @@ export interface FormData {
   // credential-vault entry rather than pasting a fresh key — see
   // credential-field.tsx and submit-payload.ts's credentialVaultLinks.
   hostingCredentialVaultId: string;
+  hostingSaveForReuse: boolean;
+  hostingReuseLabel: string;
   briefDestination: string;
   slackWebhookUrl: string;
   // Pile-On recovery gap 1 — SMS
   smsPlatform: string;
   smsApiKey: string;
   smsCredentialVaultId: string;
+  smsSaveForReuse: boolean;
+  smsReuseLabel: string;
   smsTwilioAccountSid: string;
   smsTwilioMessagingServiceSid: string;
   smsTwilioFromNumber: string;
@@ -79,6 +83,8 @@ export interface FormData {
   adDataPlatform: string;
   adDataApiKey: string;
   adDataCredentialVaultId: string;
+  adDataSaveForReuse: boolean;
+  adDataReuseLabel: string;
   adDataHyrosAccountId: string;
   adDataGoogleSheetsSpreadsheetId: string;
   adDataGoogleSheetsSheetName: string;
@@ -105,8 +111,16 @@ export interface FormData {
   rawVoiceCorpus: string;
   bookingApiKey: string;
   bookingCredentialVaultId: string;
+  // Set when the operator checks "save this so I can reuse it for other
+  // clients" while pasting a fresh bookingApiKey — see credential-field.tsx
+  // and submit-payload.ts's credentialSaveForReuse. Never set at the same
+  // time as bookingCredentialVaultId (reuse mode has nothing new to save).
+  bookingSaveForReuse: boolean;
+  bookingReuseLabel: string;
   emailApiKey: string;
   emailCredentialVaultId: string;
+  emailSaveForReuse: boolean;
+  emailReuseLabel: string;
   // Single shared GoHighLevel credential pair. GHL Private Integration
   // Tokens are scoped to one sub-account and cover calendars, workflows,
   // and SMS all at once — so whenever bookingPlatform is "ghl_calendar",
@@ -117,6 +131,8 @@ export interface FormData {
   // token 2-3 times across the wizard.
   ghlApiKey: string;
   ghlCredentialVaultId: string;
+  ghlSaveForReuse: boolean;
+  ghlReuseLabel: string;
   ghlLocationId: string;
   testimonials: Testimonial[];
   // Pin-Down recovery gap 6 — populated when bookingPlatform or

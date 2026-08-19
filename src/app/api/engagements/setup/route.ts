@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements, credentialsRefs } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
-import { storeCredential, linkEngagementToVault, vaultCredentialBelongsToTenant } from "@/lib/credentials";
+import { storeCredential, storeVaultCredential, linkEngagementToVault, vaultCredentialBelongsToTenant } from "@/lib/credentials";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import crypto from "crypto";
@@ -50,6 +50,14 @@ export async function POST(request: Request) {
       // never have both, but if it somehow does, the vault link takes
       // priority below.
       credentialVaultLinks,
+      // { booking?, email?, hosting?, sms?, adData? } — { label } per slot
+      // when the wizard's "save this so I can reuse it for other clients"
+      // checkbox was checked in paste mode (see credential-field.tsx and
+      // submit-payload.ts's credentialSaveForReuse/saveForReuseEntry).
+      // Independent of credentialVaultLinks above: this saves a *new*
+      // vault row from a freshly-pasted value, it doesn't link to an
+      // existing one.
+      credentialSaveForReuse,
     } = body;
 
     if (!engagementId || !buyerName) {
@@ -285,6 +293,41 @@ export async function POST(request: Request) {
         })
         .where(eq(engagements.engagementId, engagementId));
     });
+
+    // ── Step 3: Best-effort "save for reuse" into the credential vault ──
+    // Independent of the transaction above on purpose — this never should
+    // roll back engagement creation, the same way CredentialRow's identical
+    // action post-onboarding (update-credentials-form.tsx) is a separate
+    // fetch from the local credential save, not one atomic operation. A
+    // failure here is logged, not surfaced as a setup failure: the buyer's
+    // engagement is fully set up and usable either way, they'd just need to
+    // paste that one key again for their next client instead of reusing it.
+    if (credentialSaveForReuse && typeof credentialSaveForReuse === "object") {
+      const vaultTargets: Array<{ slot: string; provider: string | undefined; plainValue: string | undefined }> = [
+        { slot: "booking", provider: finalStack.booking_platform, plainValue: credentials?.booking },
+        { slot: "email", provider: finalStack.email_platform, plainValue: credentials?.email },
+        { slot: "hosting", provider: finalStack.hosting_platform, plainValue: credentials?.hosting },
+        { slot: "sms", provider: finalStack.sms_platform, plainValue: credentials?.sms },
+        { slot: "adData", provider: finalStack.ad_data_platform, plainValue: credentials?.adData },
+      ];
+      for (const { slot, provider, plainValue } of vaultTargets) {
+        const request = credentialSaveForReuse[slot];
+        const label = typeof request?.label === "string" ? request.label.trim() : "";
+        if (!provider || !plainValue || !label) continue;
+        try {
+          await storeVaultCredential(
+            activeWorkspace.workspaceId,
+            whopUserId,
+            provider,
+            label,
+            `secrets://vault/${activeWorkspace.workspaceId}/${provider}/${Date.now()}`,
+            plainValue
+          );
+        } catch (err) {
+          console.error(`[pin-down setup] Failed to save "${slot}" credential for reuse:`, err);
+        }
+      }
+    }
 
     return NextResponse.json({
       success: true,

@@ -96,7 +96,8 @@ export function useEmailIntegrations(
   useEffect(() => {
     let cancelled = false;
 
-    if (form.bookingApiKey?.trim() && form.bookingPlatform) {
+    const hasKeyOrVault = Boolean(form.bookingApiKey?.trim() || form.bookingCredentialVaultId?.trim());
+    if (hasKeyOrVault && form.bookingPlatform) {
       const timer = setTimeout(() => {
         setFetchingBookingOptions(true);
         setBookingOptionsError(null);
@@ -106,7 +107,8 @@ export function useEmailIntegrations(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             platform: form.bookingPlatform,
-            apiKey: form.bookingApiKey.trim(),
+            apiKey: form.bookingApiKey?.trim() || undefined,
+            vaultId: !form.bookingApiKey?.trim() ? form.bookingCredentialVaultId || undefined : undefined,
             locationId: form.bookingLocationId || form.emailGhlLocationId,
           }),
         })
@@ -150,6 +152,7 @@ export function useEmailIntegrations(
   }, [
     form.bookingPlatform,
     form.bookingApiKey,
+    form.bookingCredentialVaultId,
     form.bookingLocationId,
     form.emailGhlLocationId,
   ]);
@@ -158,7 +161,8 @@ export function useEmailIntegrations(
   useEffect(() => {
     let cancelled = false;
 
-    if (form.emailPlatform === "klaviyo" && form.emailApiKey?.trim()) {
+    const hasKeyOrVault = Boolean(form.emailApiKey?.trim() || form.emailCredentialVaultId?.trim());
+    if (form.emailPlatform === "klaviyo" && hasKeyOrVault) {
       const timer = setTimeout(() => {
         setFetchingLists(true);
         setListsFetchError(null);
@@ -166,7 +170,10 @@ export function useEmailIntegrations(
         fetch(`/api/integrations/klaviyo/lists`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: form.emailApiKey.trim() }),
+          body: JSON.stringify({
+            key: form.emailApiKey?.trim() || undefined,
+            vaultId: !form.emailApiKey?.trim() ? form.emailCredentialVaultId || undefined : undefined,
+          }),
         })
           .then(async (res) => {
             const data = await res.json().catch(() => ({}));
@@ -205,15 +212,16 @@ export function useEmailIntegrations(
     return () => {
       cancelled = true;
     };
-  }, [form.emailPlatform, form.emailApiKey]);
+  }, [form.emailPlatform, form.emailApiKey, form.emailCredentialVaultId]);
 
   // 3. ActiveCampaign: Fetch lists when base URL is provided (500ms Debounce)
   useEffect(() => {
     let cancelled = false;
 
+    const hasKeyOrVault = Boolean(form.emailApiKey?.trim() || form.emailCredentialVaultId?.trim());
     if (
       form.emailPlatform === "activecampaign" &&
-      form.emailApiKey?.trim() &&
+      hasKeyOrVault &&
       form.emailActiveCampaignBaseUrl?.trim()
     ) {
       const timer = setTimeout(() => {
@@ -224,7 +232,8 @@ export function useEmailIntegrations(
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            key: form.emailApiKey.trim(),
+            key: form.emailApiKey?.trim() || undefined,
+            vaultId: !form.emailApiKey?.trim() ? form.emailCredentialVaultId || undefined : undefined,
             baseUrl: form.emailActiveCampaignBaseUrl.trim(),
           }),
         })
@@ -265,7 +274,7 @@ export function useEmailIntegrations(
     return () => {
       cancelled = true;
     };
-  }, [form.emailPlatform, form.emailApiKey, form.emailActiveCampaignBaseUrl]);
+  }, [form.emailPlatform, form.emailApiKey, form.emailCredentialVaultId, form.emailActiveCampaignBaseUrl]);
 
   // 4. Custom SMTP: Compose JSON credential blob into emailApiKey
   useEffect(() => {
@@ -306,7 +315,8 @@ export function useEmailIntegrations(
   useEffect(() => {
     let cancelled = false;
     const needsGhl = form.bookingPlatform === "ghl_calendar" || form.emailPlatform === "ghl";
-    if (needsGhl && form.ghlApiKey?.trim() && form.ghlLocationId?.trim()) {
+    const hasKeyOrVault = Boolean(form.ghlApiKey?.trim() || form.ghlCredentialVaultId?.trim());
+    if (needsGhl && hasKeyOrVault && form.ghlLocationId?.trim()) {
       const timer = setTimeout(() => {
         setFetchingGhlLocations(true);
         setGhlLocationsError(null);
@@ -316,7 +326,11 @@ export function useEmailIntegrations(
         fetch(`/api/integrations/ghl/locations`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: form.ghlApiKey.trim(), locationId: form.ghlLocationId.trim() }),
+          body: JSON.stringify({
+            key: form.ghlApiKey?.trim() || undefined,
+            vaultId: !form.ghlApiKey?.trim() ? form.ghlCredentialVaultId || undefined : undefined,
+            locationId: form.ghlLocationId.trim(),
+          }),
         })
           .then(async (res) => {
             const data = await res.json().catch(() => ({}));
@@ -356,16 +370,18 @@ export function useEmailIntegrations(
     return () => {
       cancelled = true;
     };
-  }, [form.bookingPlatform, form.emailPlatform, form.ghlApiKey, form.ghlLocationId, setForm]);
+  }, [form.bookingPlatform, form.emailPlatform, form.ghlApiKey, form.ghlCredentialVaultId, form.ghlLocationId, setForm]);
 
   // 6. GHL: Fetch workflows once the location above is verified
   useEffect(() => {
     let cancelled = false;
 
+    const ghlKey = (form.ghlApiKey || form.emailApiKey)?.trim();
+    const hasKeyOrVault = Boolean(ghlKey || form.ghlCredentialVaultId?.trim());
     if (
       form.emailPlatform === "ghl" &&
       form.emailGhlLocationId &&
-      form.emailApiKey?.trim() &&
+      hasKeyOrVault &&
       ghlLocations.length > 0
     ) {
       setFetchingGhlWorkflows(true);
@@ -375,7 +391,8 @@ export function useEmailIntegrations(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          key: form.emailApiKey.trim(),
+          key: ghlKey || undefined,
+          vaultId: !ghlKey ? form.ghlCredentialVaultId || undefined : undefined,
           locationId: form.emailGhlLocationId,
         }),
       })
@@ -410,7 +427,7 @@ export function useEmailIntegrations(
     return () => {
       cancelled = true;
     };
-  }, [form.emailPlatform, form.emailGhlLocationId, form.emailApiKey, ghlLocations]);
+  }, [form.emailPlatform, form.emailGhlLocationId, form.emailApiKey, form.ghlApiKey, form.ghlCredentialVaultId, ghlLocations]);
 
   // "Start over" needs to wipe this too. The five fetch effects above are
   // reactive to form fields and do clear themselves once those fields go
@@ -438,7 +455,7 @@ export function useEmailIntegrations(
   }
 
   const klaviyoMissingKeyMessage =
-    form.emailPlatform === "klaviyo" && !form.emailApiKey?.trim()
+    form.emailPlatform === "klaviyo" && !(form.emailApiKey?.trim() || form.emailCredentialVaultId?.trim())
       ? "Enter your Klaviyo API key above to load your lists."
       : null;
 

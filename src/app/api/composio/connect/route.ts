@@ -1,16 +1,24 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
-import { isComposioManagedProvider, startComposioConnect } from "@/lib/composio";
+import { isComposioManagedProvider, startComposioConnect, isAllowedComposioReturnPath } from "@/lib/composio";
 
 /**
- * Body: { provider }. Starts a hosted Composio Connect flow for one of
- * the 5 providers Composio has real OAuth for (see PROVIDER_TOOLKIT_MAP
- * in src/lib/composio.ts). Returns a redirectUrl — the frontend does a
- * full-page navigation to it, not a popup: Composio's hosted page handles
- * the entire OAuth exchange and redirects the browser straight back to
- * /api/composio/callback on success or failure, no client-side SDK or
- * polling required on this app's side.
+ * Body: { provider, returnTo? }. Starts a hosted Composio Connect flow for
+ * one of the 5 providers Composio has real OAuth for (see
+ * PROVIDER_TOOLKIT_MAP in src/lib/composio-providers.ts). Returns a
+ * redirectUrl — the frontend does a full-page navigation to it, not a
+ * popup: Composio's hosted page handles the entire OAuth exchange and
+ * redirects the browser straight back to /api/composio/callback on success
+ * or failure, no client-side SDK or polling required on this app's side.
+ *
+ * returnTo lets a caller other than Settings > Apps (currently: the "new
+ * engagement" wizard's credential picker) ask to land back on its own page
+ * instead of the default. Checked against isAllowedComposioReturnPath
+ * before being threaded through — never trust it as an open-redirect
+ * target. An invalid/omitted returnTo just falls back to today's behavior
+ * (the callback route defaults to /dashboard/settings/apps on its own),
+ * so this is purely additive.
  */
 export async function POST(request: Request) {
   try {
@@ -20,7 +28,7 @@ export async function POST(request: Request) {
     }
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
-    const { provider } = await request.json();
+    const { provider, returnTo } = await request.json();
     if (!provider || typeof provider !== "string") {
       return NextResponse.json({ error: "Missing required field: provider" }, { status: 400 });
     }
@@ -29,9 +37,13 @@ export async function POST(request: Request) {
     }
 
     const origin = new URL(request.url).origin;
-    const callbackUrl = `${origin}/api/composio/callback?provider=${encodeURIComponent(provider)}`;
+    const callbackUrl = new URL("/api/composio/callback", origin);
+    callbackUrl.searchParams.set("provider", provider);
+    if (typeof returnTo === "string" && isAllowedComposioReturnPath(returnTo)) {
+      callbackUrl.searchParams.set("returnTo", returnTo);
+    }
 
-    const { redirectUrl } = await startComposioConnect(provider, activeWorkspace.workspaceId, callbackUrl);
+    const { redirectUrl } = await startComposioConnect(provider, activeWorkspace.workspaceId, callbackUrl.toString());
     return NextResponse.json({ redirectUrl });
   } catch (err) {
     console.error("[composio/connect POST]", err);

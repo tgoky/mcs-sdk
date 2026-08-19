@@ -1,4 +1,11 @@
 import { Composio } from "@composio/core";
+import { isComposioManagedProvider, toolkitSlugForProvider } from "@/lib/composio-providers";
+
+// Re-exported for backward compatibility — every existing import of these
+// three from "@/lib/composio" (composio/connect, composio/callback, etc.)
+// keeps working unchanged. See composio-providers.ts for why the
+// declaration itself moved out of this file.
+export { isComposioManagedProvider, toolkitSlugForProvider };
 
 /**
  * Composio integration layer.
@@ -35,27 +42,6 @@ import { Composio } from "@composio/core";
  * unchanged; Composio was never going to remove that step for platforms
  * that don't offer OAuth themselves.
  */
-
-const PROVIDER_TOOLKIT_MAP: Record<string, string> = {
-  calendly: "calendly",
-  hubspot: "hubspot",
-  klaviyo: "klaviyo",
-  mailchimp: "mailchimp",
-  // GoHighLevel: this app reuses the booking-slot credential
-  // (ghl_calendar) for both booking and email/CRM use — see the
-  // "GoHighLevel CRM actions reuse the Location ID set under Booking
-  // above" comment in edit-stack-settings.tsx. One Composio connection
-  // covers both.
-  ghl_calendar: "highlevel",
-};
-
-export function isComposioManagedProvider(provider: string): boolean {
-  return provider in PROVIDER_TOOLKIT_MAP;
-}
-
-export function toolkitSlugForProvider(provider: string): string | null {
-  return PROVIDER_TOOLKIT_MAP[provider] ?? null;
-}
 
 let client: Composio | null = null;
 
@@ -188,6 +174,21 @@ export async function finalizeComposioConnection(
 export async function deleteComposioConnection(connectedAccountId: string): Promise<void> {
   const composio = getComposioClient();
   await composio.connectedAccounts.delete(connectedAccountId);
+}
+
+/**
+ * Pages allowed to ask the Composio connect flow to return them there
+ * instead of the default /dashboard/settings/apps — checked on both the
+ * way out (/api/composio/connect) and the way back
+ * (/api/composio/callback), since returnTo round-trips through a
+ * Composio-hosted page and this app should never trust it blindly as an
+ * open redirect target. Exact-match only, no prefix matching: add a new
+ * entry here deliberately rather than widening the check.
+ */
+const COMPOSIO_RETURN_ALLOWLIST = ["/dashboard/settings/apps", "/dashboard/engagements/new"];
+
+export function isAllowedComposioReturnPath(path: string): boolean {
+  return COMPOSIO_RETURN_ALLOWLIST.includes(path);
 }
 
 export const COMPOSIO_VAULT_REFKEY_PREFIX = "composio:";

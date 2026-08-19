@@ -63,14 +63,22 @@ export function getValidationErrors(form: FormData): ValidationError[] {
   }
 
   // Step 3: Account Keys
-  if (!form.bookingApiKey.trim()) {
+  if (
+    !form.bookingApiKey.trim() &&
+    !form.bookingCredentialVaultId.trim() &&
+    !(form.bookingPlatform === "ghl_calendar" && form.ghlCredentialVaultId.trim())
+  ) {
     errors.push({ step: "credentials", stepLabel: "Account Keys", issue: `Booking Platform (${BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform}) API Key is missing` });
   }
   if (form.emailPlatform === "smtp") {
     if (!form.smtpHost.trim() || !form.smtpPort.trim() || !form.smtpUsername.trim() || !form.smtpPassword.trim() || !form.smtpFromAddress.trim()) {
       errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "Complete SMTP server credentials are required (host, port, username, password, from address)" });
     }
-  } else if (!form.emailApiKey.trim()) {
+  } else if (
+    !form.emailApiKey.trim() &&
+    !form.emailCredentialVaultId.trim() &&
+    !(form.emailPlatform === "ghl" && form.ghlCredentialVaultId.trim())
+  ) {
     errors.push({ step: "credentials", stepLabel: "Account Keys", issue: `Email Platform (${EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform}) API Key is missing` });
   }
 
@@ -91,6 +99,25 @@ export function getValidationErrors(form: FormData): ValidationError[] {
     if (!form.emailGhlLocationId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "GHL Location selection is required" });
     if (!form.emailGhlTargetWorkflowId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "GHL Target Workflow (Pile-On) must be selected" });
     if (!form.emailGhlRecoveryWorkflowId) errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "GHL Recovery Workflow (Win-Back) must be selected" });
+  }
+
+  // "Save this so I can reuse it for other clients" was checked but the
+  // label got cleared afterward — submit-payload.ts's saveForReuseEntry
+  // silently drops an unlabeled save-for-reuse request rather than saving
+  // an unnamed vault row, so catch it here instead of letting the box
+  // silently do nothing.
+  const saveForReuseChecks: Array<{ checked: boolean; labeled: boolean; step: Step; stepLabel: string; field: string }> = [
+    { checked: form.ghlSaveForReuse, labeled: Boolean(form.ghlReuseLabel.trim()), step: "credentials", stepLabel: "Account Keys", field: "GoHighLevel token" },
+    { checked: form.bookingSaveForReuse, labeled: Boolean(form.bookingReuseLabel.trim()), step: "credentials", stepLabel: "Account Keys", field: "Booking Platform key" },
+    { checked: form.emailSaveForReuse, labeled: Boolean(form.emailReuseLabel.trim()), step: "credentials", stepLabel: "Account Keys", field: "Email Platform key" },
+    { checked: form.hostingSaveForReuse, labeled: Boolean(form.hostingReuseLabel.trim()), step: "credentials", stepLabel: "Account Keys", field: "Hosting key" },
+    { checked: form.smsSaveForReuse, labeled: Boolean(form.smsReuseLabel.trim()), step: "stack", stepLabel: "Connect Your Tools", field: "SMS key" },
+    { checked: form.adDataSaveForReuse, labeled: Boolean(form.adDataReuseLabel.trim()), step: "stack", stepLabel: "Connect Your Tools", field: "Ad-Data key" },
+  ];
+  for (const check of saveForReuseChecks) {
+    if (check.checked && !check.labeled) {
+      errors.push({ step: check.step, stepLabel: check.stepLabel, issue: `Name the saved ${check.field} (or uncheck "save this so I can reuse it")` });
+    }
   }
 
   // Sales Context step — shared across whichever skills/agents get enabled

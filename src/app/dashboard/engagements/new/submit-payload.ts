@@ -40,9 +40,43 @@ export function buildEngagementPayload(form: FormData) {
   const resolvedGhlVaultId =
     form.ghlCredentialVaultId || form.bookingCredentialVaultId || form.emailCredentialVaultId || undefined;
 
+  // Same shared-field source as resolvedGhlApiKey/resolvedGhlVaultId above:
+  // the "save this so I can reuse it" checkbox and label only ever live on
+  // the shared GHL field's own state — the GHL mirror effect
+  // (use-email-integrations.ts) copies the raw key and location into the
+  // per-slot booking/email/sms fields, but never this, so a GHL-driven
+  // slot's save-for-reuse intent has to be read from here, not from
+  // form.bookingSaveForReuse / form.emailSaveForReuse / form.smsSaveForReuse.
+  const resolvedGhlSaveForReuse = form.ghlSaveForReuse;
+  const resolvedGhlReuseLabel = form.ghlReuseLabel;
+
   // 🌟 FIX: Unified Calendar ID resolver across all possible form state keys
   const resolvedCalendarId =
     form.bookingCalendarId || form.ghlCalendarId || form.calendarId || undefined;
+
+  // Resolved plaintext value per slot — computed once here so both the
+  // `credentials` block below and `credentialSaveForReuse` (further down)
+  // read the exact same value instead of re-deriving the GHL-mirroring
+  // branches twice and risking the two falling out of sync.
+  const bookingCredentialValue = (form.bookingPlatform === "ghl_calendar" ? resolvedGhlApiKey : form.bookingApiKey) || undefined;
+  const emailCredentialValue = (form.emailPlatform === "ghl" ? resolvedGhlApiKey : form.emailApiKey) || undefined;
+  const hostingCredentialValue = form.hostingApiKey || undefined;
+  const smsCredentialValue =
+    form.smsPlatform === "ghl_sms"
+      ? resolvedGhlApiKey
+      : form.smsPlatform !== "none"
+        ? form.smsApiKey || undefined
+        : undefined;
+  const adDataCredentialValue =
+    form.adDataPlatform !== "none" && form.adDataPlatform !== "native_crm" ? form.adDataApiKey || undefined : undefined;
+
+  // A slot only gets a save-for-reuse request when it actually has a
+  // freshly-pasted plaintext value to save (reuse mode has nothing new to
+  // save) AND the box was checked AND a non-empty label was given —
+  // matching CredentialRow's identical guard in update-credentials-form.tsx.
+  function saveForReuseEntry(saveForReuse: boolean, reuseLabel: string, plainValue: string | undefined) {
+    return saveForReuse && Boolean(plainValue) && reuseLabel.trim() ? { label: reuseLabel.trim() } : undefined;
+  }
 
   const payload = {
     engagementId,
@@ -208,13 +242,11 @@ export function buildEngagementPayload(form: FormData) {
 
     // 12. Credentials Block
     credentials: {
-      booking: form.bookingPlatform === "ghl_calendar" ? resolvedGhlApiKey : form.bookingApiKey,
-      email: form.emailPlatform === "ghl" ? resolvedGhlApiKey : form.emailApiKey,
-      hosting: form.hostingApiKey || undefined,
-      sms: form.smsPlatform === "ghl_sms" 
-        ? resolvedGhlApiKey 
-        : (form.smsPlatform !== "none" ? form.smsApiKey || undefined : undefined),
-      adData: form.adDataPlatform !== "none" && form.adDataPlatform !== "native_crm" ? form.adDataApiKey || undefined : undefined,
+      booking: bookingCredentialValue,
+      email: emailCredentialValue,
+      hosting: hostingCredentialValue,
+      sms: smsCredentialValue,
+      adData: adDataCredentialValue,
       videoEngagement: form.videoEngagementPlatform !== "none" ? form.videoEngagementApiKey || undefined : undefined,
       apollo: form.prospectResearchSourcesUsed.includes("apollo") ? form.apolloApiKey || undefined : undefined,
       pdl: form.prospectResearchSourcesUsed.includes("pdl") ? form.pdlApiKey || undefined : undefined,
@@ -239,6 +271,32 @@ export function buildEngagementPayload(form: FormData) {
         form.adDataPlatform !== "none" && form.adDataPlatform !== "native_crm"
           ? form.adDataCredentialVaultId || undefined
           : undefined,
+    },
+
+    // 14. Save-for-reuse requests — see credential-field.tsx's "save this
+    // so I can reuse it for other clients" checkbox and the matching block
+    // in /api/engagements/setup. Only a slot whose checkbox was actually
+    // checked (with a label) shows up here at all; the setup route saves
+    // that slot's plaintext value into the vault in addition to storing it
+    // for this engagement, independent of credentialVaultLinks above.
+    credentialSaveForReuse: {
+      booking: saveForReuseEntry(
+        form.bookingPlatform === "ghl_calendar" ? resolvedGhlSaveForReuse : form.bookingSaveForReuse,
+        form.bookingPlatform === "ghl_calendar" ? resolvedGhlReuseLabel : form.bookingReuseLabel,
+        bookingCredentialValue
+      ),
+      email: saveForReuseEntry(
+        form.emailPlatform === "ghl" ? resolvedGhlSaveForReuse : form.emailSaveForReuse,
+        form.emailPlatform === "ghl" ? resolvedGhlReuseLabel : form.emailReuseLabel,
+        emailCredentialValue
+      ),
+      hosting: saveForReuseEntry(form.hostingSaveForReuse, form.hostingReuseLabel, hostingCredentialValue),
+      sms: saveForReuseEntry(
+        form.smsPlatform === "ghl_sms" ? resolvedGhlSaveForReuse : form.smsSaveForReuse,
+        form.smsPlatform === "ghl_sms" ? resolvedGhlReuseLabel : form.smsReuseLabel,
+        smsCredentialValue
+      ),
+      adData: saveForReuseEntry(form.adDataSaveForReuse, form.adDataReuseLabel, adDataCredentialValue),
     },
   };
 

@@ -213,6 +213,10 @@ export function StackStep({
           onValueChange={(v) => set("smsApiKey", v)}
           vaultId={form.smsCredentialVaultId}
           onVaultIdChange={(v) => set("smsCredentialVaultId", v)}
+          saveForReuse={form.smsSaveForReuse}
+          onSaveForReuseChange={(v) => set("smsSaveForReuse", v)}
+          reuseLabel={form.smsReuseLabel}
+          onReuseLabelChange={(v) => set("smsReuseLabel", v)}
         />
       )}
       {form.smsPlatform === "twilio" && (
@@ -294,6 +298,10 @@ export function StackStep({
           onValueChange={(v) => set("adDataApiKey", v)}
           vaultId={form.adDataCredentialVaultId}
           onVaultIdChange={(v) => set("adDataCredentialVaultId", v)}
+          saveForReuse={form.adDataSaveForReuse}
+          onSaveForReuseChange={(v) => set("adDataSaveForReuse", v)}
+          reuseLabel={form.adDataReuseLabel}
+          onReuseLabelChange={(v) => set("adDataReuseLabel", v)}
         />
       )}
       {form.adDataPlatform === "hyros" && (
