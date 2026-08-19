@@ -51,8 +51,8 @@ export function CredentialsStep({
 
   // Determines whether we have a valid key to trigger calendar option fetching
   const hasBookingAuth = bookingIsGhl
-    ? Boolean((form.ghlApiKey?.trim() || form.ghlCredentialVaultId?.trim()) && form.ghlLocationId?.trim())
-    : Boolean(form.bookingApiKey?.trim() || form.bookingCredentialVaultId?.trim());
+    ? Boolean(form.ghlApiKey?.trim() && form.ghlLocationId?.trim())
+    : Boolean(form.bookingApiKey?.trim());
 
   return (
     <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
@@ -81,10 +81,6 @@ export function CredentialsStep({
             onValueChange={(v) => set("ghlApiKey", v)}
             vaultId={form.ghlCredentialVaultId}
             onVaultIdChange={(v) => set("ghlCredentialVaultId", v)}
-            saveForReuse={form.ghlSaveForReuse}
-            onSaveForReuseChange={(v) => set("ghlSaveForReuse", v)}
-            reuseLabel={form.ghlReuseLabel}
-            onReuseLabelChange={(v) => set("ghlReuseLabel", v)}
             placeholder="Paste your Private Integration Token here..."
             helpText="Sub-account Settings → Private Integrations → create one with Calendars, Workflows, and/or Conversations scopes as needed."
             required
@@ -124,10 +120,6 @@ export function CredentialsStep({
           onValueChange={(v) => set("bookingApiKey", v)}
           vaultId={form.bookingCredentialVaultId}
           onVaultIdChange={(v) => set("bookingCredentialVaultId", v)}
-          saveForReuse={form.bookingSaveForReuse}
-          onSaveForReuseChange={(v) => set("bookingSaveForReuse", v)}
-          reuseLabel={form.bookingReuseLabel}
-          onReuseLabelChange={(v) => set("bookingReuseLabel", v)}
           placeholder="Paste your API key here..."
           helpText={
             form.bookingPlatform === "calendly"
@@ -194,8 +186,72 @@ export function CredentialsStep({
             className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium"
             style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
           >
-            Custom SMTP has no single API key — enter your mail server's connection details below. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
+            No CRM or ESP account? This is the direct-send option — the app emails prospects itself, on its own schedule, using either Resend&apos;s API or your own mail server. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
           </div>
+
+          <div className="md:col-span-2 flex gap-2 rounded-lg p-1" style={{ background: "var(--surface-2)" }}>
+            <button
+              type="button"
+              onClick={() => set("directSendProvider", "resend")}
+              className="flex-1 rounded-md px-3 py-2 text-xs font-semibold transition-colors cursor-pointer"
+              style={
+                form.directSendProvider === "resend"
+                  ? { background: "var(--accent)", color: "var(--accent-contrast, #fff)" }
+                  : { color: "var(--text-secondary)" }
+              }
+            >
+              Resend (recommended)
+              <span className="block font-normal opacity-80 mt-0.5">Just an API key — better inbox deliverability, no server to run</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => set("directSendProvider", "smtp")}
+              className="flex-1 rounded-md px-3 py-2 text-xs font-semibold transition-colors cursor-pointer"
+              style={
+                form.directSendProvider === "smtp"
+                  ? { background: "var(--accent)", color: "var(--accent-contrast, #fff)" }
+                  : { color: "var(--text-secondary)" }
+              }
+            >
+              Custom SMTP
+              <span className="block font-normal opacity-80 mt-0.5">Bring your own mail server&apos;s connection details</span>
+            </button>
+          </div>
+        </>
+      ) : null}
+
+      {form.emailPlatform === "smtp" && form.directSendProvider === "resend" ? (
+        <>
+          <InputField
+            providerLogo="resend"
+            label="Resend API Key"
+            value={form.resendApiKey}
+            onChange={(v) => set("resendApiKey", v)}
+            type="password"
+            placeholder="re_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            required
+          />
+          <InputField
+            providerLogo="resend"
+            label="From address"
+            value={form.smtpFromAddress}
+            onChange={(v) => set("smtpFromAddress", v)}
+            placeholder="hello@yourdomain.com"
+            helpText="Must be on a domain you've verified in Resend."
+            required
+          />
+          <InputField
+            providerLogo="resend"
+            label="From name (optional)"
+            value={form.smtpFromName}
+            onChange={(v) => set("smtpFromName", v)}
+            placeholder="Your Company"
+          />
+        </>
+      ) : null}
+
+      {form.emailPlatform === "smtp" && form.directSendProvider === "smtp" ? (
+        <>
           <InputField
             providerLogo="smtp"
             label="SMTP Host"
@@ -269,10 +325,6 @@ export function CredentialsStep({
               onValueChange={(v) => set("emailApiKey", v)}
               vaultId={form.emailCredentialVaultId}
               onVaultIdChange={(v) => set("emailCredentialVaultId", v)}
-              saveForReuse={form.emailSaveForReuse}
-              onSaveForReuseChange={(v) => set("emailSaveForReuse", v)}
-              reuseLabel={form.emailReuseLabel}
-              onReuseLabelChange={(v) => set("emailReuseLabel", v)}
               placeholder="Paste your API key here..."
               required
             />
@@ -493,10 +545,6 @@ export function CredentialsStep({
           onValueChange={(v) => set("hostingApiKey", v)}
           vaultId={form.hostingCredentialVaultId}
           onVaultIdChange={(v) => set("hostingCredentialVaultId", v)}
-          saveForReuse={form.hostingSaveForReuse}
-          onSaveForReuseChange={(v) => set("hostingSaveForReuse", v)}
-          reuseLabel={form.hostingReuseLabel}
-          onReuseLabelChange={(v) => set("hostingReuseLabel", v)}
           placeholder="Paste your API key or token here..."
           helpText={
             form.hostingPlatform === "wordpress"
