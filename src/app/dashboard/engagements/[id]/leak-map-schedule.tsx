@@ -27,6 +27,8 @@ import { LeakMapView } from "@/app/dashboard/runs/[id]/views/leak-map-view";
 import type { LeakMapDetail } from "@/app/dashboard/runs/[id]/_shared/types";
 import type { AuditHistoryItem, ScheduledAudit, ActiveAlertItem } from "@/app/api/engagements/[id]/leak-map-schedule/route";
 
+type AuditScopeFilter = "all" | "weekly" | "monthly";
+
 function formatDayHeader(dateStr: string) {
   const todayKey = dateKey(new Date());
 
@@ -55,6 +57,7 @@ function getWeekOfMonth(date: Date) {
 export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [scopeFilter, setScopeFilter] = useState<AuditScopeFilter>("all");
   const [history, setHistory] = useState<AuditHistoryItem[]>([]);
   const [scheduled, setScheduled] = useState<ScheduledAudit[]>([]);
   const [alerts, setAlerts] = useState<ActiveAlertItem[]>([]);
@@ -111,10 +114,21 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
   };
 
   const filtered = useMemo(() => {
-    if (!filterText.trim()) return history;
-    const q = filterText.toLowerCase();
-    return history.filter((h) => h.runType.toLowerCase().includes(q));
-  }, [history, filterText]);
+    let list = history;
+
+    if (filterText.trim()) {
+      const q = filterText.toLowerCase();
+      list = list.filter((h) => h.runType.toLowerCase().includes(q));
+    }
+
+    if (scopeFilter === "weekly") {
+      list = list.filter((h) => h.runType.toLowerCase().includes("week"));
+    } else if (scopeFilter === "monthly") {
+      list = list.filter((h) => h.runType.toLowerCase().includes("month"));
+    }
+
+    return list;
+  }, [history, filterText, scopeFilter]);
 
   // Group monthly history by Week Buckets (Week 1, Week 2, Week 3, Week 4+)
   const monthWeeksGrouped = useMemo(() => {
@@ -300,17 +314,53 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 font-mono text-[11px] text-zinc-500 font-medium">
-                <span>{monthlyRunCount} run{monthlyRunCount === 1 ? "" : "s"}</span>
-                <span>•</span>
-                <span>{monthWeeksGrouped.length} active week{monthWeeksGrouped.length === 1 ? "" : "s"}</span>
+              {/* Scope Filter Segmented Pill */}
+              <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px] font-sans">
+                <button
+                  type="button"
+                  onClick={() => setScopeFilter("all")}
+                  className={cn(
+                    "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                    scopeFilter === "all"
+                      ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
+                      : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                  )}
+                >
+                  All ({monthlyRunCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScopeFilter("weekly")}
+                  className={cn(
+                    "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                    scopeFilter === "weekly"
+                      ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
+                      : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                  )}
+                >
+                  Weekly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScopeFilter("monthly")}
+                  className={cn(
+                    "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                    scopeFilter === "monthly"
+                      ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
+                      : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                  )}
+                >
+                  Monthly
+                </button>
               </div>
             </div>
 
             {monthWeeksGrouped.length === 0 && !loading ? (
               <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
                 <CalendarX2 size={22} />
-                <span className="text-xs">No audits recorded in {monthName} {year}.</span>
+                <span className="text-xs">
+                  No {scopeFilter === "all" ? "" : `${scopeFilter} `}audits recorded in {monthName} {year}.
+                </span>
               </div>
             ) : (
               <div className="divide-y divide-zinc-200/80 dark:divide-zinc-800/60 max-h-[520px] overflow-y-auto">
@@ -359,7 +409,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 font-semibold shrink-0">
-                                      <Calendar size={8} /> Scheduled
+                                      <Calendar size={8} /> Automated
                                     </span>
                                   )}
                                 </div>
