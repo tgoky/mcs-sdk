@@ -2,7 +2,7 @@
 
 // src/app/dashboard/engagements/[id]/win-back-pipeline.tsx
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { 
   ChevronLeft, 
@@ -49,21 +49,27 @@ function StatusPill({
 }) {
   const toneClasses =
     {
-      success: "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300",
-      danger: "bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200",
-      warning: "bg-amber-100 text-amber-950 dark:bg-amber-500/20 dark:text-amber-300",
-      info: "bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-300",
-      neutral: "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300",
+      success: "bg-emerald-100 text-emerald-950 border border-emerald-300/80 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800/80",
+      danger: "bg-[#ffcfd2] text-rose-950 border border-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:border-rose-800/80",
+      warning: "bg-amber-200/90 text-amber-950 border border-amber-400/90 dark:bg-amber-950/90 dark:text-amber-200 dark:border-amber-500/70 font-bold shadow-xs",
+      info: "bg-sky-100 text-sky-950 border border-sky-300/80 dark:bg-sky-950/70 dark:text-sky-300 dark:border-sky-800/80",
+      neutral: "bg-zinc-200/80 text-zinc-900 border border-zinc-300/60 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700/60",
     }[tone] ?? "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300";
 
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-tight transition-colors border-0",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-tight transition-colors",
         toneClasses,
         className
       )}
     >
+      {tone === "warning" && (
+        <span className="relative flex h-2 w-2 shrink-0">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+        </span>
+      )}
       {children}
     </span>
   );
