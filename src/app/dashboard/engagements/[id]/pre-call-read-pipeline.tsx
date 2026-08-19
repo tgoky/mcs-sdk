@@ -31,6 +31,7 @@ import type { RosterEntry, RosterStatus } from "@/app/api/engagements/[id]/roste
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 type ViewMode = "month" | "day" | "list";
+type ListScope = "week" | "month";
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 8);
 
@@ -113,6 +114,7 @@ function formatTimeBadge(isoString: string | null | undefined) {
 
 export function PreCallReadPipeline({ engagementId }: { engagementId: string }) {
   const [mode, setMode] = useState<ViewMode>("month");
+  const [listScope, setListScope] = useState<ListScope>("week");
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
@@ -122,6 +124,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
   const [filterText, setFilterText] = useState("");
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [showRunActivity, setShowRunActivity] = useState(false);
+  const [showUpcomingInMonth, setShowUpcomingInMonth] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -168,26 +171,58 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
     return map;
   }, [filtered]);
 
-  // Generates EVERY single day of the month (e.g. Aug 31 down to Aug 1)
-  const allMonthDays = useMemo(() => {
+  // SMART WEEK GENERATOR: 7 Days centered on active week (Mon -> Sun)
+  const currentWeekDays = useMemo(() => {
+    const anchor = selectedDate || new Date();
+    const d = new Date(anchor);
+    const day = d.getDay();
+    const diffToMon = day === 0 ? -6 : 1 - day; // Adjust for Sunday
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diffToMon);
+
     const days: { dateStr: string; dateObj: Date; calls: RosterEntry[] }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const dateObj = new Date(monday);
+      dateObj.setDate(monday.getDate() + i);
+      const k = dateKey(dateObj);
+      const calls = entriesByDate[k] ?? [];
+      days.push({ dateStr: k, dateObj, calls });
+    }
+    // Sort descending so Today/Latest days in week appear first
+    return days.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+  }, [selectedDate, entriesByDate]);
+
+  // SMART MONTH FEED: Today & Past first (descending), Future days separate
+  const monthDaysSmart = useMemo(() => {
+    const todayK = dateKey(new Date());
+    const days: { dateStr: string; dateObj: Date; calls: RosterEntry[]; isFuture: boolean }[] = [];
     const numDays = new Date(year, month + 1, 0).getDate();
-    for (let d = numDays; d >= 1; d--) {
+
+    for (let d = 1; d <= numDays; d++) {
       const dateObj = new Date(year, month, d);
       const k = dateKey(dateObj);
-      const dayCalls = entriesByDate[k] ?? [];
-      days.push({ dateStr: k, dateObj, calls: dayCalls });
+      const calls = entriesByDate[k] ?? [];
+      const isFuture = k > todayK;
+      days.push({ dateStr: k, dateObj, calls, isFuture });
     }
-    return days;
+
+    const pastAndToday = days
+      .filter((d) => !d.isFuture)
+      .sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+
+    const future = days
+      .filter((d) => d.isFuture)
+      .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
+
+    return { pastAndToday, future };
   }, [year, month, entriesByDate]);
 
-  // When filtering, hide empty days. Otherwise show all 31 days.
   const listDaysToRender = useMemo(() => {
-    if (filterText.trim()) {
-      return allMonthDays.filter((d) => d.calls.length > 0);
+    if (listScope === "week") {
+      return currentWeekDays;
     }
-    return allMonthDays;
-  }, [allMonthDays, filterText]);
+    return monthDaysSmart.pastAndToday;
+  }, [listScope, currentWeekDays, monthDaysSmart]);
 
   const dayMetrics = useMemo(() => {
     const metrics: Record<string, { totalCalls: number; briefDelivered: number }> = {};
@@ -639,18 +674,82 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
         </div>
       )}
 
-      {/* 3. LIST VIEW (SHOWS ALL 31 DAYS OF THE MONTH CHRONOLOGICALLY) */}
+      {/* 3. SMART LIST VIEW (DEFAULTS TO CURRENT WEEK ANCHORED ON TODAY) */}
       {mode === "list" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
-          {/* LEFT 7 COLUMNS: COMPLETE DAY-BY-DAY LIST FEED */}
-          <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
+          {/* LEFT 7 COLUMNS: SMART CHRONOLOGICAL FEED */}
+          <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans flex flex-col">
+            {/* List Feed Scope Control Header */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
+              <div className="flex items-center gap-1.5">
+                <CalendarDays size={14} className="text-zinc-500" />
+                <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
+                  {listScope === "week" ? "Current Week Feed" : `${monthName} Feed`}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {listScope === "week" && (
+                  <div className="flex items-center gap-1 font-mono text-xs text-zinc-500">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate(new Date(selectedDate.getTime() - 7 * 86400000))}
+                      className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                      title="Previous Week"
+                    >
+                      <ChevronLeft size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate(new Date())}
+                      className="text-[10.5px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate(new Date(selectedDate.getTime() + 7 * 86400000))}
+                      className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                      title="Next Week"
+                    >
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px] font-sans">
+                  <button
+                    type="button"
+                    onClick={() => setListScope("week")}
+                    className={cn(
+                      "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                      listScope === "week" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                    )}
+                  >
+                    Current Week
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setListScope("month")}
+                    className={cn(
+                      "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                      listScope === "month" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                    )}
+                  >
+                    Full Month
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* List Stream Content */}
             {listDaysToRender.length === 0 && !loading ? (
               <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
                 <CalendarX2 size={22} />
-                <span className="text-xs">No calls on file for this period.</span>
+                <span className="text-xs">No calls on file.</span>
               </div>
             ) : (
-              <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 max-h-[620px] overflow-y-auto">
+              <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 max-h-[580px] overflow-y-auto">
                 {listDaysToRender.map(({ dateStr, dateObj, calls }) => {
                   const isSelectedDay = dateKey(selectedDate) === dateStr;
 
@@ -749,6 +848,62 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                     </div>
                   );
                 })}
+
+                {/* Collapsible Upcoming Days Section (Only in Full Month mode) */}
+                {listScope === "month" && monthDaysSmart.future.length > 0 && (
+                  <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 font-sans">
+                    <button
+                      type="button"
+                      onClick={() => setShowUpcomingInMonth((p) => !p)}
+                      className="flex w-full items-center justify-between px-4 py-2 text-[11px] font-mono font-bold text-zinc-500 uppercase tracking-wider hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer font-sans"
+                    >
+                      <span>Upcoming Days in {monthName} ({monthDaysSmart.future.length})</span>
+                      <ChevronDown size={13} className={cn("transition-transform", showUpcomingInMonth && "rotate-180")} />
+                    </button>
+
+                    {showUpcomingInMonth && (
+                      <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-sans">
+                        {monthDaysSmart.future.map(({ dateStr, dateObj, calls }) => (
+                          <div key={dateStr} className="space-y-0 font-sans">
+                            <div className="bg-zinc-100/90 dark:bg-zinc-900/90 px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500 flex justify-between">
+                              <span>{formatDayHeader(dateStr)}</span>
+                              <span>{calls.length} calls</span>
+                            </div>
+                            <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
+                              {calls.length > 0 ? (
+                                calls.map((entry) => (
+                                  <button
+                                    key={entry.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedEntryId(entry.id);
+                                      setSelectedDate(new Date(entry.callTime));
+                                    }}
+                                    className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50 cursor-pointer font-sans border-0"
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <span className="font-mono text-[10px] font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0">
+                                        {formatTimeBadge(entry.callTime)}
+                                      </span>
+                                      <span className="truncate text-xs font-bold text-zinc-900 dark:text-white">
+                                        {entry.prospectName ?? entry.prospectEmail}
+                                      </span>
+                                    </div>
+                                    <StatusPill tone={STATUS_META[entry.status].tone}>
+                                      {STATUS_META[entry.status].label}
+                                    </StatusPill>
+                                  </button>
+                                ))
+                              ) : (
+                                <div className="px-4 py-2 text-xs font-mono text-zinc-400 dark:text-zinc-600">No calls scheduled</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
