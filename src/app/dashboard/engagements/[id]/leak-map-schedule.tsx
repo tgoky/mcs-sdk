@@ -414,7 +414,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                                 className={cn(
                                   "shrink-0 capitalize",
                                  item.overallSeverity === "none" &&
-  "bg-amber-400 text-amber-950 border-transparent dark:bg-amber-400 dark:text-amber-950"
+  "bg-transparent text-amber-700 border border-amber-400 dark:bg-zinc-800 dark:text-amber-400 dark:border-amber-500/40"
                                 )}
                               >
                                 {item.overallSeverity === "none" ? "Clean" : `${item.overallSeverity} severity`}
@@ -446,8 +446,8 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                       tone={toneFromSeverity(selected.overallSeverity)}
                       className={cn(
                         "capitalize",
-   selected.overallSeverity === "none" &&
-  "bg-amber-400 text-amber-950 border-transparent dark:bg-amber-400 dark:text-amber-950"
+selected.overallSeverity === "none" &&
+  "bg-transparent text-amber-700 border border-amber-400 dark:bg-zinc-800 dark:text-amber-400 dark:border-amber-500/40"
                       )}
                     >
                       {selected.overallSeverity === "none" ? "Clean" : `${selected.overallSeverity} severity`}
