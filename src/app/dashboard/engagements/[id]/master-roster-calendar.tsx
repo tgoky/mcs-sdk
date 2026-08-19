@@ -1,4 +1,3 @@
-// src/app/dashboard/engagements/[id]/master-roster-calendar.tsx
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -9,23 +8,28 @@ import {
   ChevronRight,
   Clock,
   List,
-  LayoutGrid,
   Search,
   RefreshCw,
   Check,
   Copy,
   Phone,
+  PhoneCall,
   Mail,
   ExternalLink,
   Building2,
+  CalendarDays,
+  ChevronDown,
+  Sparkles,
+  CalendarX2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { skillName } from "@/lib/copy";
 import { getDaysInMonthGrid, dateKey, timeStr } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { RunActivityPanel } from "@/app/dashboard/runs/[id]/_shared/run-activity-panel";
 import type { RosterEntry } from "@/app/api/engagements/[id]/roster/route";
-import type { PileOnPipelineItem, PileOnStage } from "@/app/api/engagements/[id]/pile-on-pipeline/route";
-import type { WinBackPipelineItem, WinBackEnrollmentStatus } from "@/app/api/engagements/[id]/win-back-pipeline/route";
+import type { PileOnPipelineItem } from "@/app/api/engagements/[id]/pile-on-pipeline/route";
+import type { WinBackPipelineItem } from "@/app/api/engagements/[id]/win-back-pipeline/route";
 import type { ActivityEvent, ActivitySkill } from "@/app/api/engagements/[id]/activity/route";
 
 const TONE_TO_SEVERITY_LABEL: Record<string, string> = {
@@ -41,8 +45,8 @@ const ACTIVITY_SKILL_LABEL: Record<ActivitySkill, string> = {
   "leak-map": skillName("leak-map"),
 };
 
-type ViewMode = "month" | "day" | "list" | "board";
-type BoardPipelineLens = "all" | "pile_on" | "win_back" | "leak_map";
+type ViewMode = "month" | "day" | "list";
+type ListScope = "week" | "month";
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 8);
 
@@ -88,6 +92,31 @@ function StatusPill({
   );
 }
 
+function formatDayHeader(dateStr: string) {
+  const todayKey = dateKey(new Date());
+
+  const yesterdayObj = new Date();
+  yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+  const yesterdayKey = dateKey(yesterdayObj);
+
+  const tomorrowObj = new Date();
+  tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+  const tomorrowKey = dateKey(tomorrowObj);
+
+  if (dateStr === todayKey) return "Today";
+  if (dateStr === yesterdayKey) return "Yesterday";
+  if (dateStr === tomorrowKey) return "Tomorrow";
+  
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+function formatTimeBadge(isoString: string | null | undefined) {
+  if (!isoString) return null;
+  return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="flex items-center justify-between rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-4 py-2.5 text-xs text-rose-800 dark:text-rose-300 font-sans">
@@ -103,12 +132,17 @@ function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => voi
   );
 }
 
+type EnrichedEntry = RosterEntry & {
+  pileOnData: PileOnPipelineItem | null;
+  winBackData: WinBackPipelineItem | null;
+};
+
 export function MasterRosterCalendar({ engagementId }: { engagementId: string }) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [mode, setMode] = useState<ViewMode>("month");
-  const [boardLens, setBoardLens] = useState<BoardPipelineLens>("all");
+  const [listScope, setListScope] = useState<ListScope>("week");
   const [filterText, setFilterText] = useState("");
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -178,21 +212,6 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     }
   }, [engagementId, winBack.fetched, winBack.loading]);
 
-  // Lazy Fetch: full-history activity
-  const [activityAll, setActivityAll] = useState<StreamState<ActivityEvent>>(emptyStream());
-  const fetchActivityAll = useCallback(async () => {
-    if (activityAll.fetched || activityAll.loading) return;
-    setActivityAll((s) => ({ ...s, loading: true, error: null }));
-    try {
-      const res = await fetch(`/api/engagements/${engagementId}/activity?all=1`);
-      if (!res.ok) throw new Error(`Activity fetch failed: ${res.status}`);
-      const data = await res.json();
-      setActivityAll({ data: data.events ?? [], loading: false, fetched: true, error: null });
-    } catch (err) {
-      setActivityAll({ data: [], loading: false, fetched: true, error: err instanceof Error ? err.message : "Failed to load skill activity" });
-    }
-  }, [engagementId, activityAll.fetched, activityAll.loading]);
-
   // Sync Month Changes & Mode Switches
   useEffect(() => {
     fetchRoster();
@@ -202,14 +221,29 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
   }, [fetchRoster, fetchActivity]);
 
   useEffect(() => {
-    if (mode === "day" || mode === "board" || mode === "list") {
+    if (mode === "day" || mode === "list") {
       fetchPileOn();
       fetchWinBack();
     }
-    if (mode === "board") {
-      fetchActivityAll();
+  }, [mode, fetchPileOn, fetchWinBack]);
+
+  const handleMonthChange = (newDate: Date) => {
+    setCurrentDate(newDate);
+    setSelectedDate(newDate);
+  };
+
+  const handleTodayClick = () => {
+    const now = new Date();
+    setCurrentDate(now);
+    setSelectedDate(now);
+  };
+
+  const handleUpdateSelectedDate = (newDate: Date) => {
+    setSelectedDate(newDate);
+    if (newDate.getFullYear() !== currentDate.getFullYear() || newDate.getMonth() !== currentDate.getMonth()) {
+      setCurrentDate(newDate);
     }
-  }, [mode, fetchPileOn, fetchWinBack, fetchActivityAll]);
+  };
 
   // Client-Side Indexes & Joins
   const pileOnByBookingId = useMemo(
@@ -221,11 +255,6 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     () => new Map(winBack.data.map((w) => [w.prospectEmail.toLowerCase(), w])),
     [winBack.data]
   );
-
-  type EnrichedEntry = RosterEntry & {
-    pileOnData: PileOnPipelineItem | null;
-    winBackData: WinBackPipelineItem | null;
-  };
 
   const enrichedEntries = useMemo<EnrichedEntry[]>(() => {
     return roster.data.map((entry) => ({
@@ -256,6 +285,62 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     }
     return map;
   }, [filteredEntries]);
+
+  const todayK = dateKey(new Date());
+
+  // SMART WEEK GENERATOR: 7 Days centered on active week
+  const currentWeekDays = useMemo(() => {
+    const anchor = selectedDate || new Date();
+    const d = new Date(anchor);
+    const day = d.getDay();
+    const diffToMon = day === 0 ? -6 : 1 - day;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diffToMon);
+
+    const days: { dateStr: string; dateObj: Date; calls: EnrichedEntry[] }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const dateObj = new Date(monday);
+      dateObj.setDate(monday.getDate() + i);
+      const k = dateKey(dateObj);
+      const calls = entriesByDate[k] ?? [];
+
+      if (k <= todayK || calls.length > 0) {
+        days.push({ dateStr: k, dateObj, calls });
+      }
+    }
+    return days.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+  }, [selectedDate, entriesByDate, todayK]);
+
+  // SMART MONTH FEED: Today & Past first (descending), Future days separate
+  const monthDaysSmart = useMemo(() => {
+    const days: { dateStr: string; dateObj: Date; calls: EnrichedEntry[]; isFuture: boolean }[] = [];
+    const numDays = new Date(year, month + 1, 0).getDate();
+
+    for (let d = 1; d <= numDays; d++) {
+      const dateObj = new Date(year, month, d);
+      const k = dateKey(dateObj);
+      const calls = entriesByDate[k] ?? [];
+      const isFuture = k > todayK;
+      days.push({ dateStr: k, dateObj, calls, isFuture });
+    }
+
+    const pastAndToday = days
+      .filter((d) => !d.isFuture)
+      .sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+
+    const future = days
+      .filter((d) => d.isFuture && d.calls.length > 0)
+      .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
+
+    return { pastAndToday, future };
+  }, [year, month, entriesByDate, todayK]);
+
+  const listDaysToRender = useMemo(() => {
+    if (listScope === "week") {
+      return currentWeekDays;
+    }
+    return monthDaysSmart.pastAndToday;
+  }, [listScope, currentWeekDays, monthDaysSmart]);
 
   const filteredActivity = useMemo(() => {
     if (!filterText.trim()) return activity.data;
@@ -336,85 +421,6 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
 
   const selectedDayActivity = activityByDate[selectedDayKey] ?? [];
 
-  type UnifiedListRow = {
-    key: string;
-    occurredAt: string;
-    skill: "pre-call-read" | ActivitySkill;
-    title: string;
-    tone: "success" | "warning" | "danger" | "info" | "neutral";
-    statusLabel: string;
-    detail: string | null;
-    prospectName: string | null;
-    prospectEmail: string | null;
-    onSelect: () => void;
-  };
-
-  function activityStatusLabel(ev: ActivityEvent): string {
-    switch (ev.type) {
-      case "pile_on_touch_sent":
-      case "win_back_touch_sent":
-        return "sent";
-      case "win_back_enrolled":
-        return "enrolled";
-      case "win_back_rebooked":
-        return "rebooked";
-      case "win_back_lost":
-        return "lost";
-      case "win_back_reply_exited":
-        return "exited";
-      case "win_back_corrected":
-        return "corrected";
-      case "leak_map_audit":
-        return TONE_TO_SEVERITY_LABEL[ev.tone] ?? ev.tone;
-      default:
-        return ev.tone;
-    }
-  }
-
-  const unifiedListRows = useMemo<UnifiedListRow[]>(() => {
-    const callRows: UnifiedListRow[] = filteredEntries.map((entry) => {
-      const parts: string[] = [];
-      if (entry.pileOnData) parts.push(`Pile-On: ${entry.pileOnData.stage.replace(/_/g, " ")}`);
-      if (entry.winBackData) parts.push(`Win-Back: ${entry.winBackData.status.replace(/_/g, " ")}`);
-      return {
-        key: `call:${entry.id}`,
-        occurredAt: entry.callTime,
-        skill: "pre-call-read",
-        title: "Call",
-        tone: entry.status === "brief_delivered" ? "success" : entry.status === "brief_failed" ? "danger" : "neutral",
-        statusLabel: entry.status.replace(/_/g, " "),
-        detail: parts.length > 0 ? parts.join(" · ") : null,
-        prospectName: entry.prospectName,
-        prospectEmail: entry.prospectEmail,
-        onSelect: () => {
-          setSelectedEntryId(entry.id);
-          setSelectedDate(new Date(entry.callTime));
-          setMode("day");
-        },
-      };
-    });
-
-    const activityRows: UnifiedListRow[] = filteredActivity.map((ev) => ({
-      key: ev.id,
-      occurredAt: ev.occurredAt,
-      skill: ev.skill,
-      title: ev.title,
-      tone: ev.tone,
-      statusLabel: activityStatusLabel(ev),
-      detail: ev.detail,
-      prospectName: ev.prospectName,
-      prospectEmail: ev.prospectEmail,
-      onSelect: () => {
-        setSelectedDate(new Date(ev.occurredAt));
-        setMode("day");
-      },
-    }));
-
-    return [...callRows, ...activityRows].sort(
-      (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()
-    );
-  }, [filteredEntries, filteredActivity]);
-
   const gridDays = useMemo(() => getDaysInMonthGrid(year, month), [year, month]);
   const monthName = currentDate.toLocaleString("default", { month: "long" });
 
@@ -433,17 +439,45 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     <div className="space-y-3 font-sans antialiased">
       {/* Explicit Error Banners */}
       {roster.error && <ErrorBanner message={roster.error} onRetry={fetchRoster} />}
-      {pileOn.error && (mode === "day" || mode === "board" || mode === "list") && (
+      {pileOn.error && (mode === "day" || mode === "list") && (
         <ErrorBanner message={pileOn.error} onRetry={fetchPileOn} />
       )}
-      {winBack.error && (mode === "day" || mode === "board" || mode === "list") && (
+      {winBack.error && (mode === "day" || mode === "list") && (
         <ErrorBanner message={winBack.error} onRetry={fetchWinBack} />
       )}
       {activity.error && <ErrorBanner message={activity.error} onRetry={fetchActivity} />}
 
       {/* Toolbar & View Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-2 shadow-sm font-sans">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Universal Month Navigation */}
+          <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
+            <button
+              type="button"
+              onClick={() => handleMonthChange(new Date(year, month - 1, 1))}
+              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans px-1 min-w-[100px] text-center">
+              {monthName} {year}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleMonthChange(new Date(year, month + 1, 1))}
+              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+            >
+              <ChevronRight size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={handleTodayClick}
+              className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
+            >
+              Today
+            </button>
+          </div>
+
           <div className="relative w-64">
             <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-400 dark:text-zinc-500" />
             <input
@@ -464,8 +498,9 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
           </button>
         </div>
 
+        {/* View Switcher (Month, Day View, Master List) */}
         <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
-          {([["month", CalendarIcon, "Month"], ["day", Clock, "Day View"], ["list", List, "Master List"], ["board", LayoutGrid, "Pipelines Board"]] as const).map(
+          {([["month", CalendarIcon, "Month"], ["day", Clock, "Day View"], ["list", List, "Master List"]] as const).map(
             ([viewMode, Icon, label]) => (
               <button
                 key={viewMode}
@@ -496,28 +531,6 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
       {/* 1. Month View */}
       {mode === "month" && !roster.loading && (
         <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
-          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
-                <ChevronLeft size={15} />
-              </button>
-              <button type="button" onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
-                <ChevronRight size={15} />
-              </button>
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-white min-w-[130px] font-sans">{monthName} {year}</h3>
-              <button
-                type="button"
-                onClick={() => { setCurrentDate(new Date()); setSelectedDate(new Date()); }}
-                className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans"
-              >
-                Today
-              </button>
-            </div>
-            <div className="text-xs font-mono text-zinc-500">
-              {roster.data.length} booking{roster.data.length === 1 ? "" : "s"}
-            </div>
-          </div>
-
           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
@@ -591,13 +604,18 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
 
                   <div className="my-auto py-1 font-sans">
                     {metric && metric.totalCalls > 0 ? (
-                      <div className="rounded-lg bg-[#fde2e8] dark:bg-pink-500/20 px-2 py-1.5 transition-colors group-hover:bg-[#fbcfe8] dark:group-hover:bg-pink-500/30">
-                        <span className="text-[11px] font-bold block leading-none text-pink-950 dark:text-pink-200 font-sans">
-                          {metric.totalCalls} call{metric.totalCalls === 1 ? "" : "s"}
+                      <div className="rounded-lg bg-[#fde2e8] dark:bg-pink-500/20 px-2 py-1.5 transition-colors group-hover:bg-[#fbcfe8] dark:group-hover:bg-pink-500/30 flex items-center gap-1.5">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-900/60 dark:text-rose-200 shrink-0">
+                          <PhoneCall size={10} className="fill-current" />
                         </span>
-                        <span className="text-[9.5px] font-mono mt-0.5 block font-semibold text-pink-800 dark:text-pink-300/90">
-                          {metric.briefDelivered}/{metric.totalCalls} briefed
-                        </span>
+                        <div>
+                          <span className="text-[11px] font-bold block leading-none text-pink-950 dark:text-pink-200 font-sans">
+                            {metric.totalCalls} call{metric.totalCalls === 1 ? "" : "s"}
+                          </span>
+                          <span className="text-[9.5px] font-mono mt-0.5 block font-semibold text-pink-800 dark:text-pink-300/90">
+                            {metric.briefDelivered}/{metric.totalCalls} briefed
+                          </span>
+                        </div>
                       </div>
                     ) : metric && (["pile-on", "win-back", "leak-map"] as ActivitySkill[]).some((s) => metric.activityBySkill[s] > 0) ? (
                       <span className="text-[10px] text-zinc-600 dark:text-zinc-400 font-mono block">
@@ -624,10 +642,10 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
           <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl flex flex-col font-sans">
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-4 py-3 font-sans">
               <div className="flex items-center gap-2 font-sans">
-                <button type="button" onClick={() => setSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
+                <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
                   <ChevronLeft size={15} />
                 </button>
-                <button type="button" onClick={() => setSelectedDate(new Date(selectedDate.getTime() + 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
+                <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() + 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
                   <ChevronRight size={15} />
                 </button>
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
@@ -636,15 +654,15 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               </div>
 
               <div className="flex items-center gap-1.5 font-mono text-[11px]">
-                <span className="text-zinc-600 dark:text-zinc-400 font-semibold">{selectedDayEntries.length} meeting{selectedDayEntries.length === 1 ? "" : "s"}</span>
+                <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400 font-semibold">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200 shrink-0">
+                    <PhoneCall size={10} className="fill-current" />
+                  </span>
+                  {selectedDayEntries.length} meeting{selectedDayEntries.length === 1 ? "" : "s"}
+                </span>
                 {selectedDayMetric.briefDelivered > 0 && (
                   <span className="text-emerald-900 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold border-0">
                     {selectedDayMetric.briefDelivered} briefed
-                  </span>
-                )}
-                {selectedDayMetric.winBackActive > 0 && (
-                  <span className="text-amber-950 dark:text-amber-300 bg-amber-100 dark:bg-amber-500/20 px-2 py-0.5 rounded text-[10px] font-bold border-0">
-                    {selectedDayMetric.winBackActive} win-back
                   </span>
                 )}
               </div>
@@ -702,7 +720,8 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             <div className="space-y-1 min-w-0 font-sans">
                               <div className="flex items-center gap-2 font-sans">
                                 <span className="font-bold text-zinc-900 dark:text-white text-xs font-sans">{entry.prospectName ?? "Unnamed"}</span>
-                                <span className="text-[10px] font-mono text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded font-bold border-0">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-mono text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded font-bold border-0">
+                                  <PhoneCall size={9} className="fill-current text-rose-950" />
                                   {timeStr(entry.callTime)}
                                 </span>
                               </div>
@@ -750,7 +769,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     <button
                       key={idx}
                       type="button"
-                      onClick={() => setSelectedDate(date)}
+                      onClick={() => handleUpdateSelectedDate(date)}
                       className={cn(
                         "h-6 w-6 mx-auto flex items-center justify-center rounded-full font-mono text-[10px] transition-colors cursor-pointer font-sans",
                         isSelected ? "bg-emerald-500 text-zinc-950 font-bold" : isCurrentMonth ? "text-zinc-800 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800" : "text-zinc-400 dark:text-zinc-700"
@@ -866,14 +885,6 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           <ExternalLink size={11} className="text-zinc-500" />
                         </a>
                       )}
-                      <Link
-                        href={`/dashboard/engagements/${engagementId}/skills/pre-call-read`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
-                      >
-                        <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
-                        <span>View full Pre-Call Read history for this client</span>
-                        <ExternalLink size={11} className="text-zinc-500" />
-                      </Link>
                     </div>
                   )}
 
@@ -902,14 +913,6 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       ) : (
                         <p className="text-zinc-500 italic text-[11px] py-4 text-center font-sans">No active Pile-On speed-to-lead sequence for this booking.</p>
                       )}
-                      <Link
-                        href={`/dashboard/engagements/${engagementId}/skills/pile-on`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
-                      >
-                        <SquishySkillBadge skill="pile-on" size={14} enabled={true} />
-                        <span>View full Pile-On history for this client</span>
-                        <ExternalLink size={11} className="text-zinc-500" />
-                      </Link>
                     </div>
                   )}
 
@@ -936,29 +939,10 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                               </div>
                             )}
                           </div>
-
-                          {selectedEntry.winBackData.freshRescheduleLink && (
-                            <button
-                              type="button"
-                              onClick={() => handleCopyText(selectedEntry.winBackData!.freshRescheduleLink!, "link")}
-                              className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 dark:border-amber-800/50 bg-amber-100/60 dark:bg-amber-950/30 px-3 py-2 text-xs font-semibold text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/40 cursor-pointer transition-colors font-sans"
-                            >
-                              {copiedLink ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                              <span>{copiedLink ? "Link Copied!" : "Copy Fresh Reschedule Link"}</span>
-                            </button>
-                          )}
                         </>
                       ) : (
                         <p className="text-zinc-500 italic text-[11px] py-4 text-center font-sans">Prospect is active/scheduled — not enrolled in Win-Back recovery.</p>
                       )}
-                      <Link
-                        href={`/dashboard/engagements/${engagementId}/skills/win-back`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
-                      >
-                        <SquishySkillBadge skill="win-back" size={14} enabled={true} />
-                        <span>View full Win-Back history for this client</span>
-                        <ExternalLink size={11} className="text-zinc-500" />
-                      </Link>
                     </div>
                   )}
                 </>
@@ -967,18 +951,6 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   <p className="text-[11px] text-zinc-500 text-center font-sans">
                     No call today, but {selectedDayActivity.length} other skill event{selectedDayActivity.length === 1 ? "" : "s"} happened — see the Skill Activity strip above.
                   </p>
-                  <div className="flex items-center justify-center gap-2 pt-1">
-                    {Array.from(new Set(selectedDayActivity.map((e) => e.skill))).map((s) => (
-                      <Link
-                        key={s}
-                        href={`/dashboard/engagements/${engagementId}/skills/${s}`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
-                      >
-                        <SquishySkillBadge skill={s} size={13} enabled={true} />
-                        {ACTIVITY_SKILL_LABEL[s]}
-                      </Link>
-                    ))}
-                  </div>
                 </div>
               ) : (
                 <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
@@ -991,244 +963,460 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
         </div>
       )}
 
-      {/* 3. Master List View */}
+      {/* 3. MASTER LIST VIEW (SMART SPLIT-PANE WITH MULTI-SKILL INSPECTOR) */}
       {mode === "list" && !roster.loading && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
-          <table className="w-full text-left text-xs font-sans">
-            <thead>
-              <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 text-[10px] uppercase tracking-wider text-zinc-500 font-mono">
-                <th className="px-4 py-2.5">Date & Time</th>
-                <th className="px-4 py-2.5">Skill</th>
-                <th className="px-4 py-2.5">Prospect</th>
-                <th className="px-4 py-2.5">Event</th>
-                <th className="px-4 py-2.5">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-sans">
-              {unifiedListRows.map((row) => (
-                <tr
-                  key={row.key}
-                  onClick={row.onSelect}
-                  className="hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 cursor-pointer transition-colors font-sans"
-                >
-                  <td className="px-4 py-3 font-mono text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-                    {new Date(row.occurredAt).toLocaleDateString()} {timeStr(row.occurredAt)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <SquishySkillBadge skill={row.skill} size={18} enabled={true} />
-                  </td>
-                  <td className="px-4 py-3 font-bold text-zinc-900 dark:text-white font-sans">
-                    {row.prospectName ?? row.prospectEmail ?? <span className="text-zinc-400 dark:text-zinc-600 font-normal font-mono">—</span>}
-                    {row.prospectName && row.prospectEmail && (
-                      <span className="block text-[11px] font-normal text-zinc-500 font-mono">{row.prospectEmail}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 font-sans text-zinc-800 dark:text-zinc-300">
-                    {row.title}
-                    {row.detail && <span className="block text-[11px] text-zinc-500 font-mono">{row.detail}</span>}
-                  </td>
-                  <td className="px-4 py-3 font-sans">
-                    <StatusPill tone={row.tone} className="capitalize">{row.statusLabel}</StatusPill>
-                  </td>
-                </tr>
-              ))}
-              {unifiedListRows.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-zinc-500 font-sans text-xs">
-                    No calls or skill activity in this month{filterText ? " matching your search" : ""}.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
+          {/* LEFT 7 COLUMNS: UNIFIED MULTI-SKILL FEED */}
+          <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans flex flex-col">
+            {/* List Feed Scope Control Header */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
+              <div className="flex items-center gap-1.5">
+                <CalendarDays size={14} className="text-zinc-500" />
+                <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
+                  {listScope === "week" ? "Current Week Feed" : `${monthName} Feed`}
+                </span>
+              </div>
 
-      {/* 4. DYNAMIC PIPELINE BOARD VIEW */}
-      {mode === "board" && !roster.loading && (
-        <div className="space-y-3 font-sans">
-          {/* LENS SWITCHER TOOLBAR */}
-          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2.5 px-1 font-sans">
-            <div className="flex items-center gap-1.5 font-sans">
-              <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">Pipeline Lens:</span>
-              <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-zinc-800 font-sans text-xs">
-                {([
-                  ["all", "All Automations"],
-                  ["pile_on", "⚡ Pile-On"],
-                  ["win_back", "🔄 Win-Back"],
-                  ["leak_map", "🔍 Leak-Map"],
-                ] as const).map(([lens, label]) => (
+              <div className="flex items-center gap-2">
+                {listScope === "week" && (
+                  <div className="flex items-center gap-1 font-mono text-xs text-zinc-500">
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 7 * 86400000))}
+                      className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                      title="Previous Week"
+                    >
+                      <ChevronLeft size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleTodayClick}
+                      className="text-[10.5px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() + 7 * 86400000))}
+                      className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                      title="Next Week"
+                    >
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px] font-sans">
                   <button
-                    key={lens}
                     type="button"
-                    onClick={() => setBoardLens(lens)}
+                    onClick={() => setListScope("week")}
                     className={cn(
-                      "px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer font-sans",
-                      boardLens === lens ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                      "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                      listScope === "week" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
                     )}
                   >
-                    {label}
+                    Current Week
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => setListScope("month")}
+                    className={cn(
+                      "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                      listScope === "month" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                    )}
+                  >
+                    Full Month
+                  </button>
+                </div>
               </div>
             </div>
+
+            {/* List Stream Content */}
+            {listDaysToRender.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
+                <CalendarX2 size={22} />
+                <span className="text-xs">No bookings or activity on file.</span>
+              </div>
+            ) : (
+              <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 max-h-[580px] overflow-y-auto">
+                {listDaysToRender.map(({ dateStr, dateObj, calls }) => {
+                  const isSelectedDay = dateKey(selectedDate) === dateStr;
+
+                  return (
+                    <div key={dateStr} className="space-y-0 font-sans">
+                      {/* Sticky Day Header */}
+                      <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">
+                        <span className="flex items-center gap-1.5">
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200 shrink-0">
+                            <PhoneCall size={9} className="fill-current" />
+                          </span>
+                          {formatDayHeader(dateStr)}
+                        </span>
+                        <span className={cn("font-normal", calls.length > 0 ? "text-zinc-700 dark:text-zinc-300 font-bold" : "text-zinc-400")}>
+                          {calls.length} booking{calls.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+
+                      {/* Day Feed Entries */}
+                      <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
+                        {calls.length > 0 ? (
+                          calls.map((entry) => {
+                            const isSelected = selectedEntry?.id === entry.id;
+                            const isFailed = entry.status === "brief_failed";
+                            const appointmentHour = formatTimeBadge(entry.callTime);
+
+                            return (
+                              <button
+                                key={entry.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedEntryId(entry.id);
+                                  handleUpdateSelectedDate(new Date(entry.callTime));
+                                }}
+                                className={cn(
+                                  "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer font-sans border-0",
+                                  isFailed && "bg-[#ffcfd2]/40 dark:bg-rose-950/30",
+                                  isSelected
+                                    ? "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                                    : "bg-white dark:bg-transparent hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50"
+                                )}
+                              >
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0 border-0">
+                                    <PhoneCall size={9} className="fill-current text-rose-950" />
+                                    {appointmentHour}
+                                  </span>
+
+                                  <div className="min-w-0 space-y-0.5">
+                                    <span className="truncate text-xs font-bold text-zinc-900 dark:text-white block font-sans">
+                                      {entry.prospectName ?? entry.prospectEmail ?? "Unnamed Prospect"}
+                                    </span>
+                                    {entry.prospectEmail && (
+                                      <span className="text-[11px] text-zinc-500 font-mono block truncate">
+                                        {entry.prospectEmail}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {/* Skill Badges indicator */}
+                                  <div className="flex items-center gap-1">
+                                    <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
+                                    {entry.pileOnData && <SquishySkillBadge skill="pile-on" size={14} enabled={true} />}
+                                    {entry.winBackData && <SquishySkillBadge skill="win-back" size={14} enabled={true} />}
+                                  </div>
+
+                                  <StatusPill tone={entry.status === "brief_delivered" ? "success" : entry.status === "brief_failed" ? "danger" : "neutral"} className="shrink-0">
+                                    {entry.status.replace("_", " ")}
+                                  </StatusPill>
+
+                                  {entry.prospectEmail && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCopyText(entry.prospectEmail!, "email");
+                                      }}
+                                      className="p-1 rounded-md text-zinc-400 hover:text-zinc-800 dark:hover:text-white transition-colors"
+                                    >
+                                      {copiedEmail ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                                    </button>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          /* Explicit empty day row when 0 bookings took place */
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleUpdateSelectedDate(dateObj);
+                              setSelectedEntryId(null);
+                            }}
+                            className={cn(
+                              "w-full px-4 py-2.5 text-left text-xs font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
+                              isSelectedDay
+                                ? "bg-zinc-200/60 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 font-semibold"
+                                : "text-zinc-400 dark:text-zinc-600 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40"
+                            )}
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-400 shrink-0">
+                                <PhoneCall size={8} />
+                              </span>
+                              No calls or skill runs
+                            </span>
+                            <span className="text-[10px] text-zinc-400 dark:text-zinc-600">0 / 0</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Collapsible Upcoming Days Section (Only in Full Month mode when future bookings exist) */}
+                {listScope === "month" && monthDaysSmart.future.length > 0 && (
+                  <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 font-sans">
+                    <button
+                      type="button"
+                      onClick={() => setShowUpcomingInMonth((p) => !p)}
+                      className="flex w-full items-center justify-between px-4 py-2 text-[11px] font-mono font-bold text-zinc-500 uppercase tracking-wider hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer font-sans"
+                    >
+                      <span>Upcoming Bookings in {monthName} ({monthDaysSmart.future.reduce((acc, d) => acc + d.calls.length, 0)})</span>
+                      <ChevronDown size={13} className={cn("transition-transform", showUpcomingInMonth && "rotate-180")} />
+                    </button>
+
+                    {showUpcomingInMonth && (
+                      <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-sans">
+                        {monthDaysSmart.future.map(({ dateStr, calls }) => (
+                          <div key={dateStr} className="space-y-0 font-sans">
+                            <div className="bg-zinc-100/90 dark:bg-zinc-900/90 px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500 flex justify-between">
+                              <span className="flex items-center gap-1.5">
+                                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-300 shrink-0">
+                                  <PhoneCall size={9} className="fill-current" />
+                                </span>
+                                {formatDayHeader(dateStr)}
+                              </span>
+                              <span>{calls.length} bookings</span>
+                            </div>
+                            <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
+                              {calls.map((entry) => (
+                                <button
+                                  key={entry.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedEntryId(entry.id);
+                                    handleUpdateSelectedDate(new Date(entry.callTime));
+                                  }}
+                                  className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50 cursor-pointer font-sans border-0"
+                                >
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0">
+                                      <PhoneCall size={9} className="fill-current text-rose-950" />
+                                      {formatTimeBadge(entry.callTime)}
+                                    </span>
+                                    <span className="truncate text-xs font-bold text-zinc-900 dark:text-white">
+                                      {entry.prospectName ?? entry.prospectEmail}
+                                    </span>
+                                  </div>
+                                  <StatusPill tone={entry.status === "brief_delivered" ? "success" : entry.status === "brief_failed" ? "danger" : "neutral"}>
+                                    {entry.status.replace("_", " ")}
+                                  </StatusPill>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* LENS 1: PILE-ON */}
-          {boardLens === "pile_on" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-sans">
-              {(["newly_booked", "active_sequence", "sequence_complete", "call_today"] as PileOnStage[]).map((stage) => {
-                const stageItems = pileOn.data.filter((i) => i.stage === stage);
-                return (
-                  <div key={stage} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 font-sans">
-                    <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2 px-1 font-sans">
-                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider font-sans">{stage.replace("_", " ")}</span>
-                      <span className="rounded-md bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{stageItems.length}</span>
+          {/* RIGHT 5 COLUMNS: MULTI-SKILL INSPECTOR PANEL */}
+          <div className="lg:col-span-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
+            {selectedEntry ? (
+              <>
+                <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
+                  <div className="flex items-center justify-between font-sans">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-sky-600 dark:text-sky-400 font-bold flex items-center gap-1 font-sans">
+                      <Building2 size={12} /> {selectedEntry.bookingPlatform ?? "Calendar"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(selectedEntry.prospectEmail ?? "", "email")}
+                      className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
+                    >
+                      {copiedEmail ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                      <span>Copy Email</span>
+                    </button>
+                  </div>
+
+                  <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selectedEntry.prospectName ?? "Unnamed Prospect"}</h4>
+
+                  <div className="space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                    <div className="flex items-center gap-2">
+                      <Mail size={12} className="text-zinc-500 shrink-0" />
+                      <span className="truncate">{selectedEntry.prospectEmail ?? "No email provided"}</span>
                     </div>
-                    <div className="space-y-2 max-h-[500px] overflow-y-auto font-sans">
-                      {stageItems.map((item) => (
-                        <div key={item.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-1 font-sans">
-                          <span className="font-bold text-zinc-900 dark:text-white text-xs block truncate font-sans">{item.prospectName ?? item.prospectEmail}</span>
-                          <span className="block text-[10.5px] font-mono text-zinc-600 dark:text-zinc-400 truncate">{item.prospectEmail}</span>
-                          <StatusPill tone="info" className="mt-1">
-                            {item.touchesSent}/{item.touchesTotal} SMS Touches
+                    <div className="flex items-center gap-2">
+                      <Phone size={12} className="text-zinc-500 shrink-0" />
+                      <span>{selectedEntry.prospectPhone ?? "No phone recorded"}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-300 pt-0.5">
+                      <Clock size={12} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                      <span>{new Date(selectedEntry.callTime).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Skill Inspection Tabs */}
+                <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("brief")}
+                    className={cn(
+                      "flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
+                      activeTab === "brief" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                    )}
+                  >
+                    Brief
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("pile_on")}
+                    className={cn(
+                      "flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
+                      activeTab === "pile_on" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                    )}
+                  >
+                    Pile-On
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("win_back")}
+                    className={cn(
+                      "flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
+                      activeTab === "win_back" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                    )}
+                  >
+                    Win-Back
+                  </button>
+                </div>
+
+                {activeTab === "brief" && (
+                  <div className="space-y-3 text-xs font-sans">
+                    <div className="flex items-center justify-between font-sans">
+                      <span className="text-[10.5px] font-mono text-zinc-500 uppercase">Status & Channel</span>
+                      <StatusPill tone={selectedEntry.status === "brief_delivered" ? "success" : selectedEntry.status === "brief_failed" ? "danger" : "neutral"}>
+                        {selectedEntry.status.replace("_", " ")}
+                      </StatusPill>
+                    </div>
+
+                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 font-sans">
+                      <div className="flex items-center justify-between text-[11px] font-sans">
+                        <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
+                        <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ?? "Slack"}</span>
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700/80 space-y-1 font-sans">
+                        <span className="text-[10px] font-mono text-zinc-500 uppercase block">Brief Content</span>
+                        <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap max-h-[160px] overflow-y-auto text-[11.5px]">
+                          {selectedEntry.briefText ?? "No brief text synthesized for this call yet."}
+                        </p>
+                      </div>
+                    </div>
+
+                    {selectedEntry.runId && (
+                      <a
+                        href={`/dashboard/runs/${selectedEntry.runId}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
+                      >
+                        <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
+                        <span>View research execution run</span>
+                        <ExternalLink size={11} className="text-zinc-500" />
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === "pile_on" && (
+                  <div className="space-y-3 text-xs font-sans">
+                    {selectedEntry.pileOnData ? (
+                      <>
+                        <div className="flex items-center justify-between font-sans">
+                          <span className="text-[10.5px] font-mono text-zinc-500 uppercase">Sequence Progress</span>
+                          <StatusPill tone="info">
+                            {selectedEntry.pileOnData.touchesSent}/{selectedEntry.pileOnData.touchesTotal} SMS Touches
                           </StatusPill>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
 
-          {/* LENS 2: WIN-BACK */}
-          {boardLens === "win_back" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 font-sans">
-              {(["active", "rebooked", "reply_exited", "lost", "manual_override", "corrected"] as WinBackEnrollmentStatus[]).map((status) => {
-                const statusItems = winBack.data.filter((i) => i.status === status);
-                return (
-                  <div key={status} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 font-sans">
-                    <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2 px-1 font-sans">
-                      <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider font-sans">{status.replace("_", " ")}</span>
-                      <span className="rounded-md bg-zinc-200 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{statusItems.length}</span>
-                    </div>
-                    <div className="space-y-2 max-h-[500px] overflow-y-auto font-sans">
-                      {statusItems.map((item) => (
-                        <div key={item.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-2.5 space-y-1 font-sans">
-                          <span className="font-bold text-zinc-900 dark:text-white text-xs block truncate font-sans">{item.prospectName ?? item.prospectEmail}</span>
-                          <span className="block text-[10px] font-mono text-zinc-600 dark:text-zinc-400">{item.touchesSent}/{item.touchesTotal} touches</span>
-                          {item.nextTouchAt && (
-                            <span className="block text-[9.5px] font-mono text-amber-600 dark:text-amber-400">
-                              Next: {new Date(item.nextTouchAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                            </span>
-                          )}
+                        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 font-sans">
+                          <div className="flex items-center justify-between text-[11px] font-sans">
+                            <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
+                            <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.pileOnData.sentVia ?? "hybrid"}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] font-sans">
+                            <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Current Stage</span>
+                            <span className="font-mono text-amber-600 dark:text-amber-400 capitalize">{selectedEntry.pileOnData.stage.replace("_", " ")}</span>
+                          </div>
                         </div>
-                      ))}
-                    </div>
+                      </>
+                    ) : (
+                      <p className="text-zinc-500 italic text-[11px] py-4 text-center font-sans">No active Pile-On speed-to-lead sequence for this booking.</p>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
 
-          {/* LENS 3: LEAK-MAP */}
-          {boardLens === "leak_map" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-sans">
-              {([
-                { severity: "high" as const, tone: "danger" as const },
-                { severity: "medium" as const, tone: "warning" as const },
-                { severity: "low" as const, tone: "info" as const },
-                { severity: "none" as const, tone: "neutral" as const },
-              ]).map(({ severity, tone }) => {
-                const audits = activityAll.data.filter((e) => e.skill === "leak-map" && e.tone === tone);
-                return (
-                  <div key={severity} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 font-sans">
-                    <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2 px-1 font-sans">
-                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider font-sans">{severity === "none" ? "Clean" : `${severity} severity`}</span>
-                      <span className="rounded-md bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{audits.length}</span>
-                    </div>
-                    <div className="space-y-2 max-h-[500px] overflow-y-auto font-sans">
-                      {audits.map((item) => (
-                        <div key={item.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-1 font-sans">
-                          <span className="font-bold text-zinc-900 dark:text-white text-xs block capitalize font-sans">{item.title}</span>
-                          <span className="block text-[10px] font-mono text-zinc-600 dark:text-zinc-400">
-                            {new Date(item.occurredAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                          </span>
-                          <StatusPill tone={item.tone} className="mt-1">
-                            {item.detail}
+                {activeTab === "win_back" && (
+                  <div className="space-y-3 text-xs font-sans">
+                    {selectedEntry.winBackData ? (
+                      <>
+                        <div className="flex items-center justify-between font-sans">
+                          <span className="text-[10.5px] font-mono text-zinc-500 uppercase">Recovery Status</span>
+                          <StatusPill tone="warning" className="capitalize">
+                            {selectedEntry.winBackData.status}
                           </StatusPill>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
 
-          {/* LENS 4: ALL AUTOMATIONS */}
-          {boardLens === "all" && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 font-sans">
-              {[
-                {
-                  id: "newly_booked" as const,
-                  label: "Newly Booked",
-                  color: "border-sky-300 dark:border-sky-800/40",
-                  filter: (e: EnrichedEntry) => !e.pileOnData && e.status === "scheduled",
-                },
-                {
-                  id: "active_sequence" as const,
-                  label: "Pile-On Active",
-                  color: "border-amber-300 dark:border-amber-800/40",
-                  filter: (e: EnrichedEntry) => e.pileOnData?.stage === "active_sequence",
-                },
-                {
-                  id: "briefed" as const,
-                  label: "Briefed & Ready",
-                  color: "border-emerald-300 dark:border-emerald-800/40",
-                  filter: (e: EnrichedEntry) => e.status === "brief_delivered" && !e.winBackData,
-                },
-                {
-                  id: "win_back" as const,
-                  label: "Win-Back Active",
-                  color: "border-indigo-300 dark:border-indigo-800/40",
-                  filter: (e: EnrichedEntry) => e.winBackData?.status === "active",
-                },
-              ].map((col) => {
-                const colEntries = filteredEntries.filter(col.filter);
-                return (
-                  <div key={col.id} className={cn("rounded-2xl border bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 font-sans", col.color)}>
-                    <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/80 pb-2 px-1 font-sans">
-                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 font-sans">{col.label}</span>
-                      <span className="rounded-md bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{colEntries.length}</span>
-                    </div>
-                    <div className="space-y-2 max-h-[500px] overflow-y-auto font-sans">
-                      {colEntries.map((entry) => (
-                        <button
-                          key={entry.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedEntryId(entry.id);
-                            setSelectedDate(new Date(entry.callTime));
-                            setMode("day");
-                          }}
-                          className="w-full text-left rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-1 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all cursor-pointer font-sans"
-                        >
-                          <span className="font-bold text-zinc-900 dark:text-white text-xs block truncate font-sans">{entry.prospectName ?? "Unnamed"}</span>
-                          <span className="block text-[10.5px] font-mono text-zinc-600 dark:text-zinc-400 truncate">{entry.prospectEmail}</span>
-                          <span className="block text-[10px] font-mono text-zinc-500">{timeStr(entry.callTime)}</span>
-                          {entry.prospectPhone && (
-                            <span className="block text-[10px] font-mono text-zinc-500">{entry.prospectPhone}</span>
+                        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 font-sans">
+                          <div className="flex items-center justify-between text-[11px] font-sans">
+                            <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
+                            <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.winBackData.touchesSent} / {selectedEntry.winBackData.touchesTotal}</span>
+                          </div>
+                          {selectedEntry.winBackData.exitReason && (
+                            <div className="flex items-center justify-between text-[11px] font-sans">
+                              <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Exit Reason</span>
+                              <span className="font-mono text-zinc-700 dark:text-zinc-300">{selectedEntry.winBackData.exitReason}</span>
+                            </div>
                           )}
-                        </button>
-                      ))}
-                    </div>
+                        </div>
+
+                        {selectedEntry.winBackData.freshRescheduleLink && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(selectedEntry.winBackData!.freshRescheduleLink!, "link")}
+                            className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 dark:border-amber-800/50 bg-amber-100/60 dark:bg-amber-950/30 px-3 py-2 text-xs font-semibold text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/40 cursor-pointer transition-colors font-sans"
+                          >
+                            {copiedLink ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                            <span>{copiedLink ? "Link Copied!" : "Copy Fresh Reschedule Link"}</span>
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-zinc-500 italic text-[11px] py-4 text-center font-sans">Prospect is active/scheduled — not enrolled in Win-Back recovery.</p>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </>
+            ) : selectedDayActivity.length > 0 ? (
+              <div className="py-6 space-y-2 font-sans">
+                <p className="text-[11px] text-zinc-500 text-center font-sans">
+                  No call today, but {selectedDayActivity.length} other skill event{selectedDayActivity.length === 1 ? "" : "s"} happened — see the Skill Activity strip above.
+                </p>
+              </div>
+            ) : (
+              <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
+                <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
+                <p className="text-xs font-sans">
+                  {selectedDate ? (
+                    <>
+                      <span className="font-bold text-zinc-800 dark:text-zinc-200 block mb-0.5">
+                        {selectedDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                      </span>
+                      Zero calls or skill activity for this date.
+                    </>
+                  ) : (
+                    "Select a date or lead from the list to inspect sequence details."
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
