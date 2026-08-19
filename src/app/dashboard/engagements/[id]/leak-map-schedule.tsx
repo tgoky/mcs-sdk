@@ -409,7 +409,14 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0">
-                              <StatusPill tone={toneFromSeverity(item.overallSeverity)} className="shrink-0 capitalize">
+                              <StatusPill
+                                tone={toneFromSeverity(item.overallSeverity)}
+                                className={cn(
+                                  "shrink-0 capitalize",
+                                  item.overallSeverity === "none" &&
+                                    "bg-transparent text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50"
+                                )}
+                              >
                                 {item.overallSeverity === "none" ? "Clean" : `${item.overallSeverity} severity`}
                               </StatusPill>
                               <SquishySkillBadge skill="leak-map" size={18} enabled={true} />
@@ -435,7 +442,14 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                     Funnel Audit Diagnostic
                   </span>
                   <div className="flex items-center gap-2">
-                    <StatusPill tone={toneFromSeverity(selected.overallSeverity)} className="capitalize">
+                    <StatusPill
+                      tone={toneFromSeverity(selected.overallSeverity)}
+                      className={cn(
+                        "capitalize",
+                        selected.overallSeverity === "none" &&
+                          "bg-transparent text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50"
+                      )}
+                    >
                       {selected.overallSeverity === "none" ? "Clean" : `${selected.overallSeverity} severity`}
                     </StatusPill>
                     <SquishySkillBadge skill="leak-map" size={16} enabled={true} />
