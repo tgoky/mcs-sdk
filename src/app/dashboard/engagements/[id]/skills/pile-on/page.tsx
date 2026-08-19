@@ -8,6 +8,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
+import { skillName } from "@/lib/copy";
 import { PileOnPipeline } from "../../pile-on-pipeline";
 import { PileOnAdCreativeBriefs } from "../../pile-on-ad-creative-briefs";
 
@@ -48,9 +49,11 @@ export default async function PileOnSkillPage({
   const backHref = isFromModule ? from : `/dashboard/engagements/${id}`;
   const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
 
+  const displayName = skillName("pile-on");
+
   return (
     <div className="space-y-4 font-sans antialiased">
-      <SetBreadcrumbLabel label={`${engagement.buyer} · Pile-On`} />
+      <SetBreadcrumbLabel label={`${engagement.buyer} · ${displayName}`} />
 
       {/* Circular Back Button & Title in the same horizontal row */}
       <div className="flex items-center gap-3">
@@ -65,7 +68,7 @@ export default async function PileOnSkillPage({
 
         <div>
           <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
-            Pile-On — {engagement.buyer}
+            {displayName} — {engagement.buyer}
           </h1>
           <p className="text-xs text-zinc-500 mt-0.5">
             Every speed-to-lead sequence this engagement has ever run, not just today&apos;s calendar.
