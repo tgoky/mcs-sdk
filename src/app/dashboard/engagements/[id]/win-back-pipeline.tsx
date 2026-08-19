@@ -510,7 +510,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                   <span className="font-mono text-zinc-900 dark:text-white">{selected.touchesSent} / {selected.touchesTotal}</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
-                  <div className="h-full bg-[#cbb9f2] dark:bg-[#adc9dd]" style={{ width: `${selected.touchesTotal ? (selected.touchesSent / selected.touchesTotal) * 100 : 0}%` }} />
+                  <div className="h-full bg-[#eaac8b] dark:bg-[#eae2b7]" style={{ width: `${selected.touchesTotal ? (selected.touchesSent / selected.touchesTotal) * 100 : 0}%` }} />
                 </div>
                 <div className="flex items-center justify-between font-sans pt-1">
                   <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Recovery Window</span>
