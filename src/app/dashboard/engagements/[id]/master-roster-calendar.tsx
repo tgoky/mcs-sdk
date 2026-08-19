@@ -450,7 +450,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               placeholder="Search bookings, emails, or phone..."
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
             />
           </div>
 
@@ -458,7 +458,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
             type="button"
             onClick={fetchRoster}
             disabled={roster.loading}
-            className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
           >
             <RefreshCw size={13} className={cn(roster.loading && "animate-spin")} />
           </button>
@@ -528,7 +528,14 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
             {gridDays.map(({ date, isCurrentMonth }, idx) => {
               const k = dateKey(date);
               const metric = dayMetrics[k];
-              const isToday = dateKey(new Date()) === k;
+
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const cellDate = new Date(date);
+              cellDate.setHours(0, 0, 0, 0);
+
+              const isToday = cellDate.getTime() === today.getTime();
+              const isPast = cellDate < today;
 
               return (
                 <button
@@ -536,14 +543,20 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   type="button"
                   onClick={() => { setSelectedDate(date); setMode("day"); }}
                   className={cn(
-                    "group relative flex min-h-[105px] flex-col justify-between border-b border-r border-zinc-200 dark:border-zinc-800/60 p-2 text-left transition-all hover:bg-zinc-200/50 dark:hover:bg-zinc-900/60 cursor-pointer font-sans",
-                    !isCurrentMonth && "bg-zinc-100/50 dark:bg-zinc-900/20 opacity-40"
+                    "group relative flex min-h-[105px] flex-col justify-between border-b border-r border-zinc-200 dark:border-zinc-800/60 p-2 text-left transition-all hover:bg-zinc-200/60 dark:hover:bg-zinc-800/80 cursor-pointer font-sans",
+                    !isCurrentMonth && "bg-zinc-100/50 dark:bg-zinc-900/20 opacity-40",
+                    isCurrentMonth && isPast && "bg-zinc-200/35 dark:bg-zinc-900/60",
+                    isCurrentMonth && !isPast && !isToday && "bg-white dark:bg-zinc-950"
                   )}
                 >
                   <div className="flex items-start justify-between gap-1 w-full">
                     <span className={cn(
                       "flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold shrink-0",
-                      isToday ? "bg-emerald-500 text-zinc-950 font-bold" : "text-zinc-700 dark:text-zinc-400"
+                      isToday
+                        ? "bg-emerald-500 text-zinc-950 font-bold"
+                        : isPast
+                        ? "text-zinc-400 dark:text-zinc-500"
+                        : "text-zinc-700 dark:text-zinc-300"
                     )}>
                       {date.getDate()}
                     </span>
@@ -648,7 +661,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     <Link
                       key={ev.id}
                       href={`/dashboard/engagements/${engagementId}/skills/${ev.skill}`}
-                      className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-2 py-1 text-xs text-zinc-800 dark:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors font-sans"
+                      className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-800 dark:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors font-sans"
                     >
                       <SquishySkillBadge skill={ev.skill} size={14} enabled={true} />
                       <span className="font-bold">
@@ -682,8 +695,8 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             className={cn(
                               "w-full rounded-xl p-2.5 text-left transition-all cursor-pointer flex items-start justify-between gap-2 shadow-xs font-sans border-0",
                               isSelected
-                                ? "bg-zinc-200/90 dark:bg-zinc-800 text-zinc-900 dark:text-white"
-                                : "bg-white dark:bg-zinc-900/90 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                                ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-white ring-1 ring-zinc-400 dark:ring-zinc-600"
+                                : "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white hover:bg-zinc-100 dark:hover:bg-zinc-700/80"
                             )}
                           >
                             <div className="space-y-1 min-w-0 font-sans">
@@ -708,7 +721,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                 e.stopPropagation();
                                 handleCopyText(entry.prospectEmail ?? "", "email");
                               }}
-                              className="rounded-lg bg-zinc-100 dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white shrink-0 font-sans border-0"
+                              className="rounded-lg bg-zinc-100 dark:bg-zinc-700/80 p-1.5 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white shrink-0 font-sans border-0"
                             >
                               {copiedEmail ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                             </button>
@@ -762,7 +775,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       <button
                         type="button"
                         onClick={() => handleCopyText(selectedEntry.prospectEmail ?? "", "email")}
-                        className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
+                        className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
                       >
                         {copiedEmail ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                         <span>Copy Email</span>
@@ -829,13 +842,13 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                         </StatusPill>
                       </div>
 
-                      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-3 space-y-2 font-sans">
+                      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-2 font-sans">
                         <div className="flex items-center justify-between text-[11px] font-sans">
                           <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
                           <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ?? "Slack"}</span>
                         </div>
 
-                        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800/80 space-y-1 font-sans">
+                        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700/80 space-y-1 font-sans">
                           <span className="text-[10px] font-mono text-zinc-500 uppercase block">Brief Content</span>
                           <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap max-h-[160px] overflow-y-auto text-[11.5px]">
                             {selectedEntry.briefText ?? "No brief text synthesized for this call yet."}
@@ -846,7 +859,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       {selectedEntry.runId && (
                         <a
                           href={`/dashboard/runs/${selectedEntry.runId}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
                         >
                           <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
                           <span>View research execution run</span>
@@ -855,7 +868,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       )}
                       <Link
                         href={`/dashboard/engagements/${engagementId}/skills/pre-call-read`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
                       >
                         <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
                         <span>View full Pre-Call Read history for this client</span>
@@ -875,7 +888,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             </StatusPill>
                           </div>
 
-                          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-3 space-y-2 font-sans">
+                          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-2 font-sans">
                             <div className="flex items-center justify-between text-[11px] font-sans">
                               <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
                               <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.pileOnData.sentVia ?? "hybrid"}</span>
@@ -891,7 +904,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       )}
                       <Link
                         href={`/dashboard/engagements/${engagementId}/skills/pile-on`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
                       >
                         <SquishySkillBadge skill="pile-on" size={14} enabled={true} />
                         <span>View full Pile-On history for this client</span>
@@ -911,7 +924,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             </StatusPill>
                           </div>
 
-                          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-3 space-y-2 font-sans">
+                          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-2 font-sans">
                             <div className="flex items-center justify-between text-[11px] font-sans">
                               <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
                               <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.winBackData.touchesSent} / {selectedEntry.winBackData.touchesTotal}</span>
@@ -940,7 +953,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       )}
                       <Link
                         href={`/dashboard/engagements/${engagementId}/skills/win-back`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
                       >
                         <SquishySkillBadge skill="win-back" size={14} enabled={true} />
                         <span>View full Win-Back history for this client</span>
@@ -959,7 +972,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       <Link
                         key={s}
                         href={`/dashboard/engagements/${engagementId}/skills/${s}`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-2.5 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
                       >
                         <SquishySkillBadge skill={s} size={13} enabled={true} />
                         {ACTIVITY_SKILL_LABEL[s]}
@@ -996,7 +1009,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 <tr
                   key={row.key}
                   onClick={row.onSelect}
-                  className="hover:bg-zinc-200/50 dark:hover:bg-zinc-900/40 cursor-pointer transition-colors font-sans"
+                  className="hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 cursor-pointer transition-colors font-sans"
                 >
                   <td className="px-4 py-3 font-mono text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
                     {new Date(row.occurredAt).toLocaleDateString()} {timeStr(row.occurredAt)}
@@ -1070,11 +1083,11 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   <div key={stage} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 font-sans">
                     <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2 px-1 font-sans">
                       <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider font-sans">{stage.replace("_", " ")}</span>
-                      <span className="rounded-md bg-zinc-200 dark:bg-zinc-900 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{stageItems.length}</span>
+                      <span className="rounded-md bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{stageItems.length}</span>
                     </div>
                     <div className="space-y-2 max-h-[500px] overflow-y-auto font-sans">
                       {stageItems.map((item) => (
-                        <div key={item.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 space-y-1 font-sans">
+                        <div key={item.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-1 font-sans">
                           <span className="font-bold text-zinc-900 dark:text-white text-xs block truncate font-sans">{item.prospectName ?? item.prospectEmail}</span>
                           <span className="block text-[10.5px] font-mono text-zinc-600 dark:text-zinc-400 truncate">{item.prospectEmail}</span>
                           <StatusPill tone="info" className="mt-1">
@@ -1098,11 +1111,11 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   <div key={status} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 font-sans">
                     <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2 px-1 font-sans">
                       <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider font-sans">{status.replace("_", " ")}</span>
-                      <span className="rounded-md bg-zinc-200 dark:bg-zinc-900 px-1.5 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{statusItems.length}</span>
+                      <span className="rounded-md bg-zinc-200 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{statusItems.length}</span>
                     </div>
                     <div className="space-y-2 max-h-[500px] overflow-y-auto font-sans">
                       {statusItems.map((item) => (
-                        <div key={item.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5 space-y-1 font-sans">
+                        <div key={item.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-2.5 space-y-1 font-sans">
                           <span className="font-bold text-zinc-900 dark:text-white text-xs block truncate font-sans">{item.prospectName ?? item.prospectEmail}</span>
                           <span className="block text-[10px] font-mono text-zinc-600 dark:text-zinc-400">{item.touchesSent}/{item.touchesTotal} touches</span>
                           {item.nextTouchAt && (
@@ -1133,11 +1146,11 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   <div key={severity} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 font-sans">
                     <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2 px-1 font-sans">
                       <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider font-sans">{severity === "none" ? "Clean" : `${severity} severity`}</span>
-                      <span className="rounded-md bg-zinc-200 dark:bg-zinc-900 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{audits.length}</span>
+                      <span className="rounded-md bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{audits.length}</span>
                     </div>
                     <div className="space-y-2 max-h-[500px] overflow-y-auto font-sans">
                       {audits.map((item) => (
-                        <div key={item.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 space-y-1 font-sans">
+                        <div key={item.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-1 font-sans">
                           <span className="font-bold text-zinc-900 dark:text-white text-xs block capitalize font-sans">{item.title}</span>
                           <span className="block text-[10px] font-mono text-zinc-600 dark:text-zinc-400">
                             {new Date(item.occurredAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
@@ -1188,7 +1201,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   <div key={col.id} className={cn("rounded-2xl border bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 font-sans", col.color)}>
                     <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/80 pb-2 px-1 font-sans">
                       <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 font-sans">{col.label}</span>
-                      <span className="rounded-md bg-zinc-200 dark:bg-zinc-900 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{colEntries.length}</span>
+                      <span className="rounded-md bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-400">{colEntries.length}</span>
                     </div>
                     <div className="space-y-2 max-h-[500px] overflow-y-auto font-sans">
                       {colEntries.map((entry) => (
@@ -1200,7 +1213,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             setSelectedDate(new Date(entry.callTime));
                             setMode("day");
                           }}
-                          className="w-full text-left rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/90 p-3 space-y-1 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all cursor-pointer font-sans"
+                          className="w-full text-left rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 p-3 space-y-1 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all cursor-pointer font-sans"
                         >
                           <span className="font-bold text-zinc-900 dark:text-white text-xs block truncate font-sans">{entry.prospectName ?? "Unnamed"}</span>
                           <span className="block text-[10.5px] font-mono text-zinc-600 dark:text-zinc-400 truncate">{entry.prospectEmail}</span>
