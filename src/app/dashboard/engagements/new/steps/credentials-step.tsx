@@ -49,10 +49,10 @@ export function CredentialsStep({
   const usesGhl = bookingIsGhl || emailIsGhl || smsIsGhl;
   const verifiedGhlLocation = ghlLocations[0];
 
-  // Determines whether we have a valid key to trigger calendar option fetching
+  // Determines whether we have a valid key or vault ID to trigger calendar option fetching
   const hasBookingAuth = bookingIsGhl
-    ? Boolean(form.ghlApiKey?.trim() && form.ghlLocationId?.trim())
-    : Boolean(form.bookingApiKey?.trim());
+    ? Boolean((form.ghlApiKey?.trim() || form.ghlCredentialVaultId?.trim()) && form.ghlLocationId?.trim())
+    : Boolean(form.bookingApiKey?.trim() || form.bookingCredentialVaultId?.trim());
 
   return (
     <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
@@ -81,6 +81,10 @@ export function CredentialsStep({
             onValueChange={(v) => set("ghlApiKey", v)}
             vaultId={form.ghlCredentialVaultId}
             onVaultIdChange={(v) => set("ghlCredentialVaultId", v)}
+            saveForReuse={form.ghlSaveForReuse}
+            onSaveForReuseChange={(v) => set("ghlSaveForReuse", v)}
+            reuseLabel={form.ghlReuseLabel}
+            onReuseLabelChange={(v) => set("ghlReuseLabel", v)}
             placeholder="Paste your Private Integration Token here..."
             helpText="Sub-account Settings → Private Integrations → create one with Calendars, Workflows, and/or Conversations scopes as needed."
             required
@@ -94,7 +98,7 @@ export function CredentialsStep({
             helpText="Sub-account Settings → Business Profile → Location ID. This token can only see this one location."
             required
           />
-          {form.ghlApiKey.trim() && form.ghlLocationId.trim() && (
+          {(form.ghlApiKey.trim() || form.ghlCredentialVaultId.trim()) && form.ghlLocationId.trim() && (
             <div className="md:col-span-2 text-xs font-mono">
               {fetchingGhlLocations && <span className="italic text-zinc-500 dark:text-zinc-400 animate-pulse">⚡ Verifying against GoHighLevel...</span>}
               {ghlLocationsError && (
@@ -120,6 +124,10 @@ export function CredentialsStep({
           onValueChange={(v) => set("bookingApiKey", v)}
           vaultId={form.bookingCredentialVaultId}
           onVaultIdChange={(v) => set("bookingCredentialVaultId", v)}
+          saveForReuse={form.bookingSaveForReuse}
+          onSaveForReuseChange={(v) => set("bookingSaveForReuse", v)}
+          reuseLabel={form.bookingReuseLabel}
+          onReuseLabelChange={(v) => set("bookingReuseLabel", v)}
           placeholder="Paste your API key here..."
           helpText={
             form.bookingPlatform === "calendly"
@@ -325,6 +333,10 @@ export function CredentialsStep({
               onValueChange={(v) => set("emailApiKey", v)}
               vaultId={form.emailCredentialVaultId}
               onVaultIdChange={(v) => set("emailCredentialVaultId", v)}
+              saveForReuse={form.emailSaveForReuse}
+              onSaveForReuseChange={(v) => set("emailSaveForReuse", v)}
+              reuseLabel={form.emailReuseLabel}
+              onReuseLabelChange={(v) => set("emailReuseLabel", v)}
               placeholder="Paste your API key here..."
               required
             />
@@ -545,6 +557,10 @@ export function CredentialsStep({
           onValueChange={(v) => set("hostingApiKey", v)}
           vaultId={form.hostingCredentialVaultId}
           onVaultIdChange={(v) => set("hostingCredentialVaultId", v)}
+          saveForReuse={form.hostingSaveForReuse}
+          onSaveForReuseChange={(v) => set("hostingSaveForReuse", v)}
+          reuseLabel={form.hostingReuseLabel}
+          onReuseLabelChange={(v) => set("hostingReuseLabel", v)}
           placeholder="Paste your API key or token here..."
           helpText={
             form.hostingPlatform === "wordpress"
