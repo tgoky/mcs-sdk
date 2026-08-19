@@ -1,4 +1,3 @@
-// src/app/dashboard/engagements/[id]/skills/pre-call-read/page.tsx
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
@@ -45,7 +44,7 @@ export default async function PreCallReadSkillPage({
 
   return (
     <div className="space-y-4 font-sans antialiased">
-      <SetBreadcrumbLabel label={`${engagement.buyer} · Pre-Call Read`} />
+      <SetBreadcrumbLabel label={`${engagement.buyer} · Call Brief`} />
 
       {/* Circular Back Button & Title in the same horizontal row */}
       <div className="flex items-center gap-3">
@@ -60,7 +59,7 @@ export default async function PreCallReadSkillPage({
 
         <div>
           <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
-            Pre-Call Read — {engagement.buyer}
+            Call Brief — {engagement.buyer}
           </h1>
           <p className="text-xs text-zinc-500 mt-0.5">
             Every call this engagement has ever had, not just today&apos;s calendar.
