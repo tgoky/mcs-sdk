@@ -1,4 +1,5 @@
 // src/app/dashboard/engagements/[id]/skills/leak-map/page.tsx
+
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
@@ -44,10 +45,10 @@ export default async function LeakMapSkillPage({
   const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
 
   return (
-    <div className="space-y-4 font-sans antialiased">
-      <SetBreadcrumbLabel label={`${engagement.buyer} · Leak-Map`} />
+    <div className="space-y-6 font-sans antialiased">
+      <SetBreadcrumbLabel label={`${engagement.buyer} · Funnel Audit`} />
 
-      {/* Circular Back Button & Title in the same horizontal row */}
+      {/* Single Clean Page Header */}
       <div className="flex items-center gap-3">
         <Link
           href={backHref}
@@ -59,11 +60,11 @@ export default async function LeakMapSkillPage({
         </Link>
 
         <div>
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
-            Leak-Map — {engagement.buyer}
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
+            Funnel Audit — {engagement.buyer}
           </h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Every audit this engagement has ever run, not just today&apos;s calendar.
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
+            Automated weekly and monthly audits checking for drop-off points and funnel leaks.
           </p>
         </div>
       </div>
