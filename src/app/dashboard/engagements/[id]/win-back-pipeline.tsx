@@ -51,8 +51,8 @@ function StatusPill({
     {
       success: "bg-emerald-100 text-emerald-950 border border-emerald-300/80 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800/80",
       danger: "bg-[#ffcfd2] text-rose-950 border border-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:border-rose-800/80",
-      // HIGH-CONTRAST #aab8d8 (LIGHT) & #c5b7ea (DARK) STYLING WITHOUT GLOWING DOT
-      warning: "bg-[#aab8d8] text-zinc-950 dark:bg-[#c5b7ea] dark:text-zinc-950 font-bold border-0 shadow-xs",
+      // HIGH-CONTRAST #aab8d8 (LIGHT) & #c5b7ea (DARK) STYLING WITHOUT BACKGROUND PILL OR GLOWING DOT
+      warning: "bg-transparent text-[#424d77] dark:text-[#c5b7ea] font-bold border-0 shadow-none p-0",
       info: "bg-sky-100 text-sky-950 border border-sky-300/80 dark:bg-sky-950/70 dark:text-sky-300 dark:border-sky-800/80",
       neutral: "bg-zinc-200/80 text-zinc-900 border border-zinc-300/60 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700/60",
     }[tone] ?? "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300";
@@ -60,7 +60,7 @@ function StatusPill({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-tight transition-colors border-0",
+        "inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-tight transition-colors",
         toneClasses,
         className
       )}
@@ -416,9 +416,9 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                               }}
                               className={cn(
                                 "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer font-sans border-0",
-                                // FAINT BACKGROUND HIGHLIGHT FOR ACTIVE ITEMS
-                                isActive && !isSelected && "bg-[#aab8d8]/20 dark:bg-[#c5b7ea]/10",
-                                isSelected && "bg-[#aab8d8]/35 dark:bg-[#c5b7ea]/25 ring-1 ring-[#aab8d8] dark:ring-[#c5b7ea]",
+                                // ACCENT COLOR ENHANCEMENT: #aab8d8 FOR LIGHT MODE, #c5b7ea FOR DARK MODE
+                                isActive && !isSelected && "bg-[#aab8d8]/30 dark:bg-[#c5b7ea]/20",
+                                isSelected && "bg-[#aab8d8]/50 dark:bg-[#c5b7ea]/35 ring-1 ring-[#aab8d8] dark:ring-[#c5b7ea]",
                                 !isActive && !isSelected && "bg-white dark:bg-transparent hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50"
                               )}
                             >
@@ -443,7 +443,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                                   {item.touchesSent}/{item.touchesTotal} Touches
                                 </span>
 
-                                {/* REPLACED STATUS PILL WITH SQUISHY SKILL BADGE */}
+                                {/* SQUISHY SKILL BADGE ON THE LEFT FEED */}
                                 <SquishySkillBadge skill="win-back" size={18} enabled={true} />
                               </div>
                             </button>
@@ -481,11 +481,17 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
           {selected ? (
             <>
               <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
+                {/* MOVED STATUS TEXT TO THE RIGHT NEXT TO SQUISHY SKILL BADGE, NO BACKGROUND FILL */}
                 <div className="flex items-center justify-between font-sans flex-wrap gap-1">
-                  <StatusPill tone={STATUS_META[selected.status].tone}>
-                    {STATUS_META[selected.status].label}
-                  </StatusPill>
-                  <SquishySkillBadge skill="win-back" size={16} enabled={true} />
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold">
+                    Prospect Recovery
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <StatusPill tone={STATUS_META[selected.status].tone}>
+                      {STATUS_META[selected.status].label}
+                    </StatusPill>
+                    <SquishySkillBadge skill="win-back" size={16} enabled={true} />
+                  </div>
                 </div>
 
                 <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selected.prospectName ?? selected.prospectEmail}</h4>
@@ -554,6 +560,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                 </div>
               )}
 
+              {/* CLEAN RUN ACTIVITY PANEL IN LIGHT MODE - NO DARK BOX OVERFLOW */}
               {selected.runId && (
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 overflow-hidden text-xs font-sans">
                   <button
@@ -567,8 +574,13 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                     </span>
                     <ChevronDown size={13} className={cn("text-zinc-500 transition-transform", showRunActivity && "rotate-180")} />
                   </button>
+
                   {showRunActivity && (
-                    <div className="px-3 pb-3 pt-2 border-t border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 rounded-b-xl">
+                    <div className={cn(
+                      "px-3 pb-3 pt-2 border-t border-zinc-200 dark:border-zinc-800/60 font-sans text-xs rounded-b-xl transition-colors",
+                      "bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100",
+                      "[html:not(.dark)_&_*]:!bg-zinc-100/90 [html:not(.dark)_&_*]:!text-zinc-900 [html:not(.dark)_&_*]:!border-zinc-200"
+                    )}>
                       <RunActivityPanel runId={selected.runId} />
                       <a
                         href={`/dashboard/runs/${selected.runId}`}
