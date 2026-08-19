@@ -14,7 +14,9 @@ import {
   RefreshCw,
   CalendarDays,
   Clock,
-  ArrowUpRight
+  ArrowUpRight,
+  Zap,
+  Calendar
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dateKey } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
@@ -24,8 +26,6 @@ import { auditRunTypeLabel } from "@/lib/copy";
 import { LeakMapView } from "@/app/dashboard/runs/[id]/views/leak-map-view";
 import type { LeakMapDetail } from "@/app/dashboard/runs/[id]/_shared/types";
 import type { AuditHistoryItem, ScheduledAudit, ActiveAlertItem } from "@/app/api/engagements/[id]/leak-map-schedule/route";
-
-type ListScope = "week" | "month";
 
 function formatDayHeader(dateStr: string) {
   const todayKey = dateKey(new Date());
@@ -47,8 +47,12 @@ function formatTimeBadge(isoString: string | null | undefined) {
   return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function getWeekOfMonth(date: Date) {
+  const firstDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  return Math.ceil((date.getDate() + firstDay) / 7);
+}
+
 export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
-  const [listScope, setListScope] = useState<ListScope>("week");
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [history, setHistory] = useState<AuditHistoryItem[]>([]);
@@ -112,79 +116,41 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
     return history.filter((h) => h.runType.toLowerCase().includes(q));
   }, [history, filterText]);
 
-  const historyByDate = useMemo(() => {
-    const map: Record<string, AuditHistoryItem[]> = {};
+  // Group monthly history by Week Buckets (Week 1, Week 2, Week 3, Week 4+)
+  const monthWeeksGrouped = useMemo(() => {
+    const groups: Record<number, AuditHistoryItem[]> = {};
+
     for (const item of filtered) {
-      const k = dateKey(new Date(item.createdAt));
-      (map[k] ??= []).push(item);
-    }
-    return map;
-  }, [filtered]);
-
-  const todayK = dateKey(new Date());
-
-  const currentWeekDays = useMemo(() => {
-    const anchor = selectedDate || new Date();
-    const d = new Date(anchor);
-    const day = d.getDay();
-    const diffToMon = day === 0 ? -6 : 1 - day;
-    const monday = new Date(d);
-    monday.setDate(d.getDate() + diffToMon);
-
-    const days: { dateStr: string; dateObj: Date; audits: AuditHistoryItem[] }[] = [];
-    for (let i = 0; i < 7; i++) {
-      const dateObj = new Date(monday);
-      dateObj.setDate(monday.getDate() + i);
-      const k = dateKey(dateObj);
-      const audits = historyByDate[k] ?? [];
-
-      if (k <= todayK && audits.length > 0) {
-        days.push({ dateStr: k, dateObj, audits });
-      }
-    }
-    return days.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
-  }, [selectedDate, historyByDate, todayK]);
-
-  const monthDaysSmart = useMemo(() => {
-    const days: { dateStr: string; dateObj: Date; audits: AuditHistoryItem[] }[] = [];
-    const numDays = new Date(year, month + 1, 0).getDate();
-
-    for (let d = 1; d <= numDays; d++) {
-      const dateObj = new Date(year, month, d);
-      const k = dateKey(dateObj);
-      const audits = historyByDate[k] ?? [];
-      if (k <= todayK && audits.length > 0) {
-        days.push({ dateStr: k, dateObj, audits });
+      const itemDate = new Date(item.createdAt);
+      if (itemDate.getFullYear() === year && itemDate.getMonth() === month) {
+        const w = getWeekOfMonth(itemDate);
+        (groups[w] ??= []).push(item);
       }
     }
 
-    return days.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
-  }, [year, month, historyByDate, todayK]);
+    return Object.entries(groups)
+      .map(([weekNum, audits]) => ({
+        weekNum: Number(weekNum),
+        audits: audits.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+      }))
+      .sort((a, b) => b.weekNum - a.weekNum);
+  }, [filtered, year, month]);
 
-  const listDaysToRender = useMemo(() => {
-    if (listScope === "week") {
-      return currentWeekDays;
-    }
-    return monthDaysSmart;
-  }, [listScope, currentWeekDays, monthDaysSmart]);
-
-  const selectedDayKey = dateKey(selectedDate);
-  const selectedDayAudits = historyByDate[selectedDayKey] ?? [];
-
-  useEffect(() => {
-    if (selectedDayAudits.length > 0) {
-      if (!selectedId || !selectedDayAudits.some((i) => i.id === selectedId)) {
-        setSelectedId(selectedDayAudits[0].id);
-      }
-    } else if (history.length > 0 && !selectedId) {
-      setSelectedId(history[0].id);
-    }
-  }, [selectedDayKey, selectedDayAudits, selectedId, history]);
+  const monthlyRunCount = useMemo(() => {
+    return monthWeeksGrouped.reduce((acc, curr) => acc + curr.audits.length, 0);
+  }, [monthWeeksGrouped]);
 
   const selected = useMemo(
-    () => history.find((h) => h.id === selectedId) ?? selectedDayAudits[0] ?? history[0] ?? null,
-    [history, selectedId, selectedDayAudits]
+    () => history.find((h) => h.id === selectedId) ?? monthWeeksGrouped[0]?.audits[0] ?? history[0] ?? null,
+    [history, selectedId, monthWeeksGrouped]
   );
+
+  useEffect(() => {
+    if (monthWeeksGrouped.length > 0 && !selectedId) {
+      const firstAvailable = monthWeeksGrouped[0]?.audits[0];
+      if (firstAvailable) setSelectedId(firstAvailable.id);
+    }
+  }, [monthWeeksGrouped, selectedId]);
 
   useEffect(() => {
     if (!selected?.runId) {
@@ -252,7 +218,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
             <input
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
-              placeholder="Search weekly / monthly..."
+              placeholder="Search audits..."
               className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
             />
           </div>
@@ -324,58 +290,42 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
             </div>
           )}
 
-          {/* Chronological Audit Feed */}
+          {/* Monthly Timeline Feed */}
           <div className="overflow-hidden rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xs font-sans flex flex-col">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60 font-sans">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
                 <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
-                  {listScope === "week" ? "Current Week Audits" : `${monthName} Audits`}
+                  {monthName} Timeline
                 </span>
               </div>
 
-              <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px] font-sans">
-                <button
-                  type="button"
-                  onClick={() => setListScope("week")}
-                  className={cn(
-                    "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
-                    listScope === "week" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-                  )}
-                >
-                  Current Week
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setListScope("month")}
-                  className={cn(
-                    "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
-                    listScope === "month" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-                  )}
-                >
-                  Full Month
-                </button>
+              <div className="flex items-center gap-2 font-mono text-[11px] text-zinc-500 font-medium">
+                <span>{monthlyRunCount} run{monthlyRunCount === 1 ? "" : "s"}</span>
+                <span>•</span>
+                <span>{monthWeeksGrouped.length} active week{monthWeeksGrouped.length === 1 ? "" : "s"}</span>
               </div>
             </div>
 
-            {listDaysToRender.length === 0 && !loading ? (
+            {monthWeeksGrouped.length === 0 && !loading ? (
               <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
                 <CalendarX2 size={22} />
-                <span className="text-xs">No audits recorded in this period.</span>
+                <span className="text-xs">No audits recorded in {monthName} {year}.</span>
               </div>
             ) : (
-              <div className="divide-y divide-zinc-200/80 dark:divide-zinc-800/60 max-h-[500px] overflow-y-auto">
-                {listDaysToRender.map(({ dateStr, audits }) => (
-                  <div key={dateStr} className="space-y-0 font-sans">
-                    <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-50/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">
-                      <span>{formatDayHeader(dateStr)}</span>
-                      <span>{audits.length} audit{audits.length === 1 ? "" : "s"}</span>
+              <div className="divide-y divide-zinc-200/80 dark:divide-zinc-800/60 max-h-[520px] overflow-y-auto">
+                {monthWeeksGrouped.map(({ weekNum, audits }) => (
+                  <div key={weekNum} className="space-y-0 font-sans">
+                    <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/90 dark:bg-zinc-900/90 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+                      <span>Week {weekNum}</span>
+                      <span>{audits.length} run{audits.length === 1 ? "" : "s"}</span>
                     </div>
 
                     <div className="divide-y divide-zinc-100 dark:divide-zinc-800/40">
                       {audits.map((item) => {
                         const isSelected = selected?.id === item.id;
                         const timeBadge = formatTimeBadge(item.createdAt);
+                        const isManual = item.runType.toLowerCase().includes("manual") || item.runType.toLowerCase().includes("adhoc");
 
                         return (
                           <button
@@ -395,13 +345,24 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                             <div className="flex items-center gap-3 min-w-0 flex-1">
                               <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-1.5 py-0.5 rounded shrink-0">
                                 <Clock size={9} />
-                                {timeBadge}
+                                {formatDayHeader(dateKey(new Date(item.createdAt)))} • {timeBadge}
                               </span>
 
                               <div className="min-w-0 space-y-0.5">
-                                <span className="truncate text-xs font-bold text-zinc-900 dark:text-white block font-sans">
-                                  {auditRunTypeLabel(item.runType)}
-                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="truncate text-xs font-bold text-zinc-900 dark:text-white font-sans">
+                                    {auditRunTypeLabel(item.runType)}
+                                  </span>
+                                  {isManual ? (
+                                    <span className="inline-flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 font-semibold shrink-0">
+                                      <Zap size={8} /> Manual
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 font-semibold shrink-0">
+                                      <Calendar size={8} /> Scheduled
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-[11px] text-zinc-500 font-mono block truncate">
                                   {item.topIssueCount} issue{item.topIssueCount === 1 ? "" : "s"} · {item.alertsFiredCount} alert{item.alertsFiredCount === 1 ? "" : "s"}
                                 </span>
@@ -413,8 +374,8 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                                 tone={toneFromSeverity(item.overallSeverity)}
                                 className={cn(
                                   "shrink-0 capitalize",
-                                 item.overallSeverity === "none" &&
-  "bg-transparent text-amber-700 border border-amber-400 dark:bg-zinc-800 dark:text-amber-400 dark:border-amber-500/40"
+                                  item.overallSeverity === "none" &&
+                                    "bg-transparent text-amber-700 border border-amber-400 dark:bg-zinc-800 dark:text-amber-400 dark:border-amber-500/40"
                                 )}
                               >
                                 {item.overallSeverity === "none" ? "Clean" : `${item.overallSeverity} severity`}
@@ -446,8 +407,8 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                       tone={toneFromSeverity(selected.overallSeverity)}
                       className={cn(
                         "capitalize",
-selected.overallSeverity === "none" &&
-  "bg-transparent text-amber-700 border border-amber-400 dark:bg-zinc-800 dark:text-amber-400 dark:border-amber-500/40"
+                        selected.overallSeverity === "none" &&
+                          "bg-transparent text-amber-700 border border-amber-400 dark:bg-zinc-800 dark:text-amber-400 dark:border-amber-500/40"
                       )}
                     >
                       {selected.overallSeverity === "none" ? "Clean" : `${selected.overallSeverity} severity`}
