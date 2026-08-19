@@ -1,30 +1,35 @@
 "use client";
 
 // src/app/dashboard/engagements/[id]/win-back-pipeline.tsx
-//
-// Reads GET /api/engagements/[id]/win-back-pipeline — every enrollment for
-// this engagement, not one prospect's run page at a time. Calendar plots
-// every real event on an enrollment's timeline (enrolled / next touch due /
-// exited), not just currently-active next-unsent touchpoints (computed
-// server-side from winBackSequenceAssetMap minus sequenceMessageLog, not a
-// scheduled-date guess) — a month with only closed-out enrollments used to
-// render completely empty. List is chronological with real touch progress
-// (X of Y sent). Board was removed: it duplicated List's grouping with
-// less information and no real interactivity gain.
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Search, Mail, CalendarX2, Loader2, ExternalLink, ChevronDown, Copy, Check, Link2 } from "lucide-react";
+import Link from "next/link";
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Search, 
+  Mail, 
+  CalendarX2, 
+  ExternalLink, 
+  ChevronDown, 
+  Copy, 
+  Check, 
+  Clock, 
+  RefreshCw, 
+  CalendarDays,
+  Link2
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ViewSwitcher, type RunViewMode } from "../../runs/[id]/_shared/view-switcher";
-import { StatusPill } from "../../runs/[id]/_shared/status-pill";
-import { getDaysInMonthGrid, dateKey } from "../../runs/[id]/_shared/calendar-grid";
-import { RunActivityPanel } from "../../runs/[id]/_shared/run-activity-panel";
+import { dateKey } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
+import { RunActivityPanel } from "@/app/dashboard/runs/[id]/_shared/run-activity-panel";
 import { exitReasonLabel } from "@/lib/copy";
-import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import type { WinBackPipelineItem, WinBackEnrollmentStatus } from "@/app/api/engagements/[id]/win-back-pipeline/route";
 
-const STATUS_META: Record<WinBackEnrollmentStatus, { label: string; tone: "success" | "warning" | "danger" | "info" | "neutral" }> = {
+type Tone = "success" | "warning" | "danger" | "info" | "neutral";
+type ListScope = "week" | "month";
+
+const STATUS_META: Record<WinBackEnrollmentStatus, { label: string; tone: Tone }> = {
   active: { label: "Active in cadence", tone: "warning" },
   rebooked: { label: "Exited — rebooked", tone: "success" },
   reply_exited: { label: "Exited — replied", tone: "info" },
@@ -33,28 +38,78 @@ const STATUS_META: Record<WinBackEnrollmentStatus, { label: string; tone: "succe
   corrected: { label: "Exited — outcome corrected", tone: "neutral" },
 };
 
-// Board view removed — grouping by status added a third view that
-// duplicated List with less information. Calendar/List only now.
-const PIPELINE_MODES: RunViewMode[] = ["calendar", "list"];
+function StatusPill({
+  tone,
+  children,
+  className,
+}: {
+  tone: Tone | string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const toneClasses =
+    {
+      success: "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300",
+      danger: "bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200",
+      warning: "bg-amber-100 text-amber-950 dark:bg-amber-500/20 dark:text-amber-300",
+      info: "bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-300",
+      neutral: "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300",
+    }[tone] ?? "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300";
 
-type WinBackCalendarKind = "enrolled" | "next_touch" | "exited";
-const CALENDAR_KIND_LABEL: Record<WinBackCalendarKind, string> = {
-  enrolled: "enrolled",
-  next_touch: "touch due",
-  exited: "exited",
-};
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-tight transition-colors border-0",
+        toneClasses,
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function formatDayHeader(dateStr: string) {
+  const todayKey = dateKey(new Date());
+
+  const yesterdayObj = new Date();
+  yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+  const yesterdayKey = dateKey(yesterdayObj);
+
+  const tomorrowObj = new Date();
+  tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+  const tomorrowKey = dateKey(tomorrowObj);
+
+  if (dateStr === todayKey) return "Today";
+  if (dateStr === yesterdayKey) return "Yesterday";
+  if (dateStr === tomorrowKey) return "Tomorrow";
+
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+function formatTimeBadge(isoString: string | null | undefined) {
+  if (!isoString) return null;
+  return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
 export function WinBackPipeline({ engagementId }: { engagementId: string }) {
-  const [mode, setMode] = useState<RunViewMode>("calendar");
+  const [listScope, setListScope] = useState<ListScope>("week");
   const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [items, setItems] = useState<WinBackPipelineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [showRunActivity, setShowRunActivity] = useState(false);
+  const [showUpcomingInMonth, setShowUpcomingInMonth] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
+  const monthString = `${year}-${String(month + 1).padStart(2, "0")}`;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,293 +130,473 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
     load();
   }, [load]);
 
+  const handleMonthChange = (newDate: Date) => {
+    setCurrentDate(newDate);
+    setSelectedDate(newDate);
+  };
+
+  const handleTodayClick = () => {
+    const now = new Date();
+    setCurrentDate(now);
+    setSelectedDate(now);
+  };
+
+  const handleUpdateSelectedDate = (newDate: Date) => {
+    setSelectedDate(newDate);
+    if (newDate.getFullYear() !== currentDate.getFullYear() || newDate.getMonth() !== currentDate.getMonth()) {
+      setCurrentDate(newDate);
+    }
+  };
+
+  const handleCopyLink = (link: string) => {
+    navigator.clipboard.writeText(link);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   const filtered = useMemo(() => {
     if (!filterText.trim()) return items;
     const q = filterText.toLowerCase();
     return items.filter((i) => (i.prospectName ?? i.prospectEmail).toLowerCase().includes(q));
   }, [items, filterText]);
 
-  // Plots real history, not just pending future touches — an enrollment
-  // whose cadence has already finished (rebooked/lost/replied, no more
-  // future sends) used to never appear on the calendar at all, since
-  // nextTouchAt only exists for currently-active enrollments. Every
-  // enrollment now shows on the day it enrolled, on its next-touch day if
-  // one is still pending, and on the day it exited if it has — so a
-  // month with real activity actually shows something.
-  const byDay = useMemo(() => {
-    const map = new Map<string, { item: WinBackPipelineItem; kind: WinBackCalendarKind }[]>();
-    const add = (iso: string, item: WinBackPipelineItem, kind: WinBackCalendarKind) => {
-      const k = dateKey(iso);
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push({ item, kind });
-    };
-    for (const i of filtered) {
-      add(i.enrolledAt, i, "enrolled");
-      if (i.nextTouchAt) add(i.nextTouchAt, i, "next_touch");
-      if (i.exitedAt) add(i.exitedAt, i, "exited");
+  const itemsByDate = useMemo(() => {
+    const map: Record<string, WinBackPipelineItem[]> = {};
+    for (const item of filtered) {
+      const k = dateKey(new Date(item.enrolledAt));
+      (map[k] ??= []).push(item);
     }
     return map;
   }, [filtered]);
 
-  const gridDays = useMemo(() => getDaysInMonthGrid(year, month), [year, month]);
+  const todayK = dateKey(new Date());
+
+  const currentWeekDays = useMemo(() => {
+    const anchor = selectedDate || new Date();
+    const d = new Date(anchor);
+    const day = d.getDay();
+    const diffToMon = day === 0 ? -6 : 1 - day;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diffToMon);
+
+    const days: { dateStr: string; dateObj: Date; calls: WinBackPipelineItem[] }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const dateObj = new Date(monday);
+      dateObj.setDate(monday.getDate() + i);
+      const k = dateKey(dateObj);
+      const calls = itemsByDate[k] ?? [];
+
+      if (k <= todayK || calls.length > 0) {
+        days.push({ dateStr: k, dateObj, calls });
+      }
+    }
+    return days.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+  }, [selectedDate, itemsByDate, todayK]);
+
+  const monthDaysSmart = useMemo(() => {
+    const days: { dateStr: string; dateObj: Date; calls: WinBackPipelineItem[]; isFuture: boolean }[] = [];
+    const numDays = new Date(year, month + 1, 0).getDate();
+
+    for (let d = 1; d <= numDays; d++) {
+      const dateObj = new Date(year, month, d);
+      const k = dateKey(dateObj);
+      const calls = itemsByDate[k] ?? [];
+      const isFuture = k > todayK;
+      days.push({ dateStr: k, dateObj, calls, isFuture });
+    }
+
+    const pastAndToday = days
+      .filter((d) => !d.isFuture)
+      .sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+
+    const future = days
+      .filter((d) => d.isFuture && d.calls.length > 0)
+      .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
+
+    return { pastAndToday, future };
+  }, [year, month, itemsByDate, todayK]);
+
+  const listDaysToRender = useMemo(() => {
+    if (listScope === "week") {
+      return currentWeekDays;
+    }
+    return monthDaysSmart.pastAndToday;
+  }, [listScope, currentWeekDays, monthDaysSmart]);
+
+  const selectedDayKey = dateKey(selectedDate);
+  const selectedDayItems = itemsByDate[selectedDayKey] ?? [];
+
+  useEffect(() => {
+    if (selectedDayItems.length > 0) {
+      if (!selectedId || !selectedDayItems.some((i) => i.id === selectedId)) {
+        setSelectedId(selectedDayItems[0].id);
+      }
+    } else {
+      setSelectedId(null);
+    }
+  }, [selectedDayKey, selectedDayItems, selectedId]);
+
+  const selected = useMemo(
+    () => filtered.find((i) => i.id === selectedId) ?? selectedDayItems[0] ?? null,
+    [filtered, selectedId, selectedDayItems]
+  );
+
   const monthName = currentDate.toLocaleString("default", { month: "long" });
-  const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? null, [items, selectedId]);
   const activeCount = filtered.filter((i) => i.status === "active").length;
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
-      <div className="flex items-center justify-between gap-2 px-0.5">
-        <div className="flex items-center gap-2.5">
-          <SquishySkillBadge skill="win-back" size={28} enabled={true} />
-          <div>
-            <h3 className="text-sm font-bold text-white font-sans">Win-Back Pipeline</h3>
-            <p className="text-[11px] text-zinc-500 font-sans mt-0.5">
-              Every enrolled prospect across the whole recovery cadence — not one run page at a time.
-            </p>
+      {/* Shared Toolbar & Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-2 shadow-sm font-sans">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Universal Month Navigation */}
+          <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
+            <button
+              type="button"
+              onClick={() => handleMonthChange(new Date(year, month - 1, 1))}
+              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans px-1 min-w-[100px] text-center">
+              {monthName} {year}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleMonthChange(new Date(year, month + 1, 1))}
+              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+            >
+              <ChevronRight size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={handleTodayClick}
+              className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
+            >
+              Today
+            </button>
           </div>
-        </div>
-        {!loading && <div className="text-[11px] font-mono text-zinc-500 shrink-0">{activeCount} active</div>}
-      </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-950 p-1.5 border border-zinc-800">
-        <div className="relative w-64">
-          <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500" />
-          <input
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
-            placeholder="Search prospect name..."
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
-          />
+          <div className="relative w-56">
+            <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-400 dark:text-zinc-500" />
+            <input
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="Search prospect name..."
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+          >
+            <RefreshCw size={13} className={cn(loading && "animate-spin")} />
+          </button>
+
+          {!loading && (
+            <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 font-semibold px-1">
+              {activeCount} active in recovery
+            </span>
+          )}
         </div>
-        <ViewSwitcher value={mode} onChange={setMode} modes={PIPELINE_MODES} />
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300 font-sans">{error}</div>
+        <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
       )}
 
-      {mode === "list" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl font-sans">
-          {filtered.length === 0 && !loading ? (
-            <div className="flex flex-col items-center gap-2 py-12 text-zinc-600 font-sans">
+      {/* SMART SPLIT-PANE RECOVERY FEED */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
+        {/* LEFT 7 COLUMNS: CHRONOLOGICAL RECOVERY FEED */}
+        <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans flex flex-col">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
+            <div className="flex items-center gap-1.5">
+              <CalendarDays size={14} className="text-zinc-500" />
+              <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
+                {listScope === "week" ? "Current Week Feed" : `${monthName} Feed`}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {listScope === "week" && (
+                <div className="flex items-center gap-1 font-mono text-xs text-zinc-500">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 7 * 86400000))}
+                    className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                    title="Previous Week"
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTodayClick}
+                    className="text-[10.5px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() + 7 * 86400000))}
+                    className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                    title="Next Week"
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px] font-sans">
+                <button
+                  type="button"
+                  onClick={() => setListScope("week")}
+                  className={cn(
+                    "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                    listScope === "week" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                  )}
+                >
+                  Current Week
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setListScope("month")}
+                  className={cn(
+                    "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                    listScope === "month" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                  )}
+                >
+                  Full Month
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* List Stream Content */}
+          {listDaysToRender.length === 0 && !loading ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
               <CalendarX2 size={22} />
-              <span className="text-xs">No enrollments yet.</span>
+              <span className="text-xs">No Win-Back enrollments on file.</span>
             </div>
           ) : (
-            filtered.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setSelectedId(item.id)}
-                className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-zinc-900/50 cursor-pointer border-b border-zinc-900/60 last:border-b-0 font-sans"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="font-mono text-[10.5px] text-zinc-500 w-20 shrink-0">
-                    {new Date(item.enrolledAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </span>
-                  <span className="truncate text-xs font-bold text-white font-sans">{item.prospectName ?? item.prospectEmail}</span>
-                  <span className="shrink-0 font-mono text-[10px] text-zinc-500">{item.touchesSent}/{item.touchesTotal}</span>
-                </div>
-                <StatusPill tone={STATUS_META[item.status].tone} className="shrink-0">
-                  {STATUS_META[item.status].label}
-                </StatusPill>
-              </button>
-            ))
+            <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 max-h-[580px] overflow-y-auto">
+              {listDaysToRender.map(({ dateStr, dateObj, calls }) => {
+                const isSelectedDay = dateKey(selectedDate) === dateStr;
+
+                return (
+                  <div key={dateStr} className="space-y-0 font-sans">
+                    {/* Sticky Day Header */}
+                    <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">
+                      <span>{formatDayHeader(dateStr)}</span>
+                      <span className={cn("font-normal", calls.length > 0 ? "text-zinc-700 dark:text-zinc-300 font-bold" : "text-zinc-400")}>
+                        {calls.length} enrollment{calls.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
+
+                    {/* Day Feed Entries */}
+                    <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
+                      {calls.length > 0 ? (
+                        calls.map((item) => {
+                          const isSelected = selected?.id === item.id;
+                          const enrollmentTime = formatTimeBadge(item.enrolledAt);
+
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedId(item.id);
+                                handleUpdateSelectedDate(new Date(item.enrolledAt));
+                              }}
+                              className={cn(
+                                "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer font-sans border-0",
+                                isSelected
+                                  ? "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                                  : "bg-white dark:bg-transparent hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50"
+                              )}
+                            >
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-amber-200 dark:bg-amber-900/60 px-1.5 py-0.5 rounded shrink-0 border-0">
+                                  <Clock size={9} />
+                                  {enrollmentTime}
+                                </span>
+
+                                <div className="min-w-0 space-y-0.5">
+                                  <span className="truncate text-xs font-bold text-zinc-900 dark:text-white block font-sans">
+                                    {item.prospectName ?? item.prospectEmail}
+                                  </span>
+                                  <span className="text-[11px] text-zinc-500 font-mono block truncate">
+                                    {item.prospectEmail}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-[9.5px] font-mono text-zinc-500 font-bold">
+                                  {item.touchesSent}/{item.touchesTotal} Touches
+                                </span>
+
+                                <StatusPill tone={STATUS_META[item.status].tone} className="shrink-0">
+                                  {STATUS_META[item.status].label}
+                                </StatusPill>
+                              </div>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        /* Explicit empty day row */
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleUpdateSelectedDate(dateObj);
+                            setSelectedId(null);
+                          }}
+                          className={cn(
+                            "w-full px-4 py-2.5 text-left text-xs font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
+                            isSelectedDay
+                              ? "bg-zinc-200/60 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 font-semibold"
+                              : "text-zinc-400 dark:text-zinc-600 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40"
+                          )}
+                        >
+                          <span>No recovery enrollments</span>
+                          <span className="text-[10px] text-zinc-400 dark:text-zinc-600">0 / 0</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
-      )}
 
-      {mode === "calendar" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl font-sans">
-          <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-4 py-2.5">
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer">
-                <ChevronLeft size={15} />
-              </button>
-              <button type="button" onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer">
-                <ChevronRight size={15} />
-              </button>
-              <h3 className="text-sm font-bold text-white min-w-[120px] font-sans">{monthName} {year}</h3>
-              <button type="button" onClick={() => setCurrentDate(new Date())} className="rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700 cursor-pointer font-sans">
-                Today
-              </button>
-            </div>
-            {loading && <Loader2 size={14} className="animate-spin text-zinc-500" />}
-          </div>
+        {/* RIGHT 5 COLUMNS: PERSISTENT RECOVERY INSPECTOR PANEL */}
+        <div className="lg:col-span-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
+          {selected ? (
+            <>
+              <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
+                <div className="flex items-center justify-between font-sans flex-wrap gap-1">
+                  <StatusPill tone={STATUS_META[selected.status].tone}>
+                    {STATUS_META[selected.status].label}
+                  </StatusPill>
+                  <SquishySkillBadge skill="win-back" size={16} enabled={true} />
+                </div>
 
-          <div className="grid grid-cols-7 border-b border-zinc-800 bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-              <div key={d} className="border-r border-zinc-800/60 py-2 last:border-r-0">{d}</div>
-            ))}
-          </div>
+                <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selected.prospectName ?? selected.prospectEmail}</h4>
 
-          <div className="grid grid-cols-7 auto-rows-fr bg-zinc-950 font-sans">
-            {gridDays.map(({ date, isCurrentMonth }, idx) => {
-              const k = dateKey(date);
-              const dayItems = byDay.get(k) ?? [];
-              const isToday = dateKey(new Date()) === k;
+                <div className="space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                  <div className="flex items-center gap-2">
+                    <Mail size={12} className="text-zinc-500 shrink-0" />
+                    <span className="truncate">{selected.prospectEmail}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-300 pt-0.5">
+                    <Clock size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>Enrolled {new Date(selected.enrolledAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+                </div>
+              </div>
 
-              return (
-                <div key={idx} className={cn("flex min-h-[90px] flex-col border-b border-r border-zinc-800/60 p-1.5 font-sans", !isCurrentMonth && "bg-zinc-900/20 text-zinc-600", isCurrentMonth && "hover:bg-zinc-900/30")}>
-                  <div className="flex items-start justify-between gap-1 w-full">
-                    <span className={cn("flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold shrink-0", isToday ? "bg-emerald-500 text-zinc-950 font-bold" : isCurrentMonth ? "text-zinc-300" : "text-zinc-600")}>
-                      {date.getDate()}
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                <div className="flex items-center justify-between font-sans">
+                  <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
+                  <span className="font-mono text-zinc-900 dark:text-white">{selected.touchesSent} / {selected.touchesTotal}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                  <div className="h-full bg-amber-500" style={{ width: `${selected.touchesTotal ? (selected.touchesSent / selected.touchesTotal) * 100 : 0}%` }} />
+                </div>
+                <div className="flex items-center justify-between font-sans pt-1">
+                  <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Recovery Window</span>
+                  <span className="font-mono text-zinc-900 dark:text-white">{selected.recoveryWindowDays} days</span>
+                </div>
+                {selected.status === "active" && selected.nextTouchAt && (
+                  <div className="flex items-center justify-between font-sans pt-1">
+                    <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Next Touch Due</span>
+                    <span className="font-mono text-amber-600 dark:text-amber-400">{new Date(selected.nextTouchAt).toLocaleDateString(undefined, { month: "long", day: "numeric" })}</span>
+                  </div>
+                )}
+                {selected.exitedAt && (
+                  <div className="flex items-center justify-between font-sans pt-1">
+                    <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Exited Cadence</span>
+                    <span className="font-mono text-zinc-900 dark:text-white">
+                      {new Date(selected.exitedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      {selected.exitReason ? ` · ${exitReasonLabel(selected.exitReason)}` : ""}
                     </span>
-                    {dayItems.length > 0 && (
-                      <div className="relative shrink-0">
-                        <SquishySkillBadge skill="win-back" size={16} enabled={true} />
-                        <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-rose-500 text-[8px] font-bold text-zinc-950 font-mono">
-                          {dayItems.length}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  {dayItems.length > 1 && (() => {
-                    const touchesDue = dayItems.filter((d) => d.kind === "next_touch").length;
-                    return (
-                      <div className="mt-1 rounded-lg bg-rose-950/40 border border-rose-800/50 px-2 py-1 text-rose-200">
-                        <span className="text-[11px] font-bold block leading-none font-sans">
-                          {dayItems.length} event{dayItems.length === 1 ? "" : "s"}
-                        </span>
-                        <span className="text-[9.5px] text-rose-400/80 font-mono mt-0.5 block">
-                          {touchesDue > 0 ? `${touchesDue} touch${touchesDue === 1 ? "" : "es"} due` : "enrollment activity"}
-                        </span>
-                      </div>
-                    );
-                  })()}
-                  <div className="mt-1 space-y-1 overflow-y-auto max-h-[65px] [scrollbar-width:none]">
-                    {dayItems.map(({ item, kind }, idx) => (
-                      <button key={`${item.id}-${kind}-${idx}`} type="button" onClick={() => setSelectedId(item.id)} className="flex w-full flex-col gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/90 p-1.5 text-left text-[11px] font-sans hover:border-zinc-700 cursor-pointer">
-                        <span className="truncate font-bold text-white font-sans">{item.prospectName ?? item.prospectEmail}</span>
-                        <span className={cn("font-mono text-[9px]", kind === "next_touch" ? "text-amber-400/80" : kind === "exited" ? "text-emerald-400/80" : "text-sky-400/80")}>
-                          {CALENDAR_KIND_LABEL[kind]}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <WinBackDrawer item={selected} onClose={() => setSelectedId(null)} />
-    </div>
-  );
-}
-
-function WinBackDrawer({ item, onClose }: { item: WinBackPipelineItem | null; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const [showRunActivity, setShowRunActivity] = useState(false);
-
-  useEffect(() => {
-    setCopied(false);
-    setShowRunActivity(false);
-  }, [item?.id]);
-
-  const copyLink = useCallback(() => {
-    if (!item?.freshRescheduleLink) return;
-    navigator.clipboard.writeText(item.freshRescheduleLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [item]);
-
-  return (
-    <Sheet open={!!item} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent widthClassName="w-full sm:max-w-md font-sans antialiased text-zinc-100">
-        {item && (
-          <>
-            <SheetHeader className="font-sans">
-              <StatusPill tone={STATUS_META[item.status].tone} className="w-fit">{STATUS_META[item.status].label}</StatusPill>
-              <SheetTitle className="mt-2 text-lg font-bold font-sans text-white">{item.prospectName ?? item.prospectEmail}</SheetTitle>
-              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-400 font-sans">
-                Enrolled {new Date(item.enrolledAt).toLocaleString(undefined, { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-              </SheetDescription>
-            </SheetHeader>
-            <SheetBody className="space-y-4 font-sans pt-2">
-              <div className="flex items-center gap-2 text-xs text-zinc-300 font-sans">
-                <Mail size={13} className="text-zinc-500 shrink-0" />
-                <span className="truncate">{item.prospectEmail}</span>
-              </div>
-
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 space-y-2">
-                <div className="flex items-center justify-between text-xs font-sans">
-                  <span className="text-zinc-400">Touches sent</span>
-                  <span className="font-mono text-white">{item.touchesSent} / {item.touchesTotal}</span>
-                </div>
-                <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                  <div className="h-full bg-amber-500" style={{ width: `${item.touchesTotal ? (item.touchesSent / item.touchesTotal) * 100 : 0}%` }} />
-                </div>
-                <div className="flex items-center justify-between text-xs font-sans pt-1">
-                  <span className="text-zinc-400">Recovery window</span>
-                  <span className="font-mono text-white">{item.recoveryWindowDays} days</span>
-                </div>
-                {item.status === "active" && item.nextTouchAt && (
-                  <div className="flex items-center justify-between text-xs font-sans">
-                    <span className="text-zinc-400">Next touch</span>
-                    <span className="font-mono text-amber-400">{new Date(item.nextTouchAt).toLocaleDateString(undefined, { month: "long", day: "numeric" })}</span>
-                  </div>
-                )}
-                {item.exitedAt && (
-                  <div className="flex items-center justify-between text-xs font-sans">
-                    <span className="text-zinc-400">Exited</span>
-                    <span className="font-mono text-white">{new Date(item.exitedAt).toLocaleDateString(undefined, { month: "long", day: "numeric" })}{item.exitReason ? ` · ${exitReasonLabel(item.exitReason)}` : ""}</span>
                   </div>
                 )}
               </div>
 
-              {item.freshRescheduleLink && (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 space-y-1.5">
-                  <span className="flex items-center gap-1.5 text-[10.5px] font-mono text-zinc-500 uppercase">
-                    <Link2 size={11} /> Single-use reschedule link
+              {selected.freshRescheduleLink && (
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                  <span className="text-[10.5px] font-mono text-zinc-500 uppercase block font-semibold flex items-center gap-1.5">
+                    <Link2 size={12} /> Single-use Reschedule Link
                   </span>
                   <div className="flex items-center gap-2">
-                    <span className="flex-1 truncate rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-[11px] font-mono text-zinc-300">
-                      {item.freshRescheduleLink}
-                    </span>
+                    <input
+                      readOnly
+                      value={selected.freshRescheduleLink}
+                      className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 py-1 px-2 font-mono text-[11px] text-zinc-700 dark:text-zinc-300 focus:outline-none"
+                    />
                     <button
                       type="button"
-                      onClick={copyLink}
-                      className="shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 p-1.5 text-zinc-400 hover:text-white hover:border-zinc-700 transition-colors cursor-pointer"
+                      onClick={() => handleCopyLink(selected.freshRescheduleLink!)}
+                      className="flex items-center gap-1 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 cursor-pointer font-sans"
                     >
-                      {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                      {copiedLink ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                      <span>{copiedLink ? "Copied" : "Copy"}</span>
                     </button>
                   </div>
                 </div>
               )}
 
-              {item.runId && (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+              {selected.runId && (
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-xs font-sans">
                   <button
                     type="button"
                     onClick={() => setShowRunActivity((p) => !p)}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-900 transition-colors"
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
                   >
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
                       <SquishySkillBadge skill="win-back" size={14} enabled={true} />
                       Run activity
                     </span>
                     <ChevronDown size={13} className={cn("text-zinc-500 transition-transform", showRunActivity && "rotate-180")} />
                   </button>
                   {showRunActivity && (
-                    <div className="px-3 pb-3 pt-1 border-t border-zinc-800/60">
-                      <RunActivityPanel runId={item.runId} />
+                    <div className="px-3 pb-3 pt-1 border-t border-zinc-200 dark:border-zinc-800/60">
+                      <RunActivityPanel runId={selected.runId} />
                       <a
-                        href={`/dashboard/runs/${item.runId}`}
-                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                        href={`/dashboard/runs/${selected.runId}`}
+                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
                       >
-                        <span>Open the full run page</span>
+                        <span>Open full run page</span>
                         <ExternalLink size={10} />
                       </a>
                     </div>
                   )}
                 </div>
               )}
-            </SheetBody>
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
+            </>
+          ) : (
+            <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
+              <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
+              <p className="text-xs font-sans">
+                {selectedDate ? (
+                  <>
+                    <span className="font-bold text-zinc-800 dark:text-zinc-200 block mb-0.5">
+                      {selectedDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                    Zero recovery enrollments for this date.
+                  </>
+                ) : (
+                  "Select an enrolled lead to inspect sequence details."
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

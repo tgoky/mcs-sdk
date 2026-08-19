@@ -49,16 +49,15 @@ export default async function WinBackSkillPage({
   const yearStart = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1));
   const revenue = await computeWinBackRevenueAttribution(id, yearStart);
 
-  // Dynamic back link destination and label
   const isFromModule = from && from.startsWith("/dashboard/modules");
   const backHref = isFromModule ? from : `/dashboard/engagements/${id}`;
   const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
 
   return (
     <div className="space-y-6 font-sans antialiased">
-      <SetBreadcrumbLabel label={`${engagement.buyer} · Win-Back`} />
+      <SetBreadcrumbLabel label={`${engagement.buyer} · Booking Recovery`} />
 
-      {/* Circular Back Button & Title in the same horizontal row */}
+      {/* Clean Single Header Section */}
       <div className="flex items-center gap-3">
         <Link
           href={backHref}
@@ -70,11 +69,11 @@ export default async function WinBackSkillPage({
         </Link>
 
         <div>
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
-            Win-Back — {engagement.buyer}
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
+            Booking Recovery — {engagement.buyer}
           </h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Every recovery enrollment this engagement has ever run, not just today&apos;s calendar.
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
+            Every enrolled prospect across the whole recovery cadence — not one run page at a time.
           </p>
         </div>
       </div>
