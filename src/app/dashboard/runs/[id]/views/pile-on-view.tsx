@@ -21,6 +21,34 @@ import type { RunStep } from "@/models/schema";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 
+function HighContrastBadge({
+  tone,
+  children,
+}: {
+  tone: Tone;
+  children: React.ReactNode;
+}) {
+  const styles: Record<Tone, string> = {
+    success:
+      "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/40 dark:bg-emerald-500/25",
+    danger:
+      "bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 dark:bg-rose-500/25",
+    warning:
+      "bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40 dark:bg-amber-500/25",
+    info: "bg-sky-500/20 text-sky-600 dark:text-sky-300 border-sky-500/40 dark:bg-sky-500/25",
+    neutral:
+      "bg-zinc-200/80 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700",
+  };
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${styles[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
 export function PileOnView({
   detail,
   steps,
@@ -87,6 +115,22 @@ export function PileOnView({
     ? "Failed"
     : "Standard Template";
 
+  const buildSentenceSummary = () => {
+    if (send?.error) {
+      return `Run hit an execution error while attempting to personalize follow-ups for ${
+        prospectEmail ?? "this booking"
+      }.`;
+    }
+    if (send?.sentVia === "hybrid") {
+      return `AI-personalized intro was written and delivered. Email sequence enrolled via ${emailPlatformLabel(
+        run.stack?.email_platform
+      )} and SMS dispatch triggered.`;
+    }
+    return `Standard template dispatched. Email sequence enrolled via ${emailPlatformLabel(
+      run.stack?.email_platform
+    )} without custom AI intro generation.`;
+  };
+
   const channels = useMemo(() => {
     return [
       {
@@ -125,7 +169,9 @@ export function PileOnView({
           !run.stack?.sms_platform || run.stack.sms_platform === "none"
             ? "Not configured"
             : smsMessages.length > 0
-            ? `${smsSentCount} sent${smsFailedCount > 0 ? `, ${smsFailedCount} failed` : ""} of ${smsMessages.length} attempted`
+            ? `${smsSentCount} sent${
+                smsFailedCount > 0 ? `, ${smsFailedCount} failed` : ""
+              } of ${smsMessages.length} attempted`
             : smsDispatchStep?.status === "success"
             ? "Dispatched — waiting on schedule"
             : smsDispatchStep?.status === "failed"
@@ -198,65 +244,83 @@ export function PileOnView({
     smsFailedCount,
   ]);
 
+  const borderAccentClass =
+    outcomeTone === "success"
+      ? "border-l-emerald-500"
+      : outcomeTone === "danger"
+      ? "border-l-rose-500"
+      : "border-l-amber-500";
+
   return (
     <div className="w-full space-y-5 font-sans antialiased text-zinc-900 dark:text-zinc-100">
-      {/* ── HEADER ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-4">
-        <div className="flex items-center gap-3">
-          {prospectEmail && (
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-xs font-semibold shrink-0 border border-zinc-200 dark:border-zinc-700">
-              {prospectEmail.slice(0, 2).toUpperCase()}
-            </div>
-          )}
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-base font-bold text-zinc-900 dark:text-white">
-                {prospectEmail ?? (bookingId ? `Booking #${bookingId}` : "Booking Dispatch")}
-              </span>
-              <SquishySkillBadge
-                skill="pile-on"
-                size={22}
-                enabled={outcomeTone === "success" || outcomeTone === "info"}
-              />
-              <span className="text-xs text-zinc-500 font-medium dark:text-zinc-400">
-                {outcomeLabel}
-              </span>
-              {prospectEmail && (
-                <button
-                  type="button"
-                  onClick={() => handleCopy(prospectEmail, "email")}
-                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors ml-1"
-                  title="Copy email"
-                >
-                  {copiedKey === "email" ? (
-                    <Check size={13} className="text-emerald-500" />
-                  ) : (
-                    <Copy size={13} />
-                  )}
-                </button>
+      {/* ── 1. PROSPECT HEADER CARD WITH LEFT ACCENT BAR ── */}
+      <div
+        className={`rounded-xl border border-zinc-200 dark:border-zinc-800 border-l-4 ${borderAccentClass} bg-white dark:bg-zinc-900/40 p-4 space-y-3 shadow-xs`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <SquishySkillBadge
+              skill="pile-on"
+              size={32}
+              enabled={outcomeTone === "success" || outcomeTone === "info"}
+            />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-base font-bold text-zinc-900 dark:text-white">
+                  {prospectEmail ??
+                    (bookingId ? `Booking #${bookingId}` : "Booking Dispatch")}
+                </span>
+                {prospectEmail && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(prospectEmail, "email")}
+                    className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+                    title="Copy email"
+                  >
+                    {copiedKey === "email" ? (
+                      <Check size={13} className="text-emerald-500" />
+                    ) : (
+                      <Copy size={13} />
+                    )}
+                  </button>
+                )}
+              </div>
+              {prospectEmail && bookingId && (
+                <p className="text-xs text-zinc-500 font-mono">
+                  Booking #{bookingId}
+                </p>
               )}
             </div>
-            {prospectEmail && bookingId && (
-              <p className="text-xs text-zinc-500 font-mono">
-                Booking #{bookingId}
-              </p>
-            )}
           </div>
+
+          <HighContrastBadge tone={outcomeTone}>
+            {outcomeLabel}
+          </HighContrastBadge>
         </div>
+
+        {/* ── 2. CONVERSATIONAL SUMMARY BANNER ── */}
+        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed border-t border-zinc-100 dark:border-zinc-800/80 pt-2.5">
+          {buildSentenceSummary()}
+        </p>
       </div>
 
-      {/* ── EXECUTION STEPS (SCALED DOWN BREADCRUMB STYLE) ── */}
+      {/* ── 3. EXECUTION STEPS BREADCRUMBS ── */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs sm:text-sm font-medium text-zinc-500 dark:text-zinc-400">
-        <span className="text-zinc-800 dark:text-zinc-200">Booking Received</span>
-        <span className="text-zinc-300 dark:text-zinc-700 font-normal">•</span>
         <span className="text-zinc-800 dark:text-zinc-200">
-          AI Personalization ({send?.sentVia === "hybrid" ? "Personalized" : "Standard"})
+          Booking Received
         </span>
         <span className="text-zinc-300 dark:text-zinc-700 font-normal">•</span>
-        <span className="text-zinc-800 dark:text-zinc-200">Sequences Triggered</span>
+        <span className="text-zinc-800 dark:text-zinc-200">
+          AI Personalization (
+          {send?.sentVia === "hybrid" ? "Personalized" : "Standard"})
+        </span>
+        <span className="text-zinc-300 dark:text-zinc-700 font-normal">•</span>
+        <span className="text-zinc-800 dark:text-zinc-200">
+          Sequences Triggered
+        </span>
       </div>
 
-      {/* ── AI PERSONALIZATION CONTENT ── */}
+      {/* ── 4. AI PERSONALIZATION CONTENT ── */}
       <div className="space-y-2 border-t border-zinc-200 dark:border-zinc-800 pt-4">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
@@ -301,12 +365,13 @@ export function PileOnView({
           })()
         ) : (
           <p className="pl-3 border-l-2 border-zinc-200 dark:border-zinc-800 text-xs italic text-zinc-400">
-            Standard {emailPlatformLabel(run.stack?.email_platform)} sequence used — no AI-personalized intro generated.
+            Standard {emailPlatformLabel(run.stack?.email_platform)} sequence used
+            — no AI-personalized intro generated.
           </p>
         )}
       </div>
 
-      {/* ── DISPATCH CHANNELS ── */}
+      {/* ── 5. DISPATCH CHANNELS ── */}
       <div className="space-y-3 border-t border-zinc-200 dark:border-zinc-800 pt-4">
         <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
           Dispatch Channels
@@ -318,29 +383,32 @@ export function PileOnView({
             const isEnabled = ch.tone !== "neutral" && ch.tone !== "danger";
             return (
               <div key={ch.id} className="py-3.5 space-y-2">
-                {/* Main Row — Inline Title + Squishy Badge Tag */}
-                <div className="flex items-center gap-2.5">
-                  <Icon size={15} className="text-zinc-400 shrink-0" />
-                  <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    {ch.title}
-                  </span>
-                  <SquishySkillBadge
-                    skill="pile-on"
-                    size={20}
-                    enabled={isEnabled}
-                    count={ch.type === "sms" && smsSentCount > 0 ? smsSentCount : undefined}
-                  />
-                  <span className="text-xs text-zinc-500 font-medium dark:text-zinc-400">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Icon size={15} className="text-zinc-400 shrink-0" />
+                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                      {ch.title}
+                    </span>
+                    <SquishySkillBadge
+                      skill="pile-on"
+                      size={20}
+                      enabled={isEnabled}
+                      count={
+                        ch.type === "sms" && smsSentCount > 0
+                          ? smsSentCount
+                          : undefined
+                      }
+                    />
+                  </div>
+                  <HighContrastBadge tone={ch.tone}>
                     {ch.badge}
-                  </span>
+                  </HighContrastBadge>
                 </div>
 
-                {/* Subtitle */}
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   {ch.subtitle}
                 </p>
 
-                {/* Inline Side-by-Side Metadata */}
                 <div className="grid grid-cols-[130px_1fr] gap-y-1 text-xs pt-1">
                   <span className="text-zinc-400">Platform</span>
                   <span className="text-zinc-700 dark:text-zinc-300 font-medium">
@@ -359,7 +427,6 @@ export function PileOnView({
                   )}
                 </div>
 
-                {/* Failure Diagnostics */}
                 {ch.step?.detail && ch.step.status === "failed" && (
                   <div className="pt-1 text-xs text-rose-500">
                     {(() => {
@@ -389,7 +456,7 @@ export function PileOnView({
                     {ch.messages.map((m, i) => (
                       <div
                         key={m.id}
-                        className="flex items-center gap-2 text-xs py-1.5 px-3 rounded bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800"
+                        className="flex items-center justify-between text-xs py-1.5 px-3 rounded bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800"
                       >
                         <span className="font-medium text-zinc-700 dark:text-zinc-300">
                           Text #{i + 1} —{" "}
@@ -400,14 +467,11 @@ export function PileOnView({
                             })}
                           </span>
                         </span>
-                        <SquishySkillBadge
-                          skill="pile-on"
-                          size={18}
-                          enabled={m.status === "sent"}
-                        />
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        <HighContrastBadge
+                          tone={m.status === "sent" ? "success" : "danger"}
+                        >
                           {m.status === "sent" ? "Sent" : "Failed"}
-                        </span>
+                        </HighContrastBadge>
                       </div>
                     ))}
                   </div>
