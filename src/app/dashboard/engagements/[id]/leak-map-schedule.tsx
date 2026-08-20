@@ -519,26 +519,8 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                       <p className="text-[11px] text-rose-600 dark:text-rose-400 font-sans">{detailError}</p>
                     )}
                     {!detailLoading && !detailError && detail && "audit" in detail && (
-                      <div className="embedded-leak-map font-sans text-xs">
-                        <style>{`
-                          /* Hide Search Bar inside embedded LeakMapView */
-                          .embedded-leak-map input[placeholder*="Search"],
-                          .embedded-leak-map input[placeholder*="search"],
-                          .embedded-leak-map div:has(> input) {
-                            display: none !important;
-                          }
-                          /* Hide Board button in view switcher (3rd child button or containing Board) */
-                          .embedded-leak-map button:nth-child(3) {
-                            display: none !important;
-                          }
-                          /* Clean light mode tile colors */
-                          html:not(.dark) .embedded-leak-map div {
-                            background-color: #ffffff !important;
-                            border-color: #e4e4e7 !important;
-                            color: #09090b !important;
-                          }
-                        `}</style>
-                        <LeakMapView detail={detail} />
+                      <div className="font-sans text-xs">
+                        <LeakMapView detail={detail} embedded />
                       </div>
                     )}
                   </div>
