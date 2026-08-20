@@ -15,38 +15,11 @@ import {
   adDataPlatformLabel,
 } from "@/lib/copy";
 import { classifyRunError } from "@/lib/error-classification";
+import { SquishySkillBadge } from "@/components/squishy-skill-badges";
 import type { PileOnDetail, SequenceMessage } from "../_shared/types";
 import type { RunStep } from "@/models/schema";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
-
-function HighContrastBadge({
-  tone,
-  children,
-}: {
-  tone: Tone;
-  children: React.ReactNode;
-}) {
-  const styles: Record<Tone, string> = {
-    success:
-      "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/40 dark:bg-emerald-500/25",
-    danger:
-      "bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 dark:bg-rose-500/25",
-    warning:
-      "bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40 dark:bg-amber-500/25",
-    info: "bg-sky-500/20 text-sky-600 dark:text-sky-300 border-sky-500/40 dark:bg-sky-500/25",
-    neutral:
-      "bg-zinc-200/80 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${styles[tone]}`}
-    >
-      {children}
-    </span>
-  );
-}
 
 export function PileOnView({
   detail,
@@ -240,11 +213,19 @@ export function PileOnView({
               <span className="text-base font-bold text-zinc-900 dark:text-white">
                 {prospectEmail ?? (bookingId ? `Booking #${bookingId}` : "Booking Dispatch")}
               </span>
+              <SquishySkillBadge
+                skill="pile-on"
+                size={22}
+                enabled={outcomeTone === "success" || outcomeTone === "info"}
+              />
+              <span className="text-xs text-zinc-500 font-medium dark:text-zinc-400">
+                {outcomeLabel}
+              </span>
               {prospectEmail && (
                 <button
                   type="button"
                   onClick={() => handleCopy(prospectEmail, "email")}
-                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors ml-1"
                   title="Copy email"
                 >
                   {copiedKey === "email" ? (
@@ -262,10 +243,6 @@ export function PileOnView({
             )}
           </div>
         </div>
-
-        <HighContrastBadge tone={outcomeTone}>
-          {outcomeLabel}
-        </HighContrastBadge>
       </div>
 
       {/* ── EXECUTION STEPS (SCALED DOWN BREADCRUMB STYLE) ── */}
@@ -338,19 +315,24 @@ export function PileOnView({
         <div className="divide-y divide-zinc-200 dark:divide-zinc-800 border-t border-b border-zinc-200 dark:border-zinc-800">
           {channels.map((ch) => {
             const Icon = ch.icon;
+            const isEnabled = ch.tone !== "neutral" && ch.tone !== "danger";
             return (
               <div key={ch.id} className="py-3.5 space-y-2">
-                {/* Main Row */}
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Icon size={15} className="text-zinc-400 shrink-0" />
-                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                      {ch.title}
-                    </span>
-                  </div>
-                  <HighContrastBadge tone={ch.tone}>
+                {/* Main Row — Inline Title + Squishy Badge Tag */}
+                <div className="flex items-center gap-2.5">
+                  <Icon size={15} className="text-zinc-400 shrink-0" />
+                  <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    {ch.title}
+                  </span>
+                  <SquishySkillBadge
+                    skill="pile-on"
+                    size={20}
+                    enabled={isEnabled}
+                    count={ch.type === "sms" && smsSentCount > 0 ? smsSentCount : undefined}
+                  />
+                  <span className="text-xs text-zinc-500 font-medium dark:text-zinc-400">
                     {ch.badge}
-                  </HighContrastBadge>
+                  </span>
                 </div>
 
                 {/* Subtitle */}
@@ -407,7 +389,7 @@ export function PileOnView({
                     {ch.messages.map((m, i) => (
                       <div
                         key={m.id}
-                        className="flex items-center justify-between text-xs py-1.5 px-3 rounded bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800"
+                        className="flex items-center gap-2 text-xs py-1.5 px-3 rounded bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800"
                       >
                         <span className="font-medium text-zinc-700 dark:text-zinc-300">
                           Text #{i + 1} —{" "}
@@ -418,11 +400,14 @@ export function PileOnView({
                             })}
                           </span>
                         </span>
-                        <HighContrastBadge
-                          tone={m.status === "sent" ? "success" : "danger"}
-                        >
+                        <SquishySkillBadge
+                          skill="pile-on"
+                          size={18}
+                          enabled={m.status === "sent"}
+                        />
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
                           {m.status === "sent" ? "Sent" : "Failed"}
-                        </HighContrastBadge>
+                        </span>
                       </div>
                     ))}
                   </div>
