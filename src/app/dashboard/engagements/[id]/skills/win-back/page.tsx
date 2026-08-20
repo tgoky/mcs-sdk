@@ -80,7 +80,7 @@ export default async function WinBackSkillPage({
 
       <WinBackPipeline engagementId={id} />
 
-      <WinBackCadencePreview assetMap={engagement.winBackSequenceAssetMap} />
+      <WinBackCadencePreview assetMap={engagement.winBackSequenceAssetMap} engagementId={id} />
 
       <WinBackRevenueSection
         engagementId={id}
