@@ -3,11 +3,16 @@ import { cn } from "@/lib/utils";
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 
 const TONE_CLASSES: Record<Tone, string> = {
-  success: "bg-emerald-950/60 text-emerald-400 border-emerald-800/60",
-  warning: "bg-orange-950/50 text-orange-400 border-orange-800/50",
-  danger: "bg-rose-950/60 text-rose-400 border-rose-800/60",
-  info: "bg-sky-950/60 text-sky-400 border-sky-800/60",
-  neutral: "bg-zinc-800/60 text-zinc-400 border-zinc-700/60",
+  success:
+    "bg-transparent text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800/60",
+  warning:
+    "bg-transparent text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800/50",
+  danger:
+    "bg-transparent text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-800/60",
+  info:
+    "bg-transparent text-sky-700 border-sky-200 dark:bg-sky-950/60 dark:text-sky-400 dark:border-sky-800/60",
+  neutral:
+    "bg-transparent text-zinc-500 border-zinc-200 dark:bg-zinc-800/60 dark:text-zinc-400 dark:border-zinc-700/60",
 };
 
 export function StatusPill({
