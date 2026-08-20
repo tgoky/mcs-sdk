@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { engagements, pileOnSendLog, sequenceMessageLog, bookingRoster } from "@/models/schema";
+import { engagements, pileOnSendLog, sequenceMessageLog, bookingRoster, briefOutcomeLog } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { and, desc, eq } from "drizzle-orm";
@@ -8,7 +8,15 @@ import { and, desc, eq } from "drizzle-orm";
 export const runtime = "nodejs";
 export const revalidate = 0;
 
-export type PileOnStage = "newly_booked" | "active_sequence" | "sequence_complete" | "call_today";
+export type PileOnStage =
+  | "newly_booked"
+  | "active_sequence"
+  | "sequence_complete"
+  | "call_today"
+  | "call_passed"
+  | "showed"
+  | "no_show"
+  | "cancelled";
 
 export interface PileOnPipelineItem {
   id: string;
@@ -59,8 +67,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     const touchesTotal = tenant.pileOnSmsAssetMap?.messages.length ?? 0;
 
-    // Pull ground-truth bookings, send logs, and sent SMS records concurrently
-    const [rosterRows, sends, sentRows] = await Promise.all([
+    // Concurrently fetch roster bookings, send logs, sequence logs, and call outcomes
+    const [rosterRows, sends, sentRows, outcomeRows] = await Promise.all([
       db
         .select()
         .from(bookingRoster)
@@ -81,9 +89,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             eq(sequenceMessageLog.status, "sent")
           )
         ),
+      db
+        .select({ bookingId: briefOutcomeLog.bookingId, outcome: briefOutcomeLog.outcome })
+        .from(briefOutcomeLog)
+        .where(eq(briefOutcomeLog.engagementId, engagementId))
+        .orderBy(desc(briefOutcomeLog.loggedAt)),
     ]);
 
-    // Lookup maps
+    // Map lookups for fast correlation
     const sendLogByBooking = new Map<string, (typeof sends)[number]>();
     for (const s of sends) {
       if (!sendLogByBooking.has(s.bookingId)) {
@@ -98,11 +111,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       sentByBooking.get(row.bookingId)!.add(row.messageId);
     }
 
-    const todayKey = new Date().toISOString().slice(0, 10);
+    const outcomeByBooking = new Map<string, string>();
+    for (const row of outcomeRows) {
+      if (!row.bookingId || outcomeByBooking.has(row.bookingId)) continue;
+      outcomeByBooking.set(row.bookingId, row.outcome);
+    }
+
+    const now = new Date();
+    const todayKey = now.toISOString().slice(0, 10);
     const items: PileOnPipelineItem[] = [];
     const seenBookingIds = new Set<string>();
 
-    // 1. Map all ground-truth roster bookings
+    // 1. Process ground-truth roster bookings with time & outcome consciousness
     for (const r of rosterRows) {
       const bookingId = r.externalCallId;
       seenBookingIds.add(bookingId);
@@ -110,13 +130,29 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       const sendLog = sendLogByBooking.get(bookingId);
       const touchesSent = (sentByBooking.get(bookingId) ?? new Set()).size;
       const callTime = r.callTime ?? null;
+      const callTimeMs = callTime ? callTime.getTime() : null;
+
       const isCallToday = callTime ? callTime.toISOString().slice(0, 10) === todayKey : false;
+      const isCallPast = callTimeMs ? callTimeMs < now.getTime() : false;
+      const loggedOutcome = outcomeByBooking.get(bookingId);
 
       let stage: PileOnStage;
-      if (isCallToday) stage = "call_today";
-      else if (touchesSent === 0) stage = "newly_booked";
-      else if (touchesTotal > 0 && touchesSent >= touchesTotal) stage = "sequence_complete";
-      else stage = "active_sequence";
+
+      if (r.status === "cancelled") {
+        stage = "cancelled";
+      } else if (loggedOutcome === "showed") {
+        stage = "showed";
+      } else if (loggedOutcome === "no_show") {
+        stage = "no_show";
+      } else if (isCallPast) {
+        stage = "call_passed";
+      } else if (isCallToday) {
+        stage = "call_today";
+      } else {
+        if (touchesTotal > 0 && touchesSent >= touchesTotal) stage = "sequence_complete";
+        else if (touchesSent > 0) stage = "active_sequence";
+        else stage = "newly_booked";
+      }
 
       items.push({
         id: sendLog?.id ?? r.id,
@@ -135,17 +171,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       });
     }
 
-    // 2. Include any legacy or standalone send log entries not present in bookingRoster
+    // 2. Include standalone send logs not present in bookingRoster
     for (const s of sends) {
       if (seenBookingIds.has(s.bookingId)) continue;
       seenBookingIds.add(s.bookingId);
 
       const touchesSent = (sentByBooking.get(s.bookingId) ?? new Set()).size;
+      const loggedOutcome = outcomeByBooking.get(s.bookingId);
 
       let stage: PileOnStage;
-      if (touchesSent === 0) stage = "newly_booked";
-      else if (touchesTotal > 0 && touchesSent >= touchesTotal) stage = "sequence_complete";
-      else stage = "active_sequence";
+      if (loggedOutcome === "showed") {
+        stage = "showed";
+      } else if (loggedOutcome === "no_show") {
+        stage = "no_show";
+      } else if (touchesSent === 0) {
+        stage = "newly_booked";
+      } else if (touchesTotal > 0 && touchesSent >= touchesTotal) {
+        stage = "sequence_complete";
+      } else {
+        stage = "active_sequence";
+      }
 
       items.push({
         id: s.id,
@@ -164,7 +209,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       });
     }
 
-    // Sort newest created first
+    // Order items newest created first
     items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     const allCreationDates = items.map((i) => new Date(i.createdAt));
