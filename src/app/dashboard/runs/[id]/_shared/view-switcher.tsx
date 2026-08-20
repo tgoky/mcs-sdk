@@ -10,7 +10,6 @@ const MODES: { key: RunViewMode; label: string; icon: typeof Calendar }[] = [
   { key: "list", label: "List", icon: List },
   { key: "board", label: "Board", icon: Kanban },
 ];
-
 export function ViewSwitcher({
   value,
   onChange,
@@ -20,14 +19,16 @@ export function ViewSwitcher({
   value: RunViewMode;
   onChange: (mode: RunViewMode) => void;
   className?: string;
-  /** Restrict which modes render as buttons — e.g. Win-Back and Leak-Map
-   * drop "board" entirely rather than ship a broken/redundant third view.
-   * Defaults to all three for every other call site. */
   modes?: RunViewMode[];
 }) {
   const visibleModes = modes ? MODES.filter((m) => modes.includes(m.key)) : MODES;
   return (
-    <div className={cn("inline-flex items-center gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900/80 p-0.5", className)}>
+    <div
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-transparent dark:bg-zinc-900/80 p-0.5",
+        className
+      )}
+    >
       {visibleModes.map(({ key, label, icon: Icon }) => {
         const active = value === key;
         return (
@@ -38,7 +39,9 @@ export function ViewSwitcher({
             aria-pressed={active}
             className={cn(
               "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer",
-              active ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-400 hover:text-zinc-200"
+              active
+                ? "bg-white text-zinc-900 shadow-sm border border-zinc-200 dark:border-zinc-700/60 dark:bg-zinc-800 dark:text-white"
+                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
             )}
           >
             <Icon size={13} />
