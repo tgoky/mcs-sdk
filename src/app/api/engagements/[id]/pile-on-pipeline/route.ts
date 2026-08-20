@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { engagements, pileOnSendLog, sequenceMessageLog, bookingRoster } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -59,35 +59,37 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     const touchesTotal = tenant.pileOnSmsAssetMap?.messages.length ?? 0;
 
-    const sends = await db
-      .select()
-      .from(pileOnSendLog)
-      .where(eq(pileOnSendLog.engagementId, engagementId))
-      .orderBy(pileOnSendLog.createdAt);
-
-    const bookingIds = sends.map((s) => s.bookingId);
-
-    const [sentRows, rosterRows] = await Promise.all([
-      bookingIds.length > 0
-        ? db
-            .select({ bookingId: sequenceMessageLog.bookingId, messageId: sequenceMessageLog.messageId })
-            .from(sequenceMessageLog)
-            .where(
-              and(
-                eq(sequenceMessageLog.engagementId, engagementId),
-                eq(sequenceMessageLog.sequenceType, "pile_on_sms"),
-                eq(sequenceMessageLog.status, "sent"),
-                inArray(sequenceMessageLog.bookingId, bookingIds)
-              )
-            )
-        : Promise.resolve([]),
-      bookingIds.length > 0
-        ? db
-            .select({ externalCallId: bookingRoster.externalCallId, callTime: bookingRoster.callTime, prospectName: bookingRoster.prospectName })
-            .from(bookingRoster)
-            .where(and(eq(bookingRoster.engagementId, engagementId), inArray(bookingRoster.externalCallId, bookingIds)))
-        : Promise.resolve([]),
+    // Pull ground-truth bookings, send logs, and sent SMS records concurrently
+    const [rosterRows, sends, sentRows] = await Promise.all([
+      db
+        .select()
+        .from(bookingRoster)
+        .where(eq(bookingRoster.engagementId, engagementId))
+        .orderBy(desc(bookingRoster.createdAt)),
+      db
+        .select()
+        .from(pileOnSendLog)
+        .where(eq(pileOnSendLog.engagementId, engagementId))
+        .orderBy(desc(pileOnSendLog.createdAt)),
+      db
+        .select({ bookingId: sequenceMessageLog.bookingId, messageId: sequenceMessageLog.messageId })
+        .from(sequenceMessageLog)
+        .where(
+          and(
+            eq(sequenceMessageLog.engagementId, engagementId),
+            eq(sequenceMessageLog.sequenceType, "pile_on_sms"),
+            eq(sequenceMessageLog.status, "sent")
+          )
+        ),
     ]);
+
+    // Lookup maps
+    const sendLogByBooking = new Map<string, (typeof sends)[number]>();
+    for (const s of sends) {
+      if (!sendLogByBooking.has(s.bookingId)) {
+        sendLogByBooking.set(s.bookingId, s);
+      }
+    }
 
     const sentByBooking = new Map<string, Set<string>>();
     for (const row of sentRows) {
@@ -95,14 +97,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       if (!sentByBooking.has(row.bookingId)) sentByBooking.set(row.bookingId, new Set());
       sentByBooking.get(row.bookingId)!.add(row.messageId);
     }
-    const rosterByBooking = new Map(rosterRows.map((r) => [r.externalCallId, r]));
 
     const todayKey = new Date().toISOString().slice(0, 10);
+    const items: PileOnPipelineItem[] = [];
+    const seenBookingIds = new Set<string>();
 
-    const items: PileOnPipelineItem[] = sends.map((s) => {
-      const touchesSent = (sentByBooking.get(s.bookingId) ?? new Set()).size;
-      const roster = rosterByBooking.get(s.bookingId) ?? null;
-      const callTime = roster?.callTime ?? null;
+    // 1. Map all ground-truth roster bookings
+    for (const r of rosterRows) {
+      const bookingId = r.externalCallId;
+      seenBookingIds.add(bookingId);
+
+      const sendLog = sendLogByBooking.get(bookingId);
+      const touchesSent = (sentByBooking.get(bookingId) ?? new Set()).size;
+      const callTime = r.callTime ?? null;
       const isCallToday = callTime ? callTime.toISOString().slice(0, 10) === todayKey : false;
 
       let stage: PileOnStage;
@@ -111,7 +118,36 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       else if (touchesTotal > 0 && touchesSent >= touchesTotal) stage = "sequence_complete";
       else stage = "active_sequence";
 
-      return {
+      items.push({
+        id: sendLog?.id ?? r.id,
+        bookingId,
+        prospectEmail: r.prospectEmail ?? sendLog?.prospectEmail ?? "Unknown",
+        sentVia: sendLog?.sentVia ?? "standard",
+        runId: sendLog?.runId ?? null,
+        createdAt: (sendLog?.createdAt ?? r.createdAt).toISOString(),
+        touchesSent,
+        touchesTotal,
+        callTime: callTime ? callTime.toISOString() : null,
+        prospectName: r.prospectName ?? null,
+        stage,
+        personalizedIntro: sendLog?.personalizedIntro ?? null,
+        sendError: sendLog?.error ?? null,
+      });
+    }
+
+    // 2. Include any legacy or standalone send log entries not present in bookingRoster
+    for (const s of sends) {
+      if (seenBookingIds.has(s.bookingId)) continue;
+      seenBookingIds.add(s.bookingId);
+
+      const touchesSent = (sentByBooking.get(s.bookingId) ?? new Set()).size;
+
+      let stage: PileOnStage;
+      if (touchesSent === 0) stage = "newly_booked";
+      else if (touchesTotal > 0 && touchesSent >= touchesTotal) stage = "sequence_complete";
+      else stage = "active_sequence";
+
+      items.push({
         id: s.id,
         bookingId: s.bookingId,
         prospectEmail: s.prospectEmail,
@@ -120,30 +156,35 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         createdAt: s.createdAt.toISOString(),
         touchesSent,
         touchesTotal,
-        callTime: callTime ? callTime.toISOString() : null,
-        prospectName: roster?.prospectName ?? null,
+        callTime: null,
+        prospectName: null,
         stage,
         personalizedIntro: s.personalizedIntro,
         sendError: s.error,
-      };
-    });
+      });
+    }
 
-    return NextResponse.json({ items, weeklyTrend: computeWeeklyTrend(sends) });
+    // Sort newest created first
+    items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const allCreationDates = items.map((i) => new Date(i.createdAt));
+
+    return NextResponse.json({ items, weeklyTrend: computeWeeklyTrend(allCreationDates) });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-function computeWeeklyTrend(sends: { createdAt: Date }[]): PileOnWeeklyTrend {
+function computeWeeklyTrend(timestamps: Date[]): PileOnWeeklyTrend {
   const now = Date.now();
   const weekMs = 7 * 24 * 60 * 60 * 1000;
   const weekAgo = now - weekMs;
   const twoWeeksAgo = now - 2 * weekMs;
   let thisWeek = 0;
   let priorWeek = 0;
-  for (const s of sends) {
-    const t = s.createdAt.getTime();
+  for (const tDate of timestamps) {
+    const t = tDate.getTime();
     if (t >= weekAgo) thisWeek++;
     else if (t >= twoWeeksAgo) priorWeek++;
   }
