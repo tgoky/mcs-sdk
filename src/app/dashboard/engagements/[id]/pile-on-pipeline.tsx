@@ -45,6 +45,10 @@ const STAGE_META: Record<PileOnStage, { label: string; tone: Tone }> = {
   active_sequence: { label: "Active sequence", tone: "warning" },
   sequence_complete: { label: "Sequence complete", tone: "success" },
   call_today: { label: "Call today", tone: "danger" },
+  call_passed: { label: "Call passed", tone: "neutral" },
+  showed: { label: "Showed", tone: "success" },
+  no_show: { label: "No-show", tone: "danger" },
+  cancelled: { label: "Cancelled", tone: "danger" },
 };
 
 function StatusPill({
@@ -104,10 +108,6 @@ function formatTimeBadge(isoString: string | null | undefined) {
 }
 
 export function PileOnPipeline({ engagementId }: { engagementId: string }) {
-  // Default to the dense list feed, not the calendar grid — a calendar view
-  // anchored to "today" silently hides every booking that isn't in the
-  // visible month, which made this page look empty even when the pipeline
-  // had real data (2026-08-20 UX audit).
   const [mode, setMode] = useState<ViewMode>("list");
   const [listScope, setListScope] = useState<ListScope>("all");
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -149,10 +149,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
     load();
   }, [load]);
 
-  // One-time auto-jump: if today's window (this week/month) has nothing but
-  // the pipeline actually has data — most commonly a client whose bookings
-  // all landed in a prior month — jump the calendar to the most recent
-  // activity instead of showing a false "no bookings on file" state.
   useEffect(() => {
     if (loading || hasAutoJumped.current || items.length === 0) return;
     hasAutoJumped.current = true;
@@ -214,7 +210,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
 
   const todayK = dateKey(new Date());
 
-  // SMART WEEK GENERATOR: 7 Days centered on active week
   const currentWeekDays = useMemo(() => {
     const anchor = selectedDate || new Date();
     const d = new Date(anchor);
@@ -237,7 +232,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
     return days.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
   }, [selectedDate, itemsByDate, todayK]);
 
-  // SMART MONTH FEED: Today & Past first (descending), Future days separate
   const monthDaysSmart = useMemo(() => {
     const days: { dateStr: string; dateObj: Date; calls: PileOnPipelineItem[]; isFuture: boolean }[] = [];
     const numDays = new Date(year, month + 1, 0).getDate();
@@ -261,12 +255,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
     return { pastAndToday, future };
   }, [year, month, itemsByDate, todayK]);
 
-  // ALL-TIME FEED: every date that has activity, most recent first — no
-  // month/week window to fall outside of. Bug fix (2026-08-20): "week" and
-  // "month" scope both windowed on currentDate, so a client whose pile-on
-  // history didn't fall in whatever window was currently selected rendered
-  // as empty even though the pipeline had real data. This scope can't have
-  // that problem because it doesn't window at all.
   const allDaysWithActivity = useMemo(() => {
     return Object.entries(itemsByDate)
       .map(([dateStr, calls]) => ({ dateStr, dateObj: new Date(dateStr), calls }))
@@ -310,7 +298,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
     [filtered, selectedId, selectedDayItems]
   );
 
-  // Auto-scroll timeline to earliest meeting when Day View opens or selected date changes
   useEffect(() => {
     if (mode === "day" && firstMeetingRef.current) {
       firstMeetingRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -348,7 +335,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       {/* Shared Toolbar & Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-2 shadow-sm font-sans">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Universal Month Navigation */}
           <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
             <button
               type="button"
@@ -402,7 +388,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
           )}
         </div>
 
-        {/* Theme-aware view switcher */}
         <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
           {([
             ["month", CalendarIcon, "Month"],
@@ -518,7 +503,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       {/* 2. DAY VIEW (HOURLY TIMELINE + PERSISTENT INSPECTOR PANEL) */}
       {mode === "day" && !loading && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
-          {/* LEFT 7 COLUMNS: HOURLY TIMELINE GRID */}
           <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl flex flex-col font-sans">
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-4 py-3 font-sans">
               <div className="flex items-center gap-2 font-sans">
@@ -543,7 +527,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
               </div>
             </div>
 
-            {/* Hourly Timeline */}
             <div className="divide-y divide-zinc-200 dark:divide-zinc-900 overflow-y-auto max-h-[620px] p-2 font-sans">
               {HOURS.map((hour) => {
                 const hourItems = selectedDayItems.filter((i) => new Date(i.callTime ?? i.createdAt).getHours() === hour);
@@ -610,9 +593,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             </div>
           </div>
 
-          {/* RIGHT 5 COLUMNS: MINI CALENDAR + PROSPECT INSPECTOR PANEL */}
           <div className="lg:col-span-5 space-y-3 font-sans">
-            {/* MINI CALENDAR NAVIGATOR */}
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 shadow-lg font-sans">
               <span className="text-[11px] font-bold text-zinc-900 dark:text-white block px-1 font-sans">{monthName} {year}</span>
               <div className="grid grid-cols-7 text-center text-[9px] font-mono text-zinc-500 font-bold uppercase font-sans">
@@ -638,7 +619,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
               </div>
             </div>
 
-            {/* FULL PROSPECT INSPECTOR PANEL */}
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
               {selected ? (
                 <>
@@ -777,9 +757,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       {/* 3. SMART LIST VIEW (DEFAULTS TO CURRENT WEEK ANCHORED ON TODAY) */}
       {mode === "list" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
-          {/* LEFT 7 COLUMNS: SMART CHRONOLOGICAL FEED */}
           <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans flex flex-col">
-            {/* List Feed Scope Control Header */}
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
@@ -853,7 +831,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
               </div>
             </div>
 
-            {/* List Stream Content */}
             {listDaysToRender.length === 0 && !loading ? (
               <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
                 <CalendarX2 size={22} />
@@ -870,7 +847,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
 
                   return (
                     <div key={dateStr} className="space-y-0 font-sans">
-                      {/* Sticky Day Header */}
                       <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">
                         <span className="flex items-center gap-1.5">
                           <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200 shrink-0">
@@ -883,7 +859,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                         </span>
                       </div>
 
-                      {/* Day Feed Entries */}
                       <div className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
                         {calls.length > 0 ? (
                           calls.map((item) => {
@@ -957,7 +932,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                             );
                           })
                         ) : (
-                          /* Explicit empty day row when 0 bookings took place */
                           <button
                             type="button"
                             onClick={() => {
@@ -985,7 +959,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   );
                 })}
 
-                {/* Collapsible Upcoming Days Section (Only in Full Month mode when future bookings exist) */}
                 {listScope === "month" && monthDaysSmart.future.length > 0 && (
                   <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 font-sans">
                     <button
@@ -1046,7 +1019,6 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             )}
           </div>
 
-          {/* RIGHT 5 COLUMNS: PROSPECT INSPECTOR PANEL ONLY */}
           <div className="lg:col-span-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
             {selected ? (
               <>
