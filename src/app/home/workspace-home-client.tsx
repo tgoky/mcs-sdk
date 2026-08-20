@@ -25,9 +25,9 @@ function relativeTime(date: Date | string): string {
 }
 
 const AVATAR_COLORS = [
-  "bg-teal-500 text-white",
+  "bg-amber-400 text-zinc-950",
   "bg-indigo-500 text-white",
-  "bg-amber-500 text-white",
+  "bg-sky-500 text-white",
   "bg-rose-500 text-white",
   "bg-emerald-500 text-white",
 ];
@@ -35,14 +35,14 @@ const AVATAR_COLORS = [
 function PackageBadge({ packageId }: { packageId: string }) {
   if (packageId === "counter-claim") {
     return (
-      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 dark:bg-amber-500 select-none">
-        <Gavel size={11} className="text-zinc-950 stroke-[2.5px] fill-white" />
+      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-none">
+        <Gavel size={11} className="stroke-[2.5px]" />
       </div>
     );
   }
   return (
-    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-500 dark:bg-teal-400 select-none">
-      <LayoutGrid size={11} className="text-zinc-950 stroke-[2.5px] fill-white" />
+    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-none">
+      <LayoutGrid size={11} className="stroke-[2.5px]" />
     </div>
   );
 }
@@ -72,15 +72,14 @@ function WorkspaceCard({ workspace, packageIds }: { workspace: Workspace; packag
               )}
             </div>
 
-            {/* Status indicator pill */}
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            {/* Status indicator pill without pulsing dot */}
+            <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400">
               Active
             </span>
           </div>
 
           <div className="space-y-1.5">
-            <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+            <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
               {workspace.name}
             </h2>
             <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400 font-sans">
@@ -112,7 +111,7 @@ function WorkspaceCard({ workspace, packageIds }: { workspace: Workspace; packag
         </div>
 
         <div className="pt-6">
-          <span className="inline-flex w-full items-center justify-center rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-bold text-white shadow-xs transition-all group-hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:group-hover:bg-zinc-200">
+          <span className="inline-flex w-full items-center justify-center rounded-lg bg-amber-400 px-2.5 py-1.5 text-xs font-bold text-zinc-950 shadow-2xs transition-all hover:bg-amber-500">
             {HOME_COPY.openLabel} {workspace.name}
           </span>
         </div>
@@ -160,7 +159,7 @@ function WorkspaceRow({
         <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="inline-block">
           <button
             type="submit"
-            className="flex items-center gap-3 text-left group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors cursor-pointer"
+            className="flex items-center gap-3 text-left group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors cursor-pointer"
           >
             <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-bold ${avatarColor} shadow-2xs`}>
               {initial}
@@ -202,10 +201,9 @@ function WorkspaceRow({
         </div>
       </td>
 
-      {/* Status */}
+      {/* Status without pulsing dot */}
       <td className="py-3.5 px-3 text-xs whitespace-nowrap">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 font-mono">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 font-mono">
           Active
         </span>
       </td>
@@ -215,15 +213,15 @@ function WorkspaceRow({
         {relativeTime(workspace.createdAt)}
       </td>
 
-      {/* Switch / Enter Button */}
+      {/* Switch / Enter Button using Queue amber accent */}
       <td className="py-3.5 pr-4 pl-3 text-right text-xs whitespace-nowrap">
         <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="inline-block">
           <button
             type="submit"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer shadow-2xs"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs"
           >
             <span>Enter</span>
-            <ArrowRight size={13} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
+            <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
           </button>
         </form>
       </td>
@@ -287,11 +285,11 @@ export function WorkspaceHomeClient({
             </button>
           </div>
 
-          {/* Add Workspace CTA */}
+          {/* Add Workspace CTA with Queue Amber Accent */}
           <Link
             href="/home/new"
             prefetch={false}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 dark:bg-teal-500 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-teal-700 dark:hover:bg-teal-400 shadow-2xs"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all shadow-2xs"
           >
             <Plus size={14} />
             <span>Add workspace</span>

@@ -41,7 +41,7 @@ export default async function WorkspaceHomePage() {
         {/* Header Bar */}
         <header className="flex items-center justify-between gap-4 border-b border-zinc-200/80 pb-5 dark:border-zinc-800/80">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-600 dark:bg-teal-500 text-xs font-bold text-white font-mono shadow-2xs">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-xs font-bold text-white dark:text-zinc-950 font-mono shadow-2xs">
               {initials}
             </div>
             <div className="space-y-0.5">
