@@ -111,7 +111,7 @@ function WorkspaceCard({ workspace, packageIds }: { workspace: Workspace; packag
         </div>
 
         <div className="pt-6">
-          <span className="inline-flex w-full items-center justify-center rounded-lg bg-amber-400 px-2.5 py-1.5 text-xs font-bold text-zinc-950 shadow-2xs transition-all hover:bg-amber-500">
+          <span className="inline-flex w-full items-center justify-center rounded-lg bg-amber-400 px-2.5 py-1.5 text-xs font-bold text-white dark:text-zinc-950 shadow-2xs transition-all hover:bg-amber-500">
             {HOME_COPY.openLabel} {workspace.name}
           </span>
         </div>
@@ -218,7 +218,7 @@ function WorkspaceRow({
         <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="inline-block">
           <button
             type="submit"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-white dark:text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs"
           >
             <span>Enter</span>
             <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
@@ -289,7 +289,7 @@ export function WorkspaceHomeClient({
           <Link
             href="/home/new"
             prefetch={false}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all shadow-2xs"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-white dark:text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all shadow-2xs"
           >
             <Plus size={14} />
             <span>Add workspace</span>
