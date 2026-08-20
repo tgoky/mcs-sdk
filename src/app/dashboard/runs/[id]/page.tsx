@@ -8,6 +8,7 @@ import {
   Ban,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   CircleAlert,
   Clock3,
   FileText,
@@ -24,7 +25,6 @@ import { WinBackView } from "./views/win-back-view";
 import { LeakMapView } from "./views/leak-map-view";
 import { skillName, runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
 import { classifyRunError } from "@/lib/error-classification";
-import { BackLink } from "@/components/back-link";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import type { RunStep, RunSummary } from "@/models/schema";
 import type { RunDetailPayload } from "./_shared/types";
@@ -58,31 +58,31 @@ function RunStatusBadge({ status }: { status: string }) {
   const config = {
     success: {
       icon: <CheckCircle2 className="h-3.5 w-3.5" />,
-      className: "border-emerald-900/60 bg-emerald-950/30 text-emerald-400",
+      className: "bg-transparent text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/60",
     },
     completed: {
       icon: <CheckCircle2 className="h-3.5 w-3.5" />,
-      className: "border-emerald-900/60 bg-emerald-950/30 text-emerald-400",
+      className: "bg-transparent text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/60",
     },
     failed: {
       icon: <XCircle className="h-3.5 w-3.5" />,
-      className: "border-rose-900/60 bg-rose-950/30 text-rose-400",
+      className: "bg-transparent text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900/60",
     },
     cancelled: {
       icon: <Ban className="h-3.5 w-3.5" />,
-      className: "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400",
+      className: "bg-transparent text-zinc-500 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-800",
     },
     timed_out: {
       icon: <Clock3 className="h-3.5 w-3.5" />,
-      className: "border-amber-900/60 bg-amber-950/30 text-amber-400",
+      className: "bg-transparent text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900/60",
     },
     running: {
       icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
-      className: "border-sky-900/60 bg-sky-950/30 text-sky-400",
+      className: "bg-transparent text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400 dark:border-sky-900/60",
     },
   }[normalized] ?? {
     icon: <AlertCircle className="h-3.5 w-3.5" />,
-    className: "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400",
+    className: "bg-transparent text-zinc-500 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-800",
   };
 
   return (
@@ -268,7 +268,13 @@ export default function RunDetailPage() {
   if (error || !run) {
     return (
       <div className="mx-auto max-w-3xl space-y-4 py-3">
-        <BackLink href="/dashboard" label="Back to dashboard" />
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors"
+          aria-label="Back to dashboard"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </Link>
         <div className="rounded-xl border border-rose-900/50 bg-rose-950/20 px-6 py-10 text-center">
           <XCircle className="mx-auto mb-3 h-7 w-7 text-rose-500" />
           <p className="text-sm font-semibold text-rose-300">{error ?? "Run trace not found"}</p>
@@ -289,11 +295,15 @@ export default function RunDetailPage() {
       {/* 1. COMPACT 1-LINE HEADER */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2.5">
         <div className="flex items-center gap-3 min-w-0">
-          <BackLink
+          <Link
             href={run.engagementId ? `/dashboard/engagements/${run.engagementId}` : "/dashboard"}
-            label={run.engagementId ? `Back to ${run.buyerName ?? "client"}` : "Back to dashboard"}
-          />
-          <span className="text-zinc-400 dark:text-zinc-700">|</span>
+            className="flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
+            aria-label={run.engagementId ? `Back to ${run.buyerName ?? "client"}` : "Back to dashboard"}
+            title={run.engagementId ? `Back to ${run.buyerName ?? "client"}` : "Back to dashboard"}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Link>
+
           <h1 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white truncate">
             {skillName(run.skillName)}
           </h1>
@@ -304,7 +314,7 @@ export default function RunDetailPage() {
 
         <div className="flex items-center gap-3 shrink-0 text-xs text-zinc-600 dark:text-zinc-400 font-mono">
           <span>{formatDuration(run.durationMs)}</span>
-          <span className="text-zinc-300 dark:text-zinc-800">•</span>
+          <span className="text-zinc-300 dark:text-zinc-800">·</span>
           <RunStatusBadge status={run.status} />
           {isRunning && <CancelRunButton runId={runId} onCancelled={() => fetchRun()} />}
         </div>
@@ -358,7 +368,7 @@ export default function RunDetailPage() {
         </div>
       )}
 
-      {/* 3. AUTOMATION DELIVERABLES — shown first, this is what the user came to see */}
+      {/* 3. AUTOMATION DELIVERABLES */}
       <main className="w-full">
         {detailLoading && !detail ? (
           <div className="flex h-40 items-center justify-center rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950">
