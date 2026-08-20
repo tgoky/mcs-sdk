@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
 import { StatusPill, toneFromSeverity } from "../_shared/status-pill";
 import { EmptyState } from "../_shared/empty-state";
-import { RunActivityPanel } from "./run-activity-panel";
+import { RunActivityPanel } from "../_shared/run-activity-panel";
 import { auditRunTypeLabel } from "@/lib/copy";
 import type { AuditRow, LeakMapDetail } from "../_shared/types";
 
