@@ -6,14 +6,9 @@ import {
   ChevronDown, 
   Check, 
   Calendar, 
-  CheckCircle2, 
-  XCircle,
-  TrendingUp,
-  Sparkles,
   Mail,
   ExternalLink,
 } from "lucide-react";
-import { skillName } from "@/lib/copy";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { StatusPill } from "../../runs/[id]/_shared/status-pill";
 import { RunActivityPanel } from "../../runs/[id]/_shared/run-activity-panel";
@@ -141,6 +136,31 @@ export function WinBackRevenueSection({
   const totalRevenue = recoveredCount * offerPrice;
   const averageRecoveryValue = recoveredCount > 0 ? totalRevenue / recoveredCount : 0;
 
+  // 12 weekly buckets across the selected quarter, for the trend strip below.
+  // Replaces a 3-column x 4-row kanban board that rendered 12 cards no
+  // matter what — mostly "No Recoveries" placeholders whenever a client is
+  // new or between recoveries. A bar strip + flat list carries the same
+  // information without the empty scaffolding (2026-08-20 UX audit).
+  const weeklyBuckets = selectedPeriod.months.flatMap((m) =>
+    WEEKS_IN_MONTH.map((w) => {
+      const count = totalQuarterEnrollments.filter((r) => {
+        const d = new Date(r.rebookedAt);
+        return d.getFullYear() === m.year && d.getMonth() === m.monthIdx && d.getDate() >= w.dayStart && d.getDate() <= w.dayEnd;
+      }).length;
+      return {
+        key: `${m.year}-${m.monthIdx}-${w.weekNum}`,
+        label: `${m.name.split(" ")[0]} ${w.label}`,
+        shortLabel: m.monthIdx !== selectedPeriod.months[0].monthIdx || w.weekNum === 1 ? m.name.slice(0, 3) : "",
+        count,
+        revenue: count * offerPrice,
+      };
+    })
+  );
+  const maxWeekCount = Math.max(1, ...weeklyBuckets.map((w) => w.count));
+  const sortedDeals = [...totalQuarterEnrollments].sort(
+    (a, b) => new Date(b.rebookedAt).getTime() - new Date(a.rebookedAt).getTime()
+  );
+
   return (
     <div className="space-y-4">
       {/* ── HEADER WITH ASANA-STYLE PERIOD SELECTOR DROPDOWN ── */}
@@ -244,159 +264,80 @@ export function WinBackRevenueSection({
         </div>
       </div>
 
-      {/* ── 3 MONTH HOUSING COLUMNS (CONTAINERS) ── */}
-      <div className="space-y-2 pt-1">
-        <div className="flex items-center justify-between px-0.5">
+      {/* ── Weekly Recovery Trend — a compact bar strip instead of a 12-card
+           kanban board that rendered "No Recoveries" placeholders for every
+           empty week. Same information, no empty scaffolding. ── */}
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-4">
+        <div className="flex items-center justify-between mb-3">
           <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
-            Quarterly Roadmap — {selectedPeriod.label}
+            Weekly Recovery Trend — {selectedPeriod.label}
           </span>
-          <span className="text-[11px] font-mono text-zinc-400">
-            4 Weekly Milestone Cards per Month
-          </span>
+          {recoveredCount === 0 && (
+            <span className="text-[11px] text-zinc-400 dark:text-zinc-500">No recoveries yet this period</span>
+          )}
         </div>
-
-        {/* 3 Columns Grid: Month 1 | Month 2 | Month 3 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {selectedPeriod.months.map((m) => {
-            // Filter all enrollments for this specific month
-            const monthEnrollments = initialEnrollments.filter((r) => {
-              const d = new Date(r.rebookedAt);
-              return d.getFullYear() === m.year && d.getMonth() === m.monthIdx;
-            });
-
-            const monthRevenue = monthEnrollments.length * offerPrice;
-
-            return (
-              /* MONTH HOUSING CARD (Matching Screenshot 2 Column Container "To do 3") */
-              <div
-                key={m.name}
-                className="rounded-2xl bg-zinc-100/70 dark:bg-zinc-950/60 border border-zinc-200/80 dark:border-zinc-800/60 p-3 space-y-3"
-              >
-                {/* Column Header Pill (Matching Screenshot 2: "To do 3") */}
-                <div className="flex items-center justify-between px-1 py-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                      {m.name}
-                    </span>
-                    <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                      {monthEnrollments.length}
-                    </span>
-                  </div>
-                  <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                    ${monthRevenue.toLocaleString()}
-                  </span>
-                </div>
-
-                {/* ── 4 WEEKLY CARDS (Matching Screenshot 2: Task 1, Task 2, Task 3, Task 4) ── */}
-                <div className="space-y-2.5">
-                  {WEEKS_IN_MONTH.map((w) => {
-                    // Filter deals for this exact week (e.g. Days 1-7)
-                    const weekDeals = monthEnrollments.filter((r) => {
-                      const day = new Date(r.rebookedAt).getDate();
-                      return day >= w.dayStart && day <= w.dayEnd;
-                    });
-
-                    const weekRevenue = weekDeals.length * offerPrice;
-                    const latestDeal = weekDeals[0] ?? null;
-                    const initials = latestDeal ? getInitials(latestDeal.prospectName, latestDeal.prospectEmail) : "WB";
-
-                    // Format date string for bottom right (e.g. "2 Jul" matching "2 Jun" in Screenshot 2)
-                    const shortMonthName = m.name.split(" ")[0].slice(0, 3);
-                    const weekDateTag = `${w.dayEnd} ${shortMonthName}`;
-
-                    return (
-                      /* WEEKLY RECTANGLE CARD (Matching Screenshot 2: White "Task 1" Card) */
-                      <div
-                        key={w.weekNum}
-                        className="rounded-xl border border-border bg-white dark:bg-zinc-900 p-3.5 space-y-2.5 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-all group"
-                      >
-                        {/* Title Row with Check Icon (Matching Screenshot 2: "(✓) Task 1") */}
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {weekDeals.length > 0 ? (
-                              <CheckCircle2 size={15} className="text-emerald-500 shrink-0 mt-0.5" />
-                            ) : (
-                              <div className="w-3.5 h-3.5 rounded-full border border-zinc-300 dark:border-zinc-700 shrink-0 mt-0.5" />
-                            )}
-                            <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                              {w.label} <span className="text-[10px] font-mono text-zinc-400 font-normal">({w.dayStart}-{w.dayEnd} {shortMonthName})</span>
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Priority / Performance Tag (Matching Screenshot 2: "Low" or "Medium" Tag) */}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {weekDeals.length > 0 ? (
-                            <>
-                              <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                                {weekDeals.length} Recovered
-                              </span>
-                              {offerPrice > 0 && (
-                                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                                  +${weekRevenue.toLocaleString()}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                              No Recoveries
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Deals / Telemetry Breakdown inside the Weekly Card — each
-                            row opens a drawer with the full enrollment (recovery
-                            window, enrolled date, and a link to the run), instead of
-                            being flat, unclickable text. */}
-                        {weekDeals.length > 0 ? (
-                          <div className="space-y-1 text-[11px] pt-0.5">
-                            {weekDeals.map((d, dIdx) => (
-                              <button
-                                key={d.prospectEmail + dIdx}
-                                type="button"
-                                onClick={() => setSelectedDeal(d)}
-                                className="w-full text-zinc-700 dark:text-zinc-300 leading-snug flex items-center justify-between rounded-md px-1 -mx-1 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 cursor-pointer transition-colors text-left"
-                              >
-                                <span className="truncate max-w-[130px]" title={d.prospectEmail}>
-                                  • {d.prospectName ?? d.prospectEmail}
-                                </span>
-                                <span className="text-[10px] font-mono text-zinc-400">
-                                  {new Date(d.rebookedAt).getDate()} {shortMonthName}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-snug">
-                            Waiting for rebook triggers.
-                          </p>
-                        )}
-
-                        {/* Avatar & Pink Date (Matching Screenshot 2: Pink "AD" Avatar + "2 Jun" Date) */}
-                        <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-800/60 text-xs">
-                          <div className="flex items-center gap-2">
-                            {/* Pink circle avatar matching Screenshot 2 "AD" */}
-                            <div className="w-6 h-6 rounded-full bg-pink-100 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 text-[10px] font-bold flex items-center justify-center shrink-0">
-                              {initials}
-                            </div>
-                            <span className="text-[11px] font-mono text-zinc-500 truncate max-w-[110px]">
-                              {latestDeal ? latestDeal.prospectEmail : skillName("win-back")}
-                            </span>
-                          </div>
-
-                          {/* Pink Date text matching "2 Jun" in Screenshot 2 */}
-                          <span className="text-xs font-mono font-medium text-pink-600 dark:text-pink-400 shrink-0">
-                            {weekDateTag}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+        <div className="flex items-end gap-1.5 h-16">
+          {weeklyBuckets.map((wk) => (
+            <div key={wk.key} className="flex-1 flex flex-col items-center gap-1" title={`${wk.label}: ${wk.count} recovered${offerPrice > 0 ? `, $${wk.revenue.toLocaleString()}` : ""}`}>
+              <div className="w-full h-12 rounded-t-sm bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden flex items-end">
+                {wk.count > 0 && (
+                  <div
+                    className="w-full bg-emerald-500 dark:bg-emerald-400 rounded-t-sm transition-all"
+                    style={{ height: `${Math.max(12, (wk.count / maxWeekCount) * 100)}%` }}
+                  />
+                )}
               </div>
-            );
-          })}
+              <span className="text-[9px] font-mono text-zinc-400 h-3">{wk.shortLabel}</span>
+            </div>
+          ))}
         </div>
+      </div>
+
+      {/* ── Recovered Deals — flat chronological list. Only real rows,
+           one honest empty state instead of stacked per-week placeholders. ── */}
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800/80">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
+            Recovered Deals — {selectedPeriod.label}
+          </span>
+          <span className="text-[11px] font-mono text-zinc-400">{sortedDeals.length} total</span>
+        </div>
+
+        {sortedDeals.length === 0 ? (
+          <div className="flex flex-col items-center gap-1 py-10 px-6 text-center">
+            <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">No recoveries yet in {selectedPeriod.label}</p>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 max-w-xs">
+              A deal shows up here the moment a prospect enrolled in the recovery cadence rebooks their call.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800/60 max-h-96 overflow-y-auto">
+            {sortedDeals.map((d, idx) => (
+              <button
+                key={d.prospectEmail + idx}
+                type="button"
+                onClick={() => setSelectedDeal(d)}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-full bg-pink-100 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                  {getInitials(d.prospectName, d.prospectEmail)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">{d.prospectName ?? d.prospectEmail}</p>
+                  <p className="text-[10.5px] text-zinc-400 font-mono truncate">{d.prospectEmail}</p>
+                </div>
+                {offerPrice > 0 && (
+                  <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
+                    +${offerPrice.toLocaleString()}
+                  </span>
+                )}
+                <span className="text-[10.5px] font-mono text-zinc-400 shrink-0 w-14 text-right">
+                  {new Date(d.rebookedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <RecoveredDealDrawer deal={selectedDeal} offerPrice={offerPrice} onClose={() => setSelectedDeal(null)} />
@@ -421,64 +362,64 @@ function RecoveredDealDrawer({
 
   return (
     <Sheet open={!!deal} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent widthClassName="w-full sm:max-w-md font-sans antialiased text-zinc-100">
+      <SheetContent widthClassName="w-full sm:max-w-md font-sans antialiased text-zinc-900 dark:text-zinc-100">
         {deal && (
           <>
             <SheetHeader className="font-sans">
               <StatusPill tone="success" className="w-fit">Recovered</StatusPill>
-              <SheetTitle className="mt-2 text-lg font-bold font-sans text-white">{deal.prospectName ?? deal.prospectEmail}</SheetTitle>
-              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-400 font-sans">
+              <SheetTitle className="mt-2 text-lg font-bold font-sans text-zinc-900 dark:text-white">{deal.prospectName ?? deal.prospectEmail}</SheetTitle>
+              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400 font-sans">
                 Rebooked {new Date(deal.rebookedAt).toLocaleString(undefined, { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
               </SheetDescription>
             </SheetHeader>
             <SheetBody className="space-y-4 font-sans pt-2">
-              <div className="flex items-center gap-2 text-xs text-zinc-300 font-sans">
-                <Mail size={13} className="text-zinc-500 shrink-0" />
+              <div className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300 font-sans">
+                <Mail size={13} className="text-zinc-500 dark:text-zinc-500 shrink-0" />
                 <span className="truncate">{deal.prospectEmail}</span>
               </div>
 
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 space-y-2">
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 p-3 space-y-2">
                 {offerPrice > 0 && (
                   <div className="flex items-center justify-between text-xs font-sans">
-                    <span className="text-zinc-400">Revenue attributed</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">Revenue attributed</span>
                     <span className="font-mono font-bold text-emerald-400">${offerPrice.toLocaleString()}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between text-xs font-sans pt-1">
-                  <span className="text-zinc-400">Enrolled in cadence</span>
-                  <span className="font-mono text-white">{new Date(deal.enrolledAt).toLocaleDateString(undefined, { month: "long", day: "numeric" })}</span>
+                  <span className="text-zinc-600 dark:text-zinc-400">Enrolled in cadence</span>
+                  <span className="font-mono text-zinc-900 dark:text-white">{new Date(deal.enrolledAt).toLocaleDateString(undefined, { month: "long", day: "numeric" })}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs font-sans pt-1">
-                  <span className="text-zinc-400">Recovery window</span>
-                  <span className="font-mono text-white">{deal.recoveryWindowDays} days</span>
+                  <span className="text-zinc-600 dark:text-zinc-400">Recovery window</span>
+                  <span className="font-mono text-zinc-900 dark:text-white">{deal.recoveryWindowDays} days</span>
                 </div>
                 <div className="flex items-center justify-between text-xs font-sans pt-1">
-                  <span className="text-zinc-400">Days to recover</span>
-                  <span className="font-mono text-white">
+                  <span className="text-zinc-600 dark:text-zinc-400">Days to recover</span>
+                  <span className="font-mono text-zinc-900 dark:text-white">
                     {Math.max(0, Math.round((new Date(deal.rebookedAt).getTime() - new Date(deal.enrolledAt).getTime()) / (24 * 60 * 60 * 1000)))} days
                   </span>
                 </div>
               </div>
 
               {deal.runId && (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setShowRunActivity((p) => !p)}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-900 transition-colors"
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-white dark:hover:bg-zinc-900 transition-colors"
                   >
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                       <SquishySkillBadge skill="win-back" size={14} enabled={true} />
                       Run activity
                     </span>
-                    <ChevronDown size={13} className={`text-zinc-500 transition-transform ${showRunActivity ? "rotate-180" : ""}`} />
+                    <ChevronDown size={13} className={`text-zinc-500 dark:text-zinc-500 transition-transform ${showRunActivity ? "rotate-180" : ""}`} />
                   </button>
                   {showRunActivity && (
-                    <div className="px-3 pb-3 pt-1 border-t border-zinc-800/60">
+                    <div className="px-3 pb-3 pt-1 border-t border-zinc-200/60 dark:border-zinc-800/60">
                       <RunActivityPanel runId={deal.runId} />
                       <a
                         href={`/dashboard/runs/${deal.runId}`}
-                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
                       >
                         <span>Open the full run page</span>
                         <ExternalLink size={10} />

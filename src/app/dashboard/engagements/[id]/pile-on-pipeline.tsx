@@ -104,8 +104,12 @@ function formatTimeBadge(isoString: string | null | undefined) {
 }
 
 export function PileOnPipeline({ engagementId }: { engagementId: string }) {
-  const [mode, setMode] = useState<ViewMode>("month");
-  const [listScope, setListScope] = useState<ListScope>("week");
+  // Default to the dense list feed, not the calendar grid — a calendar view
+  // anchored to "today" silently hides every booking that isn't in the
+  // visible month, which made this page look empty even when the pipeline
+  // had real data (2026-08-20 UX audit).
+  const [mode, setMode] = useState<ViewMode>("list");
+  const [listScope, setListScope] = useState<ListScope>("month");
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -119,6 +123,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
   const [showUpcomingInMonth, setShowUpcomingInMonth] = useState(false);
 
   const firstMeetingRef = useRef<HTMLDivElement | null>(null);
+  const hasAutoJumped = useRef(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -143,6 +148,30 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // One-time auto-jump: if today's window (this week/month) has nothing but
+  // the pipeline actually has data — most commonly a client whose bookings
+  // all landed in a prior month — jump the calendar to the most recent
+  // activity instead of showing a false "no bookings on file" state.
+  useEffect(() => {
+    if (loading || hasAutoJumped.current || items.length === 0) return;
+    hasAutoJumped.current = true;
+
+    const todayKey = dateKey(new Date());
+    const hasRecentActivity = items.some((item) => {
+      const k = dateKey(new Date(item.createdAt));
+      const daysAgo = (new Date(todayKey).getTime() - new Date(k).getTime()) / 86_400_000;
+      return daysAgo >= 0 && daysAgo <= 31;
+    });
+    if (hasRecentActivity) return;
+
+    const mostRecent = items.reduce((latest, item) =>
+      new Date(item.createdAt) > new Date(latest.createdAt) ? item : latest
+    );
+    const jumpDate = new Date(mostRecent.createdAt);
+    setCurrentDate(jumpDate);
+    setSelectedDate(jumpDate);
+  }, [loading, items]);
 
   const handleMonthChange = (newDate: Date) => {
     setCurrentDate(newDate);

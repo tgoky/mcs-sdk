@@ -32,12 +32,12 @@ const STATUS_STYLE: Record<string, { icon: React.ReactNode; className: string; l
   },
   cancelled: {
     icon: <Pause className="h-3.5 w-3.5" />,
-    className: "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300",
+    className: "border-zinc-200 bg-zinc-100 text-zinc-700 dark:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300",
     label: "Cancelled",
   },
   skipped: {
     icon: <SkipForward className="h-3.5 w-3.5" />,
-    className: "border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400",
+    className: "border-zinc-200 bg-zinc-50 text-zinc-500 dark:text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400",
     label: "Skipped",
   },
   pending_review: {
@@ -125,13 +125,13 @@ export function StepTimeline({
 
               {(step.label || step.detail) && (
                 <div className="mt-1.5 space-y-1">
-                  {step.label && <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{step.label}</p>}
-                  {step.detail && <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">{step.detail}</p>}
+                  {step.label && <p className="text-xs font-medium text-zinc-500 dark:text-zinc-500 dark:text-zinc-400">{step.label}</p>}
+                  {step.detail && <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-500 dark:text-zinc-400">{step.detail}</p>}
                 </div>
               )}
             </div>
 
-            <div className="flex shrink-0 items-start gap-1.5 pt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+            <div className="flex shrink-0 items-start gap-1.5 pt-0.5 text-[11px] text-zinc-600 dark:text-zinc-400 dark:text-zinc-500">
               {duration && <span>{duration}</span>}
               <span>{formatTime(step.startedAt)}</span>
             </div>
@@ -142,11 +142,11 @@ export function StepTimeline({
       {isRunning && (
         <li className="grid grid-cols-[24px_minmax(0,1fr)] gap-x-3 pt-4">
           <div className="flex justify-center">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-zinc-300 text-zinc-600 dark:text-zinc-400 dark:border-zinc-700 dark:text-zinc-500">
               <Minus className="h-3.5 w-3.5" />
             </span>
           </div>
-          <p className="pt-1 text-xs text-zinc-400 dark:text-zinc-500">{copy.nextStepCompiling}</p>
+          <p className="pt-1 text-xs text-zinc-600 dark:text-zinc-400 dark:text-zinc-500">{copy.nextStepCompiling}</p>
         </li>
       )}
     </ol>

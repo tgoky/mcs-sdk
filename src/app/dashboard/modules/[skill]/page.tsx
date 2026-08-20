@@ -71,7 +71,7 @@ export default async function ModulePage({
   const manifest = SKILL_MANIFEST[skill];
 
   return (
-    <div className="w-full max-w-none -mt-6 -mx-2 sm:-mx-6 pt-0 px-2 sm:px-6 pb-6 font-sans antialiased text-zinc-100">
+    <div className="w-full max-w-none -mt-6 -mx-2 sm:-mx-6 pt-0 px-2 sm:px-6 pb-6 font-sans antialiased text-zinc-900 dark:text-zinc-100">
       <ModuleClientRoster
         summaries={clientSummaries}
         manifest={manifest}

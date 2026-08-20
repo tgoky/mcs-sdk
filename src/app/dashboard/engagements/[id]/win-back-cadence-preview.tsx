@@ -3,8 +3,9 @@
 // src/app/dashboard/engagements/[id]/win-back-cadence-preview.tsx
 
 import { useState } from "react";
-import { Mail, MessageSquare, ChevronDown } from "lucide-react";
+import { Mail, MessageSquare, ChevronDown, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TriggerSkillButton } from "./trigger-skill-button";
 
 export interface WinBackCadenceAssetMap {
   windowDays: number;
@@ -26,16 +27,33 @@ function dayLabel(offsetDays: number): string {
   return `Day ${offsetDays}`;
 }
 
-export function WinBackCadencePreview({ assetMap }: { assetMap: WinBackCadenceAssetMap | null }) {
+export function WinBackCadencePreview({
+  assetMap,
+  engagementId,
+}: {
+  assetMap: WinBackCadenceAssetMap | null;
+  engagementId: string;
+}) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   if (!assetMap) {
     return (
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-5 font-sans">
-        <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans mt-1">
-          No cadence has been generated yet — this gets built automatically the first time this engagement&apos;s setup runs.
-        </p>
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-400">
+            <Sparkles size={13} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans mt-1 max-w-md">
+              No cadence has been generated yet. Win-Back builds this the first time its sequence runs for this
+              engagement — run it now to generate the emails and texts every recovered prospect will receive.
+            </p>
+            <div className="mt-3 w-56">
+              <TriggerSkillButton engagementId={engagementId} skillName="win-back" label="Generate cadence now" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

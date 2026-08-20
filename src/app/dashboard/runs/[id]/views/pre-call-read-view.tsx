@@ -122,14 +122,14 @@ export function PreCallReadView({
       {/* ----------------------------------------------------------------- */}
       {/* 1. ASANA TOOLBAR (PERSISTENT SEARCH + VIEW SWITCHER)              */}
       {/* ----------------------------------------------------------------- */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-950 p-1.5 border border-zinc-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f8f7fa] dark:bg-zinc-950 p-1.5 border border-zinc-200 dark:border-zinc-800">
         <div className="relative w-64">
-          <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500" />
+          <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
           <input
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Search prospect name..."
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none"
+            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-800 dark:text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
           />
         </div>
 
@@ -150,23 +150,23 @@ export function PreCallReadView({
       {/* ----------------------------------------------------------------- */}
       {mode === "calendar" && (
         <div className="flex flex-col gap-3 font-sans">
-          <div className="flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-black/40 px-3 py-2.5 text-[11px] font-sans">
+          <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-black/40 px-3 py-2.5 text-[11px] font-sans">
             <div className="h-3.5 w-1 shrink-0 rounded-full bg-emerald-500/80" />
-            <span className="text-zinc-400 font-semibold">{phaseLabel("roster_fetch")}</span>
-            <span className="text-zinc-700">·</span>
-            <span className="text-zinc-400">
+            <span className="text-zinc-600 dark:text-zinc-400 font-semibold">{phaseLabel("roster_fetch")}</span>
+            <span className="text-zinc-400 dark:text-zinc-700">·</span>
+            <span className="text-zinc-600 dark:text-zinc-400">
               {rosterFetchStep?.detail ?? "We haven't checked for calls on this run yet"}
             </span>
             {run.stack?.booking_platform && (
               <>
-                <span className="text-zinc-700">·</span>
-                <span className="text-zinc-600">{bookingPlatformLabel(run.stack.booking_platform)}</span>
+                <span className="text-zinc-400 dark:text-zinc-700">·</span>
+                <span className="text-zinc-700 dark:text-zinc-600">{bookingPlatformLabel(run.stack.booking_platform)}</span>
               </>
             )}
           </div>
 
           {callsByDay.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/50 py-14 text-zinc-600 font-sans">
+            <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa]/50 dark:bg-zinc-950/50 py-14 text-zinc-700 dark:text-zinc-600 font-sans">
               <CalendarX size={22} />
               <span className="text-xs">This run's window came back empty — nothing to brief.</span>
             </div>
@@ -175,12 +175,12 @@ export function PreCallReadView({
               const d = new Date(dayKeyStr);
               const isToday = dateKey(new Date()) === dayKeyStr;
               return (
-                <div key={dayKeyStr} className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl font-sans">
-                  <div className="flex items-center gap-4 border-b border-zinc-800 bg-zinc-900/60 px-5 py-4">
+                <div key={dayKeyStr} className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
+                  <div className="flex items-center gap-4 border-b border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-5 py-4">
                     <div
                       className={cn(
                         "flex flex-col items-center justify-center rounded-xl w-14 h-14 shrink-0 leading-none",
-                        isToday ? "bg-emerald-500 text-zinc-950" : "bg-zinc-900 border border-zinc-800 text-zinc-200"
+                        isToday ? "bg-emerald-500 text-zinc-950" : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200"
                       )}
                     >
                       <span className="font-mono text-xl font-black">{d.getDate()}</span>
@@ -189,11 +189,11 @@ export function PreCallReadView({
                       </span>
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-bold text-white font-sans">
+                      <span className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
                         {d.toLocaleDateString(undefined, { weekday: "long" })}
                         {isToday && <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-emerald-400">Today</span>}
                       </span>
-                      <span className="text-[11px] font-mono text-zinc-500">
+                      <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500">
                         {dayCalls.length} call{dayCalls.length === 1 ? "" : "s"} in this run's window
                       </span>
                     </div>
@@ -211,13 +211,13 @@ export function PreCallReadView({
                           className="group flex items-stretch gap-3 text-left cursor-pointer"
                         >
                           <div className="flex w-2.5 shrink-0 flex-col items-center">
-                            <div className="mt-4 h-2 w-2 shrink-0 rounded-full bg-zinc-600 transition-colors group-hover:bg-emerald-500" />
-                            {!isLast && <div className="w-px flex-1 bg-zinc-800" />}
+                            <div className="mt-4 h-2 w-2 shrink-0 rounded-full bg-zinc-300 dark:bg-zinc-600 transition-colors group-hover:bg-emerald-500" />
+                            {!isLast && <div className="w-px flex-1 bg-zinc-100 dark:bg-zinc-800" />}
                           </div>
-                          <div className="mb-2 flex flex-1 items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 transition-colors group-hover:border-zinc-700">
+                          <div className="mb-2 flex flex-1 items-center justify-between gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-3 py-2 transition-colors group-hover:border-zinc-400 dark:group-hover:border-zinc-700">
                             <div className="flex min-w-0 items-center gap-2.5">
-                              <span className="w-12 shrink-0 font-mono text-[10.5px] text-zinc-500">{timeStr(call.callTime)}</span>
-                              <span className="truncate text-xs font-bold text-white font-sans">
+                              <span className="w-12 shrink-0 font-mono text-[10.5px] text-zinc-500 dark:text-zinc-500">{timeStr(call.callTime)}</span>
+                              <span className="truncate text-xs font-bold text-zinc-900 dark:text-white font-sans">
                                 {call.prospectName ?? "Unnamed prospect"}
                               </span>
                             </div>
@@ -240,15 +240,15 @@ export function PreCallReadView({
       {/* 3. DENSE LIST VIEW                                                */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 font-sans">
+        <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 font-sans">
           {callsByDay.length === 0 ? (
-            <div className="p-8 text-center text-xs text-zinc-500 italic font-sans">
+            <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic font-sans">
               No sales calls scheduled in this briefing window.
             </div>
           ) : (
             callsByDay.map(([day, dayCalls]) => (
               <div key={day}>
-                <div className="border-b border-t border-zinc-800 bg-zinc-900/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400 font-sans">
+                <div className="border-b border-t border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 font-sans">
                   {new Date(day + "T00:00:00").toLocaleDateString(undefined, {
                     weekday: "long",
                     month: "long",
@@ -257,7 +257,7 @@ export function PreCallReadView({
                 </div>
                 <table className="w-full text-left text-xs font-sans">
                   <thead>
-                    <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500 font-sans">
+                    <tr className="border-b border-zinc-200/60 dark:border-zinc-800/60 text-[10px] uppercase text-zinc-500 dark:text-zinc-500 font-sans">
                       <th className="px-4 py-2 font-semibold">Prospect</th>
                       <th className="px-4 py-2 font-semibold">Call Time</th>
                       <th className="px-4 py-2 font-semibold">Identity</th>
@@ -269,12 +269,12 @@ export function PreCallReadView({
                     {dayCalls.map((call) => {
                       const status = deriveStatus(call);
                       return (
-                        <tr key={call.id} className="border-b border-zinc-900 last:border-b-0 hover:bg-zinc-900/40 font-sans">
-                          <td className="px-4 py-2.5 font-medium text-white font-sans">
+                        <tr key={call.id} className="border-b border-zinc-200 dark:border-zinc-900 last:border-b-0 hover:bg-zinc-100/40 dark:hover:bg-zinc-900/40 font-sans">
+                          <td className="px-4 py-2.5 font-medium text-zinc-900 dark:text-white font-sans">
                             {call.prospectName ?? "Unnamed prospect"}
                           </td>
-                          <td className="px-4 py-2.5 font-mono text-zinc-400">{timeStr(call.callTime)}</td>
-                          <td className="px-4 py-2.5 text-zinc-400 font-mono">
+                          <td className="px-4 py-2.5 font-mono text-zinc-600 dark:text-zinc-400">{timeStr(call.callTime)}</td>
+                          <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400 font-mono">
                             {matchLabel(call).text}
                           </td>
                           <td className="px-4 py-2.5">
@@ -284,7 +284,7 @@ export function PreCallReadView({
                             <button
                               type="button"
                               onClick={() => setSelectedId(call.id)}
-                              className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer font-sans"
+                              className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer font-sans"
                             >
                               Open brief
                             </button>
@@ -306,10 +306,10 @@ export function PreCallReadView({
       {mode === "board" && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 font-sans">
           {(Object.keys(board) as CallStatus[]).map((status) => (
-            <div key={status} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 flex flex-col gap-2 font-sans">
+            <div key={status} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 flex flex-col gap-2 font-sans">
               <div className="mb-1 flex items-center justify-between px-1">
-                <span className="text-xs font-bold text-zinc-300 font-sans">{STATUS_META[status].label}</span>
-                <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
+                <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 font-sans">{STATUS_META[status].label}</span>
+                <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500 bg-white dark:bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
                   {board[status].length}
                 </span>
               </div>
@@ -324,31 +324,31 @@ export function PreCallReadView({
                       key={call.id}
                       type="button"
                       onClick={() => setSelectedId(call.id)}
-                      className="w-full text-left rounded-xl border border-zinc-800 bg-zinc-900/90 hover:border-zinc-700 p-3 transition-all cursor-pointer group shadow-sm flex flex-col gap-2 font-sans"
+                      className="w-full text-left rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-900/90 hover:border-zinc-400 dark:hover:border-zinc-700 p-3 transition-all cursor-pointer group shadow-sm flex flex-col gap-2 font-sans"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-[10px] font-bold font-mono text-zinc-300 shrink-0">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-[10px] font-bold font-mono text-zinc-700 dark:text-zinc-300 shrink-0">
                             {initials}
                           </div>
                           <div className="min-w-0 font-sans">
-                            <p className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors truncate font-sans">
+                            <p className="text-xs font-bold text-zinc-900 dark:text-white group-hover:text-amber-400 transition-colors truncate font-sans">
                               {call.prospectName ?? "Unnamed prospect"}
                             </p>
                           </div>
                         </div>
 
-                        <Maximize2 size={12} className="text-zinc-600 group-hover:text-zinc-300 shrink-0 mt-0.5" />
+                        <Maximize2 size={12} className="text-zinc-700 dark:text-zinc-600 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 shrink-0 mt-0.5" />
                       </div>
 
-                      <div className="flex items-center gap-1 text-[10.5px] text-zinc-400 font-mono">
-                        <Clock size={11} className="text-zinc-500 shrink-0" />
+                      <div className="flex items-center gap-1 text-[10.5px] text-zinc-600 dark:text-zinc-400 font-mono">
+                        <Clock size={11} className="text-zinc-500 dark:text-zinc-500 shrink-0" />
                         <span>{timeStr(call.callTime)}</span>
-                        <span className="text-zinc-600">·</span>
+                        <span className="text-zinc-700 dark:text-zinc-600">·</span>
                         <span>{new Date(call.callTime).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-zinc-800/80">
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-zinc-200/80 dark:border-zinc-800/80">
                         {call.personMatchScore != null && (() => {
                           const { text, tone } = matchLabel(call);
                           const toneClass =
@@ -356,7 +356,7 @@ export function PreCallReadView({
                               ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                               : tone === "warning"
                                 ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                                : "bg-zinc-800 border-zinc-700 text-zinc-400";
+                                : "bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400";
                           return (
                             <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9.5px] font-mono font-bold ${toneClass}`}>
                               {text}
@@ -364,8 +364,8 @@ export function PreCallReadView({
                           );
                         })()}
 
-                        <span className="inline-flex items-center gap-1 rounded-md bg-zinc-800 px-1.5 py-0.5 text-[9.5px] font-mono text-zinc-300">
-                          <DestIcon size={10} className="text-zinc-400" />
+                        <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9.5px] font-mono text-zinc-700 dark:text-zinc-300">
+                          <DestIcon size={10} className="text-zinc-600 dark:text-zinc-400" />
                           {briefDestinationLabel(call.destinationDelivered ?? run.stack?.brief_landing_destination ?? "slack")}
                         </span>
                       </div>
@@ -374,7 +374,7 @@ export function PreCallReadView({
                 })}
 
                 {board[status].length === 0 && (
-                  <div className="rounded-xl border border-dashed border-zinc-900 p-4 text-center text-[10px] text-zinc-600 font-sans">
+                  <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-900 p-4 text-center text-[10px] text-zinc-700 dark:text-zinc-600 font-sans">
                     No calls in this stage
                   </div>
                 )}
@@ -491,15 +491,15 @@ function BriefDrawer({
 
   return (
     <Sheet open={!!call} onOpenChange={(open) => !open && onClose()}>
-      {/* Explicit font-sans antialiased text-zinc-100 on the portal root prevents font mismatch */}
-      <SheetContent widthClassName="w-full sm:max-w-xl font-sans antialiased text-zinc-100">
+      {/* Explicit font-sans antialiased text-zinc-900 dark:text-zinc-100 on the portal root prevents font mismatch */}
+      <SheetContent widthClassName="w-full sm:max-w-xl font-sans antialiased text-zinc-900 dark:text-zinc-100">
         {call && (
           <div className="flex flex-col h-full font-sans antialiased">
             <SheetHeader className="font-sans">
               <div className="flex items-center justify-between font-sans">
                 <div className="flex items-center gap-2 text-amber-400">
                   <Sparkles size={15} />
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 font-mono">
                     Executive Pre-Call Brief
                   </span>
                 </div>
@@ -507,7 +507,7 @@ function BriefDrawer({
                   <button
                     type="button"
                     onClick={handleCopyText}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white text-xs cursor-pointer transition-colors font-sans"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-xs cursor-pointer transition-colors font-sans"
                   >
                     {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                     <span className="font-sans">{copied ? "Copied" : "Copy Brief"}</span>
@@ -515,10 +515,10 @@ function BriefDrawer({
                 </div>
               </div>
 
-              <SheetTitle className="mt-2 text-lg font-bold font-sans text-white">
+              <SheetTitle className="mt-2 text-lg font-bold font-sans text-zinc-900 dark:text-white">
                 {call.prospectName ?? "Unnamed prospect"}
               </SheetTitle>
-              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-400 font-sans">
+              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400 font-sans">
                 <Building2 size={12} /> Call time: {timeStr(call.callTime)} on {new Date(call.callTime).toLocaleDateString()}
               </SheetDescription>
             </SheetHeader>
@@ -526,14 +526,14 @@ function BriefDrawer({
             <SheetBody className="space-y-4 font-sans pt-2">
               {/* Metadata Cards */}
               <div className="grid grid-cols-2 gap-2 text-xs font-sans">
-                <div className="space-y-0.5 rounded-xl border border-zinc-800 bg-zinc-900 p-2.5">
-                  <span className="block text-[10px] font-mono uppercase text-zinc-500">Prospect identity</span>
-                  <p className="font-semibold text-zinc-200 font-sans">{matchLabel(call).text}</p>
+                <div className="space-y-0.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5">
+                  <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Prospect identity</span>
+                  <p className="font-semibold text-zinc-800 dark:text-zinc-200 font-sans">{matchLabel(call).text}</p>
                 </div>
-                <div className="space-y-0.5 rounded-xl border border-zinc-800 bg-zinc-900 p-2.5">
-                  <span className="block text-[10px] font-mono uppercase text-zinc-500">Sent to</span>
-                  <p className="flex items-center gap-1 font-semibold text-zinc-200 font-sans">
-                    <DestIcon size={12} className="text-zinc-400" />
+                <div className="space-y-0.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5">
+                  <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Sent to</span>
+                  <p className="flex items-center gap-1 font-semibold text-zinc-800 dark:text-zinc-200 font-sans">
+                    <DestIcon size={12} className="text-zinc-600 dark:text-zinc-400" />
                     {briefDestinationLabel(call.destinationDelivered ?? destinationLabel ?? "slack")}
                   </p>
                 </div>
@@ -542,13 +542,13 @@ function BriefDrawer({
               {/* Editable Brief Document */}
               <div className="space-y-2 font-sans">
                 <div className="flex items-center justify-between font-sans">
-                  <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                  <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
                     Call Brief
                   </span>
                   <button
                     type="button"
                     onClick={() => setIsEditing((p) => !p)}
-                    className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
+                    className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white underline cursor-pointer"
                   >
                     {isEditing ? "Done Editing" : "Edit Brief Text"}
                   </button>
@@ -559,10 +559,10 @@ function BriefDrawer({
                     value={editableText}
                     onChange={(e) => setEditableText(e.target.value)}
                     rows={12}
-                    className="w-full p-3.5 rounded-xl border border-zinc-700 bg-zinc-900 text-xs font-sans text-zinc-200 focus:outline-none focus:border-zinc-500 leading-relaxed font-sans"
+                    className="w-full p-3.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-sans text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-zinc-500 dark:focus:border-zinc-500 leading-relaxed font-sans"
                   />
                 ) : (
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-300 font-sans whitespace-pre-wrap">
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans whitespace-pre-wrap">
                     {editableText ||
                       (call.aiSynthesisStatus === "failed"
                         ? `Brief generation failed for ${call.prospectName ?? "this prospect"}'s call at ${timeStr(call.callTime)}. Try regenerating from the run, or open the call directly to prep manually.`
@@ -572,8 +572,8 @@ function BriefDrawer({
               </div>
 
               {/* Log Call Outcome */}
-              <div className="space-y-2 border-t border-zinc-800 pt-3 font-sans">
-                <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+              <div className="space-y-2 border-t border-zinc-200 dark:border-zinc-800 pt-3 font-sans">
+                <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
                   Log Sales Call Outcome
                 </span>
                 <div className="grid grid-cols-3 gap-2 font-sans">
@@ -585,7 +585,7 @@ function BriefDrawer({
                       "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60",
                       loggedOutcome === "showed"
                         ? "bg-emerald-500 text-zinc-950 border-emerald-400 font-bold"
-                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                        : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-700"
                     )}
                   >
                     <UserCheck size={13} />
@@ -599,8 +599,8 @@ function BriefDrawer({
                     className={cn(
                       "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60",
                       loggedOutcome === "no_show"
-                        ? "bg-rose-500 text-white border-rose-400 font-bold"
-                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                        ? "bg-rose-500 text-zinc-900 dark:text-white border-rose-400 font-bold"
+                        : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-700"
                     )}
                   >
                     <UserX size={13} />
@@ -615,7 +615,7 @@ function BriefDrawer({
                       "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60",
                       loggedOutcome === "rescheduled"
                         ? "bg-amber-500 text-zinc-950 border-amber-400 font-bold"
-                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                        : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-700"
                     )}
                   >
                     <CalendarX size={13} />
@@ -633,7 +633,7 @@ function BriefDrawer({
                   type="button"
                   onClick={handleResendToSlack}
                   disabled={deliveryState === "sending"}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-100 text-zinc-950 font-bold text-xs hover:bg-white transition-colors cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-100 text-zinc-950 font-bold text-xs hover:bg-zinc-100 dark:hover:bg-white transition-colors cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {deliveryState === "sent" ? <Check size={13} /> : <Send size={13} />}
                   <span className="font-sans">

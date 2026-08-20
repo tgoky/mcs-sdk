@@ -132,14 +132,14 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
       {/* 1. CADENCE LIFECYCLE BANNER                                       */}
       {/* ----------------------------------------------------------------- */}
       {enrollment ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 font-sans">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 font-sans">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 text-zinc-400 shrink-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 shrink-0">
               <UserCheck size={16} />
             </div>
             <div>
-              <p className="text-sm font-bold text-white font-sans">{enrollment.prospectName ?? enrollment.prospectEmail}</p>
-              <p className="text-xs text-zinc-500 font-sans">
+              <p className="text-sm font-bold text-zinc-900 dark:text-white font-sans">{enrollment.prospectName ?? enrollment.prospectEmail}</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-500 font-sans">
                 Enrolled {new Date(enrollment.enrolledAt).toLocaleDateString()} · {recoveryWindowDays}-day window ends {windowEnd.toLocaleDateString()}
               </p>
             </div>
@@ -164,7 +164,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                 href={enrollment.freshRescheduleLink}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 transition-colors font-sans"
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors font-sans"
               >
                 <Link2 size={11} /> Reschedule link
               </a>
@@ -185,14 +185,14 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
       {/* ----------------------------------------------------------------- */}
       {/* 2. PERSISTENT TOOLBAR (SEARCH + VIEW SWITCHER)                   */}
       {/* ----------------------------------------------------------------- */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-950 p-1.5 border border-zinc-800 font-sans">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f8f7fa] dark:bg-zinc-950 p-1.5 border border-zinc-200 dark:border-zinc-800 font-sans">
         <div className="relative w-64">
-          <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500" />
+          <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
           <input
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Search touchpoint copy or day..."
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-700 focus:outline-none font-sans"
+            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
           />
         </div>
 
@@ -216,9 +216,9 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
       {/* 4. DENSE LIST VIEW                                                */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 font-sans">
+        <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 font-sans">
           {filteredTouchpoints.length === 0 ? (
-            <div className="p-8 text-center text-xs text-zinc-500 italic font-sans">
+            <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic font-sans">
               {touchpoints.length === 0
                 ? "No recovery cadence content has been generated for this engagement yet."
                 : "No touchpoints match your search filter."}
@@ -226,7 +226,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
           ) : (
             <table className="w-full text-left text-xs font-sans">
               <thead>
-                <tr className="border-b border-zinc-800/60 text-[10px] uppercase text-zinc-500 bg-zinc-900/50 font-sans">
+                <tr className="border-b border-zinc-200/60 dark:border-zinc-800/60 text-[10px] uppercase text-zinc-500 dark:text-zinc-500 bg-white/50 dark:bg-zinc-900/50 font-sans">
                   <th className="px-4 py-2 font-semibold">Touchpoint</th>
                   <th className="px-4 py-2 font-semibold">Channel</th>
                   <th className="px-4 py-2 font-semibold">Scheduled Date</th>
@@ -238,21 +238,21 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                 {filteredTouchpoints.map((tp) => {
                   const status = statusFor(tp);
                   return (
-                    <tr key={tp.key} className="border-b border-zinc-900 last:border-b-0 hover:bg-zinc-900/40 font-sans">
-                      <td className="px-4 py-2.5 font-medium text-white font-sans">{dayLabel(tp.offsetDays)}</td>
-                      <td className="px-4 py-2.5 text-zinc-400 font-sans">
+                    <tr key={tp.key} className="border-b border-zinc-200 dark:border-zinc-900 last:border-b-0 hover:bg-zinc-100/40 dark:hover:bg-zinc-900/40 font-sans">
+                      <td className="px-4 py-2.5 font-medium text-zinc-900 dark:text-white font-sans">{dayLabel(tp.offsetDays)}</td>
+                      <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400 font-sans">
                         <span className="inline-flex items-center gap-1 font-sans">
                           {tp.type === "email" ? <Mail size={11} /> : <MessageSquare size={11} />}
                           {tp.type === "email" ? "Email" : "SMS"}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-zinc-400">{tp.date.toLocaleDateString()}</td>
+                      <td className="px-4 py-2.5 font-mono text-zinc-600 dark:text-zinc-400">{tp.date.toLocaleDateString()}</td>
                       <td className="px-4 py-2.5"><StatusPill tone={status.tone}>{status.label}</StatusPill></td>
                       <td className="px-4 py-2.5 text-right font-sans">
                         <button
                           type="button"
                           onClick={() => setSelected(tp)}
-                          className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800 cursor-pointer font-sans"
+                          className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer font-sans"
                         >
                           View copy
                         </button>
@@ -280,10 +280,10 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
             });
 
             return (
-              <div key={col} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3 flex flex-col gap-2 font-sans">
+              <div key={col} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 flex flex-col gap-2 font-sans">
                 <div className="mb-1 flex items-center justify-between px-1 font-sans">
-                  <span className="text-xs font-bold text-zinc-300 font-sans">{col}</span>
-                  <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
+                  <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 font-sans">{col}</span>
+                  <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500 bg-white dark:bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
                     {items.length}
                   </span>
                 </div>
@@ -296,10 +296,10 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                         key={tp.key}
                         type="button"
                         onClick={() => setSelected(tp)}
-                        className="w-full text-left rounded-xl border border-zinc-800 bg-zinc-900/90 hover:border-zinc-700 p-3 transition-all cursor-pointer group shadow-sm flex flex-col gap-2 font-sans"
+                        className="w-full text-left rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-900/90 hover:border-zinc-400 dark:hover:border-zinc-700 p-3 transition-all cursor-pointer group shadow-sm flex flex-col gap-2 font-sans"
                       >
                         <div className="flex items-start justify-between gap-2 font-sans">
-                          <p className="flex items-center gap-1.5 font-bold text-xs text-white group-hover:text-amber-400 transition-colors font-sans">
+                          <p className="flex items-center gap-1.5 font-bold text-xs text-zinc-900 dark:text-white group-hover:text-amber-400 transition-colors font-sans">
                             {tp.type === "email" ? (
                               <Mail size={12} className="text-amber-400 shrink-0" />
                             ) : (
@@ -307,21 +307,21 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                             )}
                             <span>{dayLabel(tp.offsetDays)}</span>
                           </p>
-                          <Maximize2 size={12} className="text-zinc-600 group-hover:text-zinc-300 shrink-0 mt-0.5" />
+                          <Maximize2 size={12} className="text-zinc-700 dark:text-zinc-600 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 shrink-0 mt-0.5" />
                         </div>
 
                         {tp.subject ? (
-                          <p className="text-[11px] text-zinc-300 font-medium truncate font-sans">
+                          <p className="text-[11px] text-zinc-700 dark:text-zinc-300 font-medium truncate font-sans">
                             {tp.subject}
                           </p>
                         ) : (
-                          <p className="text-[11px] text-zinc-400 font-sans line-clamp-2 leading-snug">
+                          <p className="text-[11px] text-zinc-600 dark:text-zinc-400 font-sans line-clamp-2 leading-snug">
                             {tp.body}
                           </p>
                         )}
 
-                        <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80 font-sans">
-                          <span className="text-[10px] font-mono text-zinc-500">
+                        <div className="flex items-center justify-between pt-1 border-t border-zinc-200/80 dark:border-zinc-800/80 font-sans">
+                          <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500">
                             {tp.date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                           </span>
                           <StatusPill tone={status.tone} className="text-[9.5px]">
@@ -333,7 +333,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                   })}
 
                   {items.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-zinc-900 p-4 text-center text-[10px] text-zinc-600 font-sans">
+                    <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-900 p-4 text-center text-[10px] text-zinc-700 dark:text-zinc-600 font-sans">
                       No touchpoints in this stage
                     </div>
                   )}
@@ -399,41 +399,41 @@ function CadenceCalendar({
   const windowEndKey = new Date(enrolledAt.getTime() + windowDays * 86_400_000).toISOString().slice(0, 10);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-xl font-sans">
-      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-4 py-2.5 font-sans">
+    <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
+      <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-4 py-2.5 font-sans">
         <div className="flex items-center gap-2 font-sans">
           <button
             type="button"
             onClick={() => setMonthOffset((m) => m - 1)}
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer font-sans"
+            className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans"
           >
             <ChevronLeft size={15} />
           </button>
           <button
             type="button"
             onClick={() => setMonthOffset((m) => m + 1)}
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white cursor-pointer font-sans"
+            className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans"
           >
             <ChevronRight size={15} />
           </button>
-          <h3 className="text-sm font-bold text-white min-w-[120px] font-sans">
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-white min-w-[120px] font-sans">
             {anchor.toLocaleString("default", { month: "long" })} {year}
           </h3>
         </div>
-        <span className="flex items-center gap-1 text-[11px] font-mono text-zinc-500">
+        <span className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-500">
           <Clock3 size={11} /> {windowDays}-day recovery window
         </span>
       </div>
 
-      <div className="grid grid-cols-7 border-b border-zinc-800 bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
+      <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-white/40 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-500 font-sans">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-          <div key={d} className="border-r border-zinc-800/60 py-2 last:border-r-0">
+          <div key={d} className="border-r border-zinc-200/60 dark:border-zinc-800/60 py-2 last:border-r-0">
             {d}
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 auto-rows-fr bg-zinc-950 font-sans">
+      <div className="grid grid-cols-7 auto-rows-fr bg-[#f8f7fa] dark:bg-zinc-950 font-sans">
         {gridDays.map(({ date, isCurrentMonth }, idx) => {
           const k = date.toISOString().slice(0, 10);
           const dayTps = byDate[k] ?? [];
@@ -444,22 +444,22 @@ function CadenceCalendar({
             <div
               key={idx}
               className={cn(
-                "flex min-h-[85px] flex-col border-b border-r border-zinc-800/60 p-1.5 transition-colors font-sans",
-                !isCurrentMonth && "bg-zinc-900/20 text-zinc-600",
-                isCurrentMonth && "hover:bg-zinc-900/30"
+                "flex min-h-[85px] flex-col border-b border-r border-zinc-200/60 dark:border-zinc-800/60 p-1.5 transition-colors font-sans",
+                !isCurrentMonth && "bg-white/20 dark:bg-zinc-900/20 text-zinc-700 dark:text-zinc-600",
+                isCurrentMonth && "hover:bg-zinc-100/30 dark:hover:bg-zinc-900/30"
               )}
             >
               <div className="flex items-center gap-1 font-sans">
                 <span
                   className={cn(
                     "flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold",
-                    isCurrentMonth ? "text-zinc-300" : "text-zinc-600"
+                    isCurrentMonth ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-700 dark:text-zinc-600"
                   )}
                 >
                   {date.getDate()}
                 </span>
                 {isEnrollDay && <span className="rounded bg-emerald-500/20 px-1 text-[8px] font-bold text-emerald-400 font-mono">ENROLLED</span>}
-                {isWindowEnd && <span className="rounded bg-zinc-800 px-1 text-[8px] font-bold text-zinc-400 font-mono">WINDOW END</span>}
+                {isWindowEnd && <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1 text-[8px] font-bold text-zinc-600 dark:text-zinc-400 font-mono">WINDOW END</span>}
               </div>
 
               <div className="mt-1 space-y-1 font-sans">
@@ -470,12 +470,12 @@ function CadenceCalendar({
                       key={tp.key}
                       type="button"
                       onClick={() => onSelect(tp)}
-                      className="flex w-full items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/90 px-1.5 py-1 text-left text-[10px] hover:border-zinc-700 cursor-pointer transition-all font-sans"
+                      className="flex w-full items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-900/90 px-1.5 py-1 text-left text-[10px] hover:border-zinc-400 dark:hover:border-zinc-700 cursor-pointer transition-all font-sans"
                     >
                       {tp.type === "email" ? (
-                        <Mail size={10} className="shrink-0 text-zinc-400" />
+                        <Mail size={10} className="shrink-0 text-zinc-600 dark:text-zinc-400" />
                       ) : (
-                        <MessageSquare size={10} className="shrink-0 text-zinc-400" />
+                        <MessageSquare size={10} className="shrink-0 text-zinc-600 dark:text-zinc-400" />
                       )}
                       <span
                         className={cn(
@@ -485,8 +485,8 @@ function CadenceCalendar({
                             : status.tone === "danger"
                             ? "text-rose-400"
                             : status.tone === "neutral"
-                            ? "text-zinc-600 line-through"
-                            : "text-zinc-200"
+                            ? "text-zinc-700 dark:text-zinc-600 line-through"
+                            : "text-zinc-800 dark:text-zinc-200"
                         )}
                       >
                         {dayLabel(tp.offsetDays)} ({tp.type.toUpperCase()})
@@ -500,7 +500,7 @@ function CadenceCalendar({
         })}
       </div>
 
-      <p className="border-t border-zinc-800 bg-zinc-900/30 px-4 py-2 text-[10px] text-zinc-500 font-sans">
+      <p className="border-t border-zinc-200 dark:border-zinc-800 bg-white/30 dark:bg-zinc-900/30 px-4 py-2 text-[10px] text-zinc-500 dark:text-zinc-500 font-sans">
         The first message is confirmed sent directly. Later messages are queued in your email/SMS platform to go out automatically — the dates above are when they&apos;re scheduled to send.
       </p>
     </div>
@@ -545,30 +545,30 @@ function TouchpointDrawer({
 
   return (
     <Sheet open={!!touchpoint} onOpenChange={(open) => !open && onClose()}>
-      {/* Explicit font-sans antialiased text-zinc-100 on the portal root prevents font mismatch */}
-      <SheetContent widthClassName="w-full sm:max-w-lg font-sans antialiased text-zinc-100">
+      {/* Explicit font-sans antialiased text-zinc-900 dark:text-zinc-100 on the portal root prevents font mismatch */}
+      <SheetContent widthClassName="w-full sm:max-w-lg font-sans antialiased text-zinc-900 dark:text-zinc-100">
         {touchpoint && (
           <div className="flex flex-col h-full font-sans antialiased">
             <SheetHeader className="font-sans">
               <div className="flex items-center justify-between font-sans">
                 <div className="flex items-center gap-2 text-amber-400 font-sans">
                   {touchpoint.type === "email" ? <Mail size={15} /> : <MessageSquare size={15} />}
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 font-mono">
                     {touchpoint.type === "email" ? "Recovery Email" : "Recovery Text Message"}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={handleCopyText}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white text-xs cursor-pointer transition-colors font-sans"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-xs cursor-pointer transition-colors font-sans"
                 >
                   {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                   <span className="font-sans">{copied ? "Copied" : "Copy"}</span>
                 </button>
               </div>
 
-              <SheetTitle className="mt-1.5 text-base font-bold text-white font-sans">{dayLabel(touchpoint.offsetDays)}</SheetTitle>
-              <SheetDescription className="text-xs text-zinc-400 font-sans">
+              <SheetTitle className="mt-1.5 text-base font-bold text-zinc-900 dark:text-white font-sans">{dayLabel(touchpoint.offsetDays)}</SheetTitle>
+              <SheetDescription className="text-xs text-zinc-600 dark:text-zinc-400 font-sans">
                 Scheduled to send {touchpoint.date.toLocaleDateString()}
               </SheetDescription>
             </SheetHeader>
@@ -579,27 +579,27 @@ function TouchpointDrawer({
                   <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-amber-400">
                     <Sparkles size={11} /> AI-personalized opening actually delivered
                   </span>
-                  <div className="rounded-xl border border-amber-900/40 bg-amber-950/10 p-3 text-xs leading-relaxed text-zinc-200 font-sans">
+                  <div className="rounded-xl border border-amber-900/40 bg-amber-950/10 p-3 text-xs leading-relaxed text-zinc-800 dark:text-zinc-200 font-sans">
                     {dayZeroLog.personalizedOpening}
                   </div>
                 </div>
               )}
 
               <div className="space-y-2 font-sans">
-                <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
                   {touchpoint.offsetDays === 0 ? "Standard Message" : "Message Content"}
                 </span>
                 {touchpoint.subject && (
-                  <p className="text-xs font-semibold text-zinc-200 font-sans">Subject: {touchpoint.subject}</p>
+                  <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 font-sans">Subject: {touchpoint.subject}</p>
                 )}
-                <div className="whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-300 font-sans">
+                <div className="whitespace-pre-wrap rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">
                   {touchpoint.body}
                 </div>
               </div>
 
               {exitedOffsetDays != null && touchpoint.offsetDays > exitedOffsetDays && (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-2.5 text-[11px] text-zinc-500 flex items-center gap-2 font-sans">
-                  <AlertCircle size={13} className="text-zinc-400 shrink-0" />
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/40 dark:bg-zinc-900/40 p-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 flex items-center gap-2 font-sans">
+                  <AlertCircle size={13} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
                   <span className="font-sans">This touch was skipped — the prospect exited the cadence on Day {exitedOffsetDays + 1}.</span>
                 </div>
               )}

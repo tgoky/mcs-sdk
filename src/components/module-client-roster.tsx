@@ -75,7 +75,7 @@ function StatusBadge({
     success: "bg-emerald-400 text-zinc-950 font-bold",
     warning: "bg-amber-400 text-zinc-950 font-bold",
     danger: "bg-rose-400 text-zinc-950 font-bold",
-    neutral: "bg-zinc-700 text-zinc-100 font-medium",
+    neutral: "bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-100 font-medium",
   }[tone];
 
   return (
@@ -248,7 +248,7 @@ export function ModuleClientRoster({
   }, [filteredClients]);
 
   return (
-    <div className="space-y-3 font-sans antialiased text-zinc-100">
+    <div className="space-y-3 font-sans antialiased text-zinc-900 dark:text-zinc-100">
       {statusFilter === "activity" ? (
         activityWithBack
       ) : (
@@ -275,12 +275,12 @@ export function ModuleClientRoster({
                     className={cn(
                       "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap bg-transparent",
                       isActive
-                        ? "border-zinc-400 text-white font-semibold"
-                        : "border-zinc-800/90 text-zinc-400 hover:text-white hover:border-zinc-600"
+                        ? "border-zinc-400 dark:border-zinc-400 text-zinc-900 dark:text-white font-semibold"
+                        : "border-zinc-200/90 dark:border-zinc-800/90 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-600"
                     )}
                   >
                     <span>{labels[tab]}</span>
-                    <ChevronDown size={13} className="text-zinc-400 shrink-0" />
+                    <ChevronDown size={13} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
                   </button>
                 );
               })}
@@ -289,9 +289,9 @@ export function ModuleClientRoster({
                 <button
                   type="button"
                   onClick={() => setStatusFilter("activity")}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border border-zinc-800/90 text-zinc-400 hover:text-white hover:border-zinc-600 transition-all cursor-pointer whitespace-nowrap bg-transparent"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border border-zinc-200/90 dark:border-zinc-800/90 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer whitespace-nowrap bg-transparent"
                 >
-                  <ActivityIcon size={13} className="text-zinc-400" />
+                  <ActivityIcon size={13} className="text-zinc-600 dark:text-zinc-400" />
                   <span>Activity</span>
                 </button>
               )}
@@ -299,7 +299,7 @@ export function ModuleClientRoster({
 
             <div className="flex items-center gap-2.5">
               <div className="relative w-44 sm:w-56">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-500" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -308,19 +308,19 @@ export function ModuleClientRoster({
                     setPage(0);
                   }}
                   placeholder="Search clients..."
-                  className="w-full pl-8 pr-3 py-1 rounded-full text-xs bg-transparent border border-zinc-800/90 focus:outline-none focus:border-zinc-600 text-zinc-100 placeholder-zinc-500 transition-colors"
+                  className="w-full pl-8 pr-3 py-1 rounded-full text-xs bg-transparent border border-zinc-200/90 dark:border-zinc-800/90 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 transition-colors"
                 />
               </div>
 
-              <div className="flex items-center rounded-full border border-zinc-800/90 bg-transparent p-0.5 shrink-0">
+              <div className="flex items-center rounded-full border border-zinc-200/90 dark:border-zinc-800/90 bg-transparent p-0.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setMode("list")}
                   className={cn(
                     "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
                     mode === "list"
-                      ? "text-white font-semibold border border-zinc-600"
-                      : "text-zinc-400 hover:text-zinc-200"
+                      ? "text-zinc-900 dark:text-white font-semibold border border-zinc-400 dark:border-zinc-600"
+                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
                   )}
                 >
                   <LayoutList size={13} />
@@ -333,8 +333,8 @@ export function ModuleClientRoster({
                   className={cn(
                     "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
                     mode === "board"
-                      ? "text-white font-semibold border border-zinc-600"
-                      : "text-zinc-400 hover:text-zinc-200"
+                      ? "text-zinc-900 dark:text-white font-semibold border border-zinc-400 dark:border-zinc-600"
+                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
                   )}
                 >
                   <Kanban size={13} />
@@ -346,17 +346,17 @@ export function ModuleClientRoster({
 
           {/* LIST VIEW */}
           {mode === "list" && (
-            <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
+            <div className="w-full font-sans border-t border-b border-zinc-200/80 dark:border-zinc-800/80 pt-1">
               <table className="w-full text-left text-xs font-sans">
                 <thead>
-                  <tr className="border-b border-zinc-800/80 text-[11px] text-zinc-400">
+                  <tr className="border-b border-zinc-200/80 dark:border-zinc-800/80 text-[11px] text-zinc-600 dark:text-zinc-400">
                     <th className="px-4 py-3 font-normal">Client & Execution Summary</th>
                     <th className="px-4 py-3 font-normal text-center w-24">Skill</th>
                     <th className="px-4 py-3 font-normal text-right">Status</th>
                     <th className="w-10 px-2" />
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/60">
+                <tbody className="divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
                   {pagedClients.map((client) => {
                     const tone = deriveTone(client);
                     const statusText = deriveLabel(client);
@@ -366,7 +366,7 @@ export function ModuleClientRoster({
                       <Fragment key={client.engagementId}>
                         <tr
                           onClick={() => router.push(hrefFor(skill, client.engagementId))}
-                          className="group hover:bg-zinc-800/30 transition-colors cursor-pointer"
+                          className="group hover:bg-zinc-100/30 dark:hover:bg-zinc-800/30 transition-colors cursor-pointer"
                         >
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-3">
@@ -375,16 +375,16 @@ export function ModuleClientRoster({
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <p className="text-xs font-semibold text-white group-hover:text-amber-300 transition-colors truncate">
+                                  <p className="text-xs font-semibold text-zinc-900 dark:text-white group-hover:text-amber-300 transition-colors truncate">
                                     {client.buyerName}
                                   </p>
                                   {client.pausedAt && (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-mono text-zinc-500 shrink-0">
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-mono text-zinc-500 dark:text-zinc-500 shrink-0">
                                       <PauseCircle size={11} /> paused
                                     </span>
                                   )}
                                   {!client.skillEnabled && (
-                                    <span className="text-[10px] font-mono text-zinc-600 shrink-0">off</span>
+                                    <span className="text-[10px] font-mono text-zinc-700 dark:text-zinc-600 shrink-0">off</span>
                                   )}
                                 </div>
                                 <p
@@ -449,7 +449,7 @@ export function ModuleClientRoster({
 
                   {pagedClients.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="p-8 text-center text-xs text-zinc-500 italic">
+                      <td colSpan={4} className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic">
                         No clients match your filter criteria.
                       </td>
                     </tr>
@@ -458,8 +458,8 @@ export function ModuleClientRoster({
               </table>
 
               {/* Pagination */}
-              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800/80">
-                <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500">
+              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200/80 dark:border-zinc-800/80">
+                <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500 dark:text-zinc-500">
                   {([10, 25, 50] as const).map((size) => (
                     <button
                       key={size}
@@ -467,8 +467,8 @@ export function ModuleClientRoster({
                       className={cn(
                         "px-2 py-0.5 rounded border transition-colors cursor-pointer",
                         pageSize === size
-                          ? "border-zinc-600 bg-zinc-800 text-white"
-                          : "border-transparent text-zinc-500 hover:text-zinc-300"
+                          ? "border-zinc-400 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                          : "border-transparent text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
                       )}
                     >
                       {size}/page
@@ -476,7 +476,7 @@ export function ModuleClientRoster({
                   ))}
                 </div>
 
-                <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
+                <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-600 dark:text-zinc-400">
                   <span>
                     Page {clampedPage + 1} of {pageCount}
                   </span>
@@ -484,14 +484,14 @@ export function ModuleClientRoster({
                     <button
                       onClick={() => setPage((p) => Math.max(0, p - 1))}
                       disabled={clampedPage === 0}
-                      className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      className="px-2 py-1 rounded border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                     >
                       Prev
                     </button>
                     <button
                       onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
                       disabled={clampedPage >= pageCount - 1}
-                      className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      className="px-2 py-1 rounded border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                     >
                       Next
                     </button>
@@ -514,11 +514,11 @@ export function ModuleClientRoster({
                 return (
                   <div
                     key={colKey}
-                    className="rounded-2xl border border-zinc-800/80 bg-transparent p-3 flex flex-col gap-2 font-sans"
+                    className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-transparent p-3 flex flex-col gap-2 font-sans"
                   >
                     <div className="mb-1 flex items-center justify-between px-1">
-                      <span className="text-xs font-bold text-zinc-300">{colTitles[colKey]}</span>
-                      <span className="text-[10px] font-mono text-zinc-500 border border-zinc-800 px-2 py-0.5 rounded-md font-bold">
+                      <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{colTitles[colKey]}</span>
+                      <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 rounded-md font-bold">
                         {board[colKey].length}
                       </span>
                     </div>
@@ -528,13 +528,13 @@ export function ModuleClientRoster({
                         <div
                           key={c.engagementId}
                           onClick={() => router.push(hrefFor(skill, c.engagementId))}
-                          className="w-full text-left rounded-xl border border-zinc-800/80 bg-transparent hover:border-zinc-700 p-3 transition-all cursor-pointer group flex flex-col gap-2 font-sans"
+                          className="w-full text-left rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-transparent hover:border-zinc-300 dark:hover:border-zinc-700 p-3 transition-all cursor-pointer group flex flex-col gap-2 font-sans"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
                               <SquishySkillBadge skill={skill} size={24} enabled={c.skillEnabled} />
                               <div className="min-w-0">
-                                <p className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors truncate">
+                                <p className="text-xs font-bold text-zinc-900 dark:text-white group-hover:text-amber-300 transition-colors truncate">
                                   {c.buyerName}
                                 </p>
                               </div>
@@ -542,15 +542,15 @@ export function ModuleClientRoster({
 
                             <Maximize2
                               size={12}
-                              className="text-zinc-600 group-hover:text-zinc-300 shrink-0 mt-0.5"
+                              className="text-zinc-700 dark:text-zinc-600 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 shrink-0 mt-0.5"
                             />
                           </div>
 
-                          <p className="text-xs text-zinc-300 line-clamp-2 leading-relaxed">
+                          <p className="text-xs text-zinc-700 dark:text-zinc-300 line-clamp-2 leading-relaxed">
                             {c.totalRuns} total runs executed
                           </p>
 
-                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/80 text-[10.5px] text-zinc-400 font-mono">
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] text-zinc-600 dark:text-zinc-400 font-mono">
                             {c.lastRunAt ? (
                               <span
                                 title={formatVerboseDate(c.lastRunAt).full}
@@ -568,7 +568,7 @@ export function ModuleClientRoster({
                       ))}
 
                       {board[colKey].length === 0 && (
-                        <div className="rounded-xl border border-dashed border-zinc-800 p-4 text-center text-[10px] text-zinc-600">
+                        <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-4 text-center text-[10px] text-zinc-700 dark:text-zinc-600">
                           No clients in this column
                         </div>
                       )}
