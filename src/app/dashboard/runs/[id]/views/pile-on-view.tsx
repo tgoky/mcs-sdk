@@ -2,24 +2,18 @@
 
 import { useMemo, useState } from "react";
 import {
-  Sparkles,
-  Zap,
   Mail,
   MessageSquare,
   BarChart3,
   Copy,
   Check,
-  ShieldCheck,
-  Search,
   AlertCircle,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   emailPlatformLabel,
   smsPlatformLabel,
   adDataPlatformLabel,
   sentViaLabel,
-  runStatusLabel,
 } from "@/lib/copy";
 import { classifyRunError } from "@/lib/error-classification";
 import { StatusPill } from "../_shared/status-pill";
@@ -36,7 +30,6 @@ export function PileOnView({
   steps: RunStep[];
 }) {
   const { run, send, smsMessages } = detail;
-  const [filterText, setFilterText] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const handleCopy = (text: string, key: string) => {
@@ -58,15 +51,22 @@ export function PileOnView({
   const smsSentCount = smsMessages.filter((m) => m.status === "sent").length;
   const smsFailedCount = smsMessages.filter((m) => m.status === "failed").length;
 
-  // Real email or null — no fake fallback text
-  const prospectEmail =
+  const rawProspectEmail =
     send?.prospectEmail ??
     steps
       .find((s) => s.phase === "pile_on_enrollment" && s.detail?.includes("@"))
-      ?.detail?.match(/<([^>]+@[^>]+)>/)?.[1] ??
-    null;
+      ?.detail?.match(/<([^>]+@[^>]+)>/)?.[1];
 
-  const bookingId = send?.bookingId ?? null;
+  const prospectEmail =
+    rawProspectEmail && rawProspectEmail !== "Enrolled Prospect"
+      ? rawProspectEmail
+      : null;
+
+  const rawBookingId = send?.bookingId;
+  const bookingId =
+    rawBookingId && rawBookingId !== "null" && rawBookingId !== "—"
+      ? rawBookingId
+      : null;
 
   const outcomeTone: Tone = send?.error
     ? "danger"
@@ -89,8 +89,6 @@ export function PileOnView({
     : "Standard Template";
 
   const channels = useMemo(() => {
-    const q = filterText.toLowerCase().trim();
-
     const rows: {
       id: string;
       type: "email" | "sms" | "ad_data";
@@ -208,15 +206,9 @@ export function PileOnView({
       step: adDataStep,
     });
 
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        r.title.toLowerCase().includes(q) ||
-        r.subtitle.toLowerCase().includes(q)
-    );
+    return rows;
   }, [
     run.stack,
-    filterText,
     emailStep,
     adDataStep,
     smsDispatchStep,
@@ -225,9 +217,11 @@ export function PileOnView({
     smsFailedCount,
   ]);
 
+  const pillStyle = "bg-amber-400 text-white dark:text-black font-semibold border-none px-2.5 py-0.5 rounded-md";
+
   return (
     <div className="w-full space-y-6 font-sans antialiased text-zinc-900 dark:text-zinc-100">
-      {/* ── HEADER TOOLBAR ── */}
+      {/* ── HEADER ── */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-4">
         <div className="flex items-center gap-3">
           {prospectEmail && (
@@ -237,8 +231,8 @@ export function PileOnView({
           )}
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-zinc-900 dark:text-white">
-                {prospectEmail ?? `Booking #${bookingId}`}
+              <span className="text-base font-bold text-zinc-900 dark:text-white">
+                {prospectEmail ?? (bookingId ? `Booking #${bookingId}` : "Booking Dispatch")}
               </span>
               {prospectEmail && (
                 <button
@@ -248,9 +242,9 @@ export function PileOnView({
                   title="Copy email"
                 >
                   {copiedKey === "email" ? (
-                    <Check size={12} className="text-emerald-500" />
+                    <Check size={13} className="text-emerald-500" />
                   ) : (
-                    <Copy size={12} />
+                    <Copy size={13} />
                   )}
                 </button>
               )}
@@ -263,60 +257,28 @@ export function PileOnView({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <StatusPill tone={outcomeTone}>{outcomeLabel}</StatusPill>
-          <div className="relative w-48">
-            <Search
-              size={13}
-              className="absolute left-2.5 top-2.5 text-zinc-400"
-            />
-            <input
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              placeholder="Filter channels..."
-              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent py-1.5 pl-8 pr-2.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-600 focus:outline-none"
-            />
-          </div>
-        </div>
+        <StatusPill tone={outcomeTone} className={pillStyle}>
+          {outcomeLabel}
+        </StatusPill>
       </div>
 
-      {/* ── EXECUTION FLOW ── */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-zinc-600 dark:text-zinc-400">
-        <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-zinc-400">
-          Flow
+      {/* ── EXECUTION STEPS (LARGE TEXT, NO EMOJIS, NO "FLOW" LABEL) ── */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-base sm:text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <span>Booking Received</span>
+        <span className="text-zinc-300 dark:text-zinc-700 font-normal">•</span>
+        <span>
+          AI Personalization ({send?.sentVia === "hybrid" ? "Personalized" : "Standard"})
         </span>
-        <div className="flex items-center gap-1.5">
-          <Zap size={13} className="text-emerald-500 shrink-0" />
-          <span>Booking Received</span>
-        </div>
-        <span className="text-zinc-300 dark:text-zinc-700">•</span>
-        <div className="flex items-center gap-1.5">
-          <Sparkles
-            size={13}
-            className={cn(
-              "shrink-0",
-              send?.sentVia === "hybrid" ? "text-amber-500" : "text-zinc-400"
-            )}
-          />
-          <span>
-            AI Personalization (
-            {send?.sentVia === "hybrid" ? "Personalized" : "Standard"})
-          </span>
-        </div>
-        <span className="text-zinc-300 dark:text-zinc-700">•</span>
-        <div className="flex items-center gap-1.5">
-          <ShieldCheck size={13} className="text-sky-500 shrink-0" />
-          <span>Sequences Triggered</span>
-        </div>
+        <span className="text-zinc-300 dark:text-zinc-700 font-normal">•</span>
+        <span>Sequences Triggered</span>
       </div>
 
       {/* ── AI PERSONALIZATION CONTENT ── */}
       <div className="space-y-2 border-t border-zinc-200 dark:border-zinc-800 pt-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-            <Sparkles size={13} className="text-amber-500" />
-            <span>AI Personalization Content</span>
-          </div>
+          <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+            AI Personalization Content
+          </span>
           {send?.personalizedIntro && (
             <button
               type="button"
@@ -334,7 +296,7 @@ export function PileOnView({
         </div>
 
         {send?.personalizedIntro ? (
-          <p className="whitespace-pre-wrap pl-3 border-l-2 border-amber-500/80 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">
+          <p className="whitespace-pre-wrap pl-3 border-l-2 border-amber-400 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">
             {send.personalizedIntro}
           </p>
         ) : send?.error ? (
@@ -363,7 +325,7 @@ export function PileOnView({
 
       {/* ── DISPATCH CHANNELS ── */}
       <div className="space-y-3 border-t border-zinc-200 dark:border-zinc-800 pt-4">
-        <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-zinc-400">
+        <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
           Dispatch Channels
         </span>
 
@@ -375,12 +337,12 @@ export function PileOnView({
                 {/* Main Row */}
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <Icon size={14} className="text-zinc-400 shrink-0" />
-                    <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                    <Icon size={15} className="text-zinc-400 shrink-0" />
+                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                       {ch.title}
                     </span>
                   </div>
-                  <StatusPill tone={ch.tone} className="text-[10px]">
+                  <StatusPill tone={ch.tone} className={pillStyle}>
                     {ch.badge}
                   </StatusPill>
                 </div>
@@ -390,17 +352,17 @@ export function PileOnView({
                   {ch.subtitle}
                 </p>
 
-                {/* Metadata in tight, aligned grid */}
+                {/* Inline Side-by-Side Metadata */}
                 <div className="grid grid-cols-[130px_1fr] gap-y-1 text-xs pt-1">
                   <span className="text-zinc-400">Platform</span>
-                  <span className="text-zinc-700 dark:text-zinc-300">
+                  <span className="text-zinc-700 dark:text-zinc-300 font-medium">
                     {ch.platform || "Not configured"}
                   </span>
 
                   {ch.step && (
                     <>
                       <span className="text-zinc-400">Last Attempt</span>
-                      <span className="text-zinc-700 dark:text-zinc-300">
+                      <span className="text-zinc-700 dark:text-zinc-300 font-medium">
                         {new Date(
                           ch.step.completedAt ?? ch.step.startedAt
                         ).toLocaleString()}
@@ -409,7 +371,7 @@ export function PileOnView({
                   )}
                 </div>
 
-                {/* Failures Diagnostic */}
+                {/* Failure Diagnostics */}
                 {ch.step?.detail && ch.step.status === "failed" && (
                   <div className="pt-1 text-xs text-rose-500">
                     {(() => {
@@ -439,7 +401,7 @@ export function PileOnView({
                     {ch.messages.map((m, i) => (
                       <div
                         key={m.id}
-                        className="flex items-center justify-between text-xs py-1 px-2.5 rounded bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800"
+                        className="flex items-center justify-between text-xs py-1.5 px-3 rounded bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800"
                       >
                         <span className="font-medium text-zinc-700 dark:text-zinc-300">
                           Text #{i + 1} —{" "}
@@ -452,7 +414,7 @@ export function PileOnView({
                         </span>
                         <StatusPill
                           tone={m.status === "sent" ? "success" : "danger"}
-                          className="text-[9px]"
+                          className={pillStyle}
                         >
                           {m.status === "sent" ? "Sent" : "Failed"}
                         </StatusPill>
