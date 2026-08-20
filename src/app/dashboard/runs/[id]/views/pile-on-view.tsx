@@ -15,7 +15,7 @@ import {
   adDataPlatformLabel,
 } from "@/lib/copy";
 import { classifyRunError } from "@/lib/error-classification";
-import { SquishySkillBadge } from "@/components/squishy-skill-badges";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import type { PileOnDetail, SequenceMessage } from "../_shared/types";
 import type { RunStep } from "@/models/schema";
 
