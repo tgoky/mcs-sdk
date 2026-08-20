@@ -94,7 +94,10 @@ export function computeBookingSyncStatus(
   if (platform) {
     if (stack?.webhook_last_error) {
       health = "error";
-      headline = "Delivery rejected";
+      // Reused for both delivery paths — the message itself already says
+      // "Poll failed..." vs a signature-check failure, so the headline
+      // just needs to be generic enough to cover either source.
+      headline = mode === "polling" ? "Sync error" : "Delivery rejected";
       detail = stack.webhook_last_error;
     } else if (mode === "webhook") {
       const ageMin = minutesAgo(lastWebhookAt);
@@ -112,11 +115,25 @@ export function computeBookingSyncStatus(
         detail = "Configured, but this engagement hasn't received a booking event yet.";
       }
     } else if (mode === "polling") {
-      health = "warning";
-      headline = supportsAutoWebhook ? "Auto-polling (fallback)" : "Auto-polling · instant sync available";
-      detail = lastPollAt
-        ? `Checking every ${pollIntervalMinutes} min for new bookings.`
-        : "Will start checking on the next 5-minute cycle.";
+      const pollAgeMin = minutesAgo(lastPollAt);
+      // Bug fix (2026-08-20): this branch used to report "healthy" purely
+      // from mode === "polling", with no check on whether a poll had
+      // actually run recently. If this engagement fell out of the cron's
+      // due-list (or the cron itself stopped), the card kept claiming
+      // "Checking every N min" indefinitely with nothing to contradict it.
+      // A poll is due every pollIntervalMinutes; missing that by more than
+      // 3x is a real signal something upstream stopped, not normal jitter.
+      if (lastPollAt && pollAgeMin !== null && pollAgeMin > pollIntervalMinutes * 3) {
+        health = "error";
+        headline = "Auto-polling · stalled";
+        detail = `Last checked ${Math.round(pollAgeMin)} min ago — expected every ${pollIntervalMinutes} min. The poll cycle may have stopped; if this doesn't clear on its own, check credentials in Settings → Booking Sync.`;
+      } else {
+        health = "warning";
+        headline = supportsAutoWebhook ? "Auto-polling (fallback)" : "Auto-polling · instant sync available";
+        detail = lastPollAt
+          ? `Checking every ${pollIntervalMinutes} min for new bookings.`
+          : "Will start checking on the next 5-minute cycle.";
+      }
     } else if (mode === "none") {
       health = "warning";
       headline = "Manual only";

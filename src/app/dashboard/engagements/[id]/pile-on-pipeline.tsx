@@ -36,7 +36,7 @@ import type { PileOnPipelineItem, PileOnStage, PileOnWeeklyTrend } from "@/app/a
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 type ViewMode = "month" | "day" | "list";
-type ListScope = "week" | "month";
+type ListScope = "week" | "month" | "all";
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 8);
 
@@ -109,7 +109,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
   // visible month, which made this page look empty even when the pipeline
   // had real data (2026-08-20 UX audit).
   const [mode, setMode] = useState<ViewMode>("list");
-  const [listScope, setListScope] = useState<ListScope>("month");
+  const [listScope, setListScope] = useState<ListScope>("all");
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -261,12 +261,25 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
     return { pastAndToday, future };
   }, [year, month, itemsByDate, todayK]);
 
+  // ALL-TIME FEED: every date that has activity, most recent first — no
+  // month/week window to fall outside of. Bug fix (2026-08-20): "week" and
+  // "month" scope both windowed on currentDate, so a client whose pile-on
+  // history didn't fall in whatever window was currently selected rendered
+  // as empty even though the pipeline had real data. This scope can't have
+  // that problem because it doesn't window at all.
+  const allDaysWithActivity = useMemo(() => {
+    return Object.entries(itemsByDate)
+      .map(([dateStr, calls]) => ({ dateStr, dateObj: new Date(dateStr), calls }))
+      .sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+  }, [itemsByDate]);
+
   const listDaysToRender = useMemo(() => {
+    if (listScope === "all") return allDaysWithActivity;
     if (listScope === "week") {
       return currentWeekDays;
     }
     return monthDaysSmart.pastAndToday;
-  }, [listScope, currentWeekDays, monthDaysSmart]);
+  }, [listScope, currentWeekDays, monthDaysSmart, allDaysWithActivity]);
 
   const dayMetrics = useMemo(() => {
     const metrics: Record<string, { total: number; active: number }> = {};
@@ -771,7 +784,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
                 <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
-                  {listScope === "week" ? "Current Week Feed" : `${monthName} Feed`}
+                  {listScope === "week" ? "Current Week Feed" : listScope === "month" ? `${monthName} Feed` : "All Activity"}
                 </span>
               </div>
 
@@ -825,6 +838,17 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   >
                     Full Month
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setListScope("all")}
+                    className={cn(
+                      "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                      listScope === "all" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                    )}
+                    title="Every booking on file, regardless of date"
+                  >
+                    All
+                  </button>
                 </div>
               </div>
             </div>
@@ -833,7 +857,11 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             {listDaysToRender.length === 0 && !loading ? (
               <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
                 <CalendarX2 size={22} />
-                <span className="text-xs">No bookings on file.</span>
+                <span className="text-xs">
+                  {listScope === "all"
+                    ? "No bookings on file for this engagement yet."
+                    : `No bookings in this ${listScope === "week" ? "week" : "month"} — try "All" to see full history.`}
+                </span>
               </div>
             ) : (
               <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 max-h-[580px] overflow-y-auto">

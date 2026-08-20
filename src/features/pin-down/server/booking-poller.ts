@@ -126,6 +126,28 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
     const message = e instanceof Error ? e.message : "Unknown error";
     console.error(`[booking-poller] Poll failed for engagement ${engagementId}: ${message}`);
     errors = 1;
+    // Bug fix (2026-08-20): this used to only console.error, which nobody
+    // running the app ever sees. webhook_last_error is the exact field
+    // computeBookingSyncStatus() already reads to render the Booking Sync
+    // health card — it was just never written from this path, only from
+    // the live webhook route. A bad credential, an expired token, or a
+    // misconfigured location_id could (and did) fail silently forever
+    // while the UI kept reporting "Auto-polling · healthy". Writing it
+    // here means a broken poll now surfaces exactly where a broken
+    // webhook already does, instead of only in a server log nobody reads.
+    await db
+      .update(engagements)
+      .set({
+        stack: {
+          ...stack,
+          webhook_last_error: `Poll failed at ${now.toISOString()} — ${message}`,
+        },
+        updatedAt: now,
+      })
+      .where(eq(engagements.engagementId, engagementId))
+      .catch((dbErr: unknown) => {
+        console.error(`[booking-poller] Failed to persist poll error for ${engagementId}:`, dbErr);
+      });
     // Don't advance the watermark on a failed poll — the next cycle will
     // retry the same window rather than silently skipping it.
     return { polled: 0, newBookings: 0, duplicates: 0, errors };
@@ -244,10 +266,14 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
 
   // Advance the watermark even when calls is empty — the whole point is
   // "since the last successful poll", not "since the last booking found".
+  // Also clears any stale webhook_last_error from a prior failed cycle —
+  // reaching this line means the platform API call above succeeded, so a
+  // credential/config error that was previously surfaced in the Booking
+  // Sync status card no longer applies and shouldn't linger.
   await db
     .update(engagements)
     .set({
-      stack: { ...stack, webhook_receiver_last_polled_at: now.toISOString() },
+      stack: { ...stack, webhook_receiver_last_polled_at: now.toISOString(), webhook_last_error: undefined },
       updatedAt: now,
     })
     .where(eq(engagements.engagementId, engagementId));
