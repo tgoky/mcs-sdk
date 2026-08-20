@@ -13,14 +13,40 @@ import {
   emailPlatformLabel,
   smsPlatformLabel,
   adDataPlatformLabel,
-  sentViaLabel,
 } from "@/lib/copy";
 import { classifyRunError } from "@/lib/error-classification";
-import { StatusPill } from "../_shared/status-pill";
 import type { PileOnDetail, SequenceMessage } from "../_shared/types";
 import type { RunStep } from "@/models/schema";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
+
+function HighContrastBadge({
+  tone,
+  children,
+}: {
+  tone: Tone;
+  children: React.ReactNode;
+}) {
+  const styles: Record<Tone, string> = {
+    success:
+      "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/40 dark:bg-emerald-500/25",
+    danger:
+      "bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 dark:bg-rose-500/25",
+    warning:
+      "bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40 dark:bg-amber-500/25",
+    info: "bg-sky-500/20 text-sky-600 dark:text-sky-300 border-sky-500/40 dark:bg-sky-500/25",
+    neutral:
+      "bg-zinc-200/80 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700",
+  };
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${styles[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
 
 export function PileOnView({
   detail,
@@ -89,77 +115,62 @@ export function PileOnView({
     : "Standard Template";
 
   const channels = useMemo(() => {
-    const rows: {
-      id: string;
-      type: "email" | "sms" | "ad_data";
-      title: string;
-      subtitle: string;
-      badge: string;
-      tone: Tone;
-      icon: React.ElementType;
-      platform: string;
-      step: RunStep | undefined;
-      messages?: SequenceMessage[];
-    }[] = [];
-
-    rows.push({
-      id: "email-channel",
-      type: "email",
-      title: "Email Sequence",
-      subtitle: emailStep
-        ? emailStep.detail ?? emailPlatformLabel(run.stack?.email_platform)
-        : run.stack?.email_platform
-        ? `${emailPlatformLabel(run.stack.email_platform)} — Not attempted`
-        : "Not configured",
-      badge:
-        emailStep?.status === "success"
-          ? "Enrolled"
-          : emailStep?.status === "failed"
-          ? "Failed"
-          : emailStep?.status === "running"
-          ? "In Progress"
-          : "Not Attempted",
-      tone:
-        emailStep?.status === "success"
+    return [
+      {
+        id: "email-channel",
+        type: "email" as const,
+        title: "Email Sequence",
+        subtitle: emailStep
+          ? emailStep.detail ?? emailPlatformLabel(run.stack?.email_platform)
+          : run.stack?.email_platform
+          ? `${emailPlatformLabel(run.stack.email_platform)} — Not attempted`
+          : "Not configured",
+        badge:
+          emailStep?.status === "success"
+            ? "Enrolled"
+            : emailStep?.status === "failed"
+            ? "Failed"
+            : emailStep?.status === "running"
+            ? "In Progress"
+            : "Not Attempted",
+        tone: (emailStep?.status === "success"
           ? "success"
           : emailStep?.status === "failed"
           ? "danger"
           : emailStep?.status === "running"
           ? "info"
-          : "neutral",
-      icon: Mail,
-      platform: emailPlatformLabel(run.stack?.email_platform),
-      step: emailStep,
-    });
-
-    rows.push({
-      id: "sms-channel",
-      type: "sms",
-      title: "SMS Sequence",
-      subtitle:
-        !run.stack?.sms_platform || run.stack.sms_platform === "none"
-          ? "Not configured"
-          : smsMessages.length > 0
-          ? `${smsSentCount} sent${smsFailedCount > 0 ? `, ${smsFailedCount} failed` : ""} of ${smsMessages.length} attempted`
-          : smsDispatchStep?.status === "success"
-          ? "Dispatched — waiting on schedule"
-          : smsDispatchStep?.status === "failed"
-          ? smsDispatchStep.detail ?? "Failed to start"
-          : `${smsPlatformLabel(run.stack.sms_platform)} — no dispatch recorded`,
-      badge:
-        !run.stack?.sms_platform || run.stack.sms_platform === "none"
-          ? "Disabled"
-          : smsFailedCount > 0 && smsSentCount === 0
-          ? "Failed"
-          : smsFailedCount > 0
-          ? `${smsSentCount} sent, ${smsFailedCount} failed`
-          : smsSentCount > 0
-          ? `${smsSentCount} sent`
-          : smsDispatchStep?.status === "failed"
-          ? "Failed"
-          : "Scheduled",
-      tone:
-        !run.stack?.sms_platform || run.stack.sms_platform === "none"
+          : "neutral") as Tone,
+        icon: Mail,
+        platform: emailPlatformLabel(run.stack?.email_platform),
+        step: emailStep,
+      },
+      {
+        id: "sms-channel",
+        type: "sms" as const,
+        title: "SMS Sequence",
+        subtitle:
+          !run.stack?.sms_platform || run.stack.sms_platform === "none"
+            ? "Not configured"
+            : smsMessages.length > 0
+            ? `${smsSentCount} sent${smsFailedCount > 0 ? `, ${smsFailedCount} failed` : ""} of ${smsMessages.length} attempted`
+            : smsDispatchStep?.status === "success"
+            ? "Dispatched — waiting on schedule"
+            : smsDispatchStep?.status === "failed"
+            ? smsDispatchStep.detail ?? "Failed to start"
+            : `${smsPlatformLabel(run.stack.sms_platform)} — no dispatch recorded`,
+        badge:
+          !run.stack?.sms_platform || run.stack.sms_platform === "none"
+            ? "Disabled"
+            : smsFailedCount > 0 && smsSentCount === 0
+            ? "Failed"
+            : smsFailedCount > 0
+            ? `${smsSentCount} sent, ${smsFailedCount} failed`
+            : smsSentCount > 0
+            ? `${smsSentCount} sent`
+            : smsDispatchStep?.status === "failed"
+            ? "Failed"
+            : "Scheduled",
+        tone: (!run.stack?.sms_platform || run.stack.sms_platform === "none"
           ? "neutral"
           : smsFailedCount > 0 && smsSentCount === 0
           ? "danger"
@@ -169,44 +180,41 @@ export function PileOnView({
           ? "success"
           : smsDispatchStep?.status === "failed"
           ? "danger"
-          : "info",
-      icon: MessageSquare,
-      platform: smsPlatformLabel(run.stack?.sms_platform),
-      step: smsDispatchStep,
-      messages: smsMessages,
-    });
-
-    rows.push({
-      id: "ad-data-channel",
-      type: "ad_data",
-      title: "Ad Audience Cohort",
-      subtitle: adDataStep
-        ? adDataStep.detail ?? adDataPlatformLabel(run.stack?.ad_data_platform)
-        : run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none"
-        ? `${adDataPlatformLabel(run.stack.ad_data_platform)} — not updated`
-        : "Not configured",
-      badge:
-        adDataStep?.status === "success"
-          ? "Synced"
-          : adDataStep?.status === "failed"
-          ? "Failed"
-          : adDataStep?.status === "running"
-          ? "In Progress"
-          : "Not Attempted",
-      tone:
-        adDataStep?.status === "success"
+          : "info") as Tone,
+        icon: MessageSquare,
+        platform: smsPlatformLabel(run.stack?.sms_platform),
+        step: smsDispatchStep,
+        messages: smsMessages,
+      },
+      {
+        id: "ad-data-channel",
+        type: "ad_data" as const,
+        title: "Ad Audience Cohort",
+        subtitle: adDataStep
+          ? adDataStep.detail ?? adDataPlatformLabel(run.stack?.ad_data_platform)
+          : run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none"
+          ? `${adDataPlatformLabel(run.stack.ad_data_platform)} — not updated`
+          : "Not configured",
+        badge:
+          adDataStep?.status === "success"
+            ? "Synced"
+            : adDataStep?.status === "failed"
+            ? "Failed"
+            : adDataStep?.status === "running"
+            ? "In Progress"
+            : "Not Attempted",
+        tone: (adDataStep?.status === "success"
           ? "success"
           : adDataStep?.status === "failed"
           ? "danger"
           : adDataStep?.status === "running"
           ? "info"
-          : "neutral",
-      icon: BarChart3,
-      platform: adDataPlatformLabel(run.stack?.ad_data_platform),
-      step: adDataStep,
-    });
-
-    return rows;
+          : "neutral") as Tone,
+        icon: BarChart3,
+        platform: adDataPlatformLabel(run.stack?.ad_data_platform),
+        step: adDataStep,
+      },
+    ];
   }, [
     run.stack,
     emailStep,
@@ -217,10 +225,8 @@ export function PileOnView({
     smsFailedCount,
   ]);
 
-  const pillStyle = "bg-amber-400 text-white dark:text-black font-semibold border-none px-2.5 py-0.5 rounded-md";
-
   return (
-    <div className="w-full space-y-6 font-sans antialiased text-zinc-900 dark:text-zinc-100">
+    <div className="w-full space-y-5 font-sans antialiased text-zinc-900 dark:text-zinc-100">
       {/* ── HEADER ── */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-4">
         <div className="flex items-center gap-3">
@@ -257,26 +263,26 @@ export function PileOnView({
           </div>
         </div>
 
-        <StatusPill tone={outcomeTone} className={pillStyle}>
+        <HighContrastBadge tone={outcomeTone}>
           {outcomeLabel}
-        </StatusPill>
+        </HighContrastBadge>
       </div>
 
-      {/* ── EXECUTION STEPS (LARGE TEXT, NO EMOJIS, NO "FLOW" LABEL) ── */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-base sm:text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-        <span>Booking Received</span>
+      {/* ── EXECUTION STEPS (SCALED DOWN BREADCRUMB STYLE) ── */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs sm:text-sm font-medium text-zinc-500 dark:text-zinc-400">
+        <span className="text-zinc-800 dark:text-zinc-200">Booking Received</span>
         <span className="text-zinc-300 dark:text-zinc-700 font-normal">•</span>
-        <span>
+        <span className="text-zinc-800 dark:text-zinc-200">
           AI Personalization ({send?.sentVia === "hybrid" ? "Personalized" : "Standard"})
         </span>
         <span className="text-zinc-300 dark:text-zinc-700 font-normal">•</span>
-        <span>Sequences Triggered</span>
+        <span className="text-zinc-800 dark:text-zinc-200">Sequences Triggered</span>
       </div>
 
       {/* ── AI PERSONALIZATION CONTENT ── */}
       <div className="space-y-2 border-t border-zinc-200 dark:border-zinc-800 pt-4">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
             AI Personalization Content
           </span>
           {send?.personalizedIntro && (
@@ -325,7 +331,7 @@ export function PileOnView({
 
       {/* ── DISPATCH CHANNELS ── */}
       <div className="space-y-3 border-t border-zinc-200 dark:border-zinc-800 pt-4">
-        <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
           Dispatch Channels
         </span>
 
@@ -342,9 +348,9 @@ export function PileOnView({
                       {ch.title}
                     </span>
                   </div>
-                  <StatusPill tone={ch.tone} className={pillStyle}>
+                  <HighContrastBadge tone={ch.tone}>
                     {ch.badge}
-                  </StatusPill>
+                  </HighContrastBadge>
                 </div>
 
                 {/* Subtitle */}
@@ -412,12 +418,11 @@ export function PileOnView({
                             })}
                           </span>
                         </span>
-                        <StatusPill
+                        <HighContrastBadge
                           tone={m.status === "sent" ? "success" : "danger"}
-                          className={pillStyle}
                         >
                           {m.status === "sent" ? "Sent" : "Failed"}
-                        </StatusPill>
+                        </HighContrastBadge>
                       </div>
                     ))}
                   </div>
