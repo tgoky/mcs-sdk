@@ -10,7 +10,6 @@ import {
   ChevronDown,
   CircleAlert,
   Clock3,
-  ExternalLink,
   FileText,
   Loader2,
   XCircle,
@@ -23,7 +22,7 @@ import { PileOnView } from "./views/pile-on-view";
 import { PreCallReadView } from "./views/pre-call-read-view";
 import { WinBackView } from "./views/win-back-view";
 import { LeakMapView } from "./views/leak-map-view";
-import { skillName, phaseLabel, runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
+import { skillName, runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
 import { classifyRunError } from "@/lib/error-classification";
 import { BackLink } from "@/components/back-link";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
@@ -162,12 +161,8 @@ export default function RunDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<RunDetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
-  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
-  
-  const techDetailsRef = useRef<HTMLDivElement>(null);
+  const [showRunActivity, setShowRunActivity] = useState(true);
 
-  // Tracks the previously observed run status so fetchRun can detect the
-  // exact moment a run leaves "running" (see fetchRun below).
   const prevStatusRef = useRef<string | null>(null);
 
   const fetchDetail = useCallback(async (signal?: AbortSignal) => {
@@ -188,18 +183,6 @@ export default function RunDetailPage() {
       const data = await response.json();
       setRun(data.run);
 
-      // Live-refresh fix: `fetchDetail` only ran once, on mount, so the
-      // skill views (PinDownView/PileOnView/etc) kept showing whatever
-      // partial `detail` existed while the run was still going — the
-      // person had to manually refresh the page to see the finished
-      // result. The 3s status poll below already tells us the instant a
-      // run finishes, so use that same tick to pull the final detail
-      // payload once, right here. Deliberately called WITHOUT `signal`:
-      // this fires from inside the isRunning-gated polling effect, and
-      // the moment setRun() above flips isRunning to false, that effect's
-      // cleanup aborts its own controller — reusing that same signal here
-      // would risk the final detail fetch getting cancelled right as it's
-      // needed.
       const newStatus: string | null = data.run?.status ?? null;
       if (prevStatusRef.current === "running" && newStatus && newStatus !== "running") {
         fetchDetail();
@@ -238,8 +221,7 @@ export default function RunDetailPage() {
   useEffect(() => {
     if (!runId) return;
     const controller = new AbortController();
-    
-    // FIX: Defer synchronous setState to prevent cascading render warning
+
     const timeoutId = setTimeout(() => setDetailLoading(true), 0);
 
     (async () => {
@@ -256,7 +238,7 @@ export default function RunDetailPage() {
         if (!controller.signal.aborted) setDetailLoading(false);
       }
     })();
-    
+
     return () => {
       clearTimeout(timeoutId);
       controller.abort();
@@ -264,18 +246,6 @@ export default function RunDetailPage() {
   }, [runId]);
 
   const isRunning = run?.status === "running";
-
-  // FIX: Auto-expand and scroll to technical details when a run is live
-  useEffect(() => {
-    if (isRunning) {
-      // Defer state update and DOM manipulation to prevent synchronous setState warning
-      const timeoutId = setTimeout(() => {
-        setShowTechnicalDetails(true);
-        techDetailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 0);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [isRunning]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -316,9 +286,7 @@ export default function RunDetailPage() {
     <div className="mx-auto w-full max-w-6xl space-y-3 pb-8 text-zinc-700 dark:text-zinc-300 font-sans">
       <SetBreadcrumbLabel label={`${skillName(run.skillName)} run`} />
 
-      {/* ----------------------------------------------------------------- */}
-      {/* 1. COMPACT 1-LINE HEADER                                          */}
-      {/* ----------------------------------------------------------------- */}
+      {/* 1. COMPACT 1-LINE HEADER */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2.5">
         <div className="flex items-center gap-3 min-w-0">
           <BackLink
@@ -342,18 +310,9 @@ export default function RunDetailPage() {
         </div>
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* 2. FAILURE / CANCELLED / TIMED-OUT BANNERS                        */}
-      {/* ----------------------------------------------------------------- */}
+      {/* 2. FAILURE / CANCELLED / TIMED-OUT BANNERS */}
       {isFailed && (() => {
         const diagnosis = classifyRunError(run.errorMessage);
-        // Route "Fix Settings" to the actual broken section (booking,
-        // email, sms, ad_data, hosting) instead of always pointing at
-        // booking — the diagnosis already knows which platform failed;
-        // hardcoding one section here meant every non-booking failure
-        // sent people to fix the wrong thing. See
-        // src/lib/queue.ts's failedRunQueueItems for the same pattern
-        // this mirrors.
         return (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-900/60 bg-rose-950/30 px-3.5 py-2.5 text-xs text-rose-200 shadow-sm">
             <div className="flex items-start gap-2 min-w-0">
@@ -399,27 +358,35 @@ export default function RunDetailPage() {
         </div>
       )}
 
-      {/* ----------------------------------------------------------------- */}
-      {/* 3. RUN ACTIVITY (renamed from "technical details" — same content, */}
-      {/* framed as an explanation for the person reading it, not a debug  */}
-      {/* console; collapsed by default once a run is done, since a buyer  */}
-      {/* landing here doesn't need the step-by-step log unless they go    */}
-      {/* looking for it. Still auto-expands + scrolls into view while a   */}
-      {/* run is actively in progress, so live progress is visible.        */}
-      {/* ----------------------------------------------------------------- */}
-      <div ref={techDetailsRef} className="pt-2">
+      {/* 3. AUTOMATION DELIVERABLES — shown first, this is what the user came to see */}
+      <main className="w-full">
+        {detailLoading && !detail ? (
+          <div className="flex h-40 items-center justify-center rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950">
+            <Loader2 className="h-5 w-5 animate-spin text-zinc-700 dark:text-zinc-600" />
+          </div>
+        ) : detail && detail.run.id === run.id ? (
+          <SkillView detail={detail} steps={steps} onRefreshDetail={fetchDetail} />
+        ) : (
+          <div className="rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-white/30 dark:bg-zinc-900/30 px-6 py-10 text-center text-xs text-zinc-500 dark:text-zinc-500">
+            We don&apos;t have anything more to show for this run yet.
+          </div>
+        )}
+      </main>
+
+      {/* 4. RUN ACTIVITY — below deliverables, open by default, collapsible on demand */}
+      <section>
         <button
           type="button"
-          onClick={() => setShowTechnicalDetails((p) => !p)}
+          onClick={() => setShowRunActivity((p) => !p)}
           className="flex items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-white cursor-pointer select-none"
         >
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTechnicalDetails ? "rotate-180" : ""}`} />
-          <span>{showTechnicalDetails ? "Hide" : "Show"} what happened during this run</span>
-          <span className="text-zinc-700 dark:text-zinc-600">·</span>
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showRunActivity ? "rotate-180" : ""}`} />
+          <span>{showRunActivity ? "Hide" : "Show"} run activity</span>
+          <span className="text-zinc-300 dark:text-zinc-800">·</span>
           <span className="text-zinc-500 dark:text-zinc-500">{steps.length} step{steps.length === 1 ? "" : "s"}</span>
         </button>
 
-        {showTechnicalDetails && (
+        {showRunActivity && (
           <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
             <section className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950">
               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
@@ -452,24 +419,7 @@ export default function RunDetailPage() {
             </aside>
           </div>
         )}
-      </div>
-
-      {/* ----------------------------------------------------------------- */}
-      {/* 4. AUTOMATION DELIVERABLES (MOVED DOWN)                           */}
-      {/* ----------------------------------------------------------------- */}
-      <main className="w-full">
-        {detailLoading && !detail ? (
-          <div className="flex h-40 items-center justify-center rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950">
-            <Loader2 className="h-5 w-5 animate-spin text-zinc-700 dark:text-zinc-600" />
-          </div>
-        ) : detail && detail.run.id === run.id ? (
-          <SkillView detail={detail} steps={steps} onRefreshDetail={fetchDetail} />
-        ) : (
-          <div className="rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-white/30 dark:bg-zinc-900/30 px-6 py-10 text-center text-xs text-zinc-500 dark:text-zinc-500">
-            We don&apos;t have anything more to show for this run yet.
-          </div>
-        )}
-      </main>
+      </section>
     </div>
   );
 }
