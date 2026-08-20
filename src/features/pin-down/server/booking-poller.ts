@@ -24,7 +24,7 @@ type StepTools = GetStepTools<Inngest.Any>;
  * webhook_receiver.last_polled_at." UTP dropped this outright — engagements
  * on OnceHub (which has never supported programmatic webhook registration;
  * see registerWebhookForTenant in booking.ts) simply never got processed
- * automatically.
+ * automaticallyx.
  *
  * This module is the recovery: instead of writing to a markdown file, a
  * synthetic booking-event payload is fed through the exact same
