@@ -7,59 +7,26 @@ import {
   Mail,
   MessageSquare,
   BarChart3,
+  ListChecks,
   Copy,
   Check,
   ShieldCheck,
   Search,
   AlertCircle,
-  ChevronRight,
-  SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  emailPlatformLabel,
-  smsPlatformLabel,
-  adDataPlatformLabel,
-  sentViaLabel,
-  runStatusLabel,
-} from "@/lib/copy";
+import { emailPlatformLabel, smsPlatformLabel, adDataPlatformLabel, sentViaLabel, runStatusLabel } from "@/lib/copy";
 import { classifyRunError } from "@/lib/error-classification";
 import { StatusPill } from "../_shared/status-pill";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetBody,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
 import type { PileOnDetail, SequenceMessage } from "../_shared/types";
 import type { RunStep } from "@/models/schema";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 
-interface InspectableChannelCard {
-  id: string;
-  type: "ai_intro" | "email" | "sms" | "ad_data";
-  title: string;
-  subtitle: string;
-  badge: string;
-  tone: Tone;
-  icon: React.ElementType;
-  payload: any;
-}
-
-export function PileOnView({
-  detail,
-  steps,
-}: {
-  detail: PileOnDetail;
-  steps: RunStep[];
-}) {
+export function PileOnView({ detail, steps }: { detail: PileOnDetail; steps: RunStep[] }) {
   const { run, send, smsMessages } = detail;
   const [filterText, setFilterText] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [activeDrawerCard, setActiveDrawerCard] = useState<InspectableChannelCard | null>(null);
 
   const handleCopy = (text: string, key: string) => {
     if (!text) return;
@@ -80,12 +47,9 @@ export function PileOnView({
   const smsSentCount = smsMessages.filter((m) => m.status === "sent").length;
   const smsFailedCount = smsMessages.filter((m) => m.status === "failed").length;
 
-  const prospectEmail =
-    send?.prospectEmail ??
-    steps
-      .find((s) => s.phase === "pile_on_enrollment" && s.detail?.includes("@"))
-      ?.detail?.match(/<([^>]+@[^>]+)>/)?.[1] ??
-    "Enrolled Prospect";
+  const prospectEmail = send?.prospectEmail
+    ?? steps.find(s => s.phase === "pile_on_enrollment" && s.detail?.includes("@"))?.detail?.match(/<([^>]+@[^>]+)>/)?.[1]
+    ?? "Enrolled Prospect";
 
   const bookingId = send?.bookingId ?? "—";
 
@@ -109,576 +73,391 @@ export function PileOnView({
     ? "Enrollment Failed"
     : "Standard template used";
 
-  const channelCards = useMemo(() => {
+  // Filterable channel rows — flat list, no grouping needed
+  const channels = useMemo(() => {
     const q = filterText.toLowerCase().trim();
-    const cards: InspectableChannelCard[] = [];
 
-    if (send) {
-      cards.push({
-        id: "ai-intro",
-        type: "ai_intro",
-        title: "AI Personalization",
-        subtitle:
-          send.personalizedIntro ??
-          (send.error
-            ? `Didn't go out — ${classifyRunError(send.error)?.title ?? "hit an unexpected error"}`
-            : "Standard template intro delivered"),
-        badge: sentViaLabel(send.sentVia),
-        tone: send.sentVia === "hybrid" ? "success" : "info",
-        icon: Sparkles,
-        payload: { send },
-      });
-    }
+    const rows: {
+      id: string;
+      type: "email" | "sms" | "ad_data";
+      title: string;
+      subtitle: string;
+      badge: string;
+      tone: Tone;
+      icon: React.ElementType;
+      platform: string;
+      step: RunStep | undefined;
+      messages?: SequenceMessage[];
+    }[] = [];
 
-    cards.push(
-      {
-        id: "email-channel",
-        type: "email",
-        title: "Email Sequence",
-        subtitle: emailStep
-          ? emailStep.detail ?? emailPlatformLabel(run.stack?.email_platform)
-          : run.stack?.email_platform
-          ? `${emailPlatformLabel(run.stack.email_platform)} — wasn't attempted`
-          : "Not configured",
-        badge:
-          emailStep?.status === "success"
-            ? "Enrolled"
-            : emailStep?.status === "failed"
-            ? "Failed"
-            : emailStep?.status === "running"
-            ? "In progress"
-            : "Not attempted",
-        tone:
-          emailStep?.status === "success"
-            ? "success"
-            : emailStep?.status === "failed"
-            ? "danger"
-            : emailStep?.status === "running"
-            ? "info"
-            : "neutral",
-        icon: Mail,
-        payload: {
-          platform: emailPlatformLabel(run.stack?.email_platform),
-          raw: run.stack?.email_platform,
-          step: emailStep,
-        },
-      },
-      {
-        id: "sms-channel",
-        type: "sms",
-        title: "SMS Sequence",
-        subtitle:
-          !run.stack?.sms_platform || run.stack.sms_platform === "none"
-            ? "Not configured"
-            : smsMessages.length > 0
-            ? `${smsSentCount} sent${smsFailedCount > 0 ? `, ${smsFailedCount} failed` : ""} of ${smsMessages.length} attempted`
-            : smsDispatchStep?.status === "success"
-            ? "Dispatched — waiting on scheduled times"
-            : smsDispatchStep?.status === "failed"
-            ? smsDispatchStep.detail ?? "Sequence failed to start"
-            : `${smsPlatformLabel(run.stack.sms_platform)} — no dispatch recorded`,
-        badge:
-          !run.stack?.sms_platform || run.stack.sms_platform === "none"
-            ? "Disabled"
-            : smsFailedCount > 0 && smsSentCount === 0
-            ? "Failed"
-            : smsFailedCount > 0
-            ? `${smsSentCount} sent, ${smsFailedCount} failed`
-            : smsSentCount > 0
-            ? `${smsSentCount} sent`
-            : smsDispatchStep?.status === "failed"
-            ? "Failed"
-            : "Scheduled",
-        tone:
-          !run.stack?.sms_platform || run.stack.sms_platform === "none"
-            ? "neutral"
-            : smsFailedCount > 0 && smsSentCount === 0
-            ? "danger"
-            : smsFailedCount > 0
-            ? "warning"
-            : smsSentCount > 0
-            ? "success"
-            : smsDispatchStep?.status === "failed"
-            ? "danger"
-            : "info",
-        icon: MessageSquare,
-        payload: {
-          platform: smsPlatformLabel(run.stack?.sms_platform),
-          raw: run.stack?.sms_platform,
-          messages: smsMessages,
-          dispatchStep: smsDispatchStep,
-        },
-      },
-      {
-        id: "ad-data-channel",
-        type: "ad_data",
-        title: "Ad Audience Update",
-        subtitle: adDataStep
-          ? adDataStep.detail ?? adDataPlatformLabel(run.stack?.ad_data_platform)
-          : run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none"
-          ? `${adDataPlatformLabel(run.stack.ad_data_platform)} — not updated`
-          : "Not configured",
-        badge:
-          adDataStep?.status === "success"
-            ? "Synced"
-            : adDataStep?.status === "failed"
-            ? "Failed"
-            : adDataStep?.status === "running"
-            ? "In progress"
-            : "Not attempted",
-        tone:
-          adDataStep?.status === "success"
-            ? "success"
-            : adDataStep?.status === "failed"
-            ? "danger"
-            : adDataStep?.status === "running"
-            ? "info"
-            : "neutral",
-        icon: BarChart3,
-        payload: {
-          platform: adDataPlatformLabel(run.stack?.ad_data_platform),
-          raw: run.stack?.ad_data_platform,
-          step: adDataStep,
-        },
-      }
+    rows.push({
+      id: "email-channel",
+      type: "email",
+      title: "Email Sequence Dispatch",
+      subtitle: emailStep
+        ? emailStep.detail ?? emailPlatformLabel(run.stack?.email_platform)
+        : run.stack?.email_platform
+        ? `${emailPlatformLabel(run.stack.email_platform)} — wasn't attempted on this run`
+        : "Not configured",
+      badge: emailStep?.status === "success" ? "Enrolled" : emailStep?.status === "failed" ? "Failed" : emailStep?.status === "running" ? "In progress" : "Not attempted",
+      tone: emailStep?.status === "success" ? "success" : emailStep?.status === "failed" ? "danger" : emailStep?.status === "running" ? "info" : "neutral",
+      icon: Mail,
+      platform: emailPlatformLabel(run.stack?.email_platform),
+      step: emailStep,
+    });
+
+    rows.push({
+      id: "sms-channel",
+      type: "sms",
+      title: "SMS Sequence Dispatch",
+      subtitle:
+        !run.stack?.sms_platform || run.stack.sms_platform === "none"
+          ? "Not configured"
+          : smsMessages.length > 0
+          ? `${smsSentCount} sent${smsFailedCount > 0 ? `, ${smsFailedCount} failed` : ""} of ${smsMessages.length} attempted so far`
+          : smsDispatchStep?.status === "success"
+          ? "Sequence dispatched — no messages sent yet (still waiting on scheduled times)"
+          : smsDispatchStep?.status === "failed"
+          ? (smsDispatchStep.detail ?? "Sequence failed to start")
+          : `${smsPlatformLabel(run.stack.sms_platform)} — no dispatch recorded on this run`,
+      badge:
+        !run.stack?.sms_platform || run.stack.sms_platform === "none"
+          ? "Disabled"
+          : smsFailedCount > 0 && smsSentCount === 0
+          ? "Failed"
+          : smsFailedCount > 0
+          ? `${smsSentCount} sent, ${smsFailedCount} failed`
+          : smsSentCount > 0
+          ? `${smsSentCount} sent`
+          : smsDispatchStep?.status === "failed"
+          ? "Failed"
+          : "Scheduled",
+      tone:
+        !run.stack?.sms_platform || run.stack.sms_platform === "none"
+          ? "neutral"
+          : smsFailedCount > 0 && smsSentCount === 0
+          ? "danger"
+          : smsFailedCount > 0
+          ? "warning"
+          : smsSentCount > 0
+          ? "success"
+          : smsDispatchStep?.status === "failed"
+          ? "danger"
+          : "info",
+      icon: MessageSquare,
+      platform: smsPlatformLabel(run.stack?.sms_platform),
+      step: smsDispatchStep,
+      messages: smsMessages,
+    });
+
+    rows.push({
+      id: "ad-data-channel",
+      type: "ad_data",
+      title: "Ad Audience Update",
+      subtitle: adDataStep
+        ? adDataStep.detail ?? adDataPlatformLabel(run.stack?.ad_data_platform)
+        : run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none"
+        ? `${adDataPlatformLabel(run.stack.ad_data_platform)} — not updated on this run`
+        : "Not configured",
+      badge: adDataStep?.status === "success" ? "Synced" : adDataStep?.status === "failed" ? "Failed" : adDataStep?.status === "running" ? "In progress" : "Not attempted",
+      tone: adDataStep?.status === "success" ? "success" : adDataStep?.status === "failed" ? "danger" : adDataStep?.status === "running" ? "info" : "neutral",
+      icon: BarChart3,
+      platform: adDataPlatformLabel(run.stack?.ad_data_platform),
+      step: adDataStep,
+    });
+
+    if (!q) return rows;
+    return rows.filter(
+      (r) => r.title.toLowerCase().includes(q) || r.subtitle.toLowerCase().includes(q)
     );
-
-    return cards.filter(
-      (card) =>
-        !q ||
-        card.title.toLowerCase().includes(q) ||
-        card.subtitle.toLowerCase().includes(q)
-    );
-  }, [
-    send,
-    run.stack,
-    filterText,
-    emailStep,
-    adDataStep,
-    smsDispatchStep,
-    smsMessages,
-    smsSentCount,
-    smsFailedCount,
-  ]);
+  }, [send, run.stack, filterText, emailStep, adDataStep, smsDispatchStep, smsMessages, smsSentCount, smsFailedCount]);
 
   return (
-    <div className="max-w-3xl mx-auto py-2 space-y-6 font-sans antialiased text-zinc-900 dark:text-zinc-100">
-      {/* 1. Header & Search Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-zinc-900 dark:text-white">
-              {prospectEmail}
-            </h2>
-            <button
-              type="button"
-              onClick={() => handleCopy(prospectEmail, "email")}
-              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
-              title="Copy prospect email"
-            >
-              {copiedKey === "email" ? (
-                <Check size={13} className="text-emerald-500" />
-              ) : (
-                <Copy size={13} />
-              )}
-            </button>
+    <div className="flex flex-col gap-3 font-sans antialiased">
+      {/* ── TOOLBAR ── */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f8f7fa] dark:bg-zinc-950 p-1.5 border border-zinc-200 dark:border-zinc-800">
+        <div className="relative w-64">
+          <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500" />
+          <input
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            placeholder="Search channel..."
+            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
+          />
+        </div>
+      </div>
+
+      {/* ── PROSPECT HEADER ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 shadow-xl">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 shrink-0 font-bold font-mono text-xs">
+            {prospectEmail.slice(0, 2).toUpperCase()}
           </div>
-          <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
-            <span>Booking #{bookingId}</span>
-            {send && (
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-bold text-zinc-900 dark:text-white">{prospectEmail}</p>
               <button
                 type="button"
-                onClick={() => handleCopy(send.bookingId, "bookingId")}
-                className="hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+                onClick={() => handleCopy(prospectEmail, "email")}
+                className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+                title="Copy prospect email"
               >
-                {copiedKey === "bookingId" ? (
-                  <Check size={11} className="text-emerald-500 inline" />
-                ) : (
-                  <Copy size={11} className="inline" />
-                )}
+                {copiedKey === "email" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
               </button>
-            )}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">
+              <span>Booking {bookingId}</span>
+              {send && (
+                <button
+                  type="button"
+                  onClick={() => handleCopy(send.bookingId, "bookingId")}
+                  className="text-zinc-700 dark:text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
+                  title="Copy booking ID"
+                >
+                  {copiedKey === "bookingId" ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                </button>
+              )}
+            </div>
           </div>
         </div>
-
-        <div className="flex items-center gap-3">
-          <StatusPill tone={outcomeTone}>{outcomeLabel}</StatusPill>
-          <div className="relative w-40 sm:w-48">
-            <Search
-              size={13}
-              className="absolute left-2.5 top-2.5 text-zinc-400"
-            />
-            <input
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              placeholder="Filter channels..."
-              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent py-1 pl-8 pr-2.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
-            />
-          </div>
-        </div>
+        <StatusPill tone={outcomeTone}>{outcomeLabel}</StatusPill>
       </div>
 
-      {/* 2. Execution Flow Steps */}
-      <div className="py-1">
-        <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
-          Execution Flow
-        </p>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 text-xs">
-          <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
-            <Zap size={14} className="text-emerald-500 shrink-0" />
-            <span>1. Booking Received</span>
+      {/* ── SPEED-TO-LEAD PIPELINE ── */}
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4">
+        <h3 className="mb-2.5 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+          Instant Speed-To-Lead Execution Flow
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/40 dark:bg-zinc-900/40 p-2.5">
+            <Zap size={14} className="text-emerald-400 shrink-0" />
+            <div className="min-w-0 text-xs">
+              <p className="font-semibold text-zinc-800 dark:text-zinc-200">1. Booking Received</p>
+              <p className="text-[10px] text-zinc-500">Confirmed instantly</p>
+            </div>
           </div>
-          <ChevronRight size={12} className="hidden sm:block text-zinc-300 dark:text-zinc-700" />
-          <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
+          <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/40 dark:bg-zinc-900/40 p-2.5">
             <Sparkles
               size={14}
-              className={cn(
-                "shrink-0",
-                send?.sentVia === "hybrid" ? "text-amber-500" : "text-zinc-400"
-              )}
+              className={cn("shrink-0", send?.sentVia === "hybrid" ? "text-amber-400" : "text-zinc-500")}
             />
-            <span>
-              2. AI Personalization (
-              {send?.sentVia === "hybrid" ? "Personalized" : "Standard"})
-            </span>
+            <div className="min-w-0 text-xs">
+              <p className="font-semibold text-zinc-800 dark:text-zinc-200">2. AI Personalization</p>
+              <p className="text-[10px] text-zinc-500">{send?.sentVia === "hybrid" ? "Personalized intro written" : "Standard template used"}</p>
+            </div>
           </div>
-          <ChevronRight size={12} className="hidden sm:block text-zinc-300 dark:text-zinc-700" />
-          <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
-            <ShieldCheck size={14} className="text-sky-500 shrink-0" />
-            <span>3. Follow-Up Dispatch</span>
+          <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/40 dark:bg-zinc-900/40 p-2.5">
+            <ShieldCheck size={14} className="text-sky-400 shrink-0" />
+            <div className="min-w-0 text-xs">
+              <p className="font-semibold text-zinc-800 dark:text-zinc-200">3. Follow-Up Sequences</p>
+              <p className="text-[10px] text-zinc-500">Email, text & ad audience updated</p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 3. AI Personalization Text Stream */}
-      <div className="py-1">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            AI Personalization Output
-          </p>
+      {/* ── AI PERSONALIZATION CONTENT ── */}
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} className="text-amber-400" />
+            <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+              AI Personalization Content
+            </h3>
+          </div>
           {send?.personalizedIntro && (
             <button
               type="button"
               onClick={() => handleCopy(send.personalizedIntro!, "intro")}
-              className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-700 text-xs font-mono transition-all cursor-pointer"
             >
-              {copiedKey === "intro" ? (
-                <Check size={11} className="text-emerald-500" />
-              ) : (
-                <Copy size={11} />
-              )}
-              <span>{copiedKey === "intro" ? "Copied" : "Copy"}</span>
+              {copiedKey === "intro" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+              <span>{copiedKey === "intro" ? "Copied" : "Copy Intro"}</span>
             </button>
           )}
         </div>
 
         {send?.personalizedIntro ? (
-          <div className="pl-3.5 border-l-2 border-amber-500/70 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap py-0.5">
+          <p className="whitespace-pre-wrap rounded-xl border border-amber-900/30 bg-amber-950/10 p-3.5 text-xs leading-relaxed text-zinc-800 dark:text-zinc-200">
             {send.personalizedIntro}
-          </div>
-        ) : send?.error ? (
-          (() => {
-            const diagnosis = classifyRunError(send.error);
-            return (
-              <div className="flex items-start gap-2 text-xs text-rose-500 pl-3.5 border-l-2 border-rose-500">
-                <AlertCircle size={14} className="shrink-0 mt-0.5" />
+          </p>
+        ) : send?.error ? (() => {
+          const diagnosis = classifyRunError(send.error);
+          return (
+            <div className="rounded-xl border border-rose-900/40 bg-rose-950/10 p-3.5 text-xs text-rose-400 flex items-start gap-2">
+              <AlertCircle size={14} className="shrink-0 mt-0.5" />
+              {diagnosis ? (
                 <div>
-                  <span className="font-semibold block">
-                    {diagnosis?.title ?? "Execution Error"}
-                  </span>
-                  <span>
-                    {diagnosis?.explanation ??
-                      "This didn't go out due to an unexpected error."}
-                  </span>
+                  <span className="font-semibold block">{diagnosis.title}</span>
+                  <span>{diagnosis.explanation}</span>
                 </div>
-              </div>
-            );
-          })()
-        ) : (
-          <p className="text-xs italic text-zinc-400 dark:text-zinc-500 pl-3.5 border-l-2 border-zinc-200 dark:border-zinc-800">
-            Standard {emailPlatformLabel(run.stack?.email_platform)} sequence used — no AI-personalized intro generated.
+              ) : (
+                <span>This didn&apos;t go out — it hit an unexpected error. If it keeps happening, let your account contact know.</span>
+              )}
+            </div>
+          );
+        })() : (
+          <p className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/40 dark:bg-zinc-900/40 p-3.5 text-xs italic text-zinc-500">
+            This prospect got your standard {emailPlatformLabel(run.stack?.email_platform)} sequence — no AI-personalized intro was generated for this send.
           </p>
         )}
       </div>
 
-      {/* 4. Minimal Vertical Channel Dispatch List */}
-      <div className="pt-2">
-        <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">
-          Dispatch Channels
-        </p>
-        <div className="divide-y divide-zinc-100 dark:divide-zinc-800/60 border-t border-b border-zinc-200 dark:border-zinc-800">
-          {channelCards.map((card) => {
-            const Icon = card.icon;
-            return (
-              <button
-                key={card.id}
-                type="button"
-                onClick={() => setActiveDrawerCard(card)}
-                className="w-full flex items-center justify-between py-3 px-1 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors group cursor-pointer"
-              >
-                <div className="flex items-center gap-3 min-w-0 pr-4">
-                  <Icon
-                    size={15}
-                    className="text-zinc-400 group-hover:text-amber-500 transition-colors shrink-0"
-                  />
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">
-                      {card.title}
-                    </p>
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
-                      {card.subtitle}
-                    </p>
+      {/* ── CHANNEL DETAILS — flat, stacked, everything visible ── */}
+      <div className="flex flex-col gap-2.5">
+        {channels.map((ch) => {
+          const Icon = ch.icon;
+          return (
+            <div
+              key={ch.id}
+              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-3 space-y-3"
+            >
+              {/* Header row */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Icon size={13} className="text-amber-500 dark:text-amber-400 shrink-0" />
+                  <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">{ch.title}</p>
+                </div>
+                <StatusPill tone={ch.tone} className="text-[9.5px] shrink-0">{ch.badge}</StatusPill>
+              </div>
+
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-snug">{ch.subtitle}</p>
+
+              {/* Platform + prospect metadata */}
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 p-3 text-xs text-zinc-700 dark:text-zinc-300 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">Connected platform</span>
+                  <span>{ch.platform || "—"}{ch.platform === "Not configured" ? "" : ""}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">Prospect</span>
+                  <span className="truncate max-w-[60%] text-right">{send?.prospectEmail ?? "This booking"}</span>
+                </div>
+              </div>
+
+              {/* SMS: individual message history */}
+              {ch.type === "sms" && ch.messages && ch.messages.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+                    Send history ({ch.messages.length})
+                  </span>
+                  {ch.messages.map((m: SequenceMessage, i: number) => (
+                    <div
+                      key={m.id}
+                      className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/40 dark:bg-zinc-900/40 p-3 text-xs space-y-1"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-700 dark:text-zinc-300 font-semibold">Text message {i + 1}</span>
+                        <StatusPill tone={m.status === "sent" ? "success" : "danger"}>
+                          {m.status === "sent" ? "Sent" : "Failed"}
+                        </StatusPill>
+                      </div>
+                      <p className="text-zinc-500">{new Date(m.sentAt).toLocaleString()}</p>
+                      {m.error && (() => {
+                        const diagnosis = classifyRunError(m.error);
+                        return diagnosis ? (
+                          <p className="text-rose-400">{diagnosis.title}</p>
+                        ) : (
+                          <p className="text-rose-400">This message didn&apos;t send.</p>
+                        );
+                      })()}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {ch.type === "sms" && (!ch.messages || ch.messages.length === 0) && (
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed bg-white/40 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 p-3 rounded-lg">
+                  No individual messages have sent yet — they go out on the schedule set for this booking, each logged here the moment it sends.
+                </p>
+              )}
+
+              {/* Email / Ad Data: step attempt detail */}
+              {(ch.type === "email" || ch.type === "ad_data") && ch.step && (
+                <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/40 dark:bg-zinc-900/40 p-3 text-xs text-zinc-700 dark:text-zinc-300 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500">Last attempt</span>
+                    <StatusPill
+                      tone={ch.step.status === "success" ? "success" : ch.step.status === "failed" ? "danger" : "info"}
+                    >
+                      {runStatusLabel(ch.step.status)}
+                    </StatusPill>
                   </div>
+                  <p className="text-zinc-500">
+                    {new Date(ch.step.completedAt ?? ch.step.startedAt).toLocaleString()}
+                  </p>
+                  {ch.step.detail && ch.step.status === "failed"
+                    ? (() => {
+                        const diagnosis = classifyRunError(ch.step!.detail);
+                        return diagnosis ? (
+                          <div className="pt-1">
+                            <p className="text-zinc-700 dark:text-zinc-300 font-semibold">{diagnosis.title}</p>
+                            <p className="text-zinc-600 dark:text-zinc-400 mt-0.5">{diagnosis.explanation}</p>
+                          </div>
+                        ) : (
+                          <p className="text-zinc-600 dark:text-zinc-400 pt-1">This didn&apos;t go out — it hit an unexpected error.</p>
+                        );
+                      })()
+                    : ch.step.detail
+                    ? <p className="text-zinc-600 dark:text-zinc-400 pt-1">{ch.step.detail}</p>
+                    : null}
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <StatusPill tone={card.tone} className="text-[10px]">
-                    {card.badge}
-                  </StatusPill>
-                  <ChevronRight
-                    size={14}
-                    className="text-zinc-300 dark:text-zinc-700 group-hover:text-zinc-500 transition-colors"
-                  />
-                </div>
-              </button>
-            );
-          })}
-        </div>
+              )}
+
+              {(ch.type === "email" || ch.type === "ad_data") && !ch.step && (
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed bg-white/40 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 p-3 rounded-lg">
+                  Nothing has been attempted on this channel for this run yet.
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* 5. Minimal Configured Stack Summary Footer */}
-      <div className="pt-2 flex flex-wrap items-center gap-y-2 gap-x-6 text-xs text-zinc-500 dark:text-zinc-400">
-        <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-          Configured Stack:
-        </span>
-        <div className="flex items-center gap-1.5">
-          <Mail size={12} className="text-zinc-400" />
-          <span>{emailPlatformLabel(run.stack?.email_platform)}</span>
+      {/* ── CONFIGURED DISPATCH CHANNELS FOOTER ── */}
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <ListChecks size={14} className="text-zinc-600 dark:text-zinc-400" />
+          <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+            Configured Dispatch Channels
+          </h3>
         </div>
-        <div className="flex items-center gap-1.5">
-          <MessageSquare size={12} className="text-zinc-400" />
-          <span>
-            {run.stack?.sms_platform && run.stack.sms_platform !== "none"
-              ? smsPlatformLabel(run.stack.sms_platform)
-              : "SMS Disabled"}
-          </span>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <ChannelChip icon={Mail} label="Email sequence" value={emailPlatformLabel(run.stack?.email_platform)} />
+          <ChannelChip
+            icon={MessageSquare}
+            label="SMS sequence"
+            value={run.stack?.sms_platform && run.stack.sms_platform !== "none" ? smsPlatformLabel(run.stack.sms_platform) : "Not configured"}
+          />
+          <ChannelChip
+            icon={BarChart3}
+            label="Ad attribution"
+            value={run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none" ? adDataPlatformLabel(run.stack.ad_data_platform) : "Not configured"}
+          />
         </div>
-        <div className="flex items-center gap-1.5">
-          <BarChart3 size={12} className="text-zinc-400" />
-          <span>
-            {run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none"
-              ? adDataPlatformLabel(run.stack.ad_data_platform)
-              : "Ad Sync Disabled"}
-          </span>
-        </div>
+        <p className="mt-3 text-[10px] text-zinc-500">
+          Per-channel enrollment outcomes for this specific run (ESP sequence, SMS schedule, ad cohort sync) are logged as steps — see the Steps panel for exact success/failure per channel.
+        </p>
       </div>
-
-      {/* Slide-Over Drawer for Item Inspection */}
-      <PileOnDetailDrawer
-        card={activeDrawerCard}
-        send={send}
-        onClose={() => setActiveDrawerCard(null)}
-        onCopy={handleCopy}
-        copiedKey={copiedKey}
-      />
     </div>
   );
 }
 
-function PileOnDetailDrawer({
-  card,
-  send,
-  onClose,
-  onCopy,
-  copiedKey,
+function ChannelChip({
+  icon: Icon,
+  label,
+  value,
 }: {
-  card: InspectableChannelCard | null;
-  send: PileOnDetail["send"];
-  onClose: () => void;
-  onCopy: (text: string, key: string) => void;
-  copiedKey: string | null;
+  icon: React.ElementType;
+  label: string;
+  value: string;
 }) {
   return (
-    <Sheet open={!!card} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent widthClassName="w-full sm:max-w-xl font-sans antialiased text-zinc-900 dark:text-zinc-100">
-        {card && (
-          <div className="flex flex-col h-full font-sans antialiased">
-            <SheetHeader className="font-sans">
-              <div className="flex items-center justify-between font-sans">
-                <div className="flex items-center gap-2 text-amber-500 font-sans">
-                  <SlidersHorizontal size={15} />
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
-                    Pile-On Detail
-                  </span>
-                </div>
-                <StatusPill tone={card.tone}>{card.badge}</StatusPill>
-              </div>
-
-              <SheetTitle className="mt-2 text-base font-bold font-sans text-zinc-900 dark:text-white">
-                {card.title}
-              </SheetTitle>
-              <SheetDescription className="text-xs text-zinc-500 dark:text-zinc-400 font-sans">
-                {card.subtitle}
-              </SheetDescription>
-            </SheetHeader>
-
-            <SheetBody className="space-y-4 pt-2 font-sans">
-              {card.type === "ai_intro" && (
-                <div className="space-y-3 font-sans">
-                  <div className="flex justify-between items-center font-sans">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">
-                      AI-personalized intro
-                    </span>
-                    {card.payload.send.personalizedIntro && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onCopy(
-                            card.payload.send.personalizedIntro,
-                            "drawer-intro"
-                          )
-                        }
-                        className="flex items-center gap-1 text-xs font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
-                      >
-                        {copiedKey === "drawer-intro" ? (
-                          <Check size={12} className="text-emerald-500" />
-                        ) : (
-                          <Copy size={12} />
-                        )}
-                        <span>
-                          {copiedKey === "drawer-intro" ? "Copied" : "Copy"}
-                        </span>
-                      </button>
-                    )}
-                  </div>
-
-                  {card.payload.send.personalizedIntro ? (
-                    <div className="whitespace-pre-wrap rounded-lg border border-amber-500/20 bg-amber-500/5 p-3.5 text-xs leading-relaxed text-zinc-800 dark:text-zinc-200 font-sans">
-                      {card.payload.send.personalizedIntro}
-                    </div>
-                  ) : (
-                    <p className="text-xs italic text-zinc-500 pl-3 border-l-2 border-zinc-200 dark:border-zinc-800 py-1">
-                      Standard template used — no personalized intro generated.
-                    </p>
-                  )}
-
-                  <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 text-xs text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
-                    <span className="text-zinc-400">Recipient</span>
-                    <span>{card.payload.send.prospectEmail}</span>
-                  </div>
-                </div>
-              )}
-
-              {card.type !== "ai_intro" && (
-                <div className="space-y-3 font-sans">
-                  <div className="text-xs text-zinc-600 dark:text-zinc-400 space-y-2 border-b border-zinc-100 dark:border-zinc-800 pb-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-400">Connected platform</span>
-                      <span>{card.subtitle}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-400">Prospect</span>
-                      <span>{send?.prospectEmail ?? "This booking"}</span>
-                    </div>
-                  </div>
-
-                  {card.type === "sms" && card.payload.messages?.length > 0 ? (
-                    <div className="space-y-2">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">
-                        Send history ({card.payload.messages.length})
-                      </span>
-                      {card.payload.messages.map(
-                        (m: SequenceMessage, i: number) => (
-                          <div
-                            key={m.id}
-                            className="border-b border-zinc-100 dark:border-zinc-800 pb-2 text-xs space-y-0.5"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-zinc-800 dark:text-zinc-200 font-medium">
-                                Message #{i + 1}
-                              </span>
-                              <StatusPill
-                                tone={m.status === "sent" ? "success" : "danger"}
-                              >
-                                {m.status === "sent" ? "Sent" : "Failed"}
-                              </StatusPill>
-                            </div>
-                            <p className="text-zinc-400 text-[11px]">
-                              {new Date(m.sentAt).toLocaleString()}
-                            </p>
-                            {m.error && (() => {
-                              const diagnosis = classifyRunError(m.error);
-                              return (
-                                <p className="text-rose-500 text-[11px]">
-                                  {diagnosis?.title ?? "Delivery failed."}
-                                </p>
-                              );
-                            })()}
-                          </div>
-                        )
-                      )}
-                    </div>
-                  ) : card.type === "sms" ? (
-                    <p className="text-xs text-zinc-500 italic py-2">
-                      No individual messages have sent yet — scheduled messages will appear here upon dispatch.
-                    </p>
-                  ) : (card.type === "email" || card.type === "ad_data") &&
-                    card.payload.step ? (
-                    <div className="text-xs text-zinc-600 dark:text-zinc-400 space-y-2 py-1 font-sans">
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-400">Last attempt</span>
-                        <StatusPill
-                          tone={
-                            card.payload.step.status === "success"
-                              ? "success"
-                              : card.payload.step.status === "failed"
-                              ? "danger"
-                              : "info"
-                          }
-                        >
-                          {runStatusLabel(card.payload.step.status)}
-                        </StatusPill>
-                      </div>
-                      <p className="text-zinc-400 text-[11px]">
-                        {new Date(
-                          card.payload.step.completedAt ??
-                            card.payload.step.startedAt
-                        ).toLocaleString()}
-                      </p>
-                      {card.payload.step.detail &&
-                      card.payload.step.status === "failed" ? (
-                        (() => {
-                          const diagnosis = classifyRunError(
-                            card.payload.step.detail
-                          );
-                          return (
-                            <div className="pt-1">
-                              <p className="text-rose-500 font-medium">
-                                {diagnosis?.title ?? "Execution error"}
-                              </p>
-                              <p className="text-zinc-500 text-[11px]">
-                                {diagnosis?.explanation ??
-                                  card.payload.step.detail}
-                              </p>
-                            </div>
-                          );
-                        })()
-                      ) : card.payload.step.detail ? (
-                        <p className="text-zinc-500 pt-1">
-                          {card.payload.step.detail}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-zinc-500 italic py-2">
-                      Nothing has been attempted on this channel for this run yet.
-                    </p>
-                  )}
-                </div>
-              )}
-            </SheetBody>
-          </div>
-        )}
-      </SheetContent>
-    </Sheet>
+    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 p-2.5">
+      <p className="flex items-center gap-1.5 text-[10px] uppercase text-zinc-500">
+        <Icon size={11} /> {label}
+      </p>
+      <p className="mt-0.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200">{value}</p>
+    </div>
   );
 }
