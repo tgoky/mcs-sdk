@@ -72,9 +72,9 @@ function StatusBadge({
   children: ReactNode;
 }) {
   const styles = {
-    success: "bg-emerald-400 text-zinc-950 font-bold",
-    warning: "bg-amber-400 text-zinc-950 font-bold",
-    danger: "bg-rose-400 text-zinc-950 font-bold",
+    success: "bg-emerald-400 text-white dark:text-zinc-950 font-bold",
+    warning: "bg-amber-400 text-white dark:text-zinc-950 font-bold",
+    danger: "bg-rose-400 text-white dark:text-zinc-950 font-bold",
     neutral: "bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-100 font-medium",
   }[tone];
 
@@ -390,7 +390,7 @@ export function ModuleClientRoster({
                                 <p
                                   className={cn(
                                     "text-[11px] font-sans font-medium truncate mt-0.5",
-                                    isFailed ? "text-rose-400 font-mono" : "text-emerald-400"
+                                    isFailed ? "text-rose-400 font-mono" : "text-amber-400"
                                   )}
                                 >
                                   {client.totalRuns} total runs
@@ -546,7 +546,7 @@ export function ModuleClientRoster({
                             />
                           </div>
 
-                          <p className="text-xs text-zinc-700 dark:text-zinc-300 line-clamp-2 leading-relaxed">
+                          <p className="text-xs text-amber-400 line-clamp-2 leading-relaxed">
                             {c.totalRuns} total runs executed
                           </p>
 
