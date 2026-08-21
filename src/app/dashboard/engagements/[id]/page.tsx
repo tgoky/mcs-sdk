@@ -7,18 +7,20 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { EngagementPauseControl } from "./pause-control";
-import { EngagementRunHistory } from "./engagements-run-history";
 import { SkillsPanel } from "./skills-panel";
 import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
 import { MasterRosterCalendar } from "./master-roster-calendar";
 import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
+import { RunRowActions } from "./run-row-actions";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
+import { SquishySkillBadge } from "@/components/squishy-skull-badge";
 import { 
   CheckCircle2, 
   XCircle, 
   Loader2, 
   AlertCircle, 
+  ArrowRight, 
   Server,
   ChevronLeft
 } from "lucide-react";
@@ -28,6 +30,9 @@ import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context"
 import { getActiveWorkspace } from "@/lib/workspace";
 import {
   SKILLS,
+  skillName,
+  phaseLabel,
+  runStatusLabel,
   bookingPlatformLabel,
   emailPlatformLabel,
   type SkillName,
@@ -57,11 +62,14 @@ function relativeTime(iso: string): string {
 
 export default async function EngagementDetailPage({
   params,
+  searchParams,                                                               // NEW
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ skill?: string }>;                                  // NEW
 }) {
   const session = await getSession();
   const { id } = await params;
+  const { skill: activeSkillFilter } = await searchParams;                    // NEW
   const activeWorkspace = await getActiveWorkspace(session.whopUserId!);
 
   const [engagement] = await db
@@ -109,6 +117,14 @@ export default async function EngagementDetailPage({
     SKILLS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
   ) as Record<SkillName, typeof runs>;
 
+  // NEW — only include skills that actually have runs (keeps the filter bar tidy)
+  const skillsWithRuns = SKILLS.filter((s) => runsBySkill[s].length > 0);
+
+  // NEW — apply the active filter (if any) before rendering
+  const filteredRuns = activeSkillFilter
+    ? runs.filter((r) => r.skillName === activeSkillFilter)
+    : runs;
+
   const artifactRows = await db
     .select()
     .from(artifacts)
@@ -140,6 +156,11 @@ export default async function EngagementDetailPage({
   const offerName = String(offerDetails?.name || "").trim() || "Unspecified Offer";
   const offerPrice = String(offerDetails?.price || "").trim();
   const offerIcp = String(offerDetails?.icp || "").trim();
+
+  // NEW — shared chip classes to keep the JSX readable
+  const chipBase = "px-2.5 py-1 rounded-md text-[11px] font-mono border transition-colors inline-flex items-center gap-1.5 select-none";
+  const chipActive = "bg-zinc-900 dark:bg-zinc-100 text-zinc-50 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100";
+  const chipInactive = "bg-transparent border-border text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800";
 
   return (
     <div className="relative min-h-screen w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200 overflow-hidden pb-10">
@@ -337,20 +358,124 @@ export default async function EngagementDetailPage({
           </div>
         )}
 
-        {/* Run History */}
+        {/* ================================================================ */}
+        {/* Run History — NOW WITH SKILL FILTER                              */}
+        {/* ================================================================ */}
         {runs.length > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">Run History</h2>
-              {runs.length > 20 && (
-                <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">Showing 20 most recent</span>
+              {filteredRuns.length > 20 && (
+                <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
+                  Showing 20 of {filteredRuns.length}
+                </span>
               )}
             </div>
 
-            <EngagementRunHistory
-              engagementId={engagement.engagementId}
-              runs={runs}
-            />
+            {/* ── Filter chips ── */}
+            {skillsWithRuns.length > 1 && (
+              <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Filter runs by module">
+                <Link
+                  href={`/dashboard/engagements/${id}`}
+                  role="tab"
+                  aria-selected={!activeSkillFilter}
+                  className={`${chipBase} ${!activeSkillFilter ? chipActive : chipInactive}`}
+                >
+                  All
+                  <span className={`${!activeSkillFilter ? "opacity-70" : "opacity-50"} ml-0.5`}>
+                    {runs.length}
+                  </span>
+                </Link>
+                {skillsWithRuns.map((skill) => (
+                  <Link
+                    key={skill}
+                    href={`/dashboard/engagements/${id}?skill=${skill}`}
+                    role="tab"
+                    aria-selected={activeSkillFilter === skill}
+                    className={`${chipBase} ${activeSkillFilter === skill ? chipActive : chipInactive}`}
+                  >
+                    <SquishySkillBadge skill={skill} size={14} enabled={true} />
+                    {skillName(skill)}
+                    <span className={`${activeSkillFilter === skill ? "opacity-70" : "opacity-50"} ml-0.5`}>
+                      {runsBySkill[skill].length}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {/* ── Filtered run list ── */}
+            {filteredRuns.length > 0 ? (
+              <div className="w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-transparent transition-colors">
+                <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
+                  {filteredRuns.slice(0, 20).map((run) => {
+                    const isFailed = run.status.toLowerCase() === "failed";
+
+                    return (
+                      <li key={run.id} className="group relative">
+                        <Link
+                          href={`/dashboard/runs/${run.id}`}
+                          className="absolute inset-0 z-10"
+                          aria-label={`View run details for ${skillName(run.skillName)}`}
+                        />
+                        <div className="relative flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                          <RunStatusIcon status={run.status} />
+                          <div className="min-w-0 flex-1 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">
+                                  {skillName(run.skillName)}
+                                </span>
+                                <span className="text-zinc-600 dark:text-zinc-400 text-xs font-normal font-mono">
+                                  {runStatusLabel(run.status)}
+                                </span>
+                              </div>
+                              <div className="text-[11px] font-mono mt-0.5 text-zinc-400 dark:text-zinc-500">
+                                {phaseLabel(run.phase)}{run.stepCount > 0 ? ` · ${run.stepCount} step${run.stepCount === 1 ? "" : "s"}` : ""}
+                              </div>
+                              {isFailed && run.errorMessage && (
+                                <div className="text-[11px] font-mono text-rose-500/90 dark:text-rose-400/80 mt-1 leading-relaxed line-clamp-2 max-w-xl">
+                                  {run.errorMessage}
+                                </div>
+                              )}
+                            </div>
+
+                            <div
+                              className="shrink-0 flex items-center gap-2 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 pt-0.5"
+                              title={new Date(run.startedAt).toLocaleString()}
+                            >
+                              <SquishySkillBadge skill={run.skillName} size={22} enabled={true} />
+                              <span>{relativeTime(String(run.startedAt))}</span>
+                              <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                              <RunRowActions
+                                runId={run.id}
+                                engagementId={engagement.engagementId}
+                                skillName={run.skillName}
+                                skillLabel={skillName(run.skillName)}
+                                status={run.status}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            ) : (
+              /* ── Empty state when filter matches nothing ── */
+              <div className="h-28 border border-dashed border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-transparent rounded-xl flex flex-col items-center justify-center space-y-1 transition-colors">
+                <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
+                  No <span className="font-medium text-zinc-500 dark:text-zinc-400">{skillName(activeSkillFilter)}</span> runs yet.
+                </p>
+                <Link
+                  href={`/dashboard/engagements/${id}`}
+                  className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 underline underline-offset-2 transition-colors"
+                >
+                  Clear filter
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
