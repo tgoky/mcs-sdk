@@ -36,7 +36,7 @@ export function LandingWrapper({
       {/* Navigation Header */}
       <header className="relative z-30 w-full px-8 py-6 flex items-center justify-between">
         <div className="font-bold text-lg tracking-tight text-white">
-          Showtime
+          Mudd Ventures
         </div>
         
         {/* Centered Navigation */}
@@ -264,7 +264,7 @@ export function LandingWrapper({
 
       {/* Footer */}
       <footer className="relative z-10 w-full px-8 py-6 flex items-center justify-between text-xs text-zinc-400 border-t border-white/10 backdrop-blur-md bg-black/10">
-        <div>© Showtime</div>
+        <div>© Mudd Ventures 2026</div>
       </footer>
     </div>
   );
