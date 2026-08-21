@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { triggerExitTransition } from "@/lib/page-transition";
+// removed: import { triggerExitTransition } from "@/lib/page-transition";
 
 export function EnterDashboardBtn({
   href = "/dashboard",
@@ -17,7 +17,6 @@ export function EnterDashboardBtn({
   const clickedRef = useRef(false);
   const [pending, setPending] = useState(false);
 
-  // Pre-fetch so the actual push resolves near-instantly
   useEffect(() => {
     router.prefetch(href);
   }, [href, router]);
@@ -28,13 +27,9 @@ export function EnterDashboardBtn({
     clickedRef.current = true;
     setPending(true);
 
-    // 1. Tell the landing page to start its exit animation
     if (onNavigateStart) onNavigateStart();
+    // removed: triggerExitTransition();
 
-    // 2. Stamp sessionStorage so the *next* page knows to fade in
-    triggerExitTransition();
-
-    // 3. Navigate just after the exit overlay reaches full opacity
     setTimeout(() => {
       router.push(href);
     }, 380);
