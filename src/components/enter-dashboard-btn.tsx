@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 export function EnterDashboardBtn({
   href = "/dashboard",
   children = "Enter Dashboard",
+  onNavigateStart,
 }: {
   href?: string;
   children?: React.ReactNode;
@@ -25,10 +26,11 @@ export function EnterDashboardBtn({
     clickedRef.current = true;
     setPending(true);
 
-    // Just enough for the spinner state to paint, then go
+    if (onNavigateStart) onNavigateStart();
+
     setTimeout(() => {
       router.push(href);
-    }, 60);
+    }, 380);
   };
 
   return (

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { EnterDashboardBtn } from "@/components/enter-dashboard-btn";
 
 export function LandingWrapper({
@@ -11,6 +12,8 @@ export function LandingWrapper({
   membershipRequired: boolean;
   hasWhopUser: boolean;
 }) {
+  const [isExiting, setIsExiting] = useState(false);
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-black text-white font-sans flex flex-col justify-between selection:bg-zinc-800">
       {/* Background Image Layer */}
@@ -18,7 +21,9 @@ export function LandingWrapper({
         <img
           src="/images/new.jpeg"
           alt="Background"
-          className="w-full h-full object-cover object-center opacity-50 scale-105"
+          className={`w-full h-full object-cover object-center opacity-50 transition-all duration-700 ease-out ${
+            isExiting ? "scale-125 blur-sm" : "scale-105"
+          }`}
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
@@ -208,6 +213,16 @@ export function LandingWrapper({
 
       {/* Hero Body Content */}
       <main className="relative z-10 max-w-6xl w-full mx-auto px-8 md:px-12 my-auto py-24 flex flex-col items-start space-y-6">
+
+        {/* Exit overlay — inside main so z-40 competes with button's z-50 */}
+        <div
+          className="fixed inset-0 z-40 bg-black pointer-events-none"
+          style={{
+            opacity: isExiting ? 1 : 0,
+            transition: "opacity 350ms cubic-bezier(0.4, 0, 1, 1)",
+          }}
+        />
+
         <h1 className="text-5xl sm:text-7xl lg:text-8xl font-bold tracking-tight leading-[0.95] max-w-3xl text-white">
           Automate your sales pipeline.
         </h1>
@@ -227,8 +242,12 @@ export function LandingWrapper({
           </div>
         )}
 
-        <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
-          <EnterDashboardBtn href={destinationHref}>
+        {/* z-50 keeps the button + spinner visible above the z-40 overlay */}
+        <div className="relative z-50 pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
+          <EnterDashboardBtn
+            href={destinationHref}
+            onNavigateStart={() => setIsExiting(true)}
+          >
             Enter Dashboard
           </EnterDashboardBtn>
         </div>
