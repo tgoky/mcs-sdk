@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { EnterDashboardBtn } from "@/components/enter-dashboard-btn";
 
 export function LandingWrapper({
@@ -12,30 +11,14 @@ export function LandingWrapper({
   membershipRequired: boolean;
   hasWhopUser: boolean;
 }) {
-  const [isExiting, setIsExiting] = useState(false);
-
   return (
-    <div
-      // ── removed: transition-opacity + opacity-30/100 ──
-      className="relative min-h-screen w-full overflow-hidden bg-black text-white font-sans flex flex-col justify-between selection:bg-zinc-800"
-    >
-      {/* ── NEW: exit overlay — fades to pure black ── */}
-      <div
-        className="fixed inset-0 z-40 bg-black pointer-events-none"
-        style={{
-          opacity: isExiting ? 1 : 0,
-          transition: "opacity 350ms cubic-bezier(0.4, 0, 1, 1)",
-        }}
-      />
-
+    <div className="relative min-h-screen w-full overflow-hidden bg-black text-white font-sans flex flex-col justify-between selection:bg-zinc-800">
       {/* Background Image Layer */}
       <div className="absolute inset-0 z-0">
         <img
           src="/images/new.jpeg"
           alt="Background"
-          className={`w-full h-full object-cover object-center opacity-50 transition-all duration-700 ease-out ${
-            isExiting ? "scale-125 blur-sm" : "scale-105"
-          }`}
+          className="w-full h-full object-cover object-center opacity-50 scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
@@ -48,7 +31,6 @@ export function LandingWrapper({
         </div>
 
         <nav className="hidden md:flex items-center gap-2 text-sm font-medium absolute left-1/2 -translate-x-1/2">
-          {/* ── all five dropdown items stay exactly the same ── */}
           {/* Show Time */}
           <div className="relative group">
             <span className="px-3.5 py-1.5 rounded-sm text-zinc-300 group-hover:bg-white/10 group-hover:text-white transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none">
@@ -246,10 +228,7 @@ export function LandingWrapper({
         )}
 
         <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
-          <EnterDashboardBtn
-            href={destinationHref}
-            onNavigateStart={() => setIsExiting(true)}
-          >
+          <EnterDashboardBtn href={destinationHref}>
             Enter Dashboard
           </EnterDashboardBtn>
         </div>
