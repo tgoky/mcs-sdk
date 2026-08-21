@@ -51,27 +51,27 @@ export function LandingWrapper({
               </svg>
             </span>
             
-            {/* Light Glassy Panel */}
-            <div className="absolute top-full left-0 mt-3 w-[720px] bg-white/[0.06] backdrop-blur-2xl border border-white/10 rounded-sm p-8 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
+            {/* Uniform Light Glass Panel */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[640px] bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-sm p-7 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
               <div className="grid grid-cols-3 divide-x divide-white/10">
-                <div className="px-6 first:pl-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">ONBOARDING</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5 first:pl-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">ONBOARDING</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Show Rate Setup</div>
                     <div className="hover:text-white transition-colors duration-200">Brand Voice Extraction</div>
                     <div className="hover:text-white transition-colors duration-200">Confirmation Pages</div>
                   </div>
                 </div>
-                <div className="px-6">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">AUTOMATION</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">AUTOMATION</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Webhook Sync</div>
                     <div className="hover:text-white transition-colors duration-200">Video Scripting</div>
                   </div>
                 </div>
-                <div className="px-6 last:pr-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">ANALYTICS</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5 last:pr-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">ANALYTICS</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Attendance Metrics</div>
                     <div className="hover:text-white transition-colors duration-200">Funnel Benchmarks</div>
                   </div>
@@ -89,26 +89,27 @@ export function LandingWrapper({
               </svg>
             </span>
 
-            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[720px] bg-white/[0.06] backdrop-blur-2xl border border-white/10 rounded-sm p-8 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
+            {/* Uniform Light Glass Panel */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[640px] bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-sm p-7 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
               <div className="grid grid-cols-3 divide-x divide-white/10">
-                <div className="px-6 first:pl-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">SEQUENCES</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5 first:pl-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">SEQUENCES</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Pre-Call Sequence</div>
                     <div className="hover:text-white transition-colors duration-200">AI Personalization</div>
                     <div className="hover:text-white transition-colors duration-200">SMS Reminders</div>
                   </div>
                 </div>
-                <div className="px-6">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">INTEGRATIONS</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">INTEGRATIONS</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Calendly & Cal.com</div>
                     <div className="hover:text-white transition-colors duration-200">CRM Workflows</div>
                   </div>
                 </div>
-                <div className="px-6 last:pr-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">AUDIENCE</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5 last:pr-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">AUDIENCE</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Retargeting Sync</div>
                     <div className="hover:text-white transition-colors duration-200">Cohort Tracking</div>
                   </div>
@@ -126,25 +127,26 @@ export function LandingWrapper({
               </svg>
             </span>
 
-            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[720px] bg-white/[0.06] backdrop-blur-2xl border border-white/10 rounded-sm p-8 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
+            {/* Uniform Light Glass Panel */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[640px] bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-sm p-7 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
               <div className="grid grid-cols-3 divide-x divide-white/10">
-                <div className="px-6 first:pl-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">CADENCE</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5 first:pl-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">CADENCE</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Booking Recovery</div>
                     <div className="hover:text-white transition-colors duration-200">No-Show Sequences</div>
                   </div>
                 </div>
-                <div className="px-6">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">DETECTION</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">DETECTION</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Reply Triggers</div>
                     <div className="hover:text-white transition-colors duration-200">Rebooking Exit Logic</div>
                   </div>
                 </div>
-                <div className="px-6 last:pr-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">CHANNELS</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5 last:pr-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">CHANNELS</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Direct SMS & Email</div>
                     <div className="hover:text-white transition-colors duration-200">CRM Native Flows</div>
                   </div>
@@ -162,25 +164,26 @@ export function LandingWrapper({
               </svg>
             </span>
 
-            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[720px] bg-white/[0.06] backdrop-blur-2xl border border-white/10 rounded-sm p-8 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
+            {/* Uniform Light Glass Panel */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[640px] bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-sm p-7 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
               <div className="grid grid-cols-3 divide-x divide-white/10">
-                <div className="px-6 first:pl-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">AUDITS</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5 first:pl-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">AUDITS</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Funnel Audit</div>
                     <div className="hover:text-white transition-colors duration-200">Drop-off Detection</div>
                   </div>
                 </div>
-                <div className="px-6">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">MONITORING</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">MONITORING</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Severity Alerts</div>
                     <div className="hover:text-white transition-colors duration-200">Pipeline Integrity</div>
                   </div>
                 </div>
-                <div className="px-6 last:pr-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">REPORTS</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5 last:pr-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">REPORTS</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Weekly Health Digests</div>
                   </div>
                 </div>
@@ -197,25 +200,26 @@ export function LandingWrapper({
               </svg>
             </span>
 
-            <div className="absolute top-full right-0 mt-3 w-[720px] bg-white/[0.06] backdrop-blur-2xl border border-white/10 rounded-sm p-8 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
+            {/* Uniform Light Glass Panel */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[640px] bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-sm p-7 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
               <div className="grid grid-cols-3 divide-x divide-white/10">
-                <div className="px-6 first:pl-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">INTEL</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5 first:pl-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">INTEL</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Call Briefs</div>
                     <div className="hover:text-white transition-colors duration-200">Prospect Enrichment</div>
                   </div>
                 </div>
-                <div className="px-6">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">DELIVERY</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">DELIVERY</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">Slack Channel Digests</div>
                     <div className="hover:text-white transition-colors duration-200">CRM Timeline Notes</div>
                   </div>
                 </div>
-                <div className="px-6 last:pr-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-5">SYNTHESIS</div>
-                  <div className="space-y-3.5 text-sm text-zinc-100">
+                <div className="px-5 last:pr-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">SYNTHESIS</div>
+                  <div className="space-y-3 text-sm text-zinc-100">
                     <div className="hover:text-white transition-colors duration-200">AI Executive Summaries</div>
                   </div>
                 </div>

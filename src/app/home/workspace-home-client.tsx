@@ -35,13 +35,13 @@ const AVATAR_COLORS = [
 function PackageBadge({ packageId }: { packageId: string }) {
   if (packageId === "counter-claim") {
     return (
-      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-none">
+      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-none bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-none">
         <Gavel size={11} className="stroke-[2.5px]" />
       </div>
     );
   }
   return (
-    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-none">
+    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-none bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-none">
       <LayoutGrid size={11} className="stroke-[2.5px]" />
     </div>
   );
@@ -58,7 +58,7 @@ function WorkspaceCard({ workspace, packageIds }: { workspace: Workspace; packag
     <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="h-full">
       <button
         type="submit"
-        className="group flex h-full w-full flex-col justify-between rounded-2xl border border-zinc-200/90 bg-white/80 p-6 text-left transition-all duration-200 select-none hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md dark:border-zinc-800/90 dark:bg-zinc-900/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/80 backdrop-blur-xs cursor-pointer"
+        className="group flex h-full w-full flex-col justify-between rounded-none border border-zinc-200/90 bg-white/80 p-6 text-left transition-all duration-200 select-none hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md dark:border-zinc-800/90 dark:bg-zinc-900/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/80 backdrop-blur-xs cursor-pointer"
       >
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-2">
@@ -72,8 +72,7 @@ function WorkspaceCard({ workspace, packageIds }: { workspace: Workspace; packag
               )}
             </div>
 
-            {/* Status indicator pill without pulsing dot */}
-            <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400">
+            <span className="inline-flex items-center rounded-none bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400">
               Active
             </span>
           </div>
@@ -89,7 +88,6 @@ function WorkspaceCard({ workspace, packageIds }: { workspace: Workspace; packag
             </p>
           </div>
 
-          {/* Overlapping Olympic Rings Skill Badges for Showtime */}
           {hasShowtime && (
             <div className="pt-1">
               <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">
@@ -100,7 +98,7 @@ function WorkspaceCard({ workspace, packageIds }: { workspace: Workspace; packag
                   <div
                     key={skillId}
                     title={SKILL_MANIFEST[skillId].name}
-                    className="relative flex items-center justify-center rounded-full bg-white dark:bg-zinc-900 p-0.5 ring-2 ring-zinc-200/80 dark:ring-zinc-800/80 transition-transform group-hover:scale-105"
+                    className="relative flex items-center justify-center rounded-none bg-white dark:bg-zinc-900 p-0.5 ring-2 ring-zinc-200/80 dark:ring-zinc-800/80 transition-transform group-hover:scale-105"
                   >
                     <SquishySkillBadge skill={skillId} size={20} enabled={true} />
                   </div>
@@ -111,7 +109,7 @@ function WorkspaceCard({ workspace, packageIds }: { workspace: Workspace; packag
         </div>
 
         <div className="pt-6">
-          <span className="inline-flex w-full items-center justify-center rounded-lg bg-amber-400 px-2.5 py-1.5 text-xs font-bold text-white dark:text-zinc-950 shadow-2xs transition-all hover:bg-amber-500">
+          <span className="inline-flex w-full items-center justify-center rounded-none bg-amber-400 px-2.5 py-1.5 text-xs font-bold text-white dark:text-zinc-950 shadow-2xs transition-all hover:bg-amber-500">
             {HOME_COPY.openLabel} {workspace.name}
           </span>
         </div>
@@ -125,9 +123,9 @@ function CreateWorkspaceCard() {
     <Link
       href="/home/new"
       prefetch={false}
-      className="flex h-full flex-col items-center justify-center gap-2.5 rounded-2xl border border-dashed border-zinc-300 bg-transparent p-6 text-center transition-all duration-200 hover:-translate-y-1 hover:border-zinc-400 hover:bg-white/60 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-900/40 min-h-[220px]"
+      className="flex h-full flex-col items-center justify-center gap-2.5 rounded-none border border-dashed border-zinc-300 bg-transparent p-6 text-center transition-all duration-200 hover:-translate-y-1 hover:border-zinc-400 hover:bg-white/60 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-900/40 min-h-[220px]"
     >
-      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500">
+      <div className="flex h-9 w-9 items-center justify-center rounded-none border border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500">
         <Plus size={16} />
       </div>
       <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Create workspace</span>
@@ -154,14 +152,13 @@ function WorkspaceRow({
 
   return (
     <tr className="group border-b border-zinc-200/80 dark:border-zinc-800/60 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60 transition-colors">
-      {/* Workspace Name & Icon */}
       <td className="py-3.5 pl-4 pr-3 text-sm">
         <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="inline-block">
           <button
             type="submit"
             className="flex items-center gap-3 text-left group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors cursor-pointer"
           >
-            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-bold ${avatarColor} shadow-2xs`}>
+            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-none font-mono text-xs font-bold ${avatarColor} shadow-2xs`}>
               {initial}
             </div>
             <div className="min-w-0">
@@ -176,7 +173,6 @@ function WorkspaceRow({
         </form>
       </td>
 
-      {/* Installed Package & Skills (Olympic Rings Pattern) */}
       <td className="py-3.5 px-3 text-xs">
         <div className="flex items-center gap-3">
           <span className="font-mono text-xs font-bold text-zinc-800 dark:text-zinc-200">
@@ -191,7 +187,7 @@ function WorkspaceRow({
                 <div
                   key={skillId}
                   title={SKILL_MANIFEST[skillId].name}
-                  className="relative flex items-center justify-center rounded-full bg-white dark:bg-zinc-900 p-0.5 ring-2 ring-zinc-200/80 dark:ring-zinc-800/80 transition-transform group-hover:scale-105"
+                  className="relative flex items-center justify-center rounded-none bg-white dark:bg-zinc-900 p-0.5 ring-2 ring-zinc-200/80 dark:ring-zinc-800/80 transition-transform group-hover:scale-105"
                 >
                   <SquishySkillBadge skill={skillId} size={20} enabled={true} />
                 </div>
@@ -201,24 +197,21 @@ function WorkspaceRow({
         </div>
       </td>
 
-      {/* Status without pulsing dot */}
       <td className="py-3.5 px-3 text-xs whitespace-nowrap">
-        <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 font-mono">
+        <span className="inline-flex items-center rounded-none bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 font-mono">
           Active
         </span>
       </td>
 
-      {/* Created / Last Active */}
       <td className="py-3.5 px-3 text-xs text-zinc-500 dark:text-zinc-400 font-mono whitespace-nowrap">
         {relativeTime(workspace.createdAt)}
       </td>
 
-      {/* Switch / Enter Button using Queue amber accent */}
       <td className="py-3.5 pr-4 pl-3 text-right text-xs whitespace-nowrap">
         <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="inline-block">
           <button
             type="submit"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-white dark:text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+            className="inline-flex items-center gap-1.5 rounded-none bg-amber-400 hover:bg-amber-500 text-white dark:text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs"
           >
             <span>Enter</span>
             <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
@@ -246,7 +239,6 @@ export function WorkspaceHomeClient({
 
   return (
     <main className="flex-1 py-8">
-      {/* Subheader & Controls Toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 font-sans">
           <span className="font-bold text-zinc-900 dark:text-zinc-100">Workspaces</span>
@@ -255,12 +247,11 @@ export function WorkspaceHomeClient({
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Card / List View Switcher */}
-          <div className="flex items-center p-0.5 rounded-lg bg-zinc-200/80 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800">
+          <div className="flex items-center p-0.5 rounded-none bg-zinc-200/80 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800">
             <button
               type="button"
               onClick={() => setViewMode("card")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-none text-xs font-semibold transition-all cursor-pointer ${
                 viewMode === "card"
                   ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xs"
                   : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
@@ -273,7 +264,7 @@ export function WorkspaceHomeClient({
             <button
               type="button"
               onClick={() => setViewMode("list")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-none text-xs font-semibold transition-all cursor-pointer ${
                 viewMode === "list"
                   ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xs"
                   : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
@@ -285,11 +276,10 @@ export function WorkspaceHomeClient({
             </button>
           </div>
 
-          {/* Add Workspace CTA with Queue Amber Accent */}
           <Link
             href="/home/new"
             prefetch={false}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-white dark:text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all shadow-2xs"
+            className="inline-flex items-center gap-1.5 rounded-none bg-amber-400 hover:bg-amber-500 text-white dark:text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all shadow-2xs"
           >
             <Plus size={14} />
             <span>Add workspace</span>
@@ -297,7 +287,6 @@ export function WorkspaceHomeClient({
         </div>
       </div>
 
-      {/* VIEW RENDER: CARD VIEW */}
       {viewMode === "card" ? (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {workspaceList.map((workspace) => (
@@ -310,8 +299,7 @@ export function WorkspaceHomeClient({
           <CreateWorkspaceCard />
         </div>
       ) : (
-        /* VIEW RENDER: LIST VIEW */
-        <div className="rounded-2xl border border-zinc-200/90 bg-white/80 dark:border-zinc-800/90 dark:bg-zinc-900/60 overflow-hidden shadow-xs backdrop-blur-xs">
+        <div className="rounded-none border border-zinc-200/90 bg-white/80 dark:border-zinc-800/90 dark:bg-zinc-900/60 overflow-hidden shadow-xs backdrop-blur-xs">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/40 text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
