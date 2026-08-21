@@ -7,20 +7,18 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { EngagementPauseControl } from "./pause-control";
+import { EngagementRunHistory } from "./engagements-run-history";
 import { SkillsPanel } from "./skills-panel";
 import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
 import { MasterRosterCalendar } from "./master-roster-calendar";
 import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
-import { RunRowActions } from "./run-row-actions";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
-import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { 
   CheckCircle2, 
   XCircle, 
   Loader2, 
   AlertCircle, 
-  ArrowRight, 
   Server,
   ChevronLeft
 } from "lucide-react";
@@ -30,9 +28,6 @@ import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context"
 import { getActiveWorkspace } from "@/lib/workspace";
 import {
   SKILLS,
-  skillName,
-  phaseLabel,
-  runStatusLabel,
   bookingPlatformLabel,
   emailPlatformLabel,
   type SkillName,
@@ -163,84 +158,83 @@ export default async function EngagementDetailPage({
           <SetBreadcrumbLabel label={engagement.buyer} />
 
           {/* Title & Action Buttons Row */}
-      {/* Title & Action Buttons Row */}
-<div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-  {/* Left Column: Back Button, Title, ID, and Stack Badges */}
-  <div className="flex items-start gap-3 min-w-0">
-    <Link
-      href="/dashboard/engagements"
-      className="flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mt-0.5"
-      aria-label="Back to All Clients"
-    >
-      <ChevronLeft className="w-4 h-4" />
-    </Link>
-    
-    <div className="min-w-0 space-y-1.5">
-      <div>
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
-          {engagement.buyer}
-        </h1>
-        <p className="text-xs font-mono text-zinc-400 dark:text-zinc-500 mt-0.5">
-          {engagement.engagementId}
-        </p>
-      </div>
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            {/* Left Column: Back Button, Title, ID, and Stack Badges */}
+            <div className="flex items-start gap-3 min-w-0">
+              <Link
+                href="/dashboard/engagements"
+                className="flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mt-0.5"
+                aria-label="Back to All Clients"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Link>
+              
+              <div className="min-w-0 space-y-1.5">
+                <div>
+                  <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
+                    {engagement.buyer}
+                  </h1>
+                  <p className="text-xs font-mono text-zinc-400 dark:text-zinc-500 mt-0.5">
+                    {engagement.engagementId}
+                  </p>
+                </div>
 
-      {/* Clean Meta Row (Platforms & Traffic) */}
-   <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 translate-y-3.5 -mb-3 -ml-11 z-10 relative">
-  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
-    {bookingPlatformLabel(stack?.booking_platform)}
-  </span>
-  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
-    {emailPlatformLabel(stack?.email_platform)}
-  </span>
-  {offerDetails?.traffic_temperature && (
-    <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px] capitalize">
-      {String(offerDetails.traffic_temperature)} traffic
-    </span>
-  )}
-</div>
-    </div>
-  </div>
+                {/* Clean Meta Row (Platforms & Traffic) */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 translate-y-3.5 -mb-3 -ml-11 z-10 relative">
+                  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+                    {bookingPlatformLabel(stack?.booking_platform)}
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+                    {emailPlatformLabel(stack?.email_platform)}
+                  </span>
+                  {offerDetails?.traffic_temperature && (
+                    <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px] capitalize">
+                      {String(offerDetails.traffic_temperature)} traffic
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
 
-  {/* Right Column: Sync Status & Top Action Controls */}
-  <div className="flex flex-col sm:items-end gap-2.5 shrink-0 self-start sm:self-auto">
-    {stack?.booking_platform && (
-      <BookingSyncChip
-        status={computeBookingSyncStatus(engagement.engagementId, engagement.stack as EngagementStack | null)}
-      />
-    )}
-    <div className="flex items-center gap-2">
-      <EngagementPauseControl
-        engagementId={engagement.engagementId}
-        initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
-        initialPausedReason={engagement.pausedReason}
-      />
-      <EngagementActionsMenu
-        engagementId={engagement.engagementId}
-        buyerName={engagement.buyer}
-        initialStack={engagement.stack as EngagementStack | null}
-        bookingPlatform={stack?.booking_platform}
-        emailPlatform={stack?.email_platform}
-        vaultLinksByProvider={vaultLinksByProvider}
-        initialRequireApproval={requireApproval}
-        initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
-        clientDetails={{
-          offerDetails: engagement.offerDetails ?? null,
-          topCallQuestions: engagement.topCallQuestions ?? null,
-          topObjections: engagement.topObjections ?? null,
-          prospectMeets: engagement.prospectMeets,
-          castingChoice: engagement.castingChoice,
-          rawVoiceCorpus: engagement.rawVoiceCorpus,
-          existingProof: engagement.existingProof ?? null,
-          confirmationPageTemplate: engagement.confirmationPageTemplate,
-          notificationPackSelections: (engagement.stack as EngagementStack | null)?.notification_pack_selections ?? [],
-          hasAdCreativeBriefs: Boolean(engagement.adCreativeBriefs),
-          hasScriptPack: Boolean(engagement.pinDownScriptPack),
-        }}
-      />
-    </div>
-  </div>
-</div>
+            {/* Right Column: Sync Status & Top Action Controls */}
+            <div className="flex flex-col sm:items-end gap-2.5 shrink-0 self-start sm:self-auto">
+              {stack?.booking_platform && (
+                <BookingSyncChip
+                  status={computeBookingSyncStatus(engagement.engagementId, engagement.stack as EngagementStack | null)}
+                />
+              )}
+              <div className="flex items-center gap-2">
+                <EngagementPauseControl
+                  engagementId={engagement.engagementId}
+                  initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
+                  initialPausedReason={engagement.pausedReason}
+                />
+                <EngagementActionsMenu
+                  engagementId={engagement.engagementId}
+                  buyerName={engagement.buyer}
+                  initialStack={engagement.stack as EngagementStack | null}
+                  bookingPlatform={stack?.booking_platform}
+                  emailPlatform={stack?.email_platform}
+                  vaultLinksByProvider={vaultLinksByProvider}
+                  initialRequireApproval={requireApproval}
+                  initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
+                  clientDetails={{
+                    offerDetails: engagement.offerDetails ?? null,
+                    topCallQuestions: engagement.topCallQuestions ?? null,
+                    topObjections: engagement.topObjections ?? null,
+                    prospectMeets: engagement.prospectMeets,
+                    castingChoice: engagement.castingChoice,
+                    rawVoiceCorpus: engagement.rawVoiceCorpus,
+                    existingProof: engagement.existingProof ?? null,
+                    confirmationPageTemplate: engagement.confirmationPageTemplate,
+                    notificationPackSelections: (engagement.stack as EngagementStack | null)?.notification_pack_selections ?? [],
+                    hasAdCreativeBriefs: Boolean(engagement.adCreativeBriefs),
+                    hasScriptPack: Boolean(engagement.pinDownScriptPack),
+                  }}
+                />
+              </div>
+            </div>
+          </div>
 
           {/* Flat Offer, Price & Targeting Section (No Card Wrapper) */}
           {offerDetails && (
@@ -353,62 +347,10 @@ export default async function EngagementDetailPage({
               )}
             </div>
 
-            <div className="w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-transparent transition-colors">
-              <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
-                {runs.slice(0, 20).map((run) => {
-                  const isFailed = run.status.toLowerCase() === "failed";
-
-                  return (
-                    <li key={run.id} className="group relative">
-                      <Link
-                        href={`/dashboard/runs/${run.id}`}
-                        className="absolute inset-0 z-10"
-                        aria-label={`View run details for ${skillName(run.skillName)}`}
-                      />
-                      <div className="relative flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
-                        <RunStatusIcon status={run.status} />
-                        <div className="min-w-0 flex-1 flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">
-                                {skillName(run.skillName)}
-                              </span>
-                              <span className="text-zinc-600 dark:text-zinc-400 text-xs font-normal font-mono">
-                                {runStatusLabel(run.status)}
-                              </span>
-                            </div>
-                            <div className="text-[11px] font-mono mt-0.5 text-zinc-400 dark:text-zinc-500">
-                              {phaseLabel(run.phase)}{run.stepCount > 0 ? ` · ${run.stepCount} step${run.stepCount === 1 ? "" : "s"}` : ""}
-                            </div>
-                            {isFailed && run.errorMessage && (
-                              <div className="text-[11px] font-mono text-rose-500/90 dark:text-rose-400/80 mt-1 leading-relaxed line-clamp-2 max-w-xl">
-                                {run.errorMessage}
-                              </div>
-                            )}
-                          </div>
-
-                          <div
-                            className="shrink-0 flex items-center gap-2 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 pt-0.5"
-                            title={new Date(run.startedAt).toLocaleString()}
-                          >
-                            <SquishySkillBadge skill={run.skillName} size={22} enabled={true} />
-                            <span>{relativeTime(String(run.startedAt))}</span>
-                            <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                            <RunRowActions
-                              runId={run.id}
-                              engagementId={engagement.engagementId}
-                              skillName={run.skillName}
-                              skillLabel={skillName(run.skillName)}
-                              status={run.status}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
+            <EngagementRunHistory
+              engagementId={engagement.engagementId}
+              runs={runs}
+            />
           </div>
         )}
 
