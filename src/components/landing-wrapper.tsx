@@ -45,7 +45,7 @@ export function LandingWrapper({
           {/* Item 1: Show Rate */}
           <div className="relative group">
             <span className="px-3.5 py-1.5 rounded-sm text-zinc-300 group-hover:bg-white/10 group-hover:text-white transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none">
-              Show Rate
+              Show Time
               <svg className="w-3 h-3 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:rotate-180 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
               </svg>
@@ -83,7 +83,7 @@ export function LandingWrapper({
           {/* Item 2: Pre-Call */}
           <div className="relative group">
             <span className="px-3.5 py-1.5 rounded-sm text-zinc-300 group-hover:bg-white/10 group-hover:text-white transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none">
-              Pre-Call
+              Counter Claim
               <svg className="w-3 h-3 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:rotate-180 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
               </svg>
