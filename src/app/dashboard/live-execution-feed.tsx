@@ -30,6 +30,7 @@ import { useLocalViewState } from "@/lib/use-local-view-state";
 import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
 import { VerboseTime } from "@/components/relative-time";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 
 interface SkillRun {
   id: string;
@@ -202,8 +203,8 @@ function actionSummary(run: SkillRun): string {
 
 function RunStatusIcon({ status }: { status: string }) {
   const s = status.toLowerCase();
-  if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 fill-emerald-500 text-zinc-950 shrink-0" />;
-  if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 fill-rose-500 text-zinc-950 shrink-0" />;
+  if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 fill-emerald-500 text-white shrink-0" />;
+  if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 fill-rose-500 text-white shrink-0" />;
   if (s === "timed_out") return <Clock className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />;
   if (s === "cancelled") return <Ban className="w-4 h-4 text-amber-500 shrink-0" />;
   if (s === "running" || s === "in_progress") return <Loader2 className="w-4 h-4 text-zinc-500 dark:text-zinc-400 animate-spin shrink-0" />;
@@ -351,19 +352,24 @@ function RunRow({
           <ClientCell run={run} />
         )}
       </td>
-
-      <td className="px-4 py-2.5">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm text-zinc-600 dark:text-zinc-400 font-semibold whitespace-nowrap">
-            {skillName(run.skillName)}
-          </span>
-        </div>
-        {(run.stepCount ?? 0) > 0 && (
-          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-700">
-            {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
-          </span>
-        )}
-      </td>
+      
+<td className="px-4 py-2.5">
+  <div className="flex items-center gap-2">
+    <SquishySkillBadge
+      skill={run.skillName}
+      size={26}
+      paused={!!run.engagementPausedAt}
+    />
+    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
+      {skillName(run.skillName)}
+    </span>
+  </div>
+  {(run.stepCount ?? 0) > 0 && (
+    <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 block pl-[34px] mt-0.5">
+      {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
+    </span>
+  )}
+</td>
 
       <td className="px-4 py-2.5 max-w-[280px]">
         <span
