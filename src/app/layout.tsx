@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { TransitionCurtain } from "@/components/transition-curtain";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -25,19 +26,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // suppressHydrationWarning prevents Next.js attribute mismatch warnings when next-themes injects the active class
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${manrope.variable} ${geistMono.variable} antialiased bg-background text-foreground selection:bg-zinc-800 dark:selection:bg-zinc-200 transition-colors duration-200`}
       >
-       <ThemeProvider
-  attribute="class"
-  defaultTheme="dark"
-  enableSystem={false}
-  disableTransitionOnChange
->
-  {children}
-</ThemeProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem={false}
+          disableTransitionOnChange
+        >
+          <TransitionCurtain />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

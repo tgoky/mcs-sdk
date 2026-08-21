@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-// removed: import { triggerExitTransition } from "@/lib/page-transition";
+import { createCurtain } from "@/components/transition-curtain";
 
 export function EnterDashboardBtn({
   href = "/dashboard",
@@ -28,7 +28,9 @@ export function EnterDashboardBtn({
     setPending(true);
 
     if (onNavigateStart) onNavigateStart();
-    // removed: triggerExitTransition();
+
+    // Plant a real DOM node that React can't unmount
+    createCurtain();
 
     setTimeout(() => {
       router.push(href);
