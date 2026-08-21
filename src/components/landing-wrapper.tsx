@@ -51,7 +51,7 @@ export function LandingWrapper({
               </svg>
             </span>
             
-            {/* Smooth Glass Panel */}
+            {/* Smooth Faint Glass Panel */}
             <div className="absolute top-full left-0 mt-3 w-[720px] bg-zinc-900/35 backdrop-blur-3xl border border-white/10 rounded-2xl p-8 shadow-[0_30px_60px_rgba(0,0,0,0.6)] opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
               <div className="grid grid-cols-3 divide-x divide-white/10">
                 <div className="px-6 first:pl-0">
@@ -224,16 +224,6 @@ export function LandingWrapper({
           </div>
 
         </nav>
-
-        {/* Top Header CTA */}
-        {/* <div>
-          <EnterDashboardBtn 
-            href={destinationHref} 
-            onNavigateStart={() => setIsExiting(true)}
-          >
-            Enter Dashboard
-          </EnterDashboardBtn>
-        </div> */}
       </header>
 
       {/* Hero Body Content */}
