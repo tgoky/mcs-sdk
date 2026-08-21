@@ -314,7 +314,108 @@ function buildRunSections(
   return sections;
 }
 
+function RunRow({
+  run,
+  onOpen,
+  onActionComplete,
+  groupCount = 1,
+  groupExpanded = false,
+  onToggleGroup,
+  nested = false,
+}: {
+  run: SkillRun;
+  onOpen: () => void;
+  onActionComplete: () => void;
+  groupCount?: number;
+  groupExpanded?: boolean;
+  onToggleGroup?: () => void;
+  nested?: boolean;
+}) {
+  const isRunning = run.status.toLowerCase() === "running";
+  const isFailed = run.status.toLowerCase() === "failed" || run.status.toLowerCase() === "timed_out";
+  const [panelOpen, setPanelOpen] = useState(false);
+  const { busyKey, error, run: dispatch } = useQuickActions();
 
+  return (
+    <tr
+      className={`group bg-zinc-50/40 dark:bg-zinc-900/40 hover:bg-zinc-100 dark:hover:bg-zinc-900/80 transition-colors cursor-pointer relative ${
+        isRunning ? "bg-zinc-100/60 dark:bg-zinc-900/70" : ""
+      } ${nested ? "bg-zinc-50/70 dark:bg-zinc-950/50 border-l-2 border-l-zinc-200 dark:border-l-zinc-800" : ""}`}
+      onClick={onOpen}
+    >
+      <td className={`px-4 py-2.5 max-w-[180px] ${nested ? "pl-7" : ""}`} onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
+        {run.buyerName && run.engagementId ? (
+          <Link href={`/dashboard/engagements/${run.engagementId}`} onClick={(e) => e.stopPropagation()} className="hover:text-zinc-900 dark:hover:text-white transition-colors relative z-20">
+            <ClientCell run={run} />
+          </Link>
+        ) : (
+          <ClientCell run={run} />
+        )}
+      </td>
+      
+<td className="px-4 py-2.5">
+  <div className="flex items-center gap-2">
+    <SquishySkillBadge
+      skill={run.skillName}
+      size={26}
+      paused={!!run.engagementPausedAt}
+    />
+    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
+      {skillName(run.skillName)}
+    </span>
+  </div>
+  {(run.stepCount ?? 0) > 0 && (
+    <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 block pl-[34px] mt-0.5">
+      {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
+    </span>
+  )}
+</td>
+
+      <td className="px-4 py-2.5 max-w-[280px]">
+        <span
+          className={`text-sm truncate block font-medium ${isFailed ? "text-rose-600 dark:text-rose-400/80 font-mono" : isRunning ? "text-zinc-800 dark:text-zinc-300" : "text-zinc-500"}`}
+          title={actionSummary(run)}
+        >
+          {actionSummary(run)}
+        </span>
+        {run.subjectLabel && (
+          <span className="text-[11px] text-zinc-400 dark:text-zinc-600 truncate block font-mono" title={run.subjectLabel}>
+            {run.subjectLabel}
+          </span>
+        )}
+      </td>
+
+      <td className="px-4 py-2.5 whitespace-nowrap">
+        <div className="flex items-center gap-2">
+          <RunStatusIcon status={run.status} />
+          <StatusLabel status={run.status} />
+          {onToggleGroup && (
+            <GroupCountToggle count={groupCount} expanded={groupExpanded} onToggle={onToggleGroup} />
+          )}
+        </div>
+      </td>
+
+      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+        <VerboseTime isoString={run.startedAt} className="text-xs font-bold text-zinc-900 dark:text-zinc-100 font-mono" />
+      </td>
+
+      <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1">
+          <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-2px] group-hover:translate-x-0 duration-150" />
+          <ActionPanel
+            open={panelOpen}
+            onOpenChange={setPanelOpen}
+            header={<RunPreview run={run} />}
+            sections={buildRunSections(run, dispatch, () => setPanelOpen(false), onActionComplete)}
+            errorText={error}
+            busyKey={busyKey}
+            triggerLabel={`Quick actions for ${run.buyerName ?? "this run"}`}
+          />
+        </div>
+      </td>
+    </tr>
+  );
+}
 
 export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, storageKey }: LiveExecutionFeedProps) {
   const router = useRouter();
