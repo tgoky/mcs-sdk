@@ -15,29 +15,31 @@ export function PackageHeroCard({ overview }: { overview: PackageOverview }) {
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3.5 min-w-0">
-            <div className="relative shrink-0 flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-500 dark:bg-teal-400 shadow-[0_0_0_1px_rgba(45,212,191,0.25),0_8px_24px_-8px_rgba(45,212,191,0.5)] group-hover:scale-105 transition-transform">
+            <div className="relative shrink-0 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-400 dark:bg-amber-400 shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_24px_-8px_rgba(251,191,36,0.5)] group-hover:scale-105 transition-transform">
               <LayoutGrid size={26} className="text-zinc-950 stroke-[2.3px]" />
             </div>
             <div className="min-w-0 pt-0.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-bold text-zinc-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                <h2 className="text-base font-bold text-zinc-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
                   Showtime
                 </h2>
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-900 dark:text-zinc-100">
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-300/80 dark:border-amber-800/80">
                   <Download size={12} className="stroke-[2.5]" /> Installed
                 </span>
               </div>
-              <p className="text-[11px] font-mono text-zinc-500 mt-0.5">By Showtime Core</p>
+              <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 font-medium mt-0.5">
+                By Showtime Core
+              </p>
             </div>
           </div>
           <ArrowUpRight
             size={18}
-            className="shrink-0 text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all"
+            className="shrink-0 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all"
           />
         </div>
 
         {/* Description */}
-        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-md">
+        <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed max-w-md">
           Sales execution for your booked calls — client setup, follow-up sequences, call briefs, win-back, and funnel health, all in one place.
         </p>
 
@@ -53,8 +55,8 @@ export function PackageHeroCard({ overview }: { overview: PackageOverview }) {
         </div>
 
         {/* Skill Avatar Stack */}
-        <div className="flex items-center gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 shrink-0">
+        <div className="flex items-center gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800/80">
+          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 shrink-0">
             Inside
           </span>
           <div className="flex items-center -space-x-1.5">
@@ -64,7 +66,7 @@ export function PackageHeroCard({ overview }: { overview: PackageOverview }) {
               </div>
             ))}
           </div>
-          <span className="text-xs text-zinc-500 dark:text-zinc-400 ml-1 font-mono text-[11px]">
+          <span className="text-xs text-zinc-700 dark:text-zinc-300 ml-1 font-mono text-[11px] font-medium">
             {SKILL_IDS.map((id) => SKILL_MANIFEST[id].name).join(", ")}
           </span>
         </div>

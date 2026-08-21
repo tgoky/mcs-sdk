@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { PackageOverview } from "@/lib/package-overview";
 import { PackageHeroCard } from "@/components/library/package-hero-card";
 import { PackageTeaserCard } from "@/components/library/package-teaser-card";
-import { Search, Settings, ChevronDown, ChevronRight, ChevronLeft } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, ChevronLeft } from "lucide-react";
 
 export function LibraryMarketplaceClient({ overview }: { overview: PackageOverview }) {
   const [activeTab, setActiveTab] = useState<string>("all");
@@ -66,12 +66,12 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
 
   return (
     <div className="w-full space-y-6 font-sans">
-      {/* Header - Back button integrated inline like engagement detail */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex items-start gap-3 min-w-0">
           <Link
             href="/dashboard"
-            className="flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mt-0.5"
+            className="flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 transition-colors shrink-0 mt-0.5"
             aria-label="Back to Dashboard"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -81,15 +81,15 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
               <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
                 Marketplace Apps
               </h1>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 font-medium">
                 Explore automation suites and integrate them into your client workspace.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 -mt-1">
-              <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400 -mt-1">
+              <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-800 dark:text-zinc-200 font-mono text-[11px] font-semibold">
                 {packages.length} suites
               </span>
-              <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+              <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-800 dark:text-zinc-200 font-mono text-[11px] font-semibold">
                 {packages.filter((p) => p.status === "installed").length} installed
               </span>
             </div>
@@ -104,8 +104,8 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
           onClick={() => setActiveTab("all")}
           className={`pb-3 transition-colors whitespace-nowrap border-b-2 cursor-pointer ${
             activeTab === "all"
-              ? "border-teal-500 text-teal-600 dark:text-teal-400 font-bold"
-              : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+              ? "border-amber-400 text-amber-600 dark:text-amber-400 font-bold"
+              : "border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
           }`}
         >
           All Suites ({packages.length})
@@ -115,8 +115,8 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
           onClick={() => setActiveTab("installed")}
           className={`pb-3 transition-colors whitespace-nowrap border-b-2 cursor-pointer ${
             activeTab === "installed"
-              ? "border-teal-500 text-teal-600 dark:text-teal-400 font-bold"
-              : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+              ? "border-amber-400 text-amber-600 dark:text-amber-400 font-bold"
+              : "border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
           }`}
         >
           Installed Apps ({packages.filter((p) => p.status === "installed").length})
@@ -126,8 +126,8 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
           onClick={() => setActiveTab("coming_soon")}
           className={`pb-3 transition-colors whitespace-nowrap border-b-2 cursor-pointer ${
             activeTab === "coming_soon"
-              ? "border-teal-500 text-teal-600 dark:text-teal-400 font-bold"
-              : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+              ? "border-amber-400 text-amber-600 dark:text-amber-400 font-bold"
+              : "border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
           }`}
         >
           Upcoming ({packages.filter((p) => p.status === "coming_soon").length})
@@ -136,8 +136,8 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
 
       {/* Layout Split */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pt-2">
-        {/* Sidebar Filters - 3 Sections */}
-        <div className="lg:col-span-3 space-y-6 text-xs text-zinc-600 dark:text-zinc-400">
+        {/* Sidebar Filters */}
+        <div className="lg:col-span-3 space-y-6 text-xs text-zinc-700 dark:text-zinc-400">
           {/* Section 1: Collections */}
           <div className="space-y-3 pb-4 border-b border-border">
             <button
@@ -158,14 +158,14 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
                 ].map((col) => (
                   <label
                     key={col.id}
-                    className="flex items-center gap-2.5 cursor-pointer hover:text-zinc-900 dark:hover:text-white transition-colors"
+                    className="flex items-center gap-2.5 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
                   >
                     <input
                       type="radio"
                       name="collection"
                       checked={selectedCollection === col.id}
                       onChange={() => setSelectedCollection(col.id)}
-                      className="accent-teal-500 focus:ring-0"
+                      className="accent-amber-400 focus:ring-0 cursor-pointer"
                     />
                     <span>{col.label}</span>
                   </label>
@@ -194,14 +194,14 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
                 ].map((cat) => (
                   <label
                     key={cat.id}
-                    className="flex items-center gap-2.5 cursor-pointer hover:text-zinc-900 dark:hover:text-white transition-colors"
+                    className="flex items-center gap-2.5 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
                   >
                     <input
                       type="radio"
                       name="category"
                       checked={selectedCategory === cat.id}
                       onChange={() => setSelectedCategory(cat.id)}
-                      className="accent-teal-500 focus:ring-0"
+                      className="accent-amber-400 focus:ring-0 cursor-pointer"
                     />
                     <span>{cat.label}</span>
                   </label>
@@ -230,14 +230,14 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
                 ].map((mode) => (
                   <label
                     key={mode.id}
-                    className="flex items-center gap-2.5 cursor-pointer hover:text-zinc-900 dark:hover:text-white transition-colors"
+                    className="flex items-center gap-2.5 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
                   >
                     <input
                       type="radio"
                       name="executionMode"
                       checked={selectedExecutionMode === mode.id}
                       onChange={() => setSelectedExecutionMode(mode.id)}
-                      className="accent-teal-500 focus:ring-0"
+                      className="accent-amber-400 focus:ring-0 cursor-pointer"
                     />
                     <span>{mode.label}</span>
                   </label>
@@ -255,13 +255,13 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
             </p>
 
             <div className="relative w-full sm:w-72">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search Suites..."
-                className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-teal-500 dark:focus:border-teal-400 text-zinc-900 dark:text-white placeholder-zinc-400 shadow-sm"
+                className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-amber-400 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400 shadow-sm"
               />
             </div>
           </div>

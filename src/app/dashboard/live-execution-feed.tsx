@@ -1,606 +1,840 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, Fragment } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   CheckCircle2,
   XCircle,
   Loader2,
   AlertCircle,
-  ExternalLink,
-  Clock,
-  Radio,
-  Zap,
-  RotateCcw,
-  Pause,
-  Play,
+  Hash,
   ArrowRight,
+  ArrowUpRight,
+  Clock,
   Ban,
+  RotateCcw,
+  Waves,
+  Copy,
+  SkipForward,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { SquishySkillBadge } from "@/components/squishy-skill-badge";
-import {
-  skillName,
-  runStatusLabel,
-  phaseLabel,
-  type SkillName,
-} from "@/lib/copy";
+import { skillName, phaseLabel, SKILL_INFO, SKILLS, EXECUTIONS_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, type SkillName } from "@/lib/copy";
+import { classifyRunError } from "@/lib/error-classification";
+import type { RunSummary } from "@/models/schema";
+import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
+import { cancelSkillRun, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
+import { SegmentedTabs, type SegmentedTabOption } from "@/components/segmented-tabs";
+import { TimeRangeMenu, computeTimeRangeBounds, isWithinTimeRange, type TimeRangeValue } from "@/components/time-range-menu";
+import { ViewCustomizer, FilterChipBar, type CustomizerSection } from "@/components/view-customizer";
+import { useLocalViewState } from "@/lib/use-local-view-state";
+import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
+import { GroupCountToggle } from "@/components/group-toggle";
+import { VerboseTime } from "@/components/relative-time";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-type RunStatus = "running" | "success" | "failed" | "error" | "queued" | string;
-
-export interface RunRow {
+interface SkillRun {
   id: string;
   skillName: string;
   status: string;
   phase: string | null;
   startedAt: string;
-  engagementId: string;
-  buyerName: string;
-  engagementPausedAt: string | null;
-  errorMessage: string | null;
-  stepCount: number;
-  summary: Record<string, unknown> | null;
-  subjectLabel: string | null;
+  completedAt?: string | null;
+  engagementId?: string | null;
+  buyerName?: string | null;
+  errorMessage?: string | null;
+  stepCount?: number;
+  subjectLabel?: string | null;
+  engagementPausedAt?: string | null;
+  // The 5-field "what happened" record every skill writes at finishRun().
+  // Not present on rows completed before this column existed — actionSummary()
+  // falls back to the generic per-skill copy when it's absent.
+  summary?: RunSummary | null;
 }
 
-export interface LiveExecutionFeedProps {
-  initialRuns: RunRow[];
-  storageKey: string;
+interface LiveExecutionFeedProps {
+  initialRuns: SkillRun[];
+  apiUrl?: string;
+  title?: string;
+  lockedSkill?: SkillName;
+  storageKey?: string;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+type ExecutionsTab = "all" | "running" | "needs_attention" | "completed";
 
-function useNow(intervalMs = 30_000) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
-}
-
-function relativeTime(iso: string, now: number): string {
-  const diffMs = now - new Date(iso).getTime();
-  const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function formatDayHeader(dateStr: string): string {
-  const todayKey = dateKey(new Date());
-  const yObj = new Date();
-  yObj.setDate(yObj.getDate() - 1);
-  const yesterdayKey = dateKey(yObj);
-  if (dateStr === todayKey) return "Today";
-  if (dateStr === yesterdayKey) return "Yesterday";
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function resolveStatus(status: string): "running" | "success" | "failed" | "warning" | "idle" {
+function tabOfStatus(status: string): ExecutionsTab | null {
   const s = status.toLowerCase();
   if (s === "running" || s === "in_progress") return "running";
-  if (s === "success" || s === "completed") return "success";
-  if (s === "failed" || s === "error") return "failed";
-  if (s === "queued" || s === "pending") return "idle";
-  return "idle";
+  if (s === "failed" || s === "error" || s === "timed_out") return "needs_attention";
+  if (s === "success" || s === "completed") return "completed";
+  return null;
 }
 
-function actionSummary(run: RunRow): string {
-  if (run.errorMessage) return run.errorMessage;
-  if (run.summary && typeof run.summary === "object") {
-    const s = run.summary as Record<string, unknown>;
-    if (typeof s.outcome === "string" && s.outcome.trim()) return s.outcome;
-    if (typeof s.result === "string" && s.result.trim()) return s.result;
-    if (typeof s.summary === "string" && s.summary.trim()) return s.summary;
-    if (typeof s.delivered === "string" && s.delivered.trim()) return s.delivered;
-  }
-  if (run.subjectLabel) return run.subjectLabel;
-  return phaseLabel(run.phase);
-}
-
-// ─── Status Icon ─────────────────────────────────────────────────────────────
-
-function StatusIcon({ status, size = 16 }: { status: string; size?: number }) {
-  const s = status.toLowerCase();
-  if (s === "running" || s === "in_progress")
-    return <Loader2 size={size} className="text-sky-500 animate-spin" />;
-  if (s === "success" || s === "completed")
-    return <CheckCircle2 size={size} className="text-emerald-500" />;
-  if (s === "failed" || s === "error")
-    return <XCircle size={size} className="text-rose-500" />;
-  if (s === "queued" || s === "pending")
-    return <Clock size={size} className="text-zinc-400 dark:text-zinc-500" />;
-  return <AlertCircle size={size} className="text-zinc-400 dark:text-zinc-500" />;
-}
-
-// ─── Live Pulse ──────────────────────────────────────────────────────────────
-
-function LivePulse({ active }: { active: boolean }) {
-  if (!active) return null;
-  return (
-    <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
-      <span className="absolute inset-0 rounded-full bg-sky-500 animate-ping opacity-60" />
-      <span className="relative flex h-3 w-3 items-center justify-center rounded-full bg-sky-500 ring-2 ring-white dark:ring-zinc-950" />
-    </span>
-  );
-}
-
-// ─── Status Pill ─────────────────────────────────────────────────────────────
-
-function StatusPill({
-  resolved,
-  label,
-}: {
-  resolved: "running" | "success" | "failed" | "warning" | "idle";
+interface ExecutionsChipDef {
+  id: string;
   label: string;
-}) {
-  const classes: Record<string, string> = {
-    running: "bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-300",
-    success: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
-    failed: "bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300",
-    warning: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
-    idle: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-  };
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold tracking-tight border-0",
-        classes[resolved]
-      )}
-    >
-      {label}
-    </span>
-  );
+  section: string;
+  group: string;
+  predicate: (run: SkillRun) => boolean;
 }
 
-// ─── Feed Row (Phantom .ph-token-row anatomy) ────────────────────────────────
+const MODULE_CHIP_DEFS: ExecutionsChipDef[] = SKILLS.map((skill) => ({
+  id: `module-${skill}`,
+  label: SKILL_INFO[skill].name,
+  section: toolbarCopy.chipSections.module,
+  group: "module",
+  predicate: (run) => run.skillName === skill,
+}));
 
-function FeedRow({
-  run,
-  now,
-  isSelected,
-  onClick,
-}: {
-  run: RunRow;
-  now: number;
-  isSelected: boolean;
-  onClick: () => void;
-}) {
-  const isRunning = run.status.toLowerCase() === "running" || run.status.toLowerCase() === "in_progress";
-  const isFailed = run.status.toLowerCase() === "failed" || run.status.toLowerCase() === "error";
-  const isPaused = Boolean(run.engagementPausedAt);
-  const skill = run.skillName as SkillName;
-  const resolved = resolveStatus(run.status);
+const STATUS_ACCOUNT_CHIP_DEFS: ExecutionsChipDef[] = [
+  {
+    id: "cancelled",
+    label: toolbarCopy.chips.cancelled,
+    section: toolbarCopy.chipSections.status,
+    group: "cancelled",
+    predicate: (r) => r.status.toLowerCase() === "cancelled",
+  },
+  {
+    id: "long-running",
+    label: toolbarCopy.chips.longRunning,
+    section: toolbarCopy.chipSections.status,
+    group: "long-running",
+    predicate: (r) => r.status.toLowerCase() === "running" && Date.now() - new Date(r.startedAt).getTime() > 10 * 60_000,
+  },
+  {
+    id: "paused-clients",
+    label: toolbarCopy.chips.pausedClients,
+    section: toolbarCopy.chipSections.account,
+    group: "paused-clients",
+    predicate: (r) => !!r.engagementPausedAt,
+  },
+];
 
-  const title = run.subjectLabel ?? skillName(skill);
-  const subtitle = run.buyerName && run.buyerName !== "Unknown client"
-    ? run.buyerName
-    : null;
+const STAT_TOGGLE_IDS = {
+  successRate: "stat:success-rate",
+  moduleBreakdown: "stat:module-breakdown",
+  groupRepeats: "stat:group-repeats",
+} as const;
 
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "w-full min-h-[72px] rounded-[20px] px-4 py-3 text-left cursor-pointer",
-        "flex items-center gap-3 border-0",
-        "transition-[background-color,box-shadow] duration-150",
-        isSelected
-          ? "bg-zinc-200 dark:bg-zinc-700 ring-1 ring-zinc-400 dark:ring-zinc-600"
-          : isPaused
-            ? "bg-zinc-50 dark:bg-zinc-950/40 opacity-60 hover:opacity-80"
-            : "bg-zinc-100 dark:bg-zinc-900/80 hover:bg-zinc-200/80 dark:hover:bg-zinc-800/70",
-        isRunning && !isSelected && "ring-1 ring-sky-200 dark:ring-sky-900/40"
-      )}
-    >
-      {/* Avatar slot */}
-      <div className="relative shrink-0">
-        <div className="w-11 h-11 rounded-full bg-white dark:bg-zinc-800 grid place-items-center">
-          <SquishySkillBadge skill={skill} size={32} enabled={!isPaused} />
-        </div>
-        <LivePulse active={isRunning} />
-      </div>
-
-      {/* Title + Subtitle */}
-      <div className="flex-1 min-w-0 space-y-0.5">
-        <div className="flex items-center gap-1.5 min-w-0">
-          {isPaused && <Ban size={11} className="text-amber-500 shrink-0" />}
-          <span
-            className="text-[15px] font-extrabold text-zinc-900 dark:text-white truncate leading-tight tracking-tight"
-            style={{ fontWeight: 800 }}
-          >
-            {title}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          {subtitle && (
-            <span className="text-[13px] text-zinc-500 dark:text-zinc-400 truncate font-medium">
-              {subtitle}
-            </span>
-          )}
-          {run.stepCount > 0 && (
-            <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 tabular-nums shrink-0">
-              {run.stepCount} step{run.stepCount !== 1 ? "s" : ""}
-            </span>
-          )}
-          {isFailed && run.errorMessage && (
-            <span className="text-[11px] font-mono text-rose-500/80 dark:text-rose-400/70 truncate max-w-[200px]">
-              {run.errorMessage}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Status + Time */}
-      <div className="flex flex-col items-end gap-1.5 shrink-0">
-        <StatusIcon status={run.status} />
-        <span className="text-[12px] font-mono text-zinc-400 dark:text-zinc-500 tabular-nums font-semibold">
-          {relativeTime(run.startedAt, now)}
-        </span>
-      </div>
-    </button>
-  );
+function runSignature(run: SkillRun): string {
+  const detail = normalizeForSignature(run.errorMessage ?? run.subjectLabel);
+  if (!detail) return `solo:${run.id}`;
+  return [run.engagementId ?? "no-engagement", run.skillName, run.status.toLowerCase(), detail].join("|");
 }
 
-// ─── Inspector Panel ─────────────────────────────────────────────────────────
+interface ExecutionsViewState {
+  pinnedChipIds: string[];
+  pageSize: 10 | 25 | 50;
+  showSuccessRate: boolean;
+  showModuleBreakdown: boolean;
+  groupRepeats: boolean;
+}
 
-function FeedInspector({
-  run,
-  now,
-}: {
-  run: RunRow;
-  now: number;
-}) {
+const DEFAULT_EXECUTIONS_VIEW: ExecutionsViewState = {
+  pinnedChipIds: [],
+  pageSize: 10,
+  showSuccessRate: false,
+  showModuleBreakdown: false,
+  groupRepeats: true,
+};
+
+const TERMINAL_STATUSES = new Set(["success", "completed", "failed", "error", "timed_out"]);
+const SUCCESS_STATUSES = new Set(["success", "completed"]);
+
+const FETCH_WINDOW = 150;
+
+// Last-resort copy — only used for terminal-success runs that have no
+// `summary` at all (rows written before the summary column existed).
+// Every current finishRun() call site writes a summary, so this should be
+// rare going forward; it exists so old rows don't render a blank Action cell.
+const LEGACY_SUCCESS_FALLBACK: Partial<Record<SkillName, string>> = {
+  "pin-down":      "Client account set up and confirmation page live",
+  "pile-on":       "Pre-call sequence queued for this booking",
+  "pre-call-read": "Call brief sent to your team",
+  "win-back":      "Win-back sequence triggered for no-show",
+  "leak-map":      "Funnel health report generated",
+};
+
+/**
+ * What the Action cell shows for a run. For terminal-success runs this
+ * used to be one hardcoded sentence per skill regardless of what actually
+ * happened — a "Call brief sent" run and a "found zero calls, sent
+ * nothing" run read identically. Every skill now writes a 5-field
+ * RunSummary at finishRun() (whatWasAttempted/whatWorked/whatFailed/
+ * openItems/decisionsMade — see src/models/schema.ts), so this reads that
+ * instead: a partial failure surfaces first, then what actually worked
+ * (which already covers the "nothing to brief" / "funnel is healthy"
+ * cases, since each skill pushes those exact outcomes there), then any
+ * open item. The static line below only fires for runs with no summary
+ * at all.
+ */
+function actionSummary(run: SkillRun): string {
+  const s = run.status.toLowerCase();
   const skill = run.skillName as SkillName;
-  const resolved = resolveStatus(run.status);
-  const summary = actionSummary(run);
 
-  // Extract structured summary fields if available
-  const summaryFields = useMemo(() => {
-    if (!run.summary || typeof run.summary !== "object") return null;
-    const s = run.summary as Record<string, unknown>;
-    const skip = new Set(["outcome", "result", "summary", "delivered"]);
-    const entries = Object.entries(s).filter(([k, v]) => !skip.has(k) && v !== null && v !== undefined && v !== "");
-    if (entries.length === 0) return null;
-    return entries;
-  }, [run.summary]);
+  if (s === "running") return phaseLabel(run.phase);
+
+  if (s === "failed") {
+    const diagnosis = classifyRunError(run.errorMessage);
+    if (diagnosis) return diagnosis.title;
+    if (run.errorMessage && run.errorMessage.length < 80) return run.errorMessage;
+    return "Failed — click to view run telemetry";
+  }
+
+  if (s === "timed_out") return "Timed out — exceeded max runtime, click to view";
+  if (s === "cancelled") return "Cancelled by user request";
+
+  if (s === "skipped") {
+    // The one status finishRun() sets without a summary (paused/deleted
+    // engagement, or the skill toggled off for this client) — the run's
+    // own step log already recorded the specific reason, surfaced via
+    // subjectLabel (see latestStepLabel in lib/run-display.ts).
+    return run.subjectLabel ?? "Skipped — engagement paused, deleted, or this skill is off";
+  }
+
+  const summary = run.summary;
+  if (summary) {
+    if (summary.whatFailed.length > 0) return summary.whatFailed[0];
+    if (summary.whatWorked.length > 0) return summary.whatWorked[0];
+    if (summary.openItems.length > 0) return summary.openItems[0];
+  }
+
+  return LEGACY_SUCCESS_FALLBACK[skill] ?? SKILL_INFO[skill]?.description ?? "Completed";
+}
+
+function RunStatusIcon({ status }: { status: string }) {
+  const s = status.toLowerCase();
+  if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 fill-emerald-500 text-zinc-950 shrink-0" />;
+  if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 fill-rose-500 text-zinc-950 shrink-0" />;
+  if (s === "timed_out") return <Clock className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />;
+  if (s === "cancelled") return <Ban className="w-4 h-4 text-amber-500 shrink-0" />;
+  if (s === "running" || s === "in_progress") return <Loader2 className="w-4 h-4 text-zinc-500 dark:text-zinc-400 animate-spin shrink-0" />;
+  if (s === "skipped") return <SkipForward className="w-4 h-4 text-zinc-400 dark:text-zinc-600 shrink-0" />;
+  return <AlertCircle className="w-4 h-4 text-zinc-400 dark:text-zinc-600 shrink-0" />;
+}
+
+function StatusLabel({ status }: { status: string }) {
+  const s = status.toLowerCase();
+  if (s === "success" || s === "completed") return <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 font-mono">Done</span>;
+  if (s === "failed" || s === "error") return <span className="text-xs font-semibold text-rose-600 dark:text-rose-400 font-mono">Failed</span>;
+  if (s === "timed_out") return <span className="text-xs font-semibold text-rose-600 dark:text-rose-400 font-mono">Timed out</span>;
+  if (s === "cancelled") return <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 font-mono">Cancelled</span>;
+  if (s === "running" || s === "in_progress") return <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 italic font-mono">Running</span>;
+  if (s === "skipped") return <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-600 font-mono">Skipped</span>;
+  return <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-600 font-mono">Pending</span>;
+}
+
+function ClientCell({ run }: { run: SkillRun }) {
+  const displayName = run.buyerName ?? run.engagementId ?? "Unknown client";
+  const showHashIcon = !run.buyerName && !!run.engagementId;
 
   return (
-    <div className="rounded-[20px] border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 space-y-4 shadow-xl">
-      {/* Header */}
-      <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <SquishySkillBadge skill={skill} size={18} enabled={true} />
-            <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold">
-              {skillName(skill)}
-            </span>
-          </div>
-          <StatusPill resolved={resolved} label={runStatusLabel(run.status)} />
-        </div>
-
-        <h4
-          className="text-base font-extrabold text-zinc-900 dark:text-white tracking-tight"
-          style={{ fontWeight: 800 }}
-        >
-          {run.subjectLabel ?? skillName(skill)}
-        </h4>
-
-        <div className="flex items-center gap-2 font-mono text-xs text-zinc-500">
-          <Clock size={12} />
-          <span>
-            {new Date(run.startedAt).toLocaleString(undefined, {
-              month: "short",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
-          <span className="text-zinc-300 dark:text-zinc-600">·</span>
-          <span>{relativeTime(run.startedAt, now)}</span>
-        </div>
-      </div>
-
-      {/* Client card */}
-      {run.buyerName && run.buyerName !== "Unknown client" && (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 p-3 space-y-1">
-          <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">
-            Client
-          </span>
-          <Link
-            href={`/dashboard/engagements/${run.engagementId}`}
-            className="text-sm font-bold text-zinc-900 dark:text-white hover:text-sky-600 dark:hover:text-sky-400 transition-colors"
-          >
-            {run.buyerName}
-          </Link>
-          {run.engagementPausedAt && (
-            <p className="text-[11px] font-mono text-amber-600 dark:text-amber-400 flex items-center gap-1">
-              <Ban size={10} /> Engagement paused
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Phase + Steps */}
-      <div className="space-y-2">
-        <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">
-          Execution
-        </span>
-        <div className="flex items-center gap-3 text-xs">
-          <span className="text-zinc-600 dark:text-zinc-400 font-medium">
-            {phaseLabel(run.phase)}
-          </span>
-          {run.stepCount > 0 && (
-            <>
-              <span className="text-zinc-300 dark:text-zinc-600">·</span>
-              <span className="font-mono text-zinc-500 tabular-nums">
-                {run.stepCount} step{run.stepCount !== 1 ? "s" : ""}
-              </span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Summary / Detail */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 p-3 space-y-1">
-        <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">
-          {run.errorMessage ? "Error" : "Outcome"}
-        </span>
-        <p
-          className={cn(
-            "text-xs leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto",
-            run.errorMessage
-              ? "text-rose-700 dark:text-rose-300"
-              : "text-zinc-800 dark:text-zinc-300"
-          )}
-        >
-          {summary || "No details available."}
-        </p>
-      </div>
-
-      {/* Structured summary fields */}
-      {summaryFields && (
-        <div className="space-y-1">
-          <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">
-            Details
-          </span>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-            {summaryFields.map(([k, v]) => (
-              <Fragment key={k}>
-                <dt className="font-mono text-zinc-500 truncate">{k}</dt>
-                <dd className="font-mono text-zinc-800 dark:text-zinc-300 truncate text-right">
-                  {String(v)}
-                </dd>
-              </Fragment>
-            ))}
-          </dl>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex items-center gap-2 pt-2">
-        <Link
-          href={`/dashboard/runs/${run.id}`}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-        >
-          <span>View Run</span>
-          <ExternalLink size={12} />
-        </Link>
-      </div>
+    <div className="flex items-center gap-2 min-w-0" title={displayName}>
+      {showHashIcon && <Hash size={12} className="text-zinc-400 dark:text-zinc-600 shrink-0" />}
+      <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">
+        {displayName}
+      </span>
     </div>
   );
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
-
-export function LiveExecutionFeed({ initialRuns, storageKey }: LiveExecutionFeedProps) {
-  const now = useNow(30_000);
-  const [runs, setRuns] = useState<RunRow[]>(initialRuns);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [filterSkill, setFilterSkill] = useState<SkillName | "all">("all");
-  const feedRef = useRef<HTMLDivElement>(null);
-
-  // Sync with server data on change
-  useEffect(() => {
-    setRuns(initialRuns);
-  }, [initialRuns]);
-
-  // Persist filter in localStorage keyed by storageKey
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(`feed-filter-${storageKey}`);
-      if (saved) setFilterSkill(saved as SkillName | "all");
-    } catch { /* noop */ }
-  }, [storageKey]);
-
-  useEffect(() => {
-    try {
-      if (filterSkill !== "all") {
-        localStorage.setItem(`feed-filter-${storageKey}`, filterSkill);
-      } else {
-        localStorage.removeItem(`feed-filter-${storageKey}`);
-      }
-    } catch { /* noop */ }
-  }, [filterSkill, storageKey]);
-
-  // Filter
-  const filtered = useMemo(() => {
-    if (filterSkill === "all") return runs;
-    return runs.filter((r) => r.skillName === filterSkill);
-  }, [runs, filterSkill]);
-
-  // Temporal grouping (Master Roster pattern)
-  const groups = useMemo(() => {
-    const map: Record<string, RunRow[]> = {};
-    for (const r of filtered) {
-      const k = dateKey(new Date(r.startedAt));
-      (map[k] ??= []).push(r);
-    }
-    return Object.entries(map)
-      .sort(([a], [b]) => b.localeCompare(a))
-      .map(([dateStr, items]) => ({
-        dateStr,
-        label: formatDayHeader(dateStr),
-        runs: items.sort(
-          (a, b) =>
-            new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
-        ),
-      }));
-  }, [filtered]);
-
-  const selectedRun = useMemo(
-    () => runs.find((r) => r.id === selectedId) ?? null,
-    [runs, selectedId]
+function RunPreview({ run }: { run: SkillRun }) {
+  const displayName = run.buyerName ?? run.engagementId ?? "Unknown client";
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold text-foreground truncate">{displayName}</span>
+        <VerboseTime isoString={run.startedAt} className="text-xs" />
+      </div>
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <span className="font-mono font-bold uppercase tracking-wide text-[11px]">{skillName(run.skillName)}</span>
+        <span>·</span>
+        <div className="flex items-center gap-1">
+          <RunStatusIcon status={run.status} />
+          <StatusLabel status={run.status} />
+        </div>
+      </div>
+      <p className="text-muted-foreground leading-snug">{actionSummary(run)}</p>
+      {run.subjectLabel && <p className="font-mono text-muted-foreground/70 truncate">{run.subjectLabel}</p>}
+    </div>
   );
+}
 
-  const hasRunning = runs.some(
-    (r) => r.status.toLowerCase() === "running" || r.status.toLowerCase() === "in_progress"
-  );
+function buildRunSections(
+  run: SkillRun,
+  dispatch: ReturnType<typeof useQuickActions>["run"],
+  closePanel: () => void,
+  onDone: () => void
+): ActionPanelSection[] {
+  const isRunning = run.status.toLowerCase() === "running";
+  const skill = run.skillName as SkillName;
+  const canManualTrigger = skill === "pre-call-read" || skill === "leak-map";
 
-  // Unique skills for filter chips
-  const uniqueSkills = useMemo(() => {
-    const set = new Set<SkillName>();
-    for (const r of runs) set.add(r.skillName as SkillName);
-    return Array.from(set);
-  }, [runs]);
+  const primary: ActionPanelSection["items"] = [
+    { key: "view", icon: ArrowUpRight, label: "View full run detail", href: `/dashboard/runs/${run.id}` },
+  ];
+
+  if (run.engagementId && run.buyerName) {
+    primary.push({
+      key: "open-engagement",
+      icon: ArrowUpRight,
+      label: "Open client engagement",
+      href: `/dashboard/engagements/${run.engagementId}`,
+    });
+  }
+
+  const runControl: ActionPanelSection["items"] = [];
+
+  if (isRunning) {
+    runControl.push({
+      key: "cancel",
+      icon: Ban,
+      label: "Cancel this run",
+      tone: "danger",
+      onSelect: () => dispatch("cancel", () => cancelSkillRun(run.id), () => { onDone(); closePanel(); }),
+    });
+  } else if (canManualTrigger) {
+    runControl.push({
+      key: "retrigger",
+      icon: skill === "leak-map" ? Waves : RotateCcw,
+      label: skill === "leak-map" ? "Generate a fresh Leak Map" : "Run again",
+      disabled: !run.engagementId,
+      onSelect: () =>
+        run.engagementId &&
+        dispatch("retrigger", () => triggerSkillRun(run.engagementId as string, skill), () => { onDone(); closePanel(); }),
+    });
+  }
+
+  const utility: ActionPanelSection["items"] = [
+    { key: "copy", icon: Copy, label: "Copy run ID", onSelect: () => dispatch("copy", () => copyToClipboard(run.id)) },
+  ];
+
+  const sections: ActionPanelSection[] = [{ label: "Actions", items: primary }];
+  if (runControl.length > 0) sections.push({ label: "Run control", items: runControl });
+  sections.push({ label: "Utility", items: utility });
+  return sections;
+}
+
+function RunRow({
+  run,
+  onOpen,
+  onActionComplete,
+  groupCount = 1,
+  groupExpanded = false,
+  onToggleGroup,
+  nested = false,
+}: {
+  run: SkillRun;
+  onOpen: () => void;
+  onActionComplete: () => void;
+  groupCount?: number;
+  groupExpanded?: boolean;
+  onToggleGroup?: () => void;
+  nested?: boolean;
+}) {
+  const isRunning = run.status.toLowerCase() === "running";
+  const isFailed = run.status.toLowerCase() === "failed" || run.status.toLowerCase() === "timed_out";
+  const [panelOpen, setPanelOpen] = useState(false);
+  const { busyKey, error, run: dispatch } = useQuickActions();
 
   return (
-    <div className="space-y-3 font-sans antialiased">
-      {/* ── Toolbar ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-2 shadow-sm">
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Live indicator */}
-          <div className="flex items-center gap-1.5 rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 px-3 py-1.5">
-            <LivePulse active={hasRunning} />
-            <span className="text-xs font-extrabold text-zinc-900 dark:text-white tracking-tight">
-              {hasRunning ? "Live" : "Idle"}
-            </span>
-          </div>
+    <tr
+      className={`group bg-zinc-50/40 dark:bg-zinc-900/40 hover:bg-zinc-100 dark:hover:bg-zinc-900/80 transition-colors cursor-pointer relative ${
+        isRunning ? "bg-zinc-100/60 dark:bg-zinc-900/70" : ""
+      } ${nested ? "bg-zinc-50/70 dark:bg-zinc-950/50 border-l-2 border-l-zinc-200 dark:border-l-zinc-800" : ""}`}
+      onClick={onOpen}
+    >
+      <td className={`px-4 py-2.5 max-w-[180px] ${nested ? "pl-7" : ""}`} onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
+        {run.buyerName && run.engagementId ? (
+          <Link href={`/dashboard/engagements/${run.engagementId}`} onClick={(e) => e.stopPropagation()} className="hover:text-zinc-900 dark:hover:text-white transition-colors relative z-20">
+            <ClientCell run={run} />
+          </Link>
+        ) : (
+          <ClientCell run={run} />
+        )}
+      </td>
 
-          {/* Skill filter pills */}
-          {uniqueSkills.length > 1 && (
-            <div className="flex items-center gap-1 rounded-2xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800">
-              <button
-                type="button"
-                onClick={() => setFilterSkill("all")}
-                className={cn(
-                  "rounded-xl px-2.5 py-1 text-[11px] font-bold transition-colors cursor-pointer",
-                  filterSkill === "all"
-                    ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
-                    : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-                )}
-              >
-                All
-              </button>
-              {uniqueSkills.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setFilterSkill(s)}
-                  className={cn(
-                    "flex items-center gap-1 rounded-xl px-2 py-1 text-[11px] font-bold transition-colors cursor-pointer",
-                    filterSkill === s
-                      ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
-                      : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-                  )}
+      <td className="px-4 py-2.5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm text-zinc-600 dark:text-zinc-400 font-semibold whitespace-nowrap">
+            {skillName(run.skillName)}
+          </span>
+        </div>
+        {(run.stepCount ?? 0) > 0 && (
+          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-700">
+            {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
+          </span>
+        )}
+      </td>
+
+      <td className="px-4 py-2.5 max-w-[280px]">
+        <span
+          className={`text-sm truncate block font-medium ${isFailed ? "text-rose-600 dark:text-rose-400/80 font-mono" : isRunning ? "text-zinc-800 dark:text-zinc-300" : "text-zinc-500"}`}
+          title={actionSummary(run)}
+        >
+          {actionSummary(run)}
+        </span>
+        {run.subjectLabel && (
+          <span className="text-[11px] text-zinc-400 dark:text-zinc-600 truncate block font-mono" title={run.subjectLabel}>
+            {run.subjectLabel}
+          </span>
+        )}
+      </td>
+
+      <td className="px-4 py-2.5 whitespace-nowrap">
+        <div className="flex items-center gap-2">
+          <RunStatusIcon status={run.status} />
+          <StatusLabel status={run.status} />
+          {onToggleGroup && (
+            <GroupCountToggle count={groupCount} expanded={groupExpanded} onToggle={onToggleGroup} />
+          )}
+        </div>
+      </td>
+
+      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+        <VerboseTime isoString={run.startedAt} className="text-xs font-bold text-zinc-900 dark:text-zinc-100 font-mono" />
+      </td>
+
+      <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1">
+          <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-2px] group-hover:translate-x-0 duration-150" />
+          <ActionPanel
+            open={panelOpen}
+            onOpenChange={setPanelOpen}
+            header={<RunPreview run={run} />}
+            sections={buildRunSections(run, dispatch, () => setPanelOpen(false), onActionComplete)}
+            errorText={error}
+            busyKey={busyKey}
+            triggerLabel={`Quick actions for ${run.buyerName ?? "this run"}`}
+          />
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, storageKey }: LiveExecutionFeedProps) {
+  const router = useRouter();
+  const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
+  const [polling] = useState(true);
+
+  const [savedView, setSavedView] = useLocalViewState<ExecutionsViewState>(
+    `mcs:executions:${storageKey ?? "default"}`,
+    DEFAULT_EXECUTIONS_VIEW
+  );
+  const [tab, setTab] = useState<ExecutionsTab>("all");
+  const [search] = useState("");
+  const [timeRange, setTimeRange] = useState<TimeRangeValue>("all");
+  const [activeChipIds, setActiveChipIds] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(0);
+
+  const pinnedChipIds = new Set(savedView.pinnedChipIds);
+  const pageSize = savedView.pageSize;
+
+  const buildUrl = useCallback(() => {
+    const url = new URL(apiUrl ?? "/api/skill-runs/recent", window.location.origin);
+    url.searchParams.set("limit", String(FETCH_WINDOW));
+    url.searchParams.delete("offset");
+    return url.pathname + url.search;
+  }, [apiUrl]);
+
+  const refresh = useCallback(async (signal: AbortSignal) => {
+    try {
+      const res = await fetch(buildUrl(), { cache: "no-store", signal });
+      if (signal.aborted || !res.ok) return;
+      const data = await res.json();
+      if (signal.aborted) return;
+      setRuns(data.runs ?? []);
+    } catch {
+      // Ignore AbortError on unmount/re-fetch
+    }
+  }, [buildUrl]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    (async () => {
+      await refresh(controller.signal);
+    })();
+
+    if (!polling) {
+      return () => controller.abort();
+    }
+
+    const id = setInterval(() => refresh(controller.signal), 5000);
+    return () => {
+      clearInterval(id);
+      controller.abort();
+    };
+  }, [polling, refresh]);
+
+  const refreshNow = useCallback(() => {
+    const controller = new AbortController();
+    refresh(controller.signal);
+  }, [refresh]);
+
+  const chipDefs = useMemo(
+    () => (lockedSkill ? STATUS_ACCOUNT_CHIP_DEFS : [...MODULE_CHIP_DEFS, ...STATUS_ACCOUNT_CHIP_DEFS]),
+    [lockedSkill]
+  );
+
+  const tabCounts = useMemo(() => {
+    const counts: Record<ExecutionsTab, number> = { all: runs.length, running: 0, needs_attention: 0, completed: 0 };
+    for (const r of runs) {
+      const t = tabOfStatus(r.status);
+      if (t) counts[t]++;
+    }
+    return counts;
+  }, [runs]);
+
+  const tabFiltered = useMemo(
+    () => (tab === "all" ? runs : runs.filter((r) => tabOfStatus(r.status) === tab)),
+    [runs, tab]
+  );
+
+  const rangeFiltered = useMemo(() => {
+    if (timeRange === "all") return tabFiltered;
+    const bounds = computeTimeRangeBounds(timeRange);
+    return tabFiltered.filter((r) => isWithinTimeRange(r.startedAt, bounds));
+  }, [tabFiltered, timeRange]);
+
+  const searchFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rangeFiltered;
+    return rangeFiltered.filter((r) => {
+      const skillLabel = skillName(r.skillName).toLowerCase();
+      return (
+        (r.buyerName ?? "").toLowerCase().includes(q) ||
+        skillLabel.includes(q) ||
+        actionSummary(r).toLowerCase().includes(q) ||
+        (r.subjectLabel ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [rangeFiltered, search]);
+
+  const chipCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const def of chipDefs) {
+      let n = 0;
+      for (const run of searchFiltered) if (def.predicate(run)) n++;
+      counts.set(def.id, n);
+    }
+    return counts;
+  }, [chipDefs, searchFiltered]);
+
+  const visibleRuns = useMemo(() => {
+    if (activeChipIds.size === 0) return searchFiltered;
+    const activeDefs = chipDefs.filter((d) => activeChipIds.has(d.id));
+    const groups = new Map<string, ExecutionsChipDef[]>();
+    for (const def of activeDefs) {
+      const bucket = groups.get(def.group) ?? [];
+      bucket.push(def);
+      groups.set(def.group, bucket);
+    }
+    return searchFiltered.filter((run) => {
+      for (const defs of groups.values()) {
+        if (!defs.some((d) => d.predicate(run))) return false;
+      }
+      return true;
+    });
+  }, [searchFiltered, activeChipIds, chipDefs]);
+
+  const successRateInfo = useMemo(() => {
+    if (!savedView.showSuccessRate) return null;
+    const terminal = searchFiltered.filter((r) => TERMINAL_STATUSES.has(r.status.toLowerCase()));
+    if (terminal.length === 0) return null;
+    const successful = terminal.filter((r) => SUCCESS_STATUSES.has(r.status.toLowerCase())).length;
+    return { rate: Math.round((successful / terminal.length) * 100), total: terminal.length };
+  }, [searchFiltered, savedView.showSuccessRate]);
+
+  const moduleBreakdown = useMemo(() => {
+    if (!savedView.showModuleBreakdown || lockedSkill) return null;
+    const counts = new Map<string, number>();
+    for (const r of searchFiltered) counts.set(r.skillName, (counts.get(r.skillName) ?? 0) + 1);
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [searchFiltered, savedView.showModuleBreakdown, lockedSkill]);
+
+  const runGroups = useMemo(() => {
+    if (!savedView.groupRepeats) {
+      return visibleRuns.map((r) => ({ signature: r.id, items: [r], latest: r, count: 1 }));
+    }
+    return groupBySignature(visibleRuns, runSignature, (r) => r.startedAt);
+  }, [visibleRuns, savedView.groupRepeats]);
+
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  function toggleGroupExpanded(signature: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(signature)) next.delete(signature);
+      else next.add(signature);
+      return next;
+    });
+  }
+
+  const pageCount = Math.max(1, Math.ceil(runGroups.length / pageSize));
+  const clampedPage = Math.min(page, pageCount - 1);
+  const pagedGroups = runGroups.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
+
+  useEffect(() => {
+    setPage(0);
+  }, [tab, search, timeRange, savedView.pinnedChipIds, activeChipIds, pageSize, savedView.groupRepeats]);
+
+  function handleCustomizeToggle(id: string) {
+    if (id === STAT_TOGGLE_IDS.successRate) {
+      setSavedView((prev) => ({ ...prev, showSuccessRate: !prev.showSuccessRate }));
+      return;
+    }
+    if (id === STAT_TOGGLE_IDS.moduleBreakdown) {
+      setSavedView((prev) => ({ ...prev, showModuleBreakdown: !prev.showModuleBreakdown }));
+      return;
+    }
+    if (id === STAT_TOGGLE_IDS.groupRepeats) {
+      setSavedView((prev) => ({ ...prev, groupRepeats: !prev.groupRepeats }));
+      return;
+    }
+    setSavedView((prev) => {
+      const next = new Set(prev.pinnedChipIds);
+      if (next.has(id)) {
+        next.delete(id);
+        setActiveChipIds((prevActive) => {
+          const nextActive = new Set(prevActive);
+          nextActive.delete(id);
+          return nextActive;
+        });
+      } else {
+        next.add(id);
+      }
+      return { ...prev, pinnedChipIds: Array.from(next) };
+    });
+  }
+
+  function toggleActiveChip(id: string) {
+    setActiveChipIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function changePageSize(size: 10 | 25 | 50) {
+    setSavedView((prev) => ({ ...prev, pageSize: size }));
+  }
+
+  function clearFilters() {
+    setTab("all");
+    setTimeRange("all");
+    setActiveChipIds(new Set());
+  }
+
+  const hasActiveFilters = tab !== "all" || timeRange !== "all" || activeChipIds.size > 0;
+
+  if (runs.length === 0) {
+    return (
+      <div className="h-32 flex items-center justify-center border border-dashed border-zinc-300 dark:border-zinc-800 rounded-lg bg-zinc-50/50 dark:bg-zinc-950/50 transition-colors">
+        <div className="text-center space-y-1">
+          <p className="text-sm font-medium text-zinc-500">No executions yet</p>
+          <p className="text-xs text-zinc-400 dark:text-zinc-600 max-w-sm font-mono">
+            Skill runs will appear here once triggered for a client engagement
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const tabOptions: SegmentedTabOption<ExecutionsTab>[] = [
+    { key: "all", label: toolbarCopy.tabs.all, count: tabCounts.all },
+    { key: "running", label: toolbarCopy.tabs.running, count: tabCounts.running },
+    { key: "needs_attention", label: toolbarCopy.tabs.needs_attention, count: tabCounts.needs_attention },
+    { key: "completed", label: toolbarCopy.tabs.completed, count: tabCounts.completed },
+  ];
+
+  const chipSectionOrder = lockedSkill
+    ? [toolbarCopy.chipSections.status, toolbarCopy.chipSections.account]
+    : [toolbarCopy.chipSections.module, toolbarCopy.chipSections.status, toolbarCopy.chipSections.account];
+
+  const customizerSections: CustomizerSection[] = [
+    ...chipSectionOrder
+      .map((sectionLabel) => ({
+        label: sectionLabel,
+        options: chipDefs
+          .filter((d) => d.section === sectionLabel)
+          .map((d) => ({ id: d.id, label: d.label, count: chipCounts.get(d.id) ?? 0 })),
+      }))
+      .filter((s) => s.options.length > 0),
+    {
+      label: sharedToolbarCopy.displaySectionLabel,
+      options: [{ id: STAT_TOGGLE_IDS.groupRepeats, label: sharedToolbarCopy.groupRepeatsLabel }],
+    },
+    {
+      label: sharedToolbarCopy.statsSectionLabel,
+      options: lockedSkill
+        ? [{ id: STAT_TOGGLE_IDS.successRate, label: toolbarCopy.stats.showSuccessRate }]
+        : [
+            { id: STAT_TOGGLE_IDS.successRate, label: toolbarCopy.stats.showSuccessRate },
+            { id: STAT_TOGGLE_IDS.moduleBreakdown, label: toolbarCopy.stats.showModuleBreakdown },
+          ],
+    },
+  ];
+
+  const customizerEnabledIds = new Set(savedView.pinnedChipIds);
+  if (savedView.showSuccessRate) customizerEnabledIds.add(STAT_TOGGLE_IDS.successRate);
+  if (savedView.showModuleBreakdown) customizerEnabledIds.add(STAT_TOGGLE_IDS.moduleBreakdown);
+  if (savedView.groupRepeats) customizerEnabledIds.add(STAT_TOGGLE_IDS.groupRepeats);
+
+  const pinnedChips = chipDefs
+    .filter((d) => pinnedChipIds.has(d.id))
+    .map((d) => ({ id: d.id, label: d.label, count: chipCounts.get(d.id) ?? 0 }));
+
+  return (
+    <div className="border border-border rounded-lg bg-white/60 dark:bg-zinc-900/50 backdrop-blur-md overflow-hidden shadow-sm transition-colors duration-200">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-zinc-50/50 dark:bg-zinc-950/50 gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider font-mono shrink-0">
+            {title ?? toolbarCopy.title}
+          </h3>
+          <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 bg-zinc-200/60 dark:bg-zinc-900 px-1.5 py-0.5 rounded-sm border border-zinc-300/40 dark:border-zinc-800/40 shrink-0">
+            {visibleRuns.length}
+          </span>
+          {successRateInfo && (
+            <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 truncate">
+              {successRateInfo.rate}% {toolbarCopy.successRateSuffix(successRateInfo.total)}
+            </span>
+          )}
+          {moduleBreakdown && moduleBreakdown.length > 0 && (
+            <div className="hidden md:flex items-center gap-1 min-w-0 overflow-hidden">
+              {moduleBreakdown.map(([skill, count]) => (
+                <span
+                  key={skill}
+                  className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 bg-zinc-100/70 dark:bg-zinc-900/60 px-1.5 py-0.5 rounded-sm whitespace-nowrap"
                 >
-                  <SquishySkillBadge skill={s} size={12} enabled={true} />
-                  <span className="hidden sm:inline">{skillName(s)}</span>
-                </button>
+                  {skillName(skill)} {count}
+                </span>
               ))}
             </div>
           )}
         </div>
-
-        <span className="text-[11px] font-mono text-zinc-400 tabular-nums">
-          {filtered.length} run{filtered.length !== 1 ? "s" : ""}
-        </span>
+        {/*
+        <button
+          onClick={() => setPolling((p) => !p)}
+          className="text-xs font-bold font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors cursor-pointer shrink-0"
+        >
+          {polling ? "[ Pause live ]" : "[ Resume live ]"}
+        </button>
+        */}
       </div>
 
-      {/* ── Feed + Inspector ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        <div
-          className={cn(
-            "transition-all",
-            selectedRun ? "lg:col-span-7" : "lg:col-span-12"
+      <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800/60">
+        <SegmentedTabs options={tabOptions} value={tab} onChange={setTab} />
+        {/* <TableSearchInput value={search} onChange={setSearch} placeholder={toolbarCopy.searchPlaceholder} className="w-[190px]" /> */}
+        <TimeRangeMenu value={timeRange} onChange={setTimeRange} />
+        <div className="ml-auto flex items-center gap-1.5">
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+            >
+              {sharedToolbarCopy.clearFiltersButton}
+            </button>
           )}
-        >
-          <div
-            ref={feedRef}
-            className="space-y-5 max-h-[720px] overflow-y-auto scrollbar-none pr-1"
-          >
-            {groups.length === 0 && (
-              <div className="rounded-[20px] border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 h-40 flex flex-col items-center justify-center gap-2">
-                <Radio size={24} className="text-zinc-300 dark:text-zinc-700" />
-                <p className="text-sm text-zinc-400 dark:text-zinc-500 font-medium">
-                  No runs yet
-                </p>
-              </div>
-            )}
+          <ViewCustomizer
+            sections={customizerSections}
+            enabledIds={customizerEnabledIds}
+            onToggle={handleCustomizeToggle}
+            menuTitle={sharedToolbarCopy.customizeMenuTitle}
+          />
+        </div>
+      </div>
 
-            {groups.map((group) => (
-              <div key={group.dateStr}>
-                {/* Temporal header */}
-                <div className="flex items-center gap-2.5 mb-2.5 px-1">
-                  <span
-                    className="text-[11px] font-extrabold text-zinc-900 dark:text-white tracking-tight"
-                    style={{ fontWeight: 800 }}
-                  >
-                    {group.label}
-                  </span>
-                  <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 tabular-nums">
-                    {group.runs.length} run{group.runs.length !== 1 ? "s" : ""}
-                  </span>
-                  <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-800" />
-                </div>
+      {pinnedChips.length > 0 && (
+        <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-800/60">
+          <FilterChipBar chips={pinnedChips} activeIds={activeChipIds} onToggle={toggleActiveChip} />
+        </div>
+      )}
 
-                {/* Rows (Phantom 10px gap) */}
-                <div className="space-y-[10px]">
-                  {group.runs.map((run) => (
-                    <FeedRow
-                      key={run.id}
-                      run={run}
-                      now={now}
-                      isSelected={selectedId === run.id}
-                      onClick={() =>
-                        setSelectedId(selectedId === run.id ? null : run.id)
-                      }
+      {visibleRuns.length === 0 ? (
+        <div className="py-10 text-center space-y-1">
+          <p className="text-sm font-medium text-zinc-500">{sharedToolbarCopy.noResultsTitle}</p>
+          <p className="text-xs text-zinc-400 dark:text-zinc-600 font-mono max-w-sm mx-auto">{sharedToolbarCopy.noResultsSubtitle}</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] text-left border-collapse text-xs font-sans tracking-tight">
+            <thead>
+              <tr className="border-b border-zinc-200 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-transparent text-zinc-400 dark:text-zinc-600 uppercase tracking-wider font-mono text-[10px] select-none">
+                <th className="px-4 py-2 w-[180px] font-normal">Client</th>
+                <th className="px-4 py-2 font-normal">Module</th>
+                <th className="px-4 py-2 font-normal">Action</th>
+                <th className="px-4 py-2 w-24 font-normal">Status</th>
+                <th className="px-4 py-2 text-right w-12 font-normal">Age</th>
+                <th className="w-8 px-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/30">
+              {pagedGroups.map((group) => {
+                const expanded = expandedGroups.has(group.signature);
+                return (
+                  <Fragment key={group.signature}>
+                    <RunRow
+                      run={group.latest}
+                      onOpen={() => router.push(`/dashboard/runs/${group.latest.id}`)}
+                      onActionComplete={refreshNow}
+                      groupCount={group.count}
+                      groupExpanded={expanded}
+                      onToggleGroup={group.count > 1 ? () => toggleGroupExpanded(group.signature) : undefined}
                     />
-                  ))}
-                </div>
-              </div>
-            ))}
+                    {expanded &&
+                      group.items.slice(1).map((run) => (
+                        <RunRow
+                          key={run.id}
+                          run={run}
+                          onOpen={() => router.push(`/dashboard/runs/${run.id}`)}
+                          onActionComplete={refreshNow}
+                          nested
+                        />
+                      ))}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-zinc-50/30 dark:bg-transparent">
+        <div className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
+          {([10, 25, 50] as const).map((size) => (
+            <button
+              key={size}
+              onClick={() => changePageSize(size)}
+              className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                pageSize === size
+                  ? "border-zinc-400 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300"
+                  : "border-transparent hover:text-zinc-700 dark:hover:text-zinc-300"
+              }`}
+            >
+              {sharedToolbarCopy.pageSizeLabel(size)}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">Page {clampedPage + 1} of {pageCount}</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(Math.max(0, clampedPage - 1))}
+              disabled={clampedPage === 0}
+              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              ← Prev
+            </button>
+            <button
+              onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}
+              disabled={clampedPage >= pageCount - 1}
+              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              Next →
+            </button>
           </div>
         </div>
-
-        {/* Inspector */}
-        {selectedRun && (
-          <div className="lg:col-span-5">
-            <div className="sticky top-2">
-              <FeedInspector run={selectedRun} now={now} />
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
