@@ -11,43 +11,46 @@ import {
   Clock,
   Radio,
   Zap,
-  MessageSquare,
-  Shield,
   RotateCcw,
   Pause,
   Play,
+  ArrowRight,
+  Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
-import { skillName, type SkillName } from "@/lib/copy";
+import {
+  skillName,
+  runStatusLabel,
+  phaseLabel,
+  type SkillName,
+} from "@/lib/copy";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type EventStatus = "running" | "success" | "failed" | "warning" | "info" | "idle";
-type EventKind = "run" | "pipeline" | "audit" | "brief";
+type RunStatus = "running" | "success" | "failed" | "error" | "queued" | string;
 
-export interface FeedEvent {
+export interface RunRow {
   id: string;
-  kind: EventKind;
-  skill: SkillName;
-  status: EventStatus;
-  title: string;
-  subtitle?: string;
-  detail?: string;
-  prospectName?: string;
-  prospectEmail?: string;
-  occurredAt: string;
-  runId?: string;
-  engagementId?: string;
-  progress?: { current: number; total: number };
-  steps?: Array<{
-    label: string;
-    status: "pending" | "running" | "done" | "failed";
-  }>;
-  metadata?: Record<string, string | number | boolean>;
+  skillName: string;
+  status: string;
+  phase: string | null;
+  startedAt: string;
+  engagementId: string;
+  buyerName: string;
+  engagementPausedAt: string | null;
+  errorMessage: string | null;
+  stepCount: number;
+  summary: Record<string, unknown> | null;
+  subjectLabel: string | null;
 }
 
-// ─── Relative Time Hook (auto-updating) ──────────────────────────────────────
+export interface LiveExecutionFeedProps {
+  initialRuns: RunRow[];
+  storageKey: string;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function useNow(intervalMs = 30_000) {
   const [now, setNow] = useState(Date.now());
@@ -93,30 +96,44 @@ function formatDayHeader(dateStr: string): string {
   });
 }
 
-// ─── Status Icon ─────────────────────────────────────────────────────────────
-
-function StatusIcon({
-  status,
-  size = 16,
-}: {
-  status: EventStatus;
-  size?: number;
-}) {
-  switch (status) {
-    case "running":
-      return <Loader2 size={size} className="text-sky-500 animate-spin" />;
-    case "success":
-      return <CheckCircle2 size={size} className="text-emerald-500" />;
-    case "failed":
-      return <XCircle size={size} className="text-rose-500" />;
-    case "warning":
-      return <AlertCircle size={size} className="text-amber-500" />;
-    default:
-      return <AlertCircle size={size} className="text-zinc-400 dark:text-zinc-600" />;
-  }
+function resolveStatus(status: string): "running" | "success" | "failed" | "warning" | "idle" {
+  const s = status.toLowerCase();
+  if (s === "running" || s === "in_progress") return "running";
+  if (s === "success" || s === "completed") return "success";
+  if (s === "failed" || s === "error") return "failed";
+  if (s === "queued" || s === "pending") return "idle";
+  return "idle";
 }
 
-// ─── Live Pulse (Phantom avatar-overlay pattern adapted) ─────────────────────
+function actionSummary(run: RunRow): string {
+  if (run.errorMessage) return run.errorMessage;
+  if (run.summary && typeof run.summary === "object") {
+    const s = run.summary as Record<string, unknown>;
+    if (typeof s.outcome === "string" && s.outcome.trim()) return s.outcome;
+    if (typeof s.result === "string" && s.result.trim()) return s.result;
+    if (typeof s.summary === "string" && s.summary.trim()) return s.summary;
+    if (typeof s.delivered === "string" && s.delivered.trim()) return s.delivered;
+  }
+  if (run.subjectLabel) return run.subjectLabel;
+  return phaseLabel(run.phase);
+}
+
+// ─── Status Icon ─────────────────────────────────────────────────────────────
+
+function StatusIcon({ status, size = 16 }: { status: string; size?: number }) {
+  const s = status.toLowerCase();
+  if (s === "running" || s === "in_progress")
+    return <Loader2 size={size} className="text-sky-500 animate-spin" />;
+  if (s === "success" || s === "completed")
+    return <CheckCircle2 size={size} className="text-emerald-500" />;
+  if (s === "failed" || s === "error")
+    return <XCircle size={size} className="text-rose-500" />;
+  if (s === "queued" || s === "pending")
+    return <Clock size={size} className="text-zinc-400 dark:text-zinc-500" />;
+  return <AlertCircle size={size} className="text-zinc-400 dark:text-zinc-500" />;
+}
+
+// ─── Live Pulse ──────────────────────────────────────────────────────────────
 
 function LivePulse({ active }: { active: boolean }) {
   if (!active) return null;
@@ -131,195 +148,168 @@ function LivePulse({ active }: { active: boolean }) {
 // ─── Status Pill ─────────────────────────────────────────────────────────────
 
 function StatusPill({
-  status,
-  children,
+  resolved,
+  label,
 }: {
-  status: EventStatus;
-  children: React.ReactNode;
+  resolved: "running" | "success" | "failed" | "warning" | "idle";
+  label: string;
 }) {
-  const classes: Record<EventStatus, string> = {
-    running:
-      "bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-300",
-    success:
-      "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
-    failed:
-      "bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300",
-    warning:
-      "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
-    info: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  const classes: Record<string, string> = {
+    running: "bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-300",
+    success: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+    failed: "bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300",
+    warning: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
     idle: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
   };
   return (
     <span
       className={cn(
         "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold tracking-tight border-0",
-        classes[status]
+        classes[resolved]
       )}
     >
-      {children}
+      {label}
     </span>
   );
 }
 
-// ─── Inline Progress Bar ( Phantom's .ph-token-pnl slot adapted) ─────────────
-
-function InlineProgress({
-  current,
-  total,
-}: {
-  current: number;
-  total: number;
-}) {
-  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className="w-16 h-1 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
-        <div
-          className="h-full rounded-full bg-sky-500 transition-all duration-500 ease-out"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className="text-[10px] font-mono text-zinc-500 tabular-nums">
-        {current}/{total}
-      </span>
-    </div>
-  );
-}
-
-// ─── Kind Icon ───────────────────────────────────────────────────────────────
-
-function KindIcon({ kind }: { kind: EventKind }) {
-  const map: Record<EventKind, { icon: typeof Zap; color: string }> = {
-    run: { icon: Zap, color: "text-sky-500" },
-    pipeline: { icon: MessageSquare, color: "text-violet-500" },
-    audit: { icon: Shield, color: "text-amber-500" },
-    brief: { icon: Radio, color: "text-emerald-500" },
-  };
-  const { icon: Icon, color } = map[kind];
-  return <Icon size={12} className={color} />;
-}
-
 // ─── Feed Row (Phantom .ph-token-row anatomy) ────────────────────────────────
-// Avatar slot → Title + Subtitle → Value + PNL → Chevron
-// 44px round    17px/800 + 14px/700  17px/800 + 14px/800
 
 function FeedRow({
-  event,
+  run,
   now,
   isSelected,
   onClick,
 }: {
-  event: FeedEvent;
+  run: RunRow;
   now: number;
   isSelected: boolean;
   onClick: () => void;
 }) {
-  const isRunning = event.status === "running";
+  const isRunning = run.status.toLowerCase() === "running" || run.status.toLowerCase() === "in_progress";
+  const isFailed = run.status.toLowerCase() === "failed" || run.status.toLowerCase() === "error";
+  const isPaused = Boolean(run.engagementPausedAt);
+  const skill = run.skillName as SkillName;
+  const resolved = resolveStatus(run.status);
+
+  const title = run.subjectLabel ?? skillName(skill);
+  const subtitle = run.buyerName && run.buyerName !== "Unknown client"
+    ? run.buyerName
+    : null;
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        // Phantom: min-h-[72px], rounded-[20px], padding 12px 16px, gap 12px
         "w-full min-h-[72px] rounded-[20px] px-4 py-3 text-left cursor-pointer",
         "flex items-center gap-3 border-0",
-        // Phantom: transition: background 0.15s — we use Tailwind transition-[background-color]
         "transition-[background-color,box-shadow] duration-150",
-        // Selected state (from Master Roster's inspection pattern)
         isSelected
           ? "bg-zinc-200 dark:bg-zinc-700 ring-1 ring-zinc-400 dark:ring-zinc-600"
-          : "bg-zinc-100 dark:bg-zinc-900/80 hover:bg-zinc-200/80 dark:hover:bg-zinc-800/70",
-        // Running: subtle ring glow
-        isRunning &&
-          !isSelected &&
-          "ring-1 ring-sky-200 dark:ring-sky-900/40"
+          : isPaused
+            ? "bg-zinc-50 dark:bg-zinc-950/40 opacity-60 hover:opacity-80"
+            : "bg-zinc-100 dark:bg-zinc-900/80 hover:bg-zinc-200/80 dark:hover:bg-zinc-800/70",
+        isRunning && !isSelected && "ring-1 ring-sky-200 dark:ring-sky-900/40"
       )}
     >
-      {/* ── Slot 1: Avatar (Phantom .ph-token-avatar) ── */}
+      {/* Avatar slot */}
       <div className="relative shrink-0">
         <div className="w-11 h-11 rounded-full bg-white dark:bg-zinc-800 grid place-items-center">
-          <SquishySkillBadge skill={event.skill} size={32} enabled={true} />
+          <SquishySkillBadge skill={skill} size={32} enabled={!isPaused} />
         </div>
-        {/* Phantom .ph-token-avatar-overlay → LivePulse */}
         <LivePulse active={isRunning} />
       </div>
 
-      {/* ── Slot 2: Title + Subtitle (Phantom .ph-token-main) ── */}
+      {/* Title + Subtitle */}
       <div className="flex-1 min-w-0 space-y-0.5">
-        <div className="flex items-center gap-1.5">
-          <KindIcon kind={event.kind} />
+        <div className="flex items-center gap-1.5 min-w-0">
+          {isPaused && <Ban size={11} className="text-amber-500 shrink-0" />}
           <span
             className="text-[15px] font-extrabold text-zinc-900 dark:text-white truncate leading-tight tracking-tight"
             style={{ fontWeight: 800 }}
           >
-            {event.title}
+            {title}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[13px] text-zinc-500 dark:text-zinc-400 truncate font-medium">
-            {event.subtitle ??
-              event.prospectEmail ??
-              event.prospectName ??
-              skillName(event.skill)}
-          </span>
-          {event.progress && (
-            <InlineProgress
-              current={event.progress.current}
-              total={event.progress.total}
-            />
+          {subtitle && (
+            <span className="text-[13px] text-zinc-500 dark:text-zinc-400 truncate font-medium">
+              {subtitle}
+            </span>
+          )}
+          {run.stepCount > 0 && (
+            <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 tabular-nums shrink-0">
+              {run.stepCount} step{run.stepCount !== 1 ? "s" : ""}
+            </span>
+          )}
+          {isFailed && run.errorMessage && (
+            <span className="text-[11px] font-mono text-rose-500/80 dark:text-rose-400/70 truncate max-w-[200px]">
+              {run.errorMessage}
+            </span>
           )}
         </div>
       </div>
 
-      {/* ── Slot 3: Value + PNL (Phantom .ph-token-side) ── */}
+      {/* Status + Time */}
       <div className="flex flex-col items-end gap-1.5 shrink-0">
-        <StatusIcon status={event.status} />
+        <StatusIcon status={run.status} />
         <span className="text-[12px] font-mono text-zinc-400 dark:text-zinc-500 tabular-nums font-semibold">
-          {relativeTime(event.occurredAt, now)}
+          {relativeTime(run.startedAt, now)}
         </span>
       </div>
     </button>
   );
 }
 
-// ─── Inspector Panel (Master Roster pattern) ─────────────────────────────────
+// ─── Inspector Panel ─────────────────────────────────────────────────────────
 
 function FeedInspector({
-  event,
+  run,
   now,
-  onRetry,
 }: {
-  event: FeedEvent;
+  run: RunRow;
   now: number;
-  onRetry?: (eventId: string) => void;
 }) {
+  const skill = run.skillName as SkillName;
+  const resolved = resolveStatus(run.status);
+  const summary = actionSummary(run);
+
+  // Extract structured summary fields if available
+  const summaryFields = useMemo(() => {
+    if (!run.summary || typeof run.summary !== "object") return null;
+    const s = run.summary as Record<string, unknown>;
+    const skip = new Set(["outcome", "result", "summary", "delivered"]);
+    const entries = Object.entries(s).filter(([k, v]) => !skip.has(k) && v !== null && v !== undefined && v !== "");
+    if (entries.length === 0) return null;
+    return entries;
+  }, [run.summary]);
+
   return (
     <div className="rounded-[20px] border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 space-y-4 shadow-xl">
       {/* Header */}
       <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <SquishySkillBadge skill={event.skill} size={18} enabled={true} />
-            <KindIcon kind={event.kind} />
+            <SquishySkillBadge skill={skill} size={18} enabled={true} />
             <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold">
-              {skillName(event.skill)}
+              {skillName(skill)}
             </span>
           </div>
-          <StatusPill status={event.status}>{event.status}</StatusPill>
+          <StatusPill resolved={resolved} label={runStatusLabel(run.status)} />
         </div>
 
         <h4
           className="text-base font-extrabold text-zinc-900 dark:text-white tracking-tight"
           style={{ fontWeight: 800 }}
         >
-          {event.title}
+          {run.subjectLabel ?? skillName(skill)}
         </h4>
 
         <div className="flex items-center gap-2 font-mono text-xs text-zinc-500">
           <Clock size={12} />
           <span>
-            {new Date(event.occurredAt).toLocaleString(undefined, {
+            {new Date(run.startedAt).toLocaleString(undefined, {
               month: "short",
               day: "numeric",
               hour: "2-digit",
@@ -327,121 +317,75 @@ function FeedInspector({
             })}
           </span>
           <span className="text-zinc-300 dark:text-zinc-600">·</span>
-          <span>{relativeTime(event.occurredAt, now)}</span>
+          <span>{relativeTime(run.startedAt, now)}</span>
         </div>
       </div>
 
-      {/* Prospect Card */}
-      {(event.prospectName || event.prospectEmail) && (
+      {/* Client card */}
+      {run.buyerName && run.buyerName !== "Unknown client" && (
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 p-3 space-y-1">
           <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">
-            Prospect
+            Client
           </span>
-          <p className="text-sm font-bold text-zinc-900 dark:text-white">
-            {event.prospectName ?? "—"}
-          </p>
-          <p className="text-xs font-mono text-zinc-500">
-            {event.prospectEmail ?? "—"}
-          </p>
+          <Link
+            href={`/dashboard/engagements/${run.engagementId}`}
+            className="text-sm font-bold text-zinc-900 dark:text-white hover:text-sky-600 dark:hover:text-sky-400 transition-colors"
+          >
+            {run.buyerName}
+          </Link>
+          {run.engagementPausedAt && (
+            <p className="text-[11px] font-mono text-amber-600 dark:text-amber-400 flex items-center gap-1">
+              <Ban size={10} /> Engagement paused
+            </p>
+          )}
         </div>
       )}
 
-      {/* Progress */}
-      {event.progress && (
-        <div className="space-y-2">
-          <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">
-            Progress
+      {/* Phase + Steps */}
+      <div className="space-y-2">
+        <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">
+          Execution
+        </span>
+        <div className="flex items-center gap-3 text-xs">
+          <span className="text-zinc-600 dark:text-zinc-400 font-medium">
+            {phaseLabel(run.phase)}
           </span>
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-2 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-sky-500 transition-all duration-500 ease-out"
-                style={{
-                  width: `${
-                    event.progress.total > 0
-                      ? Math.round(
-                          (event.progress.current / event.progress.total) * 100
-                        )
-                      : 0
-                  }%`,
-                }}
-              />
-            </div>
-            <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300 tabular-nums">
-              {event.progress.current}/{event.progress.total}
-            </span>
-          </div>
+          {run.stepCount > 0 && (
+            <>
+              <span className="text-zinc-300 dark:text-zinc-600">·</span>
+              <span className="font-mono text-zinc-500 tabular-nums">
+                {run.stepCount} step{run.stepCount !== 1 ? "s" : ""}
+              </span>
+            </>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Steps */}
-      {event.steps && event.steps.length > 0 && (
-        <div className="space-y-1.5">
-          <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">
-            Steps
-          </span>
-          <ol className="space-y-1">
-            {event.steps.map((step, i) => (
-              <li
-                key={i}
-                className="flex items-center gap-2.5 text-xs py-0.5"
-              >
-                {step.status === "done" ? (
-                  <CheckCircle2
-                    size={14}
-                    className="text-emerald-500 shrink-0"
-                  />
-                ) : step.status === "running" ? (
-                  <Loader2
-                    size={14}
-                    className="text-sky-500 animate-spin shrink-0"
-                  />
-                ) : step.status === "failed" ? (
-                  <XCircle size={14} className="text-rose-500 shrink-0" />
-                ) : (
-                  <div className="w-3.5 h-3.5 rounded-full border border-zinc-300 dark:border-zinc-600 shrink-0" />
-                )}
-                <span
-                  className={cn(
-                    "font-medium transition-colors",
-                    step.status === "done" &&
-                      "text-zinc-500 dark:text-zinc-400 line-through",
-                    step.status === "running" &&
-                      "text-zinc-900 dark:text-white font-bold",
-                    step.status === "failed" &&
-                      "text-rose-600 dark:text-rose-400",
-                    step.status === "pending" &&
-                      "text-zinc-400 dark:text-zinc-500"
-                  )}
-                >
-                  {step.label}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
+      {/* Summary / Detail */}
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 p-3 space-y-1">
+        <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">
+          {run.errorMessage ? "Error" : "Outcome"}
+        </span>
+        <p
+          className={cn(
+            "text-xs leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto",
+            run.errorMessage
+              ? "text-rose-700 dark:text-rose-300"
+              : "text-zinc-800 dark:text-zinc-300"
+          )}
+        >
+          {summary || "No details available."}
+        </p>
+      </div>
 
-      {/* Detail */}
-      {event.detail && (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 p-3 space-y-1">
+      {/* Structured summary fields */}
+      {summaryFields && (
+        <div className="space-y-1">
           <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">
             Details
           </span>
-          <p className="text-xs text-zinc-800 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto">
-            {event.detail}
-          </p>
-        </div>
-      )}
-
-      {/* Metadata Grid */}
-      {event.metadata && Object.keys(event.metadata).length > 0 && (
-        <div className="space-y-1">
-          <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">
-            Metadata
-          </span>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-            {Object.entries(event.metadata).map(([k, v]) => (
+            {summaryFields.map(([k, v]) => (
               <Fragment key={k}>
                 <dt className="font-mono text-zinc-500 truncate">{k}</dt>
                 <dd className="font-mono text-zinc-800 dark:text-zinc-300 truncate text-right">
@@ -455,25 +399,13 @@ function FeedInspector({
 
       {/* Actions */}
       <div className="flex items-center gap-2 pt-2">
-        {event.runId && (
-          <Link
-            href={`/dashboard/runs/${event.runId}`}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-          >
-            <span>View Run</span>
-            <ExternalLink size={12} />
-          </Link>
-        )}
-        {event.status === "failed" && onRetry && (
-          <button
-            type="button"
-            onClick={() => onRetry(event.id)}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-2xl bg-rose-500 text-white px-3 py-2.5 text-xs font-bold hover:bg-rose-600 transition-colors cursor-pointer"
-          >
-            <RotateCcw size={12} />
-            <span>Retry</span>
-          </button>
-        )}
+        <Link
+          href={`/dashboard/runs/${run.id}`}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+        >
+          <span>View Run</span>
+          <ExternalLink size={12} />
+        </Link>
       </div>
     </div>
   );
@@ -481,123 +413,83 @@ function FeedInspector({
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-interface LiveExecutionFeedProps {
-  events: FeedEvent[];
-  engagementId?: string;
-  autoScroll?: boolean;
-  pollIntervalMs?: number;
-  onRetry?: (eventId: string) => void;
-}
-
-export function LiveExecutionFeed({
-  events: initialEvents,
-  engagementId,
-  autoScroll: initialAutoScroll = true,
-  pollIntervalMs = 5000,
-  onRetry,
-}: LiveExecutionFeedProps) {
+export function LiveExecutionFeed({ initialRuns, storageKey }: LiveExecutionFeedProps) {
   const now = useNow(30_000);
-  const [events, setEvents] = useState<FeedEvent[]>(initialEvents);
+  const [runs, setRuns] = useState<RunRow[]>(initialRuns);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [autoScroll, setAutoScroll] = useState(initialAutoScroll);
   const [filterSkill, setFilterSkill] = useState<SkillName | "all">("all");
-  const [filterStatus, setFilterStatus] = useState<EventStatus | "all">(
-    "all"
-  );
   const feedRef = useRef<HTMLDivElement>(null);
-  const prevCountRef = useRef(initialEvents.length);
 
-  // Poll for new events
+  // Sync with server data on change
   useEffect(() => {
-    if (!engagementId) return;
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const res = await fetch(
-          `/api/engagements/${engagementId}/activity-feed`
-        );
-        if (res.ok && !cancelled) {
-          const data = await res.json();
-          setEvents(data.events ?? []);
-        }
-      } catch {
-        /* silent — keep last known state */
+    setRuns(initialRuns);
+  }, [initialRuns]);
+
+  // Persist filter in localStorage keyed by storageKey
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`feed-filter-${storageKey}`);
+      if (saved) setFilterSkill(saved as SkillName | "all");
+    } catch { /* noop */ }
+  }, [storageKey]);
+
+  useEffect(() => {
+    try {
+      if (filterSkill !== "all") {
+        localStorage.setItem(`feed-filter-${storageKey}`, filterSkill);
+      } else {
+        localStorage.removeItem(`feed-filter-${storageKey}`);
       }
-    };
-    poll();
-    const id = setInterval(poll, pollIntervalMs);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [engagementId, pollIntervalMs]);
-
-  // Sync with external events prop
-  useEffect(() => {
-    setEvents(initialEvents);
-  }, [initialEvents]);
-
-  // Auto-scroll to top on new events
-  useEffect(() => {
-    if (
-      autoScroll &&
-      events.length > prevCountRef.current &&
-      feedRef.current
-    ) {
-      feedRef.current.scrollTo({ top: 0, behavior: "smooth" });
-    }
-    prevCountRef.current = events.length;
-  }, [events.length, autoScroll]);
+    } catch { /* noop */ }
+  }, [filterSkill, storageKey]);
 
   // Filter
   const filtered = useMemo(() => {
-    return events.filter((e) => {
-      if (filterSkill !== "all" && e.skill !== filterSkill) return false;
-      if (filterStatus !== "all" && e.status !== filterStatus) return false;
-      return true;
-    });
-  }, [events, filterSkill, filterStatus]);
+    if (filterSkill === "all") return runs;
+    return runs.filter((r) => r.skillName === filterSkill);
+  }, [runs, filterSkill]);
 
-  // Temporal grouping (Master Roster's smart grouping pattern)
+  // Temporal grouping (Master Roster pattern)
   const groups = useMemo(() => {
-    const map: Record<string, FeedEvent[]> = {};
-    for (const e of filtered) {
-      const k = dateKey(new Date(e.occurredAt));
-      (map[k] ??= []).push(e);
+    const map: Record<string, RunRow[]> = {};
+    for (const r of filtered) {
+      const k = dateKey(new Date(r.startedAt));
+      (map[k] ??= []).push(r);
     }
     return Object.entries(map)
       .sort(([a], [b]) => b.localeCompare(a))
       .map(([dateStr, items]) => ({
         dateStr,
         label: formatDayHeader(dateStr),
-        events: items.sort(
+        runs: items.sort(
           (a, b) =>
-            new Date(b.occurredAt).getTime() -
-            new Date(a.occurredAt).getTime()
+            new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
         ),
       }));
   }, [filtered]);
 
-  const selectedEvent = useMemo(
-    () => events.find((e) => e.id === selectedId) ?? null,
-    [events, selectedId]
+  const selectedRun = useMemo(
+    () => runs.find((r) => r.id === selectedId) ?? null,
+    [runs, selectedId]
   );
 
-  const hasRunning = events.some((e) => e.status === "running");
+  const hasRunning = runs.some(
+    (r) => r.status.toLowerCase() === "running" || r.status.toLowerCase() === "in_progress"
+  );
 
   // Unique skills for filter chips
   const uniqueSkills = useMemo(() => {
     const set = new Set<SkillName>();
-    for (const e of events) set.add(e.skill);
+    for (const r of runs) set.add(r.skillName as SkillName);
     return Array.from(set);
-  }, [events]);
+  }, [runs]);
 
   return (
     <div className="space-y-3 font-sans antialiased">
-      {/* ── Toolbar (Phantom .ph-actions-row density + Master Roster toolbar) ── */}
+      {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-2 shadow-sm">
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Live indicator (unique to live feeds) */}
+          {/* Live indicator */}
           <div className="flex items-center gap-1.5 rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 px-3 py-1.5">
             <LivePulse active={hasRunning} />
             <span className="text-xs font-extrabold text-zinc-900 dark:text-white tracking-tight">
@@ -605,83 +497,52 @@ export function LiveExecutionFeed({
             </span>
           </div>
 
-          {/* Skill filter pills (Phantom .ph-top-pill pattern) */}
-          <div className="flex items-center gap-1 rounded-2xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800">
-            <button
-              type="button"
-              onClick={() => setFilterSkill("all")}
-              className={cn(
-                "rounded-xl px-2.5 py-1 text-[11px] font-bold transition-colors cursor-pointer",
-                filterSkill === "all"
-                  ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-              )}
-            >
-              All
-            </button>
-            {uniqueSkills.map((s) => (
+          {/* Skill filter pills */}
+          {uniqueSkills.length > 1 && (
+            <div className="flex items-center gap-1 rounded-2xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800">
               <button
-                key={s}
                 type="button"
-                onClick={() => setFilterSkill(s)}
+                onClick={() => setFilterSkill("all")}
                 className={cn(
-                  "flex items-center gap-1 rounded-xl px-2 py-1 text-[11px] font-bold transition-colors cursor-pointer",
-                  filterSkill === s
+                  "rounded-xl px-2.5 py-1 text-[11px] font-bold transition-colors cursor-pointer",
+                  filterSkill === "all"
                     ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
                     : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
                 )}
               >
-                <SquishySkillBadge skill={s} size={12} enabled={true} />
-                <span className="hidden sm:inline">{skillName(s)}</span>
+                All
               </button>
-            ))}
-          </div>
-
-          {/* Status dropdown */}
-          <select
-            value={filterStatus}
-            onChange={(e) =>
-              setFilterStatus(e.target.value as EventStatus | "all")
-            }
-            className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-1.5 text-[11px] font-bold text-zinc-700 dark:text-zinc-300 focus:outline-none focus:border-zinc-400 cursor-pointer"
-          >
-            <option value="all">All Status</option>
-            <option value="running">Running</option>
-            <option value="success">Success</option>
-            <option value="failed">Failed</option>
-            <option value="warning">Warning</option>
-          </select>
+              {uniqueSkills.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setFilterSkill(s)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-xl px-2 py-1 text-[11px] font-bold transition-colors cursor-pointer",
+                    filterSkill === s
+                      ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
+                      : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                  )}
+                >
+                  <SquishySkillBadge skill={s} size={12} enabled={true} />
+                  <span className="hidden sm:inline">{skillName(s)}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Auto-scroll toggle (unique to live feeds) */}
-          <button
-            type="button"
-            onClick={() => setAutoScroll(!autoScroll)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-2xl border px-3 py-1.5 text-[11px] font-bold cursor-pointer transition-colors",
-              autoScroll
-                ? "border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300"
-                : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-            )}
-          >
-            {autoScroll ? <Pause size={12} /> : <Play size={12} />}
-            <span>{autoScroll ? "Following" : "Paused"}</span>
-          </button>
-
-          <span className="text-[11px] font-mono text-zinc-400 tabular-nums">
-            {filtered.length} event{filtered.length !== 1 ? "s" : ""}
-          </span>
-        </div>
+        <span className="text-[11px] font-mono text-zinc-400 tabular-nums">
+          {filtered.length} run{filtered.length !== 1 ? "s" : ""}
+        </span>
       </div>
 
-      {/* ── Feed + Inspector Layout (Master Roster's 7/5 split) ── */}
+      {/* ── Feed + Inspector ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        {/* Feed Column */}
         <div
           className={cn(
-            "space-y-0 transition-all",
-            selectedEvent ? "lg:col-span-7" : "lg:col-span-12"
+            "transition-all",
+            selectedRun ? "lg:col-span-7" : "lg:col-span-12"
           )}
         >
           <div
@@ -689,23 +550,17 @@ export function LiveExecutionFeed({
             className="space-y-5 max-h-[720px] overflow-y-auto scrollbar-none pr-1"
           >
             {groups.length === 0 && (
-              <div className="rounded-[20px] border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 h-52 flex flex-col items-center justify-center gap-2">
-                <Radio
-                  size={24}
-                  className="text-zinc-300 dark:text-zinc-700"
-                />
+              <div className="rounded-[20px] border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 h-40 flex flex-col items-center justify-center gap-2">
+                <Radio size={24} className="text-zinc-300 dark:text-zinc-700" />
                 <p className="text-sm text-zinc-400 dark:text-zinc-500 font-medium">
-                  No execution events yet
-                </p>
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">
-                  Events will stream here in real-time
+                  No runs yet
                 </p>
               </div>
             )}
 
             {groups.map((group) => (
               <div key={group.dateStr}>
-                {/* Temporal header (Master Roster's formatDayHeader) */}
+                {/* Temporal header */}
                 <div className="flex items-center gap-2.5 mb-2.5 px-1">
                   <span
                     className="text-[11px] font-extrabold text-zinc-900 dark:text-white tracking-tight"
@@ -714,24 +569,21 @@ export function LiveExecutionFeed({
                     {group.label}
                   </span>
                   <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 tabular-nums">
-                    {group.events.length} event
-                    {group.events.length !== 1 ? "s" : ""}
+                    {group.runs.length} run{group.runs.length !== 1 ? "s" : ""}
                   </span>
                   <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-800" />
                 </div>
 
-                {/* Event rows (Phantom: 10px gap between .ph-token-row) */}
+                {/* Rows (Phantom 10px gap) */}
                 <div className="space-y-[10px]">
-                  {group.events.map((event) => (
+                  {group.runs.map((run) => (
                     <FeedRow
-                      key={event.id}
-                      event={event}
+                      key={run.id}
+                      run={run}
                       now={now}
-                      isSelected={selectedId === event.id}
+                      isSelected={selectedId === run.id}
                       onClick={() =>
-                        setSelectedId(
-                          selectedId === event.id ? null : event.id
-                        )
+                        setSelectedId(selectedId === run.id ? null : run.id)
                       }
                     />
                   ))}
@@ -741,15 +593,11 @@ export function LiveExecutionFeed({
           </div>
         </div>
 
-        {/* Inspector Column (Master Roster's sticky 5-col panel) */}
-        {selectedEvent && (
+        {/* Inspector */}
+        {selectedRun && (
           <div className="lg:col-span-5">
             <div className="sticky top-2">
-              <FeedInspector
-                event={selectedEvent}
-                now={now}
-                onRetry={onRetry}
-              />
+              <FeedInspector run={selectedRun} now={now} />
             </div>
           </div>
         )}
