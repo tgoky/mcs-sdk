@@ -373,36 +373,39 @@ export default async function EngagementDetailPage({
             </div>
 
             {/* ── Filter chips ── */}
-            {skillsWithRuns.length > 1 && (
-              <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Filter runs by module">
-                <Link
-                  href={`/dashboard/engagements/${id}`}
-                  role="tab"
-                  aria-selected={!activeSkillFilter}
-                  className={`${chipBase} ${!activeSkillFilter ? chipActive : chipInactive}`}
-                >
-                  All
-                  <span className={`${!activeSkillFilter ? "opacity-70" : "opacity-50"} ml-0.5`}>
-                    {runs.length}
-                  </span>
-                </Link>
-                {skillsWithRuns.map((skill) => (
-                  <Link
-                    key={skill}
-                    href={`/dashboard/engagements/${id}?skill=${skill}`}
-                    role="tab"
-                    aria-selected={activeSkillFilter === skill}
-                    className={`${chipBase} ${activeSkillFilter === skill ? chipActive : chipInactive}`}
-                  >
-                    <SquishySkillBadge skill={skill} size={14} enabled={true} />
-                    {skillName(skill)}
-                    <span className={`${activeSkillFilter === skill ? "opacity-70" : "opacity-50"} ml-0.5`}>
-                      {runsBySkill[skill].length}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            )}
+           {/* ── Filter chips ── */}
+{skillsWithRuns.length > 1 && (
+  <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Filter runs by module">
+    <Link
+      href={`/dashboard/engagements/${id}`}
+      scroll={false}
+      role="tab"
+      aria-selected={!activeSkillFilter}
+      className={`${chipBase} ${!activeSkillFilter ? chipActive : chipInactive}`}
+    >
+      All
+      <span className={`${!activeSkillFilter ? "opacity-70" : "opacity-50"} ml-0.5`}>
+        {runs.length}
+      </span>
+    </Link>
+    {skillsWithRuns.map((skill) => (
+      <Link
+        key={skill}
+        href={`/dashboard/engagements/${id}?skill=${skill}`}
+        scroll={false}
+        role="tab"
+        aria-selected={activeSkillFilter === skill}
+        className={`${chipBase} ${activeSkillFilter === skill ? chipActive : chipInactive}`}
+      >
+        <SquishySkillBadge skill={skill} size={14} enabled={true} />
+        {skillName(skill)}
+        <span className={`${activeSkillFilter === skill ? "opacity-70" : "opacity-50"} ml-0.5`}>
+          {runsBySkill[skill].length}
+        </span>
+      </Link>
+    ))}
+  </div>
+)}
 
             {/* ── Filtered run list ── */}
             {filteredRuns.length > 0 ? (
@@ -470,6 +473,7 @@ export default async function EngagementDetailPage({
                 </p>
                 <Link
                   href={`/dashboard/engagements/${id}`}
+                   scroll={false}
                   className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 underline underline-offset-2 transition-colors"
                 >
                   Clear filter
