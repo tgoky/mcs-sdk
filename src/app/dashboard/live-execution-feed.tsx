@@ -352,7 +352,7 @@ function RunRow({
           <ClientCell run={run} />
         )}
       </td>
-      
+
 <td className="px-4 py-2.5">
   <div className="flex items-center gap-2">
     <SquishySkillBadge
@@ -471,15 +471,39 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
     };
   }, [polling, refresh]);
 
+  const clientChipDefs = useMemo<ExecutionsChipDef[]>(() => {
+  const clientMap = new Map<string, string>();
+
+  for (const run of runs) {
+    const clientId = run.engagementId ?? run.buyerName;
+    if (clientId && !clientMap.has(clientId)) {
+      clientMap.set(clientId, run.buyerName ?? run.engagementId ?? "Unknown client");
+    }
+  }
+
+  return Array.from(clientMap.entries()).map(([id, label]) => ({
+    id: `client-${id}`,
+    label,
+    section: toolbarCopy.chipSections.account, // Shows under Account section
+    group: "client", // Separate group ensures AND logic with module group
+    predicate: (run) => run.engagementId === id || run.buyerName === id,
+  }));
+}, [runs]);
+
+
+
   const refreshNow = useCallback(() => {
     const controller = new AbortController();
     refresh(controller.signal);
   }, [refresh]);
 
-  const chipDefs = useMemo(
-    () => (lockedSkill ? STATUS_ACCOUNT_CHIP_DEFS : [...MODULE_CHIP_DEFS, ...STATUS_ACCOUNT_CHIP_DEFS]),
-    [lockedSkill]
-  );
+ const chipDefs = useMemo(
+  () =>
+    lockedSkill
+      ? [...clientChipDefs, ...STATUS_ACCOUNT_CHIP_DEFS]
+      : [...MODULE_CHIP_DEFS, ...clientChipDefs, ...STATUS_ACCOUNT_CHIP_DEFS],
+  [lockedSkill, clientChipDefs]
+);
 
   const tabCounts = useMemo(() => {
     const counts: Record<ExecutionsTab, number> = { all: runs.length, running: 0, needs_attention: 0, completed: 0 };
