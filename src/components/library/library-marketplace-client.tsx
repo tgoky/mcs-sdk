@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import type { PackageOverview } from "@/lib/package-overview";
 import { PackageHeroCard } from "@/components/library/package-hero-card";
 import { PackageTeaserCard } from "@/components/library/package-teaser-card";
-import { Search, Settings, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, Settings, ChevronDown, ChevronRight, ChevronLeft } from "lucide-react";
 
 export function LibraryMarketplaceClient({ overview }: { overview: PackageOverview }) {
   const [activeTab, setActiveTab] = useState<string>("all");
@@ -65,23 +66,35 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
 
   return (
     <div className="w-full space-y-6 font-sans">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
-            Marketplace Apps
-          </h1>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Explore automation suites and integrate them into your client workspace.
-          </p>
+      {/* Header - Back button integrated inline like engagement detail */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="flex items-start gap-3 min-w-0">
+          <Link
+            href="/dashboard"
+            className="flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mt-0.5"
+            aria-label="Back to Dashboard"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Link>
+          <div className="min-w-0 space-y-1.5">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
+                Marketplace Apps
+              </h1>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Explore automation suites and integrate them into your client workspace.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 -mt-1">
+              <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+                {packages.length} suites
+              </span>
+              <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+                {packages.filter((p) => p.status === "installed").length} installed
+              </span>
+            </div>
+          </div>
         </div>
-{/* 
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white px-3 py-2 rounded-xl border border-border bg-white dark:bg-zinc-900 shadow-sm transition-colors cursor-pointer self-start sm:self-auto"
-        >
-          <Settings size={14} /> Settings
-        </button> */}
       </div>
 
       {/* Tabs */}
