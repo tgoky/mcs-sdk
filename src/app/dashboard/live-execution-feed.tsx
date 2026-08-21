@@ -352,24 +352,24 @@ function RunRow({
           <ClientCell run={run} />
         )}
       </td>
-      
-<td className="px-4 py-2.5">
-  <div className="flex items-center gap-2">
-    <SquishySkillBadge
-      skill={run.skillName}
-      size={26}
-      paused={!!run.engagementPausedAt}
-    />
-    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-      {skillName(run.skillName)}
-    </span>
-  </div>
-  {(run.stepCount ?? 0) > 0 && (
-    <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 block pl-[34px] mt-0.5">
-      {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
-    </span>
-  )}
-</td>
+
+      <td className="px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <SquishySkillBadge
+            skill={run.skillName}
+            size={26}
+            paused={!!run.engagementPausedAt}
+          />
+          <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
+            {skillName(run.skillName)}
+          </span>
+        </div>
+        {(run.stepCount ?? 0) > 0 && (
+          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 block pl-[34px] mt-0.5">
+            {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
+          </span>
+        )}
+      </td>
 
       <td className="px-4 py-2.5 max-w-[280px]">
         <span
@@ -396,7 +396,9 @@ function RunRow({
       </td>
 
       <td className="px-4 py-2.5 text-right whitespace-nowrap">
-        <VerboseTime isoString={run.startedAt} className="text-xs font-bold text-zinc-900 dark:text-zinc-100 font-mono" />
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-pink-100 dark:bg-pink-950/60 border border-pink-200/80 dark:border-pink-800/40 text-black dark:text-white text-xs font-bold font-mono">
+          <VerboseTime isoString={run.startedAt} />
+        </span>
       </td>
 
       <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
@@ -416,6 +418,7 @@ function RunRow({
     </tr>
   );
 }
+
 
 export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, storageKey }: LiveExecutionFeedProps) {
   const router = useRouter();
