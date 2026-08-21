@@ -212,46 +212,44 @@ export function LandingWrapper({
       </header>
 
       {/* Hero Body Content */}
-      <main className="relative z-10 max-w-6xl w-full mx-auto px-8 md:px-12 my-auto py-24 flex flex-col items-start space-y-6">
+     <main className="relative z-10 max-w-6xl w-full mx-auto px-8 md:px-12 my-auto py-24 flex flex-col items-start space-y-6">
 
-        {/* Exit overlay — inside main so z-40 competes with button's z-50 */}
-        <div
-          className="fixed inset-0 z-40 bg-black pointer-events-none"
-          style={{
-            opacity: isExiting ? 1 : 0,
-            transition: "opacity 350ms cubic-bezier(0.4, 0, 1, 1)",
-          }}
-        />
+  {/* removed: the fixed inset-0 bg-black overlay entirely */}
 
-        <h1 className="text-5xl sm:text-7xl lg:text-8xl font-bold tracking-tight leading-[0.95] max-w-3xl text-white">
-          Automate your sales pipeline.
-        </h1>
+  <h1 className={`text-5xl sm:text-7xl lg:text-8xl font-bold tracking-tight leading-[0.95] max-w-3xl text-white transition-all duration-700 ease-out ${
+    isExiting ? "opacity-0 scale-105" : "opacity-100 scale-100"
+  }`}>
+    Automate your sales pipeline.
+  </h1>
 
-        <p className="text-lg sm:text-2xl text-zinc-300 max-w-xl font-normal leading-relaxed">
-          Stop losing revenue to dropped calendar handoffs, fragmented lead tracking, and unverified data.
-        </p>
+  <p className={`text-lg sm:text-2xl text-zinc-300 max-w-xl font-normal leading-relaxed transition-all duration-500 ease-out ${
+    isExiting ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
+  }`}>
+    Stop losing revenue to dropped calendar handoffs, fragmented lead tracking, and unverified data.
+  </p>
 
-        {membershipRequired && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 backdrop-blur-md p-4 max-w-md text-sm text-amber-200 space-y-1">
-            <div className="font-semibold text-amber-400">Membership Required</div>
-            <p className="text-zinc-300 text-xs leading-normal">
-              {hasWhopUser
-                ? "Your account is active, but requires an active subscription."
-                : "Please sign in to access your account."}
-            </p>
-          </div>
-        )}
+  {membershipRequired && (
+    <div className={`rounded-xl border border-amber-500/30 bg-amber-500/10 backdrop-blur-md p-4 max-w-md text-sm text-amber-200 space-y-1 transition-all duration-400 ease-out ${
+      isExiting ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
+    }`}>
+      <div className="font-semibold text-amber-400">Membership Required</div>
+      <p className="text-zinc-300 text-xs leading-normal">
+        {hasWhopUser
+          ? "Your account is active, but requires an active subscription."
+          : "Please sign in to access your account."}
+      </p>
+    </div>
+  )}
 
-        {/* z-50 keeps the button + spinner visible above the z-40 overlay */}
-        <div className="relative z-50 pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
-          <EnterDashboardBtn
-            href={destinationHref}
-            onNavigateStart={() => setIsExiting(true)}
-          >
-            Enter Dashboard
-          </EnterDashboardBtn>
-        </div>
-      </main>
+  <div className="relative z-50 pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
+    <EnterDashboardBtn
+      href={destinationHref}
+      onNavigateStart={() => setIsExiting(true)}
+    >
+      Enter Dashboard
+    </EnterDashboardBtn>
+  </div>
+</main>
 
       {/* Footer */}
       <footer className="relative z-10 w-full px-8 py-6 flex items-center justify-between text-xs text-zinc-400 border-t border-white/10 backdrop-blur-md bg-black/10">
