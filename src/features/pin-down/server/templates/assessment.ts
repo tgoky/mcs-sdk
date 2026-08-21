@@ -1,4 +1,5 @@
 import type { PageContentModel } from "./content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
 
 /**
  * The Pre-Call Assessment — for a niche or vertical offer where
@@ -10,6 +11,10 @@ import type { PageContentModel } from "./content-model";
  * lead score or a graded quiz (nothing here is sent anywhere or judges
  * the prospect) — just a priming device that makes the call feel
  * diagnostic before it starts, which is the actual job of this design.
+ *
+ * Published once per engagement as static HTML, so the greeting and call
+ * particulars resolve client-side from the booking redirect (see
+ * content-model.ts) rather than every prospect seeing identical text.
  */
 export function buildAssessmentHtml(m: PageContentModel): string {
   const checklistHtml = m.questions
@@ -61,13 +66,28 @@ export function buildAssessmentHtml(m: PageContentModel): string {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   main { max-width: 600px; margin: 0 auto; padding: 60px 24px 100px; }
+  [hidden] { display: none !important; }
+  .mf-d, .mf-l { display: inline; }
 
+  .brand-line { font-size: 0.72rem; font-weight: 600; color: #6b9c8a; margin: 0 0 10px; }
   .eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #1F6F5C; margin: 0 0 12px; }
   h1 { font-size: 1.95rem; font-weight: 700; letter-spacing: -0.015em; line-height: 1.22; margin: 0 0 10px; }
-  .sub { color: #4d5851; font-size: 0.92rem; margin: 0 0 44px; max-width: 46ch; line-height: 1.6; }
+  .sub { color: #4d5851; font-size: 0.92rem; margin: 0 0 24px; max-width: 46ch; line-height: 1.6; }
+
+  .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 44px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; background: #ffffff; border: 1px solid #dbe4de; border-radius: 999px; padding: 7px 14px; font-size: 0.8rem; color: #2c352f; }
+  .chip strong { color: #1F6F5C; }
 
   section { margin-bottom: 44px; }
   .label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #6b756f; margin: 0 0 16px; }
+
+  /* Overview video — placeholder until the operator's recording pass
+     produces one; never a fabricated embed. */
+  .video-card { background: #ffffff; border: 1px solid #dbe4de; border-radius: 12px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; }
+  .video-card .play { width: 32px; height: 32px; border-radius: 50%; background: #1F6F5C; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .video-card .play::after { content: ""; border-left: 9px solid #fff; border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 3px; }
+  .video-card .vtitle { margin: 0 0 2px; font-size: 0.85rem; font-weight: 700; color: #1C2321; }
+  .video-card .vsub { margin: 0; font-size: 0.76rem; color: #6b756f; }
 
   /* Self-check — signature element */
   .assess-panel { background: #ffffff; border: 1px solid #dbe4de; border-radius: 12px; padding: 24px 22px 22px; }
@@ -107,9 +127,29 @@ export function buildAssessmentHtml(m: PageContentModel): string {
 </head>
 <body>
 <main>
+  <p class="brand-line">${m.buyer}</p>
   <p class="eyebrow">${m.heroEyebrow}</p>
-  <h1>Before your call, ${m.buyer}</h1>
+  <h1>${mergeField("firstName", "Before your call", `Before your call, ${mergeSlot("firstName")}`)}</h1>
   <p class="sub">A ${m.heroLength} self-check so ${m.host} can spend the whole call on what actually applies to you.</p>
+
+  <div class="chip-row">
+    <span class="chip">${mergeField(
+      "call_time",
+      "Time confirmed by email",
+      `<strong>${mergeSlot("call_time")}</strong>`
+    )}</span>
+    <span class="chip">With <strong>${mergeField("host", m.host, mergeSlot("host"))}</strong></span>
+  </div>
+
+  <section>
+    <div class="video-card">
+      <span class="play"></span>
+      <div>
+        <p class="vtitle">How the assessment works</p>
+        <p class="vsub">${m.heroLength} &middot; recording in progress</p>
+      </div>
+    </div>
+  </section>
 
   <section>
     <p class="label">Quick self-check</p>
@@ -147,6 +187,7 @@ export function buildAssessmentHtml(m: PageContentModel): string {
   boxes.forEach(function (b) { b.addEventListener('change', update); });
 })();
 </script>
+${buildMergeScriptTag()}
 </body>
 </html>`;
 }

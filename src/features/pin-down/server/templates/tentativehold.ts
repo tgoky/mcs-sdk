@@ -1,4 +1,5 @@
 import type { PageContentModel } from "./content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
 
 /**
  * The Tentative Hold — for agency/done-for-you offers, where a booked
@@ -10,6 +11,13 @@ import type { PageContentModel } from "./content-model";
  * submission, no backend write — the page has no server to write to)
  * built to raise the buyer's own felt commitment the same way saying a
  * thing out loud does, not to fake a persistence step that isn't there.
+ * The status indicator is a plain static dot — no pulsing animation —
+ * since a hold that's genuinely pending doesn't need to visually nag.
+ *
+ * Published once per engagement as static HTML, so the greeting and call
+ * time resolve client-side from the booking redirect (see
+ * content-model.ts) rather than every prospect seeing the same baked-in
+ * text.
  */
 export function buildTentativeHoldHtml(m: PageContentModel): string {
   const questionsHtml = m.questions
@@ -60,9 +68,18 @@ export function buildTentativeHoldHtml(m: PageContentModel): string {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   main { max-width: 600px; margin: 0 auto; padding: 56px 24px 96px; }
+  [hidden] { display: none !important; }
+  .mf-d, .mf-l { display: inline; }
 
+  .brand-line { text-align: center; font-size: 0.72rem; font-weight: 600; color: #7d93af; margin: 0 0 8px; }
   .eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #5b7699; margin: 0 0 12px; text-align: center; }
-  h1 { text-align: center; font-size: 1.9rem; font-weight: 800; letter-spacing: -0.01em; line-height: 1.2; margin: 0 0 36px; }
+  h1 { text-align: center; font-size: 1.9rem; font-weight: 800; letter-spacing: -0.01em; line-height: 1.2; margin: 0 0 8px; }
+
+  /* Call-time chip, shown only once the booking redirect resolves it —
+     never a guessed or stale time. */
+  .chip-row { display: flex; justify-content: center; margin: 0 0 32px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #d7dee6; border-radius: 999px; padding: 7px 14px; font-size: 0.8rem; color: #2c3947; }
+  .chip strong { color: #2B4C7E; }
 
   /* Hold-status card — signature element */
   .hold-card {
@@ -76,9 +93,8 @@ export function buildTentativeHoldHtml(m: PageContentModel): string {
   .hold-card.is-confirmed { border-color: #2B4C7E; background: #F3F7FC; }
 
   .status-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-  .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #d9a441; flex-shrink: 0; animation: pulse 1.8s ease-in-out infinite; }
-  .hold-card.is-confirmed .status-dot { background: #2B4C7E; animation: none; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #d9a441; flex-shrink: 0; }
+  .hold-card.is-confirmed .status-dot { background: #2B4C7E; }
   .status-text { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #a67c1f; }
   .hold-card.is-confirmed .status-text { color: #2B4C7E; }
 
@@ -102,6 +118,14 @@ export function buildTentativeHoldHtml(m: PageContentModel): string {
   section { margin-bottom: 40px; }
   .label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #5b7699; margin: 0 0 16px; }
 
+  /* Briefing video — placeholder until the operator's recording pass
+     produces one; never a fabricated embed. */
+  .video-card { background: #fff; border: 1px solid #d7dee6; border-radius: 12px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; margin-bottom: 40px; }
+  .video-card .play { width: 32px; height: 32px; border-radius: 50%; background: #2B4C7E; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .video-card .play::after { content: ""; border-left: 9px solid #fff; border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 3px; }
+  .video-card .vtitle { margin: 0 0 2px; font-size: 0.85rem; font-weight: 700; color: #1B2733; }
+  .video-card .vsub { margin: 0; font-size: 0.76rem; color: #5b7699; }
+
   .qrow { display: flex; gap: 14px; align-items: flex-start; padding: 14px 0; border-bottom: 1px solid #dde3ea; }
   .qrow:first-child { border-top: 1px solid #dde3ea; }
   .qnum { font-size: 0.76rem; font-weight: 800; color: #2B4C7E; flex-shrink: 0; min-width: 16px; margin-top: 1px; }
@@ -118,8 +142,17 @@ export function buildTentativeHoldHtml(m: PageContentModel): string {
 </head>
 <body>
 <main>
+  <p class="brand-line">${m.buyer}</p>
   <p class="eyebrow">${m.heroEyebrow}</p>
-  <h1>${m.buyer}, your slot is on hold</h1>
+  <h1>${mergeField("firstName", "Your slot is on hold", `${mergeSlot("firstName")}, your slot is on hold`)}</h1>
+
+  <div class="chip-row">
+    <span class="chip">${mergeField(
+      "call_time",
+      "Time confirmed by email",
+      `<strong>${mergeSlot("call_time")}</strong>`
+    )}</span>
+  </div>
 
   <div class="hold-card" id="hold-card">
     <div class="status-row">
@@ -128,12 +161,20 @@ export function buildTentativeHoldHtml(m: PageContentModel): string {
     </div>
     <p class="headline">One tap keeps this slot yours</p>
     <p class="sub">This time is held for ${m.heroLength}, but a hold isn't a commitment yet. Let us know you'll be there and we'll lock it in.</p>
-    <p class="confirmed-sub">Locked in. ${m.host} is preparing for your call &mdash; we'll see you then.</p>
+    <p class="confirmed-sub">Locked in. ${mergeField("host", m.host, mergeSlot("host"))} is preparing for your call &mdash; we'll see you then.</p>
     <button class="confirm-btn" id="confirm-btn" type="button">Yes, I'll be there</button>
     <span class="confirmed-badge" id="confirmed-badge">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="#2B4C7E"/><path d="M5 8.2l2 2 4-4.4" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Confirmed by ${m.buyer}
+      Confirmed
     </span>
+  </div>
+
+  <div class="video-card">
+    <span class="play"></span>
+    <div>
+      <p class="vtitle">What to expect on the call</p>
+      <p class="vsub">${m.heroLength} &middot; recording in progress</p>
+    </div>
   </div>
 
   <section>
@@ -160,6 +201,7 @@ export function buildTentativeHoldHtml(m: PageContentModel): string {
   });
 })();
 </script>
+${buildMergeScriptTag()}
 </body>
 </html>`;
 }

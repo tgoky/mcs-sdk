@@ -1,4 +1,5 @@
 import type { PageContentModel } from "./content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
 
 /**
  * The Golden Ticket — built for a workshop or event registration where
@@ -7,7 +8,14 @@ import type { PageContentModel } from "./content-model";
  * Signature element: the ticket itself — a real stub shape (perforated
  * edge, notch cutouts, a stub half carrying the reference code) rather
  * than a card wearing a gold accent color, since a ticket only works if
- * it actually reads as one at a glance.
+ * it actually reads as one at a glance. The stub code now sits upright —
+ * a real paper ticket's stub number is small print, not sideways text
+ * nobody can read without tilting their head.
+ *
+ * Published once per engagement as static HTML, so "Admit one" resolves
+ * the actual attendee's name client-side from the booking redirect
+ * (see content-model.ts) rather than showing every attendee the
+ * operator's own business name.
  */
 export function buildGoldenTicketHtml(m: PageContentModel): string {
   const questionsHtml = m.questions
@@ -56,12 +64,15 @@ export function buildGoldenTicketHtml(m: PageContentModel): string {
     -webkit-font-smoothing: antialiased;
   }
   main { max-width: 640px; margin: 0 auto; padding: 52px 22px 96px; }
+  [hidden] { display: none !important; }
+  .mf-d, .mf-l { display: inline; }
 
-  .eyebrow { text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.18em; color: #E8B23D; margin: 0 0 10px; }
-  h1 { text-align: center; font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 32px; }
+  .eyebrow { text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.18em; color: #E8B23D; margin: 0 0 6px; }
+  .brand-line { text-align: center; font-size: 0.72rem; color: #a3915f; margin: 0 0 22px; }
+  h1 { text-align: center; font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 28px; }
 
   /* Ticket stub — signature element */
-  .ticket { display: flex; margin: 0 0 40px; filter: drop-shadow(0 18px 40px rgba(0,0,0,0.45)); }
+  .ticket { display: flex; margin: 0 0 22px; filter: drop-shadow(0 18px 40px rgba(0,0,0,0.45)); }
   .ticket-main {
     flex: 1;
     background: linear-gradient(155deg, #1d1720 0%, #171217 100%);
@@ -72,7 +83,7 @@ export function buildGoldenTicketHtml(m: PageContentModel): string {
     position: relative;
   }
   .ticket-stub {
-    width: 108px;
+    width: 116px;
     flex-shrink: 0;
     background: #1a1418;
     border: 1px solid #4a3a1c;
@@ -85,13 +96,12 @@ export function buildGoldenTicketHtml(m: PageContentModel): string {
     gap: 6px;
     position: relative;
     padding: 16px 8px;
+    text-align: center;
   }
-  /* perforation: dashed border rendered as repeating gradient notches */
-  .perf {
-    position: absolute; top: 0; bottom: 0; left: -1px; width: 1px;
-    background-image: repeating-linear-gradient(to bottom, #E8B23D 0 6px, transparent 6px 14px);
-    opacity: 0.55;
-  }
+  /* perforation: a column of small punched circles, the way a real
+     die-cut stub separates — no sideways text needed to sell "ticket". */
+  .perf { position: absolute; top: 10px; bottom: 10px; left: -1px; width: 1px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; }
+  .perf span { width: 4px; height: 4px; border-radius: 50%; background: #151014; border: 1px solid #4a3a1c; }
   .notch { position: absolute; left: -8px; width: 16px; height: 16px; border-radius: 50%; background: #151014; border: 1px solid #4a3a1c; }
   .notch.top { top: -8px; }
   .notch.bottom { bottom: -8px; }
@@ -102,10 +112,19 @@ export function buildGoldenTicketHtml(m: PageContentModel): string {
   .admit { position: absolute; top: 22px; right: 24px; border: 1px solid #E8B23D; color: #E8B23D; font-size: 9px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 9px; border-radius: 3px; transform: rotate(4deg); }
 
   .ticket-stub .stub-label { font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: #8a7a54; }
-  .ticket-stub .stub-code { font-family: "Courier New", monospace; font-size: 0.95rem; font-weight: 700; color: #fcefcf; writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: 0.06em; }
+  .ticket-stub .stub-code { font-family: "Courier New", monospace; font-size: 1.05rem; font-weight: 700; color: #fcefcf; letter-spacing: 0.06em; }
+  .ticket-stub .stub-when { font-size: 9.5px; color: #a3915f; line-height: 1.4; }
 
   section { margin-bottom: 40px; }
   .label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: #E8B23D; margin: 0 0 16px; text-align: center; }
+
+  /* Doors-open video — placeholder card until the operator's recording
+     pass produces one; never a fabricated embed. */
+  .video-card { background: #1a1418; border: 1px dashed #4a3a1c; border-radius: 8px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; margin-bottom: 40px; }
+  .video-card .play { width: 32px; height: 32px; border-radius: 50%; background: #E8B23D; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .video-card .play::after { content: ""; border-left: 9px solid #151014; border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 3px; }
+  .video-card .vtitle { margin: 0 0 2px; font-size: 0.82rem; font-weight: 700; color: #fcefcf; }
+  .video-card .vsub { margin: 0; font-size: 0.72rem; color: #a3915f; }
 
   .fine-print { background: #1a1418; border: 1px dashed #4a3a1c; border-radius: 8px; padding: 20px 22px; }
   .fine-print p.head { margin: 0 0 12px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: #cbb98d; }
@@ -128,21 +147,31 @@ export function buildGoldenTicketHtml(m: PageContentModel): string {
 <body>
 <main>
   <p class="eyebrow">${m.heroEyebrow}</p>
-  <h1>You're in, ${m.buyer}</h1>
+  <p class="brand-line">Hosted by ${m.buyer}</p>
+  <h1>${mergeField("firstName", "You&rsquo;re in", `You&rsquo;re in, ${mergeSlot("firstName")}`)}</h1>
 
   <div class="ticket">
     <div class="ticket-main">
       <span class="admit">Admit&nbsp;one</span>
       <p class="kicker">Confirmed seat</p>
-      <p class="name">${m.buyer}</p>
+      <p class="name">${mergeField("firstName", "Guest", mergeSlot("fullName"))}</p>
       <p class="meta">With ${m.host} &middot; ${m.heroLength} briefing before you arrive</p>
     </div>
     <div class="ticket-stub">
-      <span class="perf"></span>
+      <span class="perf"><span></span><span></span><span></span><span></span><span></span></span>
       <span class="notch top"></span>
       <span class="notch bottom"></span>
       <span class="stub-label">No.</span>
       <span class="stub-code">${m.reference}</span>
+      <span class="stub-when">${mergeField("call_time", "Time on file", mergeSlot("call_time"))}</span>
+    </div>
+  </div>
+
+  <div class="video-card">
+    <span class="play"></span>
+    <div>
+      <p class="vtitle">What to expect when you arrive</p>
+      <p class="vsub">${m.heroLength} &middot; recording in progress</p>
     </div>
   </div>
 
@@ -161,6 +190,7 @@ export function buildGoldenTicketHtml(m: PageContentModel): string {
     ${calendarHtml}
   </div>
 </main>
+${buildMergeScriptTag()}
 </body>
 </html>`;
 }
