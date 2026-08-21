@@ -44,6 +44,9 @@ interface SkillRun {
   stepCount?: number;
   subjectLabel?: string | null;
   engagementPausedAt?: string | null;
+  // The 5-field "what happened" record every skill writes at finishRun().
+  // Not present on rows completed before this column existed — actionSummary()
+  // falls back to the generic per-skill copy when it's absent.
   summary?: RunSummary | null;
 }
 
@@ -138,6 +141,10 @@ const SUCCESS_STATUSES = new Set(["success", "completed"]);
 
 const FETCH_WINDOW = 150;
 
+// Last-resort copy — only used for terminal-success runs that have no
+// `summary` at all (rows written before the summary column existed).
+// Every current finishRun() call site writes a summary, so this should be
+// rare going forward; it exists so old rows don't render a blank Action cell.
 const LEGACY_SUCCESS_FALLBACK: Partial<Record<SkillName, string>> = {
   "pin-down":      "Client account set up and confirmation page live",
   "pile-on":       "Pre-call sequence queued for this booking",
@@ -146,6 +153,19 @@ const LEGACY_SUCCESS_FALLBACK: Partial<Record<SkillName, string>> = {
   "leak-map":      "Funnel health report generated",
 };
 
+/**
+ * What the Action cell shows for a run. For terminal-success runs this
+ * used to be one hardcoded sentence per skill regardless of what actually
+ * happened — a "Call brief sent" run and a "found zero calls, sent
+ * nothing" run read identically. Every skill now writes a 5-field
+ * RunSummary at finishRun() (whatWasAttempted/whatWorked/whatFailed/
+ * openItems/decisionsMade — see src/models/schema.ts), so this reads that
+ * instead: a partial failure surfaces first, then what actually worked
+ * (which already covers the "nothing to brief" / "funnel is healthy"
+ * cases, since each skill pushes those exact outcomes there), then any
+ * open item. The static line below only fires for runs with no summary
+ * at all.
+ */
 function actionSummary(run: SkillRun): string {
   const s = run.status.toLowerCase();
   const skill = run.skillName as SkillName;
@@ -163,6 +183,10 @@ function actionSummary(run: SkillRun): string {
   if (s === "cancelled") return "Cancelled by user request";
 
   if (s === "skipped") {
+    // The one status finishRun() sets without a summary (paused/deleted
+    // engagement, or the skill toggled off for this client) — the run's
+    // own step log already recorded the specific reason, surfaced via
+    // subjectLabel (see latestStepLabel in lib/run-display.ts).
     return run.subjectLabel ?? "Skipped — engagement paused, deleted, or this skill is off";
   }
 
@@ -203,7 +227,7 @@ function ClientCell({ run }: { run: SkillRun }) {
   const showHashIcon = !run.buyerName && !!run.engagementId;
 
   return (
-    <div className="flex items-center gap-1.5 min-w-0" title={displayName}>
+    <div className="flex items-center gap-2 min-w-0" title={displayName}>
       {showHashIcon && <Hash size={12} className="text-zinc-400 dark:text-zinc-600 shrink-0" />}
       <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">
         {displayName}
@@ -318,52 +342,45 @@ function RunRow({
       } ${nested ? "bg-zinc-50/70 dark:bg-zinc-950/50 border-l-2 border-l-zinc-200 dark:border-l-zinc-800" : ""}`}
       onClick={onOpen}
     >
-      {/* Client & Date/Time Merged */}
-      <td className={`px-4 py-2.5 w-[220px] ${nested ? "pl-7" : ""}`} onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
-        <div className="flex flex-col gap-0.5">
-          {run.buyerName && run.engagementId ? (
-            <Link href={`/dashboard/engagements/${run.engagementId}`} onClick={(e) => e.stopPropagation()} className="hover:text-zinc-900 dark:hover:text-white transition-colors relative z-20">
-              <ClientCell run={run} />
-            </Link>
-          ) : (
+      <td className={`px-4 py-2.5 max-w-[180px] ${nested ? "pl-7" : ""}`} onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
+        {run.buyerName && run.engagementId ? (
+          <Link href={`/dashboard/engagements/${run.engagementId}`} onClick={(e) => e.stopPropagation()} className="hover:text-zinc-900 dark:hover:text-white transition-colors relative z-20">
             <ClientCell run={run} />
-          )}
-          <VerboseTime isoString={run.startedAt} className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 font-medium" />
-        </div>
+          </Link>
+        ) : (
+          <ClientCell run={run} />
+        )}
       </td>
 
-      {/* Module */}
-      <td className="px-4 py-2.5 w-[140px] whitespace-nowrap">
+      <td className="px-4 py-2.5">
         <div className="flex items-center gap-1.5">
-          <span className="text-sm text-zinc-600 dark:text-zinc-400 font-semibold">
+          <span className="text-sm text-zinc-600 dark:text-zinc-400 font-semibold whitespace-nowrap">
             {skillName(run.skillName)}
           </span>
         </div>
         {(run.stepCount ?? 0) > 0 && (
-          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-700 block">
+          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-700">
             {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
           </span>
         )}
       </td>
 
-      {/* Action (Takes available remaining space) */}
-      <td className="px-4 py-2.5">
+      <td className="px-4 py-2.5 max-w-[280px]">
         <span
-          className={`text-sm block font-medium ${isFailed ? "text-rose-600 dark:text-rose-400/80 font-mono" : isRunning ? "text-zinc-800 dark:text-zinc-300" : "text-zinc-600 dark:text-zinc-300"}`}
+          className={`text-sm truncate block font-medium ${isFailed ? "text-rose-600 dark:text-rose-400/80 font-mono" : isRunning ? "text-zinc-800 dark:text-zinc-300" : "text-zinc-500"}`}
           title={actionSummary(run)}
         >
           {actionSummary(run)}
         </span>
         {run.subjectLabel && (
-          <span className="text-[11px] text-zinc-400 dark:text-zinc-600 truncate block font-mono mt-0.5" title={run.subjectLabel}>
+          <span className="text-[11px] text-zinc-400 dark:text-zinc-600 truncate block font-mono" title={run.subjectLabel}>
             {run.subjectLabel}
           </span>
         )}
       </td>
 
-      {/* Status (Extremity Right) */}
-      <td className="px-4 py-2.5 whitespace-nowrap text-right w-44">
-        <div className="flex items-center justify-end gap-2">
+      <td className="px-4 py-2.5 whitespace-nowrap">
+        <div className="flex items-center gap-2">
           <RunStatusIcon status={run.status} />
           <StatusLabel status={run.status} />
           {onToggleGroup && (
@@ -372,8 +389,11 @@ function RunRow({
         </div>
       </td>
 
-      {/* Quick Actions */}
-      <td className="pr-3 text-right w-8" onClick={(e) => e.stopPropagation()}>
+      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+        <VerboseTime isoString={run.startedAt} className="text-xs font-bold text-zinc-900 dark:text-zinc-100 font-mono" />
+      </td>
+
+      <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1">
           <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-2px] group-hover:translate-x-0 duration-150" />
           <ActionPanel
@@ -692,10 +712,19 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
             </div>
           )}
         </div>
+        {/*
+        <button
+          onClick={() => setPolling((p) => !p)}
+          className="text-xs font-bold font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors cursor-pointer shrink-0"
+        >
+          {polling ? "[ Pause live ]" : "[ Resume live ]"}
+        </button>
+        */}
       </div>
 
       <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800/60">
         <SegmentedTabs options={tabOptions} value={tab} onChange={setTab} />
+        {/* <TableSearchInput value={search} onChange={setSearch} placeholder={toolbarCopy.searchPlaceholder} className="w-[190px]" /> */}
         <TimeRangeMenu value={timeRange} onChange={setTimeRange} />
         <div className="ml-auto flex items-center gap-1.5">
           {hasActiveFilters && (
@@ -732,10 +761,11 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
           <table className="w-full min-w-[680px] text-left border-collapse text-xs font-sans tracking-tight">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-transparent text-zinc-400 dark:text-zinc-600 uppercase tracking-wider font-mono text-[10px] select-none">
-                <th className="px-4 py-2 w-[220px] font-normal">Client & Date</th>
-                <th className="px-4 py-2 w-[140px] font-normal">Module</th>
+                <th className="px-4 py-2 w-[180px] font-normal">Client</th>
+                <th className="px-4 py-2 font-normal">Module</th>
                 <th className="px-4 py-2 font-normal">Action</th>
-                <th className="px-4 py-2 text-right w-44 font-normal">Status</th>
+                <th className="px-4 py-2 w-24 font-normal">Status</th>
+                <th className="px-4 py-2 text-right w-12 font-normal">Age</th>
                 <th className="w-8 px-2" />
               </tr>
             </thead>
