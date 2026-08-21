@@ -15,16 +15,24 @@ export function LandingWrapper({
   const [isExiting, setIsExiting] = useState(false);
 
   return (
-    <div 
-      className={`relative min-h-screen w-full overflow-hidden bg-black text-white font-sans flex flex-col justify-between selection:bg-zinc-800 transition-opacity duration-500 ${
-        isExiting ? "opacity-30" : "opacity-100"
-      }`}
+    <div
+      // ── removed: transition-opacity + opacity-30/100 ──
+      className="relative min-h-screen w-full overflow-hidden bg-black text-white font-sans flex flex-col justify-between selection:bg-zinc-800"
     >
+      {/* ── NEW: exit overlay — fades to pure black ── */}
+      <div
+        className="fixed inset-0 z-40 bg-black pointer-events-none"
+        style={{
+          opacity: isExiting ? 1 : 0,
+          transition: "opacity 350ms cubic-bezier(0.4, 0, 1, 1)",
+        }}
+      />
+
       {/* Background Image Layer */}
       <div className="absolute inset-0 z-0">
-        <img 
-          src="/images/new.jpeg" 
-          alt="Background" 
+        <img
+          src="/images/new.jpeg"
+          alt="Background"
           className={`w-full h-full object-cover object-center opacity-50 transition-all duration-700 ease-out ${
             isExiting ? "scale-125 blur-sm" : "scale-105"
           }`}
@@ -38,11 +46,10 @@ export function LandingWrapper({
         <div className="font-bold text-lg tracking-tight text-white">
           Mudd Ventures
         </div>
-        
-        {/* Centered Navigation */}
+
         <nav className="hidden md:flex items-center gap-2 text-sm font-medium absolute left-1/2 -translate-x-1/2">
-          
-          {/* Item 1: Show Rate */}
+          {/* ── all five dropdown items stay exactly the same ── */}
+          {/* Show Time */}
           <div className="relative group">
             <span className="px-3.5 py-1.5 rounded-sm text-zinc-300 group-hover:bg-white/10 group-hover:text-white transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none">
               Show Time
@@ -50,14 +57,11 @@ export function LandingWrapper({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
               </svg>
             </span>
-            
-            {/* Uniform Light Glass Panel */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[640px] bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-sm p-7 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
               <div className="grid grid-cols-3 divide-x divide-white/10">
                 <div className="px-5 first:pl-0">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">ONBOARDING</div>
                   <div className="space-y-3 text-sm text-zinc-100">
-                    {/* <div className="hover:text-white transition-colors duration-200">Show Rate Setup</div> */}
                     <div className="hover:text-white transition-colors duration-200">Brand Voice Extraction</div>
                     <div className="hover:text-white transition-colors duration-200">Confirmation Pages</div>
                   </div>
@@ -80,7 +84,7 @@ export function LandingWrapper({
             </div>
           </div>
 
-          {/* Item 2: Pre-Call */}
+          {/* Counter Claim */}
           <div className="relative group">
             <span className="px-3.5 py-1.5 rounded-sm text-zinc-300 group-hover:bg-white/10 group-hover:text-white transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none">
               Counter Claim
@@ -88,14 +92,11 @@ export function LandingWrapper({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
               </svg>
             </span>
-
-            {/* Uniform Light Glass Panel */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[640px] bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-sm p-7 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
               <div className="grid grid-cols-3 divide-x divide-white/10">
                 <div className="px-5 first:pl-0">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">SEQUENCES</div>
                   <div className="space-y-3 text-sm text-zinc-100">
-                    {/* <div className="hover:text-white transition-colors duration-200">Pre-Call Sequence</div> */}
                     <div className="hover:text-white transition-colors duration-200">AI Personalization</div>
                     <div className="hover:text-white transition-colors duration-200">SMS Reminders</div>
                   </div>
@@ -118,7 +119,7 @@ export function LandingWrapper({
             </div>
           </div>
 
-          {/* Item 3: Recovery */}
+          {/* Recovery */}
           <div className="relative group">
             <span className="px-3.5 py-1.5 rounded-sm text-zinc-300 group-hover:bg-white/10 group-hover:text-white transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none">
               Recovery
@@ -126,8 +127,6 @@ export function LandingWrapper({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
               </svg>
             </span>
-
-            {/* Uniform Light Glass Panel */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[640px] bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-sm p-7 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
               <div className="grid grid-cols-3 divide-x divide-white/10">
                 <div className="px-5 first:pl-0">
@@ -155,7 +154,7 @@ export function LandingWrapper({
             </div>
           </div>
 
-          {/* Item 4: Funnel Audit */}
+          {/* Funnel Audit */}
           <div className="relative group">
             <span className="px-3.5 py-1.5 rounded-sm text-zinc-300 group-hover:bg-white/10 group-hover:text-white transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none">
               Funnel Audit
@@ -163,8 +162,6 @@ export function LandingWrapper({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
               </svg>
             </span>
-
-            {/* Uniform Light Glass Panel */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[640px] bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-sm p-7 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
               <div className="grid grid-cols-3 divide-x divide-white/10">
                 <div className="px-5 first:pl-0">
@@ -191,7 +188,7 @@ export function LandingWrapper({
             </div>
           </div>
 
-          {/* Item 5: Call Brief */}
+          {/* Call Brief */}
           <div className="relative group">
             <span className="px-3.5 py-1.5 rounded-sm text-zinc-300 group-hover:bg-white/10 group-hover:text-white transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none">
               Call Brief
@@ -199,8 +196,6 @@ export function LandingWrapper({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
               </svg>
             </span>
-
-            {/* Uniform Light Glass Panel */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[640px] bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-sm p-7 shadow-2xl opacity-0 -translate-y-2 scale-[0.98] pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-50">
               <div className="grid grid-cols-3 divide-x divide-white/10">
                 <div className="px-5 first:pl-0">
@@ -226,7 +221,6 @@ export function LandingWrapper({
               </div>
             </div>
           </div>
-
         </nav>
       </header>
 
@@ -251,10 +245,9 @@ export function LandingWrapper({
           </div>
         )}
 
-        {/* Main Hero CTA */}
         <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
-          <EnterDashboardBtn 
-            href={destinationHref} 
+          <EnterDashboardBtn
+            href={destinationHref}
             onNavigateStart={() => setIsExiting(true)}
           >
             Enter Dashboard

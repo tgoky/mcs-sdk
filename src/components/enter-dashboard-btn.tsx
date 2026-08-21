@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { triggerExitTransition } from "@/lib/page-transition";
 
 export function EnterDashboardBtn({
   href = "/dashboard",
@@ -16,7 +17,7 @@ export function EnterDashboardBtn({
   const clickedRef = useRef(false);
   const [pending, setPending] = useState(false);
 
-  // Prefetch destination so router.push resolves near-instantly
+  // Pre-fetch so the actual push resolves near-instantly
   useEffect(() => {
     router.prefetch(href);
   }, [href, router]);
@@ -27,14 +28,16 @@ export function EnterDashboardBtn({
     clickedRef.current = true;
     setPending(true);
 
-    // Kick off the exit animation immediately
+    // 1. Tell the landing page to start its exit animation
     if (onNavigateStart) onNavigateStart();
 
-    // Navigate after a short delay so the animation is visibly underway
-    // and the page swap arrives right as it completes
+    // 2. Stamp sessionStorage so the *next* page knows to fade in
+    triggerExitTransition();
+
+    // 3. Navigate just after the exit overlay reaches full opacity
     setTimeout(() => {
       router.push(href);
-    }, 400);
+    }, 380);
   };
 
   return (
@@ -47,8 +50,8 @@ export function EnterDashboardBtn({
         "flex items-center justify-center " +
         "transform transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] " +
         "hover:scale-[1.02] active:scale-[0.97] hover:bg-zinc-100 " +
-        "overflow-hidden cursor-pointer " +
-        (pending ? "pointer-events-none opacity-70" : "")
+        "overflow-hidden " +
+        (pending ? "pointer-events-none opacity-70" : "cursor-pointer")
       }
     >
       <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-black/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
