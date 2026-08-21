@@ -14,7 +14,7 @@ import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
 import { RunRowActions } from "./run-row-actions";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
-import { SquishySkillBadge } from "@/components/squishy-skull-badge";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { 
   CheckCircle2, 
   XCircle, 
