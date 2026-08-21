@@ -57,7 +57,7 @@ export function LandingWrapper({
                 <div className="px-5 first:pl-0">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">ONBOARDING</div>
                   <div className="space-y-3 text-sm text-zinc-100">
-                    <div className="hover:text-white transition-colors duration-200">Show Rate Setup</div>
+                    {/* <div className="hover:text-white transition-colors duration-200">Show Rate Setup</div> */}
                     <div className="hover:text-white transition-colors duration-200">Brand Voice Extraction</div>
                     <div className="hover:text-white transition-colors duration-200">Confirmation Pages</div>
                   </div>
@@ -95,7 +95,7 @@ export function LandingWrapper({
                 <div className="px-5 first:pl-0">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-300 mb-4">SEQUENCES</div>
                   <div className="space-y-3 text-sm text-zinc-100">
-                    <div className="hover:text-white transition-colors duration-200">Pre-Call Sequence</div>
+                    {/* <div className="hover:text-white transition-colors duration-200">Pre-Call Sequence</div> */}
                     <div className="hover:text-white transition-colors duration-200">AI Personalization</div>
                     <div className="hover:text-white transition-colors duration-200">SMS Reminders</div>
                   </div>
