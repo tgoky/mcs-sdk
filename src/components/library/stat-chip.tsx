@@ -18,17 +18,17 @@ export function StatChip({
 }) {
   const toneClass =
     tone === "success"
-      ? "text-emerald-400"
+      ? "text-emerald-600 dark:text-emerald-400"
       : tone === "warning"
-        ? "text-orange-400"
+        ? "text-orange-600 dark:text-orange-400"
         : tone === "danger"
-          ? "text-rose-400"
-          : "text-zinc-100";
+          ? "text-rose-600 dark:text-rose-400"
+          : "text-zinc-900 dark:text-zinc-100";
 
   return (
     <div className="flex flex-col gap-0.5">
       <span className={cn("text-lg font-bold tabular-nums leading-none", toneClass)}>{value}</span>
-      <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">{label}</span>
+      <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{label}</span>
     </div>
   );
 }
