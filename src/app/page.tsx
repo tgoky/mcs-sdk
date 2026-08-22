@@ -17,7 +17,7 @@ export default async function LandingIndexPage({ searchParams }: PageProps) {
     session.whopUserId && hasAccess
       ? "/home"
       : session.whopUserId
-      ? (process.env.WHOP_COMPANY_CHECKOUT_URL ?? "https://whop.com")
+      ? "/checkout"
       : "/api/auth/login";
 
   return (

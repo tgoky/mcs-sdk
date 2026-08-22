@@ -31,6 +31,15 @@ const WHOP_ACCESS_PRODUCT_IDS = (process.env.WHOP_ACCESS_PRODUCT_IDS ?? "")
 // here and enforce the cutoff via canceled_at/expires-at logic instead.
 const ACTIVE_STATUSES = new Set(["active", "trialing"]);
 
+// Shared with the membership.activated/deactivated webhook handler
+// (src/app/api/webhooks/whop/route.ts) so a membership event for a
+// different product under the same Whop company can't grant access there
+// either — same rule, one place, instead of two copies that could drift.
+export function isRelevantProductId(productId: string | undefined): boolean {
+  if (!WHOP_ACCESS_PRODUCT_IDS.length) return true;
+  return Boolean(productId && WHOP_ACCESS_PRODUCT_IDS.includes(productId));
+}
+
 let _client: WhopSDK | null = null;
 function client(): WhopSDK {
   if (!_client) {
