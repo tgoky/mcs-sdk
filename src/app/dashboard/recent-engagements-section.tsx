@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, ArrowRight, ChevronDown, List } from "lucide-react";
+import { ChevronRight, ChevronDown, List } from "lucide-react";
 import { isSkillId, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
 import { SkillsNavList } from "@/components/skills-nav-list";
 
@@ -103,7 +103,7 @@ function SkillSiblingClients({ skillId, currentEngagementId }: { skillId: SkillI
 
       {/* Header */}
       <div className="px-2.5 pb-2 text-[11px] font-mono font-semibold text-zinc-600 dark:text-zinc-400 tracking-wider flex items-center justify-between">
-        <span>Clients · {manifest.name}</span>
+        <span>{manifest.name}</span>
         <ChevronDown className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
       </div>
 
@@ -149,7 +149,7 @@ function SkillSiblingClients({ skillId, currentEngagementId }: { skillId: SkillI
   <span className="text-xs font-mono tracking-tight transition-colors">
     view all
   </span>
-  <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-all duration-200 shrink-0" />
+
 </Link>
     </>
   );
