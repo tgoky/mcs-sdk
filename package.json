@@ -16,6 +16,7 @@
     "@composio/core": "^0.16.0",
     "@t3-oss/env-nextjs": "^0.13.11",
     "@vercel/functions": "^3.7.3",
+    "@whop/checkout": "^0.6.0",
     "@whop/sdk": "^0.0.40",
     "ai": "^6.0.209",
     "class-variance-authority": "^0.7.1",

@@ -20,6 +20,9 @@ importers:
       '@vercel/functions':
         specifier: ^3.7.3
         version: 3.7.5
+      '@whop/checkout':
+        specifier: ^0.6.0
+        version: 0.6.0(react@19.2.4)
       '@whop/sdk':
         specifier: ^0.0.40
         version: 0.0.40
@@ -3063,6 +3066,14 @@ packages:
   '@vitest/utils@4.1.10':
     resolution: {integrity: sha512-fy9am/HWxbaGt/Sawrp90vt6Y6jQwf1RX77cz3uwoJwJVMli/e1IEwRPnMNJ7vKfPTwo0diXifkpPvwH9v7nGA==}
 
+  '@whop/checkout@0.6.0':
+    resolution: {integrity: sha512-cKmeKM55ZZnUVAYB4eJG2kr749dvvWZ3WPaMZw9aLurTuuxE4NnMKcSnBBdZZOFHjemj4YAcMufJFAGfrqyH6g==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      react:
+        optional: true
+
   '@whop/sdk@0.0.40':
     resolution: {integrity: sha512-hTZHVEo7IN6O+bU06Bbde5eDh6EDIoJ22hs5VdDXHKf/tMOvA9IMlGQeWeyDhXXUg2fvUQ3LQ+7qxGxs7JXPOQ==}
 
@@ -3843,6 +3854,7 @@ packages:
   eslint@9.39.5:
     resolution: {integrity: sha512-DgZS62aPLXKlnxILS/AYCoRvHaZeXceIzlXPkkGGzJWSow1aEk0lbTlxUSlyjC8jcaKxAdOnTDz+o1JFSBsyjw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -8913,6 +8925,10 @@ snapshots:
       '@vitest/pretty-format': 4.1.10
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
+
+  '@whop/checkout@0.6.0(react@19.2.4)':
+    optionalDependencies:
+      react: 19.2.4
 
   '@whop/sdk@0.0.40':
     dependencies:
