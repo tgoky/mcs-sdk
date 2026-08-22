@@ -1,5 +1,6 @@
 import type { PageContentModel } from "./content-model";
 import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
+import { buildContractDynamicHtml } from "./dynamic/contract.dynamic";
 
 const CLAUSE_NUMERALS = ["I", "II", "III", "IV"];
 
@@ -21,6 +22,11 @@ const CLAUSE_NUMERALS = ["I", "II", "III", "IV"];
  * known until a real prospect's browser loads the page.
  */
 export function buildContractHtml(m: PageContentModel): string {
+  if (m.designTokens.confidence === "scraped") return buildContractDynamicHtml(m);
+  return buildContractStaticHtml(m);
+}
+
+function buildContractStaticHtml(m: PageContentModel): string {
   const questionsHtml = m.questions
     .map(
       (q, i) => `

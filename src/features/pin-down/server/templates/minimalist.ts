@@ -1,5 +1,6 @@
 import type { PageContentModel } from "./content-model";
 import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
+import { buildMinimalistDynamicHtml } from "./dynamic/minimalist.dynamic";
 
 /**
  * The Minimalist Trust — for a brand that's already done the convincing
@@ -17,6 +18,11 @@ import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
  * than every prospect seeing the operator's own business name.
  */
 export function buildMinimalistHtml(m: PageContentModel): string {
+  if (m.designTokens.confidence === "scraped") return buildMinimalistDynamicHtml(m);
+  return buildMinimalistStaticHtml(m);
+}
+
+function buildMinimalistStaticHtml(m: PageContentModel): string {
   const questionsHtml = m.questions
     .map(
       (q, i) => `

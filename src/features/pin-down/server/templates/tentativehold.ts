@@ -1,5 +1,6 @@
 import type { PageContentModel } from "./content-model";
 import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
+import { buildTentativeHoldDynamicHtml } from "./dynamic/tentative-hold.dynamic";
 
 /**
  * The Tentative Hold — for agency/done-for-you offers, where a booked
@@ -20,6 +21,11 @@ import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
  * text.
  */
 export function buildTentativeHoldHtml(m: PageContentModel): string {
+  if (m.designTokens.confidence === "scraped") return buildTentativeHoldDynamicHtml(m);
+  return buildTentativeHoldStaticHtml(m);
+}
+
+function buildTentativeHoldStaticHtml(m: PageContentModel): string {
   const questionsHtml = m.questions
     .map(
       (q, i) => `

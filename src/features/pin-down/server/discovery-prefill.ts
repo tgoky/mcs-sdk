@@ -1,5 +1,6 @@
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { scrapeVoiceCorpus } from "./voice-scraper";
+import { scrapeDesignSignal, type DesignSignalResult } from "./design-scraper";
 import { fetchWithTimeout } from "@/lib/http";
 
 /**
@@ -19,6 +20,13 @@ export interface DiscoveryPrefillResult {
   scrapedCorpus?: string;
   existingConfirmationPageUrl?: string;
   detectedBookingPlatform?: string;
+  /** Raw visual signal from the buyer's own site (design-scraper.ts), for
+   * the dynamic confirmation-page templates (templates/dynamic/). Passed
+   * straight through to buildConfirmationPageHtml as
+   * PageBuilderInput.designSignal — undefined here means "render the
+   * static default for whichever archetype gets picked", never a
+   * broken page. */
+  designSignal?: DesignSignalResult;
   notes: string[];
 }
 
@@ -130,10 +138,11 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
   const base = normalizeDomain(domain);
   const notes: string[] = [];
 
-  const [homepageHtml, { corpus, sources }, existingConfirmationPageUrl] = await Promise.all([
+  const [homepageHtml, { corpus, sources }, existingConfirmationPageUrl, designSignal] = await Promise.all([
     fetchRaw(base),
     scrapeVoiceCorpus(domain),
     detectExistingConfirmationPage(base),
+    scrapeDesignSignal(domain).catch(() => null),
   ]);
 
   const detectedBookingPlatform = detectBookingPlatform(homepageHtml);
@@ -164,6 +173,7 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
       scrapedCorpus: corpus || undefined,
       existingConfirmationPageUrl,
       detectedBookingPlatform,
+      designSignal: designSignal ?? undefined,
       notes,
     };
   }
@@ -235,6 +245,9 @@ aren't reasonably confident, use null rather than guessing.`,
   if (!detectedBookingPlatform) {
     notes.push("Couldn't detect a recognizable booking platform from the homepage HTML — set booking_platform manually.");
   }
+  if (!designSignal) {
+    notes.push("Couldn't extract visual design signal from the site — the confirmation page will use the default theme for whichever template you pick, not one matched to your site.");
+  }
 
   return {
     domain: base,
@@ -245,6 +258,7 @@ aren't reasonably confident, use null rather than guessing.`,
     scrapedCorpus: corpus,
     existingConfirmationPageUrl,
     detectedBookingPlatform,
+    designSignal: designSignal ?? undefined,
     notes,
   };
 }

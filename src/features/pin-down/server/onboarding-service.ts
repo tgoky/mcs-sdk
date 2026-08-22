@@ -11,6 +11,7 @@ import { buildScriptPack } from "./script-builder";
 import { auditExistingConfirmationPage } from "./discovery-prefill";
 import { createPlatformAdapterDraft } from "./doc-researcher";
 import { scrapeVoiceCorpus, scrapeEspBroadcasts } from "./voice-scraper";
+import { scrapeDesignSignal } from "./design-scraper";
 import { buildSmsSequence } from "@/features/pile-on/server/sms-sequence-builder";
 import { auditExistingPileOnSequence } from "@/features/pile-on/server/existing-sequence-builder";
 import { auditExistingReport } from "@/features/leak-map/server/existing-audit-audit";
@@ -357,6 +358,45 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
       );
     }
 
+    // ── Design scrape ─────────────────────────────────────────────────────
+    // Independent of the voice scrape above — different endpoint format
+    // (rawHtml, not markdown), different purpose (visual signal for the
+    // confirmation page's skin, not copy for the voice profile). Failure
+    // here is always non-fatal: buildConfirmationPageHtml falls back to
+    // each archetype's existing static default whenever designSignal is
+    // undefined, so a failed or skipped scrape never breaks the page —
+    // it just means the page renders exactly like it always has.
+    let designSignal: Awaited<ReturnType<typeof scrapeDesignSignal>> = null;
+    if (finalStack.buyer_domain) {
+      designSignal = await run("design-scrape", async () => {
+        await logStep(runId, { phase: "design_scrape", status: "running" });
+        try {
+          const signal = await scrapeDesignSignal(finalStack.buyer_domain!);
+          await logStep(runId, {
+            phase: "design_scrape",
+            status: signal ? "success" : "skipped",
+            detail: signal ? `${signal.classTokens.length} class token(s), ${signal.colorMentions.length} color mention(s)` : "No usable visual signal returned",
+          });
+          return signal;
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.error("[pin-down onboarding] Design scrape failed (non-fatal):", message);
+          await logStep(runId, { phase: "design_scrape", status: "failed", detail: message });
+          return null;
+        }
+      });
+
+      if (designSignal) {
+        summary.whatWorked.push(`Matched the confirmation page's visual style to ${finalStack.buyer_domain}.`);
+      } else {
+        summary.openItems.push(
+          `Couldn't pull visual design signal from ${finalStack.buyer_domain} — the confirmation page will use the template's default look instead of one matched to the site.`
+        );
+      }
+    } else {
+      await logStep(runId, { phase: "design_scrape", status: "skipped", detail: "No buyer_domain on file" });
+    }
+
     // ── Voice extraction ───────────────────────────────────────────────────
     const voiceProfile = await run("voice-extraction", async () => {
       await logStep(runId, { phase: "voice_extraction", status: "running" });
@@ -627,6 +667,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
             topCallQuestions,
             prospectMeets,
             existingProof,
+            designSignal: designSignal ?? undefined,
           },
           confirmationPageTemplate
         );

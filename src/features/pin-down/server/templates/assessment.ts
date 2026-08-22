@@ -1,5 +1,6 @@
 import type { PageContentModel } from "./content-model";
 import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
+import { buildAssessmentDynamicHtml } from "./dynamic/assessment.dynamic";
 
 /**
  * The Pre-Call Assessment — for a niche or vertical offer where
@@ -17,6 +18,11 @@ import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
  * content-model.ts) rather than every prospect seeing identical text.
  */
 export function buildAssessmentHtml(m: PageContentModel): string {
+  if (m.designTokens.confidence === "scraped") return buildAssessmentDynamicHtml(m);
+  return buildAssessmentStaticHtml(m);
+}
+
+function buildAssessmentStaticHtml(m: PageContentModel): string {
   const checklistHtml = m.questions
     .map(
       (q, i) => `

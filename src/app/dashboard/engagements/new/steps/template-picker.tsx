@@ -50,6 +50,7 @@ export function TemplatePicker({ form, onSelect }: Props) {
       existingProof: {
         testimonials: form.testimonials.filter((t) => t.name && t.role && t.quote),
       },
+      designSignal: form.designSignal,
     }),
     [
       form.buyerName,
@@ -60,6 +61,7 @@ export function TemplatePicker({ form, onSelect }: Props) {
       form.topCallQuestions,
       form.prospectMeets,
       form.testimonials,
+      form.designSignal,
     ]
   );
 

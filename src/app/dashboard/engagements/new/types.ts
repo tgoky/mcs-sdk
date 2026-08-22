@@ -2,6 +2,8 @@
 // so step components, hooks, and validation/submit logic can all import
 // the same shapes without pulling in the page component itself.
 
+import type { RawSiteSignal } from "@/features/pin-down/server/templates/dynamic/tokens";
+
 export type Step = "offer" | "stack" | "credentials" | "voice" | "confirm";
 
 export interface Testimonial {
@@ -152,6 +154,15 @@ export interface FormData {
   // buyer has a confirmation page live (or after running smart pre-fill,
   // gap 1, which can detect this automatically).
   existingConfirmationPageUrl: string;
+  // Set by smart pre-fill's design scrape (design-scraper.ts) when the
+  // buyer's own domain yields usable visual signal — passed straight
+  // through to the confirmation-page template preview/build so it can
+  // render each archetype in the buyer's real button/card/type/color
+  // language instead of the template's static default. undefined is a
+  // completely normal state (no domain yet, or the scrape found nothing
+  // usable) and just means every archetype falls back to its default
+  // look — never a broken preview.
+  designSignal?: RawSiteSignal;
   // Win-Back recovery gaps 3, 4, 6
   rescheduleMode: "fresh_link" | "time_slots";
   recoveredFromNoShowTaggingEnabled: boolean;

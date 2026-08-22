@@ -1,5 +1,6 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import type { FormData } from "./types";
+import type { DesignSignalResult } from "@/features/pin-down/server/design-scraper";
 
 /**
  * Smart pre-fill from the client's marketing domain.
@@ -44,6 +45,7 @@ export function useSmartPrefill(setForm: Dispatch<SetStateAction<FormData>>) {
         scrapedCorpus?: string;
         existingConfirmationPageUrl?: string;
         detectedBookingPlatform?: string;
+        designSignal?: DesignSignalResult;
         notes: string[];
       };
 
@@ -67,6 +69,7 @@ export function useSmartPrefill(setForm: Dispatch<SetStateAction<FormData>>) {
           rawVoiceCorpus: p.scrapedCorpus && p.scrapedCorpus.length > 50 ? p.scrapedCorpus : "",
           existingConfirmationPageUrl: p.existingConfirmationPageUrl || f.existingConfirmationPageUrl,
           bookingPlatform: p.detectedBookingPlatform || f.bookingPlatform,
+          designSignal: p.designSignal ?? f.designSignal,
         };
       });
 

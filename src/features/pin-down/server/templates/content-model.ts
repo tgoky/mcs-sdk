@@ -23,6 +23,8 @@
 // so a prospect's first name / call time / assigned host resolve
 // client-side after the static page loads, instead of every visitor
 // seeing the operator's own business name in the greeting.
+import { classifySiteSignal, DEFAULT_TOKENS, type DesignTokens, type RawSiteSignal } from "./dynamic/tokens";
+
 export interface PageBuilderInput {
   buyer: string;
   offerDetails?: {
@@ -43,6 +45,14 @@ export interface PageBuilderInput {
     }>;
   };
   calendarAddToUrl?: string;
+  /** Raw scraped signal from the buyer's own site (design-scraper.ts),
+   * when a crawl produced one. Classified once, here, into DesignTokens —
+   * templates never see the raw form. Absent (undefined) is a completely
+   * normal state (no domain yet, scrape failed, or the buyer's site
+   * didn't yield enough signal) and falls back to DEFAULT_TOKENS, which
+   * is exactly today's hardcoded look for each archetype — a scrape can
+   * only add a matched skin, it can never break the safe default. */
+  designSignal?: RawSiteSignal;
 }
 
 export interface EscapedTestimonial {
@@ -73,6 +83,12 @@ export interface PageContentModel {
    * Used as a signature element by Ledger, Contract (agreement reference),
    * and The Golden Ticket (ticket-stub number). */
   reference: string;
+  /** Resolved once here from PageBuilderInput.designSignal — see that
+   * field's doc comment. `designTokens.confidence` is how every archetype
+   * decides whether to render its site-matched skin or its static
+   * default; templates should never need to look at anything else to
+   * make that call. */
+  designTokens: DesignTokens;
 }
 
 /**
@@ -169,6 +185,7 @@ export function buildPageContentModel(input: PageBuilderInput): PageContentModel
     showProof: testimonials.length > 0,
     calendarAddToUrl: input.calendarAddToUrl,
     reference: buildReference(input.buyer),
+    designTokens: input.designSignal ? classifySiteSignal(input.designSignal) : DEFAULT_TOKENS,
   };
 }
 

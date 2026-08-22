@@ -1,5 +1,6 @@
 import type { PageContentModel } from "./content-model";
 import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
+import { buildGoldenTicketDynamicHtml } from "./dynamic/golden-ticket.dynamic";
 
 /**
  * The Golden Ticket — built for a workshop or event registration where
@@ -18,6 +19,11 @@ import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
  * operator's own business name.
  */
 export function buildGoldenTicketHtml(m: PageContentModel): string {
+  if (m.designTokens.confidence === "scraped") return buildGoldenTicketDynamicHtml(m);
+  return buildGoldenTicketStaticHtml(m);
+}
+
+function buildGoldenTicketStaticHtml(m: PageContentModel): string {
   const questionsHtml = m.questions
     .map(
       (q, i) => `
