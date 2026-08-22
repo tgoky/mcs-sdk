@@ -517,7 +517,7 @@ export function DeliverablesPanel({
                   <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
                     Scroll-Stopper Hook (First 3 Seconds)
                   </span>
-                  <div className="text-sm font-bold text-white dark:text-zinc-950 bg-amber-400 p-3 rounded-lg border-0 shadow-xs leading-snug">
+                  <div className="text-sm font-bold text-zinc-900 dark:text-white leading-snug">
                     &ldquo;{b.hook}&rdquo;
                   </div>
                 </div>
@@ -547,7 +547,7 @@ export function DeliverablesPanel({
 
                 <div className="pt-2 flex items-center justify-between border-t border-zinc-200 dark:border-zinc-800">
                   <span className="text-[11px] font-mono text-zinc-500 font-medium">Call to Action (CTA):</span>
-                  <span className="text-xs font-bold text-white dark:text-zinc-950 font-mono bg-amber-400 border-0 px-3 py-1.5 rounded-lg shadow-xs">
+                  <span className="text-xs font-bold text-zinc-900 dark:text-white font-mono">
                     {b.cta}
                   </span>
                 </div>
