@@ -205,7 +205,7 @@ export function SkillsPanel({
                       aria-label={`Toggle ${info.name}`}
                       className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
                         isEnabled
-                          ? "bg-emerald-500 dark:bg-emerald-600 border border-emerald-600/30"
+                          ? "bg-amber-400 border border-amber-500/30"
                           : "bg-zinc-300 dark:bg-zinc-800 border border-zinc-400/30 dark:border-zinc-700/50"
                       } ${isBusy ? "opacity-50" : ""}`}
                     >
