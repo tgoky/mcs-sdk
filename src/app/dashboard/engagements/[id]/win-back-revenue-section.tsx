@@ -276,9 +276,18 @@ export function WinBackRevenueSection({
             <span className="text-[11px] text-zinc-400 dark:text-zinc-500">No recoveries yet this period</span>
           )}
         </div>
-        <div className="flex items-end gap-1.5 h-16">
+        {/* Fix: every week's count/revenue used to live only in a native
+            `title` tooltip on the bar — invisible until you happened to
+            hover it, and completely unreachable on touch devices, which
+            is most of "only on hover do I get a description" complaint.
+            Counts/revenue are now printed directly above each bar that
+            has any recoveries — nothing to discover, nothing hidden. */}
+        <div className="flex items-end gap-1.5 h-20">
           {weeklyBuckets.map((wk) => (
-            <div key={wk.key} className="flex-1 flex flex-col items-center gap-1" title={`${wk.label}: ${wk.count} recovered${offerPrice > 0 ? `, $${wk.revenue.toLocaleString()}` : ""}`}>
+            <div key={wk.key} className="flex-1 flex flex-col items-center gap-1">
+              <span className="text-[9px] font-mono font-bold text-zinc-600 dark:text-zinc-400 h-3 tabular-nums">
+                {wk.count > 0 ? wk.count : ""}
+              </span>
               <div className="w-full h-12 rounded-t-sm bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden flex items-end">
                 {wk.count > 0 && (
                   <div
@@ -288,6 +297,11 @@ export function WinBackRevenueSection({
                 )}
               </div>
               <span className="text-[9px] font-mono text-zinc-400 h-3">{wk.shortLabel}</span>
+              {offerPrice > 0 && wk.count > 0 && (
+                <span className="text-[8.5px] font-mono text-emerald-600 dark:text-emerald-400 h-3">
+                  ${wk.revenue.toLocaleString()}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -382,7 +396,7 @@ function RecoveredDealDrawer({
                 {offerPrice > 0 && (
                   <div className="flex items-center justify-between text-xs font-sans">
                     <span className="text-zinc-600 dark:text-zinc-400">Revenue attributed</span>
-                    <span className="font-mono font-bold text-emerald-400">${offerPrice.toLocaleString()}</span>
+                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">${offerPrice.toLocaleString()}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between text-xs font-sans pt-1">

@@ -66,6 +66,19 @@ export interface ResolveCallOutcomeParams {
   prospectEmailHint?: string | null;
   prospectNameHint?: string | null;
   prospectPhoneHint?: string | null;
+  // Assistant-quality reasoning fix — passed straight through to
+  // triggerNoShowWinBack's message for a sweep-detected no-show. Built by
+  // the caller (crons.ts) since that's where the actual per-call
+  // evidence lives — which duration estimate decided the call was over,
+  // and what the CRM check specifically found or couldn't check — none
+  // of which this function has visibility into on its own. Only
+  // meaningful when source is "auto_sweep" and outcome is "no_show";
+  // ignored otherwise.
+  sweepReasonDetail?: {
+    crmCheckDescription: string;
+    readinessDescription: string;
+    minutesSinceReady: number;
+  };
 }
 
 export interface ResolveCallOutcomeResult {
@@ -133,6 +146,39 @@ async function resolveProspectIdentity(
  * same check authoritatively (see its sourceBookingId guard), this is
  * just a soft pre-check to avoid a wasted dispatch in the common case.
  */
+/**
+ * Assistant-quality reasoning fix — the old message here was one fixed
+ * template regardless of what was actually true for this specific call:
+ * "no recent CRM activity was found" even when no CRM was connected at
+ * all, and a flat "no Recall bot session" with no sense of how long ago
+ * the call was or how the sweep decided it was even over yet. That's
+ * what made it read like a hardcoded alarm instead of an assistant that
+ * looked into it — because it hadn't actually used any of the specific
+ * evidence it had gathered. This builds the real sentence from what
+ * reasonDetail (crons.ts) actually found for this booking.
+ */
+function buildSweepReasonText(
+  prospectName: string,
+  reasonDetail?: { crmCheckDescription: string; readinessDescription: string; minutesSinceReady: number }
+): string {
+  if (!reasonDetail) {
+    return `Possible no-show: ${prospectName}. No rep logged an outcome and no Recall bot session confirmed attendance. This is an inference from missing evidence, not a confirmed no-show — approve to start Win-Back recovery, or use the outcome buttons if you know what actually happened.`;
+  }
+  const { crmCheckDescription, readinessDescription, minutesSinceReady } = reasonDetail;
+  const elapsed =
+    minutesSinceReady < 60
+      ? `${minutesSinceReady} min ago`
+      : minutesSinceReady < 24 * 60
+        ? `${Math.round(minutesSinceReady / 60)}h ago`
+        : `${Math.round(minutesSinceReady / (24 * 60))}d ago`;
+
+  return (
+    `Possible no-show: ${prospectName}. Here's what I checked — ${readinessDescription} (call became eligible for review ${elapsed}); ` +
+    `no rep logged an outcome on the dashboard or Slack; no Recall bot session confirmed attendance; and I ${crmCheckDescription}. ` +
+    `That's an inference from missing evidence, not a confirmed no-show — approve to start Win-Back recovery, or use the outcome buttons below if you already know what actually happened.`
+  );
+}
+
 async function triggerNoShowWinBack(
   engagementId: string,
   bookingId: string,
@@ -140,7 +186,8 @@ async function triggerNoShowWinBack(
   prospectName: string,
   prospectPhone: string | null,
   stack: EngagementStack | null | undefined,
-  source: OutcomeSource
+  source: OutcomeSource,
+  reasonDetail?: { crmCheckDescription: string; readinessDescription: string; minutesSinceReady: number }
 ): Promise<"enrolled" | "skipped_duplicate" | "skipped_disabled" | "pending_review"> {
   const [existing] = await db
     .select({ id: winBackEnrollments.id })
@@ -159,15 +206,6 @@ async function triggerNoShowWinBack(
     _bookingId: bookingId,
   };
 
-  const runId = crypto.randomUUID();
-  await startRun({
-    id: runId,
-    engagementId,
-    skillName: "win-back",
-    phase: "webhook_received",
-    label: `No-show resolved for ${prospectName || prospectEmail} (outcome resolution)`,
-  });
-
   // Same gate booking-event/route.ts already uses for a platform-reported
   // cancellation — an operator who requires approval before enrollment
   // gets that here too, not just on the webhook path.
@@ -183,9 +221,26 @@ async function triggerNoShowWinBack(
   // embarrassing email to someone who was on the call the whole time.
   const sweepReason =
     source === "auto_sweep"
-      ? `Possible no-show: ${prospectName}. No rep logged an outcome, no Recall bot session confirmed attendance, and no recent CRM activity was found on this contact. This is an inference from missing evidence, not a confirmed no-show — approve to start Win-Back recovery, or reject if they actually showed and just weren't logged.`
+      ? buildSweepReasonText(prospectName, reasonDetail)
       : undefined;
 
+  // Zombie-run fix — this used to call startRun (and mint the runId it
+  // needs) unconditionally, before the gate decision below. For any
+  // source with forceGate=true (auto_sweep, always) gateOrExecute never
+  // calls `execute` at all — it always queues a pending action instead —
+  // so that pre-created run had nothing left to ever finish it: no
+  // logStep, no finishRun, nothing, permanently sitting in whatever
+  // phase startRun initialized it to. That's the run that shows "stuck
+  // running" forever in the live-executions feed even after the pending
+  // action is approved or rejected — approving runs a *different*,
+  // separate execution (ACTION_EXECUTORS.webhook_enrollment mints its
+  // own fresh runId), so the original one was never going to be touched
+  // again either way. Moving runId/startRun inside this closure means a
+  // run is only ever created at the moment it's actually going to run —
+  // immediately here for a non-gated source (dashboard/Slack/Recall bot
+  // with approval gating off), or later, once, in
+  // ACTION_EXECUTORS.webhook_enrollment for a gated one. Never both,
+  // never neither.
   const gated = await gateOrExecute(
     stack,
     engagementId,
@@ -193,7 +248,10 @@ async function triggerNoShowWinBack(
     // _reason stored on the pending action itself (not just sent to
     // Slack/notifyUser) so it's still visible to anyone reviewing
     // pendingActions directly — e.g. a future dashboard list view — not
-    // only to whoever happened to see the one-time notification.
+    // only to whoever happened to see the one-time notification. Also
+    // doubles as the signal ACTION_EXECUTORS.webhook_enrollment uses to
+    // know this approval needs a deferred outcome-log write first (see
+    // confirmSweepNoShow) — only sweep-originated actions set it.
     {
       bookingPayload: payload,
       eventKind: "cancelled",
@@ -217,7 +275,17 @@ async function triggerNoShowWinBack(
       // inference — it should still interrupt immediately.
       _digest: source === "auto_sweep" ? true : undefined,
     },
-    () => inngest.send(bookingWebhookProcess.create({ runId, engagementId, eventKind: "cancelled", bookingPayload: payload })),
+    async () => {
+      const runId = crypto.randomUUID();
+      await startRun({
+        id: runId,
+        engagementId,
+        skillName: "win-back",
+        phase: "webhook_received",
+        label: `No-show resolved for ${prospectName || prospectEmail} (outcome resolution)`,
+      });
+      return inngest.send(bookingWebhookProcess.create({ runId, engagementId, eventKind: "cancelled", bookingPayload: payload }));
+    },
     source === "auto_sweep",
     sweepReason
   );
@@ -361,6 +429,43 @@ export async function resolveCallOutcome(params: ResolveCallOutcomeParams): Prom
     prospectPhoneHint: params.prospectPhoneHint,
   });
 
+  // Approval-gate integrity fix — an auto_sweep no_show is an inference
+  // from missing evidence, not a confirmed fact, and triggerNoShowWinBack
+  // always routes it to human review before it's treated as real (see
+  // its forceGate doc). Writing it to briefOutcomeLog here, before that
+  // review ever happens, was the actual bug behind "how do we know
+  // that's real, is this hardcoded" — every other page that reads
+  // briefOutcomeLog as ground truth (the master roster, the pile-on
+  // pipeline) would show "No-show" as CONFIRMED the instant the sweep
+  // merely guessed it, with no way to tell an approved outcome from an
+  // unreviewed one — and a reject click had nothing to undo, because the
+  // row calling it "no_show" was already sitting there. Nothing gets
+  // written for this specific case until a human actually approves it —
+  // see confirmSweepNoShow, called from ACTION_EXECUTORS.webhook_enrollment
+  // in approval-gate.ts at that point, not here.
+  if (source === "auto_sweep" && outcome === "no_show") {
+    if (!identity.email) {
+      return {
+        recorded: false,
+        prospectEmail: null,
+        winBack: "skipped_no_email",
+        cohort: "none",
+        reason: "No prospect email on file for this booking — cannot enroll or sync a cohort.",
+      };
+    }
+    const winBack = await triggerNoShowWinBack(
+      engagementId,
+      bookingId,
+      identity.email,
+      identity.name ?? "Prospect",
+      identity.phone,
+      stack,
+      source,
+      params.sweepReasonDetail
+    );
+    return { recorded: true, prospectEmail: identity.email, winBack, cohort: "none" };
+  }
+
   await db.insert(briefOutcomeLog).values({
     engagementId,
     bookingId,
@@ -446,4 +551,52 @@ export async function resolveCallOutcome(params: ResolveCallOutcomeParams): Prom
   // manual "Rescheduled" tap here would double-handle it.
 
   return result;
+}
+
+/**
+ * Writes the deferred outcome-log entry for a sweep-inferred no-show once
+ * a human has actually approved it — the counterpart to
+ * resolveCallOutcome's auto_sweep + no_show early return above, which
+ * deliberately writes nothing at guess-time. Called from
+ * ACTION_EXECUTORS.webhook_enrollment (approval-gate.ts) right before the
+ * real enrollment runs, so briefOutcomeLog only ever says "no_show" once
+ * a person confirmed it, never the moment the sweep merely inferred it.
+ * Mirrors the write + cohort-removal gating resolveCallOutcome does for
+ * every other source — just delayed to this point instead of firing
+ * immediately.
+ */
+export async function confirmSweepNoShow(
+  engagementId: string,
+  bookingId: string,
+  prospectEmail: string,
+  stack: EngagementStack | null | undefined
+): Promise<void> {
+  await db.insert(briefOutcomeLog).values({
+    engagementId,
+    bookingId,
+    prospectEmail,
+    outcome: "no_show",
+    loggedBySlackUserId: null,
+    source: "auto_sweep",
+  });
+
+  try {
+    await db
+      .update(showRateFeatures)
+      .set({ actualOutcome: "no_show", outcomeRecordedAt: new Date() })
+      .where(and(eq(showRateFeatures.engagementId, engagementId), eq(showRateFeatures.bookingId, bookingId)));
+  } catch {
+    // Non-fatal — see resolveCallOutcome's identical try/catch.
+  }
+
+  if (stack?.ad_data_platform && stack.ad_data_platform !== "none") {
+    // Best-effort, matching resolveCallOutcome's own cohort-removal call.
+    // No "prior" check needed the way resolveCallOutcome does for its
+    // other callers — an approval is always this booking's first (and
+    // only) terminal resolution, since the sweep only ever reaches this
+    // point for bookings with nothing already logged.
+    await gateOrExecute(stack, engagementId, "cohort_membership_remove", { prospectEmail }, () =>
+      removeProspectFromAdDataCohort(engagementId, stack, prospectEmail)
+    ).catch(() => {});
+  }
 }

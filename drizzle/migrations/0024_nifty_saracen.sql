@@ -1,0 +1,1 @@
+CREATE INDEX "briefed_calls_log_engagement_call_time_idx" ON "briefed_calls_log" USING btree ("engagement_id","call_time");

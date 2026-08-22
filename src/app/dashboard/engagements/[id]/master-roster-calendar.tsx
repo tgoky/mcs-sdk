@@ -23,6 +23,10 @@ import {
   ChevronDown,
   Sparkles,
   CalendarX2,
+  UserCheck,
+  UserX,
+  CalendarClock,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { skillName } from "@/lib/copy";
@@ -39,6 +43,16 @@ const TONE_TO_SEVERITY_LABEL: Record<string, string> = {
   warning: "Medium severity",
   info: "Low severity",
   neutral: "Clean",
+};
+
+// Real outcome, sourced from briefOutcomeLog via the roster API (see that
+// route's comment on the actualOutcome fix) — not a guess, not a status
+// that was quietly assumed once a date passed.
+const OUTCOME_META: Record<"showed" | "no_show" | "rescheduled" | "cancelled", { label: string; tone: "success" | "danger" | "warning" | "neutral" }> = {
+  showed: { label: "Showed", tone: "success" },
+  no_show: { label: "No-show", tone: "danger" },
+  rescheduled: { label: "Rescheduled", tone: "warning" },
+  cancelled: { label: "Cancelled", tone: "neutral" },
 };
 
 const ACTIVITY_SKILL_LABEL: Record<ActivitySkill, string> = {
@@ -454,6 +468,37 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
     }
   };
 
+  // Outcome logging — the master roster is the one place meant to show
+  // every booking regardless of which skills are enabled, so this hits
+  // the general engagement-level endpoint (not the Pre-Call-Read-specific
+  // one) and doesn't require any particular skill to have already
+  // processed the call. Keyed by externalCallId since that's the roster's
+  // own ground-truth booking id — the same id every skill's own tables
+  // (briefedCallsLog, pileOnSendLog, briefOutcomeLog) key on.
+  const [outcomeSubmittingId, setOutcomeSubmittingId] = useState<string | null>(null);
+  const [outcomeError, setOutcomeError] = useState<string | null>(null);
+  const handleLogOutcome = async (entry: EnrichedEntry, outcome: "showed" | "no_show" | "rescheduled") => {
+    if (outcomeSubmittingId) return;
+    setOutcomeSubmittingId(entry.externalCallId);
+    setOutcomeError(null);
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}/bookings/${entry.externalCallId}/outcome`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outcome }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to log outcome.");
+      }
+      await fetchRoster();
+    } catch (err) {
+      setOutcomeError(err instanceof Error ? err.message : "Failed to log outcome.");
+    } finally {
+      setOutcomeSubmittingId(null);
+    }
+  };
+
   return (
     <div className="space-y-3 font-sans antialiased">
       {/* Explicit Error Banners */}
@@ -762,6 +807,16 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                 <StatusPill tone={entry.status === "brief_delivered" ? "success" : entry.status === "brief_failed" ? "danger" : "neutral"}>
                                   Brief: {entry.status.replace("_", " ")}
                                 </StatusPill>
+                                {entry.outcomeStatus === "resolved" && entry.actualOutcome && (
+                                  <StatusPill tone={OUTCOME_META[entry.actualOutcome].tone}>
+                                    {OUTCOME_META[entry.actualOutcome].label}
+                                  </StatusPill>
+                                )}
+                                {entry.outcomeStatus === "awaiting_outcome" && (
+                                  <StatusPill tone="warning" className="flex items-center gap-1">
+                                    <HelpCircle size={10} /> Awaiting outcome
+                                  </StatusPill>
+                                )}
                               </div>
                             </div>
 
@@ -896,6 +951,61 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                         <span>{new Date(selectedEntry.callTime).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                       </div>
                     </div>
+
+                    {/* ── Call outcome — truth, not an assumption ──
+                        Fix: this whole section didn't exist before. A
+                        booking whose date had passed with nothing logged
+                        just kept showing whatever pipeline stage it last
+                        had (usually "Newly booked" or "Scheduled")
+                        indefinitely — no distinction from a call still
+                        genuinely upcoming, and no way to resolve it from
+                        here. Resolution priority is unchanged (a rep
+                        clicking here is source "dashboard", same as
+                        every other manual click) — Recall telemetry, the
+                        CRM check, and the auto-sweep all still run first
+                        and this simply won't need clicking if one of
+                        them already resolved it. */}
+                    {selectedEntry.outcomeStatus === "resolved" && selectedEntry.actualOutcome ? (
+                      <div className="flex items-center justify-between rounded-lg bg-zinc-100 dark:bg-zinc-800/60 px-2.5 py-1.5 font-sans">
+                        <span className="text-[10.5px] font-mono text-zinc-500 uppercase">Call outcome</span>
+                        <StatusPill tone={OUTCOME_META[selectedEntry.actualOutcome].tone}>
+                          {OUTCOME_META[selectedEntry.actualOutcome].label}
+                        </StatusPill>
+                      </div>
+                    ) : selectedEntry.outcomeStatus === "awaiting_outcome" ? (
+                      <div className="space-y-1.5 rounded-lg border border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/10 p-2.5 font-sans">
+                        <span className="flex items-center gap-1 text-[10.5px] font-mono text-amber-800 dark:text-amber-300 uppercase">
+                          <CalendarClock size={11} /> Call time has passed — no outcome logged yet
+                        </span>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleLogOutcome(selectedEntry, "showed")}
+                            disabled={outcomeSubmittingId !== null}
+                            className="flex items-center justify-center gap-1 py-1.5 rounded-lg bg-emerald-500 text-zinc-950 text-[11px] font-bold hover:bg-emerald-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <UserCheck size={11} /> {outcomeSubmittingId === selectedEntry.externalCallId ? "…" : "Showed"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleLogOutcome(selectedEntry, "no_show")}
+                            disabled={outcomeSubmittingId !== null}
+                            className="flex items-center justify-center gap-1 py-1.5 rounded-lg bg-rose-500 text-white text-[11px] font-bold hover:bg-rose-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <UserX size={11} /> No-Show
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleLogOutcome(selectedEntry, "rescheduled")}
+                            disabled={outcomeSubmittingId !== null}
+                            className="flex items-center justify-center gap-1 py-1.5 rounded-lg bg-zinc-700 dark:bg-zinc-600 text-white text-[11px] font-bold hover:bg-zinc-600 dark:hover:bg-zinc-500 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Resched.
+                          </button>
+                        </div>
+                        {outcomeError && <p className="text-[10.5px] text-rose-600 dark:text-rose-400">{outcomeError}</p>}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
@@ -1251,6 +1361,24 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                     {entry.status.replace("_", " ")}
                                   </StatusPill>
 
+                                  {/* Fix: this row previously said nothing about
+                                      whether the call actually happened — a
+                                      booking from a week ago with no outcome
+                                      logged looked identical to one still in
+                                      the future. Now says so plainly, and
+                                      distinguishes a real logged outcome from
+                                      one nobody has confirmed yet. */}
+                                  {entry.outcomeStatus === "resolved" && entry.actualOutcome && (
+                                    <StatusPill tone={OUTCOME_META[entry.actualOutcome].tone} className="shrink-0">
+                                      {OUTCOME_META[entry.actualOutcome].label}
+                                    </StatusPill>
+                                  )}
+                                  {entry.outcomeStatus === "awaiting_outcome" && (
+                                    <StatusPill tone="warning" className="shrink-0 flex items-center gap-1">
+                                      <HelpCircle size={10} /> Awaiting outcome
+                                    </StatusPill>
+                                  )}
+
                                   {entry.prospectEmail && (
                                     <button
                                       type="button"
@@ -1442,6 +1570,48 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       <span>{new Date(selectedEntry.callTime).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
                   </div>
+
+                  {selectedEntry.outcomeStatus === "resolved" && selectedEntry.actualOutcome ? (
+                    <div className="flex items-center justify-between rounded-lg bg-zinc-100 dark:bg-zinc-800/60 px-2.5 py-1.5 font-sans">
+                      <span className="text-[10.5px] font-mono text-zinc-500 uppercase">Call outcome</span>
+                      <StatusPill tone={OUTCOME_META[selectedEntry.actualOutcome].tone}>
+                        {OUTCOME_META[selectedEntry.actualOutcome].label}
+                      </StatusPill>
+                    </div>
+                  ) : selectedEntry.outcomeStatus === "awaiting_outcome" ? (
+                    <div className="space-y-1.5 rounded-lg border border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/10 p-2.5 font-sans">
+                      <span className="flex items-center gap-1 text-[10.5px] font-mono text-amber-800 dark:text-amber-300 uppercase">
+                        <CalendarClock size={11} /> Call time has passed — no outcome logged yet
+                      </span>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleLogOutcome(selectedEntry, "showed")}
+                          disabled={outcomeSubmittingId !== null}
+                          className="flex items-center justify-center gap-1 py-1.5 rounded-lg bg-emerald-500 text-zinc-950 text-[11px] font-bold hover:bg-emerald-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <UserCheck size={11} /> {outcomeSubmittingId === selectedEntry.externalCallId ? "…" : "Showed"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleLogOutcome(selectedEntry, "no_show")}
+                          disabled={outcomeSubmittingId !== null}
+                          className="flex items-center justify-center gap-1 py-1.5 rounded-lg bg-rose-500 text-white text-[11px] font-bold hover:bg-rose-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <UserX size={11} /> No-Show
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleLogOutcome(selectedEntry, "rescheduled")}
+                          disabled={outcomeSubmittingId !== null}
+                          className="flex items-center justify-center gap-1 py-1.5 rounded-lg bg-zinc-700 dark:bg-zinc-600 text-white text-[11px] font-bold hover:bg-zinc-600 dark:hover:bg-zinc-500 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Resched.
+                        </button>
+                      </div>
+                      {outcomeError && <p className="text-[10.5px] text-rose-600 dark:text-rose-400">{outcomeError}</p>}
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Skill Inspection Tabs */}

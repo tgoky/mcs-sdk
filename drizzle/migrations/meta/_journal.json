@@ -169,6 +169,13 @@
       "when": 1787099507132,
       "tag": "0023_far_supreme_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787436893395,
+      "tag": "0024_nifty_saracen",
+      "breakpoints": true
     }
   ]
 }

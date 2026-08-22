@@ -324,18 +324,34 @@ export default function RunDetailPage() {
       {isFailed && (() => {
         const diagnosis = classifyRunError(run.errorMessage);
         return (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-900/60 bg-rose-950/30 px-3.5 py-2.5 text-xs text-rose-200 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-3.5 py-2.5 text-xs text-rose-950 dark:text-rose-200 shadow-sm">
             <div className="flex items-start gap-2 min-w-0">
-              <CircleAlert size={15} className="text-rose-400 shrink-0 mt-0.5" />
+              <CircleAlert size={15} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
               <div className="min-w-0 font-sans">
                 {diagnosis ? (
                   <>
-                    <span className="font-bold text-rose-300">{diagnosis.title}</span>
-                    <p className="text-rose-200/90 mt-0.5">{diagnosis.explanation}</p>
+                    <span className="font-bold text-rose-800 dark:text-rose-300">{diagnosis.title}</span>
+                    <p className="text-rose-900/90 dark:text-rose-200/90 mt-0.5">{diagnosis.explanation}</p>
+                  </>
+                ) : run.errorMessage ? (
+                  // Fix: previously this branch showed a generic "nothing
+                  // you need to do" line regardless of what actually broke
+                  // — a dead end for the one person (the account owner)
+                  // who most needs specifics. classifyRunError only
+                  // returns null when it can't confidently match a known
+                  // platform/HTTP-status pattern (see its module comment)
+                  // — that's a reason not to guess at a *diagnosis*, not a
+                  // reason to hide the *error itself*, which run.errorMessage
+                  // already holds. Showing it verbatim costs nothing and is
+                  // strictly more useful than silence.
+                  <>
+                    <span className="font-bold text-rose-800 dark:text-rose-300">This run failed with an error we haven&apos;t seen enough of yet to auto-diagnose.</span>
+                    <p className="text-rose-900/90 dark:text-rose-200/90 mt-0.5 font-mono text-[11px] break-words">{run.errorMessage}</p>
+                    <p className="text-rose-900/70 dark:text-rose-200/70 mt-1">If this keeps happening, share the message above with your account contact.</p>
                   </>
                 ) : (
-                  <span className="text-rose-200/90">
-                    This run hit an unexpected error. There&apos;s nothing you need to do — if it keeps happening, let your account contact know.
+                  <span className="text-rose-900/90 dark:text-rose-200/90">
+                    This run failed without recording a specific error message. If it keeps happening, share this run&apos;s ID (below) with your account contact.
                   </span>
                 )}
               </div>

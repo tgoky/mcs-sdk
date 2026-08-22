@@ -83,6 +83,19 @@ export interface QueueItem {
    * skill the buyer explicitly turned off for this client.
    */
   skillEnabledForClient?: boolean;
+  /**
+   * Only set for source "action" items whose payload carries _reason —
+   * currently only triggerNoShowWinBack's auto_sweep path (see its doc in
+   * outcome-resolution.ts). A blunt Approve/Reject is the wrong shape for
+   * "did this person actually no-show": approving is fine, but rejecting
+   * could mean they showed, they rescheduled, or the reviewer just isn't
+   * sure — three different real outcomes a plain reject couldn't
+   * distinguish and didn't record. When this is set, the panel offers
+   * those specific resolutions instead of a binary decision, and each one
+   * (other than "not sure") logs the real outcome via the general
+   * per-booking endpoint, not just a silent status flip.
+   */
+  sweepNoShowReview?: { bookingId: string; prospectEmail: string } | null;
 }
 
 const CATEGORY_PRIORITY: Record<QueueCategory, number> = {
@@ -344,8 +357,14 @@ export async function getQueueItems(whopUserId: string, workspaceId: string): Pr
 
   const items: QueueItem[] = [
     ...actionRows.map((a): QueueItem => {
-      const payload = a.payload as { _reason?: string; _title?: string } | null;
+      const payload = a.payload as {
+        _reason?: string;
+        _title?: string;
+        bookingPayload?: { _bookingId?: string; email?: string };
+      } | null;
       const reason = payload?._reason;
+      const bookingId = payload?.bookingPayload?._bookingId;
+      const prospectEmail = payload?.bookingPayload?.email;
       return {
         id: a.id,
         source: "action",
@@ -359,6 +378,7 @@ export async function getQueueItems(whopUserId: string, workspaceId: string): Pr
         buyer: a.buyer,
         runId: null,
         createdAt: a.createdAt.toISOString(),
+        sweepNoShowReview: reason && bookingId && prospectEmail ? { bookingId, prospectEmail } : null,
       };
     }),
     ...blockerRows.map((b): QueueItem => ({

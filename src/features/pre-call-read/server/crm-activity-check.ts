@@ -23,37 +23,58 @@ import type { EngagementStack } from "@/models/schema";
 import { resolveCredential } from "@/lib/credentials";
 import { HubSpotClient, GHLCRMClient } from "@/lib/platforms/email";
 
+export type CrmActivityCheckResult = {
+  hasActivity: boolean;
+  /**
+   * Which platform actually got queried — hubspot/ghl only, since those
+   * are the only two with a verified read endpoint (see the default
+   * branch below). Null means no real check happened, for any of several
+   * different reasons distinguished by `skippedReason` — a caller that
+   * only looked at `hasActivity` couldn't tell "we checked and found
+   * nothing" apart from "we never actually checked," which is exactly
+   * the gap that made the sweep's old fixed message ("no recent CRM
+   * activity was found") misleading whenever nothing was really checked
+   * at all.
+   */
+  checkedPlatform: "hubspot" | "ghl" | null;
+  skippedReason: "no_email_platform" | "unsupported_platform" | "missing_location_id" | "check_failed" | null;
+};
+
 /**
- * Returns true only when a positive signal was actually found. Any
- * failure mode — no CRM configured, credential missing, the platform
+ * hasActivity is true only when a positive signal was actually found.
+ * Any failure mode — no CRM configured, credential missing, the platform
  * isn't one of the two with a verified read endpoint, the API call
- * itself errors — resolves to false, i.e. "no evidence found," which is
- * the same as today's behavior before this check existed. This function
- * only ever makes the sweep more conservative, never less: a false here
- * can't cause a wrongful enrollment on its own, it just means this
- * particular safeguard didn't catch anything and the forced-gate review
- * step (see outcome-resolution.ts's triggerNoShowWinBack) is still the
- * backstop.
+ * itself errors — resolves hasActivity to false, i.e. "no evidence
+ * found," which is the same as today's behavior before this check
+ * existed. This function only ever makes the sweep more conservative,
+ * never less: a false here can't cause a wrongful enrollment on its own,
+ * it just means this particular safeguard didn't catch anything and the
+ * forced-gate review step (see outcome-resolution.ts's
+ * triggerNoShowWinBack) is still the backstop.
  */
 export async function hasPostCallCrmActivity(
   engagementId: string,
   stack: EngagementStack | null | undefined,
   prospectEmail: string,
   since: Date
-): Promise<boolean> {
-  if (!stack?.email_platform || !prospectEmail) return false;
+): Promise<CrmActivityCheckResult> {
+  if (!stack?.email_platform || !prospectEmail) {
+    return { hasActivity: false, checkedPlatform: null, skippedReason: "no_email_platform" };
+  }
 
   try {
     switch (stack.email_platform) {
       case "hubspot": {
         const apiKey = await resolveCredential(engagementId, "hubspot");
-        return await new HubSpotClient(apiKey).hasActivitySince(prospectEmail, since);
+        const hasActivity = await new HubSpotClient(apiKey).hasActivitySince(prospectEmail, since);
+        return { hasActivity, checkedPlatform: "hubspot", skippedReason: null };
       }
       case "ghl": {
         const locationId = stack.booking_platform_meta?.location_id;
-        if (!locationId) return false;
+        if (!locationId) return { hasActivity: false, checkedPlatform: null, skippedReason: "missing_location_id" };
         const apiKey = await resolveCredential(engagementId, "ghl");
-        return await new GHLCRMClient(apiKey, locationId).hasActivitySince(prospectEmail, since);
+        const hasActivity = await new GHLCRMClient(apiKey, locationId).hasActivitySince(prospectEmail, since);
+        return { hasActivity, checkedPlatform: "ghl", skippedReason: null };
       }
       default:
         // Klaviyo/Mailchimp/ConvertKit/ActiveCampaign/SMTP: no
@@ -62,7 +83,7 @@ export async function hasPostCallCrmActivity(
         // same rationale crm-tagger.ts's default branch already
         // documents for why those platforms don't get a supported path
         // here either, rather than a best-guess one.
-        return false;
+        return { hasActivity: false, checkedPlatform: null, skippedReason: "unsupported_platform" };
     }
   } catch (e) {
     // Best-effort, same isolation as every other CRM read/write call
@@ -70,6 +91,35 @@ export async function hasPostCallCrmActivity(
     // real no-show goes unenrolled, it just means this one extra signal
     // didn't get checked this time.
     console.error("[crm-activity-check] hasPostCallCrmActivity failed:", e);
-    return false;
+    return { hasActivity: false, checkedPlatform: null, skippedReason: "check_failed" };
+  }
+}
+
+/**
+ * Plain-English account of what the CRM check actually did, for the
+ * sweep's reasoning message (crons.ts) — the honest replacement for the
+ * old fixed "no recent CRM activity was found" line, which claimed a
+ * check happened and came back negative even in the common cases where
+ * no real check occurred at all (no CRM connected, an unsupported
+ * platform, or the lookup itself failing).
+ */
+export function describeCrmCheck(result: CrmActivityCheckResult): string {
+  if (result.checkedPlatform) {
+    // hasActivity is always false here — this helper is only ever called
+    // on the no-show path, where a true would have short-circuited the
+    // sweep to "showed" before this message gets built.
+    return `checked ${result.checkedPlatform === "hubspot" ? "HubSpot" : "GoHighLevel"} for any note, call, email, or task logged on this contact since the call — found nothing`;
+  }
+  switch (result.skippedReason) {
+    case "no_email_platform":
+      return "no CRM is connected on this engagement, so this couldn't be checked";
+    case "unsupported_platform":
+      return "the connected email platform doesn't support reading contact activity yet, so this couldn't be checked";
+    case "missing_location_id":
+      return "the GoHighLevel connection is missing a location ID, so this couldn't be checked";
+    case "check_failed":
+      return "the CRM lookup itself failed, so this couldn't be checked this time";
+    default:
+      return "this couldn't be checked";
   }
 }

@@ -78,11 +78,19 @@ export function PileOnView({
   const smsSentCount = smsMessages.filter((m) => m.status === "sent").length;
   const smsFailedCount = smsMessages.filter((m) => m.status === "failed").length;
 
-  const rawProspectEmail =
-    send?.prospectEmail ??
-    steps
-      .find((s) => s.phase === "pile_on_enrollment" && s.detail?.includes("@"))
-      ?.detail?.match(/<([^>]+@[^>]+)>/)?.[1];
+  // Fix: this was matching against `.detail` ("Enrolled Prospect in
+  // pre-call sequence" — never contains an email), when the actual
+  // "Name <email>" pair is written to `.label` on the very first step of
+  // every pile-on run (enrollment-service.ts logs it before attempting
+  // enrollment, so it's there even on a run that failed immediately and
+  // never got as far as writing a pile_on_sends row). That mismatch is
+  // why the card fell back to "Booking Dispatch" with zero prospect info
+  // even on runs that had a perfectly good name/email the whole time.
+  const enrollmentStep = steps.find((s) => s.phase === "pile_on_enrollment" && s.label?.includes("<"));
+  const labelMatch = enrollmentStep?.label?.match(/^(.*?)\s*<([^>]+@[^>]+)>$/);
+
+  const rawProspectEmail = send?.prospectEmail ?? labelMatch?.[2];
+  const prospectName = labelMatch?.[1] && labelMatch[1] !== "Prospect" ? labelMatch[1] : null;
 
   const prospectEmail =
     rawProspectEmail && rawProspectEmail !== "Enrolled Prospect"
@@ -244,19 +252,14 @@ export function PileOnView({
     smsFailedCount,
   ]);
 
-  const borderAccentClass =
-    outcomeTone === "success"
-      ? "border-l-emerald-500"
-      : outcomeTone === "danger"
-      ? "border-l-rose-500"
-      : "border-l-amber-500";
-
   return (
     <div className="w-full space-y-5 font-sans antialiased text-zinc-900 dark:text-zinc-100">
-      {/* ── 1. PROSPECT HEADER CARD WITH LEFT ACCENT BAR ── */}
-      <div
-        className={`rounded-xl border border-zinc-200 dark:border-zinc-800 border-l-4 ${borderAccentClass} bg-white dark:bg-zinc-900/40 p-4 space-y-3 shadow-xs`}
-      >
+      {/* ── 1. PROSPECT HEADER CARD ── */}
+      {/* Fix: this used to have a border-l-4 colored accent bar (green on
+          success) purely for decoration — the same status is already
+          stated in words by the badge two lines down, so the bar added
+          no information, just an "AI slop" visual flourish. Dropped. */}
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-4 space-y-3 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <SquishySkillBadge
@@ -267,7 +270,8 @@ export function PileOnView({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-base font-bold text-zinc-900 dark:text-white">
-                  {prospectEmail ??
+                  {prospectName ??
+                    prospectEmail ??
                     (bookingId ? `Booking #${bookingId}` : "Booking Dispatch")}
                 </span>
                 {prospectEmail && (
@@ -285,7 +289,13 @@ export function PileOnView({
                   </button>
                 )}
               </div>
-              {prospectEmail && bookingId && (
+              {prospectEmail && (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
+                  {prospectEmail}
+                  {bookingId && <span className="text-zinc-400 dark:text-zinc-600"> · Booking #{bookingId}</span>}
+                </p>
+              )}
+              {!prospectEmail && bookingId && (
                 <p className="text-xs text-zinc-500 font-mono">
                   Booking #{bookingId}
                 </p>

@@ -1,13 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
-  Clock,
   Search,
-  Sparkles,
-  Building2,
-  StickyNote,
-  CalendarCheck,
   MessageSquare,
   Send,
   Check,
@@ -15,12 +10,14 @@ import {
   UserCheck,
   UserX,
   CalendarX,
-  Maximize2,
+  ChevronDown,
+  ChevronUp,
+  StickyNote,
+  CalendarCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
 import { StatusPill } from "../_shared/status-pill";
-import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { BriefedCall, PreCallReadDetail } from "../_shared/types";
 import type { RunStep } from "@/models/schema";
 import { bookingPlatformLabel, briefDestinationLabel, phaseLabel } from "@/lib/copy";
@@ -60,6 +57,24 @@ function matchLabel(call: BriefedCall): { text: string; tone: Tone } {
   return { text: "Not scored", tone: "neutral" };
 }
 
+/**
+ * The real reason a brief wasn't sent, sourced from the run's own step
+ * log instead of a hardcoded fallback string — fix for the drawer/card
+ * showing "Brief generation failed" while the step timeline showed the
+ * actual reason (e.g. a missing Slack webhook) right next to it. Matched
+ * by prospect name since BriefedCall doesn't carry email and logStep's
+ * label is `${name} (${email})` — good enough for the realistic case of
+ * a handful of calls per run; falls back to null (card shows a generic
+ * line) if no name is on the call or no matching step is found.
+ */
+function findDeliveryFailureDetail(steps: RunStep[], call: BriefedCall): string | null {
+  if (!call.prospectName) return null;
+  const step = [...steps]
+    .reverse()
+    .find((s) => s.phase === "delivery" && s.status === "failed" && s.label?.startsWith(call.prospectName!));
+  return step?.detail ?? null;
+}
+
 const DESTINATION_ICON: Record<string, typeof MessageSquare> = {
   slack: MessageSquare,
   crm_note: StickyNote,
@@ -79,13 +94,11 @@ export function PreCallReadView({
 }) {
   const { run, calls } = detail;
   const [mode, setMode] = useState<RunViewMode>("calendar");
-  // Tracked by id and re-derived from the live `calls` array (rather than
-  // held as a raw snapshot object) so the drawer picks up fresh data —
-  // outcome, delivery status — after onRefreshDetail() runs following a
-  // mutation made from inside the drawer itself.
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = useMemo(() => calls.find((c) => c.id === selectedId) ?? null, [calls, selectedId]);
   const [filterText, setFilterText] = useState("");
+  // Only used by the list view's inline expand-in-place row (not a
+  // separate overlay/drawer) — clicking a row reveals the same CallCard
+  // content directly beneath it in the table's own flow.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const filteredCalls = useMemo(() => {
     if (!filterText.trim()) return calls;
@@ -103,12 +116,6 @@ export function PreCallReadView({
       map.get(k)!.push(c);
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredCalls]);
-
-  const board = useMemo(() => {
-    const cols: Record<CallStatus, BriefedCall[]> = { pending: [], brief_ready: [], delivered: [], failed: [] };
-    for (const c of filteredCalls) cols[deriveStatus(c)].push(c);
-    return cols;
   }, [filteredCalls]);
 
   // The real log line this run wrote when it fetched its window — surfaced
@@ -133,7 +140,7 @@ export function PreCallReadView({
           />
         </div>
 
-        <ViewSwitcher value={mode} onChange={setMode} />
+        <ViewSwitcher value={mode} onChange={setMode} modes={["calendar", "list"]} />
       </div>
 
       {/* ----------------------------------------------------------------- */}
@@ -168,7 +175,7 @@ export function PreCallReadView({
           {callsByDay.length === 0 ? (
             <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa]/50 dark:bg-zinc-950/50 py-14 text-zinc-700 dark:text-zinc-600 font-sans">
               <CalendarX size={22} />
-              <span className="text-xs">This run's window came back empty — nothing to brief.</span>
+              <span className="text-xs">This run&apos;s window came back empty — nothing to brief.</span>
             </div>
           ) : (
             callsByDay.map(([dayKeyStr, dayCalls]) => {
@@ -194,40 +201,15 @@ export function PreCallReadView({
                         {isToday && <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-emerald-400">Today</span>}
                       </span>
                       <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500">
-                        {dayCalls.length} call{dayCalls.length === 1 ? "" : "s"} in this run's window
+                        {dayCalls.length} call{dayCalls.length === 1 ? "" : "s"} in this run&apos;s window
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex flex-col px-5 py-3">
-                    {dayCalls.map((call, i) => {
-                      const status = deriveStatus(call);
-                      const isLast = i === dayCalls.length - 1;
-                      return (
-                        <button
-                          key={call.id}
-                          type="button"
-                          onClick={() => setSelectedId(call.id)}
-                          className="group flex items-stretch gap-3 text-left cursor-pointer"
-                        >
-                          <div className="flex w-2.5 shrink-0 flex-col items-center">
-                            <div className="mt-4 h-2 w-2 shrink-0 rounded-full bg-zinc-300 dark:bg-zinc-600 transition-colors group-hover:bg-emerald-500" />
-                            {!isLast && <div className="w-px flex-1 bg-zinc-100 dark:bg-zinc-800" />}
-                          </div>
-                          <div className="mb-2 flex flex-1 items-center justify-between gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-3 py-2 transition-colors group-hover:border-zinc-400 dark:group-hover:border-zinc-700">
-                            <div className="flex min-w-0 items-center gap-2.5">
-                              <span className="w-12 shrink-0 font-mono text-[10.5px] text-zinc-500 dark:text-zinc-500">{timeStr(call.callTime)}</span>
-                              <span className="truncate text-xs font-bold text-zinc-900 dark:text-white font-sans">
-                                {call.prospectName ?? "Unnamed prospect"}
-                              </span>
-                            </div>
-                            <StatusPill tone={STATUS_META[status].tone} className="shrink-0">
-                              {STATUS_META[status].label}
-                            </StatusPill>
-                          </div>
-                        </button>
-                      );
-                    })}
+                  <div className="flex flex-col gap-3 px-5 py-4">
+                    {dayCalls.map((call) => (
+                      <CallCard key={call.id} call={call} steps={steps} destinationLabel={run.stack?.brief_landing_destination} onRefreshDetail={onRefreshDetail} />
+                    ))}
                   </div>
                 </div>
               );
@@ -268,28 +250,48 @@ export function PreCallReadView({
                   <tbody>
                     {dayCalls.map((call) => {
                       const status = deriveStatus(call);
+                      const isExpanded = expandedId === call.id;
                       return (
-                        <tr key={call.id} className="border-b border-zinc-200 dark:border-zinc-900 last:border-b-0 hover:bg-zinc-100/40 dark:hover:bg-zinc-900/40 font-sans">
-                          <td className="px-4 py-2.5 font-medium text-zinc-900 dark:text-white font-sans">
-                            {call.prospectName ?? "Unnamed prospect"}
-                          </td>
-                          <td className="px-4 py-2.5 font-mono text-zinc-600 dark:text-zinc-400">{timeStr(call.callTime)}</td>
-                          <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400 font-mono">
-                            {matchLabel(call).text}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <StatusPill tone={STATUS_META[status].tone}>{STATUS_META[status].label}</StatusPill>
-                          </td>
-                          <td className="px-4 py-2.5 text-right font-sans">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedId(call.id)}
-                              className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer font-sans"
-                            >
-                              Open brief
-                            </button>
-                          </td>
-                        </tr>
+                        <Fragment key={call.id}>
+                          <tr
+                            onClick={() => setExpandedId(isExpanded ? null : call.id)}
+                            className={cn(
+                              "cursor-pointer border-b border-zinc-200 dark:border-zinc-900 hover:bg-zinc-100/40 dark:hover:bg-zinc-900/40 font-sans",
+                              isExpanded && "border-b-0 bg-zinc-100/60 dark:bg-zinc-900/60"
+                            )}
+                          >
+                            <td className="px-4 py-2.5 font-medium text-zinc-900 dark:text-white font-sans">
+                              {call.prospectName ?? "Unnamed prospect"}
+                            </td>
+                            <td className="px-4 py-2.5 font-mono text-zinc-600 dark:text-zinc-400">{timeStr(call.callTime)}</td>
+                            <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400 font-mono">
+                              {matchLabel(call).text}
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <StatusPill tone={STATUS_META[status].tone}>{STATUS_META[status].label}</StatusPill>
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-sans">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedId(isExpanded ? null : call.id);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 dark:bg-white px-2.5 py-1.5 text-[11px] font-bold text-white dark:text-zinc-950 hover:bg-zinc-700 dark:hover:bg-zinc-200 cursor-pointer font-sans"
+                              >
+                                {isExpanded ? "Hide" : "View"}
+                                {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                              </button>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr className="border-b border-zinc-200 dark:border-zinc-900 last:border-b-0">
+                              <td colSpan={5} className="bg-zinc-50/60 dark:bg-black/20 px-4 py-4">
+                                <CallCard call={call} steps={steps} destinationLabel={run.stack?.brief_landing_destination} onRefreshDetail={onRefreshDetail} />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       );
                     })}
                   </tbody>
@@ -300,153 +302,54 @@ export function PreCallReadView({
         </div>
       )}
 
-      {/* ----------------------------------------------------------------- */}
-      {/* 4. ASANA-GRADE KANBAN BOARD VIEW                                  */}
-      {/* ----------------------------------------------------------------- */}
-      {mode === "board" && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 font-sans">
-          {(Object.keys(board) as CallStatus[]).map((status) => (
-            <div key={status} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 flex flex-col gap-2 font-sans">
-              <div className="mb-1 flex items-center justify-between px-1">
-                <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 font-sans">{STATUS_META[status].label}</span>
-                <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500 bg-white dark:bg-zinc-900 px-2 py-0.5 rounded-md font-bold">
-                  {board[status].length}
-                </span>
-              </div>
-
-              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-0.5">
-                {board[status].map((call) => {
-                  const DestIcon = (call && DESTINATION_ICON[call.destinationDelivered ?? ""]) || MessageSquare;
-                  const initials = (call.prospectName ?? "UN").slice(0, 2).toUpperCase();
-
-                  return (
-                    <button
-                      key={call.id}
-                      type="button"
-                      onClick={() => setSelectedId(call.id)}
-                      className="w-full text-left rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-900/90 hover:border-zinc-400 dark:hover:border-zinc-700 p-3 transition-all cursor-pointer group shadow-sm flex flex-col gap-2 font-sans"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-[10px] font-bold font-mono text-zinc-700 dark:text-zinc-300 shrink-0">
-                            {initials}
-                          </div>
-                          <div className="min-w-0 font-sans">
-                            <p className="text-xs font-bold text-zinc-900 dark:text-white group-hover:text-amber-400 transition-colors truncate font-sans">
-                              {call.prospectName ?? "Unnamed prospect"}
-                            </p>
-                          </div>
-                        </div>
-
-                        <Maximize2 size={12} className="text-zinc-700 dark:text-zinc-600 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 shrink-0 mt-0.5" />
-                      </div>
-
-                      <div className="flex items-center gap-1 text-[10.5px] text-zinc-600 dark:text-zinc-400 font-mono">
-                        <Clock size={11} className="text-zinc-500 dark:text-zinc-500 shrink-0" />
-                        <span>{timeStr(call.callTime)}</span>
-                        <span className="text-zinc-700 dark:text-zinc-600">·</span>
-                        <span>{new Date(call.callTime).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-zinc-200/80 dark:border-zinc-800/80">
-                        {call.personMatchScore != null && (() => {
-                          const { text, tone } = matchLabel(call);
-                          const toneClass =
-                            tone === "success"
-                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                              : tone === "warning"
-                                ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                                : "bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400";
-                          return (
-                            <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9.5px] font-mono font-bold ${toneClass}`}>
-                              {text}
-                            </span>
-                          );
-                        })()}
-
-                        <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9.5px] font-mono text-zinc-700 dark:text-zinc-300">
-                          <DestIcon size={10} className="text-zinc-600 dark:text-zinc-400" />
-                          {briefDestinationLabel(call.destinationDelivered ?? run.stack?.brief_landing_destination ?? "slack")}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-
-                {board[status].length === 0 && (
-                  <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-900 p-4 text-center text-[10px] text-zinc-700 dark:text-zinc-600 font-sans">
-                    No calls in this stage
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ----------------------------------------------------------------- */}
-      {/* 5. INTERACTIVE EXECUTIVE BRIEF SLIDE-OVER DRAWER                  */}
-      {/* ----------------------------------------------------------------- */}
-      <BriefDrawer
-        call={selected}
-        onClose={() => setSelectedId(null)}
-        destinationLabel={run.stack?.brief_landing_destination}
-        onRefreshDetail={onRefreshDetail}
-      />
+      {/* Card-level detail replaces the old slide-over drawer — see CallCard
+          below. Nothing rendered here; each call's full info (identity,
+          destination, brief text, outcome logging, resend) is already on
+          its card in both the calendar and list views above. */}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// FULLY INTERACTIVE BRIEF DRAWER (STRICT FONT PERSISTENCE)
+// FULLY INTERACTIVE CALL CARD — everything the old drawer showed, rendered
+// directly in place. Fix for "users have to click into a drawer to see
+// info that should just be on the card" — identity, destination, the brief
+// itself, outcome logging, and resend are all here with no click required
+// to reveal them (list view still needs one click to reveal the card at
+// all, since a dense table can't show every card at once — but nothing is
+// hidden inside it once open).
 // ---------------------------------------------------------------------------
-function BriefDrawer({
+function CallCard({
   call,
-  onClose,
+  steps,
   destinationLabel,
   onRefreshDetail,
 }: {
-  call: BriefedCall | null;
-  onClose: () => void;
+  call: BriefedCall;
+  steps: RunStep[];
   destinationLabel?: string;
   onRefreshDetail: () => void;
 }) {
-  const [prevCallId, setPrevCallId] = useState<string | null>(null);
-  const [editableText, setEditableText] = useState("");
+  const status = deriveStatus(call);
+  const [editableText, setEditableText] = useState(call.briefText ?? "");
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const [loggedOutcome, setLoggedOutcome] = useState<"showed" | "no_show" | "rescheduled" | null>(null);
+  const [loggedOutcome, setLoggedOutcome] = useState<"showed" | "no_show" | "rescheduled" | null>(call.outcome ?? null);
   const [outcomeSubmitting, setOutcomeSubmitting] = useState<"showed" | "no_show" | "rescheduled" | null>(null);
   const [outcomeError, setOutcomeError] = useState<string | null>(null);
 
   const [deliveryState, setDeliveryState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
 
-  // Normalize undefined to null so (null !== null) is false when the drawer is closed
-  const currentCallId = call?.id ?? null;
-  if (currentCallId !== prevCallId) {
-    setPrevCallId(currentCallId);
-    setEditableText(call?.briefText ?? "");
-    setIsEditing(false);
-    // Seed from the server-confirmed value on the fresh call, not always
-    // null — a call reopened after being outcome-logged (from here or
-    // from Slack) should show that outcome, not reset to blank.
-    setLoggedOutcome(call?.outcome ?? null);
-    setOutcomeSubmitting(null);
-    setOutcomeError(null);
-    setDeliveryState("idle");
-    setDeliveryError(null);
-  }
-
   const handleCopyText = () => {
-    navigator.clipboard.writeText(editableText || call?.briefText || "");
+    navigator.clipboard.writeText(editableText || call.briefText || "");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleLogOutcome = async (outcome: "showed" | "no_show" | "rescheduled") => {
-    if (!call || outcomeSubmitting) return;
+    if (outcomeSubmitting) return;
     setOutcomeSubmitting(outcome);
     setOutcomeError(null);
     try {
@@ -469,7 +372,7 @@ function BriefDrawer({
   };
 
   const handleResendToSlack = async () => {
-    if (!call || deliveryState === "sending") return;
+    if (deliveryState === "sending") return;
     setDeliveryState("sending");
     setDeliveryError(null);
     try {
@@ -487,171 +390,178 @@ function BriefDrawer({
     }
   };
 
-  const DestIcon = (call && DESTINATION_ICON[call.destinationDelivered ?? ""]) || MessageSquare;
+  const DestIcon = DESTINATION_ICON[call.destinationDelivered ?? ""] || MessageSquare;
+  // Real reason, not a guess — see findDeliveryFailureDetail's comment.
+  // Covers both true failures and the "brief exists, wasn't sent" state.
+  const stepDetail = status === "failed" || (status === "brief_ready" && !call.briefDeliveredAt)
+    ? findDeliveryFailureDetail(steps, call)
+    : null;
 
   return (
-    <Sheet open={!!call} onOpenChange={(open) => !open && onClose()}>
-      {/* Explicit font-sans antialiased text-zinc-900 dark:text-zinc-100 on the portal root prevents font mismatch */}
-      <SheetContent widthClassName="w-full sm:max-w-xl font-sans antialiased text-zinc-900 dark:text-zinc-100">
-        {call && (
-          <div className="flex flex-col h-full font-sans antialiased">
-            <SheetHeader className="font-sans">
-              <div className="flex items-center justify-between font-sans">
-                <div className="flex items-center gap-2 text-amber-400">
-                  <Sparkles size={15} />
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 font-mono">
-                    Executive Pre-Call Brief
-                  </span>
-                </div>
-                <div className="flex items-center gap-1 font-sans">
-                  <button
-                    type="button"
-                    onClick={handleCopyText}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-xs cursor-pointer transition-colors font-sans"
-                  >
-                    {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                    <span className="font-sans">{copied ? "Copied" : "Copy Brief"}</span>
-                  </button>
-                </div>
-              </div>
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm font-sans antialiased overflow-hidden">
+      {/* Header: prospect, time, status — all visible with no click */}
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-zinc-900 dark:text-white">{call.prospectName ?? "Unnamed prospect"}</p>
+          <p className="mt-0.5 text-[11px] font-mono text-zinc-500 dark:text-zinc-500">
+            {timeStr(call.callTime)} on {new Date(call.callTime).toLocaleDateString()}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <StatusPill tone={STATUS_META[status].tone}>{STATUS_META[status].label}</StatusPill>
+          <button
+            type="button"
+            onClick={handleCopyText}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[11px] font-semibold cursor-pointer transition-colors"
+          >
+            {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      </div>
 
-              <SheetTitle className="mt-2 text-lg font-bold font-sans text-zinc-900 dark:text-white">
-                {call.prospectName ?? "Unnamed prospect"}
-              </SheetTitle>
-              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400 font-sans">
-                <Building2 size={12} /> Call time: {timeStr(call.callTime)} on {new Date(call.callTime).toLocaleDateString()}
-              </SheetDescription>
-            </SheetHeader>
+      <div className="p-4 space-y-3.5">
+        {/* Metadata — sent-to only claims delivery once it actually
+            happened. Fix: this used to fall back to the run's configured
+            destination even when nothing had been delivered, so a call
+            that failed to send still showed "Sent to: Slack message" as
+            if it succeeded — the exact mismatch that broke trust. */}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="space-y-0.5 rounded-xl bg-zinc-50 dark:bg-zinc-950 p-2.5">
+            <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Prospect identity</span>
+            <p className="font-semibold text-zinc-800 dark:text-zinc-200">{matchLabel(call).text}</p>
+          </div>
+          <div className="space-y-0.5 rounded-xl bg-zinc-50 dark:bg-zinc-950 p-2.5">
+            <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Sent to</span>
+            {call.briefDeliveredAt ? (
+              <p className="flex items-center gap-1 font-semibold text-zinc-800 dark:text-zinc-200">
+                <DestIcon size={12} className="text-zinc-600 dark:text-zinc-400" />
+                {briefDestinationLabel(call.destinationDelivered ?? destinationLabel ?? "slack")}
+              </p>
+            ) : (
+              <p className="font-semibold text-zinc-500 dark:text-zinc-500">Not sent yet</p>
+            )}
+          </div>
+        </div>
 
-            <SheetBody className="space-y-4 font-sans pt-2">
-              {/* Metadata Cards */}
-              <div className="grid grid-cols-2 gap-2 text-xs font-sans">
-                <div className="space-y-0.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5">
-                  <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Prospect identity</span>
-                  <p className="font-semibold text-zinc-800 dark:text-zinc-200 font-sans">{matchLabel(call).text}</p>
-                </div>
-                <div className="space-y-0.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5">
-                  <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Sent to</span>
-                  <p className="flex items-center gap-1 font-semibold text-zinc-800 dark:text-zinc-200 font-sans">
-                    <DestIcon size={12} className="text-zinc-600 dark:text-zinc-400" />
-                    {briefDestinationLabel(call.destinationDelivered ?? destinationLabel ?? "slack")}
-                  </p>
-                </div>
-              </div>
+        {/* Brief text — real failure/undelivered reason, never a hardcoded
+            fallback string that could disagree with the step timeline. */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Call Brief</span>
+            {call.briefText && (
+              <button
+                type="button"
+                onClick={() => setIsEditing((p) => !p)}
+                className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white underline cursor-pointer"
+              >
+                {isEditing ? "Done editing" : "Edit brief text"}
+              </button>
+            )}
+          </div>
 
-              {/* Editable Brief Document */}
-              <div className="space-y-2 font-sans">
-                <div className="flex items-center justify-between font-sans">
-                  <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
-                    Call Brief
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing((p) => !p)}
-                    className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white underline cursor-pointer"
-                  >
-                    {isEditing ? "Done Editing" : "Edit Brief Text"}
-                  </button>
-                </div>
+          {isEditing ? (
+            <textarea
+              value={editableText}
+              onChange={(e) => setEditableText(e.target.value)}
+              rows={10}
+              className="w-full p-3.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-zinc-500 leading-relaxed"
+            />
+          ) : editableText ? (
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-950 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+              {editableText}
+            </div>
+          ) : (
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-950 p-3.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+              {status === "failed"
+                ? stepDetail
+                  ? `Brief generation failed: ${stepDetail}`
+                  : "Brief generation failed. Try regenerating from the run."
+                : `${call.prospectName ?? "This prospect"}'s call hasn't been briefed yet.`}
+            </div>
+          )}
 
-                {isEditing ? (
-                  <textarea
-                    value={editableText}
-                    onChange={(e) => setEditableText(e.target.value)}
-                    rows={12}
-                    className="w-full p-3.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-sans text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-zinc-500 dark:focus:border-zinc-500 leading-relaxed font-sans"
-                  />
-                ) : (
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans whitespace-pre-wrap">
-                    {editableText ||
-                      (call.aiSynthesisStatus === "failed"
-                        ? `Brief generation failed for ${call.prospectName ?? "this prospect"}'s call at ${timeStr(call.callTime)}. Try regenerating from the run, or open the call directly to prep manually.`
-                        : `${call.prospectName ?? "This prospect"}'s call at ${timeStr(call.callTime)} hasn't been briefed yet.`)}
-                  </div>
-                )}
-              </div>
+          {stepDetail && status === "brief_ready" && !call.briefDeliveredAt && (
+            <p className="text-[11px] text-amber-700 dark:text-amber-400">
+              Brief generated but not sent — {stepDetail}
+            </p>
+          )}
+        </div>
 
-              {/* Log Call Outcome */}
-              <div className="space-y-2 border-t border-zinc-200 dark:border-zinc-800 pt-3 font-sans">
-                <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
-                  Log Sales Call Outcome
-                </span>
-                <div className="grid grid-cols-3 gap-2 font-sans">
-                  <button
-                    type="button"
-                    onClick={() => handleLogOutcome("showed")}
-                    disabled={outcomeSubmitting !== null}
-                    className={cn(
-                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60",
-                      loggedOutcome === "showed"
-                        ? "bg-emerald-500 text-zinc-950 border-emerald-400 font-bold"
-                        : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-700"
-                    )}
-                  >
-                    <UserCheck size={13} />
-                    <span className="font-sans">{outcomeSubmitting === "showed" ? "Logging…" : "Showed"}</span>
-                  </button>
+        {/* Log Call Outcome — filled buttons, no borders */}
+        <div className="space-y-1.5 border-t border-zinc-100 dark:border-zinc-800 pt-3">
+          <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Log Sales Call Outcome</span>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => handleLogOutcome("showed")}
+              disabled={outcomeSubmitting !== null}
+              className={cn(
+                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
+                loggedOutcome === "showed"
+                  ? "bg-emerald-500 text-zinc-950"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+              )}
+            >
+              <UserCheck size={13} />
+              {outcomeSubmitting === "showed" ? "Logging…" : "Showed"}
+            </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleLogOutcome("no_show")}
-                    disabled={outcomeSubmitting !== null}
-                    className={cn(
-                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60",
-                      loggedOutcome === "no_show"
-                        ? "bg-rose-500 text-zinc-900 dark:text-white border-rose-400 font-bold"
-                        : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-700"
-                    )}
-                  >
-                    <UserX size={13} />
-                    <span className="font-sans">{outcomeSubmitting === "no_show" ? "Logging…" : "No-Show"}</span>
-                  </button>
+            <button
+              type="button"
+              onClick={() => handleLogOutcome("no_show")}
+              disabled={outcomeSubmitting !== null}
+              className={cn(
+                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
+                loggedOutcome === "no_show"
+                  ? "bg-rose-500 text-white"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+              )}
+            >
+              <UserX size={13} />
+              {outcomeSubmitting === "no_show" ? "Logging…" : "No-Show"}
+            </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleLogOutcome("rescheduled")}
-                    disabled={outcomeSubmitting !== null}
-                    className={cn(
-                      "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60",
-                      loggedOutcome === "rescheduled"
-                        ? "bg-amber-500 text-zinc-950 border-amber-400 font-bold"
-                        : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-700"
-                    )}
-                  >
-                    <CalendarX size={13} />
-                    <span className="font-sans">{outcomeSubmitting === "rescheduled" ? "Logging…" : "Rescheduled"}</span>
-                  </button>
-                </div>
-                {outcomeError && (
-                  <p className="text-[11px] text-rose-400 font-sans">{outcomeError}</p>
-                )}
-              </div>
+            <button
+              type="button"
+              onClick={() => handleLogOutcome("rescheduled")}
+              disabled={outcomeSubmitting !== null}
+              className={cn(
+                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
+                loggedOutcome === "rescheduled"
+                  ? "bg-amber-500 text-zinc-950"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+              )}
+            >
+              <CalendarX size={13} />
+              {outcomeSubmitting === "rescheduled" ? "Logging…" : "Rescheduled"}
+            </button>
+          </div>
+          {outcomeError && <p className="text-[11px] text-rose-600 dark:text-rose-400">{outcomeError}</p>}
+        </div>
 
-              {/* Dispatch Action */}
-              <div className="pt-2 font-sans space-y-1.5">
-                <button
-                  type="button"
-                  onClick={handleResendToSlack}
-                  disabled={deliveryState === "sending"}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-100 text-zinc-950 font-bold text-xs hover:bg-zinc-100 dark:hover:bg-white transition-colors cursor-pointer font-sans disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {deliveryState === "sent" ? <Check size={13} /> : <Send size={13} />}
-                  <span className="font-sans">
-                    {deliveryState === "sending"
-                      ? "Re-delivering Brief to Slack..."
-                      : deliveryState === "sent"
-                        ? "Sent to Slack"
-                        : "Re-send Brief to Slack"}
-                  </span>
-                </button>
-                {deliveryState === "error" && deliveryError && (
-                  <p className="text-[11px] text-rose-400 font-sans text-center">{deliveryError}</p>
-                )}
-              </div>
-            </SheetBody>
+        {/* Resend — only offered once there's something to send */}
+        {call.briefText && !call.briefDeliveredAt && (
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={handleResendToSlack}
+              disabled={deliveryState === "sending"}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 font-bold text-xs hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {deliveryState === "sent" ? <Check size={13} /> : <Send size={13} />}
+              {deliveryState === "sending"
+                ? "Sending…"
+                : deliveryState === "sent"
+                  ? "Sent to Slack"
+                  : "Send Brief to Slack"}
+            </button>
+            {deliveryState === "error" && deliveryError && (
+              <p className="text-[11px] text-rose-600 dark:text-rose-400 text-center">{deliveryError}</p>
+            )}
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+      </div>
+    </div>
   );
 }

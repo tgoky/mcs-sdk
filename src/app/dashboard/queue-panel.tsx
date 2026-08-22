@@ -20,6 +20,9 @@ import {
   List,
   Tag as TagIcon,
   Trash2,
+  UserX,
+  UserCheck,
+  CalendarClock,
 } from "lucide-react";
 import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, skillName as skillDisplayName, SKILLS } from "@/lib/copy";
 import type { StackSection } from "@/lib/error-classification";
@@ -53,6 +56,7 @@ export interface QueueItemDTO {
   isCredentialIssue?: boolean;
   diagnosisSection?: StackSection;
   skillEnabledForClient?: boolean;
+  sweepNoShowReview?: { bookingId: string; prospectEmail: string } | null;
 }
 
 export interface ClientOption {
@@ -283,6 +287,7 @@ function QueueRow({
   onDismissSyncSetup,
   onDismissRunFailure,
   onRunMutation,
+  onResolveSweepNoShow,
   onLinkNavigate,
   onActionComplete,
   onOpenFixDrawer,
@@ -300,6 +305,7 @@ function QueueRow({
   onDismissSyncSetup: () => void;
   onDismissRunFailure: () => void;
   onRunMutation: (url: string) => void;
+  onResolveSweepNoShow: (outcome: "showed" | "rescheduled") => void;
   onLinkNavigate: () => void;
   onActionComplete: () => void;
   onOpenFixDrawer: (
@@ -358,23 +364,69 @@ function QueueRow({
       </div>
 
       <div className="flex items-center gap-1.5 shrink-0">
-        {item.category === "approve" && (
-          <>
-            <button
-              disabled={isBusy}
-              onClick={() => onDecide("approved")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-2xs"
-            >
-              <Check size={12} /> {copy.actions.approve}
-            </button>
+        {item.category === "approve" && item.sweepNoShowReview ? (
+          // Fix: a plain Approve/Reject was the wrong shape for "did this
+          // person actually no-show" — see QueueItem.sweepNoShowReview's
+          // doc. Reject specifically promised "reject if they actually
+          // showed and just weren't logged" but recorded nothing; these
+          // three map directly to the real outcomes a reviewer is
+          // actually choosing between, and each one (besides "not sure")
+          // logs the real outcome, not just a status flip.
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-1.5">
+              <button
+                disabled={isBusy}
+                onClick={() => onDecide("approved")}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-600 dark:bg-rose-500 text-white hover:bg-rose-700 dark:hover:bg-rose-400 transition-colors cursor-pointer shadow-2xs"
+                title="Confirm no-show and start Win-Back recovery"
+              >
+                <UserX size={12} /> Confirm no-show
+              </button>
+              <button
+                disabled={isBusy}
+                onClick={() => onResolveSweepNoShow("showed")}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-2xs"
+                title="Log that they actually showed — no Win-Back"
+              >
+                <UserCheck size={12} /> Showed
+              </button>
+              <button
+                disabled={isBusy}
+                onClick={() => onResolveSweepNoShow("rescheduled")}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-500 text-zinc-950 hover:bg-amber-400 transition-colors cursor-pointer shadow-2xs"
+                title="Log that they rescheduled — no Win-Back"
+              >
+                <CalendarClock size={12} /> Rescheduled
+              </button>
+            </div>
             <button
               disabled={isBusy}
               onClick={() => onDecide("rejected")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
+              className="text-[10.5px] font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer"
+              title="Dismiss without logging anything — resolve it later from the roster"
             >
-              <X size={12} /> {copy.actions.reject}
+              Not sure — dismiss
             </button>
-          </>
+          </div>
+        ) : (
+          item.category === "approve" && (
+            <>
+              <button
+                disabled={isBusy}
+                onClick={() => onDecide("approved")}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-2xs"
+              >
+                <Check size={12} /> {copy.actions.approve}
+              </button>
+              <button
+                disabled={isBusy}
+                onClick={() => onDecide("rejected")}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
+              >
+                <X size={12} /> {copy.actions.reject}
+              </button>
+            </>
+          )
         )}
 
         {item.category === "action_needed" && item.source === "sync_setup" && (
@@ -825,6 +877,51 @@ export function QueuePanel({
     return runMutation(item, `/api/notifications/${item.id}/read`);
   }
 
+  // Richer resolution for a sweep-inferred no-show — see
+  // QueueItem.sweepNoShowReview's doc. Logs the real outcome (via the
+  // general per-booking endpoint, same one the master roster's inline
+  // buttons use) before closing out the pending action, instead of a
+  // plain reject that recorded nothing and left the booking's own status
+  // exactly as ambiguous as it was before the sweep ever looked at it.
+  async function resolveSweepNoShow(item: QueueItemDTO, outcome: "showed" | "rescheduled") {
+    if (!item.engagementId || !item.sweepNoShowReview) return;
+    setBusyId(item.id);
+    setErrorId(null);
+    try {
+      const res = await fetch(
+        `/api/engagements/${item.engagementId}/bookings/${item.sweepNoShowReview.bookingId}/outcome`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ outcome }),
+        }
+      );
+      if (!res.ok) {
+        const message =
+          res.status === 403
+            ? copy.errors.adminOnly
+            : (await res.json().then((d) => d?.error).catch(() => null)) || copy.errors.generic;
+        setErrorId(item.id);
+        setErrorText(message);
+        return;
+      }
+      // The real outcome is on file now — this pending action's own
+      // question is already answered, so close it the same way a plain
+      // reject would, just with something more specific already recorded.
+      await fetch(`/api/actions/${item.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision: "rejected" }),
+      }).catch(() => {});
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+    } catch {
+      setErrorId(item.id);
+      setErrorText(copy.errors.generic);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function dismissSyncSetup(item: QueueItemDTO) {
     if (!item.engagementId) return;
     return runMutation(item, `/api/engagements/${item.engagementId}/sync-mode`, { dismissSetupNudge: true }, "PATCH");
@@ -854,6 +951,7 @@ export function QueuePanel({
         onDismissSyncSetup={() => dismissSyncSetup(item)}
         onDismissRunFailure={() => dismissRunFailure(item)}
         onRunMutation={(url) => runMutation(item, url)}
+        onResolveSweepNoShow={(outcome) => resolveSweepNoShow(item, outcome)}
         onLinkNavigate={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
         onActionComplete={refreshNow}
         matchedTag={matchedTag}

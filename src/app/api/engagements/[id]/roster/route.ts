@@ -49,6 +49,18 @@ export type ResearchStatus = "completed" | "skipped_low_confidence" | "failed" |
 export type SynthesisStatus = "completed" | "failed" | null;
 export type CallOutcome = "showed" | "no_show" | "rescheduled" | "cancelled" | null;
 export type OutcomeSource = "dashboard" | "slack" | "recall_bot" | "auto_sweep" | null;
+// Whether the sales-call outcome (not the brief-delivery pipeline status
+// above — a distinct concern) is known yet. "awaiting_outcome" is new:
+// the call's estimated end time has passed and nothing — not a manual
+// click, not Recall telemetry, not the CRM check, not the auto-sweep —
+// has resolved it yet. Previously the UI had no way to distinguish this
+// from a call that's simply upcoming; both just showed as "scheduled"
+// indefinitely. Same 90-minute default-duration convention crons.ts's
+// assumed-no-show sweep uses, so this and the sweep agree on when a call
+// is "over" without a real callEndTime to go on.
+export type OutcomeStatus = "future" | "awaiting_outcome" | "resolved" | "cancelled";
+
+const UNKNOWN_DURATION_DEFAULT_MS = 90 * 60 * 1000;
 
 export interface RosterEntry {
   id: string;
@@ -70,19 +82,26 @@ export interface RosterEntry {
   personMatchScore: number | null;
   researchStatus: ResearchStatus;
   synthesisStatus: SynthesisStatus;
-  // From showRateFeatures, when show_rate_scoring_enabled was on for this
-  // booking. predictedShowProbability is the heuristic model's 0-100 call
-  // made *before* the call happened; actualOutcome is the confirmed
-  // ground truth once someone (rep, Recall bot, or the auto-sweep) logs
-  // it. Both null just means scoring wasn't enabled for this engagement,
-  // not that anything failed.
+  // The heuristic model's pre-call prediction, only present when
+  // show_rate_scoring_enabled was on for this booking — null just means
+  // scoring wasn't enabled, not that anything failed.
   predictedShowProbability: number | null;
+  // Fix: this used to read from showRateFeatures.actualOutcome, which is
+  // only ever written when show-rate scoring is enabled for the booking
+  // — so on any engagement without that feature on, this was null even
+  // when a real outcome had been logged. resolveCallOutcome
+  // (outcome-resolution.ts) always writes to briefOutcomeLog regardless
+  // of show-rate scoring; that's the actual ground truth, and it's what
+  // this now reads from — the same table pre-call-read-view.tsx's
+  // CallCard and pile-on-pipeline's stage already read from, so the
+  // roster finally agrees with the pages it's supposed to summarize.
   actualOutcome: CallOutcome;
   // From briefOutcomeLog's latest row for this booking — how the outcome
   // above was actually confirmed. Null means no outcome has been logged
   // yet (distinct from actualOutcome being null for a different reason,
   // e.g. show-rate scoring being off).
   outcomeSource: OutcomeSource;
+  outcomeStatus: OutcomeStatus;
 }
 
 function deriveRosterStatus(row: {
@@ -95,6 +114,19 @@ function deriveRosterStatus(row: {
   if (row.briefDeliveredAt) return "brief_delivered";
   if (row.researchStatus === "failed" || row.aiSynthesisStatus === "failed") return "brief_failed";
   return "scheduled";
+}
+
+function deriveOutcomeStatus(row: {
+  bookingStatus: string;
+  callTime: Date;
+  callEndTime: Date | null;
+  outcome: CallOutcome;
+  now: Date;
+}): OutcomeStatus {
+  if (row.bookingStatus === "cancelled") return "cancelled";
+  if (row.outcome) return "resolved";
+  const readyAt = row.callEndTime ?? new Date(row.callTime.getTime() + UNKNOWN_DURATION_DEFAULT_MS);
+  return readyAt < row.now ? "awaiting_outcome" : "future";
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -164,7 +196,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         runId: briefedCallsLog.runId,
         personMatchScore: briefedCallsLog.personMatchScore,
         predictedShowProbability: showRateFeatures.predictedShowProbability,
-        actualOutcome: showRateFeatures.actualOutcome,
       })
       .from(bookingRoster)
       .leftJoin(
@@ -189,7 +220,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const outcomeLogRows =
       bookingIds.length > 0
         ? await db
-            .select({ bookingId: briefOutcomeLog.bookingId, source: briefOutcomeLog.source, loggedAt: briefOutcomeLog.loggedAt })
+            .select({
+              bookingId: briefOutcomeLog.bookingId,
+              source: briefOutcomeLog.source,
+              outcome: briefOutcomeLog.outcome,
+              loggedAt: briefOutcomeLog.loggedAt,
+            })
             .from(briefOutcomeLog)
             .where(and(eq(briefOutcomeLog.engagementId, engagementId), inArray(briefOutcomeLog.bookingId, bookingIds)))
             .orderBy(desc(briefOutcomeLog.loggedAt))
@@ -197,33 +233,46 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     // First row wins per bookingId, since outcomeLogRows is already
     // ordered newest-first — append-only log, so "latest" is "current".
     const latestSourceByBooking = new Map<string, OutcomeSource>();
+    const latestOutcomeByBooking = new Map<string, CallOutcome>();
     for (const row of outcomeLogRows) {
       if (!latestSourceByBooking.has(row.bookingId)) {
         latestSourceByBooking.set(row.bookingId, (row.source as OutcomeSource) ?? null);
+        latestOutcomeByBooking.set(row.bookingId, (row.outcome as CallOutcome) ?? null);
       }
     }
 
-    const entries: RosterEntry[] = rows.map((r) => ({
-      id: r.id,
-      externalCallId: r.externalCallId,
-      prospectName: r.prospectName,
-      prospectEmail: r.prospectEmail,
-      prospectPhone: r.prospectPhone,
-      callTime: r.callTime.toISOString(),
-      callEndTime: r.callEndTime ? r.callEndTime.toISOString() : null,
-      bookingPlatform: r.bookingPlatform,
-      status: deriveRosterStatus(r),
-      briefDeliveredAt: r.briefDeliveredAt ? r.briefDeliveredAt.toISOString() : null,
-      destinationDelivered: r.destinationDelivered,
-      briefText: r.briefText,
-      runId: r.runId,
-      personMatchScore: r.personMatchScore,
-      researchStatus: (r.researchStatus as ResearchStatus) ?? null,
-      synthesisStatus: (r.aiSynthesisStatus as SynthesisStatus) ?? null,
-      predictedShowProbability: r.predictedShowProbability,
-      actualOutcome: (r.actualOutcome as CallOutcome) ?? null,
-      outcomeSource: latestSourceByBooking.get(r.externalCallId) ?? null,
-    }));
+    const requestNow = new Date();
+    const entries: RosterEntry[] = rows.map((r) => {
+      const outcome = latestOutcomeByBooking.get(r.externalCallId) ?? null;
+      return {
+        id: r.id,
+        externalCallId: r.externalCallId,
+        prospectName: r.prospectName,
+        prospectEmail: r.prospectEmail,
+        prospectPhone: r.prospectPhone,
+        callTime: r.callTime.toISOString(),
+        callEndTime: r.callEndTime ? r.callEndTime.toISOString() : null,
+        bookingPlatform: r.bookingPlatform,
+        status: deriveRosterStatus(r),
+        briefDeliveredAt: r.briefDeliveredAt ? r.briefDeliveredAt.toISOString() : null,
+        destinationDelivered: r.destinationDelivered,
+        briefText: r.briefText,
+        runId: r.runId,
+        personMatchScore: r.personMatchScore,
+        researchStatus: (r.researchStatus as ResearchStatus) ?? null,
+        synthesisStatus: (r.aiSynthesisStatus as SynthesisStatus) ?? null,
+        predictedShowProbability: r.predictedShowProbability,
+        actualOutcome: outcome,
+        outcomeSource: latestSourceByBooking.get(r.externalCallId) ?? null,
+        outcomeStatus: deriveOutcomeStatus({
+          bookingStatus: r.bookingStatus,
+          callTime: r.callTime,
+          callEndTime: r.callEndTime,
+          outcome,
+          now: requestNow,
+        }),
+      };
+    });
 
     return NextResponse.json({ entries });
   } catch (err: unknown) {

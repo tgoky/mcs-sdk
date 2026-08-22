@@ -45,7 +45,7 @@ import type { EngagementStack } from "@/models/schema";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { isSkillEnabledForEngagement, getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
 import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
-import { hasPostCallCrmActivity } from "@/features/pre-call-read/server/crm-activity-check";
+import { hasPostCallCrmActivity, describeCrmCheck } from "@/features/pre-call-read/server/crm-activity-check";
 import { estimateEngagementCallDurationMinutes } from "@/features/pre-call-read/server/call-duration-estimator";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
@@ -755,12 +755,12 @@ export const assumedNoShowSweepCron = inngest.createFunction(
  * this app doesn't otherwise watch and never come back to click a
  * Slack/dashboard button.
  *
- * The 4-hour upper bound on the initial DB scan isn't about correctness
- * (a call from a week ago with no outcome logged is just as much a
- * no-show), it's about keeping each run's query cheap and bounded —
- * nothing stops a call from being caught on this cron's next pass 15
- * minutes later if it's missed for any reason, since the exclusion is
- * "no outcome logged yet", not "seen once already".
+ * The scan window bounds how far back the initial DB query looks — it's
+ * about keeping each run's query cheap, and it does matter for
+ * correctness: a call has to still be inside this window on some future
+ * 15-minute pass to ever get resolved. See the fix note on windowStart
+ * below — this used to be 4 hours, which meant a call that fell through
+ * the cracks once could age out and never get resolved at all.
  */
 export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
   { id: "process-assumed-no-show-sweep-engagement", triggers: [assumedNoShowSweepEngagement] },
@@ -769,7 +769,18 @@ export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
 
     const eligible = await step.run("find-eligible-calls", async () => {
       const now = new Date();
-      const windowStart = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+      // Fix: this was `now - 4h`, which — because it's recomputed fresh
+      // every 15-minute run — only ever admits a call during the 4 hours
+      // immediately following its own callTime. The comment above this
+      // function claimed a missed call would be "caught on the next pass
+      // 15 minutes later," but that's only true within that first
+      // 4-hour window; once a call (e.g. one a Recall session held as
+      // "active" and never reached a terminal status for) ages past it,
+      // the WHERE clause excludes it permanently and it sits with no
+      // outcome logged forever. 30 days matches the outer bound of
+      // win-back's own recovery window — a booking older than that is
+      // already outside win-back's timing regardless of outcome.
+      const windowStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
       // Coarse DB-level filter only: "started sometime in the last 4h."
       // Whether a given call is actually *ready* to resolve is a per-row
@@ -826,14 +837,18 @@ export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
       return candidates
         .map((c) => {
           let readyAt: Date;
+          let readyAtSource: "real_end_time" | "historical_average" | "default_estimate";
           if (c.callEndTime) {
             readyAt = new Date(c.callEndTime.getTime() + END_TIME_BUFFER_MS);
+            readyAtSource = "real_end_time";
           } else if (historicalEstimateMinutes !== null) {
             readyAt = new Date(c.callTime.getTime() + historicalEstimateMinutes * 60 * 1000 + ESTIMATE_BUFFER_MS);
+            readyAtSource = "historical_average";
           } else {
             readyAt = new Date(c.callTime.getTime() + UNKNOWN_DURATION_DEFAULT_MS);
+            readyAtSource = "default_estimate";
           }
-          return { ...c, readyAt };
+          return { ...c, readyAt, readyAtSource };
         })
         .filter((c) => c.readyAt <= now);
     });
@@ -845,6 +860,7 @@ export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
       // mutating an outer variable from inside the callback would not.
       const wasResolved = await step.run(`resolve-${call.callId}`, async () => {
         let outcome: "no_show" | "showed" = "no_show";
+        let crmCheckDescription: string | undefined;
 
         if (call.prospectEmail) {
           const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
@@ -853,15 +869,46 @@ export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
           // fields to strings — call.callTime crossed the
           // find-eligible-calls step boundary and needs re-hydrating
           // before it can be passed to a function typed to take a Date.
-          const hasCrmActivity = await hasPostCallCrmActivity(engagementId, stack, call.prospectEmail, new Date(call.callTime));
-          if (hasCrmActivity) outcome = "showed";
+          const crmCheck = await hasPostCallCrmActivity(engagementId, stack, call.prospectEmail, new Date(call.callTime));
+          if (crmCheck.hasActivity) {
+            outcome = "showed";
+          } else {
+            // Reasoning-text fix — the old message on the "no_show" path
+            // claimed "no recent CRM activity was found" unconditionally,
+            // even when no CRM was connected, the connected platform
+            // doesn't support this check, or the lookup itself failed —
+            // three situations where nothing was actually checked, not a
+            // real negative signal. Captured per-call so the message
+            // built below (and threaded through to triggerNoShowWinBack)
+            // says exactly what happened for this specific booking,
+            // instead of a fixed template.
+            crmCheckDescription = describeCrmCheck(crmCheck);
+          }
         }
+
+        const readyAtSource: "real_end_time" | "historical_average" | "default_estimate" =
+          call.readyAtSource;
+        const minutesSinceReady = Math.round((Date.now() - new Date(call.readyAt).getTime()) / 60000);
+        const readinessDescription =
+          readyAtSource === "real_end_time"
+            ? "the platform's own reported end time for this call has passed"
+            : readyAtSource === "historical_average"
+              ? "this engagement's typical call length has passed since the scheduled start"
+              : "a conservative 90-minute default has passed since the scheduled start (no real end time or engagement history to go on yet)";
 
         const result = await resolveCallOutcome({
           engagementId,
           bookingId: call.callId,
           outcome,
           source: "auto_sweep",
+          sweepReasonDetail:
+            outcome === "no_show"
+              ? {
+                  crmCheckDescription: crmCheckDescription ?? "this couldn't be checked",
+                  readinessDescription,
+                  minutesSinceReady,
+                }
+              : undefined,
         });
         return result.recorded ? 1 : 0;
       });

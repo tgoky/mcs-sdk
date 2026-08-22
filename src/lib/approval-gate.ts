@@ -199,6 +199,22 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
       );
     }
 
+    const stack = tenant.stack as EngagementStack | null;
+    const prospectName: string | undefined = payload?.bookingPayload?.name;
+    const prospectEmail: string | undefined = payload?.bookingPayload?.email;
+
+    // Deferred outcome-log write — payload._reason is only ever set by
+    // triggerNoShowWinBack's auto_sweep path (see its doc), so its
+    // presence here means this approval is confirming a sweep's
+    // inference, not just releasing an ordinary gated webhook. See
+    // resolveCallOutcome's matching early-return and confirmSweepNoShow's
+    // own doc for why this write happens now, at approval time, instead
+    // of the moment the sweep merely guessed.
+    if (payload?._reason && prospectEmail) {
+      const { confirmSweepNoShow } = await import("@/features/pre-call-read/server/outcome-resolution");
+      await confirmSweepNoShow(engagementId, payload.bookingPayload._bookingId, prospectEmail, stack);
+    }
+
     const runId = crypto.randomUUID();
     const skillName = payload.eventKind === "cancelled" ? "win-back" : "pile-on";
 
@@ -210,12 +226,20 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
       throw new Error(`${skillName} is turned off for this engagement — approve after re-enabling it, if that's intended.`);
     }
 
+    // Fix: this label was the generic, mechanism-y "approved pending
+    // action: webhook_enrollment" regardless of what was actually being
+    // approved — exactly the "sounds like a hardcoded system alarm, not
+    // an assistant" complaint. Says what actually happened instead.
+    const label = payload?._reason
+      ? `Win-Back recovery started for ${prospectName || prospectEmail || "prospect"} — no-show confirmed on review`
+      : `${skillName === "win-back" ? "Win-Back" : "Pile-On"} enrollment approved for ${prospectName || prospectEmail || "prospect"}`;
+
     await startRun({
       id: runId,
       engagementId,
       skillName,
       phase: "webhook_received",
-      label: "approved pending action: webhook_enrollment",
+      label,
     });
     await handleInboundBookingEvent(payload.bookingPayload, tenant, runId, payload.eventKind);
   },

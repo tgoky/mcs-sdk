@@ -15,8 +15,8 @@
 // app's side, not a business metric the buyer needs. errorMessage is
 // never shown raw either: it goes through classifyRunError first (see
 // error-classification.ts) for a plain-language diagnosis, falling back
-// to a generic "nothing you need to do" note rather than exception text
-// when it can't be classified.
+// to a message that points at the full run-detail page for the exact
+// error rather than exception text, when it can't be classified.
 
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -101,19 +101,24 @@ export function RunActivityPanel({ runId }: { runId: string }) {
       {run.errorMessage && (() => {
         const diagnosis = classifyRunError(run.errorMessage);
         return (
-          <div className="rounded-lg border border-rose-900/50 bg-rose-950/20 px-2.5 py-1.5 font-sans">
-            <span className="block text-[10px] font-mono uppercase text-rose-400/80 mb-0.5">{copy.errorSectionTitle}</span>
+          <div className="rounded-lg border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/20 px-2.5 py-1.5 font-sans">
+            <span className="block text-[10px] font-mono uppercase text-rose-700 dark:text-rose-400/80 mb-0.5">{copy.errorSectionTitle}</span>
             {diagnosis ? (
               <>
-                <p className="text-[11px] font-semibold text-rose-300">{diagnosis.title}</p>
-                <p className="text-[11px] text-rose-300/90 mt-0.5">{diagnosis.explanation}</p>
+                <p className="text-[11px] font-semibold text-rose-800 dark:text-rose-300">{diagnosis.title}</p>
+                <p className="text-[11px] text-rose-900/90 dark:text-rose-300/90 mt-0.5">{diagnosis.explanation}</p>
               </>
             ) : (
               // Not every failure fits the classifier's known patterns — rather
               // than show the raw exception text (which can read like a stack
               // trace), fall back to something a buyer can actually act on.
-              <p className="text-[11px] text-rose-300/90">
-                This run hit an unexpected error. There&apos;s nothing you need to do — if it keeps happening, let your account contact know.
+              // Fix: the old fallback ("nothing you need to do") gave the
+              // account owner nothing to act on even when they ARE the one
+              // who needs to — it reads fine for an end buyer but is a dead
+              // end for the person running this dashboard. Point at the
+              // fuller run-detail page instead of a shrug.
+              <p className="text-[11px] text-rose-900/90 dark:text-rose-300/90">
+                This run hit an error our system couldn&apos;t auto-diagnose. Open the full run for the exact error, or share this with your account contact if it keeps happening.
               </p>
             )}
           </div>

@@ -955,9 +955,11 @@ export const bookingRoster = pgTable(
   ]
 );
 
-export const briefedCallsLog = pgTable("briefed_calls_log", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  engagementId: text("engagement_id")
+export const briefedCallsLog = pgTable(
+  "briefed_calls_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
     .notNull()
     .references(() => engagements.engagementId),
   callId: text("call_id").notNull().unique(), // idempotency key
@@ -1014,7 +1016,17 @@ export const briefedCallsLog = pgTable("briefed_calls_log", {
   researchStatus: text("research_status"), // "completed" | "skipped_low_confidence" | "failed"
   aiSynthesisStatus: text("ai_synthesis_status"), // "completed" | "failed"
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+  },
+  (table) => [
+    // Assumed-no-show sweep fix (crons.ts) — the sweep's scan window was
+    // widened from 4 hours to 30 days so a call that fell through the
+    // cracks once (e.g. a Recall session stuck non-terminal) still gets
+    // retried on every future 15-minute pass instead of aging out
+    // unresolved forever. That only stays cheap with this index backing
+    // the (engagementId, callTime range) filter the sweep queries on.
+    index("briefed_calls_log_engagement_call_time_idx").on(table.engagementId, table.callTime),
+  ]
+);
 
 // ── Win-Back Enrollments ────────────────────────────────────────────────
 // Individual per-prospect enrollment tracking. Nothing previously recorded

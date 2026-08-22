@@ -166,6 +166,13 @@ async function gatherEngagementContext(
 type CallOutcome =
   | { status: "duplicate_skipped"; callLabel: string }
   | { status: "delivered"; callLabel: string; researchAttempted: boolean; searchesUsed?: number; confidenceScore: number; destination: string }
+  // Synthesis succeeded (the brief exists and is readable on the
+  // dashboard) but the send to `destination` failed — most commonly a
+  // missing slack_webhook_url. Deliberately NOT the same bucket as
+  // "failed": nothing about the brief itself failed, so a run made up
+  // entirely of these shouldn't be reported to the operator as a run
+  // failure (see the aggregation below).
+  | { status: "brief_ready_undelivered"; callLabel: string; detail: string; destination: string }
   | { status: "failed"; callLabel: string; detail: string };
 
 /**
@@ -395,82 +402,126 @@ Identity confidence: ${matchResult.passed ? "confirmed enough to research" : "no
     // ── Delivery + log write (memoized as one unit) ───────────────────
     await logStep(runId, { phase: "delivery", status: "running", label: callLabel });
 
-    await run(`deliver-${call.id}`, async () => {
-      const emailProvider = stack.email_platform;
-      const emailApiKey = emailProvider
-        ? await resolveCredential(tenant.engagementId, emailProvider).catch(() => undefined)
-        : undefined;
+    // Delivery-failure isolation fix — a synthesis-side failure (Rule 14
+    // gate, engagement lookup, the LLM call itself) means there is no
+    // brief at all, and the call should show as "Failed" with nothing to
+    // act on but a retry. A delivery-side failure (e.g. Slack webhook
+    // missing) is a completely different situation: the 7-section brief
+    // in `llmResult.text` above is real and already synthesized — the
+    // only thing that didn't happen is the send. Previously both cases
+    // fell into the same outer catch, which discarded llmResult.text
+    // entirely (wrote briefText: null), so a delivery failure silently
+    // destroyed a perfectly good brief and made the "Re-send Brief to
+    // Slack" control in the UI permanently non-functional for that call
+    // (resend/route.ts 400s on a null briefText). Isolating delivery lets
+    // us keep the brief, persist it as "completed," and surface the real
+    // delivery error separately — the operator can read the brief on the
+    // dashboard immediately and fix delivery (or not) on their own time,
+    // instead of the whole call being reported as a failure it wasn't.
+    let deliveryError: string | null = null;
+    try {
+      await run(`deliver-${call.id}`, async () => {
+        const emailProvider = stack.email_platform;
+        const emailApiKey = emailProvider
+          ? await resolveCredential(tenant.engagementId, emailProvider).catch(() => undefined)
+          : undefined;
 
-      await deliverBrief(
-        stack.brief_landing_destination ?? "slack",
-        llmResult.text,
-        call.email,
-        stack.slack_webhook_url,
-        emailApiKey,
-        stack.email_platform
-          ? { platform: stack.email_platform, location_id: stack.booking_platform_meta?.location_id }
-          : undefined,
-        // Tier 4 #27 — only offer tappable outcome buttons when the
-        // operator has actually set up the signing secret needed to
-        // verify a click came from Slack (see the interactions route) —
-        // buttons with no way to verify their own callbacks would be
-        // worse than no buttons at all.
-        stack.brief_landing_destination === "slack" && stack.slack_signing_secret
-          ? { engagementId: tenant.engagementId, bookingId: call.id, prospectEmail: call.email }
-          : undefined
-      );
+        await deliverBrief(
+          stack.brief_landing_destination ?? "slack",
+          llmResult.text,
+          call.email,
+          stack.slack_webhook_url,
+          emailApiKey,
+          stack.email_platform
+            ? { platform: stack.email_platform, location_id: stack.booking_platform_meta?.location_id }
+            : undefined,
+          // Tier 4 #27 — only offer tappable outcome buttons when the
+          // operator has actually set up the signing secret needed to
+          // verify a click came from Slack (see the interactions route) —
+          // buttons with no way to verify their own callbacks would be
+          // worse than no buttons at all.
+          stack.brief_landing_destination === "slack" && stack.slack_signing_secret
+            ? { engagementId: tenant.engagementId, bookingId: call.id, prospectEmail: call.email }
+            : undefined
+        );
+      });
+    } catch (deliveryErr: unknown) {
+      deliveryError = deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr);
+    }
 
-      // Upsert rather than a plain insert: if an earlier attempt for this
-      // same call already wrote a failed row (see the catch block below),
-      // a retry that now succeeds must overwrite it — callId is a unique
-      // column, so a plain insert would throw a duplicate-key error here
-      // instead of correcting the record.
-      await db
-        .insert(briefedCallsLog)
-        .values({
-          id: crypto.randomUUID(),
-          engagementId: tenant.engagementId,
-          callId: call.id,
+    // Upsert rather than a plain insert: if an earlier attempt for this
+    // same call already wrote a failed row (see the catch block below),
+    // a retry that now succeeds must overwrite it — callId is a unique
+    // column, so a plain insert would throw a duplicate-key error here
+    // instead of correcting the record.
+    const deliveredNow = deliveryError === null;
+    await db
+      .insert(briefedCallsLog)
+      .values({
+        id: crypto.randomUUID(),
+        engagementId: tenant.engagementId,
+        callId: call.id,
+        runId,
+        callTime: call.callTime,
+        // Assumed-no-show sweep false-positive fix — see the column's
+        // comment in schema.ts. Null on platforms that don't expose an
+        // end time yet; the sweep treats that as "unknown," not "over."
+        callEndTime: call.callEndTime ?? null,
+        prospectName: call.name,
+        // Win-Back no-show gap fix — this is the only guaranteed-to-exist
+        // row per call (unlike showRateFeatures, which only exists when
+        // show_rate_scoring_enabled was on), so it's what
+        // resolveCallOutcome (outcome-resolution.ts) looks up to find who
+        // to enroll in Win-Back or sync an ad cohort for. Sourced from
+        // the same NormalizedCall booking.ts already populated — not a
+        // re-fetch, not a guess.
+        prospectEmail: call.email || null,
+        prospectPhone: call.phone ?? null,
+        briefDeliveredAt: deliveredNow ? new Date() : null,
+        destinationDelivered: deliveredNow ? stack.brief_landing_destination ?? "slack" : null,
+        personMatchScore: matchResult!.totalScore,
+        // Persisted regardless of delivery outcome — see the comment
+        // above this block. This is the fix for the drawer/card showing
+        // "Brief generation failed" while the step timeline showed a
+        // delivery-specific reason: they were reading two different
+        // fields (a hardcoded fallback string vs. logStep's detail) for
+        // two different failure modes that got collapsed into one.
+        briefText: llmResult.text,
+        researchStatus,
+        aiSynthesisStatus: "completed",
+        createdAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: briefedCallsLog.callId,
+        set: {
           runId,
-          callTime: call.callTime,
-          // Assumed-no-show sweep false-positive fix — see the column's
-          // comment in schema.ts. Null on platforms that don't expose an
-          // end time yet; the sweep treats that as "unknown," not "over."
-          callEndTime: call.callEndTime ?? null,
-          prospectName: call.name,
-          // Win-Back no-show gap fix — this is the only guaranteed-to-exist
-          // row per call (unlike showRateFeatures, which only exists when
-          // show_rate_scoring_enabled was on), so it's what
-          // resolveCallOutcome (outcome-resolution.ts) looks up to find who
-          // to enroll in Win-Back or sync an ad cohort for. Sourced from
-          // the same NormalizedCall booking.ts already populated — not a
-          // re-fetch, not a guess.
           prospectEmail: call.email || null,
           prospectPhone: call.phone ?? null,
-          briefDeliveredAt: new Date(),
-          destinationDelivered: stack.brief_landing_destination ?? "slack",
+          callEndTime: call.callEndTime ?? null,
+          briefDeliveredAt: deliveredNow ? new Date() : null,
+          destinationDelivered: deliveredNow ? stack.brief_landing_destination ?? "slack" : null,
           personMatchScore: matchResult!.totalScore,
           briefText: llmResult.text,
           researchStatus,
           aiSynthesisStatus: "completed",
-          createdAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: briefedCallsLog.callId,
-          set: {
-            runId,
-            prospectEmail: call.email || null,
-            prospectPhone: call.phone ?? null,
-            callEndTime: call.callEndTime ?? null,
-            briefDeliveredAt: new Date(),
-            destinationDelivered: stack.brief_landing_destination ?? "slack",
-            personMatchScore: matchResult!.totalScore,
-            briefText: llmResult.text,
-            researchStatus,
-            aiSynthesisStatus: "completed",
-          },
-        });
-    });
+        },
+      });
+
+    if (!deliveredNow) {
+      await logStep(runId, {
+        phase: "delivery",
+        status: "failed",
+        label: callLabel,
+        detail: deliveryError!,
+      });
+
+      return {
+        status: "brief_ready_undelivered",
+        callLabel,
+        detail: deliveryError!,
+        destination: stack.brief_landing_destination ?? "slack",
+      };
+    }
 
     await logStep(runId, {
       phase: "delivery",
@@ -711,6 +762,7 @@ export async function executeNightlyBriefingCycle(
       }
     }
 
+    let undeliveredReadyCount = 0;
     for (const outcome of outcomes) {
       if (outcome.status === "duplicate_skipped") {
         continue;
@@ -722,17 +774,28 @@ export async function executeNightlyBriefingCycle(
         summary.whatWasAttempted.push(`Brief ${outcome.callLabel}.`);
         summary.whatWorked.push(`Delivered brief for ${outcome.callLabel} via ${outcome.destination} (confidence ${outcome.confidenceScore}/100).`);
         deliveredCount++;
+      } else if (outcome.status === "brief_ready_undelivered") {
+        // Not a failure to brief — the brief exists. Only delivery to
+        // `destination` didn't happen, most often because the engagement
+        // has no slack_webhook_url configured yet. Surfaced as an open
+        // item pointing at the dashboard rather than as a failure, so a
+        // missing Slack webhook can never fail the whole nightly run.
+        summary.whatWasAttempted.push(`Brief ${outcome.callLabel}.`);
+        summary.openItems.push(
+          `Brief ready for ${outcome.callLabel} but not sent — ${outcome.detail}. It's readable now on the run's dashboard card; configure the missing credential to auto-deliver next time, or send it manually from there.`
+        );
+        undeliveredReadyCount++;
       } else {
         summary.whatFailed.push(`Failed to brief ${outcome.callLabel}: ${outcome.detail}`);
       }
     }
 
-    if (deliveredCount === 0 && normalizedCalls.length > 0) {
+    if (deliveredCount === 0 && undeliveredReadyCount === 0 && normalizedCalls.length > 0) {
       summary.openItems.push("Every call on tomorrow's roster was already briefed in the last 24h — no new briefs sent.");
     }
 
     const hadFailures = summary.whatFailed.length > 0;
-    if (hadFailures && deliveredCount === 0 && normalizedCalls.length > 0) {
+    if (hadFailures && deliveredCount === 0 && undeliveredReadyCount === 0 && normalizedCalls.length > 0) {
       await failRun(runId, new Error(`All ${normalizedCalls.length} call(s) failed to brief — see summary for per-call errors.`), { summary });
       return deliveredCount;
     }
