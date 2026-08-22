@@ -142,17 +142,15 @@ function SkillSiblingClients({ skillId, currentEngagementId }: { skillId: SkillI
       <div className="my-3 border-t border-zinc-200/80 dark:border-sidebar-border" />
 
       {/* View All CTA */}
-      <Link
-        href={`/dashboard/modules/${skillId}`}
-        className="group flex items-center justify-between rounded-xl px-2.5 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 bg-white dark:bg-zinc-900/60 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700/80 transition-all duration-200 shadow-2xs"
-      >
-        <span className="text-xs font-mono tracking-tight text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-200 transition-colors">
-          View all
-        </span>
-        <div className="flex items-center justify-center w-5 h-5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-700/60 border border-zinc-200 dark:border-zinc-700/50 transition-colors">
-          <ArrowRight className="w-3 h-3 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 group-hover:translate-x-0.5 transition-all duration-200 shrink-0" />
-        </div>
-      </Link>
+     <Link
+  href={`/dashboard/modules/${skillId}`}
+  className="group flex items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-all duration-200"
+>
+  <span className="text-xs font-mono tracking-tight transition-colors">
+    view all
+  </span>
+  <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-all duration-200 shrink-0" />
+</Link>
     </>
   );
 }
