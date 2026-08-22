@@ -12,7 +12,7 @@ const SCAN_DIRS = [
 ];
 
 // OpenRouter model
-const MODEL = 'stealth/ox-alph';
+const MODEL = 'stealth/ox-alpha';
 
 // Only bundle TypeScript code files (exclude heavy .json and .css files)
 const ALLOWED_EXTENSIONS = new Set(['.ts', '.tsx']);
@@ -107,7 +107,7 @@ async function main() {
   }
 
   // 5. CRITICAL PROMPT - COMPLETE USER RANT & ALL PROBLEMS
-  const brainStormPrompt = `need you to look at my runs id , engagements id, engagements id skill files, something doesnt convince me this is ready to enter the market, i mean real world usage, somethings are off, point those out,tell me whats not right
+  const brainStormPrompt = `need you to look at my runs id , engagements id, my queue panel, live executions , sometimes new executions come in and user really has to thin their eyes to see , like no visual contrast for differentiation,  engagements id skill files, something doesnt convince me this is ready to enter the market, i mean real world usage, somethings are off, point those out,tell me whats not right
 
 Here is the codebase:
 ${codebaseContext}
