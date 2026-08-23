@@ -33,6 +33,7 @@ import { skillName } from "@/lib/copy";
 import { getDaysInMonthGrid, dateKey, timeStr } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { RunActivityPanel } from "@/app/dashboard/runs/[id]/_shared/run-activity-panel";
+import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import type { RosterEntry } from "@/app/api/engagements/[id]/roster/route";
 import type { PileOnPipelineItem } from "@/app/api/engagements/[id]/pile-on-pipeline/route";
 import type { WinBackPipelineItem } from "@/app/api/engagements/[id]/win-back-pipeline/route";
@@ -77,36 +78,7 @@ function emptyStream<T>(): StreamState<T> {
   return { data: [], loading: false, fetched: false, error: null };
 }
 
-function StatusPill({
-  tone,
-  children,
-  className,
-}: {
-  tone: "success" | "warning" | "danger" | "info" | "neutral" | string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const toneClasses =
-    {
-      success: "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300",
-      danger: "bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200",
-      warning: "bg-amber-100 text-amber-950 dark:bg-amber-500/20 dark:text-amber-300",
-      info: "bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-300",
-      neutral: "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300",
-    }[tone] ?? "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300";
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-tight transition-colors border-0",
-        toneClasses,
-        className
-      )}
-    >
-      {children}
-    </span>
-  );
-}
+// Fix: local filled-pill StatusPill removed — see _shared/status-pill.tsx.
 
 function formatDayHeader(dateStr: string) {
   const todayKey = dateKey(new Date());

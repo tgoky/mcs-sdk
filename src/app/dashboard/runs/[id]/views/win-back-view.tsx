@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "../_shared/status-pill";
+import { formatDiaryDate } from "@/lib/format-datetime";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { WinBackDetail } from "../_shared/types";
 
@@ -136,7 +137,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
               <div>
                 <p className="text-sm font-bold text-zinc-900 dark:text-white font-sans">{enrollment.prospectName ?? enrollment.prospectEmail}</p>
                 <p className="text-xs text-zinc-500 dark:text-zinc-500 font-sans">
-                  Enrolled {new Date(enrollment.enrolledAt).toLocaleDateString()} · {recoveryWindowDays}-day window ends {windowEnd.toLocaleDateString()}
+                  Enrolled {formatDiaryDate(enrollment.enrolledAt)} · {recoveryWindowDays}-day window ends {formatDiaryDate(windowEnd)}
                 </p>
               </div>
             </div>
@@ -281,7 +282,7 @@ function CadenceTimeline({
           {hasEnrollment ? "Recovery cadence" : "Standard cadence template"}
         </h3>
         <span className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-500">
-          <Clock3 size={11} /> {enrolledAt.toLocaleDateString()} – {windowEnd.toLocaleDateString()} ({windowDays}d)
+          <Clock3 size={11} /> {formatDiaryDate(enrolledAt)} – {formatDiaryDate(windowEnd)} ({windowDays}d)
         </span>
       </div>
 
@@ -306,7 +307,7 @@ function CadenceTimeline({
                     className={cn(
                       "mt-4 h-2 w-2 shrink-0 rounded-full transition-colors",
                       status.tone === "success"
-                        ? "bg-emerald-500"
+                        ? "bg-[#424d77] dark:bg-[#c5b7ea]"
                         : status.tone === "danger"
                         ? "bg-rose-500"
                         : status.tone === "neutral"
@@ -324,7 +325,7 @@ function CadenceTimeline({
                       <MessageSquare size={13} className="shrink-0 text-zinc-500 dark:text-zinc-500" />
                     )}
                     <span className="truncate text-xs font-bold text-zinc-900 dark:text-white font-sans">{dayLabel(tp.offsetDays)}</span>
-                    <span className="font-mono text-[10.5px] text-zinc-500 dark:text-zinc-500 shrink-0">{tp.date.toLocaleDateString()}</span>
+                    <span className="font-mono text-[10.5px] text-zinc-500 dark:text-zinc-500 shrink-0">{formatDiaryDate(tp.date)}</span>
                   </div>
                   <StatusPill tone={status.tone} className="shrink-0">
                     {status.label}
@@ -405,7 +406,7 @@ function TouchpointDrawer({
 
               <SheetTitle className="mt-1.5 text-base font-bold text-zinc-900 dark:text-white font-sans">{dayLabel(touchpoint.offsetDays)}</SheetTitle>
               <SheetDescription className="text-xs text-zinc-600 dark:text-zinc-400 font-sans">
-                Scheduled to send {touchpoint.date.toLocaleDateString()}
+                Scheduled to send {formatDiaryDate(touchpoint.date)}
               </SheetDescription>
             </SheetHeader>
 

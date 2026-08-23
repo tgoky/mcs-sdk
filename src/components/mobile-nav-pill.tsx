@@ -4,87 +4,17 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Search,
-  Menu,
-  X,
-  ChevronRight,
-  ChevronDown,
-  LayoutDashboard,
-  Users,
-  Inbox,
-  PlaySquare,
-  BarChart3,
-  Settings,
-  Key,
-  Layers,
-} from "lucide-react";
+import { Search, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
+import { PRIMARY_NAV_SECTIONS, SETTINGS_NAV } from "@/lib/primary-nav";
 
-interface NavSection {
-  title: string;
-  href?: string;
-  icon: any;
-  items?: { name: string; href: string }[];
-}
-
-const NAVIGATION_SECTIONS: NavSection[] = [
-  {
-    title: "Overview",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Queue",
-    href: "/dashboard/queue",
-    icon: Inbox,
-  },
-  {
-    title: "Live Executions",
-    href: "/dashboard/runs",
-    icon: PlaySquare,
-  },
-  {
-    title: "Clients",
-    icon: Users,
-    items: [
-      { name: "All Clients", href: "/dashboard/engagements" },
-      { name: "Add New Client", href: "/dashboard/engagements/new" },
-    ],
-  },
-  {
-    title: "Modules",
-    icon: Layers,
-    items: [
-      { name: "Show Rate Setup", href: "/dashboard/modules/pin-down" },
-      { name: "Pre-Call Sequence", href: "/dashboard/modules/pile-on" },
-      { name: "Call Brief", href: "/dashboard/modules/pre-call-read" },
-      { name: "Booking Recovery", href: "/dashboard/modules/win-back" },
-      { name: "Funnel Audit", href: "/dashboard/modules/leak-map" },
-    ],
-  },
-  {
-    title: "Analytics",
-    icon: BarChart3,
-    items: [
-      { name: "Overview", href: "/dashboard/analytics" },
-      { name: "Funnel & Leak Audits", href: "/dashboard/analytics/funnel" },
-      { name: "Call Outcomes & Objections", href: "/dashboard/analytics/calls" },
-      { name: "Recovery & Rebookings", href: "/dashboard/analytics/recovery" },
-      { name: "Ad Cohorts & Sequences", href: "/dashboard/analytics/cohorts" },
-      { name: "Unit Economics & Sync", href: "/dashboard/analytics/infrastructure" },
-    ],
-  },
-  {
-    title: "Credentials",
-    href: "/dashboard/credentials",
-    icon: Key,
-  },
-  {
-    title: "Settings",
-    href: "/dashboard/settings",
-    icon: Settings,
-  },
-];
+// Fix: this file used to hardcode its own NAVIGATION_SECTIONS — a second,
+// independently-authored guess at the app's structure that didn't match
+// the desktop primary rail (different labels for the same destination,
+// two invented sections desktop doesn't have, and an Analytics sub-list
+// pointing at five routes that don't exist). Now reads the same
+// PRIMARY_NAV_SECTIONS the desktop rail reads, so "the tabs should at
+// least align" holds by construction instead of by remembering to update
+// two files in sync.
 
 export function MobileNavPill() {
   const pathname = usePathname();
@@ -168,13 +98,13 @@ export function MobileNavPill() {
 
           {/* Full-Bleed List */}
           <div className="flex-1 divide-y divide-zinc-200 dark:divide-zinc-900 pb-24">
-            {NAVIGATION_SECTIONS.map((section) => {
+            {PRIMARY_NAV_SECTIONS.map((section) => {
               const Icon = section.icon;
-              const hasSubItems = Boolean(section.items && section.items.length > 0);
+              const hasSubItems = Boolean(section.children && section.children.length > 0);
               const isExpanded = Boolean(expandedSections[section.title]);
-              const isDirectActive = section.href ? pathname === section.href : false;
+              const isDirectActive = pathname === section.href;
 
-              if (!hasSubItems && section.href) {
+              if (!hasSubItems) {
                 return (
                   <Link
                     key={section.title}
@@ -214,9 +144,9 @@ export function MobileNavPill() {
                   </button>
 
                   {/* Sub-item Edge-to-Edge Nested List */}
-                  {isExpanded && section.items && (
+                  {isExpanded && section.children && (
                     <div className="bg-zinc-50 dark:bg-zinc-900/30 divide-y divide-zinc-200 dark:divide-zinc-900/60 border-t border-zinc-200 dark:border-zinc-900">
-                      {section.items.map((subItem) => {
+                      {section.children.map((subItem) => {
                         const isSubActive = pathname === subItem.href;
                         return (
                           <Link
@@ -228,7 +158,7 @@ export function MobileNavPill() {
                                 : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900/20 font-medium"
                             }`}
                           >
-                            <span>{subItem.name}</span>
+                            <span>{subItem.label}</span>
                           </Link>
                         );
                       })}
@@ -237,6 +167,25 @@ export function MobileNavPill() {
                 </div>
               );
             })}
+
+            {/* Fix: Settings used to sit inline in the same flat list as
+                Work/Engagements/Analytics — desktop only ever reaches it
+                through the avatar popover, never as a rail icon, so
+                giving it equal top-level billing here was one more point
+                of mismatch. Kept reachable (mobile has no popover to
+                tuck it into) but visually set apart the way the rail's
+                bottom section is set apart from its main 5 tabs. */}
+            <Link
+              href={SETTINGS_NAV.href}
+              className={`flex items-center gap-3.5 px-5 py-4 text-base transition-colors ${
+                pathname === SETTINGS_NAV.href
+                  ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white"
+                  : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 hover:text-zinc-900 dark:hover:text-white font-medium"
+              }`}
+            >
+              <SETTINGS_NAV.icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
+              <span>{SETTINGS_NAV.label}</span>
+            </Link>
           </div>
         </div>
       )}

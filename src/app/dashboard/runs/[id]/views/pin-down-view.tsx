@@ -162,13 +162,17 @@ function StatusPill({
   customLabel?: string;
 }) {
   const config: Record<StatusPillVariant, { label: string; color: string }> = {
+    // Fix: was emerald (green) — moved to the same lavender-slate family
+    // used everywhere else for "done/good" states. Left the rest of this
+    // component's dark-only styling (no `dark:` variants) alone for now —
+    // that's a separate light-theme-contrast bug worth its own pass.
     live: {
       label: "Live",
-      color: "text-emerald-400 bg-emerald-950/30 border-emerald-800/50",
+      color: "text-[#c5b7ea] bg-[#c5b7ea]/10 border-[#c5b7ea]/30",
     },
     ready: {
       label: "Ready",
-      color: "text-emerald-400 bg-emerald-950/30 border-emerald-800/50",
+      color: "text-[#c5b7ea] bg-[#c5b7ea]/10 border-[#c5b7ea]/30",
     },
     polling: {
       label: "Polling active",

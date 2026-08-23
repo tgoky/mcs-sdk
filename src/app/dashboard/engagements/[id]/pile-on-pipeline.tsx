@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { getDaysInMonthGrid, dateKey, timeStr } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { RunActivityPanel } from "@/app/dashboard/runs/[id]/_shared/run-activity-panel";
+import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import { classifyRunError } from "@/lib/error-classification";
 import { sentViaLabel } from "@/lib/copy";
 import type { PileOnPipelineItem, PileOnStage, PileOnWeeklyTrend } from "@/app/api/engagements/[id]/pile-on-pipeline/route";
@@ -51,36 +52,10 @@ const STAGE_META: Record<PileOnStage, { label: string; tone: Tone }> = {
   cancelled: { label: "Cancelled", tone: "danger" },
 };
 
-function StatusPill({
-  tone,
-  children,
-  className,
-}: {
-  tone: Tone | string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const toneClasses =
-    {
-      success: "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300",
-      danger: "bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200",
-      warning: "bg-amber-100 text-amber-950 dark:bg-amber-500/20 dark:text-amber-300",
-      info: "bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-300",
-      neutral: "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300",
-    }[tone] ?? "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300";
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-tight transition-colors border-0",
-        toneClasses,
-        className
-      )}
-    >
-      {children}
-    </span>
-  );
-}
+// Fix: local StatusPill (filled emerald/amber rounded-full pills) removed
+// in favor of the shared one — see _shared/status-pill.tsx for why this
+// file having its own copy is exactly how the green/amber colors kept
+// coming back after being "fixed" elsewhere.
 
 function formatDayHeader(dateStr: string) {
   const todayKey = dateKey(new Date());

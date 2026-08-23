@@ -2,17 +2,35 @@ import { cn } from "@/lib/utils";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 
+// ---------------------------------------------------------------------------
+// This is now the ONE tone/color system for status pills in the app. It used
+// to be redefined locally, slightly differently each time, in five other
+// files (win-back-pipeline.tsx, master-roster-calendar.tsx, pile-on-pipeline.tsx,
+// pre-call-read-pipeline.tsx, and this one) — which is exactly why a color
+// fix approved in one place never reached the others.
+//
+// Direct feedback this addresses:
+//   - "the border radius active in cadence label... I hate how they look" —
+//     dropped the rounded/bordered/uppercase pill shape entirely. Every
+//     tone now renders as plain bold colored text, same treatment
+//     win-back-pipeline.tsx's "Active in cadence" already had — that page
+//     was cited as the version to copy, so its style is now the shared
+//     default instead of a one-off.
+//   - No green for "success/done" states, no orange/gold for "active/
+//     warning" states. Both live in the same lavender-slate family
+//     (#424d77 light / #c5b7ea dark) already approved for "Active in
+//     cadence" — reused verbatim rather than inventing a second shade.
+//   - danger keeps a little more visual weight (border) than the rest —
+//     a failed send is the one status where losing the visual "alert" cue
+//     would make the log harder to scan for what needs attention.
+// ---------------------------------------------------------------------------
 const TONE_CLASSES: Record<Tone, string> = {
-  success:
-    "bg-transparent text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800/60",
-  warning:
-    "bg-transparent text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800/50",
+  success: "font-semibold text-[#424d77] dark:text-[#c5b7ea]",
+  warning: "font-bold text-[#424d77] dark:text-[#c5b7ea]",
   danger:
-    "bg-transparent text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-800/60",
-  info:
-    "bg-transparent text-sky-700 border-sky-200 dark:bg-sky-950/60 dark:text-sky-400 dark:border-sky-800/60",
-  neutral:
-    "bg-transparent text-zinc-500 border-zinc-200 dark:bg-zinc-800/60 dark:text-zinc-400 dark:border-zinc-700/60",
+    "font-semibold text-rose-700 dark:text-rose-400 border-b border-rose-300/70 dark:border-rose-800/70",
+  info: "font-medium text-sky-700 dark:text-sky-400",
+  neutral: "font-medium text-zinc-500 dark:text-zinc-400",
 };
 
 export function StatusPill({
@@ -26,11 +44,7 @@ export function StatusPill({
 }) {
   return (
     <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-        TONE_CLASSES[tone],
-        className
-      )}
+      className={cn("inline-flex items-center gap-1 text-[11px] tracking-tight", TONE_CLASSES[tone], className)}
     >
       {children}
     </span>

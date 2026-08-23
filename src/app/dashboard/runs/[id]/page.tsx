@@ -27,6 +27,7 @@ import { PreCallReadView } from "./views/pre-call-read-view";
 import { WinBackView } from "./views/win-back-view";
 import { LeakMapView } from "./views/leak-map-view";
 import { skillName, runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
+import { formatDiaryDateTime, formatReadableDuration } from "@/lib/format-datetime";
 import { classifyRunError } from "@/lib/error-classification";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import type { RunStep, RunSummary } from "@/models/schema";
@@ -49,23 +50,23 @@ interface RunDetail {
   durationMs: number | null;
 }
 
-function formatDuration(ms: number | null): string {
-  if (ms === null || ms < 0) return "—";
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
-}
+// Fix: this was a near-identical copy of step-timeline.tsx's own
+// formatDuration (same three branches, same "0ms" reading like a debug
+// log). Both now defer to the one shared formatter.
+const formatDuration = (ms: number | null) => formatReadableDuration(ms) ?? "—";
 
 function RunStatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   const config = {
+    // Fix: was emerald (green) — lavender-slate, same family used
+    // everywhere else in the app for "done" states now.
     success: {
       icon: <CheckCircle2 className="h-3.5 w-3.5" />,
-      className: "bg-transparent text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/60",
+      className: "bg-transparent text-[#424d77] border-[#424d77]/30 dark:bg-[#c5b7ea]/10 dark:text-[#c5b7ea] dark:border-[#c5b7ea]/35",
     },
     completed: {
       icon: <CheckCircle2 className="h-3.5 w-3.5" />,
-      className: "bg-transparent text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/60",
+      className: "bg-transparent text-[#424d77] border-[#424d77]/30 dark:bg-[#c5b7ea]/10 dark:text-[#c5b7ea] dark:border-[#c5b7ea]/35",
     },
     failed: {
       icon: <XCircle className="h-3.5 w-3.5" />,
@@ -345,8 +346,13 @@ export default function RunDetailPage() {
           </span>
         </div>
 
+        {/* Fix: this used to lead with raw execution duration ("1.3s") —
+            useful to an engineer, not to someone scanning "when did this
+            run." Diary-style date/time now sits immediately before the
+            status, duration moved into the Details panel below where it's
+            still available without competing for the most prominent spot. */}
         <div className="flex items-center gap-3 shrink-0 text-xs text-zinc-600 dark:text-zinc-400 font-mono">
-          <span>{formatDuration(run.durationMs)}</span>
+          <span>{formatDiaryDateTime(run.startedAt)}</span>
           <span className="text-zinc-300 dark:text-zinc-800">·</span>
           <RunStatusBadge status={run.status} />
           {isRunning && <CancelRunButton runId={runId} onCancelled={() => fetchRun()} />}
@@ -477,7 +483,11 @@ export default function RunDetailPage() {
                 <span className="text-[10px] uppercase text-zinc-500 dark:text-zinc-500 block font-sans font-bold">Details</span>
                 <div className="flex justify-between text-zinc-600 dark:text-zinc-400 font-sans">
                   <span>Started</span>
-                  <span className="text-zinc-800 dark:text-zinc-200">{new Date(run.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="text-zinc-800 dark:text-zinc-200">{formatDiaryDateTime(run.startedAt)}</span>
+                </div>
+                <div className="flex justify-between text-zinc-600 dark:text-zinc-400 font-sans">
+                  <span>Duration</span>
+                  <span className="text-zinc-800 dark:text-zinc-200">{formatDuration(run.durationMs)}</span>
                 </div>
                 <div className="flex justify-between items-center text-zinc-600 dark:text-zinc-400 font-sans gap-3">
                   <span className="shrink-0">Run ID</span>

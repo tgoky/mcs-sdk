@@ -22,6 +22,8 @@ import {
 import { cn } from "@/lib/utils";
 import { dateKey } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
 import { RunActivityPanel } from "@/app/dashboard/runs/[id]/_shared/run-activity-panel";
+import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
+import { formatDiaryDateTime } from "@/lib/format-datetime";
 import { exitReasonLabel } from "@/lib/copy";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import type { WinBackPipelineItem, WinBackEnrollmentStatus } from "@/app/api/engagements/[id]/win-back-pipeline/route";
@@ -29,6 +31,12 @@ import type { WinBackPipelineItem, WinBackEnrollmentStatus } from "@/app/api/eng
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 type ListScope = "week" | "month";
 
+// Fix: this file used to define its own local StatusPill with its own
+// hand-tuned lavender colors — the ONE place that already had the "no
+// green" fix applied. Every other file rendering a status pill (this
+// page's own tables aside) had a *different* local copy that never got
+// that fix. Now imports the shared one from _shared/status-pill.tsx, which
+// carries the same lavender palette forward everywhere instead of just here.
 const STATUS_META: Record<WinBackEnrollmentStatus, { label: string; tone: Tone }> = {
   active: { label: "Active in cadence", tone: "warning" },
   rebooked: { label: "Exited — rebooked", tone: "success" },
@@ -37,38 +45,6 @@ const STATUS_META: Record<WinBackEnrollmentStatus, { label: string; tone: Tone }
   lost: { label: "Exited — window elapsed", tone: "neutral" },
   corrected: { label: "Exited — outcome corrected", tone: "neutral" },
 };
-
-function StatusPill({
-  tone,
-  children,
-  className,
-}: {
-  tone: Tone | string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const toneClasses =
-    {
-      success: "bg-emerald-100 text-emerald-950 border border-emerald-300/80 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800/80",
-      danger: "bg-[#ffcfd2] text-rose-950 border border-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:border-rose-800/80",
-      // HIGH-CONTRAST #aab8d8 (LIGHT) & #c5b7ea (DARK) STYLING WITHOUT BACKGROUND PILL OR GLOWING DOT
-      warning: "bg-transparent text-[#424d77] dark:text-[#c5b7ea] font-bold border-0 shadow-none p-0",
-      info: "bg-sky-100 text-sky-950 border border-sky-300/80 dark:bg-sky-950/70 dark:text-sky-300 dark:border-sky-800/80",
-      neutral: "bg-zinc-200/80 text-zinc-900 border border-zinc-300/60 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700/60",
-    }[tone] ?? "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300";
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-tight transition-colors",
-        toneClasses,
-        className
-      )}
-    >
-      {children}
-    </span>
-  );
-}
 
 function formatDayHeader(dateStr: string) {
   const todayKey = dateKey(new Date());
@@ -92,7 +68,7 @@ function formatDayHeader(dateStr: string) {
 
 function formatTimeBadge(isoString: string | null | undefined) {
   if (!isoString) return null;
-  return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(isoString).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
 export function WinBackPipeline({ engagementId }: { engagementId: string }) {
@@ -503,7 +479,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                   </div>
                   <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-300 pt-0.5">
                     <Clock size={12} className="text-zinc-600 dark:text-zinc-300 shrink-0" />
-                    <span>Enrolled {new Date(selected.enrolledAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                    <span>Enrolled {new Date(selected.enrolledAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</span>
                   </div>
                 </div>
               </div>

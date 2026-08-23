@@ -150,7 +150,14 @@ export function WinBackRevenueSection({
       return {
         key: `${m.year}-${m.monthIdx}-${w.weekNum}`,
         label: `${m.name.split(" ")[0]} ${w.label}`,
-        shortLabel: m.monthIdx !== selectedPeriod.months[0].monthIdx || w.weekNum === 1 ? m.name.slice(0, 3) : "",
+        // Fix: this used to be blank for 9 of every 12 bars — only the
+        // first week of each month got a label, everything else was an
+        // unlabeled bar you had to count over to place ("isn't fully
+        // detailed" complaint). Every bar now gets its own start-day
+        // marker (e.g. "Aug 1", "Aug 8", "Aug 15") so you can read a
+        // specific week straight off the chart, not just which month
+        // you're roughly in.
+        shortLabel: `${m.name.slice(0, 3)} ${w.dayStart}`,
         count,
         revenue: count * offerPrice,
       };
@@ -166,7 +173,7 @@ export function WinBackRevenueSection({
       {/* ── HEADER WITH ASANA-STYLE PERIOD SELECTOR DROPDOWN ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
-          <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> 
+          <DollarSign className="w-3.5 h-3.5 text-[#424d77] dark:text-[#c5b7ea]" /> 
           Win-Back Revenue &amp; Milestone Breakdown
         </h2>
 
@@ -238,7 +245,7 @@ export function WinBackRevenueSection({
               <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
                 {recoveredCount}
               </p>
-              <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-medium">
+              <span className="text-xs font-mono text-[#424d77] dark:text-[#c5b7ea] font-medium">
                 {recoveredCount > 0 ? "Active pipeline" : "No recoveries yet"}
               </span>
             </div>
@@ -248,7 +255,7 @@ export function WinBackRevenueSection({
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
               Revenue Attributed
             </p>
-            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+            <p className="text-2xl font-bold text-[#424d77] dark:text-[#c5b7ea] tabular-nums">
               ${totalRevenue.toLocaleString()}
             </p>
           </div>
@@ -284,21 +291,21 @@ export function WinBackRevenueSection({
             has any recoveries — nothing to discover, nothing hidden. */}
         <div className="flex items-end gap-1.5 h-20">
           {weeklyBuckets.map((wk) => (
-            <div key={wk.key} className="flex-1 flex flex-col items-center gap-1">
+            <div key={wk.key} className="flex-1 flex flex-col items-center gap-1 min-w-0" title={`${wk.label}: ${wk.count} recovered${offerPrice > 0 ? ` · $${wk.revenue.toLocaleString()}` : ""}`}>
               <span className="text-[9px] font-mono font-bold text-zinc-600 dark:text-zinc-400 h-3 tabular-nums">
                 {wk.count > 0 ? wk.count : ""}
               </span>
               <div className="w-full h-12 rounded-t-sm bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden flex items-end">
                 {wk.count > 0 && (
                   <div
-                    className="w-full bg-emerald-500 dark:bg-emerald-400 rounded-t-sm transition-all"
+                    className="w-full bg-[#424d77] dark:bg-[#c5b7ea] rounded-t-sm transition-all"
                     style={{ height: `${Math.max(12, (wk.count / maxWeekCount) * 100)}%` }}
                   />
                 )}
               </div>
-              <span className="text-[9px] font-mono text-zinc-400 h-3">{wk.shortLabel}</span>
+              <span className="text-[9px] font-mono text-zinc-400 h-3 truncate w-full text-center">{wk.shortLabel}</span>
               {offerPrice > 0 && wk.count > 0 && (
-                <span className="text-[8.5px] font-mono text-emerald-600 dark:text-emerald-400 h-3">
+                <span className="text-[8.5px] font-mono text-[#424d77] dark:text-[#c5b7ea] h-3">
                   ${wk.revenue.toLocaleString()}
                 </span>
               )}
@@ -341,7 +348,7 @@ export function WinBackRevenueSection({
                   <p className="text-[10.5px] text-zinc-400 font-mono truncate">{d.prospectEmail}</p>
                 </div>
                 {offerPrice > 0 && (
-                  <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
+                  <span className="text-xs font-mono font-bold text-[#424d77] dark:text-[#c5b7ea] shrink-0">
                     +${offerPrice.toLocaleString()}
                   </span>
                 )}
@@ -383,7 +390,7 @@ function RecoveredDealDrawer({
               <StatusPill tone="success" className="w-fit">Recovered</StatusPill>
               <SheetTitle className="mt-2 text-lg font-bold font-sans text-zinc-900 dark:text-white">{deal.prospectName ?? deal.prospectEmail}</SheetTitle>
               <SheetDescription className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400 font-sans">
-                Rebooked {new Date(deal.rebookedAt).toLocaleString(undefined, { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                Rebooked {new Date(deal.rebookedAt).toLocaleString(undefined, { month: "long", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}
               </SheetDescription>
             </SheetHeader>
             <SheetBody className="space-y-4 font-sans pt-2">
@@ -396,7 +403,7 @@ function RecoveredDealDrawer({
                 {offerPrice > 0 && (
                   <div className="flex items-center justify-between text-xs font-sans">
                     <span className="text-zinc-600 dark:text-zinc-400">Revenue attributed</span>
-                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">${offerPrice.toLocaleString()}</span>
+                    <span className="font-mono font-bold text-[#424d77] dark:text-[#c5b7ea]">${offerPrice.toLocaleString()}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between text-xs font-sans pt-1">

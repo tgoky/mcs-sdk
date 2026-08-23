@@ -5,10 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutGrid,
-  Building2,
-  BarChart3,
-  BookOpen,
-  CalendarClock,
   LogOut,
   User,
   Settings,
@@ -18,10 +14,10 @@ import {
   Sliders,
   Plus,
   UserPlus,
-  type LucideIcon,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
+import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
 
 interface PrimaryRailProps {
   displayName: string;
@@ -30,13 +26,12 @@ interface PrimaryRailProps {
   activeWorkspaceId: string;
 }
 
-const RAIL_SECTIONS: Array<{ href: string; title: string; icon: LucideIcon }> = [
-  { href: "/dashboard", title: "Work", icon: LayoutGrid },
-  { href: "/dashboard/engagements", title: "Engagements", icon: Building2 },
-  { href: "/dashboard/analytics", title: "Analytics", icon: BarChart3 },
-  { href: "/dashboard/library", title: "Library", icon: BookOpen },
-  { href: "/dashboard/meetings", title: "Meetings", icon: CalendarClock },
-];
+// Fix: this used to be its own hardcoded RAIL_SECTIONS list — the mobile
+// menu had a second, independently-authored list that named these same
+// 5 destinations differently and added two more that don't exist here
+// ("Modules", "Credentials"). Now both read PRIMARY_NAV_SECTIONS from
+// lib/primary-nav.tsx so the tab set can't drift apart again.
+const RAIL_SECTIONS = PRIMARY_NAV_SECTIONS;
 
 function SquishyCounterClaimBadge({ active }: { active: boolean }) {
   return (

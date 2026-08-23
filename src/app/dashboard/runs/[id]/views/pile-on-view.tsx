@@ -17,38 +17,17 @@ import {
 } from "@/lib/copy";
 import { classifyRunError } from "@/lib/error-classification";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { StatusPill as HighContrastBadge } from "../_shared/status-pill";
+import { formatDiaryDateTime, formatDiaryTime } from "@/lib/format-datetime";
 import type { PileOnDetail, SequenceMessage } from "../_shared/types";
 import type { RunStep } from "@/models/schema";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 
-function HighContrastBadge({
-  tone,
-  children,
-}: {
-  tone: Tone;
-  children: React.ReactNode;
-}) {
-  const styles: Record<Tone, string> = {
-    success:
-      "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/40 dark:bg-emerald-500/25",
-    danger:
-      "bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 dark:bg-rose-500/25",
-    warning:
-      "bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40 dark:bg-amber-500/25",
-    info: "bg-sky-500/20 text-sky-600 dark:text-sky-300 border-sky-500/40 dark:bg-sky-500/25",
-    neutral:
-      "bg-zinc-200/80 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${styles[tone]}`}
-    >
-      {children}
-    </span>
-  );
-}
+// Fix: this file had its own bordered/filled badge (green success, orange
+// warning) — replaced with the shared StatusPill (aliased to the old name
+// so the rest of this file doesn't need touching) so this run view carries
+// the same lavender palette as win-back-view.tsx instead of drifting again.
 
 export function PileOnView({
   detail,
@@ -329,13 +308,15 @@ export function PileOnView({
              previously only existed two generic step labels deep in the
              raw timeline below — see the comment on wasRecoveredFromWinBack. */}
         {winBackExitStep && (
-          <div className="flex items-start gap-2.5 rounded-lg border border-emerald-300/60 dark:border-emerald-900/50 bg-emerald-50/70 dark:bg-emerald-950/20 px-3 py-2.5">
-            <Sparkles size={14} className="shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+          // Fix: was emerald green — matches the same lavender-slate used
+          // for every other "good outcome" state now (see status-pill.tsx).
+          <div className="flex items-start gap-2.5 rounded-lg border border-[#424d77]/25 dark:border-[#c5b7ea]/30 bg-[#424d77]/[0.04] dark:bg-[#c5b7ea]/10 px-3 py-2.5">
+            <Sparkles size={14} className="shrink-0 mt-0.5 text-[#424d77] dark:text-[#c5b7ea]" />
             <div className="space-y-0.5">
-              <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+              <p className="text-xs font-bold text-[#424d77] dark:text-[#c5b7ea]">
                 Recovered a lost lead
               </p>
-              <p className="text-xs text-emerald-800/80 dark:text-emerald-400/80 leading-relaxed">
+              <p className="text-xs text-[#424d77]/80 dark:text-[#c5b7ea]/80 leading-relaxed">
                 {prospectEmail ?? "This prospect"} had no-showed and was actively in the Win-Back sequence — this
                 booking pulled them out of it{" "}
                 {recoveredTaggerStep?.status === "success" ? (
@@ -368,7 +349,7 @@ export function PileOnView({
         {wasRecoveredFromWinBack && (
           <>
             <span className="text-zinc-300 dark:text-zinc-700 font-normal">•</span>
-            <span className="text-emerald-700 dark:text-emerald-400">
+            <span className="text-[#424d77] dark:text-[#c5b7ea] font-semibold">
               Recovered from Win-Back
             </span>
           </>
@@ -473,10 +454,12 @@ export function PileOnView({
                   {ch.step && (
                     <>
                       <span className="text-zinc-400">Last Attempt</span>
+                      {/* Fix: was `.toLocaleString()` with no options — a raw
+                          locale-dependent "20/08/2026, 12:00:39" (ambiguous
+                          DD/MM, includes seconds nobody needs, no guaranteed
+                          AM/PM). Now a consistent "Aug 20, 2026 · 12:00 PM". */}
                       <span className="text-zinc-700 dark:text-zinc-300 font-medium">
-                        {new Date(
-                          ch.step.completedAt ?? ch.step.startedAt
-                        ).toLocaleString()}
+                        {formatDiaryDateTime(ch.step.completedAt ?? ch.step.startedAt)}
                       </span>
                     </>
                   )}
@@ -516,10 +499,7 @@ export function PileOnView({
                         <span className="font-medium text-zinc-700 dark:text-zinc-300">
                           Text #{i + 1} —{" "}
                           <span className="text-zinc-400 font-normal">
-                            {new Date(m.sentAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {formatDiaryTime(m.sentAt)}
                           </span>
                         </span>
                         <HighContrastBadge

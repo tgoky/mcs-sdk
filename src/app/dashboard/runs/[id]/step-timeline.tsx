@@ -10,14 +10,17 @@ import {
   X,
 } from "lucide-react";
 import { phaseLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
+import { formatDiaryTime, formatReadableDuration } from "@/lib/format-datetime";
 import type { RunStep } from "@/models/schema";
 
 type RunStepStatus = RunStep["status"];
 
 const STATUS_STYLE: Record<string, { icon: React.ReactNode; className: string; label: string }> = {
+  // Fix: was emerald (green) — lavender-slate, same family as every other
+  // "done" state in the app now.
   success: {
     icon: <Check className="h-3.5 w-3.5" />,
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300",
+    className: "border-[#424d77]/30 bg-[#424d77]/5 text-[#424d77] dark:border-[#c5b7ea]/35 dark:bg-[#c5b7ea]/10 dark:text-[#c5b7ea]",
     label: "Complete",
   },
   failed: {
@@ -52,19 +55,14 @@ function getStepStatus(status: RunStepStatus, interrupted: boolean) {
   return STATUS_STYLE[status] ?? STATUS_STYLE.running;
 }
 
-function formatDuration(ms: number | null): string | null {
-  if (ms === null || ms < 0) return null;
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
+// Fix: raw millisecond counts ("0ms", "43ms") read like a debug log, not
+// something a client should have to parse — and formatTime previously left
+// hour12 up to the browser's default locale, which is why the same run
+// could show "12:00 PM" for one person and unmarked 24-hour "16:30" for
+// another. Both now go through the shared diary formatter so every
+// timestamp in the app looks the same and is never ambiguous.
+const formatDuration = formatReadableDuration;
+const formatTime = formatDiaryTime;
 
 function StepMarker({ status, interrupted }: { status: RunStepStatus; interrupted: boolean }) {
   const visual = getStepStatus(status, interrupted);

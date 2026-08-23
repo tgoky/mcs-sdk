@@ -158,10 +158,16 @@
   --text-secondary: oklch(0.35 0.005 285);
   --text-muted: oklch(0.55 0.005 285);
   --error: oklch(0.6 0.18 15);
-  /* 2026-08-09 light-mode audit target: #006738 (deep forest green, needed
-     for legibility on a near-white bg). Was oklch(0.45 0.15 155), which
-     resolved to #006b2c — close, but not the exact audited value. */
-  --success: #006738;
+  /* 2026-08-23 repaint — this was #006738 (deep forest green). Same call as
+     the amber→neutral repaint below: "success"/"done" states shouldn't
+     read as traffic-light green, they should read as the same calm
+     lavender-slate the rest of the "settled" UI uses. #424d77 is the exact
+     value already approved and shipped on win-back-pipeline.tsx's local
+     StatusPill — reusing it here instead of inventing a new shade, and
+     applying it centrally so every consumer of --success (dashboard
+     overview cards, run-history tables, activity feed, MODULE_STATUS_COLORS,
+     RUN_STATUS_COLORS) picks it up without a separate per-file fix. */
+  --success: #424d77;
   --accent-dim: color-mix(in oklch, var(--foreground) 6%, transparent);
 
   --ink: #1c1a22;
@@ -226,7 +232,10 @@
   --text-secondary: oklch(0.705 0.015 286.067);
   --text-muted: oklch(0.552 0.016 285.938);
   --error: oklch(0.712 0.194 13.428);
-  --success: oklch(0.765 0.177 163.223);
+  /* 2026-08-23 repaint — see matching light-mode comment above. Was
+     oklch(0.765 0.177 163.223), a saturated green. #c5b7ea is the dark-mode
+     half of the same approved lavender pair. */
+  --success: #c5b7ea;
   --accent-dim: color-mix(in oklch, var(--foreground) 8%, transparent);
 
   --ink: #f2eff7;

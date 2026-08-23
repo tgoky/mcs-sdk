@@ -231,10 +231,18 @@ export function GlobalSearch({ triggerClassName }: { triggerClassName?: string }
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/40 backdrop-blur-[2px] pt-[12vh] px-4">
+        // Fix: this was a single, non-responsive centered "spotlight" modal
+        // used at every viewport width — on mobile that reads as "a
+        // container popping up in the middle of the screen" instead of
+        // something that feels like it slid out of the search button you
+        // just tapped. Below `md` it now anchors to the bottom edge as a
+        // proper sheet (full width, top corners only, slides up); `md` and
+        // above keeps the existing centered/near-top command-palette
+        // layout unchanged.
+        <div className="fixed inset-0 z-[100] flex items-end md:items-start justify-center bg-black/40 backdrop-blur-[2px] md:pt-[12vh]">
           <div
             ref={containerRef}
-            className="w-full max-w-xl bg-background border border-border rounded-xl shadow-2xl overflow-hidden font-sans antialiased"
+            className="w-full max-w-xl bg-background border-t md:border border-border rounded-t-2xl md:rounded-xl shadow-2xl overflow-hidden font-sans antialiased flex flex-col max-h-[85vh] md:max-h-none animate-in slide-in-from-bottom md:slide-in-from-top-2 fade-in duration-200"
           >
             {/* Input row */}
             <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border">
@@ -254,7 +262,7 @@ export function GlobalSearch({ triggerClassName }: { triggerClassName?: string }
             </div>
 
             {/* Results */}
-            <div className="max-h-[60vh] overflow-y-auto py-1.5">
+            <div className="flex-1 min-h-0 overflow-y-auto py-1.5">
               {!query.trim() && (
                 <ResultGroup label="Jump to">
                   {QUICK_LINKS.map((item, i) => (
