@@ -77,9 +77,17 @@ export async function GET(request: Request) {
         },
       });
 
-    const destination = membership.hasAccess
-      ? redirectTo || "/home"
-      : "/?membership=required";
+    // No active membership after a real OAuth round trip means this person
+    // just proved who they are but hasn't paid — send them straight to
+    // checkout instead of bouncing back to the marketing landing page.
+    // /checkout already reads the session's whopUserId itself (the
+    // "returning buyer" path in createSignupCheckoutSession) so it greets
+    // them correctly without any extra plumbing here. The landing page's
+    // own /?membership=required banner is unrelated to this path — it's
+    // still used by middleware.ts for a session whose membership lapses
+    // after the fact on a protected route, which is a different moment
+    // than "just signed in for the first time."
+    const destination = membership.hasAccess ? redirectTo || "/home" : "/checkout";
 
     // 6. Create the NextResponse object with the redirect HTML payload
     const response = new NextResponse(buildOAuthRedirectHtml(destination, "Authenticated — redirecting..."), {

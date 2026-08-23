@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import { EnterDashboardBtn } from "@/components/enter-dashboard-btn";
+import { HeaderCtaBtn } from "@/components/header-cta-btn";
 
 export function LandingWrapper({
   destinationHref,
+  getStartedHref,
   membershipRequired,
   hasWhopUser,
 }: {
   destinationHref: string;
+  getStartedHref: string;
   membershipRequired: boolean;
   hasWhopUser: boolean;
 }) {
@@ -209,6 +212,13 @@ export function LandingWrapper({
             </div>
           </div>
         </nav>
+
+        {/* Signup-flavored CTA, deliberately separate from the hero's
+            sign-in-flavored "Enter Dashboard" button below — see
+            src/app/page.tsx's getStartedHref for the routing logic. */}
+        <HeaderCtaBtn href={getStartedHref} onNavigateStart={() => setIsExiting(true)}>
+          Get Started
+        </HeaderCtaBtn>
       </header>
 
       {/* Hero Body Content */}
