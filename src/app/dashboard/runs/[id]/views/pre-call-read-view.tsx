@@ -182,7 +182,7 @@ export function PreCallReadView({
               const d = new Date(dayKeyStr);
               const isToday = dateKey(new Date()) === dayKeyStr;
               return (
-                <div key={dayKeyStr} className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
+<div key={dayKeyStr} className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-transparent shadow-xl font-sans">                
                   <div className="flex items-center gap-4 border-b border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-5 py-4">
                     <div
                       className={cn(
@@ -398,7 +398,7 @@ function CallCard({
     : null;
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm font-sans antialiased overflow-hidden">
+   <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-transparent shadow-sm font-sans antialiased overflow-hidden">
       {/* Header: prospect, time, status — all visible with no click */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
         <div className="min-w-0">
@@ -427,11 +427,11 @@ function CallCard({
             that failed to send still showed "Sent to: Slack message" as
             if it succeeded — the exact mismatch that broke trust. */}
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="space-y-0.5 rounded-xl bg-zinc-50 dark:bg-zinc-950 p-2.5">
+         <div className="space-y-0.5 rounded-xl bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 p-2.5">
             <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Prospect identity</span>
             <p className="font-semibold text-zinc-800 dark:text-zinc-200">{matchLabel(call).text}</p>
           </div>
-          <div className="space-y-0.5 rounded-xl bg-zinc-50 dark:bg-zinc-950 p-2.5">
+ <div className="space-y-0.5 rounded-xl bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 p-2.5">
             <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Sent to</span>
             {call.briefDeliveredAt ? (
               <p className="flex items-center gap-1 font-semibold text-zinc-800 dark:text-zinc-200">
@@ -468,7 +468,7 @@ function CallCard({
               className="w-full p-3.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-zinc-500 leading-relaxed"
             />
           ) : editableText ? (
-            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-950 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+           <div className="rounded-xl bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
               {editableText}
             </div>
           ) : (
