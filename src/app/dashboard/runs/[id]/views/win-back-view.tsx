@@ -127,44 +127,68 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
       {/* 1. CADENCE LIFECYCLE BANNER                                       */}
       {/* ----------------------------------------------------------------- */}
       {enrollment ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 font-sans">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 shrink-0">
-              <UserCheck size={16} />
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 font-sans overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 shrink-0">
+                <UserCheck size={16} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-zinc-900 dark:text-white font-sans">{enrollment.prospectName ?? enrollment.prospectEmail}</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-500 font-sans">
+                  Enrolled {new Date(enrollment.enrolledAt).toLocaleDateString()} · {recoveryWindowDays}-day window ends {windowEnd.toLocaleDateString()}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-bold text-zinc-900 dark:text-white font-sans">{enrollment.prospectName ?? enrollment.prospectEmail}</p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-500 font-sans">
-                Enrolled {new Date(enrollment.enrolledAt).toLocaleDateString()} · {recoveryWindowDays}-day window ends {windowEnd.toLocaleDateString()}
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2 font-sans">
-            {meta && <StatusPill tone={meta.tone}>{meta.label}</StatusPill>}
-            
-            {enrollment.status === "active" && !manualExited && (
-              <button
-                type="button"
-                onClick={handleManualStopCadence}
-                className="flex items-center gap-1.5 rounded-lg border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 cursor-pointer transition-colors font-sans"
-                title="Stop the automated sequence — use this if the prospect already rebooked elsewhere or replied directly"
-              >
-                <SquareX size={12} /> Stop Cadence
-              </button>
-            )}
 
-            {enrollment.freshRescheduleLink && (
-              <a
-                href={enrollment.freshRescheduleLink}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors font-sans"
-              >
-                <Link2 size={11} /> Reschedule link
-              </a>
-            )}
+            <div className="flex items-center gap-2 font-sans">
+              {meta && <StatusPill tone={meta.tone}>{meta.label}</StatusPill>}
+
+              {enrollment.status === "active" && !manualExited && (
+                <button
+                  type="button"
+                  onClick={handleManualStopCadence}
+                  className="flex items-center gap-1.5 rounded-lg border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 cursor-pointer transition-colors font-sans"
+                  title="Stop the automated sequence — use this if the prospect already rebooked elsewhere or replied directly"
+                >
+                  <SquareX size={12} /> Stop Cadence
+                </button>
+              )}
+
+              {enrollment.freshRescheduleLink && (
+                <a
+                  href={enrollment.freshRescheduleLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors font-sans"
+                >
+                  <Link2 size={11} /> Reschedule link
+                </a>
+              )}
+            </div>
           </div>
+
+          {/* Fix: enrollment used to just report a status with no
+              explanation of what the status actually means or what
+              happens next — a reader had to already know what "Win-Back"
+              does to make sense of "Active in cadence." Spelled out in
+              plain language, and made status-aware so it stays accurate
+              once the cadence exits instead of always describing "active." */}
+          <p className="border-t border-zinc-200 dark:border-zinc-800 bg-white/40 dark:bg-zinc-900/40 px-4 py-2.5 text-xs text-zinc-600 dark:text-zinc-400 font-sans leading-relaxed">
+            {manualExited || enrollment.status === "manual_override" ? (
+              <>You stopped this sequence manually — no further messages will go out to this prospect.</>
+            ) : enrollment.status === "rebooked" ? (
+              <>This sequence stopped automatically because the prospect rebooked — no further messages went out after that.</>
+            ) : enrollment.status === "reply_exited" ? (
+              <>This sequence stopped automatically because the prospect replied — no further messages went out after that.</>
+            ) : enrollment.status === "lost" ? (
+              <>This sequence ran its full {recoveryWindowDays}-day window without the prospect rebooking or replying, so it closed out.</>
+            ) : (
+              <>
+                What happens next: over the next {recoveryWindowDays} days, we&apos;ll automatically send this prospect the scheduled emails/texts below trying to get them rebooked. It stops the moment they reply or book again — or you can stop it yourself anytime with <span className="font-semibold text-zinc-700 dark:text-zinc-300">Stop Cadence</span> above.
+              </>
+            )}
+          </p>
         </div>
       ) : (
         // Fix: same light-theme contrast bug as the run-failure banner

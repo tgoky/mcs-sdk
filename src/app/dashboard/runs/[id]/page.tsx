@@ -6,17 +6,20 @@ import Link from "next/link";
 import {
   AlertCircle,
   Ban,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
   CircleAlert,
   Clock3,
+  Copy,
   FileText,
   Loader2,
   XCircle,
   Wrench,
 } from "lucide-react";
 import { CancelRunButton } from "../../cancel-run-button";
+import { copyToClipboard } from "@/lib/quick-actions";
 import { StepTimeline } from "./step-timeline";
 import { PinDownView } from "./views/pin-down-view";
 import { PileOnView } from "./views/pile-on-view";
@@ -107,6 +110,36 @@ function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayloa
     default:
       return <PinDownView detail={detail} />;
   }
+}
+
+// Fix: this used to be a truncated, non-interactive ID with the caption
+// "Have this handy if you ever need to reference this run with your
+// account contact" — vague copy pointing at an undefined "account
+// contact" (no name, no link, no way to actually reach anyone), and a
+// ~150px-truncated UUID the user had to manually select around to copy.
+// This says plainly what the ID is for and makes it a single click to
+// grab, same copyToClipboard pattern already used across the queue/quick
+// actions panels.
+function CopyRunId({ runId }: { runId: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        const result = await copyToClipboard(runId);
+        if (result.ok) {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }
+      }}
+      className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-500 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+      title={runId}
+    >
+      <span className="truncate max-w-[130px]">{runId}</span>
+      {copied ? <Check size={11} className="text-emerald-500 shrink-0" /> : <Copy size={11} className="shrink-0" />}
+    </button>
+  );
 }
 
 function SummarySection({ summary }: { summary: RunSummary }) {
@@ -399,7 +432,12 @@ export default function RunDetailPage() {
         )}
       </main>
 
-      {/* 4. RUN ACTIVITY — below deliverables, open by default, collapsible on demand */}
+      {/* 4. RUN ACTIVITY — below deliverables, open by default, collapsible on demand.
+           Fix: this used to just restart with "Run started" and a step list with
+           no acknowledgment it's describing the same run as the summary above —
+           read as two disconnected reports bolted together. The caption below
+           frames it as "the log behind what you just saw," and the toggle label
+           now says what's actually gained by expanding it. */}
       <section>
         <button
           type="button"
@@ -407,16 +445,21 @@ export default function RunDetailPage() {
           className="flex items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-white cursor-pointer select-none"
         >
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showRunActivity ? "rotate-180" : ""}`} />
-          <span>{showRunActivity ? "Hide" : "Show"} run activity</span>
+          <span>{showRunActivity ? "Hide" : "Show"} the step-by-step log</span>
           <span className="text-zinc-300 dark:text-zinc-800">·</span>
           <span className="text-zinc-500 dark:text-zinc-500">{steps.length} step{steps.length === 1 ? "" : "s"}</span>
         </button>
+        {!showRunActivity && (
+          <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-600 pl-5">
+            The exact sequence of internal steps behind the summary above — useful if something looks off and you need the play-by-play.
+          </p>
+        )}
 
         {showRunActivity && (
           <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
             <section className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950">
               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Run activity</span>
+                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Step-by-step log</span>
                 <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500">{steps.length} steps</span>
               </div>
               <div className="max-h-[75vh] overflow-y-auto p-4">
@@ -436,11 +479,11 @@ export default function RunDetailPage() {
                   <span>Started</span>
                   <span className="text-zinc-800 dark:text-zinc-200">{new Date(run.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                 </div>
-                <div className="flex justify-between text-zinc-600 dark:text-zinc-400 font-sans gap-3">
-                  <span className="shrink-0">Reference ID</span>
-                  <span className="text-zinc-500 dark:text-zinc-500 text-[10px] font-mono truncate max-w-[150px]" title={run.id}>{run.id}</span>
+                <div className="flex justify-between items-center text-zinc-600 dark:text-zinc-400 font-sans gap-3">
+                  <span className="shrink-0">Run ID</span>
+                  <CopyRunId runId={run.id} />
                 </div>
-                <p className="text-[10px] text-zinc-700 dark:text-zinc-600 font-sans pt-1">Have this handy if you ever need to reference this run with your account contact.</p>
+                <p className="text-[10px] text-zinc-700 dark:text-zinc-600 font-sans pt-1">Uniquely identifies this run. Copy it if you need to report a problem with it.</p>
               </div>
             </aside>
           </div>

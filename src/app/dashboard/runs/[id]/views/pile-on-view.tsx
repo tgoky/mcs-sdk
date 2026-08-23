@@ -8,6 +8,7 @@ import {
   Copy,
   Check,
   AlertCircle,
+  Sparkles,
 } from "lucide-react";
 import {
   emailPlatformLabel,
@@ -74,6 +75,17 @@ export function PileOnView({
   const emailStep = latestStepFor("pile_on_enrollment");
   const adDataStep = latestStepFor("ad_data_cohort");
   const smsDispatchStep = latestStepFor("sms_enrollment");
+
+  // Fix: this run can also recover a lead that was actively mid-sequence
+  // in Win-Back (someone who no-showed, then rebooked) — enrollment-service.ts
+  // exits them from Win-Back and tags them "recovered" in the CRM when
+  // that happens. That's arguably the single most useful thing to know
+  // about a run like this, and it was previously invisible unless you
+  // expanded the raw step timeline below and read two generic-sounding
+  // step labels out of context. Surfaced here as its own callout instead.
+  const winBackExitStep = latestStepFor("win_back_exit_signal");
+  const recoveredTaggerStep = latestStepFor("recovered_tagger");
+  const wasRecoveredFromWinBack = winBackExitStep?.status === "success" && !!recoveredTaggerStep;
 
   const smsSentCount = smsMessages.filter((m) => m.status === "sent").length;
   const smsFailedCount = smsMessages.filter((m) => m.status === "failed").length;
@@ -312,6 +324,31 @@ export function PileOnView({
         <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed border-t border-zinc-100 dark:border-zinc-800/80 pt-2.5">
           {buildSentenceSummary()}
         </p>
+
+        {/* ── 2b. WIN-BACK RECOVERY CALLOUT ── surfaces an outcome that
+             previously only existed two generic step labels deep in the
+             raw timeline below — see the comment on wasRecoveredFromWinBack. */}
+        {winBackExitStep && (
+          <div className="flex items-start gap-2.5 rounded-lg border border-emerald-300/60 dark:border-emerald-900/50 bg-emerald-50/70 dark:bg-emerald-950/20 px-3 py-2.5">
+            <Sparkles size={14} className="shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+            <div className="space-y-0.5">
+              <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                Recovered a lost lead
+              </p>
+              <p className="text-xs text-emerald-800/80 dark:text-emerald-400/80 leading-relaxed">
+                {prospectEmail ?? "This prospect"} had no-showed and was actively in the Win-Back sequence — this
+                booking pulled them out of it{" "}
+                {recoveredTaggerStep?.status === "success" ? (
+                  <>and tagged them as recovered on {run.stack?.email_platform ? emailPlatformLabel(run.stack.email_platform) : "your CRM"}.</>
+                ) : recoveredTaggerStep?.status === "failed" ? (
+                  <>, but tagging them as recovered in your CRM failed ({recoveredTaggerStep.detail ?? "unknown error"}).</>
+                ) : (
+                  <>. CRM tagging wasn&apos;t attempted (recovered-from-no-show tagging is off for this client).</>
+                )}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── 3. EXECUTION STEPS BREADCRUMBS ── */}
@@ -328,6 +365,14 @@ export function PileOnView({
         <span className="text-zinc-800 dark:text-zinc-200">
           Sequences Triggered
         </span>
+        {wasRecoveredFromWinBack && (
+          <>
+            <span className="text-zinc-300 dark:text-zinc-700 font-normal">•</span>
+            <span className="text-emerald-700 dark:text-emerald-400">
+              Recovered from Win-Back
+            </span>
+          </>
+        )}
       </div>
 
       {/* ── 4. AI PERSONALIZATION CONTENT ── */}

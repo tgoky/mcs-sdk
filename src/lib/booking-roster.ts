@@ -31,6 +31,7 @@
 import { db } from "@/lib/db";
 import { bookingRoster } from "@/models/schema";
 import { and, eq, sql } from "drizzle-orm";
+import { deriveProspectName } from "@/lib/prospect-identity";
 
 export interface RosterUpsertResult {
   wrote: boolean;
@@ -105,8 +106,19 @@ export async function upsertBookingRoster(
 
   const prospectEmail: string =
     payload.data?.attributes?.email ?? payload.email ?? payload.prospect_email ?? payload.payload?.email ?? "";
-  const prospectName: string =
-    payload.data?.attributes?.first_name ?? payload.name ?? payload.prospect_name ?? payload.payload?.name ?? "Prospect";
+  // Fix: used to fall back to the literal string "Prospect" when the
+  // payload had no name field, which then got stored as this row's real
+  // prospectName and rendered verbatim across the roster/calendar UI as
+  // if it were an actual name — see deriveProspectName's doc. Falls back
+  // to an email-derived display name now, and only to null (not a fake
+  // placeholder) when there's no email either; every UI reading this
+  // column already has its own "Unnamed Prospect" fallback for that case.
+  const prospectName: string | null =
+    payload.data?.attributes?.first_name ??
+    payload.name ??
+    payload.prospect_name ??
+    payload.payload?.name ??
+    deriveProspectName(null, prospectEmail);
   const prospectPhone: string | undefined =
     payload.phone ??
     payload.prospect_phone ??

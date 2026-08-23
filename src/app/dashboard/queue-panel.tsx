@@ -59,6 +59,20 @@ export interface QueueItemDTO {
   sweepNoShowReview?: { bookingId: string; prospectEmail: string } | null;
 }
 
+/** Client-side mirror of QueueArchiveItem (src/lib/queue.ts) — the "Closed" tab's data. */
+export interface QueueArchiveItemDTO {
+  id: string;
+  source: "action" | "blocker";
+  title: string;
+  subtitle: string;
+  engagementId: string | null;
+  buyer: string | null;
+  runId: string | null;
+  outcome: "approved" | "rejected" | "execution_failed" | "resolved" | "abandoned";
+  closedAt: string;
+  closedBy: string | null;
+}
+
 export interface ClientOption {
   engagementId: string;
   buyer: string;
@@ -98,7 +112,26 @@ const DEFAULT_TAGS: CustomTag[] = [
 ];
 
 const POLL_MS = 8_000;
-type QueueTab = "all" | "approve" | "action_needed" | "alerts";
+const CLOSE_ANIMATION_MS = 280;
+type QueueTab = "all" | "approve" | "action_needed" | "alerts" | "closed";
+
+const ARCHIVE_OUTCOME_LABEL: Record<QueueArchiveItemDTO["outcome"], string> = {
+  approved: "Approved",
+  rejected: "Rejected",
+  execution_failed: "Approved — failed to run",
+  resolved: "Resolved",
+  abandoned: "Abandoned",
+};
+
+function archiveOutcomeClasses(outcome: QueueArchiveItemDTO["outcome"]): string {
+  if (outcome === "approved" || outcome === "resolved") {
+    return "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50";
+  }
+  if (outcome === "execution_failed") {
+    return "bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50";
+  }
+  return "bg-zinc-100 dark:bg-muted text-zinc-600 dark:text-muted-foreground border-zinc-200 dark:border-border";
+}
 type QueuePriority = "high" | "medium" | "low";
 export type ClientScopeView = "all" | "clients";
 
@@ -535,6 +568,50 @@ function QueueRow({
   );
 }
 
+/**
+ * A row in the "Closed" tab — deliberately read-only (no decide/dismiss
+ * buttons, nothing to accidentally re-trigger). Shows what it was, what
+ * happened to it, when, and by whom, plus the same "go to" link a live
+ * row offers. See getQueueArchiveItems for what closedBy can be null for
+ * (a Slack-button decision doesn't always carry a resolvable name).
+ */
+function ClosedQueueRow({ item }: { item: QueueArchiveItemDTO }) {
+  const href =
+    item.runId ? `/dashboard/runs/${item.runId}` : item.engagementId ? `/dashboard/engagements/${item.engagementId}` : null;
+
+  const body = (
+    <div className="group flex items-center gap-3 py-3 px-3.5 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors bg-white dark:bg-transparent">
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className={cn(
+              "inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 border",
+              archiveOutcomeClasses(item.outcome)
+            )}
+          >
+            {ARCHIVE_OUTCOME_LABEL[item.outcome]}
+          </span>
+          <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">{item.title}</p>
+        </div>
+        <p className="text-xs text-zinc-600 dark:text-zinc-300 line-clamp-2 leading-relaxed">{item.subtitle}</p>
+        <p className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">
+          {item.buyer ? `${item.buyer} · ` : ""}
+          <VerboseTime isoString={item.closedAt} className="text-[11px] text-zinc-400 dark:text-zinc-500" showFreshIndicator={false} />
+          {item.closedBy ? ` · by ${item.closedBy}` : ""}
+        </p>
+      </div>
+      {href && <ArrowUpRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />}
+    </div>
+  );
+
+  if (!href) return body;
+  return (
+    <Link href={href} className="block">
+      {body}
+    </Link>
+  );
+}
+
 export function QueuePanel({
   initialItems,
   clients = [],
@@ -550,6 +627,56 @@ export function QueuePanel({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string>(copy.errors.generic);
+
+  // Items mid-exit-animation — still rendered (collapsing/fading out) so a
+  // resolved item doesn't just vanish, but no longer counted or actionable.
+  // Fix: a row used to disappear the instant a mutation resolved, with
+  // nothing telling the user their click actually landed.
+  const [closingIds, setClosingIds] = useState<Set<string>>(new Set());
+  const closeItemWithAnimation = useCallback((id: string) => {
+    setClosingIds((prev) => new Set(prev).add(id));
+    setTimeout(() => {
+      setItems((prev) => prev.filter((i) => i.id !== id));
+      setClosingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, CLOSE_ANIMATION_MS);
+  }, []);
+
+  // "Closed" tab — what the user already decided, read back from the DB
+  // (see getQueueArchiveItems). Loaded lazily on first visit to the tab,
+  // not polled — this is a look-back, not a live view.
+  const [archiveItems, setArchiveItems] = useState<QueueArchiveItemDTO[]>([]);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveLoaded, setArchiveLoaded] = useState(false);
+  const fetchArchive = useCallback(async () => {
+    setArchiveLoading(true);
+    try {
+      const res = await fetch("/api/queue/archive", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setArchiveItems(data.items ?? []);
+      }
+    } catch {
+      // Archive is supplementary — a failed fetch just leaves the last
+      // known list (or empty) rather than blocking the whole panel.
+    } finally {
+      setArchiveLoading(false);
+      setArchiveLoaded(true);
+    }
+  }, []);
+
+  // Event-handler-triggered, not effect-triggered — this fetch is a
+  // response to the user clicking the tab, not a render needing to stay
+  // in sync with `tab`, so it belongs in the SegmentedTabs onChange
+  // below rather than a useEffect watching `tab`.
+  function handleTabChange(next: QueueTab) {
+    setTab(next);
+    setPage(0);
+    if (next === "closed" && !archiveLoaded) fetchArchive();
+  }
 
   const [activeFix, setActiveFix] = useState<{
     engagementId: string;
@@ -579,6 +706,7 @@ export function QueuePanel({
   // Table State
   const [savedView, setSavedView] = useLocalViewState<QueueViewState>("mcs:queue:view", DEFAULT_QUEUE_VIEW);
   const [tab, setTab] = useState<QueueTab>("all");
+
   const [search, setSearch] = useState("");
   const [timeRange, setTimeRange] = useState<TimeRangeValue>("all");
   const [activeChipIds, setActiveChipIds] = useState<Set<string>>(new Set());
@@ -701,7 +829,7 @@ export function QueuePanel({
   }, [items, railView, selectedClientId, selectedCategory, categories, groupingMode, selectedTagId, tags, itemMatchesTag]);
 
   const tabCounts = useMemo(() => {
-    const counts: Record<QueueTab, number> = { all: railFilteredItems.length, approve: 0, action_needed: 0, alerts: 0 };
+    const counts: Record<QueueTab, number> = { all: railFilteredItems.length, approve: 0, action_needed: 0, alerts: 0, closed: 0 };
     for (const item of railFilteredItems) {
       if (item.category === "approve") counts.approve++;
       else if (item.category === "action_needed") counts.action_needed++;
@@ -711,6 +839,7 @@ export function QueuePanel({
   }, [railFilteredItems]);
 
   const tabFiltered = useMemo(() => {
+    if (tab === "closed") return []; // Closed tab reads from archiveItems, a separate fetch — not the live queue pipeline.
     if (tab === "all") return railFilteredItems;
     if (tab === "alerts") return railFilteredItems.filter((i) => i.category === "alert" || i.category === "fyi");
     return railFilteredItems.filter((i) => i.category === tab);
@@ -862,7 +991,7 @@ export function QueuePanel({
         setErrorText(message);
         return;
       }
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      closeItemWithAnimation(item.id);
     } catch {
       setErrorId(item.id);
       setErrorText(copy.errors.generic);
@@ -913,7 +1042,7 @@ export function QueuePanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ decision: "rejected" }),
       }).catch(() => {});
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      closeItemWithAnimation(item.id);
     } catch {
       setErrorId(item.id);
       setErrorText(copy.errors.generic);
@@ -940,26 +1069,41 @@ export function QueuePanel({
     extra: { groupCount?: number; groupExpanded?: boolean; onToggleGroup?: () => void; nested?: boolean } = {}
   ) {
     const matchedTag = selectedTagId ? tags.find((t) => t.id === selectedTagId && itemMatchesTag(item, t)) : null;
+    const isClosing = closingIds.has(item.id);
     return (
-      <QueueRow
+      // Collapses height + fades out on close instead of vanishing
+      // instantly, so acting on an item reads as "this closed" rather
+      // than "this disappeared" — see closeItemWithAnimation above.
+      <div
         key={item.id}
-        item={item}
-        isBusy={busyId === item.id}
-        errorText={errorId === item.id ? errorText : null}
-        href={openHref(item)}
-        onDecide={(decision) => decide(item, decision)}
-        onDismissSyncSetup={() => dismissSyncSetup(item)}
-        onDismissRunFailure={() => dismissRunFailure(item)}
-        onRunMutation={(url) => runMutation(item, url)}
-        onResolveSweepNoShow={(outcome) => resolveSweepNoShow(item, outcome)}
-        onLinkNavigate={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
-        onActionComplete={refreshNow}
-        matchedTag={matchedTag}
-        onOpenFixDrawer={(engagementId, type, section) => {
-          setActiveFix({ engagementId, type, section });
+        className="grid overflow-hidden"
+        style={{
+          gridTemplateRows: isClosing ? "0fr" : "1fr",
+          opacity: isClosing ? 0 : 1,
+          transition: "grid-template-rows 280ms ease-in-out, opacity 280ms ease-in-out",
         }}
-        {...extra}
-      />
+      >
+        <div className={`overflow-hidden ${isClosing ? "pointer-events-none" : ""}`}>
+          <QueueRow
+            item={item}
+            isBusy={busyId === item.id}
+            errorText={errorId === item.id ? errorText : null}
+            href={openHref(item)}
+            onDecide={(decision) => decide(item, decision)}
+            onDismissSyncSetup={() => dismissSyncSetup(item)}
+            onDismissRunFailure={() => dismissRunFailure(item)}
+            onRunMutation={(url) => runMutation(item, url)}
+            onResolveSweepNoShow={(outcome) => resolveSweepNoShow(item, outcome)}
+            onLinkNavigate={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
+            onActionComplete={refreshNow}
+            matchedTag={matchedTag}
+            onOpenFixDrawer={(engagementId, type, section) => {
+              setActiveFix({ engagementId, type, section });
+            }}
+            {...extra}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -968,6 +1112,9 @@ export function QueuePanel({
     { key: "approve", label: toolbarCopy.tabs.approve, count: tabCounts.approve },
     { key: "action_needed", label: toolbarCopy.tabs.action_needed, count: tabCounts.action_needed },
     { key: "alerts", label: toolbarCopy.tabs.alerts, count: tabCounts.alerts },
+    // What you already decided on — read from the DB, not polled. See
+    // getQueueArchiveItems' doc for why some closed items don't appear.
+    { key: "closed", label: "Closed", count: archiveLoaded ? archiveItems.length : undefined },
   ];
 
   const customizerSections: CustomizerSection[] = [
@@ -1372,7 +1519,7 @@ export function QueuePanel({
         <div className="flex-1 flex flex-col min-w-0 bg-white/60 dark:bg-sidebar p-3 space-y-3">
           {/* TOOLBAR */}
           <div className="flex items-center gap-2 flex-wrap">
-            <SegmentedTabs options={tabOptions} value={tab} onChange={(t) => { setTab(t); setPage(0); }} />
+            <SegmentedTabs options={tabOptions} value={tab} onChange={handleTabChange} />
             <TableSearchInput value={search} onChange={(s) => { setSearch(s); setPage(0); }} placeholder={toolbarCopy.searchPlaceholder} className="w-[180px]" />
             <TimeRangeMenu value={timeRange} onChange={(r) => { setTimeRange(r); setPage(0); }} />
             <div className="ml-auto flex items-center gap-1.5">
@@ -1417,7 +1564,26 @@ export function QueuePanel({
           )}
 
           {/* ROWS CONTAINER */}
-          {railView === "clients" && !selectedClientId ? (
+          {tab === "closed" ? (
+            archiveLoading && archiveItems.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center py-12 text-xs font-mono text-zinc-400 dark:text-zinc-600">
+                Loading closed items…
+              </div>
+            ) : archiveItems.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-zinc-500 space-y-1">
+                <p className="text-sm font-medium">Nothing closed yet</p>
+                <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600 max-w-xs mx-auto">
+                  Approvals and blockers you decide on show up here — so you can double-check what you already acted on.
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border border border-zinc-200/80 dark:border-sidebar-border rounded-xl overflow-hidden bg-white dark:bg-zinc-900/30 shadow-xs">
+                {archiveItems.map((it) => (
+                  <ClosedQueueRow key={it.id} item={it} />
+                ))}
+              </div>
+            )
+          ) : railView === "clients" && !selectedClientId ? (
             clients.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-zinc-500 space-y-1">
                 <p className="text-sm font-medium">{sharedToolbarCopy.noResultsTitle}</p>
@@ -1469,7 +1635,8 @@ export function QueuePanel({
             </div>
           )}
 
-          {/* PAGINATION */}
+          {/* PAGINATION — not shown on the Closed tab, which is a flat, non-paginated look-back */}
+          {tab !== "closed" && (
           <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-sidebar-border text-xs text-zinc-500 dark:text-zinc-400">
             {pageSize === 5 && queueGroups.length > 5 ? (
               <button
@@ -1520,6 +1687,7 @@ export function QueuePanel({
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
 

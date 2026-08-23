@@ -422,6 +422,133 @@ export async function getQueueItems(whopUserId: string, workspaceId: string): Pr
 }
 
 /**
+ * "What did I already act on" — the archive view of the Queue panel.
+ *
+ * Not a new table: pending_actions and human_blockers never delete a row
+ * on decision/resolution, they just flip `status` and stamp who/when —
+ * see decidePendingAction() in approval-gate.ts and the resolve route in
+ * api/blockers/[id]/resolve. This reads exactly those already-durable
+ * rows back out, so "show me what I closed" needed zero schema changes
+ * and can never drift from what actually happened (no separate log to
+ * keep in sync).
+ *
+ * Deliberately excludes source "notification": `notifications.read` has
+ * no matching `readAt` column, so there's no real closedAt to sort or
+ * badge by for those — surfacing them here would either fake a
+ * timestamp or silently reorder by createdAt, which would put a
+ * months-old FYI at the top of "recently closed" the moment someone
+ * happens to mark it read. The two sources below (pending_actions,
+ * human_blockers) both stamp a real decided/resolved timestamp, so this
+ * stays honest about what it can and can't show.
+ */
+export type QueueArchiveOutcome = "approved" | "rejected" | "execution_failed" | "resolved" | "abandoned";
+
+export interface QueueArchiveItem {
+  id: string;
+  source: "action" | "blocker";
+  title: string;
+  subtitle: string;
+  engagementId: string | null;
+  buyer: string | null;
+  runId: string | null;
+  outcome: QueueArchiveOutcome;
+  closedAt: string; // ISO
+  closedBy: string | null;
+}
+
+export async function getQueueArchiveItems(
+  whopUserId: string,
+  workspaceId: string,
+  limit = 50
+): Promise<QueueArchiveItem[]> {
+  const [decidedActionRows, resolvedBlockerRows] = await Promise.all([
+    db
+      .select({
+        id: pendingActions.id,
+        engagementId: pendingActions.engagementId,
+        buyer: engagements.buyer,
+        actionType: pendingActions.actionType,
+        payload: pendingActions.payload,
+        status: pendingActions.status,
+        decidedAt: pendingActions.decidedAt,
+        decidedBy: pendingActions.decidedBy,
+      })
+      .from(pendingActions)
+      .innerJoin(engagements, eq(pendingActions.engagementId, engagements.engagementId))
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
+          inArray(pendingActions.status, ["approved", "rejected", "execution_failed"])
+        )
+      )
+      .orderBy(desc(pendingActions.decidedAt))
+      .limit(limit),
+
+    db
+      .select({
+        id: humanBlockers.id,
+        engagementId: humanBlockers.engagementId,
+        buyer: engagements.buyer,
+        blockerType: humanBlockers.blockerType,
+        description: humanBlockers.description,
+        runId: humanBlockers.runId,
+        status: humanBlockers.status,
+        resolvedAt: humanBlockers.resolvedAt,
+        resolvedBy: humanBlockers.resolvedBy,
+      })
+      .from(humanBlockers)
+      .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
+          inArray(humanBlockers.status, ["resolved", "abandoned"])
+        )
+      )
+      .orderBy(desc(humanBlockers.resolvedAt))
+      .limit(limit),
+  ]);
+
+  const items: QueueArchiveItem[] = [
+    ...decidedActionRows
+      .filter((a) => a.decidedAt)
+      .map((a): QueueArchiveItem => {
+        const payload = a.payload as { _title?: string } | null;
+        return {
+          id: a.id,
+          source: "action",
+          title: payload?._title ?? ACTION_TYPE_LABELS[a.actionType] ?? a.actionType,
+          subtitle: a.buyer,
+          engagementId: a.engagementId,
+          buyer: a.buyer,
+          runId: null,
+          outcome: a.status as QueueArchiveOutcome,
+          closedAt: a.decidedAt!.toISOString(),
+          closedBy: a.decidedBy,
+        };
+      }),
+    ...resolvedBlockerRows
+      .filter((b) => b.resolvedAt)
+      .map((b): QueueArchiveItem => ({
+        id: b.id,
+        source: "blocker",
+        title: BLOCKER_TYPE_LABELS[b.blockerType] ?? b.blockerType,
+        subtitle: b.description || b.buyer,
+        engagementId: b.engagementId,
+        buyer: b.buyer,
+        runId: b.runId ?? null,
+        outcome: b.status as QueueArchiveOutcome,
+        closedAt: b.resolvedAt!.toISOString(),
+        closedBy: b.resolvedBy,
+      })),
+  ];
+
+  items.sort((x, y) => new Date(y.closedAt).getTime() - new Date(x.closedAt).getTime());
+  return items.slice(0, limit);
+}
+
+/**
  * Cheap count-only version for the sidebar badge, which renders on every
  * dashboard navigation and shouldn't pay for full row hydration. Counts
  * only the two categories that actually need a human to unblock something

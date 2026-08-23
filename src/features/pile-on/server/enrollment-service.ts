@@ -13,6 +13,7 @@ import { tagRecoveredFromNoShow } from "@/lib/platforms/crm-tagger";
 import { extractFreshRescheduleLink } from "@/lib/platforms/reschedule";
 import { runWinBackHybridPersonalization } from "@/features/win-back/server/hybrid-personalizer";
 import { gateOrExecute } from "@/lib/approval-gate";
+import { deriveProspectName } from "@/lib/prospect-identity";
 import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
@@ -101,11 +102,22 @@ export async function handleInboundBookingEvent(
     payload.payload?.email ??
     "";
 
+  // Fix: this used to fall back to the literal string "Prospect" when a
+  // platform's payload had no name field — which then got stored and
+  // rendered verbatim as if it were the person's real name (see
+  // deriveProspectName's doc). Falls back to an email-derived display
+  // name instead ("kelechi.anthony@gmail.com" → "Kelechi Anthony"), and
+  // only to the generic "Prospect" when there's no email either, which
+  // can't actually happen past the `if (!prospectEmail) throw` guard
+  // below — that final `?? "Prospect"` is just satisfying the string
+  // (non-nullable) return type this value already had everywhere else
+  // it's used (outbound message copy, summary text).
   const prospectName: string =
     payload.data?.attributes?.first_name ??
     payload.name ??
     payload.prospect_name ??
     payload.payload?.name ??
+    deriveProspectName(null, prospectEmail) ??
     "Prospect";
 
   const prospectPhone: string | undefined =
