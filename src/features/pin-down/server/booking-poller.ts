@@ -67,7 +67,7 @@ export async function findEngagementsDueForPoll(): Promise<string[]> {
     const stack = row.stack as EngagementStack | null;
     if (!stack?.booking_platform_credentials_ref) continue;
 
-    const intervalMs = (stack.webhook_poll_interval_minutes ?? 5) * 60_000;
+    const intervalMs = (stack.webhook_poll_interval_minutes ?? 30) * 60_000;
     const lastPolledAt = stack.webhook_receiver_last_polled_at
       ? new Date(stack.webhook_receiver_last_polled_at).getTime()
       : 0;
@@ -114,7 +114,7 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
   // ingest the buyer's entire historical booking log on the first cycle.
   const sinceISO =
     stack.webhook_receiver_last_polled_at ??
-    new Date(now.getTime() - (stack.webhook_poll_interval_minutes ?? 5) * 60_000).toISOString();
+    new Date(now.getTime() - (stack.webhook_poll_interval_minutes ?? 30) * 60_000).toISOString();
 
   let calls: Awaited<ReturnType<typeof listBookingsSinceForTenant>> = [];
   let errors = 0;

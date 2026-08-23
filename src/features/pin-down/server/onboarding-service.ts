@@ -847,7 +847,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
                 stack: {
                   ...finalStack,
                   webhook_receiver_mode: "polling",
-                  webhook_poll_interval_minutes: finalStack.webhook_poll_interval_minutes ?? 5,
+                  webhook_poll_interval_minutes: finalStack.webhook_poll_interval_minutes ?? 30,
                   webhook_receiver_last_polled_at: new Date().toISOString(),
                   webhook_signing_secret: signingSecret,
                 },
@@ -867,7 +867,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
               stack: {
                 ...finalStack,
                 webhook_receiver_mode: "polling",
-                webhook_poll_interval_minutes: finalStack.webhook_poll_interval_minutes ?? 5,
+                webhook_poll_interval_minutes: finalStack.webhook_poll_interval_minutes ?? 30,
                 webhook_receiver_last_polled_at: new Date().toISOString(),
                 webhook_signing_secret: signingSecret,
               },
@@ -886,12 +886,12 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
         summary.whatWasAttempted.push(`Attempted ${finalStack.booking_platform} webhook registration → ${webhookResult.receiverUrl}.`);
         summary.whatFailed.push(`${finalStack.booking_platform} webhook registration failed: ${webhookResult.reason}`);
         summary.openItems.push(
-          `Booking webhook registration failed — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 5} minute(s) as a fallback so bookings still process.`
+          `Booking webhook registration failed — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 30} minute(s) as a fallback so bookings still process.`
         );
       } else {
         summary.whatWasAttempted.push(`Evaluated ${finalStack.booking_platform} webhook capability — polling mode selected.`);
         summary.openItems.push(
-          `${finalStack.booking_platform} doesn't support live webhook registration — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 5} minute(s) instead. Bookings will process on a short delay rather than instantly.`
+          `${finalStack.booking_platform} doesn't support live webhook registration — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 30} minute(s) instead. Bookings will process on a short delay rather than instantly.`
         );
       }
     } else {

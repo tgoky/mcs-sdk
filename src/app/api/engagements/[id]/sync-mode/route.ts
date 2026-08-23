@@ -87,13 +87,13 @@ export async function PATCH(
       nextStack.webhook_receiver_mode = "webhook";
     } else if (mode === "polling") {
       nextStack.webhook_receiver_mode = "polling";
-      nextStack.webhook_poll_interval_minutes = nextStack.webhook_poll_interval_minutes ?? 5;
+      nextStack.webhook_poll_interval_minutes = nextStack.webhook_poll_interval_minutes ?? 30;
       // First cycle after switching back looks one interval behind
       // instead of from whatever stale watermark was left over, same
       // "don't backfill the buyer's entire history" reasoning
       // pollBookingsForEngagement uses for a brand-new polling tenant.
       nextStack.webhook_receiver_last_polled_at = new Date(
-        Date.now() - (nextStack.webhook_poll_interval_minutes ?? 5) * 60_000
+        Date.now() - (nextStack.webhook_poll_interval_minutes ?? 30) * 60_000
       ).toISOString();
     }
 
