@@ -35,7 +35,7 @@ export default async function WorkspaceHomePage() {
         <header className="flex items-center justify-between gap-4 border-b border-zinc-200/80 pb-5 dark:border-zinc-800/80">
           <div className="flex items-center gap-4">
             <img
-              src="/images/logo.png"
+              src="/images/homelg.png"
               alt="Mudd Ventures"
               className="h-8 w-auto object-contain dark:invert"
             />
