@@ -13,6 +13,7 @@ import {
   CornerDownLeft,
   ArrowUp,
   ArrowDown,
+  X,
 } from "lucide-react";
 import { runStatusDotColor } from "@/lib/copy";
 
@@ -231,21 +232,22 @@ export function GlobalSearch({ triggerClassName }: { triggerClassName?: string }
       </button>
 
       {open && (
-        // Fix: this was a single, non-responsive centered "spotlight" modal
-        // used at every viewport width — on mobile that reads as "a
-        // container popping up in the middle of the screen" instead of
-        // something that feels like it slid out of the search button you
-        // just tapped. Below `md` it now anchors to the bottom edge as a
-        // proper sheet (full width, top corners only, slides up); `md` and
-        // above keeps the existing centered/near-top command-palette
-        // layout unchanged.
-        <div className="fixed inset-0 z-[100] flex items-end md:items-start justify-center bg-black/40 backdrop-blur-[2px] md:pt-[12vh]">
+        // Fix v2: the first pass made this a bottom sheet (rounded top
+        // corners, floating card, dimmed backdrop showing behind it) —
+        // still a "card sitting over the page," just anchored to a
+        // different edge. Your Vercel reference is a true full-screen
+        // takeover: bar flush to the top with no rounded corners/border/
+        // shadow, an X in the bar itself, results filling everything down
+        // to the keyboard. Below `md` this is now that — 100dvh, no
+        // backdrop needed since the panel IS opaque and covers the full
+        // screen. `md` and up is untouched (centered command palette).
+        <div className="fixed inset-0 z-[100] flex items-end md:items-start justify-center md:bg-black/40 md:backdrop-blur-[2px] md:pt-[12vh]">
           <div
             ref={containerRef}
-            className="w-full max-w-xl bg-background border-t md:border border-border rounded-t-2xl md:rounded-xl shadow-2xl overflow-hidden font-sans antialiased flex flex-col max-h-[85vh] md:max-h-none animate-in slide-in-from-bottom md:slide-in-from-top-2 fade-in duration-200"
+            className="w-full h-[100dvh] md:h-auto max-w-none md:max-w-xl bg-background md:border border-border md:rounded-xl md:shadow-2xl overflow-hidden font-sans antialiased flex flex-col"
           >
             {/* Input row */}
-            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border shrink-0">
               <Search className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
               <input
                 ref={inputRef}
@@ -253,10 +255,21 @@ export function GlobalSearch({ triggerClassName }: { triggerClassName?: string }
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleInputKeyDown}
                 placeholder="Search clients, executions, projects, queue..."
-                className="flex-1 bg-transparent text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none"
+                className="flex-1 bg-transparent text-base md:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none"
               />
               {loading && <Loader2 className="w-3.5 h-3.5 text-zinc-400 animate-spin shrink-0" />}
-              <kbd className="text-[10px] font-mono bg-zinc-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded border border-border text-zinc-400 dark:text-zinc-500 shrink-0">
+              {/* X — the mobile close affordance; ESC doesn't exist on a
+                  phone keyboard, so this replaces it below md rather than
+                  sitting alongside it. */}
+              <button
+                type="button"
+                onClick={closePalette}
+                aria-label="Close search"
+                className="md:hidden p-0.5 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors shrink-0 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <kbd className="hidden md:inline-flex text-[10px] font-mono bg-zinc-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded border border-border text-zinc-400 dark:text-zinc-500 shrink-0">
                 ESC
               </kbd>
             </div>
@@ -369,8 +382,10 @@ export function GlobalSearch({ triggerClassName }: { triggerClassName?: string }
               )}
             </div>
 
-            {/* Footer hint bar */}
-            <div className="flex items-center gap-3 px-4 py-2 border-t border-border text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
+            {/* Footer hint bar — desktop-only; on mobile the OS keyboard
+                sits right where this would render, and ArrowUp/ArrowDown/
+                Enter aren't real mobile gestures anyway (tap replaces them). */}
+            <div className="hidden md:flex items-center gap-3 px-4 py-2 border-t border-border text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
               <span className="flex items-center gap-1">
                 <ArrowUp className="w-2.5 h-2.5" />
                 <ArrowDown className="w-2.5 h-2.5" /> Navigate
