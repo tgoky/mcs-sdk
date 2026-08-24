@@ -34,14 +34,13 @@ export function LandingWrapper({
 
       {/* Navigation Header */}
       <header className="relative z-30 w-full px-8 py-6 flex items-center justify-between">
-        <div className="flex items-center">
-          <img
-            src="/images/logo.png"
-            alt="Mudd Ventures"
-            className="h-8 w-auto object-contain"
-          />
-        </div>
-
+   <div className="flex items-center z-10">
+  <img
+    src="/images/logo.png"
+    alt="Mudd Ventures"
+    className="h-11 md:h-14 w-auto object-contain"
+  />
+</div>
         <nav className="hidden md:flex items-center gap-2 text-sm font-medium absolute left-1/2 -translate-x-1/2">
           {/* Show Time */}
           <div className="relative group">
@@ -233,7 +232,7 @@ export function LandingWrapper({
         <p className={`text-lg sm:text-2xl text-zinc-300 max-w-xl font-normal leading-relaxed transition-all duration-500 ease-out ${
           isExiting ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
         }`}> 
-         Access an expanding ecosystem of tools built to automate, and scale your operations.
+         Access an expanding ecosystem of tools built to automate and scale your operations.
         </p>
 
         {membershipRequired && (
