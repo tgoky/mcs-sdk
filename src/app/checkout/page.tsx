@@ -22,10 +22,10 @@ export default async function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-black text-white flex flex-col items-center justify-center px-6 py-16">
+    <div className="font-sans min-h-screen w-full bg-black text-white flex flex-col items-center justify-center px-6 py-16">
       <div className="w-full max-w-md">
-        <h1 className="text-2xl font-semibold mb-2">Get started</h1>
-        <p className="text-sm text-zinc-400 mb-8">
+        <h1 className="text-2xl font-bold tracking-tight mb-2">Get started</h1>
+        <p className="text-sm text-zinc-400 mb-8 leading-relaxed">
           {session.whopUserId
             ? "Your account needs an active subscription to continue."
             : "Complete checkout below — this creates your account too."}
@@ -38,7 +38,7 @@ export default async function CheckoutPage() {
             <div className="font-semibold text-red-400 mb-1">
               Checkout isn&apos;t configured yet
             </div>
-            <p className="text-zinc-300 text-xs leading-normal">
+            <p className="text-zinc-300 text-xs font-mono leading-normal">
               {configError ?? "Unknown error creating the checkout session."}
             </p>
           </div>
