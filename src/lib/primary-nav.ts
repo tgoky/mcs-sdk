@@ -104,7 +104,7 @@ const MEETINGS_CHILDREN: PrimaryNavChild[] = [
 export const PRIMARY_NAV_SECTIONS: PrimaryNavSection[] = [
   { title: "Work", href: "/dashboard", icon: LayoutGrid, children: WORK_CHILDREN },
   { title: "Engagements", href: "/dashboard/engagements", icon: Building2, children: ENGAGEMENTS_CHILDREN },
-  { title: "Analytics", href: "/dashboard/analytics", icon: BarChart3, children: ANALYTICS_CHILDREN },
+  { title: "Analytics", href: "/dashboard/analytics", icon: BarChart3,},
   { title: "Library", href: "/dashboard/library", icon: BookOpen },
   { title: "Meetings", href: "/dashboard/meetings", icon: CalendarClock, children: MEETINGS_CHILDREN },
 ];

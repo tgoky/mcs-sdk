@@ -15,7 +15,6 @@ export function ShellLayout({
   activeWorkspaceId,
   work,
   engagements,
-  analytics,
   meetings,
   settings,
 }: {
@@ -26,7 +25,6 @@ export function ShellLayout({
   activeWorkspaceId: string;
   work: ReactNode;
   engagements: ReactNode;
-  analytics: ReactNode;
   meetings: ReactNode;
   settings?: ReactNode;
 }) {
@@ -59,7 +57,6 @@ export function ShellLayout({
             <SecondarySidebar
               work={work}
               engagements={engagements}
-              analytics={analytics}
               meetings={meetings}
               settings={settings ?? <SettingsSidebar />}
             />

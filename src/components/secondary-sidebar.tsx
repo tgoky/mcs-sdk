@@ -6,16 +6,15 @@ import { usePathname } from "next/navigation";
 interface SecondarySidebarProps {
   work: ReactNode;
   engagements: ReactNode;
-  analytics: ReactNode;
   meetings: ReactNode;
   settings: ReactNode;
+  analytics?: ReactNode;
 }
 
-type SectionKey = "engagements" | "analytics" | "meetings" | "settings" | "work";
+type SectionKey = "engagements" | "meetings" | "settings" | "work";
 
 const SECTION_PREFIXES: Array<{ key: SectionKey; prefix: string }> = [
   { key: "engagements", prefix: "/dashboard/engagements" },
-  { key: "analytics", prefix: "/dashboard/analytics" },
   { key: "meetings", prefix: "/dashboard/meetings" },
   { key: "settings", prefix: "/dashboard/settings" },
 ];
@@ -30,7 +29,6 @@ function activeSection(pathname: string): SectionKey {
 const SECTION_LABELS: Record<SectionKey, string> = {
   work: "Work",
   engagements: "Engagements",
-  analytics: "Analytics",
   meetings: "Meetings",
   settings: "Settings",
 };
@@ -38,14 +36,18 @@ const SECTION_LABELS: Record<SectionKey, string> = {
 export function SecondarySidebar({
   work,
   engagements,
-  analytics,
   meetings,
   settings,
 }: SecondarySidebarProps) {
   const pathname = usePathname();
 
-  // Observation 4: Library gets no secondary sidebar (single-page destination)
-  if (pathname === "/dashboard/library" || pathname.startsWith("/dashboard/library/")) {
+  // Library and Analytics both get no secondary sidebar (single-page destinations)
+  if (
+    pathname === "/dashboard/library" ||
+    pathname.startsWith("/dashboard/library/") ||
+    pathname === "/dashboard/analytics" ||
+    pathname.startsWith("/dashboard/analytics/")
+  ) {
     return null;
   }
 
@@ -54,7 +56,6 @@ export function SecondarySidebar({
   const content: Record<SectionKey, ReactNode> = {
     work,
     engagements,
-    analytics,
     meetings,
     settings,
   };
