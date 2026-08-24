@@ -227,13 +227,13 @@ export function LandingWrapper({
         <h1 className={`text-5xl sm:text-7xl lg:text-8xl font-bold tracking-tight leading-[0.95] max-w-3xl text-white transition-all duration-700 ease-out ${
           isExiting ? "opacity-0 scale-105" : "opacity-100 scale-100"
         }`}>
-         Your entire work tools stack, unified.
+         Your entire stack, unified.
         </h1>
 
         <p className={`text-lg sm:text-2xl text-zinc-300 max-w-xl font-normal leading-relaxed transition-all duration-500 ease-out ${
           isExiting ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
-        }`}>
-         Access an expanding ecosystem of high-performance tools built to power, automate, and scale every corner of your operations.
+        }`}> 
+         Access an expanding ecosystem of tools built to automate, and scale your operations.
         </p>
 
         {membershipRequired && (
