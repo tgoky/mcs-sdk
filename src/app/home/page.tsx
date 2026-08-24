@@ -4,7 +4,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { HOME_COPY } from "@/lib/copy";
 import { listWorkspaces, getInstalledPackagesByWorkspace } from "@/lib/workspace";
 import { WorkspaceHomeClient } from "./workspace-home-client";
-// removed: import { PageEnterTransition } from "@/components/page-enter-transition";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -26,28 +25,35 @@ export default async function WorkspaceHomePage() {
   });
 
   return (
-    // removed: <PageEnterTransition>
     <div className="relative min-h-screen bg-zinc-50/50 font-sans text-zinc-600 antialiased dark:bg-zinc-950 dark:text-zinc-400 transition-colors duration-200 overflow-hidden">
-
       <div
         className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(#cbd5e1_0.8px,transparent_0.8px)] dark:bg-[radial-gradient(#27272a_0.8px,transparent_0.8px)] [background-size:10px_10px] [mask-image:radial-gradient(ellipse_75%_75%_at_50%_30%,#000_60%,transparent_100%)] opacity-80"
         aria-hidden="true"
       />
 
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-8 sm:px-10 lg:px-12">
-
         <header className="flex items-center justify-between gap-4 border-b border-zinc-200/80 pb-5 dark:border-zinc-800/80">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-xs font-bold text-white dark:text-zinc-950 font-mono shadow-2xs">
-              {initials}
-            </div>
-            <div className="space-y-0.5">
-              <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                {HOME_COPY.eyebrow}
-              </p>
-              <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
-                Welcome back, {displayName}
-              </p>
+          <div className="flex items-center gap-4">
+            <img
+              src="/images/logo.png"
+              alt="Mudd Ventures"
+              className="h-8 w-auto object-contain dark:invert"
+            />
+
+            <div className="h-6 w-px bg-zinc-200 dark:bg-zinc-800" aria-hidden="true" />
+
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-xs font-bold text-white dark:text-zinc-950 font-mono shadow-2xs">
+                {initials}
+              </div>
+              <div className="space-y-0.5">
+                <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                  {HOME_COPY.eyebrow}
+                </p>
+                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                  Welcome back, {displayName}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -75,6 +81,5 @@ export default async function WorkspaceHomePage() {
         </footer>
       </div>
     </div>
-    // removed: </PageEnterTransition>
   );
 }
