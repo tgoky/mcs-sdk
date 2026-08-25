@@ -235,9 +235,12 @@ const STALE_RUN_CEILING_MS =
  * this existed, the run-detail page's 3s poll would spin on that row
  * indefinitely, and nothing ever told the buyer their automation was dead.
  *
- * Runs every 15 minutes — frequent enough that a stuck run doesn't sit
- * silently for hours, cheap enough that it's a non-issue against Inngest's
- * free-tier execution allowance.
+ * Runs every 30 minutes (widened from 15 on 2026-08-25 — see nightlyBriefsCron's
+ * neighbors for why every tight-interval cron got re-examined at once
+ * during the execution-budget audit) — still frequent enough that a stuck
+ * run doesn't sit silently for hours, no longer treating "cheap against
+ * Inngest's free-tier allowance" as a property of a single cron in
+ * isolation rather than the ~10 of them running together.
  *
  * Fixed: previously called timeoutRun() (DB write + notification together)
  * inside the loop in the main step.run(), same single-step shape as the
@@ -247,7 +250,7 @@ const STALE_RUN_CEILING_MS =
  * run (the notification) is fanned out to notifyStaleRunCron below.
  */
 export const staleRunReaperCron = inngest.createFunction(
-  { id: "stale-run-reaper-cron", triggers: [{ cron: "*/15 * * * *" }] },
+  { id: "stale-run-reaper-cron", triggers: [{ cron: "*/30 * * * *" }] },
   async ({ step }) => {
     const reaped = await step.run("reap-stale-runs", async () => {
       const cutoff = new Date(Date.now() - STALE_RUN_CEILING_MS);
@@ -506,14 +509,16 @@ export const docsLinksValidatorCron = inngest.createFunction(
  * integrates with expose a distinct, subscribable "N hours before this
  * specific call" webhook event — what they expose is booking.created and
  * (for some) booking.cancelled. So "dynamic" here is implemented as a
- * tight rolling poll (every 15 minutes) that asks each dynamic-mode
- * engagement "what calls just entered my lead-time window since the last
- * check", rather than a literal webhook subscription — same honest
- * reframing Pin-Down's own polling fallback already applies for booking
- * events lacking a real webhook. In practice this still gets a rep their
- * brief within 15 minutes of entering the window instead of up to 24
- * hours late on the old nightly-only path, which is the actual value the
- * OG SKILL.md's dynamic mode was for.
+ * rolling poll (every 30 minutes — widened from 15 on 2026-08-25 as part
+ * of the execution-budget audit; see assumedNoShowSweepCron's fix note
+ * for the actual driver) that asks each dynamic-mode engagement "what
+ * calls just entered my lead-time window since the last check", rather
+ * than a literal webhook subscription — same honest reframing Pin-Down's
+ * own polling fallback already applies for booking events lacking a real
+ * webhook. In practice this still gets a rep their brief within 30
+ * minutes of entering the window instead of up to 24 hours late on the
+ * old nightly-only path, which is the actual value the OG SKILL.md's
+ * dynamic mode was for.
  *
  * briefedCallsLog's existing callId + 24h dedup window (see
  * brief-service.ts) already makes this idempotent against being polled
@@ -521,7 +526,7 @@ export const docsLinksValidatorCron = inngest.createFunction(
  * watermark bookkeeping needed here, unlike bookingPollCron.
  */
 export const dynamicBriefCron = inngest.createFunction(
-  { id: "dynamic-brief-cron", triggers: [{ cron: "*/15 * * * *" }] },
+  { id: "dynamic-brief-cron", triggers: [{ cron: "*/30 * * * *" }] },
   async ({ step }) => {
     const engagementIds = await step.run("find-dynamic-brief-engagements", async () => {
       // isNull(deletedAt) — see the same note on nightlyBriefsCron above.
@@ -700,12 +705,65 @@ export const checkSingleCanary = inngest.createFunction(
 // Same fan-out shape as bookingPollCron/dynamicBriefCron: a cheap,
 // broad top-level scan, one event per engagement so a single tenant's
 // resolution work can't block another's.
+//
+// Fixed (2026-08-25): this used to fan out to every non-paused engagement
+// on every 15-minute tick, unconditionally — the one cron in this file
+// that didn't follow the due-check pattern bookingPollCron/dynamicBriefCron/
+// credentialHealthCron all use elsewhere. An engagement with zero
+// unresolved calls still burned a full fan-out + find-eligible-calls
+// invocation (3 DB queries) every 15 minutes, forever — at 40+ engagements
+// this alone was the largest single source of Inngest execution volume.
+// The query below mirrors (cheaply, in one round trip) the same "is there
+// anything to actually look at" check processAssumedNoShowSweepEngagementCron
+// computes per-engagement below: a call in the resolution window with no
+// outcome logged yet and no Recall session still actively tracking it.
+// It's deliberately looser than the per-call readyAt gate there — it
+// doesn't know an engagement's historical call-duration estimate and
+// shouldn't have to. A false positive here costs one wasted fan-out; a
+// false negative would silently stop a real no-show from ever resolving,
+// so this errs toward over-inclusion.
 export const assumedNoShowSweepCron = inngest.createFunction(
   { id: "assumed-no-show-sweep-cron", triggers: [{ cron: "*/15 * * * *" }] },
   async ({ step }) => {
     const engagementIds = await step.run("find-sweep-engagements", async () => {
-      const all = await db.select().from(engagements).where(isNull(engagements.deletedAt));
-      return all.filter((t) => !isEngagementPaused(t)).map((t) => t.engagementId);
+      const now = new Date();
+      // Matches processAssumedNoShowSweepEngagementCron's own outer bound
+      // (win-back's 30-day recovery window) — has to be at least as wide,
+      // or a real candidate would never make it into the dispatch list.
+      const windowStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      const rows = await db
+        .select({ engagementId: briefedCallsLog.engagementId, pausedAt: engagements.pausedAt })
+        .from(briefedCallsLog)
+        .innerJoin(engagements, eq(engagements.engagementId, briefedCallsLog.engagementId))
+        .leftJoin(
+          briefOutcomeLog,
+          and(
+            eq(briefOutcomeLog.engagementId, briefedCallsLog.engagementId),
+            eq(briefOutcomeLog.bookingId, briefedCallsLog.callId)
+          )
+        )
+        .leftJoin(
+          conversationIntelligenceSessions,
+          and(
+            eq(conversationIntelligenceSessions.engagementId, briefedCallsLog.engagementId),
+            eq(conversationIntelligenceSessions.bookingId, briefedCallsLog.callId),
+            notInArray(conversationIntelligenceSessions.status, ["done", "call_ended", "failed"])
+          )
+        )
+        .where(
+          and(
+            gte(briefedCallsLog.callTime, windowStart),
+            lt(briefedCallsLog.callTime, now),
+            isNull(engagements.deletedAt),
+            isNull(briefOutcomeLog.id),
+            isNull(conversationIntelligenceSessions.id)
+          )
+        );
+
+      return Array.from(
+        new Set(rows.filter((r) => !isEngagementPaused(r)).map((r) => r.engagementId))
+      );
     });
 
     if (engagementIds.length > 0) {
