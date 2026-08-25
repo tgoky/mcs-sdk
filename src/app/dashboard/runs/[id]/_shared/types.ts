@@ -185,6 +185,15 @@ export interface TopIssue {
   prior: number;
   delta: number;
   severity: "high" | "medium" | "low" | "none";
+  /** True when this metric's sample was below the statistical floor —
+   * severity is forced to "none" in that case too, so this is the only
+   * way to tell "confirmed healthy" apart from "not enough data to know
+   * yet." See MetricResult in audit-engine.ts, the source of truth this
+   * is persisted from. Optional because audit runs recorded before this
+   * field existed won't have it — treated as false (today's behavior)
+   * rather than breaking on old rows.
+   */
+  insufficientData?: boolean;
 }
 
 export interface AuditRow {

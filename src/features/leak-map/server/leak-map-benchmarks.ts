@@ -143,9 +143,18 @@ export async function computeAndPersistBenchmarks(): Promise<{ bucketsComputed: 
     const bucketKey = computeBucketKey(offerDetails);
     if (!bucketKey) continue;
 
-    const topIssues: Array<{ name: string; current: number }> = row.top_issues ?? [];
+    const topIssues: Array<{ name: string; current: number; insufficientData?: boolean }> = row.top_issues ?? [];
     for (const issue of topIssues) {
       if (typeof issue.current !== "number") continue;
+      // A metric flagged insufficientData is a delta computed from too
+      // small a sample to trust for this one tenant — pooling it into
+      // the cross-tenant percentile is worse than just leaving it out,
+      // since it drags p25/p50/p75/p90 toward a noisy, unrepresentative
+      // number for every OTHER tenant in the bucket too. getBenchmarkLines
+      // already filters this out on the read side; this is the same gate
+      // on the write side, which had nothing to filter on until
+      // insufficientData started being persisted (see audit-engine.ts).
+      if (issue.insufficientData) continue;
       if (!buckets.has(bucketKey)) buckets.set(bucketKey, new Map());
       const metricMap = buckets.get(bucketKey)!;
       if (!metricMap.has(issue.name)) metricMap.set(issue.name, []);

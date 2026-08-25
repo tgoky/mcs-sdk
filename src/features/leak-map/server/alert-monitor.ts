@@ -94,7 +94,7 @@ export async function evaluateActiveAlertMonitor(): Promise<number> {
     ),
   ];
 
-  const latestAuditByEngagement = new Map<string, Array<{ name: string; current: number; delta: number }>>();
+  const latestAuditByEngagement = new Map<string, Array<{ name: string; current: number; delta: number; insufficientData?: boolean }>>();
   if (engagementIdsNeedingAuditData.length > 0) {
     const auditRows = await db
       .select()
@@ -130,7 +130,14 @@ export async function evaluateActiveAlertMonitor(): Promise<number> {
     } else if (AUDIT_METRIC_NAME_MAP[alert.metricName]) {
       const auditMetrics = latestAuditByEngagement.get(alert.engagementId) ?? [];
       const match = auditMetrics.find((m) => m.name === AUDIT_METRIC_NAME_MAP[alert.metricName]);
-      if (!match) continue; // No audit run yet, or this metric had insufficient data last run
+      if (!match) continue; // No audit run yet
+      // A metric can be present but flagged insufficientData — its
+      // `current` is real but the delta/severity it fed into last run's
+      // audit was already suppressed for being too small a sample to
+      // trust. Comparing that same unreliable number against an alert
+      // threshold here would fire on noise. This is what the comment
+      // above used to (incorrectly) claim `!match` already covered.
+      if (match.insufficientData) continue;
       currentValue = match.current;
     } else {
       // Unrecognized metric name — a custom alert the operator defined on

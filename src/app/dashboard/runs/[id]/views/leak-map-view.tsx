@@ -72,6 +72,13 @@ export function LeakMapView({
   }, [audit?.gaps, filterText]);
 
   const overallSeverity = issues[0]?.severity ?? "none";
+  // Distinguishes "every metric came back none/low because things are
+  // actually fine" from "every metric came back none because none of
+  // them had enough data to say anything" — computeDelta forces severity
+  // to "none" in both cases, so severity alone can't tell them apart.
+  // Drives the status strip below; the per-metric cards use
+  // issue.insufficientData directly for the same reason.
+  const hasAnyUsableData = issues.some((i) => !i.insufficientData);
 
   const handleCopyReport = () => {
     if (!audit?.reportMarkdown) return;
@@ -116,7 +123,9 @@ export function LeakMapView({
                   "flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border px-3.5 py-2.5 transition-all",
                   overallSeverity === "high" && "border-rose-900/50 bg-rose-950/10",
                   overallSeverity === "medium" && "border-orange-900/50 bg-orange-950/10",
-                  (overallSeverity === "low" || overallSeverity === "none") &&
+                  overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData &&
+                    "border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10",
+                  overallSeverity !== "high" && overallSeverity !== "medium" && hasAnyUsableData &&
                     "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/30"
                 )}
               >
@@ -126,13 +135,18 @@ export function LeakMapView({
                       "h-2 w-2 rounded-full shrink-0",
                       overallSeverity === "high" && "bg-rose-500",
                       overallSeverity === "medium" && "bg-orange-500",
-                      (overallSeverity === "low" || overallSeverity === "none") && "bg-emerald-500"
+                      overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData && "bg-amber-500",
+                      overallSeverity !== "high" && overallSeverity !== "medium" && hasAnyUsableData && "bg-emerald-500"
                     )}
                     aria-hidden
                   />
                   <p className="text-sm font-bold text-zinc-900 dark:text-white whitespace-nowrap">
                     Funnel health:{" "}
-                    {overallSeverity === "none" ? "Stable" : `${overallSeverity.toUpperCase()} severity`}
+                    {overallSeverity === "none"
+                      ? hasAnyUsableData
+                        ? "Stable"
+                        : "Not enough data yet"
+                      : `${overallSeverity.toUpperCase()} severity`}
                   </p>
                 </div>
 
@@ -276,12 +290,16 @@ export function LeakMapView({
                             </span>
                           </td>
                           <td className="px-4 py-2.5">
-                            <StatusPill tone={tone}>{issue.severity}</StatusPill>
+                            <StatusPill tone={tone}>{issue.insufficientData ? "insufficient data" : issue.severity}</StatusPill>
                           </td>
                           <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400 max-w-[220px]">
-                            {issue.severity === "high" && "Significant drop-off — requires immediate attention."}
-                            {issue.severity === "medium" && "Moderate variance — monitor over upcoming cycles."}
-                            {(issue.severity === "low" || issue.severity === "none") && "Within expected parameters."}
+                            {issue.insufficientData
+                              ? "Not enough data yet — sample below the reliability floor."
+                              : issue.severity === "high"
+                              ? "Significant drop-off — requires immediate attention."
+                              : issue.severity === "medium"
+                              ? "Moderate variance — monitor over upcoming cycles."
+                              : "Within expected parameters."}
                           </td>
                         </tr>
                       );
@@ -300,13 +318,20 @@ export function LeakMapView({
 function IssueCard({ issue }: { issue: IssueType }) {
   const improved = issue.delta > 0;
   const tone = toneFromSeverity(issue.severity);
+  // A metric with insufficientData always has severity "none" (computeDelta
+  // forces this), but "none because unconfirmed" and "none because
+  // genuinely nominal" need to look different here, or this card ends up
+  // asserting "stable performance" for something that was never actually
+  // checked — which is exactly what it did before this field existed.
+  const cardTone = issue.insufficientData ? "gap" : tone;
   return (
     <div
       className={cn(
         "rounded-xl border p-3 transition-all",
-        tone === "danger" && "border-rose-900/40 bg-rose-950/10",
-        tone === "warning" && "border-orange-900/40 bg-orange-950/10",
-        (tone === "info" || tone === "neutral") && "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40"
+        cardTone === "danger" && "border-rose-900/40 bg-rose-950/10",
+        cardTone === "warning" && "border-orange-900/40 bg-orange-950/10",
+        cardTone === "gap" && "border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10",
+        (cardTone === "info" || cardTone === "neutral") && "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40"
       )}
     >
       {/* Header row */}
@@ -314,7 +339,7 @@ function IssueCard({ issue }: { issue: IssueType }) {
         <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
           {issue.name}
         </p>
-        <StatusPill tone={tone}>{issue.severity}</StatusPill>
+        <StatusPill tone={tone}>{issue.insufficientData ? "insufficient data" : issue.severity}</StatusPill>
       </div>
 
       {/* Numbers row */}
@@ -348,12 +373,13 @@ function IssueCard({ issue }: { issue: IssueType }) {
 
       {/* Assessment */}
       <p className="mt-2.5 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400 border-t border-zinc-200/60 dark:border-zinc-800/60 pt-2">
-        {issue.severity === "high" &&
-          "Significant drop-off compared to the prior period. Potential leak in conversion or scheduling workflow — prioritize investigation."}
-        {issue.severity === "medium" &&
-          "Moderate variance from baseline. Track over upcoming audit cycles to catch further funnel friction early."}
-        {(issue.severity === "low" || issue.severity === "none") &&
-          "Operating within expected parameters with stable performance."}
+        {issue.insufficientData
+          ? "Not enough data yet to call a trend for this metric — the sample is below the reliability floor, so this isn't confirmation of healthy performance, just an unknown."
+          : issue.severity === "high"
+          ? "Significant drop-off compared to the prior period. Potential leak in conversion or scheduling workflow — prioritize investigation."
+          : issue.severity === "medium"
+          ? "Moderate variance from baseline. Track over upcoming audit cycles to catch further funnel friction early."
+          : "Operating within expected parameters with stable performance."}
       </p>
     </div>
   );

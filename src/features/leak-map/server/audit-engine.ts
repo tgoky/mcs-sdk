@@ -311,6 +311,13 @@ Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})
             prior: m.prior,
             delta: m.delta,
             severity: m.severity,
+            // Was silently dropped here before — every downstream reader
+            // (the run detail view, computeAndPersistBenchmarks, the
+            // active-alert monitor) had no way to tell "confirmed
+            // healthy" apart from "sample too small to know," and each
+            // ended up treating the two as the same thing in its own
+            // way. See LEAK-003.
+            insufficientData: m.insufficientData,
           })),
           alertsFired,
           gaps: gaps.length > 0 ? gaps : ["No data gaps detected."],

@@ -519,6 +519,14 @@ export const workspaces = pgTable("workspaces", {
   locale: text("locale").notNull().default("en-US"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  // Soft delete only — mirrors engagements.deletedAt (see that column's
+  // comment in this file). A hard DELETE FROM here would hit the same
+  // ON DELETE NO ACTION foreign-key wall the instant a workspace has so
+  // much as one engagement, workspace_packages row, or credential_vault
+  // entry, which is to say always in practice. Every workspace read
+  // (listWorkspaces, getActiveWorkspace, getOwnedWorkspace) filters this
+  // out; nothing else needs to know it exists.
+  deletedAt: timestamp("deleted_at"),
 });
 
 // Which skill packages (see copy.ts's WORKSPACE_PRODUCTS) are installed in

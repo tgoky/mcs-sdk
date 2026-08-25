@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { cache } from "react";
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { engagements, workspacePackages, workspaces } from "@/models/schema";
@@ -102,7 +102,7 @@ export async function listWorkspaces(whopUserId: string): Promise<Workspace[]> {
   const rows = await db
     .select(WORKSPACE_SELECT)
     .from(workspaces)
-    .where(eq(workspaces.whopUserId, whopUserId))
+    .where(and(eq(workspaces.whopUserId, whopUserId), isNull(workspaces.deletedAt)))
     .orderBy(asc(workspaces.createdAt));
 
   if (rows.length === 0) {
@@ -140,7 +140,13 @@ export const getActiveWorkspace = cache(async (whopUserId: string): Promise<Work
     const [row] = await db
       .select(WORKSPACE_SELECT)
       .from(workspaces)
-      .where(and(eq(workspaces.workspaceId, cookieId), eq(workspaces.whopUserId, whopUserId)))
+      .where(
+        and(
+          eq(workspaces.workspaceId, cookieId),
+          eq(workspaces.whopUserId, whopUserId),
+          isNull(workspaces.deletedAt)
+        )
+      )
       .limit(1);
     if (row) return row;
   }
@@ -156,7 +162,13 @@ export async function getOwnedWorkspace(whopUserId: string, workspaceId: string)
   const [row] = await db
     .select(WORKSPACE_SELECT)
     .from(workspaces)
-    .where(and(eq(workspaces.workspaceId, workspaceId), eq(workspaces.whopUserId, whopUserId)))
+    .where(
+      and(
+        eq(workspaces.workspaceId, workspaceId),
+        eq(workspaces.whopUserId, whopUserId),
+        isNull(workspaces.deletedAt)
+      )
+    )
     .limit(1);
   return row ?? null;
 }
@@ -274,4 +286,108 @@ export async function updateWorkspaceRegionSettings(
     return { error: "Workspace not found." };
   }
   return updated;
+}
+
+/**
+ * Renames a workspace — backs "Edit workspace name" in the /home workspace
+ * card's menu (see workspace-card-menu.tsx). Same trim/length rule as
+ * createWorkspace so a card's title can never overflow what creation
+ * itself would have allowed. Ownership enforced the same way as
+ * updateWorkspaceRegionSettings: the WHERE clause matches on whopUserId
+ * too, so a tampered workspaceId silently no-ops instead of renaming
+ * someone else's workspace.
+ */
+export async function renameWorkspace(
+  whopUserId: string,
+  workspaceId: string,
+  name: string
+): Promise<Workspace | { error: string }> {
+  const trimmed = name.trim().slice(0, 80);
+  if (!trimmed) {
+    return { error: "Workspace name is required." };
+  }
+
+  const [updated] = await db
+    .update(workspaces)
+    .set({ name: trimmed, updatedAt: new Date() })
+    .where(and(eq(workspaces.workspaceId, workspaceId), eq(workspaces.whopUserId, whopUserId)))
+    .returning(WORKSPACE_SELECT);
+
+  if (!updated) {
+    return { error: "Workspace not found." };
+  }
+  return updated;
+}
+
+/**
+ * Soft-deletes a workspace — backs "Delete workspace" in the /home
+ * workspace card's menu. Soft only, for the same foreign-key reason as
+ * engagements' DELETE handler (workspace_packages, engagements, and
+ * credential_vault all reference workspaces.workspaceId with ON DELETE NO
+ * ACTION — a hard delete would throw the instant this workspace owned so
+ * much as one of any of those). Nothing under it is touched here: its
+ * engagements simply stop being reachable through listWorkspaces /
+ * getOwnedWorkspace, same as a deleted engagement stops being reachable
+ * through the roster.
+ *
+ * Two guardrails on top of the soft-delete itself, since unlike an
+ * engagement, deleting a workspace can leave an account with *nowhere to
+ * land*:
+ *  - The auto-created default workspace (isLegacy) can't be deleted. It's
+ *    the one ensureLegacyWorkspace get-or-creates by a deterministic id;
+ *    soft-deleting it wouldn't cause that function to mint a replacement
+ *    (onConflictDoNothing matches on workspaceId, not deletedAt), so it
+ *    would just disappear for good — no PATCH { restore: true } analog
+ *    exists on this menu.
+ *  - The account's last remaining (non-deleted) workspace can't be
+ *    deleted, so /home is never left with zero cards and getActiveWorkspace
+ *    always has something to resolve to.
+ *
+ * Requires the workspace's own name as a confirmation echo, same "type to
+ * confirm" pattern as DeleteClientSection.
+ */
+export async function deleteWorkspace(
+  whopUserId: string,
+  workspaceId: string,
+  confirmName: string
+): Promise<{ ok: true } | { error: string }> {
+  const [existing] = await db
+    .select({ name: workspaces.name, isLegacy: workspaces.isLegacy, deletedAt: workspaces.deletedAt })
+    .from(workspaces)
+    .where(and(eq(workspaces.workspaceId, workspaceId), eq(workspaces.whopUserId, whopUserId)))
+    .limit(1);
+
+  if (!existing) {
+    return { error: "Workspace not found." };
+  }
+  if (existing.deletedAt) {
+    return { error: "Already deleted." };
+  }
+  if (existing.isLegacy) {
+    return { error: "Your default workspace can't be deleted." };
+  }
+  if (confirmName.trim() !== existing.name) {
+    return { error: "Confirmation text didn't match the workspace name." };
+  }
+
+  const [{ count: remaining }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(workspaces)
+    .where(
+      and(
+        eq(workspaces.whopUserId, whopUserId),
+        isNull(workspaces.deletedAt),
+        ne(workspaces.workspaceId, workspaceId)
+      )
+    );
+  if (remaining === 0) {
+    return { error: "You need at least one workspace — create another before deleting this one." };
+  }
+
+  await db
+    .update(workspaces)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(workspaces.workspaceId, workspaceId), eq(workspaces.whopUserId, whopUserId)));
+
+  return { ok: true };
 }

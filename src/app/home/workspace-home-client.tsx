@@ -7,6 +7,7 @@ import type { Workspace } from "@/lib/workspace";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { SKILL_IDS, SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { useLocalViewState } from "@/lib/use-local-view-state";
+import { WorkspaceCardMenu } from "./workspace-card-menu";
 
 const PACKAGE_NAMES = new Map(WORKSPACE_PRODUCTS.map((p) => [p.id, p.name] as const));
 
@@ -51,70 +52,91 @@ function PackageBadge({ packageId }: { packageId: string }) {
 /* CARD VIEW COMPONENTS                                                        */
 /* -------------------------------------------------------------------------- */
 
-function WorkspaceCard({ workspace, packageIds }: { workspace: Workspace; packageIds: string[] }) {
+function WorkspaceCard({
+  workspace,
+  packageIds,
+  workspaceCount,
+}: {
+  workspace: Workspace;
+  packageIds: string[];
+  workspaceCount: number;
+}) {
   const hasShowtime = packageIds.includes("showtime");
 
   return (
-    <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="h-full">
-      <button
-        type="submit"
-        className="group flex h-full w-full flex-col justify-between rounded-none border border-zinc-200/90 bg-white/80 p-6 text-left transition-all duration-200 select-none hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md dark:border-zinc-800/90 dark:bg-zinc-900/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/80 backdrop-blur-xs cursor-pointer"
-      >
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              {packageIds.length > 0 ? (
-                packageIds.map((id) => <PackageBadge key={id} packageId={id} />)
-              ) : (
-                <span className="font-mono text-[10px] font-medium text-zinc-400 dark:text-zinc-600">
-                  Nothing installed
-                </span>
-              )}
-            </div>
+    <div className="group relative flex h-full w-full flex-col justify-between rounded-none border border-zinc-200/90 bg-white/80 p-6 text-left transition-all duration-200 select-none hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md dark:border-zinc-800/90 dark:bg-zinc-900/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/80 backdrop-blur-xs">
+      {/* Full-card open action. A plain <div> now wraps the card instead of
+          this being the card's own <button> — the top-right menu below
+          needs somewhere to sit that isn't inside this button. Absolutely
+          positioned and z-10 so it still captures a click anywhere on the
+          card except where WorkspaceCardMenu's z-20 trigger overlaps it,
+          same "full-row Link behind a z-20 action button" pattern
+          RunRowActions uses for the run history rows. */}
+      <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="contents">
+        <button
+          type="submit"
+          aria-label={`Open ${workspace.name}`}
+          className="absolute inset-0 z-10 cursor-pointer rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+        />
+      </form>
 
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            {packageIds.length > 0 ? (
+              packageIds.map((id) => <PackageBadge key={id} packageId={id} />)
+            ) : (
+              <span className="font-mono text-[10px] font-medium text-zinc-400 dark:text-zinc-600">
+                Nothing installed
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5">
             <span className="inline-flex items-center rounded-none bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400">
               Active
             </span>
+            <WorkspaceCardMenu workspace={workspace} canDelete={workspaceCount > 1 && !workspace.isLegacy} />
           </div>
+        </div>
 
-          <div className="space-y-1.5">
-            <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
-              {workspace.name}
-            </h2>
-            <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400 font-sans">
-              {packageIds.length > 0
-                ? packageIds.map((id) => PACKAGE_NAMES.get(id) ?? id).join(" · ")
-                : "No packages installed yet"}
+        <div className="space-y-1.5">
+          <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+            {workspace.name}
+          </h2>
+          <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400 font-sans">
+            {packageIds.length > 0
+              ? packageIds.map((id) => PACKAGE_NAMES.get(id) ?? id).join(" · ")
+              : "No packages installed yet"}
+          </p>
+        </div>
+
+        {hasShowtime && (
+          <div className="pt-1">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">
+              Installed Skills
             </p>
-          </div>
-
-          {hasShowtime && (
-            <div className="pt-1">
-              <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">
-                Installed Skills
-              </p>
-              <div className="flex items-center -space-x-1.5 overflow-hidden">
-                {SKILL_IDS.map((skillId) => (
-                  <div
-                    key={skillId}
-                    title={SKILL_MANIFEST[skillId].name}
-                    className="relative flex items-center justify-center rounded-none bg-white dark:bg-zinc-900 p-0.5 ring-2 ring-zinc-200/80 dark:ring-zinc-800/80 transition-transform group-hover:scale-105"
-                  >
-                    <SquishySkillBadge skill={skillId} size={20} enabled={true} />
-                  </div>
-                ))}
-              </div>
+            <div className="flex items-center -space-x-1.5 overflow-hidden">
+              {SKILL_IDS.map((skillId) => (
+                <div
+                  key={skillId}
+                  title={SKILL_MANIFEST[skillId].name}
+                  className="relative flex items-center justify-center rounded-none bg-white dark:bg-zinc-900 p-0.5 ring-2 ring-zinc-200/80 dark:ring-zinc-800/80 transition-transform group-hover:scale-105"
+                >
+                  <SquishySkillBadge skill={skillId} size={20} enabled={true} />
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
-        <div className="pt-6">
-          <span className="inline-flex w-full items-center justify-center rounded-none bg-amber-400 px-2.5 py-1.5 text-xs font-bold text-white dark:text-zinc-950 shadow-2xs transition-all hover:bg-amber-500">
-            {HOME_COPY.openLabel} {workspace.name}
-          </span>
-        </div>
-      </button>
-    </form>
+      <div className="pt-6">
+        <span className="inline-flex w-full items-center justify-center rounded-none bg-amber-400 px-2.5 py-1.5 text-xs font-bold text-white dark:text-zinc-950 shadow-2xs transition-all group-hover:bg-amber-500">
+          {HOME_COPY.openLabel} {workspace.name}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -141,10 +163,12 @@ function WorkspaceRow({
   workspace,
   packageIds,
   index,
+  workspaceCount,
 }: {
   workspace: Workspace;
   packageIds: string[];
   index: number;
+  workspaceCount: number;
 }) {
   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const initial = workspace.name.slice(0, 1).toUpperCase() || "W";
@@ -208,15 +232,18 @@ function WorkspaceRow({
       </td>
 
       <td className="py-3.5 pr-4 pl-3 text-right text-xs whitespace-nowrap">
-        <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="inline-block">
-          <button
-            type="submit"
-            className="inline-flex items-center gap-1.5 rounded-none bg-amber-400 hover:bg-amber-500 text-white dark:text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs"
-          >
-            <span>Enter</span>
-            <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
-          </button>
-        </form>
+        <div className="flex items-center justify-end gap-2">
+          <WorkspaceCardMenu workspace={workspace} canDelete={workspaceCount > 1 && !workspace.isLegacy} />
+          <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="inline-block">
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 rounded-none bg-amber-400 hover:bg-amber-500 text-white dark:text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+            >
+              <span>Enter</span>
+              <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          </form>
+        </div>
       </td>
     </tr>
   );
@@ -294,6 +321,7 @@ export function WorkspaceHomeClient({
               key={workspace.workspaceId}
               workspace={workspace}
               packageIds={installedByWorkspace[workspace.workspaceId] ?? []}
+              workspaceCount={workspaceList.length}
             />
           ))}
           <CreateWorkspaceCard />
@@ -317,6 +345,7 @@ export function WorkspaceHomeClient({
                   workspace={workspace}
                   packageIds={installedByWorkspace[workspace.workspaceId] ?? []}
                   index={idx}
+                  workspaceCount={workspaceList.length}
                 />
               ))}
             </tbody>
