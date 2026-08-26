@@ -6,6 +6,13 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import { isValidTagColorId } from "@/lib/engagement-tag-colors";
 import { isValidTimezone } from "@/lib/timezones";
+import { ACTION_TYPE_LABELS } from "@/lib/copy";
+import type { PendingActionType } from "@/lib/approval-gate";
+
+// The 4 gateable action types, read off ACTION_TYPE_LABELS' own keys rather
+// than re-listing them a second time — same "single source of truth"
+// convention as SKILL_MANIFEST/SKILL_INFO elsewhere in this file's siblings.
+const VALID_APPROVAL_ACTION_TYPES = Object.keys(ACTION_TYPE_LABELS) as PendingActionType[];
 
 export const revalidate = 0;
 
@@ -340,6 +347,28 @@ export async function PATCH(
     ) {
       return NextResponse.json({ error: `Invalid timezone: ${incoming.timezone}` }, { status: 400 });
     }
+    // Co-Pilot vs. Autopilot — previously set once at onboarding
+    // (submit-payload.ts) and only ever read back (engagements/[id]/page.tsx),
+    // never editable afterward. This is the first write path for it, added
+    // for the account-wide Autopilot rail panel.
+    if (
+      incoming.require_approval_for_side_effects !== undefined &&
+      typeof incoming.require_approval_for_side_effects !== "boolean"
+    ) {
+      return NextResponse.json({ error: "require_approval_for_side_effects must be a boolean." }, { status: 400 });
+    }
+    if (incoming.require_approval_action_types !== undefined) {
+      const list = incoming.require_approval_action_types;
+      const isValidList =
+        Array.isArray(list) &&
+        list.every((t: unknown) => typeof t === "string" && VALID_APPROVAL_ACTION_TYPES.includes(t as PendingActionType));
+      if (!isValidList) {
+        return NextResponse.json(
+          { error: `require_approval_action_types must be an array drawn from: ${VALID_APPROVAL_ACTION_TYPES.join(", ")}` },
+          { status: 400 }
+        );
+      }
+    }
     for (const field of EDITABLE_FLAT_STRING_FIELDS) {
       if (incoming[field] !== undefined && incoming[field] !== null && typeof incoming[field] !== "string") {
         return NextResponse.json({ error: `${field} must be a string.` }, { status: 400 });
@@ -374,6 +403,12 @@ export async function PATCH(
         ? { ad_data_platform_meta: { ...currentStack.ad_data_platform_meta, ...incoming.ad_data_platform_meta } }
         : {}),
       ...(incoming.timezone !== undefined ? { timezone: incoming.timezone } : {}),
+      ...(incoming.require_approval_for_side_effects !== undefined
+        ? { require_approval_for_side_effects: incoming.require_approval_for_side_effects }
+        : {}),
+      ...(incoming.require_approval_action_types !== undefined
+        ? { require_approval_action_types: incoming.require_approval_action_types }
+        : {}),
       ...Object.fromEntries(
         EDITABLE_FLAT_STRING_FIELDS
           .filter((f) => incoming[f] !== undefined)

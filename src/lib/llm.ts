@@ -218,6 +218,95 @@ async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult>
   };
 }
 
+// ── Tool-calling (custom, client-defined tools — not the built-in
+// web_search tool above) ────────────────────────────────────────────────
+// Added 2026-08-25 for the Teammates chat (src/app/api/teammates/chat/
+// route.ts), the first caller that needs a real multi-turn conversation
+// with Anthropic's native tool_use protocol instead of a single
+// system+userMessage completion. Anthropic-direct only for now —
+// OpenRouter's tool-calling uses OpenAI-style function-call messages, a
+// different request/response shape this isn't wired up to translate yet.
+
+export interface ClaudeTool {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
+
+export type ClaudeContentBlock =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean };
+
+export interface ClaudeMessage {
+  role: "user" | "assistant";
+  content: string | ClaudeContentBlock[];
+}
+
+export interface ClaudeToolCallOptions {
+  model: ModelKey;
+  system: string;
+  messages: ClaudeMessage[];
+  tools: ClaudeTool[];
+  maxTokens?: number;
+  signal?: AbortSignal;
+  // Not threaded to skillRuns cost tracking yet, unlike the calls above —
+  // chat turns aren't tied to a pre-existing skillRuns row the way a
+  // pipeline run is. Stated here rather than silently dropped.
+}
+
+export interface ClaudeToolCallResult {
+  content: ClaudeContentBlock[];
+  stopReason: string;
+  inputTokens: number;
+  outputTokens: number;
+  costInCents: number;
+}
+
+export async function callClaudeWithTools(opts: ClaudeToolCallOptions): Promise<ClaudeToolCallResult> {
+  if (USE_OPENROUTER) {
+    throw new Error("Tool-calling chat isn't wired up for OpenRouter yet — set USE_OPENROUTER=false (or unset it) to use it.");
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY not set. Add it to your environment variables.");
+  }
+
+  const modelString = ANTHROPIC_MODELS[opts.model];
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: modelString,
+      max_tokens: opts.maxTokens ?? 1500,
+      system: opts.system,
+      messages: opts.messages,
+      tools: opts.tools,
+    }),
+    signal: opts.signal,
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Anthropic API error [${res.status}]: ${body}`);
+  }
+
+  const data = await res.json();
+  const content: ClaudeContentBlock[] = data.content ?? [];
+  const inputTokens: number = data.usage?.input_tokens ?? 0;
+  const outputTokens: number = data.usage?.output_tokens ?? 0;
+  const pricing = ANTHROPIC_PRICING[modelString] ?? { input: 0, output: 0 };
+  const costInCents = Math.round((inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output);
+
+  return { content, stopReason: data.stop_reason ?? "end_turn", inputTokens, outputTokens, costInCents };
+}
+
 // ── Retry wrapper ─────────────────────────────────────────────────────────
 export async function callClaudeWithRetry(
   opts: ClaudeCallOptions,
@@ -288,7 +377,13 @@ async function callViaAnthropicWithSearch(opts: ClaudeSearchCallOptions): Promis
   }
 
   const data = await res.json();
-  const blocks: any[] = data.content ?? [];
+  interface AnthropicSearchContentBlock {
+    type: string;
+    text?: string;
+    name?: string;
+    content?: Array<{ url?: string }>;
+  }
+  const blocks: AnthropicSearchContentBlock[] = data.content ?? [];
 
   const text = blocks
     .filter((b) => b.type === "text")
@@ -382,9 +477,13 @@ async function callViaOpenRouterWithSearch(opts: ClaudeSearchCallOptions): Promi
   const message = data.choices?.[0]?.message ?? {};
   const text: string = message.content ?? "";
 
-  const citedUrls: string[] = (message.annotations ?? [])
-    .filter((a: any) => a.type === "url_citation" && a.url_citation?.url)
-    .map((a: any) => a.url_citation.url);
+  interface OpenRouterAnnotation {
+    type: string;
+    url_citation?: { url?: string };
+  }
+  const citedUrls: string[] = ((message.annotations ?? []) as OpenRouterAnnotation[])
+    .filter((a) => a.type === "url_citation" && !!a.url_citation?.url)
+    .map((a) => a.url_citation!.url!);
 
   const inputTokens: number = data.usage?.prompt_tokens ?? 0;
   const outputTokens: number = data.usage?.completion_tokens ?? 0;

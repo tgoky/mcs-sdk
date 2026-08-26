@@ -11,16 +11,20 @@ import {
   CheckCircle2, 
   Download
 } from "lucide-react";
-import { NotificationBell } from "@/app/dashboard/notification-bell";
 import { Breadcrumbs } from "@/components/breadcrumbs/breadcrumbs";
 import { GlobalSearch } from "@/components/global-search";
+import { RightUtilityRail } from "@/components/right-utility-rail";
+import type { RightPanelKey } from "@/components/right-utility-panel";
 
 interface TopNavProps {
   onToggleSidebar: () => void;
   displayName?: string;
+  activePanel: RightPanelKey | null;
+  onSelectPanel: (key: RightPanelKey) => void;
+  unreadNotifications: number;
 }
 
-export function TopNav({ onToggleSidebar }: TopNavProps) {
+export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNotifications }: TopNavProps) {
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
@@ -120,9 +124,10 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
           when open. */}
       <GlobalSearch triggerClassName="hidden sm:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
 
-      {/* Right: Notification bell */}
+      {/* Right: the 6-icon utility rail (Calendar / Teammates / Notifications /
+          Autopilot / Upcoming / Plan) — each opens right-utility-panel.tsx */}
       <div className="flex items-center gap-2 ml-auto shrink-0">
-        <NotificationBell />
+        <RightUtilityRail activePanel={activePanel} onSelect={onSelectPanel} unreadCount={unreadNotifications} />
       </div>
     </header>
   );

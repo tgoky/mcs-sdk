@@ -1,22 +1,18 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+// src/app/dashboard/notification-bell.tsx
+//
+// 2026-08-23: this used to be a self-contained bell + floating dropdown.
+// It's now a presentational list only (NotificationList) — the bell icon
+// lives in right-utility-rail.tsx, the sliding/pushing panel it opens into
+// lives in right-utility-panel.tsx, and the polling/read-state logic moved
+// to use-notifications.ts so the rail's unread badge and this list share
+// one poller. Kept in this file (not renamed) since it's still exactly
+// "the notifications feature," just restructured.
+
 import Link from "next/link";
 import { Bell, AlertTriangle, XCircle, Clock, KeyRound, RotateCcw, BarChart3, Radio } from "lucide-react";
-
-interface NotificationRow {
-  id: string;
-  type: string;
-  severity: "info" | "warning" | "critical";
-  title: string;
-  body: string;
-  runId: string | null;
-  engagementId: string | null;
-  read: boolean;
-  createdAt: string;
-}
-
-const POLL_MS = 30_000;
+import type { NotificationRow } from "./use-notifications";
 
 function iconFor(type: string) {
   if (type === "run_failed") return <XCircle size={14} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />;
@@ -40,150 +36,97 @@ function relativeTime(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+interface NotificationListProps {
+  notifs: NotificationRow[];
+  unreadCount: number;
+  markAllRead: () => void;
+  markRead: (id: string) => void;
+  /** Closes the host panel — passed through so a click on a notification
+   * that navigates via Link doesn't leave the panel open behind it. */
+  onNavigate?: () => void;
+}
+
 /**
  * The "app" notification channel from the reliability pass — this is what
  * lets a buyer see a failed/timed-out run or a dead credential without
- * having to already be looking at the run or credentials page. Polls
- * /api/notifications every 30s; the same table also fans out to Slack/email
- * (see src/lib/notify.ts), but this is the channel every tenant has by
- * default with zero setup.
+ * having to already be looking at the run or credentials page. The same
+ * table also fans out to Slack/email (see src/lib/notify.ts); this is the
+ * in-app channel every tenant has by default with zero setup.
  */
-export function NotificationBell() {
-  const [notifs, setNotifs] = useState<NotificationRow[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const load = useCallback(async (signal: AbortSignal) => {
-    try {
-      const res = await fetch("/api/notifications", { cache: "no-store", signal });
-      if (signal.aborted || !res.ok) return;
-      const data = await res.json();
-      if (signal.aborted) return;
-      setNotifs(data.notifications ?? []);
-      setUnreadCount(data.unreadCount ?? 0);
-    } catch {
-      // Silent — includes AbortError from a cancelled in-flight request on
-      // unmount. A failed poll shouldn't throw a visible error at the user
-      // either way; it'll just try again on the next interval.
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    (async () => {
-      await load(controller.signal);
-    })();
-    const interval = setInterval(() => load(controller.signal), POLL_MS);
-    return () => {
-      clearInterval(interval);
-      controller.abort();
-    };
-  }, [load]);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  async function markAllRead() {
-    setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
-    setUnreadCount(0);
-    await fetch("/api/notifications/all/read", { method: "POST" }).catch(() => {});
-  }
-
-  async function markRead(id: string) {
-    setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-    setUnreadCount((c) => Math.max(0, c - 1));
-    await fetch(`/api/notifications/${id}/read`, { method: "POST" }).catch(() => {});
-  }
-
+export function NotificationList({ notifs, unreadCount, markAllRead, markRead, onNavigate }: NotificationListProps) {
   return (
-    <div className="relative" ref={containerRef}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="relative flex items-center justify-center w-8 h-8 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
-        aria-label="Notifications"
-      >
-        <Bell size={17} />
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
+        <span className="text-xs font-bold font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+          Notifications
+        </span>
         {unreadCount > 0 && (
-          <span className="absolute top-0.5 right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-[10px] font-bold text-white leading-none">
-            {unreadCount > 9 ? "9+" : unreadCount}
-          </span>
+          <button
+            onClick={markAllRead}
+            className="text-[11px] font-mono font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+          >
+            [ Mark all read ]
+          </button>
         )}
-      </button>
+      </div>
 
-      {open && (
-        <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-background border border-border rounded-lg shadow-2xl z-50 transition-all">
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-200 dark:border-zinc-900 sticky top-0 bg-background z-10">
-            <span className="text-xs font-bold font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-              Notifications
-            </span>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllRead}
-                className="text-[11px] font-mono font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
-              >
-                [ Mark all read ]
-              </button>
-            )}
+      <div className="flex-1 overflow-y-auto">
+        {notifs.length === 0 ? (
+          <div className="px-3 py-8 text-center text-xs font-mono font-medium text-zinc-400 dark:text-zinc-600">
+            Nothing yet — you&apos;ll see run failures and connection issues here.
           </div>
-
-          {notifs.length === 0 ? (
-            <div className="px-3 py-8 text-center text-xs font-mono font-medium text-zinc-400 dark:text-zinc-600">
-              Nothing yet — you&apos;ll see run failures and connection issues here.
-            </div>
-          ) : (
-            notifs.map((n) => {
-              const content = (
-                <div
-                  className={`flex gap-2.5 px-3 py-2.5 border-b border-zinc-100 dark:border-zinc-900/60 last:border-b-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors text-left w-full ${
-                    n.read ? "opacity-50" : ""
-                  }`}
-                >
-                  {iconFor(n.type)}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] text-zinc-800 dark:text-zinc-200 font-semibold leading-snug">
-                      {n.title}
-                    </p>
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug mt-0.5 line-clamp-2">
-                      {n.body}
-                    </p>
-                    <p className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono mt-1">{relativeTime(n.createdAt)}</p>
-                  </div>
-                  {!n.read && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0 mt-1.5" />
-                  )}
+        ) : (
+          notifs.map((n) => {
+            const content = (
+              <div
+                className={`flex gap-2.5 px-3 py-2.5 border-b border-zinc-100 dark:border-zinc-900/60 last:border-b-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors text-left w-full ${
+                  n.read ? "opacity-50" : ""
+                }`}
+              >
+                {iconFor(n.type)}
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] text-zinc-800 dark:text-zinc-200 font-semibold leading-snug">
+                    {n.title}
+                  </p>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug mt-0.5 line-clamp-2">
+                    {n.body}
+                  </p>
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono mt-1">{relativeTime(n.createdAt)}</p>
                 </div>
-              );
+                {!n.read && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0 mt-1.5" />
+                )}
+              </div>
+            );
 
-              return n.runId ? (
-                <Link
-                  key={n.id}
-                  href={`/dashboard/runs/${n.runId}`}
-                  onClick={() => !n.read && markRead(n.id)}
-                  className="block"
-                >
-                  {content}
-                </Link>
-              ) : (
-                <button
-                  key={n.id}
-                  onClick={() => !n.read && markRead(n.id)}
-                  className="w-full text-left cursor-pointer block"
-                >
-                  {content}
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
+            return n.runId ? (
+              <Link
+                key={n.id}
+                href={`/dashboard/runs/${n.runId}`}
+                onClick={() => {
+                  if (!n.read) markRead(n.id);
+                  onNavigate?.();
+                }}
+                className="block"
+              >
+                {content}
+              </Link>
+            ) : (
+              <button
+                key={n.id}
+                onClick={() => !n.read && markRead(n.id)}
+                className="w-full text-left cursor-pointer block"
+              >
+                {content}
+              </button>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
+
+/** Small re-export so any other call site that just wants the bell glyph
+ * itself (no dropdown) doesn't need to reach into right-utility-rail.tsx. */
+export { Bell as NotificationBellIcon };

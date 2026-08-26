@@ -40,11 +40,17 @@ import { engagements, bookingRoster, briefedCallsLog, showRateFeatures, briefOut
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq, gte, lt, inArray, desc } from "drizzle-orm";
+import { deriveRosterStatus, type RosterStatus } from "@/lib/roster-status";
+
+// Re-exported so existing consumers (pre-call-read-pipeline.tsx,
+// master-roster-calendar.tsx) don't need an import-path change — the type
+// itself now lives in src/lib/roster-status.ts alongside the function that
+// derives it.
+export type { RosterStatus };
 
 export const runtime = "nodejs";
 export const revalidate = 0;
 
-export type RosterStatus = "scheduled" | "brief_delivered" | "brief_failed" | "cancelled";
 export type ResearchStatus = "completed" | "skipped_low_confidence" | "failed" | null;
 export type SynthesisStatus = "completed" | "failed" | null;
 export type CallOutcome = "showed" | "no_show" | "rescheduled" | "cancelled" | null;
@@ -102,18 +108,6 @@ export interface RosterEntry {
   // e.g. show-rate scoring being off).
   outcomeSource: OutcomeSource;
   outcomeStatus: OutcomeStatus;
-}
-
-function deriveRosterStatus(row: {
-  bookingStatus: string;
-  researchStatus: string | null;
-  aiSynthesisStatus: string | null;
-  briefDeliveredAt: Date | null;
-}): RosterStatus {
-  if (row.bookingStatus === "cancelled") return "cancelled";
-  if (row.briefDeliveredAt) return "brief_delivered";
-  if (row.researchStatus === "failed" || row.aiSynthesisStatus === "failed") return "brief_failed";
-  return "scheduled";
 }
 
 function deriveOutcomeStatus(row: {

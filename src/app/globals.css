@@ -185,6 +185,16 @@
      themed, same reasoning as --accent-client above. */
   --accent-mint: #82e6d4;
   --accent-mint-foreground: #05221d;
+
+  /* Smart pre-fill "divided zone" (2026-08-23) — the top banner on the
+     New Client offer step, deliberately distinct from every other
+     surface in the app so it reads as "the AI part" at a glance.
+     Light: a lighter variant of the primary-rail "Upgrade account"
+     lavender (#f0ebf8 / border #d6caec, see primary-rail.tsx) — inspired
+     by that chip, not a literal color-pick off any screenshot. */
+  --surface-prefill: #f5f1fa;
+  --border-prefill: #e2d6f0;
+  --text-prefill-accent: #6b4fa0;
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
@@ -241,6 +251,14 @@
   --ink: #f2eff7;
   --ink-hover: #ffffff;
   --ink-foreground: #0b0812;
+
+  /* Dark mode: reuse this theme's own --surface-2 value exactly (already
+     a dark purple, #262034) rather than inventing a second dark color —
+     that's the "smart prefill bg area" color per-round instructions asked
+     to carry forward as-is. */
+  --surface-prefill: var(--surface-2);
+  --border-prefill: #3c3252;
+  --text-prefill-accent: #c9b6ea;
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
@@ -315,6 +333,67 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .step-spine-flow {
+    animation: none;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* PREFILL ORBIT — original loading motif for the Smart Pre-Fill zone.   */
+/* Three nodes on staggered elliptical orbits around a pulsing core,     */
+/* not a copy of any third-party product's loading treatment. Used by   */
+/* PrefillLoader (src/components/prefill-loader.tsx) while a crawl runs. */
+/* ────────────────────────────────────────────────────────────────────── */
+.prefill-orbit-core {
+  animation: prefill-core-pulse 1.6s ease-in-out infinite;
+  transform-origin: center;
+}
+.prefill-orbit-node {
+  animation: prefill-orbit-spin 2.4s linear infinite;
+  transform-origin: 50% 50%;
+}
+.prefill-orbit-node:nth-child(2) {
+  animation-duration: 3.1s;
+  animation-direction: reverse;
+}
+.prefill-orbit-node:nth-child(3) {
+  animation-duration: 1.9s;
+}
+@keyframes prefill-core-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+@keyframes prefill-orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+/* Ambient sweep across the whole banner while a crawl is in flight —
+   a soft diagonal band of light, not a spinner, so it reads calmly at
+   banner scale instead of looking like a stalled progress bar. */
+.prefill-scan {
+  position: relative;
+  overflow: hidden;
+}
+.prefill-scan::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    color-mix(in oklch, var(--text-prefill-accent) 22%, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  animation: prefill-scan-sweep 2.2s ease-in-out infinite;
+}
+@keyframes prefill-scan-sweep {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .prefill-orbit-core,
+  .prefill-orbit-node,
+  .prefill-scan::after {
     animation: none;
   }
 }

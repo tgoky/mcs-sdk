@@ -15,6 +15,7 @@ import { engagements, winBackEnrollments, sequenceMessageLog } from "@/models/sc
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq, inArray } from "drizzle-orm";
+import { buildTouchSchedule, computeNextTouchAt } from "@/lib/win-back-touch-schedule";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -70,12 +71,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     // Merge emails+sms into one offset-sorted touch schedule keyed by the
     // same messageId sequenceMessageLog rows use, so "sent" lookups below
     // are a straight id match rather than a fragile position/index guess.
-    const touchSchedule: { id: string; offsetDays: number }[] = assetMap
-      ? [
-          ...assetMap.emails.map((e) => ({ id: e.id, offsetDays: e.offsetDays })),
-          ...assetMap.sms.map((s) => ({ id: s.id, offsetDays: s.offsetDays })),
-        ].sort((a, b) => a.offsetDays - b.offsetDays)
-      : [];
+    const touchSchedule = buildTouchSchedule(assetMap);
     const touchesTotal = touchSchedule.length;
 
     const enrollments = await db
@@ -109,15 +105,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     const items: WinBackPipelineItem[] = enrollments.map((e) => {
       const sentIds = sentByEnrollment.get(e.id) ?? new Set<string>();
-      let nextTouchAt: string | null = null;
-      if (e.status === "active") {
-        const next = touchSchedule.find((t) => !sentIds.has(t.id));
-        if (next) {
-          const d = new Date(e.enrolledAt);
-          d.setDate(d.getDate() + next.offsetDays);
-          nextTouchAt = d.toISOString();
-        }
-      }
+      const nextTouchAt = computeNextTouchAt(e.status, e.enrolledAt, touchSchedule, sentIds);
       return {
         id: e.id,
         prospectName: e.prospectName,

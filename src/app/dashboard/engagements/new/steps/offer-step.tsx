@@ -1,4 +1,6 @@
+import { Sparkles } from "lucide-react";
 import { InputField, SelectField } from "../form-fields";
+import { PrefillLoader } from "@/components/prefill-loader";
 import type { FormData } from "../types";
 
 export function OfferStep({
@@ -22,10 +24,26 @@ export function OfferStep({
 }) {
   return (
     <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-      <div className="md:col-span-2 rounded-lg p-3 space-y-2 shadow-xs" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-        <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
-          Smart pre-fill (optional)
-        </label>
+      {/* Smart pre-fill "divided zone" — deliberately its own surface
+          color (--surface-prefill / --border-prefill, see globals.css)
+          so this is unmistakably "the AI part" of the very first screen
+          someone sees when creating a client. Scoped to this step only —
+          every step after this one is on the normal --surface. */}
+      <div
+        className={`md:col-span-2 rounded-2xl p-4 space-y-2.5 shadow-xs mb-1 ${prefillLoading ? "prefill-scan" : ""}`}
+        style={{ background: "var(--surface-prefill)", border: "1px solid var(--border-prefill)" }}
+      >
+        <div className="flex items-center gap-2">
+          <span
+            className="flex items-center justify-center w-6 h-6 rounded-full shrink-0"
+            style={{ background: "color-mix(in oklch, var(--text-prefill-accent) 16%, transparent)", color: "var(--text-prefill-accent)" }}
+          >
+            <Sparkles size={13} />
+          </span>
+          <label className="text-xs font-bold block" style={{ color: "var(--text-prefill-accent)" }}>
+            Smart pre-fill (optional)
+          </label>
+        </div>
         <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
           Have the clients domain? We will crawl it and suggest values below — review and edit anything before submitting.
         </p>
@@ -34,15 +52,18 @@ export function OfferStep({
             value={prefillDomain}
             onChange={(e) => setPrefillDomain(e.target.value)}
             placeholder="clientsite.com"
-          className="flex-1 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+            disabled={prefillLoading}
+            className="flex-1 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 disabled:opacity-60"
+            style={{ background: "var(--surface)", border: "1px solid var(--border-prefill)", color: "var(--text-primary)" }}
           />
           <button
             type="button"
             onClick={runSmartPrefill}
             disabled={prefillLoading || !prefillDomain.trim()}
-          className="px-3.5 py-2 text-xs font-bold font-mono uppercase tracking-wider rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0"
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold font-mono uppercase tracking-wider rounded-lg transition-all cursor-pointer text-white disabled:opacity-60 disabled:cursor-not-allowed shadow-sm shrink-0"
+            style={{ background: "var(--text-prefill-accent)" }}
           >
+            {prefillLoading && <PrefillLoader size={13} />}
             {prefillLoading ? "Crawling…" : "Pre-fill"}
           </button>
         </div>

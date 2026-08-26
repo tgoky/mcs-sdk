@@ -146,3 +146,36 @@ export function nextMonthlyOccurrence(schedule: MonthlySchedule | undefined | nu
   }
   return cursor;
 }
+
+/**
+ * Every instant in [rangeStart, rangeEnd) a weekly schedule matches — for
+ * the cross-client Calendar view (2026-08-25), which needs to plot every
+ * occurrence in a browsed month, not just the soonest one the way
+ * nextWeeklyOccurrence does. Same matcher, same hour-by-hour scan
+ * technique, just collecting instead of stopping at the first hit; bounded
+ * by the range itself rather than a separate iteration cap. Guards against
+ * a non-hour-aligned rangeStart (truncating minutes could otherwise walk
+ * the cursor backward past rangeStart by up to 59 minutes).
+ */
+export function weeklyOccurrencesInRange(schedule: WeeklySchedule | undefined | null, rangeStart: Date, rangeEnd: Date): Date[] {
+  const occurrences: Date[] = [];
+  const cursor = new Date(rangeStart);
+  cursor.setUTCMinutes(0, 0, 0);
+  while (cursor < rangeEnd) {
+    if (cursor >= rangeStart && matchesWeeklySchedule(schedule, cursor)) occurrences.push(new Date(cursor));
+    cursor.setUTCHours(cursor.getUTCHours() + 1);
+  }
+  return occurrences;
+}
+
+/** Same as weeklyOccurrencesInRange, for monthly schedules. */
+export function monthlyOccurrencesInRange(schedule: MonthlySchedule | undefined | null, rangeStart: Date, rangeEnd: Date): Date[] {
+  const occurrences: Date[] = [];
+  const cursor = new Date(rangeStart);
+  cursor.setUTCMinutes(0, 0, 0);
+  while (cursor < rangeEnd) {
+    if (cursor >= rangeStart && matchesMonthlySchedule(schedule, cursor)) occurrences.push(new Date(cursor));
+    cursor.setUTCHours(cursor.getUTCHours() + 1);
+  }
+  return occurrences;
+}
