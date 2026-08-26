@@ -225,7 +225,7 @@ function QueueItemPreview({ item }: { item: QueueItemDTO }) {
         <CategoryBadge category={item.category} />
       </div>
       <p className="font-semibold text-zinc-900 dark:text-foreground leading-snug">{item.title}</p>
-      <p className="text-zinc-600 dark:text-muted-foreground leading-snug">{item.subtitle}</p>
+      <p className="text-zinc-600 dark:text-muted-foreground leading-snug whitespace-pre-line">{item.subtitle}</p>
       {item.buyer && <p className="font-mono text-zinc-500 dark:text-muted-foreground/80">{item.buyer}</p>}
       <VerboseTime isoString={item.createdAt} className="text-zinc-400 dark:text-muted-foreground/70 text-[11px]" />
     </div>
@@ -536,13 +536,22 @@ function QueueRow({
         {(item.category === "alert" || item.category === "fyi") && (
           <>
             {href ? (
-              <Link
-                href={href}
-                onClick={onLinkNavigate}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors shadow-2xs"
+              // Fix: this used to be a <Link> straight to the engagement
+              // page, so the fuller context in item.subtitle (e.g. the
+              // weekly readout's list-size lines and anomaly warning,
+              // beyond what the clamped 2-line row shows) was never seen
+              // — the reader landed on the engagement page with no trace
+              // of what the readout actually said. The panel below
+              // already renders that full body via QueueItemPreview and
+              // already has a real "Open client engagement" link in its
+              // "Go to" section (see buildQueueSections), so this just
+              // opens that instead of skipping straight past it.
+              <button
+                onClick={() => setPanelOpen(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors cursor-pointer shadow-2xs"
               >
                 <ArrowUpRight size={12} /> {copy.actions.open}
-              </Link>
+              </button>
             ) : null}
             <button
               disabled={isBusy}

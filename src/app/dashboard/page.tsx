@@ -7,6 +7,7 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import { LiveExecutionFeed } from "./live-execution-feed";
 import { latestStepLabel } from "@/lib/run-display";
 import { QueuePanel } from "./queue-panel";
+import { OverviewStatsPanel } from "./overview-stats-panel";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
 import Link from "next/link";
@@ -32,6 +33,8 @@ export default async function DashboardPage() {
     runningCountResult,
     recentRunsRaw,
     queueItems,
+    completedThisWeekBySkillRaw,
+    recentCompletionsRaw,
   ] = await Promise.all([
     db
       .select()
@@ -134,6 +137,51 @@ export default async function DashboardPage() {
     // below for the Issues stat instead of the near-always-empty
     // active_alerts rule-definitions table. See summarizeIssues().
     getQueueItems(whopUserId, workspaceId),
+
+    // Per-skill breakdown for the "Tasks Completed" expand panel — same
+    // window as thisWeekResult above, just grouped instead of a flat
+    // count, so clicking the stat has something real to show beyond the
+    // single number it already displays.
+    db
+      .select({ skillName: skillRuns.skillName, count: sql<number>`count(*)` })
+      .from(skillRuns)
+      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
+          eq(skillRuns.status, "success"),
+          gte(skillRuns.completedAt, thisWeekStart)
+        )
+      )
+      .groupBy(skillRuns.skillName),
+
+    // The actual "briefly and easily, without going to executions" list —
+    // most recent successful completions this week, same subjectLabel
+    // treatment as the run-history/live-feed fix so each row reads as a
+    // real outcome ("Sarah Jenkins <sarah@acme.com>", "0 call(s) found")
+    // rather than just a skill name and a timestamp.
+    db
+      .select({
+        id: skillRuns.id,
+        skillName: skillRuns.skillName,
+        engagementId: skillRuns.engagementId,
+        buyerName: engagements.buyer,
+        completedAt: skillRuns.completedAt,
+        steps: skillRuns.steps,
+      })
+      .from(skillRuns)
+      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+      .where(
+        and(
+          eq(engagements.whopUserId, whopUserId),
+          eq(engagements.workspaceId, workspaceId),
+          eq(skillRuns.status, "success"),
+          gte(skillRuns.completedAt, thisWeekStart)
+        )
+      )
+      .orderBy(desc(skillRuns.completedAt))
+      .limit(8),
   ]);
 
   const completedThisWeek = Number(thisWeekResult[0]?.count ?? 0);
@@ -143,6 +191,16 @@ export default async function DashboardPage() {
   const runningCount = Number(runningCountResult[0]?.count ?? 0);
   const pausedCount = userEngagements.filter((e) => e.pausedAt).length;
   const issues = summarizeIssues(queueItems);
+
+  const completedThisWeekBySkill = completedThisWeekBySkillRaw
+    .map((r) => ({ skillName: r.skillName, count: Number(r.count) }))
+    .sort((a, b) => b.count - a.count);
+
+  const recentCompletions = recentCompletionsRaw.map(({ steps, completedAt, ...rest }) => ({
+    ...rest,
+    completedAt: (completedAt ?? new Date()).toISOString(),
+    subjectLabel: latestStepLabel(steps),
+  }));
 
   const clients = userEngagements.map((e) => ({
     engagementId: e.engagementId,
@@ -194,56 +252,18 @@ export default async function DashboardPage() {
         </div>
 
         {/* Overview stats */}
-        <div className="border-b border-zinc-200 dark:border-zinc-900 pb-4">
-          <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 mb-3 font-mono tracking-wider uppercase">
-            {copy.overviewSectionTitle}
-          </p>
-
-          <div className="grid gap-4 sm:grid-cols-3 pt-1 border-t border-zinc-200/60 dark:border-zinc-900/20">
-            <div className="space-y-1">
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">{copy.stat.activeAccounts}</p>
-              <div className="flex items-baseline space-x-2">
-                <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{userEngagements.length}</span>
-                <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">
-                  {runningCount > 0 ? copy.stat.activeAccountsRunning(runningCount) : copy.stat.activeAccountsAllGood}
-                </span>
-              </div>
-              {pausedCount > 0 && (
-                <p className="text-[11px] text-amber-600 dark:text-amber-400 font-mono">
-                  {copy.stat.activeAccountsPaused(pausedCount)}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1 sm:border-l border-zinc-200 dark:border-zinc-900 sm:pl-4">
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
-                {copy.stat.automatedActions} <span className="text-zinc-400 dark:text-zinc-600">· {copy.stat.automatedActionsThisWeek}</span>
-              </p>
-              <div className="flex items-baseline space-x-1.5">
-                <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{completedThisWeek}</span>
-                <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">{copy.stat.automatedActionsUnit}</span>
-              </div>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
-                {weeklyTrend ?? "No completions yet this week"} · {copy.stat.automatedActionsAllTime(completedAllTime)}
-              </p>
-            </div>
-
-            <div className="space-y-1 sm:border-l border-zinc-200 dark:border-zinc-900 sm:pl-4">
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">{copy.stat.systemIntegrity}</p>
-              <div className="flex items-baseline space-x-2">
-                <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{issues.count}</span>
-                <span className={`text-xs font-mono ${
-                  issues.count > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-zinc-400 dark:text-zinc-600"
-                }`}>
-                  {issues.count > 0 ? copy.stat.systemIntegrityFound : copy.stat.systemIntegrityClear}
-                </span>
-              </div>
-              {issues.breakdown && (
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">{issues.breakdown}</p>
-              )}
-            </div>
-          </div>
-        </div>
+        <OverviewStatsPanel
+          activeAccountsCount={userEngagements.length}
+          runningCount={runningCount}
+          pausedCount={pausedCount}
+          completedThisWeek={completedThisWeek}
+          completedAllTime={completedAllTime}
+          weeklyTrend={weeklyTrend}
+          completedThisWeekBySkill={completedThisWeekBySkill}
+          recentCompletions={recentCompletions}
+          issuesCount={issues.count}
+          issuesBreakdown={issues.breakdown ?? null}
+        />
 
         {/* Queue */}
         <div className="pt-2">

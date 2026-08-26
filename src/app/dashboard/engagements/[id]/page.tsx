@@ -28,22 +28,33 @@ import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
 import { BookingSyncChip } from "@/components/booking-sync-chip";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import { getActiveWorkspace } from "@/lib/workspace";
+import { computeClientReportAllPeriods } from "@/features/reports/server/report-service";
+import { generateReportNote } from "@/features/reports/server/report-notes";
+import { ClientReportCard } from "@/components/client-report-card";
 import {
   SKILLS,
   skillName,
   phaseLabel,
   runStatusLabel,
+  runStatusColor,
   bookingPlatformLabel,
   emailPlatformLabel,
   type SkillName,
 } from "@/lib/copy";
+import { latestStepLabel } from "@/lib/run-display";
 
 export const revalidate = 0;
 
 function RunStatusIcon({ status }: { status: string }) {
   const s = status.toLowerCase();
-  if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />;
-  if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 text-rose-500 shrink-0" />;
+  // Fix: was hardcoded emerald/rose, independent of runStatusColor() below
+  // and of the shared StatusPill tone system win-back-pipeline.tsx already
+  // uses — a fix to one never reached the other. text-status-success is
+  // bound to the same --success lavender-slate variable as everywhere
+  // else; text-status-error keeps rose, same "danger keeps more visual
+  // weight" reasoning as StatusPill's own danger tone.
+  if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 text-status-success shrink-0" />;
+  if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 text-status-error shrink-0" />;
   if (s === "running" || s === "in_progress") return <Loader2 className="w-4 h-4 text-zinc-400 dark:text-zinc-500 animate-spin shrink-0" />;
   return <AlertCircle className="w-4 h-4 text-zinc-400 dark:text-zinc-600 shrink-0" />;
 }
@@ -93,7 +104,7 @@ export default async function EngagementDetailPage({
     credentialRows.map((r) => [r.provider, r.vaultId])
   );
 
-  const runs = await db
+  const runsRaw = await db
     .select({
       id: skillRuns.id,
       skillName: skillRuns.skillName,
@@ -102,11 +113,33 @@ export default async function EngagementDetailPage({
       errorMessage: skillRuns.errorMessage,
       startedAt: skillRuns.startedAt,
       completedAt: skillRuns.completedAt,
+      steps: skillRuns.steps,
       stepCount: sql<number>`coalesce(jsonb_array_length(${skillRuns.steps}), 0)`,
     })
     .from(skillRuns)
     .where(eq(skillRuns.engagementId, id))
     .orderBy(desc(skillRuns.startedAt));
+
+  // Fix: this list used to show only the generic phase verb ("Checking
+  // today's calls") for every run regardless of outcome, and the specific
+  // detail — "0 call(s) found", "7-section brief generated", who a lead
+  // was, etc. — only ever surfaced for failures (via errorMessage). A
+  // successful "nothing to brief" run and an in-progress one looked
+  // identical, so telling them apart meant opening the run. latestStepLabel
+  // already exists and does this for the live feed and /dashboard/runs;
+  // it was just never wired in here.
+  const runs = runsRaw.map((r) => ({ ...r, subjectLabel: latestStepLabel(r.steps) }));
+
+  // Structured metrics are cheap (a handful of indexed COUNT-shaped
+  // queries) and always computed fresh. Notes are the LLM-backed layer —
+  // generateReportNote checks its own cache first (client_report_notes)
+  // and only calls the model on the first view of a given week/month;
+  // all_time never generates a note at all (see report-notes.ts for why).
+  const reportMetrics = await computeClientReportAllPeriods(id);
+  const [weekNote, monthNote] = await Promise.all([
+    generateReportNote(id, "week", reportMetrics.week),
+    generateReportNote(id, "month", reportMetrics.month),
+  ]);
 
   const stack = engagement.stack as Record<string, string> | null;
   const requireApproval = (engagement.stack as EngagementStack | null)?.require_approval_for_side_effects ?? false;
@@ -293,6 +326,12 @@ export default async function EngagementDetailPage({
           )}
         </div>
 
+        <ClientReportCard
+          buyerName={engagement.buyer}
+          metricsByPeriod={reportMetrics}
+          notesByPeriod={{ week: weekNote, month: monthNote }}
+        />
+
         <SkillsPanel
           engagementId={engagement.engagementId}
           initialStates={skillStates}
@@ -429,18 +468,25 @@ export default async function EngagementDetailPage({
                                 <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">
                                   {skillName(run.skillName)}
                                 </span>
-                                <span className="text-zinc-600 dark:text-zinc-400 text-xs font-normal font-mono">
+                                <span className={`text-xs font-normal font-mono ${runStatusColor(run.status)}`}>
                                   {runStatusLabel(run.status)}
                                 </span>
                               </div>
                               <div className="text-[11px] font-mono mt-0.5 text-zinc-400 dark:text-zinc-500">
                                 {phaseLabel(run.phase)}{run.stepCount > 0 ? ` · ${run.stepCount} step${run.stepCount === 1 ? "" : "s"}` : ""}
                               </div>
-                              {isFailed && run.errorMessage && (
+                              {isFailed && run.errorMessage ? (
                                 <div className="text-[11px] font-mono text-rose-500/90 dark:text-rose-400/80 mt-1 leading-relaxed line-clamp-2 max-w-xl">
                                   {run.errorMessage}
                                 </div>
-                              )}
+                              ) : run.subjectLabel ? (
+                                <div
+                                  className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed truncate max-w-xl"
+                                  title={run.subjectLabel}
+                                >
+                                  {run.subjectLabel}
+                                </div>
+                              ) : null}
                             </div>
 
                             <div

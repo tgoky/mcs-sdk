@@ -33,7 +33,6 @@ import {
   BookOpen,
   CalendarClock,
   Home,
-  Inbox,
   ListTodo,
   Activity,
   UserPlus,
@@ -65,7 +64,14 @@ export interface PrimaryNavSection {
 // needing a second edit.
 const WORK_CHILDREN: PrimaryNavChild[] = [
   { label: "Home", href: "/dashboard", icon: Home },
-  { label: "Notifications", href: "/dashboard/inbox", icon: Inbox },
+  // Fix (2026-08-25): was "Notifications" → /dashboard/inbox. Replaced
+  // per direct request — /dashboard/inbox itself still exists and is
+  // still reachable (FYI/alert items already surface in Queue below via
+  // getQueueItems' notification source), it's just no longer a top-level
+  // nav destination. Reports is the new per-client quality-breakdown page
+  // (report-service.ts + report-notes.ts) — deliberately distinct from
+  // Analytics below, which stays portfolio-wide trend charts.
+  { label: "Reports", href: "/dashboard/reports", icon: FileText },
   { label: "Queue", href: "/dashboard/queue", icon: ListTodo },
   { label: "Executions", href: "/dashboard/runs", icon: Activity },
   ...SKILL_IDS.map((id) => ({

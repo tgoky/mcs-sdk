@@ -1694,6 +1694,37 @@ export const briefOutcomeLog = pgTable("brief_outcome_log", {
   loggedAt: timestamp("logged_at").defaultNow().notNull(),
 });
 
+// ── Client Report Notes (report feature) ────────────────────────────────
+// One row per (engagement, period type, period start) — caches the
+// LLM-generated qualitative note for a given week/month so the report
+// page/card doesn't re-call the model on every view, and so the *next*
+// period's generation can be shown its own recent notes and told
+// explicitly not to repeat their phrasing. metricsSnapshot is the exact
+// structured-metrics object the note was generated from, kept for
+// display next to the note and so a later re-generation (if metrics
+// were recomputed) can tell whether anything actually changed.
+export const clientReportNotes = pgTable(
+  "client_report_notes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    period: text("period").notNull(), // "week" | "month"
+    periodKey: text("period_key").notNull(), // ISO date of period start, e.g. "2026-08-18"
+    notesText: text("notes_text").notNull(),
+    metricsSnapshot: jsonb("metrics_snapshot").notNull(),
+    generatedAt: timestamp("generated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    engagementPeriodUnique: uniqueIndex("client_report_notes_engagement_period_uidx").on(
+      table.engagementId,
+      table.period,
+      table.periodKey
+    ),
+  })
+);
+
 // ── Conversation Intelligence Sessions (recovery gap 24) ───────────────────
 // One row per Recall.ai bot dispatched to a call. See
 // src/lib/platforms/conversation-intelligence.ts. Deliberately scoped to
