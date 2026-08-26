@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { engagementSkills } from "@/models/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
 
 /**
@@ -57,6 +57,41 @@ export async function getDisabledEngagementIdsForSkill(skillId: SkillId): Promis
     .where(and(eq(engagementSkills.skillId, skillId), eq(engagementSkills.enabled, false)));
 
   return new Set(rows.map((r) => r.engagementId));
+}
+
+/**
+ * Same "no row = enabled" state getEngagementSkillStates resolves, but for
+ * every engagement in one query — for the account-wide Autopilot rail
+ * panel, which needs every client's 5 skill states at once and would
+ * otherwise be N round trips (one per client) on top of the N a per-skill
+ * getEngagementSkillStates loop would already be.
+ */
+export async function getSkillStatesForEngagements(
+  engagementIds: string[]
+): Promise<Record<string, Record<SkillId, boolean>>> {
+  const allEnabled = Object.fromEntries(SKILL_IDS.map((id) => [id, true])) as Record<SkillId, boolean>;
+  if (engagementIds.length === 0) return {};
+
+  const rows = await db
+    .select({ engagementId: engagementSkills.engagementId, skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
+    .from(engagementSkills)
+    .where(inArray(engagementSkills.engagementId, engagementIds));
+
+  const disabledByEngagement = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (row.enabled) continue;
+    const set = disabledByEngagement.get(row.engagementId) ?? new Set<string>();
+    set.add(row.skillId);
+    disabledByEngagement.set(row.engagementId, set);
+  }
+
+  return Object.fromEntries(
+    engagementIds.map((engagementId) => {
+      const disabled = disabledByEngagement.get(engagementId);
+      if (!disabled) return [engagementId, allEnabled];
+      return [engagementId, Object.fromEntries(SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<SkillId, boolean>];
+    })
+  );
 }
 
 /** Upserts the enabled flag for one (engagementId, skillId) pair — see the Skills panel on the engagement detail page. */

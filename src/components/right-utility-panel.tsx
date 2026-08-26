@@ -1,0 +1,187 @@
+"use client";
+
+// src/components/right-utility-panel.tsx
+//
+// The shared right-hand panel for all 6 rail icons (right-utility-rail.tsx):
+// Notifications, Calendar, Teammates, Autopilot, Upcoming, Plan. Mounted as
+// a flex sibling of <main> in shell-layout.tsx, NOT an overlay — opening it
+// shrinks the main content area instead of floating above it, and it only
+// closes when the active rail icon is clicked again (no click-outside
+// dismiss, no auto-fade), per this round's spec. Drag the left edge to
+// resize; the width is remembered per browser. "Expand" hands off to a
+// full dedicated page for whichever panel is open.
+//
+// Only "notifications", "autopilot", "calendar", "upcoming", and
+// "teammates" are fully wired to real data — "plan" renders
+// <ComingSoonPanel>, a real, navigable shell (title, icon, Expand target)
+// with placeholder body copy, since its backend (Plan's connectors) is a
+// separate, larger build flagged for a follow-up round rather than
+// guessed at here.
+
+import { useCallback, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { X, Maximize2, CalendarDays, Users, Bot, ListChecks, Workflow, type LucideIcon } from "lucide-react";
+import { NotificationList } from "@/app/dashboard/notification-bell";
+import type { NotificationRow } from "@/app/dashboard/use-notifications";
+import { AutopilotPanelContent } from "@/app/dashboard/autopilot/autopilot-panel-content";
+import { CalendarPanelContent } from "@/app/dashboard/calendar/calendar-panel-content";
+import { UpcomingPanelContent } from "@/app/dashboard/upcoming/upcoming-panel-content";
+import { TeammatesPanelContent } from "@/app/dashboard/teammates/teammates-panel-content";
+
+export type RightPanelKey = "notifications" | "calendar" | "teammates" | "autopilot" | "upcoming" | "plan";
+
+export const RIGHT_PANEL_META: Record<RightPanelKey, { label: string; icon: LucideIcon; expandHref: string }> = {
+  // "Expand" reuses the existing full-page notifications view rather than
+  // creating a duplicate — see src/app/dashboard/inbox/page.tsx.
+  notifications: { label: "Notifications", icon: X, expandHref: "/dashboard/inbox" }, // icon unused (custom bell in rail)
+  calendar: { label: "Calendar", icon: CalendarDays, expandHref: "/dashboard/calendar" },
+  teammates: { label: "Teammates", icon: Users, expandHref: "/dashboard/teammates" },
+  autopilot: { label: "Autopilot", icon: Bot, expandHref: "/dashboard/autopilot" },
+  upcoming: { label: "Upcoming", icon: ListChecks, expandHref: "/dashboard/upcoming" },
+  plan: { label: "Plan", icon: Workflow, expandHref: "/dashboard/plan" },
+};
+
+const MIN_WIDTH = 320;
+const MAX_WIDTH = 720;
+
+type StillComingKey = Exclude<RightPanelKey, "notifications" | "autopilot" | "calendar" | "upcoming" | "teammates">;
+
+function ComingSoonPanel({ panelKey }: { panelKey: StillComingKey }) {
+  const meta = RIGHT_PANEL_META[panelKey];
+  const Icon = meta.icon;
+  const copy: Record<StillComingKey, string> = {
+    plan: "A workshop for planning a client's week: connectors and tools to enrich a client, generate the win-back video scripts, and handle the other one-off asks that currently go outside the app.",
+  };
+  return (
+    <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
+      <span
+        className="flex items-center justify-center w-10 h-10 rounded-full"
+        style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
+      >
+        <Icon size={18} />
+      </span>
+      <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+        {meta.label} is coming next
+      </p>
+      <p className="text-[11px] leading-relaxed max-w-[240px]" style={{ color: "var(--text-muted)" }}>
+        {copy[panelKey]}
+      </p>
+    </div>
+  );
+}
+
+export function RightUtilityPanel({
+  activePanel,
+  onClose,
+  width,
+  onWidthChange,
+  notifications,
+}: {
+  activePanel: RightPanelKey | null;
+  onClose: () => void;
+  width: number;
+  onWidthChange: (w: number) => void;
+  notifications: {
+    notifs: NotificationRow[];
+    unreadCount: number;
+    markAllRead: () => void;
+    markRead: (id: string) => void;
+  };
+}) {
+  const router = useRouter();
+  const draggingRef = useRef(false);
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!draggingRef.current) return;
+      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, window.innerWidth - e.clientX));
+      onWidthChange(next);
+    }
+    function onUp() {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [onWidthChange]);
+
+  if (!activePanel) return null;
+  const meta = RIGHT_PANEL_META[activePanel];
+
+  return (
+    <div
+      className="hidden md:flex relative shrink-0 flex-col border-l h-full transition-[width] duration-150 ease-out"
+      style={{ width, background: "var(--card)", borderColor: "var(--border)" }}
+    >
+      {/* Drag handle */}
+      <div
+        onMouseDown={onDragStart}
+        className="absolute left-0 top-0 bottom-0 w-1.5 -ml-0.5 cursor-col-resize z-10 hover:bg-[color:var(--ring)]/40 transition-colors"
+        title="Drag to resize"
+      />
+
+      <div className="flex items-center justify-between px-3 h-11 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
+        <span className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+          {meta.label}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              router.push(meta.expandHref);
+              onClose();
+            }}
+            className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
+            title={`Expand ${meta.label}`}
+            aria-label={`Expand ${meta.label}`}
+          >
+            <Maximize2 size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
+            title="Close"
+            aria-label="Close panel"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0">
+        {activePanel === "notifications" ? (
+          <NotificationList
+            notifs={notifications.notifs}
+            unreadCount={notifications.unreadCount}
+            markAllRead={notifications.markAllRead}
+            markRead={notifications.markRead}
+          />
+        ) : activePanel === "autopilot" ? (
+          <AutopilotPanelContent />
+        ) : activePanel === "calendar" ? (
+          <CalendarPanelContent />
+        ) : activePanel === "upcoming" ? (
+          <UpcomingPanelContent />
+        ) : activePanel === "teammates" ? (
+          <TeammatesPanelContent />
+        ) : (
+          <ComingSoonPanel panelKey={activePanel} />
+        )}
+      </div>
+    </div>
+  );
+}
