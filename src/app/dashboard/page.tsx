@@ -1,3 +1,5 @@
+// src/app/dashboard/page.tsx
+
 import { db } from "@/lib/db";
 import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
@@ -11,8 +13,7 @@ import { OverviewStatsPanel } from "./overview-stats-panel";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
 import Link from "next/link";
-import { Calendar
- } from "lucide-react";
+import { Calendar } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -47,8 +48,6 @@ export default async function DashboardPage() {
         )
       ),
 
-    // All-time total — kept as quiet secondary context under the weekly
-    // number below, not the headline anymore (see automatedActionsAllTime).
     db
       .select({ count: sql<number>`count(*)` })
       .from(skillRuns)
@@ -61,9 +60,6 @@ export default async function DashboardPage() {
         )
       ),
 
-    // This week's completions (Mon 00:00 → now) — the headline number.
-    // Resets on its own every Monday since it's always a live window,
-    // never a stored/accumulated counter.
     db
       .select({ count: sql<number>`count(*)` })
       .from(skillRuns)
@@ -77,8 +73,6 @@ export default async function DashboardPage() {
         )
       ),
 
-    // Same Mon–Sun window, one week back — the only baseline this week's
-    // number can be meaningfully compared against (see weeklyTrendLabel).
     db
       .select({ count: sql<number>`count(*)` })
       .from(skillRuns)
@@ -105,12 +99,6 @@ export default async function DashboardPage() {
         )
       ),
 
-    // Same LiveExecutionFeed table as /dashboard/runs, just the newest 8 —
-    // needs the same fields that page selects (buyerName/engagementId were
-    // missing here before, so this widget showed "Unknown client" on every
-    // row; errorMessage/steps/summary were missing too, so failed runs
-    // couldn't show why and successful runs fell back to static per-skill
-    // copy regardless of outcome — see actionSummary() in live-execution-feed.tsx).
     db
       .select({
         id: skillRuns.id,
@@ -132,16 +120,8 @@ export default async function DashboardPage() {
       .orderBy(desc(skillRuns.startedAt))
       .limit(8),
 
-    // Already the tenant's real "needs a human" feed (pending approvals,
-    // open blockers, run failures, credential-health alerts) — reused
-    // below for the Issues stat instead of the near-always-empty
-    // active_alerts rule-definitions table. See summarizeIssues().
     getQueueItems(whopUserId, workspaceId),
 
-    // Per-skill breakdown for the "Tasks Completed" expand panel — same
-    // window as thisWeekResult above, just grouped instead of a flat
-    // count, so clicking the stat has something real to show beyond the
-    // single number it already displays.
     db
       .select({ skillName: skillRuns.skillName, count: sql<number>`count(*)` })
       .from(skillRuns)
@@ -156,11 +136,6 @@ export default async function DashboardPage() {
       )
       .groupBy(skillRuns.skillName),
 
-    // The actual "briefly and easily, without going to executions" list —
-    // most recent successful completions this week, same subjectLabel
-    // treatment as the run-history/live-feed fix so each row reads as a
-    // real outcome ("Sarah Jenkins <sarah@acme.com>", "0 call(s) found")
-    // rather than just a skill name and a timestamp.
     db
       .select({
         id: skillRuns.id,
@@ -263,6 +238,7 @@ export default async function DashboardPage() {
           recentCompletions={recentCompletions}
           issuesCount={issues.count}
           issuesBreakdown={issues.breakdown ?? null}
+          queueItems={queueItems}
         />
 
         {/* Queue */}
@@ -277,12 +253,12 @@ export default async function DashboardPage() {
               {copy.activityLogSectionTitle}
             </p>
             {recentRuns.length > 0 && (
-         <Link
-  href="/dashboard/runs"
-  className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 transition-colors"
->
-  View all
-</Link>
+              <Link
+                href="/dashboard/runs"
+                className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 transition-colors"
+              >
+                View all
+              </Link>
             )}
           </div>
 
