@@ -1,22 +1,4 @@
-"use client";
-
 // src/components/right-utility-panel.tsx
-//
-// The shared right-hand panel for all 6 rail icons (right-utility-rail.tsx):
-// Notifications, Calendar, Teammates, Autopilot, Upcoming, Plan. Mounted as
-// a flex sibling of <main> in shell-layout.tsx, NOT an overlay — opening it
-// shrinks the main content area instead of floating above it, and it only
-// closes when the active rail icon is clicked again (no click-outside
-// dismiss, no auto-fade), per this round's spec. Drag the left edge to
-// resize; the width is remembered per browser. "Expand" hands off to a
-// full dedicated page for whichever panel is open.
-//
-// Only "notifications", "autopilot", "calendar", "upcoming", and
-// "teammates" are fully wired to real data — "plan" renders
-// <ComingSoonPanel>, a real, navigable shell (title, icon, Expand target)
-// with placeholder body copy, since its backend (Plan's connectors) is a
-// separate, larger build flagged for a follow-up round rather than
-// guessed at here.
 
 import { useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -31,9 +13,7 @@ import { TeammatesPanelContent } from "@/app/dashboard/teammates/teammates-panel
 export type RightPanelKey = "notifications" | "calendar" | "teammates" | "autopilot" | "upcoming" | "plan";
 
 export const RIGHT_PANEL_META: Record<RightPanelKey, { label: string; icon: LucideIcon; expandHref: string }> = {
-  // "Expand" reuses the existing full-page notifications view rather than
-  // creating a duplicate — see src/app/dashboard/inbox/page.tsx.
-  notifications: { label: "Notifications", icon: X, expandHref: "/dashboard/inbox" }, // icon unused (custom bell in rail)
+  notifications: { label: "Notifications", icon: X, expandHref: "/dashboard/inbox" },
   calendar: { label: "Calendar", icon: CalendarDays, expandHref: "/dashboard/calendar" },
   teammates: { label: "Teammates", icon: Users, expandHref: "/dashboard/teammates" },
   autopilot: { label: "Autopilot", icon: Bot, expandHref: "/dashboard/autopilot" },
@@ -60,10 +40,10 @@ function ComingSoonPanel({ panelKey }: { panelKey: StillComingKey }) {
       >
         <Icon size={18} />
       </span>
-      <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
         {meta.label} is coming next
       </p>
-      <p className="text-[11px] leading-relaxed max-w-[240px]" style={{ color: "var(--text-muted)" }}>
+      <p className="text-[11px] leading-relaxed max-w-[240px] text-zinc-500 dark:text-zinc-400">
         {copy[panelKey]}
       </p>
     </div>
@@ -123,18 +103,25 @@ export function RightUtilityPanel({
 
   return (
     <div
-      className="hidden md:flex relative shrink-0 flex-col border-l h-full transition-[width] duration-150 ease-out"
-      style={{ width, background: "var(--card)", borderColor: "var(--border)" }}
+      className="hidden md:flex relative shrink-0 flex-col border-l h-full transition-[width] duration-150 ease-out overflow-hidden bg-white dark:bg-black border-zinc-200/80 dark:border-zinc-800/80"
+      style={{ width }}
     >
+      {/* --- HYPER-MICRO TIGHT DOT GRID --- */}
+      <div 
+        className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" 
+        aria-hidden="true"
+      />
+
       {/* Drag handle */}
       <div
         onMouseDown={onDragStart}
-        className="absolute left-0 top-0 bottom-0 w-1.5 -ml-0.5 cursor-col-resize z-10 hover:bg-[color:var(--ring)]/40 transition-colors"
+        className="absolute left-0 top-0 bottom-0 w-1.5 -ml-0.5 cursor-col-resize z-20 hover:bg-zinc-400/40 dark:hover:bg-zinc-600/40 transition-colors"
         title="Drag to resize"
       />
 
-      <div className="flex items-center justify-between px-3 h-11 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
-        <span className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+      {/* Header */}
+      <div className="relative z-10 flex items-center justify-between px-3 h-11 border-b shrink-0 border-zinc-200/80 dark:border-zinc-800/80">
+        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
           {meta.label}
         </span>
         <div className="flex items-center gap-1">
@@ -162,7 +149,8 @@ export function RightUtilityPanel({
         </div>
       </div>
 
-      <div className="flex-1 min-h-0">
+      {/* Content area */}
+      <div className="relative z-10 flex-1 min-h-0">
         {activePanel === "notifications" ? (
           <NotificationList
             notifs={notifications.notifs}
