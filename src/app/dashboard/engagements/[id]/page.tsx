@@ -47,12 +47,6 @@ export const revalidate = 0;
 
 function RunStatusIcon({ status }: { status: string }) {
   const s = status.toLowerCase();
-  // Fix: was hardcoded emerald/rose, independent of runStatusColor() below
-  // and of the shared StatusPill tone system win-back-pipeline.tsx already
-  // uses — a fix to one never reached the other. text-status-success is
-  // bound to the same --success lavender-slate variable as everywhere
-  // else; text-status-error keeps rose, same "danger keeps more visual
-  // weight" reasoning as StatusPill's own danger tone.
   if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 text-status-success shrink-0" />;
   if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 text-status-error shrink-0" />;
   if (s === "running" || s === "in_progress") return <Loader2 className="w-4 h-4 text-zinc-400 dark:text-zinc-500 animate-spin shrink-0" />;
@@ -73,14 +67,14 @@ function relativeTime(iso: string): string {
 
 export default async function EngagementDetailPage({
   params,
-  searchParams,                                                               // NEW
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ skill?: string }>;                                  // NEW
+  searchParams: Promise<{ skill?: string }>;
 }) {
   const session = await getSession();
   const { id } = await params;
-  const { skill: activeSkillFilter } = await searchParams;                    // NEW
+  const { skill: activeSkillFilter } = await searchParams;
   const activeWorkspace = await getActiveWorkspace(session.whopUserId!);
 
   const [engagement] = await db
@@ -120,21 +114,8 @@ export default async function EngagementDetailPage({
     .where(eq(skillRuns.engagementId, id))
     .orderBy(desc(skillRuns.startedAt));
 
-  // Fix: this list used to show only the generic phase verb ("Checking
-  // today's calls") for every run regardless of outcome, and the specific
-  // detail — "0 call(s) found", "7-section brief generated", who a lead
-  // was, etc. — only ever surfaced for failures (via errorMessage). A
-  // successful "nothing to brief" run and an in-progress one looked
-  // identical, so telling them apart meant opening the run. latestStepLabel
-  // already exists and does this for the live feed and /dashboard/runs;
-  // it was just never wired in here.
   const runs = runsRaw.map((r) => ({ ...r, subjectLabel: latestStepLabel(r.steps) }));
 
-  // Structured metrics are cheap (a handful of indexed COUNT-shaped
-  // queries) and always computed fresh. Notes are the LLM-backed layer —
-  // generateReportNote checks its own cache first (client_report_notes)
-  // and only calls the model on the first view of a given week/month;
-  // all_time never generates a note at all (see report-notes.ts for why).
   const reportMetrics = await computeClientReportAllPeriods(id);
   const [weekNote, monthNote] = await Promise.all([
     generateReportNote(id, "week", reportMetrics.week),
@@ -150,10 +131,8 @@ export default async function EngagementDetailPage({
     SKILLS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
   ) as Record<SkillName, typeof runs>;
 
-  // NEW — only include skills that actually have runs (keeps the filter bar tidy)
   const skillsWithRuns = SKILLS.filter((s) => runsBySkill[s].length > 0);
 
-  // NEW — apply the active filter (if any) before rendering
   const filteredRuns = activeSkillFilter
     ? runs.filter((r) => r.skillName === activeSkillFilter)
     : runs;
@@ -186,11 +165,6 @@ export default async function EngagementDetailPage({
     buyer: "Exported to buyer's infra",
   };
 
-  const offerName = String(offerDetails?.name || "").trim() || "Unspecified Offer";
-  const offerPrice = String(offerDetails?.price || "").trim();
-  const offerIcp = String(offerDetails?.icp || "").trim();
-
-  // NEW — shared chip classes to keep the JSX readable
   const chipBase = "px-2.5 py-1 rounded-md text-[11px] font-mono border transition-colors inline-flex items-center gap-1.5 select-none";
   const chipActive = "bg-zinc-900 dark:bg-zinc-100 text-zinc-50 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100";
   const chipInactive = "bg-transparent border-border text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800";
@@ -233,7 +207,7 @@ export default async function EngagementDetailPage({
                   </p>
                 </div>
 
-                {/* Clean Meta Row (Platforms & Traffic) */}
+                {/* Clean Meta Row */}
                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 translate-y-3.5 -mb-3 -ml-11 z-10 relative">
                   <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
                     {bookingPlatformLabel(stack?.booking_platform)}
@@ -241,11 +215,6 @@ export default async function EngagementDetailPage({
                   <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
                     {emailPlatformLabel(stack?.email_platform)}
                   </span>
-                  {offerDetails?.traffic_temperature && (
-                    <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px] capitalize">
-                      {String(offerDetails.traffic_temperature)} traffic
-                    </span>
-                  )}
                 </div>
               </div>
             </div>
@@ -289,47 +258,14 @@ export default async function EngagementDetailPage({
               </div>
             </div>
           </div>
-
-          {/* Flat Offer, Price & Targeting Section (No Card Wrapper) */}
-          {offerDetails && (
-            <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800/80 space-y-3">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-0.5 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500 block">
-                    Offer
-                  </span>
-                  <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
-                    {offerName}
-                  </h2>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500 block">
-                    Price
-                  </span>
-                  <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-mono">
-                    {offerPrice ? `$${offerPrice}` : "—"}
-                  </span>
-                </div>
-              </div>
-
-              {offerIcp && (
-                <div className="space-y-1 pt-2.5 border-t border-zinc-100 dark:border-zinc-800/50">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500 block">
-                    Targeting
-                  </span>
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-3xl">
-                    {offerIcp}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
+        {/* Merged Offer & Performance Report Card */}
         <ClientReportCard
           buyerName={engagement.buyer}
           metricsByPeriod={reportMetrics}
           notesByPeriod={{ week: weekNote, month: monthNote }}
+          offerDetails={offerDetails}
         />
 
         <SkillsPanel
@@ -397,9 +333,7 @@ export default async function EngagementDetailPage({
           </div>
         )}
 
-        {/* ================================================================ */}
-        {/* Run History — NOW WITH SKILL FILTER                              */}
-        {/* ================================================================ */}
+        {/* Run History */}
         {runs.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -411,42 +345,41 @@ export default async function EngagementDetailPage({
               )}
             </div>
 
-            {/* ── Filter chips ── */}
-           {/* ── Filter chips ── */}
-{skillsWithRuns.length > 1 && (
-  <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Filter runs by module">
-    <Link
-      href={`/dashboard/engagements/${id}`}
-      scroll={false}
-      role="tab"
-      aria-selected={!activeSkillFilter}
-      className={`${chipBase} ${!activeSkillFilter ? chipActive : chipInactive}`}
-    >
-      All
-      <span className={`${!activeSkillFilter ? "opacity-70" : "opacity-50"} ml-0.5`}>
-        {runs.length}
-      </span>
-    </Link>
-    {skillsWithRuns.map((skill) => (
-      <Link
-        key={skill}
-        href={`/dashboard/engagements/${id}?skill=${skill}`}
-        scroll={false}
-        role="tab"
-        aria-selected={activeSkillFilter === skill}
-        className={`${chipBase} ${activeSkillFilter === skill ? chipActive : chipInactive}`}
-      >
-        <SquishySkillBadge skill={skill} size={14} enabled={true} />
-        {skillName(skill)}
-        <span className={`${activeSkillFilter === skill ? "opacity-70" : "opacity-50"} ml-0.5`}>
-          {runsBySkill[skill].length}
-        </span>
-      </Link>
-    ))}
-  </div>
-)}
+            {/* Filter chips */}
+            {skillsWithRuns.length > 1 && (
+              <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Filter runs by module">
+                <Link
+                  href={`/dashboard/engagements/${id}`}
+                  scroll={false}
+                  role="tab"
+                  aria-selected={!activeSkillFilter}
+                  className={`${chipBase} ${!activeSkillFilter ? chipActive : chipInactive}`}
+                >
+                  All
+                  <span className={`${!activeSkillFilter ? "opacity-70" : "opacity-50"} ml-0.5`}>
+                    {runs.length}
+                  </span>
+                </Link>
+                {skillsWithRuns.map((skill) => (
+                  <Link
+                    key={skill}
+                    href={`/dashboard/engagements/${id}?skill=${skill}`}
+                    scroll={false}
+                    role="tab"
+                    aria-selected={activeSkillFilter === skill}
+                    className={`${chipBase} ${activeSkillFilter === skill ? chipActive : chipInactive}`}
+                  >
+                    <SquishySkillBadge skill={skill} size={14} enabled={true} />
+                    {skillName(skill)}
+                    <span className={`${activeSkillFilter === skill ? "opacity-70" : "opacity-50"} ml-0.5`}>
+                      {runsBySkill[skill].length}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
 
-            {/* ── Filtered run list ── */}
+            {/* Filtered run list */}
             {filteredRuns.length > 0 ? (
               <div className="w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-transparent transition-colors">
                 <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
@@ -512,14 +445,13 @@ export default async function EngagementDetailPage({
                 </ol>
               </div>
             ) : (
-              /* ── Empty state when filter matches nothing ── */
               <div className="h-28 border border-dashed border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-transparent rounded-xl flex flex-col items-center justify-center space-y-1 transition-colors">
                 <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
                   No <span className="font-medium text-zinc-500 dark:text-zinc-400">{skillName(activeSkillFilter)}</span> runs yet.
                 </p>
                 <Link
                   href={`/dashboard/engagements/${id}`}
-                   scroll={false}
+                  scroll={false}
                   className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 underline underline-offset-2 transition-colors"
                 >
                   Clear filter

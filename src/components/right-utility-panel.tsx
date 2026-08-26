@@ -30,7 +30,7 @@ function ComingSoonPanel({ panelKey }: { panelKey: StillComingKey }) {
   const meta = RIGHT_PANEL_META[panelKey];
   const Icon = meta.icon;
   const copy: Record<StillComingKey, string> = {
-    plan: "A workshop for planning a client's week: connectors and tools to enrich a client, generate the win-back video scripts, and handle the other one-off asks that currently go outside the app.",
+    plan: "A workshop for planning a client's week: connectors and tools to enrich a client, generate the win-back video scripts and handle the other one-off asks that currently go outside the app.",
   };
   return (
     <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
