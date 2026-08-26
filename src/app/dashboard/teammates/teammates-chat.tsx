@@ -98,7 +98,7 @@ export function TeammatesChat() {
               className="flex items-center justify-center w-9 h-9 rounded-full"
               style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
             >
-              <Sparkles size={16} />
+           
             </span>
             <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
               Ask Teammates to run something
