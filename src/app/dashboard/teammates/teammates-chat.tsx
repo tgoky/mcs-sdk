@@ -17,6 +17,7 @@
 import { useRef, useState } from "react";
 import { Send, Sparkles, CheckCircle2, XCircle } from "lucide-react";
 import { PrefillLoader } from "@/components/prefill-loader";
+import { PinnedSkillsBar } from "./pinned-skills-bar";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -24,7 +25,7 @@ interface ChatMessage {
   toolCalls?: { name: string; ok: boolean; message: string }[];
 }
 
-const MENTIONABLE_SKILLS = [
+export const MENTIONABLE_SKILLS = [
   { token: "call-brief", label: "Call Brief" },
   { token: "leak-map", label: "Leak Map" },
 ];
@@ -55,6 +56,14 @@ export function TeammatesChat() {
   function insertMention(token: string) {
     setInput((prev) => prev.replace(/@(\w*)$/, `@${token} `));
     setMentionQuery(null);
+    inputRef.current?.focus();
+  }
+
+  // Clicking a pinned chip isn't replacing a typed "@partial" the way the
+  // dropdown's insertMention is — there's nothing to regex out, just
+  // append the mention to whatever's already there.
+  function appendMention(token: string) {
+    setInput((prev) => (prev.trim().length > 0 ? `${prev.trimEnd()} @${token} ` : `@${token} `));
     inputRef.current?.focus();
   }
 
@@ -91,6 +100,7 @@ export function TeammatesChat() {
 
   return (
     <div className="flex flex-col h-full">
+      <PinnedSkillsBar onSelect={appendMention} />
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-2 px-4">
@@ -98,7 +108,7 @@ export function TeammatesChat() {
               className="flex items-center justify-center w-9 h-9 rounded-full"
               style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
             >
-           
+              <Sparkles size={16} />
             </span>
             <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
               Ask Teammates to run something
