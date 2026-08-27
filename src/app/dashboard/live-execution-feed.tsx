@@ -464,13 +464,11 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
         // Stay lit ~2.5s after becoming visible so the user actually sees
         // which rows are new while the smooth-scroll settles, then clear.
         if (dwellTimer) return;
-        dwellTimer = setTimeout(() => {
-          setHighlightCount(0);
-          // TODO(mark-seen): fire-and-forget the server-side reset here,
-          // e.g. fetch("/api/skill-runs/mark-seen", { method: "POST" })
-          // .catch(() => {}); once that route exists. Without it, the
-          // unseen count survives reloads.
-        }, 2500);
+     dwellTimer = setTimeout(() => {
+  setHighlightCount(0);
+  // Persists read state to Postgres so reloads stay at 0 unread
+  fetch("/api/skill-runs/mark-seen", { method: "POST" }).catch(() => {});
+}, 2500);
       },
       { threshold: 0.3 }
     );

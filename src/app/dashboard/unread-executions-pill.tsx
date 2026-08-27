@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ArrowDown } from "lucide-react";
 
 interface UnreadExecutionsPillProps {
@@ -11,9 +12,18 @@ export function UnreadExecutionsPill({
   count,
   targetId = "live-executions-section",
 }: UnreadExecutionsPillProps) {
-  if (count <= 0) return null;
+  const [dismissed, setDismissed] = useState(false);
+
+  if (count <= 0 || dismissed) return null;
 
   const handleScroll = () => {
+    // 1. Hide pill immediately on click
+    setDismissed(true);
+
+    // 2. Persist to DB right away so refreshes won't show it again
+    fetch("/api/skill-runs/mark-seen", { method: "POST" }).catch(() => {});
+
+    // 3. Smooth scroll
     const target = document.getElementById(targetId);
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });

@@ -162,7 +162,7 @@ export default async function DashboardPage() {
       .limit(8),
 
     // CHANGED: new 10th query — pairs with `unseenCount` above.
-    getUnseenCompletedExecutionCount(whopUserId),
+   getUnseenCompletedExecutionCount(whopUserId, workspaceId),
   ]);
 
   const completedThisWeek = Number(thisWeekResult[0]?.count ?? 0);
