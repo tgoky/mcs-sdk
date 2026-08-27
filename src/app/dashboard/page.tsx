@@ -6,7 +6,9 @@ import { getSession } from "@/lib/session";
 import { getQueueItems } from "@/lib/queue";
 import { eq, desc, sql, and, isNull, gte, lt } from "drizzle-orm";
 import { getActiveWorkspace } from "@/lib/workspace";
+import { getUnseenCompletedExecutionCount } from "@/lib/run-log"; // CHANGED: new import
 import { LiveExecutionFeed } from "./live-execution-feed";
+import { UnreadExecutionsPill } from "./unread-executions-pill"; // CHANGED: new import
 import { latestStepLabel } from "@/lib/run-display";
 import { QueuePanel } from "./queue-panel";
 import { OverviewStatsPanel } from "./overview-stats-panel";
@@ -36,6 +38,7 @@ export default async function DashboardPage() {
     queueItems,
     completedThisWeekBySkillRaw,
     recentCompletionsRaw,
+    unseenCount, // CHANGED: new 10th slot — MUST stay positionally aligned with the 10th query below
   ] = await Promise.all([
     db
       .select()
@@ -157,6 +160,9 @@ export default async function DashboardPage() {
       )
       .orderBy(desc(skillRuns.completedAt))
       .limit(8),
+
+    // CHANGED: new 10th query — pairs with `unseenCount` above.
+    getUnseenCompletedExecutionCount(whopUserId),
   ]);
 
   const completedThisWeek = Number(thisWeekResult[0]?.count ?? 0);
@@ -198,18 +204,19 @@ export default async function DashboardPage() {
 
   return (
     <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
-      
+
       {/* --- HYPER-MICRO TIGHT DOT GRID (0.5px / 6px grid) --- */}
-      <div 
-        className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" 
+      <div
+        className="pointer-events-none absolute inset-0 z-0 bg-dot-grid"
         aria-hidden="true"
       />
 
       {/* --- DASHBOARD CONTENT --- */}
       <div className="relative z-10 space-y-5">
-        
+
         {/* Premium Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200/80 dark:border-zinc-800/80 pb-4">
+        {/* CHANGED: added `relative` so the unread pill can absolutely center against this row */}
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200/80 dark:border-zinc-800/80 pb-4">
           <div className="space-y-1">
             <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
               {copy.pageTitle}
@@ -218,6 +225,15 @@ export default async function DashboardPage() {
               {copy.pageSubtitle}
             </p>
           </div>
+
+          {/* CHANGED: TOP-CENTER UNREAD PILL — absolute-centers over the header row at sm+;
+              stacks naturally below the subtitle on mobile. Component itself hides at count <= 0,
+              so the outer check is just a cheap way to skip the wrapper node entirely. */}
+          {unseenCount > 0 && (
+            <div className="sm:absolute sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2">
+              <UnreadExecutionsPill count={unseenCount} targetId="live-executions-section" />
+            </div>
+          )}
 
           {/* Date Display */}
           <div className="inline-flex items-center gap-2 self-start sm:self-auto px-3 py-1.5 text-xs font-mono font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100/80 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-md shadow-2xs">
@@ -247,7 +263,9 @@ export default async function DashboardPage() {
         </div>
 
         {/* Activity feed */}
-        <div className="pt-2">
+        {/* CHANGED: id + scroll-mt so the pill's scrollIntoView lands correctly even
+            under any future sticky/fixed nav; unseenCount seeds the highlight state */}
+        <div className="pt-2 scroll-mt-20" id="live-executions-section">
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
               {copy.activityLogSectionTitle}
@@ -263,7 +281,11 @@ export default async function DashboardPage() {
           </div>
 
           <div className="pt-1 border-t border-zinc-200/60 dark:border-zinc-900/20">
-            <LiveExecutionFeed initialRuns={recentRuns} storageKey="overview" />
+            <LiveExecutionFeed
+              initialRuns={recentRuns}
+              storageKey="overview"
+              unseenCount={unseenCount}
+            />
           </div>
         </div>
 
@@ -275,7 +297,7 @@ export default async function DashboardPage() {
               className="group block p-4 rounded-lg bg-zinc-100/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-900/60 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/20 transition-all shadow-xs"
             >
               <p className="text-sm font-medium text-zinc-700 dark:text-zinc-400 group-hover:text-zinc-900 group-hover:dark:text-zinc-100 transition-colors">
-                {copy.shortcuts.manageEngagements.title} 
+                {copy.shortcuts.manageEngagements.title}
               </p>
               <p className="text-xs font-normal text-zinc-400 dark:text-zinc-600 mt-1">
                 {copy.shortcuts.manageEngagements.description}

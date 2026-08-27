@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react"; // CHANGED: + useRef
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -57,6 +57,7 @@ interface LiveExecutionFeedProps {
   title?: string;
   lockedSkill?: SkillName;
   storageKey?: string;
+  unseenCount?: number; // CHANGED: seeds how many newest completed rows glow as "unread"
 }
 
 type ExecutionsTab = "all" | "running" | "needs_attention" | "completed";
@@ -314,6 +315,9 @@ function buildRunSections(
   return sections;
 }
 
+// CHANGED: RunRow accepts isUnseen. Class chain reordered so `nested` is
+// checked FIRST — previously both branches emitted border-l-* utilities and
+// whichever won depended on stylesheet emission order, not JSX order.
 function RunRow({
   run,
   onOpen,
@@ -322,6 +326,7 @@ function RunRow({
   groupExpanded = false,
   onToggleGroup,
   nested = false,
+  isUnseen = false,
 }: {
   run: SkillRun;
   onOpen: () => void;
@@ -330,6 +335,7 @@ function RunRow({
   groupExpanded?: boolean;
   onToggleGroup?: () => void;
   nested?: boolean;
+  isUnseen?: boolean;
 }) {
   const isRunning = run.status.toLowerCase() === "running";
   const isFailed = run.status.toLowerCase() === "failed" || run.status.toLowerCase() === "timed_out";
@@ -338,9 +344,15 @@ function RunRow({
 
   return (
     <tr
-      className={`group bg-zinc-50/40 dark:bg-zinc-900/40 hover:bg-zinc-100 dark:hover:bg-zinc-900/80 transition-colors cursor-pointer relative ${
-        isRunning ? "bg-zinc-100/60 dark:bg-zinc-900/70" : ""
-      } ${nested ? "bg-zinc-50/70 dark:bg-zinc-950/50 border-l-2 border-l-zinc-200 dark:border-l-zinc-800" : ""}`}
+      className={`group hover:bg-zinc-100 dark:hover:bg-zinc-900/80 transition-colors cursor-pointer relative ${
+        nested
+          ? "bg-zinc-50/70 dark:bg-zinc-950/50 border-l-2 border-l-zinc-200 dark:border-l-zinc-800"
+          : isUnseen
+          ? "bg-fuchsia-500/10 dark:bg-fuchsia-950/30 border-l-2 border-l-[#d946ef]"
+          : isRunning
+          ? "bg-zinc-100/60 dark:bg-zinc-900/70"
+          : "bg-zinc-50/40 dark:bg-zinc-900/40"
+      }`}
       onClick={onOpen}
     >
       <td className={`px-4 py-2.5 max-w-[180px] ${nested ? "pl-7" : ""}`} onClick={(e) => { if (run.engagementId && run.buyerName) e.stopPropagation(); }}>
@@ -353,23 +365,23 @@ function RunRow({
         )}
       </td>
 
-<td className="px-4 py-2.5">
-  <div className="flex items-center gap-2">
-    <SquishySkillBadge
-      skill={run.skillName}
-      size={26}
-      paused={!!run.engagementPausedAt}
-    />
-    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-      {skillName(run.skillName)}
-    </span>
-  </div>
-  {(run.stepCount ?? 0) > 0 && (
-    <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 block pl-[34px] mt-0.5">
-      {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
-    </span>
-  )}
-</td>
+      <td className="px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <SquishySkillBadge
+            skill={run.skillName}
+            size={26}
+            paused={!!run.engagementPausedAt}
+          />
+          <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
+            {skillName(run.skillName)}
+          </span>
+        </div>
+        {(run.stepCount ?? 0) > 0 && (
+          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 block pl-[34px] mt-0.5">
+            {run.stepCount} step{run.stepCount === 1 ? "" : "s"}
+          </span>
+        )}
+      </td>
 
       <td className="px-4 py-2.5 max-w-[280px]">
         <span
@@ -417,10 +429,57 @@ function RunRow({
   );
 }
 
-export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, storageKey }: LiveExecutionFeedProps) {
+export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, storageKey, unseenCount }: LiveExecutionFeedProps) {
   const router = useRouter();
   const [runs, setRuns] = useState<SkillRun[]>(initialRuns);
   const [polling] = useState(true);
+
+  // CHANGED: unread-highlight lifecycle. Seeded from the server-rendered
+  // count, cleared once the feed has been visibly scrolled into view (with
+  // a short dwell so the glow survives the smooth-scroll from the pill).
+  // NOTE: this is client-side only — until a mark-as-seen endpoint exists,
+  // a full page reload restores both the pill and the glow.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [highlightCount, setHighlightCount] = useState(unseenCount ?? 0);
+
+  useEffect(() => {
+    setHighlightCount(unseenCount ?? 0);
+  }, [unseenCount]);
+
+  useEffect(() => {
+    if (highlightCount === 0) return;
+    const el = rootRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+
+    let dwellTimer: ReturnType<typeof setTimeout> | undefined;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) {
+          if (dwellTimer) {
+            clearTimeout(dwellTimer);
+            dwellTimer = undefined;
+          }
+          return;
+        }
+        // Stay lit ~2.5s after becoming visible so the user actually sees
+        // which rows are new while the smooth-scroll settles, then clear.
+        if (dwellTimer) return;
+        dwellTimer = setTimeout(() => {
+          setHighlightCount(0);
+          // TODO(mark-seen): fire-and-forget the server-side reset here,
+          // e.g. fetch("/api/skill-runs/mark-seen", { method: "POST" })
+          // .catch(() => {}); once that route exists. Without it, the
+          // unseen count survives reloads.
+        }, 2500);
+      },
+      { threshold: 0.3 }
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      if (dwellTimer) clearTimeout(dwellTimer);
+    };
+  }, [highlightCount]);
 
   const [savedView, setSavedView] = useLocalViewState<ExecutionsViewState>(
     `mcs:executions:${storageKey ?? "default"}`,
@@ -472,38 +531,36 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
   }, [polling, refresh]);
 
   const clientChipDefs = useMemo<ExecutionsChipDef[]>(() => {
-  const clientMap = new Map<string, string>();
+    const clientMap = new Map<string, string>();
 
-  for (const run of runs) {
-    const clientId = run.engagementId ?? run.buyerName;
-    if (clientId && !clientMap.has(clientId)) {
-      clientMap.set(clientId, run.buyerName ?? run.engagementId ?? "Unknown client");
+    for (const run of runs) {
+      const clientId = run.engagementId ?? run.buyerName;
+      if (clientId && !clientMap.has(clientId)) {
+        clientMap.set(clientId, run.buyerName ?? run.engagementId ?? "Unknown client");
+      }
     }
-  }
 
-  return Array.from(clientMap.entries()).map(([id, label]) => ({
-    id: `client-${id}`,
-    label,
-    section: toolbarCopy.chipSections.account, // Shows under Account section
-    group: "client", // Separate group ensures AND logic with module group
-    predicate: (run) => run.engagementId === id || run.buyerName === id,
-  }));
-}, [runs]);
-
-
+    return Array.from(clientMap.entries()).map(([id, label]) => ({
+      id: `client-${id}`,
+      label,
+      section: toolbarCopy.chipSections.account, // Shows under Account section
+      group: "client", // Separate group ensures AND logic with module group
+      predicate: (run) => run.engagementId === id || run.buyerName === id,
+    }));
+  }, [runs]);
 
   const refreshNow = useCallback(() => {
     const controller = new AbortController();
     refresh(controller.signal);
   }, [refresh]);
 
- const chipDefs = useMemo(
-  () =>
-    lockedSkill
-      ? [...clientChipDefs, ...STATUS_ACCOUNT_CHIP_DEFS]
-      : [...MODULE_CHIP_DEFS, ...clientChipDefs, ...STATUS_ACCOUNT_CHIP_DEFS],
-  [lockedSkill, clientChipDefs]
-);
+  const chipDefs = useMemo(
+    () =>
+      lockedSkill
+        ? [...clientChipDefs, ...STATUS_ACCOUNT_CHIP_DEFS]
+        : [...MODULE_CHIP_DEFS, ...clientChipDefs, ...STATUS_ACCOUNT_CHIP_DEFS],
+    [lockedSkill, clientChipDefs]
+  );
 
   const tabCounts = useMemo(() => {
     const counts: Record<ExecutionsTab, number> = { all: runs.length, running: 0, needs_attention: 0, completed: 0 };
@@ -715,7 +772,10 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
     .map((d) => ({ id: d.id, label: d.label, count: chipCounts.get(d.id) ?? 0 }));
 
   return (
-    <div className="border border-border rounded-lg bg-white/60 dark:bg-zinc-900/50 backdrop-blur-md overflow-hidden shadow-sm transition-colors duration-200">
+    // CHANGED: rootRef attached so the observer watches THIS instance rather
+    // than a page-specific DOM id — keeps the feed reusable on other pages
+    // (engagement detail) where "live-executions-section" doesn't exist.
+    <div ref={rootRef} className="border border-border rounded-lg bg-white/60 dark:bg-zinc-900/50 backdrop-blur-md overflow-hidden shadow-sm transition-colors duration-200">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-zinc-50/50 dark:bg-zinc-950/50 gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <h3 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider font-mono shrink-0">
@@ -741,8 +801,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
               ))}
             </div>
           )}
-        </div>
-        {/*
+        </div> {/*
         <button
           onClick={() => setPolling((p) => !p)}
           className="text-xs font-bold font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors cursor-pointer shrink-0"
@@ -800,8 +859,23 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/30">
-              {pagedGroups.map((group) => {
+              {/* CHANGED: spend the unread budget on this page's NON-RUNNING
+                  groups only. unseenCount comes from completed executions, so
+                  letting a still-running group occupy slot 0 shifted every
+                  highlight one row off. Grouped repeats glow together — the
+                  group's signature includes its error/subject, so a repeat
+                  group genuinely is new information. Expanded nested rows do
+                  NOT consume the budget (they're history of an already-glowing
+                  group) and never glow themselves. */}
+              {pagedGroups.map((group, index) => {
                 const expanded = expandedGroups.has(group.signature);
+                const isRunningGroup = group.latest.status.toLowerCase() === "running";
+                const completedGroupsBefore = pagedGroups
+                  .slice(0, index)
+                  .filter((g) => g.latest.status.toLowerCase() !== "running")
+                  .length;
+                const isUnseen =
+                  highlightCount > 0 && !isRunningGroup && completedGroupsBefore < highlightCount;
                 return (
                   <Fragment key={group.signature}>
                     <RunRow
@@ -811,6 +885,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
                       groupCount={group.count}
                       groupExpanded={expanded}
                       onToggleGroup={group.count > 1 ? () => toggleGroupExpanded(group.signature) : undefined}
+                      isUnseen={isUnseen}
                     />
                     {expanded &&
                       group.items.slice(1).map((run) => (

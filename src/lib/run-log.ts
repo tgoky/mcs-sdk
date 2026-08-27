@@ -508,8 +508,16 @@ export function emptySummary(): RunSummary {
  * route), and double-counting a run in both numbers while it's in flight
  * would make the two badges disagree with each other for no reason.
  */
-export async function getUnseenCompletedExecutionCount(whopUserId: string): Promise<number> {
-  const [user] = await db.select({ executionsLastSeenAt: users.executionsLastSeenAt }).from(users).where(eq(users.whopUserId, whopUserId)).limit(1);
+export async function getUnseenCompletedExecutionCount(
+  whopUserId: string,
+  workspaceId?: string
+): Promise<number> {
+  const [user] = await db
+    .select({ executionsLastSeenAt: users.executionsLastSeenAt })
+    .from(users)
+    .where(eq(users.whopUserId, whopUserId))
+    .limit(1);
+
   if (!user?.executionsLastSeenAt) return 0;
 
   const [row] = await db
@@ -519,6 +527,7 @@ export async function getUnseenCompletedExecutionCount(whopUserId: string): Prom
     .where(
       and(
         eq(engagements.whopUserId, whopUserId),
+        workspaceId ? eq(engagements.workspaceId, workspaceId) : undefined,
         ne(skillRuns.status, "running"),
         isNotNull(skillRuns.completedAt),
         gt(skillRuns.completedAt, user.executionsLastSeenAt)
@@ -527,6 +536,7 @@ export async function getUnseenCompletedExecutionCount(whopUserId: string): Prom
 
   return Number(row?.count ?? 0);
 }
+
 
 /** Called when the user actually visits /dashboard/runs — see that page. */
 export async function markExecutionsSeen(whopUserId: string): Promise<void> {
