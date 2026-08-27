@@ -2,24 +2,26 @@
 
 // src/app/dashboard/upcoming/leak-map-audit-list.tsx
 //
-// The "next Leak Map" section of /dashboard/upcoming — shared between the
-// full page and the compact right-panel tab, same reuse pattern as every
-// other list on this page.
+// The "next Leak Map" section of /dashboard/upcoming — restyled 2026-08-26
+// to match the shared SquishySkillBadge/StatusPill row language (see
+// win-back-touch-list.tsx's header comment for why this doesn't switch to
+// day-grouping like Calendar has).
 
 import Link from "next/link";
-import { Radar } from "lucide-react";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import type { UpcomingLeakMapAudit } from "@/lib/upcoming-leak-map";
 
-function relativeDay(iso: string): string {
+function relativeDay(iso: string): { label: string; tone: "warning" | "info" } {
   const target = new Date(iso);
   const now = new Date();
   const msPerDay = 86_400_000;
   const dayDiff = Math.round(
     (Date.UTC(target.getFullYear(), target.getMonth(), target.getDate()) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / msPerDay
   );
-  if (dayDiff <= 0) return "Due today";
-  if (dayDiff === 1) return "Tomorrow";
-  return `In ${dayDiff}d`;
+  if (dayDiff <= 0) return { label: "Due today", tone: "warning" };
+  if (dayDiff === 1) return { label: "Tomorrow", tone: "info" };
+  return { label: `In ${dayDiff}d`, tone: "info" };
 }
 
 export function LeakMapAuditList({ audits }: { audits: UpcomingLeakMapAudit[] }) {
@@ -32,30 +34,28 @@ export function LeakMapAuditList({ audits }: { audits: UpcomingLeakMapAudit[] })
   }
 
   return (
-    <div className="space-y-1.5">
-      {audits.map((audit) => (
-        <Link
-          key={audit.engagementId}
-          href={`/dashboard/engagements/${audit.engagementId}`}
-          className="flex items-center gap-3 rounded-lg px-3 py-2 hover:opacity-80 transition-opacity"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-        >
-          <span
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold shrink-0 w-20 justify-center text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40"
+    <div className="rounded-2xl border overflow-hidden shadow-xl divide-y" style={{ borderColor: "var(--border)" }}>
+      {audits.map((audit) => {
+        const { label, tone } = relativeDay(audit.nextRunAt);
+        return (
+          <Link
+            key={audit.engagementId}
+            href={`/dashboard/engagements/${audit.engagementId}`}
+            className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
           >
-            {relativeDay(audit.nextRunAt)}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>
-              {audit.buyer}
-            </p>
-          </div>
-          <span className="flex items-center gap-1 text-[10px] font-mono font-bold capitalize shrink-0" style={{ color: "var(--text-muted)" }}>
-            <Radar size={11} />
-            {audit.auditType}
-          </span>
-        </Link>
-      ))}
+            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 w-20 text-center" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+              {label}
+            </span>
+            <SquishySkillBadge skill="leak-map" size={16} enabled />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                {audit.buyer}
+              </p>
+            </div>
+            <StatusPill tone={tone}>{audit.auditType}</StatusPill>
+          </Link>
+        );
+      })}
     </div>
   );
 }

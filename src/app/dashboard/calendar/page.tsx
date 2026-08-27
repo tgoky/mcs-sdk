@@ -3,7 +3,7 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import { getCalendarEventsInRange } from "@/lib/calendar-events";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { CalendarAgenda } from "./calendar-agenda";
+import { CalendarView } from "./calendar-view";
 
 export const revalidate = 0;
 
@@ -80,7 +80,7 @@ export default async function CalendarPage({
       </div>
 
       <div className="flex-1 overflow-y-auto py-4">
-        <CalendarAgenda events={events} />
+        <CalendarView events={events} year={year} month={month} />
       </div>
     </div>
   );

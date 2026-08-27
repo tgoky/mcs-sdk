@@ -56,9 +56,17 @@ export async function markElapsedEnrollmentsLost(): Promise<
     .where(
       and(
         eq(winBackEnrollments.status, "active"),
+        // Verified-defect fix (2026-08-27): comparing a raw sql`` expression
+        // (untyped) against a bare JS Date via lt() skips Drizzle's normal
+        // column-type-aware serialization, so the driver received a raw
+        // Date object where it expects a string/Buffer and threw on every
+        // single invocation — 100% failure rate on this cron, confirmed via
+        // Inngest run logs. Passing an ISO string instead makes the
+        // parameter type unambiguous; Postgres implicitly casts it back to
+        // timestamptz for the comparison.
         lt(
           sql`${winBackEnrollments.enrolledAt} + (${winBackEnrollments.recoveryWindowDays}::text || ' days')::interval`,
-          now
+          now.toISOString()
         )
       )
     );

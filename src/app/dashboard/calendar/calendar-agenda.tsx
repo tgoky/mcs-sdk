@@ -2,33 +2,26 @@
 
 // src/app/dashboard/calendar/calendar-agenda.tsx
 //
-// The merged, day-grouped, all-3-event-types agenda for /dashboard/calendar
-// — deliberately a different component from call-agenda-list.tsx, which
-// Upcoming's "next appointments" section still uses and must stay
-// calls-only (see calendar-events.ts's header comment for why these two
-// pages intentionally diverge). This one renders whatever mix of calls,
-// Win-Back touches, and Leak Map audits fall on each day in the browsed
-// range, so Calendar reads as a real "everything, this month" view instead
-// of just the booking roster it showed before.
+// The list view for /dashboard/calendar — restyled 2026-08-26 to match the
+// per-engagement master-roster-calendar.tsx's actual list view (sticky day
+// headers, mono time-badge pills, SquishySkillBadge, StatusPill) instead of
+// a bespoke style, per direction to reuse that already-designed UI rather
+// than re-invent one. The cross-client addition on top of that visual
+// language: each row also shows which client it belongs to, since the
+// per-engagement version never needed to.
 
 import Link from "next/link";
-import { Phone, PhoneOff, FileWarning, Clock, Mail, Radar } from "lucide-react";
+import { PhoneCall, Mail, Radar, CalendarX2 } from "lucide-react";
 import { dateKey, timeStr } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import type { CalendarEvent } from "@/lib/calendar-events";
 
-const CALL_STATUS_META: Record<string, { label: string; className: string; icon: typeof Phone }> = {
-  scheduled: { label: "Scheduled", className: "text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40", icon: Clock },
-  brief_delivered: {
-    label: "Brief delivered",
-    className: "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40",
-    icon: Phone,
-  },
-  brief_failed: {
-    label: "Brief failed",
-    className: "text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40",
-    icon: FileWarning,
-  },
-  cancelled: { label: "Cancelled", className: "text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900", icon: PhoneOff },
+const CALL_STATUS_TONE: Record<string, "success" | "danger" | "neutral" | "info"> = {
+  brief_delivered: "success",
+  brief_failed: "danger",
+  cancelled: "neutral",
+  scheduled: "info",
 };
 
 function formatDayHeading(key: string): string {
@@ -38,7 +31,7 @@ function formatDayHeading(key: string): string {
   const tomorrow = dateKey(new Date(Date.now() + 86_400_000));
   if (key === today) return "Today";
   if (key === tomorrow) return "Tomorrow";
-  return date.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
+  return date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 }
 
 function eventTime(event: CalendarEvent): string {
@@ -46,102 +39,110 @@ function eventTime(event: CalendarEvent): string {
 }
 
 function EventRow({ event }: { event: CalendarEvent }) {
-  if (event.kind === "call") {
-    const meta = CALL_STATUS_META[event.status];
-    const StatusIcon = meta.icon;
-    const row = (
-      <div
-        className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-      >
-        <span className="text-[11px] font-mono font-bold shrink-0 w-12" style={{ color: "var(--text-secondary)" }}>
-          {timeStr(event.callTime)}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>
-            {event.prospectName ?? "Unnamed prospect"}
-          </p>
-          <p className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>
-            {event.buyer}
-          </p>
-        </div>
-        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${meta.className}`}>
-          <StatusIcon size={11} />
-          {meta.label}
-        </span>
-      </div>
-    );
-    return event.runId ? (
-      <Link href={`/dashboard/runs/${event.runId}`} className="block hover:opacity-80 transition-opacity">
-        {row}
-      </Link>
-    ) : (
-      row
-    );
-  }
+  const timeBadge = (
+    <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0">
+      <PhoneCall size={9} className="fill-current text-rose-950" />
+      {timeStr(eventTime(event))}
+    </span>
+  );
 
-  if (event.kind === "win_back_touch") {
-    const row = (
-      <div
-        className="flex items-center gap-3 rounded-lg px-3 py-2"
-        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-      >
-        <span className="text-[11px] font-mono font-bold shrink-0 w-12" style={{ color: "var(--text-secondary)" }}>
-          {timeStr(event.scheduledAt)}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>
-            {event.prospectName ?? "Win-Back touch"}
-          </p>
-          <p className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>
-            {event.buyer}
-          </p>
+  const row = (() => {
+    if (event.kind === "call") {
+      return (
+        <div className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            {timeBadge}
+            <div className="min-w-0 space-y-0.5">
+              <span className="truncate text-xs font-bold block" style={{ color: "var(--text-primary)" }}>
+                {event.prospectName ?? "Unnamed prospect"}
+              </span>
+              <span className="text-[10px] truncate block" style={{ color: "var(--text-muted)" }}>
+                {event.buyer}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <SquishySkillBadge skill="pre-call-read" size={16} enabled />
+            <StatusPill tone={CALL_STATUS_TONE[event.status] ?? "neutral"}>{event.status.replace(/_/g, " ")}</StatusPill>
+          </div>
         </div>
-        <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40">
-          <Mail size={11} />
-          Win-Back touch
-        </span>
+      );
+    }
+    if (event.kind === "win_back_touch") {
+      return (
+        <div className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            {timeBadge}
+            <div className="min-w-0 space-y-0.5">
+              <span className="truncate text-xs font-bold block" style={{ color: "var(--text-primary)" }}>
+                {event.prospectName ?? "Win-Back touch"}
+              </span>
+              <span className="text-[10px] truncate block" style={{ color: "var(--text-muted)" }}>
+                {event.buyer}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <SquishySkillBadge skill="win-back" size={16} enabled />
+            <span className="flex items-center gap-1 text-[10px] font-bold" style={{ color: "var(--text-muted)" }}>
+              <Mail size={11} />
+              Touch
+            </span>
+          </div>
+        </div>
+      );
+    }
+    // leak_map_audit
+    return (
+      <div className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          {timeBadge}
+          <span className="truncate text-xs font-bold block" style={{ color: "var(--text-primary)" }}>
+            {event.buyer}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <SquishySkillBadge skill="leak-map" size={16} enabled />
+          <span className="flex items-center gap-1 text-[10px] font-bold capitalize" style={{ color: "var(--text-muted)" }}>
+            <Radar size={11} />
+            {event.auditType}
+          </span>
+        </div>
       </div>
     );
-    return event.runId ? (
-      <Link href={`/dashboard/runs/${event.runId}`} className="block hover:opacity-80 transition-opacity">
-        {row}
-      </Link>
-    ) : (
-      row
-    );
-  }
+  })();
 
-  // leak_map_audit
-  return (
-    <div className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-      <span className="text-[11px] font-mono font-bold shrink-0 w-12" style={{ color: "var(--text-secondary)" }}>
-        {timeStr(event.scheduledAt)}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>
-          {event.buyer}
-        </p>
-      </div>
-      <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold capitalize shrink-0 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40">
-        <Radar size={11} />
-        {event.auditType} Leak Map
-      </span>
-    </div>
+  const runId = event.kind === "leak_map_audit" ? null : event.runId;
+  return runId ? (
+    <Link href={`/dashboard/runs/${runId}`} className="block hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
+      {row}
+    </Link>
+  ) : (
+    <div className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">{row}</div>
   );
 }
 
-export function CalendarAgenda({ events }: { events: CalendarEvent[] }) {
-  if (events.length === 0) {
+export function CalendarAgenda({ events, focusDate, onClearFocus }: { events: CalendarEvent[]; focusDate?: string | null; onClearFocus?: () => void }) {
+  const visible = focusDate ? events.filter((e) => dateKey(eventTime(e)) === focusDate) : events;
+
+  if (visible.length === 0) {
     return (
-      <div className="text-center py-12 text-xs font-mono font-medium text-zinc-400 dark:text-zinc-600">
-        Nothing on the calendar for this range across any client.
+      <div className="flex flex-col items-center gap-2 py-12" style={{ color: "var(--text-muted)" }}>
+        <CalendarX2 size={20} />
+        <span className="text-xs">
+          {focusDate ? "Nothing on the calendar this day." : "Nothing on the calendar for this range across any client."}
+        </span>
+        {focusDate && onClearFocus && (
+          <button type="button" onClick={onClearFocus} className="text-[11px] font-bold underline cursor-pointer" style={{ color: "var(--text-prefill-accent)" }}>
+            Show the whole month
+          </button>
+        )}
       </div>
     );
   }
 
   const byDay = new Map<string, CalendarEvent[]>();
-  for (const event of events) {
+  for (const event of visible) {
     const key = dateKey(eventTime(event));
     const list = byDay.get(key) ?? [];
     list.push(event);
@@ -150,19 +151,37 @@ export function CalendarAgenda({ events }: { events: CalendarEvent[] }) {
   const sortedDays = [...byDay.keys()].sort();
 
   return (
-    <div className="space-y-4">
-      {sortedDays.map((day) => (
-        <div key={day}>
-          <p className="text-[11px] font-bold font-mono uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-            {formatDayHeading(day)}
-          </p>
-          <div className="space-y-1.5">
-            {byDay.get(day)!.map((event) => (
-              <EventRow key={event.id} event={event} />
-            ))}
-          </div>
+    <div className="rounded-2xl border overflow-hidden shadow-xl" style={{ borderColor: "var(--border)" }}>
+      {focusDate && onClearFocus && (
+        <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
+          <span className="text-[11px] font-bold" style={{ color: "var(--text-primary)" }}>
+            {formatDayHeading(focusDate)} only
+          </span>
+          <button type="button" onClick={onClearFocus} className="text-[11px] font-bold underline cursor-pointer" style={{ color: "var(--text-prefill-accent)" }}>
+            Show whole month
+          </button>
         </div>
-      ))}
+      )}
+      <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+        {sortedDays.map((day) => (
+          <div key={day}>
+            <div
+              className="sticky top-0 z-10 flex items-center justify-between backdrop-blur-xs px-3 py-1.5 border-b text-[10.5px] font-mono font-bold uppercase tracking-wider"
+              style={{ background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+            >
+              <span>{formatDayHeading(day)}</span>
+              <span className="font-normal" style={{ color: "var(--text-secondary)" }}>
+                {byDay.get(day)!.length} event{byDay.get(day)!.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+              {byDay.get(day)!.map((event) => (
+                <EventRow key={event.id} event={event} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

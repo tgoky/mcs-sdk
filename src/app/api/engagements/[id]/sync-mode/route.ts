@@ -17,7 +17,7 @@ export const revalidate = 0;
  * for the "auto-polling vs direct webhook" choice — same two-option
  * pattern this app already offers, just made explicit and switchable.
  *
- * Body: { mode?: "webhook" | "polling"; dismissSetupNudge?: boolean }
+ * Body: { mode?: "webhook" | "polling"; pollIntervalMinutes?: number; dismissSetupNudge?: boolean }
  *
  * Switching TO "webhook" is always safe to do before the buyer has
  * actually pasted the URL into their platform — nothing is destructive,
@@ -43,6 +43,18 @@ export async function PATCH(
     const body = await req.json().catch(() => ({}));
     const mode = body?.mode;
     const dismissSetupNudge = body?.dismissSetupNudge === true;
+    // Lets an existing polling-mode engagement's cadence actually be
+    // changed — the ?? fallback below only ever applies when the field
+    // has never been set, so without this, an engagement already stuck
+    // on some prior default (30, or an even older 5) has no way to move
+    // off it short of a direct DB edit.
+    const pollIntervalMinutes = body?.pollIntervalMinutes;
+    if (
+      pollIntervalMinutes !== undefined &&
+      (typeof pollIntervalMinutes !== "number" || !Number.isFinite(pollIntervalMinutes) || pollIntervalMinutes < 1)
+    ) {
+      return NextResponse.json({ error: "pollIntervalMinutes must be a positive number." }, { status: 400 });
+    }
 
     if (mode !== undefined && mode !== "webhook" && mode !== "polling") {
       return NextResponse.json({ error: "mode must be 'webhook' or 'polling'." }, { status: 400 });
@@ -87,13 +99,22 @@ export async function PATCH(
       nextStack.webhook_receiver_mode = "webhook";
     } else if (mode === "polling") {
       nextStack.webhook_receiver_mode = "polling";
-      nextStack.webhook_poll_interval_minutes = nextStack.webhook_poll_interval_minutes ?? 30;
+      nextStack.webhook_poll_interval_minutes =
+        pollIntervalMinutes ?? nextStack.webhook_poll_interval_minutes ?? 25;
       // First cycle after switching back looks one interval behind
       // instead of from whatever stale watermark was left over, same
       // "don't backfill the buyer's entire history" reasoning
       // pollBookingsForEngagement uses for a brand-new polling tenant.
       nextStack.webhook_receiver_last_polled_at = new Date(
-        Date.now() - (nextStack.webhook_poll_interval_minutes ?? 30) * 60_000
+        Date.now() - nextStack.webhook_poll_interval_minutes * 60_000
+      ).toISOString();
+    } else if (pollIntervalMinutes !== undefined && stack.webhook_receiver_mode === "polling") {
+      // Already in polling mode and only the interval is changing — same
+      // watermark-rewind logic as above, without requiring the caller to
+      // also re-send mode: "polling".
+      nextStack.webhook_poll_interval_minutes = pollIntervalMinutes;
+      nextStack.webhook_receiver_last_polled_at = new Date(
+        Date.now() - pollIntervalMinutes * 60_000
       ).toISOString();
     }
 
@@ -115,6 +136,7 @@ export async function PATCH(
     return NextResponse.json({
       ok: true,
       mode: nextStack.webhook_receiver_mode ?? null,
+      pollIntervalMinutes: nextStack.webhook_poll_interval_minutes ?? null,
       webhookUrl: buildWebhookReceiverUrl(id),
       // Only ever returned right after it's (re)generated or on request —
       // this is a shared secret the buyer needs to configure their

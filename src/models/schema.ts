@@ -72,7 +72,7 @@ export type EngagementStack = {
   // src/lib/platforms/booking.ts#listBookingsSinceForTenant and
   // src/inngest/crons.ts#bookingPollCron.
   webhook_receiver_mode?: "webhook" | "polling" | "none";
-  webhook_poll_interval_minutes?: number; // default 5
+  webhook_poll_interval_minutes?: number; // default 25
   // ISO timestamp of the last successful poll — the watermark the next
   // poll cycle reads forward from. Only meaningful when
   // webhook_receiver_mode === "polling".

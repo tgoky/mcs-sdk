@@ -66,7 +66,7 @@ import { estimateEngagementCallDurationMinutes } from "@/features/pre-call-read/
 const NIGHTLY_BRIEF_LOCAL_HOUR = 20; // 20:00 in the engagement's own timezone (defaults to UTC)
 
 export const nightlyBriefsCron = inngest.createFunction(
-  { id: "nightly-briefs-cron", triggers: [{ cron: "0 * * * *" }] }, // hourly; fires per-engagement at their local 20:00
+  { id: "nightly-briefs-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 }, // hourly; fires per-engagement at their local 20:00
   async ({ step }) => {
     const now = new Date();
     const prepared = await step.run("prepare-nightly-runs", async () => {
@@ -141,7 +141,7 @@ export const nightlyBriefsCron = inngest.createFunction(
 // time, so "buyer-configurable local time" has to be checked, not
 // subscribed to.
 export const leakMapScheduleCron = inngest.createFunction(
-  { id: "leak-map-schedule-cron", triggers: [{ cron: "0 * * * *" }] }, // every hour, on the hour
+  { id: "leak-map-schedule-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 }, // every hour, on the hour
   async ({ step }) => {
     const now = new Date();
 
@@ -207,7 +207,7 @@ export const leakMapScheduleCron = inngest.createFunction(
 // This is the one that would have failed Vercel's own deploy check on
 // Hobby — 4x/day is more than Hobby's once-per-day ceiling allows.
 export const alertMonitorCron = inngest.createFunction(
-  { id: "alert-monitor-cron", triggers: [{ cron: "0 */6 * * *" }] }, // every 6 hours
+  { id: "alert-monitor-cron", triggers: [{ cron: "0 */6 * * *" }], retries: 1 }, // every 6 hours
   async ({ step }) => {
     const actionsTriggered = await step.run("evaluate-active-alerts", () =>
       evaluateActiveAlertMonitor()
@@ -250,7 +250,7 @@ const STALE_RUN_CEILING_MS =
  * run (the notification) is fanned out to notifyStaleRunCron below.
  */
 export const staleRunReaperCron = inngest.createFunction(
-  { id: "stale-run-reaper-cron", triggers: [{ cron: "*/30 * * * *" }] },
+  { id: "stale-run-reaper-cron", triggers: [{ cron: "*/30 * * * *" }], retries: 1 },
   async ({ step }) => {
     const reaped = await step.run("reap-stale-runs", async () => {
       const cutoff = new Date(Date.now() - STALE_RUN_CEILING_MS);
@@ -295,7 +295,7 @@ export const staleRunReaperCron = inngest.createFunction(
 
 /** Fanned-out handler: the one real network call (Slack/email) per reaped run. */
 export const notifyStaleRunCron = inngest.createFunction(
-  { id: "notify-stale-run", triggers: [staleRunNotify] },
+  { id: "notify-stale-run", triggers: [staleRunNotify], retries: 2 },
   async ({ event }) => {
     await notifyRunOutcome(
       event.data.engagementId,
@@ -330,7 +330,7 @@ export const credentialHealthCron = inngest.createFunction(
   // Verified-defect fix (2026-08-08 handoff, defect #2): hourly poll,
   // per-engagement local-13:00 check lives in findCredentialsNeedingCheck
   // (credential-health.ts).
-  { id: "credential-health-cron", triggers: [{ cron: "0 * * * *" }] },
+  { id: "credential-health-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 },
   async ({ step }) => {
     const ids = await step.run("find-credentials-needing-check", () => findCredentialsNeedingCheck());
 
@@ -347,7 +347,7 @@ export const credentialHealthCron = inngest.createFunction(
 
 /** Fanned-out handler: the one real network call per invocation. */
 export const checkSingleCredentialHealthCron = inngest.createFunction(
-  { id: "check-single-credential-health", triggers: [credentialHealthCheckSingle] },
+  { id: "check-single-credential-health", triggers: [credentialHealthCheckSingle], retries: 2 },
   async ({ event }) => {
     return checkSingleCredential(event.data.credentialId);
   }
@@ -372,7 +372,7 @@ export const lostDealSweepCron = inngest.createFunction(
   // Verified-defect fix (2026-08-08 handoff, defect #2): hourly poll,
   // per-engagement local-14:00 gate lives in markElapsedEnrollmentsLost
   // (lost-deal-sweep.ts).
-  { id: "lost-deal-sweep-cron", triggers: [{ cron: "0 * * * *" }] },
+  { id: "lost-deal-sweep-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 },
   async ({ step }) => {
     const { markedLost, byEngagement } = await step.run("mark-elapsed-enrollments-lost", () =>
       markElapsedEnrollmentsLost()
@@ -393,7 +393,7 @@ export const lostDealSweepCron = inngest.createFunction(
 
 /** Fanned-out handler: nurture generation (LLM call) + Klaviyo enrollment + notify, one engagement at a time. */
 export const processLostDealEngagementCron = inngest.createFunction(
-  { id: "process-lost-deal-engagement", triggers: [lostDealSweepEngagement] },
+  { id: "process-lost-deal-engagement", triggers: [lostDealSweepEngagement], retries: 2 },
   async ({ event, step }) => {
     return processLostDealsForEngagement(event.data.engagementId, event.data.enrollmentIds, step);
   }
@@ -416,7 +416,7 @@ export const weeklyMetricsCron = inngest.createFunction(
   // Verified-defect fix (2026-08-08 handoff, defect #2): hourly poll,
   // per-engagement local-Monday-08:00 check lives in
   // findEngagementsForWeeklyReadout (weekly-metrics.ts).
-  { id: "weekly-metrics-cron", triggers: [{ cron: "0 * * * *" }] },
+  { id: "weekly-metrics-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 },
   async ({ step }) => {
     const eligible = await step.run("find-engagements-for-weekly-readout", () =>
       findEngagementsForWeeklyReadout()
@@ -435,7 +435,7 @@ export const weeklyMetricsCron = inngest.createFunction(
 
 /** Fanned-out handler: Klaviyo list-size lookups + notification, one engagement at a time. */
 export const processWeeklyMetricsEngagementCron = inngest.createFunction(
-  { id: "process-weekly-metrics-engagement", triggers: [weeklyMetricsEngagement] },
+  { id: "process-weekly-metrics-engagement", triggers: [weeklyMetricsEngagement], retries: 2 },
   async ({ event }) => {
     return processWeeklyMetricsForEngagement(event.data.engagementId);
   }
@@ -453,11 +453,15 @@ export const processWeeklyMetricsEngagementCron = inngest.createFunction(
  * tenant's slow/failing booking API call shouldn't block or retry-storm
  * everyone else's poll cycle.
  *
- * 5-minute cadence matches the OG SKILL.md's stated default
- * (webhook_receiver.poll interval) exactly.
+ * The scan itself runs every 5 minutes so a due engagement is never more
+ * than 5 minutes late getting picked up, but that's just the tick
+ * resolution — the actual per-engagement cadence is
+ * stack.webhook_poll_interval_minutes, which defaults to 25 (see
+ * onboarding-service.ts / sync-mode route). Lowered from 30 on
+ * 2026-08-27 — see the execution-budget audit note above.
  */
 export const bookingPollCron = inngest.createFunction(
-  { id: "booking-poll-cron", triggers: [{ cron: "*/5 * * * *" }] },
+  { id: "booking-poll-cron", triggers: [{ cron: "*/5 * * * *" }], retries: 1 },
   async ({ step }) => {
     const due = await step.run("find-engagements-due-for-poll", () => findEngagementsDueForPoll());
 
@@ -474,7 +478,7 @@ export const bookingPollCron = inngest.createFunction(
 
 /** Fanned-out handler: one platform API poll + enrollment pass, one engagement at a time. */
 export const processBookingPollEngagementCron = inngest.createFunction(
-  { id: "process-booking-poll-engagement", triggers: [bookingPollEngagement] },
+  { id: "process-booking-poll-engagement", triggers: [bookingPollEngagement], retries: 1 },
   async ({ event, step }) => {
     return pollBookingsForEngagement(event.data.engagementId, step);
   }
@@ -493,7 +497,7 @@ export const processBookingPollEngagementCron = inngest.createFunction(
  * inline instead of 404ing when an operator clicks through.
  */
 export const docsLinksValidatorCron = inngest.createFunction(
-  { id: "docs-links-validator-cron", triggers: [{ cron: "TZ=UTC 0 6 * * *" }] }, // 06:00 UTC daily
+  { id: "docs-links-validator-cron", triggers: [{ cron: "TZ=UTC 0 6 * * *" }], retries: 1 }, // 06:00 UTC daily
   async ({ step }) => {
     return step.run("validate-platform-docs-links", () => validateAllPlatformDocsLinks());
   }
@@ -526,7 +530,7 @@ export const docsLinksValidatorCron = inngest.createFunction(
  * watermark bookkeeping needed here, unlike bookingPollCron.
  */
 export const dynamicBriefCron = inngest.createFunction(
-  { id: "dynamic-brief-cron", triggers: [{ cron: "*/30 * * * *" }] },
+  { id: "dynamic-brief-cron", triggers: [{ cron: "*/30 * * * *" }], retries: 1 },
   async ({ step }) => {
     const engagementIds = await step.run("find-dynamic-brief-engagements", async () => {
       // isNull(deletedAt) — see the same note on nightlyBriefsCron above.
@@ -557,7 +561,7 @@ export const dynamicBriefCron = inngest.createFunction(
 
 /** Fanned-out handler: one engagement's dynamic-window brief pass. */
 export const processDynamicBriefEngagementCron = inngest.createFunction(
-  { id: "process-dynamic-brief-engagement", triggers: [dynamicBriefEngagement] },
+  { id: "process-dynamic-brief-engagement", triggers: [dynamicBriefEngagement], retries: 2 },
   async ({ event, step }) => {
     const { engagementId } = event.data;
 
@@ -602,7 +606,7 @@ export const processDynamicBriefEngagementCron = inngest.createFunction(
 // single audit run — see leak-map-benchmarks.ts for the k-anonymity floor
 // this enforces before publishing any bucket.
 export const leakMapBenchmarksCron = inngest.createFunction(
-  { id: "leak-map-benchmarks-cron", triggers: [{ cron: "TZ=UTC 0 4 * * *" }] }, // 04:00 UTC daily, ahead of the 09:00 audit crons
+  { id: "leak-map-benchmarks-cron", triggers: [{ cron: "TZ=UTC 0 4 * * *" }], retries: 1 }, // 04:00 UTC daily, ahead of the 09:00 audit crons
   async ({ step }) => {
     return step.run("compute-benchmarks", () => computeAndPersistBenchmarks());
   }
@@ -618,7 +622,7 @@ export const leakMapBenchmarksCron = inngest.createFunction(
  * src/lib/platforms/canary.ts.
  */
 export const canaryWeeklySweep = inngest.createFunction(
-  { id: "canary-weekly-sweep", triggers: [{ cron: "TZ=UTC 0 9 * * 1" }] }, // Monday 09:00 UTC
+  { id: "canary-weekly-sweep", triggers: [{ cron: "TZ=UTC 0 9 * * 1" }], retries: 1 }, // Monday 09:00 UTC
   async ({ step }) => {
     if (!getCanaryEngagementId()) {
       return { dispatched: 0, reason: "CANARY_ENGAGEMENT_ID not set" };
@@ -633,7 +637,7 @@ export const canaryWeeklySweep = inngest.createFunction(
 
 /** Fanned-out handler: the one real network call per invocation, mirroring checkSingleCredentialHealthCron. */
 export const checkSingleCanary = inngest.createFunction(
-  { id: "check-single-canary", triggers: [canaryCheckSingle] },
+  { id: "check-single-canary", triggers: [canaryCheckSingle], retries: 1 },
   async ({ event }) => {
     const check = CANARY_CHECKS.find(
       (c) => c.platform === event.data.platform && c.adapterMethod === event.data.adapterMethod
@@ -723,7 +727,7 @@ export const checkSingleCanary = inngest.createFunction(
 // false negative would silently stop a real no-show from ever resolving,
 // so this errs toward over-inclusion.
 export const assumedNoShowSweepCron = inngest.createFunction(
-  { id: "assumed-no-show-sweep-cron", triggers: [{ cron: "*/15 * * * *" }] },
+  { id: "assumed-no-show-sweep-cron", triggers: [{ cron: "*/15 * * * *" }], retries: 1 },
   async ({ step }) => {
     const engagementIds = await step.run("find-sweep-engagements", async () => {
       const now = new Date();
@@ -821,7 +825,7 @@ export const assumedNoShowSweepCron = inngest.createFunction(
  * the cracks once could age out and never get resolved at all.
  */
 export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
-  { id: "process-assumed-no-show-sweep-engagement", triggers: [assumedNoShowSweepEngagement] },
+  { id: "process-assumed-no-show-sweep-engagement", triggers: [assumedNoShowSweepEngagement], retries: 2 },
   async ({ event, step }) => {
     const { engagementId } = event.data;
 
@@ -998,7 +1002,7 @@ export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
 // so there's always at least one full sweep pass of fresh data to report
 // on by the time this runs.
 export const pendingActionDigestCron = inngest.createFunction(
-  { id: "pending-action-digest-cron", triggers: [{ cron: "*/30 * * * *" }] },
+  { id: "pending-action-digest-cron", triggers: [{ cron: "*/30 * * * *" }], retries: 1 },
   async ({ step }) => {
     const undigested = await step.run("find-undigested", async () => {
       // _digest is the real filter (checked in JS below, since it lives
