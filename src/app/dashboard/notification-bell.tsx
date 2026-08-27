@@ -99,10 +99,20 @@ export function NotificationList({ notifs, unreadCount, markAllRead, markRead, o
               </div>
             );
 
-            return n.runId ? (
+            // Every notify() call site in the codebase sets engagementId —
+            // runId is the more specific destination when present (goes
+            // straight to the run that failed/timed out), engagementId is
+            // the fallback every other type actually has (credential
+            // issues, weekly metrics, lost-deal sweeps, audit delivery
+            // failures, objection alerts). Previously only runId was ever
+            // used, so most notification types had nowhere to click
+            // through to at all — fixed here rather than only documented.
+            const href = n.runId ? `/dashboard/runs/${n.runId}` : n.engagementId ? `/dashboard/engagements/${n.engagementId}` : null;
+
+            return href ? (
               <Link
                 key={n.id}
-                href={`/dashboard/runs/${n.runId}`}
+                href={href}
                 onClick={() => {
                   if (!n.read) markRead(n.id);
                   onNavigate?.();
