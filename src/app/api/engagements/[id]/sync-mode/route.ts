@@ -43,18 +43,33 @@ export async function PATCH(
     const body = await req.json().catch(() => ({}));
     const mode = body?.mode;
     const dismissSetupNudge = body?.dismissSetupNudge === true;
+
+    // CHANGED: pollIntervalMinutes used to be read straight off `body`
+    // (which is `any` from req.json()), so its type was `any` and nothing
+    // downstream was ever narrowed. Now it goes through `unknown` + a real
+    // type guard and lands as a proper `number | undefined`.
+    //
     // Lets an existing polling-mode engagement's cadence actually be
     // changed — the ?? fallback below only ever applies when the field
     // has never been set, so without this, an engagement already stuck
     // on some prior default (30, or an even older 5) has no way to move
     // off it short of a direct DB edit.
-    const pollIntervalMinutes = body?.pollIntervalMinutes;
+    const rawPollIntervalMinutes: unknown = body?.pollIntervalMinutes;
+
     if (
-      pollIntervalMinutes !== undefined &&
-      (typeof pollIntervalMinutes !== "number" || !Number.isFinite(pollIntervalMinutes) || pollIntervalMinutes < 1)
+      rawPollIntervalMinutes !== undefined &&
+      (typeof rawPollIntervalMinutes !== "number" ||
+        !Number.isFinite(rawPollIntervalMinutes) ||
+        rawPollIntervalMinutes < 1)
     ) {
-      return NextResponse.json({ error: "pollIntervalMinutes must be a positive number." }, { status: 400 });
+      return NextResponse.json(
+        { error: "pollIntervalMinutes must be a positive number." },
+        { status: 400 }
+      );
     }
+
+    // Guaranteed by the guard above: a finite positive number, or absent.
+    const pollIntervalMinutes: number | undefined = rawPollIntervalMinutes;
 
     if (mode !== undefined && mode !== "webhook" && mode !== "polling") {
       return NextResponse.json({ error: "mode must be 'webhook' or 'polling'." }, { status: 400 });
@@ -99,14 +114,18 @@ export async function PATCH(
       nextStack.webhook_receiver_mode = "webhook";
     } else if (mode === "polling") {
       nextStack.webhook_receiver_mode = "polling";
-      nextStack.webhook_poll_interval_minutes =
+      // CHANGED: hoisted into a local const. Assigning into the optional
+      // `nextStack.webhook_poll_interval_minutes` field doesn't narrow it,
+      // so the watermark math below needs a definitely-number binding.
+      const intervalMinutes =
         pollIntervalMinutes ?? nextStack.webhook_poll_interval_minutes ?? 25;
+      nextStack.webhook_poll_interval_minutes = intervalMinutes;
       // First cycle after switching back looks one interval behind
       // instead of from whatever stale watermark was left over, same
       // "don't backfill the buyer's entire history" reasoning
       // pollBookingsForEngagement uses for a brand-new polling tenant.
       nextStack.webhook_receiver_last_polled_at = new Date(
-        Date.now() - nextStack.webhook_poll_interval_minutes * 60_000
+        Date.now() - intervalMinutes * 60_000
       ).toISOString();
     } else if (pollIntervalMinutes !== undefined && stack.webhook_receiver_mode === "polling") {
       // Already in polling mode and only the interval is changing — same
