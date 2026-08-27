@@ -348,7 +348,7 @@ function RunRow({
         nested
           ? "bg-zinc-50/70 dark:bg-zinc-950/50 border-l-2 border-l-zinc-200 dark:border-l-zinc-800"
           : isUnseen
-          ? "bg-fuchsia-500/10 dark:bg-fuchsia-950/30 border-l-2 border-l-[#d946ef]"
+          ? "bg-amber-400/10 dark:bg-amber-400/10 border-l-2 border-l-amber-400"
           : isRunning
           ? "bg-zinc-100/60 dark:bg-zinc-900/70"
           : "bg-zinc-50/40 dark:bg-zinc-900/40"
@@ -408,7 +408,14 @@ function RunRow({
       </td>
 
       <td className="px-4 py-2.5 text-right whitespace-nowrap">
-        <VerboseTime isoString={run.startedAt} className="text-xs font-bold text-zinc-900 dark:text-zinc-100 font-mono" />
+        <div className="flex items-center justify-end gap-1.5">
+          {isUnseen && (
+            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber-950 dark:text-amber-200 bg-amber-400/20 border border-amber-400/40 px-1 py-0.5 rounded shrink-0">
+              New
+            </span>
+          )}
+          <VerboseTime isoString={run.startedAt} className="text-xs font-bold text-zinc-900 dark:text-zinc-100 font-mono" />
+        </div>
       </td>
 
       <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
