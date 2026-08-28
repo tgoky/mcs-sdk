@@ -112,9 +112,9 @@ function EventRow({ event }: { event: CalendarEvent }) {
     );
   })();
 
-  const runId = event.kind === "leak_map_audit" ? null : event.runId;
-  return runId ? (
-    <Link href={`/dashboard/runs/${runId}`} className="block hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
+  const href = event.kind === "leak_map_audit" ? `/dashboard/engagements/${event.engagementId}/skills/leak-map` : event.runId ? `/dashboard/runs/${event.runId}` : null;
+  return href ? (
+    <Link href={href} className="block hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
       {row}
     </Link>
   ) : (

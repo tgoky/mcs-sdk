@@ -31,12 +31,14 @@ export function CalendarMonthGrid({
   events,
   year,
   month,
+  selectedDay,
   onDayClick,
 }: {
   events: CalendarEvent[];
   year: number;
   /** 1-indexed, matching the page's own year/month state. */
   month: number;
+  selectedDay?: string | null;
   onDayClick: (key: string) => void;
 }) {
   const gridDays = getDaysInMonthGrid(year, month - 1);
@@ -86,7 +88,8 @@ export function CalendarMonthGrid({
               onClick={() => onDayClick(key)}
               className={cn(
                 "group relative flex min-h-[92px] flex-col gap-1 border-b border-r p-1.5 text-left transition-all cursor-pointer",
-                !isCurrentMonth && "opacity-40"
+                !isCurrentMonth && "opacity-40",
+                key === selectedDay && "ring-2 ring-inset ring-emerald-500"
               )}
               style={{
                 borderColor: "var(--border)",

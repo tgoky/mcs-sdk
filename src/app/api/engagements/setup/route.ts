@@ -134,7 +134,7 @@ export async function POST(request: Request) {
     // moments later once onboarding actually confirms a live subscription.
     if (!finalStack.webhook_receiver_mode && finalStack.booking_platform) {
       finalStack.webhook_receiver_mode = "polling";
-      finalStack.webhook_poll_interval_minutes = finalStack.webhook_poll_interval_minutes ?? 30;
+      finalStack.webhook_poll_interval_minutes = finalStack.webhook_poll_interval_minutes ?? 25;
       finalStack.webhook_receiver_last_polled_at = new Date().toISOString();
     }
 

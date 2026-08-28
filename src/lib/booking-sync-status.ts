@@ -69,7 +69,7 @@ export function computeBookingSyncStatus(
 
   const lastWebhookAt = stack?.webhook_last_received_at ?? null;
   const lastPollAt = stack?.webhook_receiver_last_polled_at ?? null;
-  const pollIntervalMinutes = stack?.webhook_poll_interval_minutes ?? 5;
+  const pollIntervalMinutes = stack?.webhook_poll_interval_minutes ?? 25;
 
   let lastActivityAt: string | null = null;
   let lastActivityKind: "webhook" | "poll" | null = null;

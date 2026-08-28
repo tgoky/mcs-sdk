@@ -2,9 +2,11 @@
 
 // src/app/dashboard/calendar/calendar-panel-content.tsx
 //
-// The right-utility-panel's compact Calendar tab — the next 14 days across
-// every client and every skill, fetched lazily only once this tab is
-// opened. Same CalendarAgenda the full page renders.
+// The right-utility-panel's compact Calendar tab — the current calendar
+// month across every client and every skill (same "what's on this day"
+// lens as the full page, not a forward-looking digest — that's Upcoming's
+// job), fetched lazily only once this tab is opened. Same CalendarAgenda
+// the full page renders.
 
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -14,6 +16,7 @@ import type { CalendarEvent } from "@/lib/calendar-events";
 export function CalendarPanelContent() {
   const [events, setEvents] = useState<CalendarEvent[] | null>(null);
   const [error, setError] = useState(false);
+  const monthLabel = new Date().toLocaleDateString([], { month: "long" });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -56,7 +59,7 @@ export function CalendarPanelContent() {
   return (
     <div className="p-3 overflow-y-auto h-full">
       <p className="text-[10px] font-mono font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
-        Next 14 days
+        {monthLabel}
       </p>
       <CalendarAgenda events={events} />
     </div>
