@@ -332,10 +332,10 @@ export default function NewEngagementPage() {
         </div>
 
         {/* Navigation footer buttons — sticky so Back/Next stay visible without scrolling through the whole step */}
-        <div
-          className="sticky bottom-0 z-20 flex justify-between pt-4 pb-3 font-mono backdrop-blur-xs bg-white/95 dark:bg-black/95"
-          style={{ borderTop: "1px solid var(--border)" }}
-        >
+     <div
+  className="sticky bottom-0 z-20 flex justify-between pt-4 pb-3 font-mono bg-transparent"
+  style={{ borderTop: "1px solid var(--border)" }}
+>
           <button
             type="button"
             onClick={() => {
