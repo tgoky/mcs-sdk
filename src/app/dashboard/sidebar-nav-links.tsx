@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { LiveCountBadge } from "./live-count-badge";
 
 export interface NavLinkItem {
@@ -18,23 +18,56 @@ export interface NavLinkItem {
 
 export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
   const pathname = usePathname();
+  const navRef = useRef<HTMLElement>(null);
+  const linkRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
+  const [indicator, setIndicator] = useState<{ top: number; height: number } | null>(null);
+
+  const activeHref =
+    links.find((l) => (l.href === "/dashboard" ? pathname === "/dashboard" : pathname === l.href || pathname.startsWith(`${l.href}/`)))
+      ?.href ?? null;
+
+  // Each link previously carried its own active background and animated
+  // it in/out independently (`transition-all` on the individual button),
+  // which reads as two things fading in unison rather than one thing
+  // moving. This measures the currently-active link's actual box
+  // (offsetTop/offsetHeight, not assumed from index — link heights are
+  // uniform in practice but nothing here depends on that assumption) and
+  // slides one shared highlight to it instead.
+  //
+  // useLayoutEffect + setState here isn't the "adjust state during
+  // render" case used elsewhere in this delivery — that pattern is for
+  // pure prop-derived values with no DOM dependency. This genuinely needs
+  // the link's post-commit rendered position, which only exists after
+  // paint, same reasoning as the measurement pass in use-flip-list.ts.
+  useLayoutEffect(() => {
+    const el = activeHref ? linkRefs.current.get(activeHref) : null;
+    setIndicator(el ? { top: el.offsetTop, height: el.offsetHeight } : null);
+  }, [activeHref]);
 
   return (
-    <nav className="flex flex-col gap-0.5">
+    <nav ref={navRef} className="relative flex flex-col gap-0.5">
+      {indicator && (
+        <div
+          aria-hidden="true"
+          className="sidebar-nav-indicator absolute left-0 right-0 rounded-[10px] bg-white dark:bg-zinc-700 shadow-xs border border-zinc-200/60 dark:border-transparent"
+          style={{ height: indicator.height, transform: `translateY(${indicator.top}px)` }}
+        />
+      )}
       {links.map((link) => {
-        const active =
-          link.href === "/dashboard"
-            ? pathname === "/dashboard"
-            : pathname === link.href || pathname.startsWith(`${link.href}/`);
+        const active = link.href === activeHref;
 
         return (
           <Link
             key={link.href}
             href={link.href}
+            ref={(el) => {
+              if (el) linkRefs.current.set(link.href, el);
+              else linkRefs.current.delete(link.href);
+            }}
             aria-current={active ? "page" : undefined}
-            className={`group relative flex items-center justify-between rounded-[10px] px-3 py-2 text-[13px] font-medium transition-all ${
+            className={`group relative z-10 flex items-center justify-between rounded-[10px] px-3 py-2 text-[13px] font-medium transition-colors ${
               active
-                ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs border border-zinc-200/60 dark:border-transparent"
+                ? "text-zinc-900 dark:text-white font-semibold"
                 : "text-zinc-600 dark:text-zinc-300 hover:bg-[#f0edf6] dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white border border-transparent"
             }`}
           >

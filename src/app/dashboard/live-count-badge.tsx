@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Matches LiveExecutionFeed's own poll cadence (see the `polling` effect in
@@ -76,10 +76,13 @@ export function LiveCountBadge({
   // Running takes priority when both are nonzero — "N running" is the more
   // urgent, more current fact; the unseen-completed count is still sitting
   // there waiting and will show again the moment nothing's actively running.
+  const displayValue = count > 0 ? count : unseenCount > 0 ? unseenCount : null;
+  const justChanged = useCountBump(displayValue);
+
   if (count > 0) {
     return (
       <span
-        className={`ml-auto shrink-0 px-1.5 py-[1px] rounded-full text-[11px] font-mono font-medium transition-colors ${
+        className={`ml-auto shrink-0 px-1.5 py-[1px] rounded-full text-[11px] font-mono font-medium tabular-nums transition-colors ${justChanged ? "count-bump" : ""} ${
           active ? "bg-zinc-700 text-white" : "bg-zinc-800 text-zinc-400 group-hover:text-zinc-200"
         }`}
       >
@@ -92,7 +95,7 @@ export function LiveCountBadge({
     return (
       <span
         title={`${unseenCount} run${unseenCount === 1 ? "" : "s"} finished since you last checked`}
-        className={`ml-auto shrink-0 px-1.5 py-[1px] rounded-full text-[11px] font-mono font-medium border transition-colors ${
+        className={`ml-auto shrink-0 px-1.5 py-[1px] rounded-full text-[11px] font-mono font-medium tabular-nums border transition-colors ${justChanged ? "count-bump" : ""} ${
           active ? "border-zinc-500 text-zinc-200" : "border-zinc-700 text-zinc-400 group-hover:text-zinc-200 group-hover:border-zinc-600"
         }`}
       >
@@ -102,4 +105,30 @@ export function LiveCountBadge({
   }
 
   return null;
+}
+
+/**
+ * True for one animation cycle right after `value` changes (and only once
+ * mounted — a badge's first paint shouldn't bump). Confirmation that the
+ * number moved, not decoration: a crisp scale pulse via CSS (.count-bump,
+ * globals.css), no color change, so it survives both the solid and
+ * outlined pill styling above unmodified.
+ */
+function useCountBump(value: number | null): boolean {
+  const [bumping, setBumping] = useState(false);
+  const prevValueRef = useRef(value);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    if (mountedRef.current && prevValueRef.current !== value) {
+      setBumping(true);
+      const timeout = setTimeout(() => setBumping(false), 220);
+      prevValueRef.current = value;
+      return () => clearTimeout(timeout);
+    }
+    prevValueRef.current = value;
+    mountedRef.current = true;
+  }, [value]);
+
+  return bumping;
 }

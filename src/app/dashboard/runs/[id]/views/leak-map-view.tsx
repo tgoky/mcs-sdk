@@ -116,7 +116,7 @@ export function LeakMapView({
         <>
           {/* CALENDAR / OVERVIEW VIEW */}
           {mode === "calendar" && (
-            <>
+            <div key="calendar" className="run-view-content-enter">
               {/* Status Strip */}
               <div
                 className={cn(
@@ -235,12 +235,12 @@ export function LeakMapView({
                   </div>
                 )}
               </div>
-            </>
+            </div>
           )}
 
           {/* LIST VIEW */}
           {mode === "list" && (
-            <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950">
+            <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950">
               {filteredIssues.length === 0 ? (
                 <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic">
                   {issues.length === 0

@@ -331,8 +331,144 @@
     stroke-dashoffset: -8;
   }
 }
+
+/* Shared "settled in" entrance — opacity + a small upward rise, used
+   anywhere content appears/replaces in place rather than being pushed in
+   directionally (contrast the calendar's directional slide below, which
+   needs to say *which way*). One keyframe, several call sites below with
+   their own duration/distance — kept as separate classnames rather than
+   one generic utility because each is named for what it's for
+   (.step-enter, .right-panel-content-enter, .run-view-content-enter),
+   matching this file's existing convention (.step-spine-flow,
+   .prefill-core-pulse) of feature-scoped names over generic ones. */
+@keyframes fade-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--fade-rise-distance, 4px));
+  }
+}
+
+/* A step row that just appeared in the live poll (step-timeline.tsx) —
+   settles in rather than popping into an already-rendered list. */
+.step-enter {
+  animation: fade-rise-in 280ms ease-out;
+}
 @media (prefers-reduced-motion: reduce) {
-  .step-spine-flow {
+  .step-spine-flow,
+  .step-enter {
+    animation: none;
+  }
+}
+
+/* A nav-badge count just changed (live-count-badge.tsx) — a single crisp
+   scale pulse confirms the number moved without recoloring the pill or
+   drawing a glow around it. */
+.count-bump {
+  animation: count-bump 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes count-bump {
+  30% {
+    transform: scale(1.22);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .count-bump {
+    animation: none;
+  }
+}
+
+/* Calendar month grid (calendar-view.tsx) — navigating months plays a
+   card-flip: the outgoing month rotates away on a Y-axis hinge at the
+   shared edge while the incoming month rotates in from the other side.
+   Direction-aware (forward pivots right->left, backward the mirror).
+   Geometry validated interactively before building this for real: a
+   flat directional slide was the original, lower-risk choice, but once
+   compared side-by-side a flip read better for "moving through a
+   sequence" here. See calendar-view.tsx for how the outgoing/incoming
+   split handles the two grids not sharing one fixed height. */
+.calendar-flip-outgoing,
+.calendar-flip-incoming-fwd,
+.calendar-flip-incoming-back {
+  animation-duration: 320ms;
+  animation-timing-function: ease-in-out;
+  backface-visibility: hidden;
+}
+.calendar-flip-outgoing {
+  animation-name: calendar-flip-out-fwd;
+  transform-origin: right center;
+}
+.calendar-flip-outgoing[data-direction="backward"] {
+  animation-name: calendar-flip-out-back;
+  transform-origin: left center;
+}
+.calendar-flip-incoming-fwd {
+  animation-name: calendar-flip-in-fwd;
+  transform-origin: left center;
+}
+.calendar-flip-incoming-back {
+  animation-name: calendar-flip-in-back;
+  transform-origin: right center;
+}
+@keyframes calendar-flip-out-fwd {
+  to {
+    transform: rotateY(-90deg);
+    opacity: 0.3;
+  }
+}
+@keyframes calendar-flip-out-back {
+  to {
+    transform: rotateY(90deg);
+    opacity: 0.3;
+  }
+}
+@keyframes calendar-flip-in-fwd {
+  from {
+    transform: rotateY(90deg);
+    opacity: 0.4;
+  }
+}
+@keyframes calendar-flip-in-back {
+  from {
+    transform: rotateY(-90deg);
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .calendar-flip-outgoing,
+  .calendar-flip-incoming-fwd,
+  .calendar-flip-incoming-back {
+    animation: none;
+  }
+}
+
+/* Right utility panel (right-utility-panel.tsx) — the panel itself opens/
+   closes via a plain width+opacity transition already on the element (see
+   the component for why: it's a flex sibling of <main>, not an overlay,
+   so a transform-based slide would leave <main>'s reflow snapping
+   instantly instead of tracking it). This just covers switching content
+   *within* an already-open panel — Calendar to Notifications with no
+   close in between — so the swap settles in instead of replacing
+   mid-frame. */
+.right-panel-content-enter {
+  animation: fade-rise-in 180ms ease-out;
+  --fade-rise-distance: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .right-panel-content-enter {
+    animation: none;
+  }
+}
+
+/* Run-detail Calendar/List/Board view switch (view-switcher.tsx, consumed
+   by leak-map-view.tsx and pre-call-read-view.tsx) — these were a plain
+   `{mode === "x" && <...>}` swap with no transition at all; content just
+   popped. Same treatment as the panel content swap above, not a new idea. */
+.run-view-content-enter {
+  animation: fade-rise-in 180ms ease-out;
+  --fade-rise-distance: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .run-view-content-enter {
     animation: none;
   }
 }
@@ -396,4 +532,34 @@
   .prefill-scan::after {
     animation: none;
   }
+}
+/* Sidebar nav active-link highlight (sidebar-nav-links.tsx) — one shared
+   surface that slides to whichever link is active, instead of each link
+   independently fading its own background in/out. transform only
+   (compositor), height set directly without a transition since link
+   heights are uniform in practice. */
+.sidebar-nav-indicator {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-nav-indicator {
+    transition: none;
+  }
+}
+
+/* Opts every full-page (cross-document) navigation into the browser's
+   native View Transition — a crossfade between the old and new page,
+   with zero JS and zero per-page setup. This is what actually smooths
+   the workspace switch (a real <form method="POST"> + redirect, not a
+   client-side route change — see primary-rail.tsx) and anywhere else in
+   the app that does a genuine full navigation (/home <-> /dashboard,
+   auth redirects). Regular in-app <Link> navigation is already handled
+   client-side by Next's router and never triggers this.
+   Currently Chromium-only (`@view-transition` is "Limited availability",
+   not yet Baseline — Safari/Firefox don't implement cross-document
+   transitions as of this writing). Pure progressive enhancement either
+   way: unsupported browsers get exactly today's instant navigation,
+   nothing breaks, nothing to feature-detect. */
+@view-transition {
+  navigation: auto;
 }

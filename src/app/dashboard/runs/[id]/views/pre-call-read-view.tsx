@@ -156,7 +156,7 @@ export function PreCallReadView({
       {/* (roster-calendar.tsx) — this stays a single-run audit view.       */}
       {/* ----------------------------------------------------------------- */}
       {mode === "calendar" && (
-        <div className="flex flex-col gap-3 font-sans">
+        <div key="calendar" className="run-view-content-enter flex flex-col gap-3 font-sans">
           <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-black/40 px-3 py-2.5 text-[11px] font-sans">
             <div className="h-3.5 w-1 shrink-0 rounded-full bg-emerald-500/80" />
             <span className="text-zinc-600 dark:text-zinc-400 font-semibold">{phaseLabel("roster_fetch")}</span>
@@ -222,7 +222,7 @@ export function PreCallReadView({
       {/* 3. DENSE LIST VIEW                                                */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 font-sans">
+        <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 font-sans">
           {callsByDay.length === 0 ? (
             <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic font-sans">
               No sales calls scheduled in this briefing window.

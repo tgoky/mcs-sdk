@@ -1,6 +1,6 @@
 // src/components/right-utility-panel.tsx
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X, Maximize2, CalendarDays, Users, Bot, ListChecks, Workflow, type LucideIcon } from "lucide-react";
 import { NotificationList } from "@/app/dashboard/notification-bell";
@@ -70,6 +70,32 @@ export function RightUtilityPanel({
 }) {
   const router = useRouter();
   const draggingRef = useRef(false);
+  const isOpen = activePanel !== null;
+
+  // This panel is a flex sibling of <main> in shell-layout.tsx, not an
+  // overlay — opening/closing it already reflows the whole page, and it
+  // already had a `transition-[width]` for the drag-resize handle below.
+  // So the open/close motion is that same width transition, driven all
+  // the way down to 0 instead of unmounting outright: <main> reflows in
+  // step with it for free, rather than snapping the instant a `return
+  // null` mounts/unmounts a sibling. (A transform-based slide-in would
+  // animate the panel's own content but leave <main> jumping instantly —
+  // wrong technique for a layout-affecting sibling, right one for an
+  // overlay like the Sheet drawers already use.)
+  //
+  // Content still needs to hang around a beat past `activePanel` going
+  // null, or the box would visibly go blank first and *then* shrink —
+  // same reasoning as closeItemWithAnimation in queue-panel.tsx, just
+  // holding onto "what to render" instead of "whether to render".
+  const [displayedPanel, setDisplayedPanel] = useState<RightPanelKey | null>(activePanel);
+  if (activePanel && activePanel !== displayedPanel) {
+    setDisplayedPanel(activePanel);
+  }
+  useEffect(() => {
+    if (activePanel) return;
+    const timeout = setTimeout(() => setDisplayedPanel(null), 150);
+    return () => clearTimeout(timeout);
+  }, [activePanel]);
 
   const onDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -98,78 +124,85 @@ export function RightUtilityPanel({
     };
   }, [onWidthChange]);
 
-  if (!activePanel) return null;
-  const meta = RIGHT_PANEL_META[activePanel];
+  const meta = displayedPanel ? RIGHT_PANEL_META[displayedPanel] : null;
 
   return (
     <div
-      className="hidden md:flex relative shrink-0 flex-col border-l h-full transition-[width] duration-150 ease-out overflow-hidden bg-white dark:bg-black border-zinc-200/80 dark:border-zinc-800/80"
-      style={{ width }}
+      className="hidden md:flex relative shrink-0 flex-col border-l h-full transition-[width,opacity] duration-150 ease-out overflow-hidden bg-white dark:bg-black border-zinc-200/80 dark:border-zinc-800/80"
+      style={{ width: isOpen ? width : 0, opacity: isOpen ? 1 : 0 }}
+      aria-hidden={!isOpen}
     >
-      {/* --- HYPER-MICRO TIGHT DOT GRID --- */}
-      <div 
-        className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" 
-        aria-hidden="true"
-      />
-
-      {/* Drag handle */}
-      <div
-        onMouseDown={onDragStart}
-        className="absolute left-0 top-0 bottom-0 w-1.5 -ml-0.5 cursor-col-resize z-20 hover:bg-zinc-400/40 dark:hover:bg-zinc-600/40 transition-colors"
-        title="Drag to resize"
-      />
-
-      {/* Header */}
-      <div className="relative z-10 flex items-center justify-between px-3 h-11 border-b shrink-0 border-zinc-200/80 dark:border-zinc-800/80">
-        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-          {meta.label}
-        </span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              router.push(meta.expandHref);
-              onClose();
-            }}
-            className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
-            title={`Expand ${meta.label}`}
-            aria-label={`Expand ${meta.label}`}
-          >
-            <Maximize2 size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
-            title="Close"
-            aria-label="Close panel"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      </div>
-
-      {/* Content area */}
-      <div className="relative z-10 flex-1 min-h-0">
-        {activePanel === "notifications" ? (
-          <NotificationList
-            notifs={notifications.notifs}
-            unreadCount={notifications.unreadCount}
-            markAllRead={notifications.markAllRead}
-            markRead={notifications.markRead}
+      {meta && displayedPanel && (
+        <>
+          {/* --- HYPER-MICRO TIGHT DOT GRID --- */}
+          <div 
+            className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" 
+            aria-hidden="true"
           />
-        ) : activePanel === "autopilot" ? (
-          <AutopilotPanelContent />
-        ) : activePanel === "calendar" ? (
-          <CalendarPanelContent />
-        ) : activePanel === "upcoming" ? (
-          <UpcomingPanelContent />
-        ) : activePanel === "teammates" ? (
-          <TeammatesPanelContent />
-        ) : (
-          <ComingSoonPanel panelKey={activePanel} />
-        )}
-      </div>
+
+          {/* Drag handle */}
+          <div
+            onMouseDown={onDragStart}
+            className="absolute left-0 top-0 bottom-0 w-1.5 -ml-0.5 cursor-col-resize z-20 hover:bg-zinc-400/40 dark:hover:bg-zinc-600/40 transition-colors"
+            title="Drag to resize"
+          />
+
+          {/* Header */}
+          <div className="relative z-10 flex items-center justify-between px-3 h-11 border-b shrink-0 border-zinc-200/80 dark:border-zinc-800/80">
+            <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+              {meta.label}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  router.push(meta.expandHref);
+                  onClose();
+                }}
+                className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
+                title={`Expand ${meta.label}`}
+                aria-label={`Expand ${meta.label}`}
+              >
+                <Maximize2 size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
+                title="Close"
+                aria-label="Close panel"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* Content area — keyed on displayedPanel so switching straight
+              from one open panel to another (Calendar -> Notifications,
+              no close in between) plays a quick settle-in instead of the
+              content just being replaced mid-frame. */}
+          <div key={displayedPanel} className="relative z-10 flex-1 min-h-0 right-panel-content-enter">
+            {displayedPanel === "notifications" ? (
+              <NotificationList
+                notifs={notifications.notifs}
+                unreadCount={notifications.unreadCount}
+                markAllRead={notifications.markAllRead}
+                markRead={notifications.markRead}
+              />
+            ) : displayedPanel === "autopilot" ? (
+              <AutopilotPanelContent />
+            ) : displayedPanel === "calendar" ? (
+              <CalendarPanelContent />
+            ) : displayedPanel === "upcoming" ? (
+              <UpcomingPanelContent />
+            ) : displayedPanel === "teammates" ? (
+              <TeammatesPanelContent />
+            ) : (
+              <ComingSoonPanel panelKey={displayedPanel} />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

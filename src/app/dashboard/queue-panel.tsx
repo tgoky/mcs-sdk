@@ -34,6 +34,7 @@ import { TableSearchInput } from "@/components/table-search-input";
 import { TimeRangeMenu, computeTimeRangeBounds, isWithinTimeRange, type TimeRangeValue } from "@/components/time-range-menu";
 import { ViewCustomizer, FilterChipBar, type CustomizerSection } from "@/components/view-customizer";
 import { useLocalViewState } from "@/lib/use-local-view-state";
+import { useFlipList } from "@/lib/use-flip-list";
 import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
 import { VerboseTime } from "@/components/relative-time";
@@ -935,6 +936,25 @@ export function QueuePanel({
   const clampedPage = Math.min(page, pageCount - 1);
   const pagedGroups = queueGroups.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
 
+  // Smooths the row reshuffle that happens every POLL_MS when `load()`
+  // wholesale-replaces `items` with a freshly re-sorted response (see
+  // CATEGORY_PRIORITY ordering in queue.ts) — without this, a new
+  // higher-priority item landing mid-list snaps every row below it into
+  // place instantly. See use-flip-list.ts for why this is scoped to
+  // position only, not entry/exit.
+  const listContainerRef = useRef<HTMLDivElement>(null);
+  const flipTrackedIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const group of pagedGroups) {
+      ids.push(group.signature);
+      if (expandedGroups.has(group.signature)) {
+        for (const it of group.items.slice(1)) ids.push(it.id);
+      }
+    }
+    return ids;
+  }, [pagedGroups, expandedGroups]);
+  useFlipList(listContainerRef, flipTrackedIds);
+
   function handleCreateTag() {
     if (!newTagName.trim()) return;
     const swatch = TAG_SWATCHES.find((s) => s.hex === newTagColor);
@@ -1075,7 +1095,17 @@ export function QueuePanel({
 
   function renderQueueRow(
     item: QueueItemDTO,
-    extra: { groupCount?: number; groupExpanded?: boolean; onToggleGroup?: () => void; nested?: boolean } = {}
+    extra: {
+      groupCount?: number;
+      groupExpanded?: boolean;
+      onToggleGroup?: () => void;
+      nested?: boolean;
+      // Defaults to item.id, but the top-level (possibly-grouped) row must
+      // pass the group's signature instead — that's what useFlipList is
+      // told to track for that slot (see flipTrackedIds above), and the
+      // two need to match or the FLIP measurement silently no-ops.
+      flipId?: string;
+    } = {}
   ) {
     const matchedTag = selectedTagId ? tags.find((t) => t.id === selectedTagId && itemMatchesTag(item, t)) : null;
     const isClosing = closingIds.has(item.id);
@@ -1085,6 +1115,7 @@ export function QueuePanel({
       // than "this disappeared" — see closeItemWithAnimation above.
       <div
         key={item.id}
+        data-flip-id={extra.flipId ?? item.id}
         className="grid overflow-hidden"
         style={{
           gridTemplateRows: isClosing ? "0fr" : "1fr",
@@ -1627,7 +1658,7 @@ export function QueuePanel({
               <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>
             </div>
           ) : (
-            <div className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border border border-zinc-200/80 dark:border-sidebar-border rounded-xl overflow-hidden bg-white dark:bg-zinc-900/30 shadow-xs">
+            <div ref={listContainerRef} className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border border border-zinc-200/80 dark:border-sidebar-border rounded-xl overflow-hidden bg-white dark:bg-zinc-900/30 shadow-xs">
               {pagedGroups.map((group) => {
                 const expanded = expandedGroups.has(group.signature);
                 return (
@@ -1636,6 +1667,7 @@ export function QueuePanel({
                       groupCount: group.count,
                       groupExpanded: expanded,
                       onToggleGroup: group.count > 1 ? () => toggleGroupExpanded(group.signature) : undefined,
+                      flipId: group.signature,
                     })}
                     {expanded && group.items.slice(1).map((it) => renderQueueRow(it, { nested: true }))}
                   </Fragment>

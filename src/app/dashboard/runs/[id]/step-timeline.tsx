@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Check,
   CircleAlert,
@@ -78,6 +79,25 @@ function StepMarker({ status, interrupted }: { status: RunStepStatus; interrupte
 }
 
 /**
+ * The vertical rule between two markers. `flowing` swaps the static line
+ * for the same geometry animated with the .step-spine-flow keyframe
+ * (globals.css) — a marching-dash stroke-dashoffset tween, previously
+ * defined but never wired to a component. Reused instead of duplicated:
+ * darker stroke than the resting line so it reads as "live" through
+ * contrast and motion alone, no accent color and no glow.
+ */
+function Connector({ flowing }: { flowing: boolean }) {
+  if (!flowing) {
+    return <span className="mt-1 w-px flex-1 bg-zinc-200 dark:bg-zinc-800" aria-hidden />;
+  }
+  return (
+    <svg className="mt-1 w-px min-h-6 flex-1 text-zinc-400 dark:text-zinc-600" viewBox="0 0 2 40" preserveAspectRatio="none" aria-hidden>
+      <line x1="1" y1="0" x2="1" y2="40" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" strokeLinecap="round" className="step-spine-flow" />
+    </svg>
+  );
+}
+
+/**
  * A deliberately quiet activity log. The old version wrapped each item in a
  * card, which made a simple serial run look like a dashboard inside a
  * dashboard. This uses one connected list—the hierarchy users need to scan
@@ -92,6 +112,41 @@ export function StepTimeline({
   isRunning: boolean;
   runStatus: string;
 }) {
+  // Exactly one connector "flows" at a time — whichever segment is
+  // currently carrying the run forward — so motion reads as a pointer to
+  // what's happening next, not ambient decoration on every line. Picks the
+  // segment feeding the actively-running step; if no step is running but
+  // the run is still going (the gap between one step completing and the
+  // next being logged), it flows into the trailing "compiling" indicator
+  // instead.
+  const activeRunningIndex = steps.findIndex(
+    (s) => s.status === "running" && runStatus !== "timed_out" && runStatus !== "cancelled"
+  );
+  const flowingAfterIndex =
+    activeRunningIndex > 0
+      ? activeRunningIndex - 1
+      : isRunning && activeRunningIndex === -1 && steps.length > 0
+        ? steps.length - 1
+        : null;
+
+  // This page polls every 3s while a run is live (see the interval in
+  // runs/[id]/page.tsx) and `steps` only ever grows/updates in place — it's
+  // never reordered or trimmed. So "how many steps existed last render" is
+  // enough to tell a brand-new step apart from one that's just re-rendering
+  // with a fresh status, without a library or per-step id bookkeeping.
+  // Tracked via the "adjust state during render" pattern (React docs: You
+  // Might Not Need an Effect), not an effect — an effect-based setState
+  // here would fire after commit and cost an extra cascading render on
+  // every single poll tick (react-hooks/set-state-in-effect). Starts at
+  // the steps length already on the page at first paint, so nothing
+  // already visible plays the entrance — only steps appended after.
+  const [previousStepCount, setPreviousStepCount] = useState<number | null>(null);
+  const [trackedStepCount, setTrackedStepCount] = useState(steps.length);
+  if (steps.length !== trackedStepCount) {
+    setPreviousStepCount(trackedStepCount);
+    setTrackedStepCount(steps.length);
+  }
+
   return (
     <ol className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
       {steps.map((step, index) => {
@@ -104,11 +159,19 @@ export function StepTimeline({
             ? formatDuration(new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime())
             : null;
 
+        // Only steps that weren't there last render get the entrance —
+        // an existing step flipping from "running" to "success" mid-poll
+        // must not replay the whole row's fade-in, just its own marker/pill.
+        const isNewlyAppeared = previousStepCount !== null && index >= previousStepCount;
+
         return (
-          <li key={`${step.phase}-${index}`} className="grid grid-cols-[24px_minmax(0,1fr)_auto] gap-x-3 py-4 first:pt-0 last:pb-0">
+          <li
+            key={`${step.phase}-${index}`}
+            className={`grid grid-cols-[24px_minmax(0,1fr)_auto] gap-x-3 py-4 first:pt-0 last:pb-0 ${isNewlyAppeared ? "step-enter" : ""}`}
+          >
             <div className="relative flex min-h-full flex-col items-center">
               <StepMarker status={step.status} interrupted={interrupted} />
-              {!isLast && <span className="mt-1 w-px flex-1 bg-zinc-200 dark:bg-zinc-800" aria-hidden />}
+              {(!isLast || isRunning) && <Connector flowing={index === flowingAfterIndex} />}
             </div>
 
             <div className="min-w-0">

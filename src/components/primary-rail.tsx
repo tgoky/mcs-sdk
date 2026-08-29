@@ -14,6 +14,7 @@ import {
   Sliders,
   Plus,
   UserPlus,
+  Loader2,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
@@ -74,6 +75,16 @@ function activeSectionHref(pathname: string): string {
 
 export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
+  // Switching workspaces is a plain <form method="POST"> to a route
+  // handler that sets an httpOnly cookie and redirects — deliberately no
+  // client-side fetch (see the route handler's own comment), which also
+  // means there's no async step for something like useFormStatus to
+  // observe: a string `action` triggers a real, synchronous browser
+  // navigation, not a React-tracked Action. This just marks which
+  // workspace was clicked before that navigation fires, so there's some
+  // visible response before the new page arrives instead of the click
+  // appearing to do nothing until it does.
+  const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
   const pathname = usePathname();
   const activeHref = activeSectionHref(pathname);
   const initials = displayName.slice(0, 2).toUpperCase();
@@ -176,15 +187,23 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                     <div className="space-y-0.5 max-h-64 overflow-y-auto">
                       {workspaces.map((workspace) => {
                         const isActive = workspace.workspaceId === activeWorkspaceId;
+                        const isSwitching = switchingWorkspaceId === workspace.workspaceId;
                         return (
-                          <form key={workspace.workspaceId} action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST">
+                          <form
+                            key={workspace.workspaceId}
+                            action={`/api/workspaces/${workspace.workspaceId}/switch`}
+                            method="POST"
+                            onSubmit={() => setSwitchingWorkspaceId(workspace.workspaceId)}
+                          >
                             <button
                               type="submit"
-                              disabled={isActive}
-                              className={`w-full flex items-center gap-2.5 py-1.5 px-2 rounded-xl min-w-0 transition-colors ${
+                              disabled={isActive || switchingWorkspaceId !== null}
+                              className={`w-full flex items-center gap-2.5 py-1.5 px-2 rounded-xl min-w-0 transition-colors disabled:cursor-not-allowed ${
                                 isActive
                                   ? "bg-white dark:bg-zinc-900/80 shadow-xs cursor-default"
-                                  : "cursor-pointer hover:bg-zinc-200/60 dark:hover:bg-zinc-900"
+                                  : switchingWorkspaceId !== null
+                                    ? "opacity-50"
+                                    : "cursor-pointer hover:bg-zinc-200/60 dark:hover:bg-zinc-900"
                               }`}
                             >
                               {/* Workspace Avatar: Plum / Purple Accent */}
@@ -197,8 +216,10 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                               >
                                 {workspace.name}
                               </span>
-                              {isActive && (
-                                <Check className="w-3.5 h-3.5 text-[#2a233c] dark:text-[#e4dff2] shrink-0 ml-auto" />
+                              {isSwitching ? (
+                                <Loader2 className="w-3.5 h-3.5 text-[#2a233c] dark:text-[#e4dff2] shrink-0 ml-auto animate-spin" />
+                              ) : (
+                                isActive && <Check className="w-3.5 h-3.5 text-[#2a233c] dark:text-[#e4dff2] shrink-0 ml-auto" />
                               )}
                             </button>
                           </form>
