@@ -1,12 +1,7 @@
 import type { FormData } from "./types";
+import { generateEngagementId } from "@/lib/engagement-id";
 
-export function generateEngagementId(buyerName: string): string {
-  const slug = buyerName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  return `eng_${slug}_${Date.now().toString(36)}`;
-}
+export { generateEngagementId };
 
 export function buildEngagementPayload(form: FormData) {
   const engagementId = form.engagementId || generateEngagementId(form.buyerName);

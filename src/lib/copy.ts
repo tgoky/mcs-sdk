@@ -630,7 +630,15 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
     name: "Counter Claim",
     description:
       "Automated dispute responses for chargebacks — evidence packs and alerts generated as disputes come in.",
-    href: "/counter-claim",
+    href: "/dashboard/counter-claim",
+    status: "coming_soon",
+  },
+  {
+    id: "reputation-manager",
+    name: "Reputation Manager",
+    description:
+      "Monitors what AI engines, Trustpilot, and Reddit say about your business, and pages you the moment something crosses into crisis territory.",
+    href: "/dashboard/reputation-manager",
     status: "coming_soon",
   },
 ];

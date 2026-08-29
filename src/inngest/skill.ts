@@ -3,9 +3,33 @@ import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { failRun, logStep, finishRun } from "@/lib/run-log";
-import { SKILL_REGISTRY, isSkillId } from "@/lib/skill-registry";
+import { SKILL_REGISTRY, isSkillId, type SkillDefinition } from "@/lib/skill-registry";
+import { REP_SKILL_REGISTRY, isRepSkillId, type RepSkillDefinition } from "@/lib/rep-skill-registry";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { isEngagementPaused } from "@/lib/engagement-status"; // <--- ADDED
+
+/**
+ * Resolves a skill id against every product's catalog in turn. Showtime's
+ * SKILL_REGISTRY and Reputation Manager's REP_SKILL_REGISTRY are
+ * deliberately separate modules (see rep-skill-manifest.ts's file comment
+ * for why), so this dispatcher is the one place that legitimately needs to
+ * know both exist — everything downstream of this function (the run
+ * itself, engagementSkills, skillRuns) already treats skillId as an
+ * opaque, product-agnostic string, so adding a product here costs one
+ * more `else if`, not a schema change.
+ *
+ * A straight sequential check is the right amount of generalization for
+ * two products. If/when a third product's skills need dispatching here,
+ * that's the point to fold this into a loop over a registered list of
+ * catalogs — not before, per the same reasoning skill.ts's neighbors in
+ * this app apply elsewhere: generalize once a second real example exists,
+ * not from a guess made on the first one.
+ */
+function resolveSkillDefinition(skillName: string): SkillDefinition | RepSkillDefinition | null {
+  if (isSkillId(skillName)) return SKILL_REGISTRY[skillName];
+  if (isRepSkillId(skillName)) return REP_SKILL_REGISTRY[skillName];
+  return null;
+}
 
 /**
  * Unified Background Skill Execution Worker
@@ -61,11 +85,10 @@ export const executeSkillRun = inngest.createFunction(
     }
 
     try {
-      if (!isSkillId(skillName)) {
+      const definition = resolveSkillDefinition(skillName);
+      if (!definition) {
         throw new Error(`Unknown skill: ${skillName}`);
       }
-
-      const definition = SKILL_REGISTRY[skillName];
 
       const enabled = await step.run("check-skill-enabled", () =>
         isSkillEnabledForEngagement(engagementId, skillName)

@@ -11,7 +11,18 @@ import { Inngest, eventType, staticSchema } from "inngest";
 export type SkillRunExecuteData = {
   runId: string;
   engagementId: string;
-  skillName: "pin-down" | "pile-on" | "pre-call-read" | "win-back" | "leak-map";
+  // Was a closed union of Showtime's 5 skill names. Widened to string when
+  // Reputation Manager's rep-onboarding became the second runOnSetup
+  // bridge to dispatch through this same event — this is the one place
+  // that's genuinely shared infrastructure between products (see
+  // skill.ts's resolveSkillDefinition), same as engagementSkills.skillId
+  // and skillRuns.skillName already being plain text columns rather than
+  // enums. Confirmed no switch on this specific field relies on
+  // TypeScript's exhaustiveness checking before widening it — every
+  // skillName comparison found in the app operates on skillRuns rows
+  // (already plain text from the DB) rather than this event field
+  // directly.
+  skillName: string;
   auditType?: "weekly" | "monthly";
   manualOverride?: boolean; // <--- ADD THIS
 };

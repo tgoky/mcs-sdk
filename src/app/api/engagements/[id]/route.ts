@@ -226,8 +226,8 @@ export async function PATCH(
     // jsonb blob, and this way a client rail edit can never accidentally
     // race a concurrent Edit Stack Settings save into the same `stack.set()`
     // call.
-    if (body.buyer !== undefined || body.tagColor !== undefined) {
-      const rowUpdate: { buyer?: string; tagColor?: string | null; updatedAt: Date } = {
+    if (body.buyer !== undefined || body.tagColor !== undefined || body.label !== undefined) {
+      const rowUpdate: { buyer?: string; tagColor?: string | null; label?: string | null; updatedAt: Date } = {
         updatedAt: new Date(),
       };
 
@@ -249,12 +249,26 @@ export async function PATCH(
         rowUpdate.tagColor = body.tagColor;
       }
 
+      if (body.label !== undefined) {
+        // Unlike buyer, an empty label is valid — it's how you clear one
+        // you no longer need. null and "" both mean "no label."
+        if (body.label !== null && typeof body.label !== "string") {
+          return NextResponse.json({ error: "Label must be a string." }, { status: 400 });
+        }
+        const trimmed = typeof body.label === "string" ? body.label.trim() : "";
+        if (trimmed.length > 60) {
+          return NextResponse.json({ error: "Label is too long." }, { status: 400 });
+        }
+        rowUpdate.label = trimmed.length > 0 ? trimmed : null;
+      }
+
       await db.update(engagements).set(rowUpdate).where(eq(engagements.engagementId, id));
 
       return NextResponse.json({
         ok: true,
         ...(rowUpdate.buyer !== undefined ? { buyer: rowUpdate.buyer } : {}),
         ...(rowUpdate.tagColor !== undefined ? { tagColor: rowUpdate.tagColor } : {}),
+        ...(rowUpdate.label !== undefined ? { label: rowUpdate.label } : {}),
       });
     }
 

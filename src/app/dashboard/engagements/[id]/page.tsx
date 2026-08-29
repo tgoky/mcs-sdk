@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { engagements, skillRuns, artifacts, credentialsRefs, conversationIntelligenceSessions, type EngagementStack } from "@/models/schema";
+import { engagements, skillRuns, artifacts, credentialsRefs, conversationIntelligenceSessions, repIdentityGraphs, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { eq, and, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -8,12 +8,15 @@ import Link from "next/link";
 
 import { EngagementPauseControl } from "./pause-control";
 import { SkillsPanel } from "./skills-panel";
+import { ProductsPanel, type ProductCardData, type ProductSetupState } from "./products-panel";
 import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
 import { MasterRosterCalendar } from "./master-roster-calendar";
 import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
 import { RunRowActions } from "./run-row-actions";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
+import { getInstalledPackagesByWorkspace } from "@/lib/workspace";
+import { WORKSPACE_PRODUCTS } from "@/lib/copy";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { 
   CheckCircle2, 
@@ -126,6 +129,56 @@ export default async function EngagementDetailPage({
   const requireApproval = (engagement.stack as EngagementStack | null)?.require_approval_for_side_effects ?? false;
   const offerDetails = engagement.offerDetails as Record<string, string | boolean> | null;
   const skillStates = await getEngagementSkillStates(id);
+
+  // ── Products panel data ─────────────────────────────────────────────
+  // Each product's own "is this set up for THIS client" criterion is its
+  // own concern, not a uniform flag — Showtime's is whether the wizard
+  // ever got as far as picking a booking platform (same signal
+  // bookingPlatformLabel(stack?.booking_platform) already uses just above
+  // for the header badge), Reputation Manager's is whether its identity
+  // graph row exists. A third product would add its own case here, same
+  // as SKILL_REGISTRY grew one entry at a time rather than trying to
+  // guess every future skill's shape up front.
+  const installedProductIds = (
+    await getInstalledPackagesByWorkspace([activeWorkspace.workspaceId])
+  ).get(activeWorkspace.workspaceId) ?? [];
+
+  const [repIdentityGraphRow] = installedProductIds.includes("reputation-manager")
+    ? await db
+        .select({ id: repIdentityGraphs.id })
+        .from(repIdentityGraphs)
+        .where(eq(repIdentityGraphs.engagementId, id))
+        .limit(1)
+    : [];
+
+  function productSetupState(productId: string): ProductSetupState {
+    if (productId === "showtime") return stack?.booking_platform ? "configured" : "needs_setup";
+    if (productId === "reputation-manager") return repIdentityGraphRow ? "configured" : "needs_setup";
+    return "needs_setup"; // a genuinely unknown product id defaults to "needs setup" rather than silently claiming it's configured
+  }
+
+  function productSetupHref(productId: string): string | undefined {
+    if (productId === "showtime") {
+      return `/dashboard/engagements/new?engagementId=${encodeURIComponent(engagement.engagementId)}&buyerName=${encodeURIComponent(engagement.buyer)}`;
+    }
+    // Reputation Manager's own hinges panel — attaches to this existing
+    // engagement, distinct from /dashboard/reputation-manager/new (that
+    // one creates a brand-new engagement instead).
+    if (productId === "reputation-manager") {
+      return `/dashboard/engagements/${encodeURIComponent(engagement.engagementId)}/bridges/rep-onboarding`;
+    }
+    return undefined;
+  }
+
+  const installedProducts: ProductCardData[] = WORKSPACE_PRODUCTS.filter(
+    (p) => p.status === "available" && installedProductIds.includes(p.id)
+  ).map((p) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    setupState: productSetupState(p.id),
+    setupHref: productSetupHref(p.id),
+  }));
 
   const runsBySkill = Object.fromEntries(
     SKILLS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
@@ -267,6 +320,8 @@ export default async function EngagementDetailPage({
           notesByPeriod={{ week: weekNote, month: monthNote }}
           offerDetails={offerDetails}
         />
+
+        <ProductsPanel products={installedProducts} />
 
         <SkillsPanel
           engagementId={engagement.engagementId}

@@ -8,8 +8,18 @@ import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
  * needs to hold explicit disables, so every engagement that predates the
  * Skill Library concept reads as "all skills on" with zero migration
  * needed on their data.
+ *
+ * skillId widened to string: this is one of the two functions (with
+ * setSkillEnabledForEngagement below) the shared dispatcher in
+ * src/inngest/skill.ts calls generically for whatever product's skill is
+ * running — SkillId would reject Reputation Manager's ids. The query
+ * itself was always just an equality check against a free-text column,
+ * so this was an accidental over-constraint, not a deliberate design
+ * choice; the other three functions in this file return
+ * Record<SkillId, boolean> for Showtime's own Skills panel specifically
+ * and correctly stay narrow.
  */
-export async function isSkillEnabledForEngagement(engagementId: string, skillId: SkillId): Promise<boolean> {
+export async function isSkillEnabledForEngagement(engagementId: string, skillId: string): Promise<boolean> {
   const [row] = await db
     .select({ enabled: engagementSkills.enabled })
     .from(engagementSkills)
@@ -94,10 +104,11 @@ export async function getSkillStatesForEngagements(
   );
 }
 
-/** Upserts the enabled flag for one (engagementId, skillId) pair — see the Skills panel on the engagement detail page. */
+/** Upserts the enabled flag for one (engagementId, skillId) pair — see the Skills panel on the engagement detail page.
+ * skillId widened to string, same reasoning as isSkillEnabledForEngagement above. */
 export async function setSkillEnabledForEngagement(
   engagementId: string,
-  skillId: SkillId,
+  skillId: string,
   enabled: boolean
 ): Promise<void> {
   await db

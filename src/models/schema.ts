@@ -565,6 +565,16 @@ export const engagements = pgTable("engagements", {
   // NULL for a few moments post-migration, pre-first-visit.
   workspaceId: text("workspace_id").references(() => workspaces.workspaceId),
   buyer: text("buyer").notNull(),
+  // Optional, freeform, buyer-set subtitle — never required, never
+  // generated, purely a way to tell two same-named clients apart at a
+  // glance ("Marvo — roofing arm" vs plain "Marvo"). Deliberately NOT
+  // used anywhere `buyer` is — briefs, confirmation pages, AI-engine
+  // prompts, anything that needs the client's actual name reads `buyer`,
+  // never this. When this is null and the roster finds two rows sharing
+  // the same buyer name, it falls back to a computed, never-stored
+  // disambiguator (created date) rather than inventing a label on the
+  // buyer's behalf — see ClientRosterTable's collision handling.
+  label: text("label"),
   // Sidebar client-rail squircle color, set from the "..." row menu's
   // "Add tag color" submenu (src/app/dashboard/client-sidebar-list.tsx).
   // One of ENGAGEMENT_TAG_COLORS' ids (src/lib/engagement-tag-colors.ts),
@@ -1779,3 +1789,145 @@ export const canaryRuns = pgTable("canary_runs", {
   latencyMs: integer("latency_ms"),
   runAt: timestamp("run_at").defaultNow().notNull(),
 });
+
+// ── Reputation Manager: Identity Graph ──────────────────────────────────────
+// Ported from the OG Claude Skill Pack's counterclaim-intake skill
+// (mcs/cms/skills/counterclaim-intake), which wrote this to the buyer's own
+// filesystem as identity-graph.md + config/your-identity.yml. Showtime is a
+// hosted multi-tenant app, not a buyer-run local system, so this is the one
+// Postgres row that replaces both files — the rep-onboarding hinges panel
+// IS the human-readable view the .md file used to be, and every downstream
+// Reputation Manager skill reads this row instead of re-parsing YAML.
+//
+// Scoped to one row per engagement (rep_identity_graph_engagement_unique),
+// same cardinality as Pin-Down's setup — Reputation Manager monitors each
+// of the buyer's own clients' reputations as its own surface, not the
+// Showtime operator's own brand, consistent with how every other skill in
+// this app treats an engagement as one served client.
+//
+// What's deliberately NOT here: the full severity-scoring rubric and
+// routing matrix from thresholds.yml.template. Per that template's own
+// comment, "most operators leave this file unchanged at setup" — it's a
+// shared set of defaults, not per-client config, so it lives as an
+// application-level constant (REP_THRESHOLD_DEFAULTS) rather than being
+// duplicated into every row here. crisisThresholdOverride below is the one
+// value from that file worth letting a buyer tune per client.
+
+/** One social/professional handle to bind as part of an identity — open
+ * platform key set (x, linkedin, youtube, reddit, whop, ...) rather than a
+ * fixed column per platform, since the source template explicitly allows
+ * "add more platforms as needed." */
+export type RepHandleMap = Record<string, string>;
+
+/** A company, brand, product, or organization the engagement's client owns
+ * or is publicly associated with. One entity per distinct reputation
+ * surface — a solo founder with one company has one entity; a holding
+ * company with multiple brands has several. */
+export type RepEntity = {
+  name: string;
+  aliases: string[];
+  type: "company" | "brand" | "product" | "service" | "publication";
+  domainsOwned: string[];
+  handles: RepHandleMap;
+  highPriority: boolean;
+};
+
+/** A specific product, course, or offer sold by one of the entities above —
+ * monitored as its own identity string even when the parent entity isn't
+ * named in the mention. */
+export type RepOffering = {
+  name: string;
+  aliases: string[];
+  surfaces: string[]; // sales pages, landing pages, checkout URLs
+  parentEntityName: string; // matches an entities[].name above
+};
+
+/** A competitor whose category-adjacent mentions get watched alongside the
+ * client's own — deliberately opt-in and short (the source template's own
+ * guidance: "the right list is the 3 to 7 competitors your prospects
+ * compare you against," not every company in the category. */
+export type RepCompetitor = {
+  name: string;
+  monitorFor: string[]; // e.g. "price comparisons", "feature compares", "negative content"
+  highPriority: boolean;
+};
+
+/** A same-name collision: another person or company AI engines confuse
+ * with this client. Every entry needs a disambiguation note — an empty
+ * note defeats the whole point of the disambiguation work the schema/
+ * Wikidata skill does downstream. */
+export type RepCollision = {
+  name: string;
+  whoTheyAre: string;
+  disambiguationNote: string;
+};
+
+export const repIdentityGraphs = pgTable(
+  "rep_identity_graphs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+
+    // ── Operator (intake questions 1, 5-7 partial) ──────────────────────
+    operatorName: text("operator_name").notNull(),
+    operatorAliases: jsonb("operator_aliases").$type<string[]>().notNull().default([]),
+    operatorHandles: jsonb("operator_handles").$type<RepHandleMap>().notNull().default({}),
+    operatorDomains: jsonb("operator_domains").$type<string[]>().notNull().default([]),
+    operatorEmailContacts: jsonb("operator_email_contacts").$type<string[]>().notNull().default([]),
+
+    // ── Entities / offerings / competitors (questions 2-3, 6) ───────────
+    entities: jsonb("entities").$type<RepEntity[]>().notNull().default([]),
+    offerings: jsonb("offerings").$type<RepOffering[]>().notNull().default([]),
+    competitors: jsonb("competitors").$type<RepCompetitor[]>().notNull().default([]),
+
+    // ── Same-name collisions (question 4) ───────────────────────────────
+    // Buyer-entered collisions from the interview, PLUS anything
+    // runRepOnboarding's one-time web-search pass finds that the buyer
+    // missed (each tagged source: "buyer" | "collision_check" — see
+    // onboarding-service.ts) — never silently merged into operator/entity
+    // data, since a collision is explicitly a DIFFERENT party.
+    collisions: jsonb("collisions").$type<(RepCollision & { source: "buyer" | "collision_check" })[]>().notNull().default([]),
+
+    // ── Trusted / adversarial sources ───────────────────────────────────
+    trustedSources: jsonb("trusted_sources").$type<string[]>().notNull().default([]),
+    // Starts empty by design (source template: "the Step 1 state is
+    // correctly empty; do not invent adversaries") — populated over time
+    // from real incidents by the crisis-response skill, not at intake.
+    adversarialSources: jsonb("adversarial_sources").$type<string[]>().notNull().default([]),
+
+    // ── Seed AI-engine prompts (question 8) ─────────────────────────────
+    // The buyer's 5-8 starting prompts. Expanded to the locked 20-50
+    // prompt panel by the ai-engine-panel skill (not yet built) — this
+    // row only holds the seed, matching the source pack's own skill
+    // boundary (intake seeds, ai-engine-panel locks the full panel).
+    seedPanelPrompts: jsonb("seed_panel_prompts").$type<string[]>().notNull().default([]),
+
+    // ── Sole authority (question 10) ────────────────────────────────────
+    // The one person who can declare a crisis, approve a public response,
+    // or stand down. Recorded, never defaulted — every engagement using
+    // Reputation Manager confirms this explicitly at intake, and nothing
+    // in this app or the skills built on top of this row is ever allowed
+    // to auto-publish on the client's behalf regardless of this value.
+    soleAuthorityName: text("sole_authority_name").notNull(),
+
+    // Per-engagement override of REP_THRESHOLD_DEFAULTS.crisisScoreFloor
+    // (shared default: 80). Null means "inherit the default" — see that
+    // constant's own comment for why this is the one threshold value
+    // worth tuning per client instead of centralizing.
+    crisisThresholdOverride: integer("crisis_threshold_override"),
+
+    // Set the first time runRepOnboarding's collision-detection web-search
+    // pass actually runs, so re-saving this form from the hinges panel
+    // doesn't re-trigger it on every edit — matches the source skill's
+    // "push once" failure-mode guidance, not "push on every save."
+    collisionCheckRunAt: timestamp("collision_check_run_at"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    repIdentityGraphEngagementUnique: uniqueIndex("rep_identity_graph_engagement_unique").on(table.engagementId),
+  })
+);

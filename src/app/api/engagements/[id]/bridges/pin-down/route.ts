@@ -145,7 +145,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .where(eq(engagements.engagementId, id));
 
     await setSkillEnabledForEngagement(id, "pin-down", true);
-    const runId = await dispatchSkillRun(id, "pin-down", row.buyer);
+    const runId = await dispatchSkillRun(id, "pin-down", row.buyer, {
+      completedSteps: [{ phase: "credential_storage", detail: "Credentials stored during setup" }],
+    });
 
     return NextResponse.json({ ok: true, runId });
   } catch (error: unknown) {

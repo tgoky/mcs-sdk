@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { List, MoreHorizontal, Pencil, Palette, Check, X, Loader2, Zap, ArrowRight } from "lucide-react";
@@ -31,6 +31,7 @@ import type { EngagementStack } from "@/models/schema";
 export interface RosterEngagement {
   engagementId: string;
   buyer: string;
+  label: string | null;
   tagColor: string | null;
   stack: EngagementStack | null;
   createdAt: string | Date;
@@ -96,16 +97,33 @@ export function ClientRosterTable({
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [editLabelValue, setEditLabelValue] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorRowId, setErrorRowId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Never stored — purely a render-time fallback for the common case
+  // where nobody's bothered setting a label yet. A name only needs
+  // disambiguating here if two OR MORE unlabeled rows share it; a row
+  // with its own label has already solved this for itself and drops out
+  // of consideration entirely, on either side of the comparison.
+  const duplicateBuyerNames = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      if (row.label) continue;
+      const key = row.buyer.trim().toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([name]) => name));
+  }, [rows]);
+
   function startEditing(row: RosterEngagement) {
     setOpenMenuId(null);
     setErrorRowId(null);
     setEditValue(row.buyer);
+    setEditLabelValue(row.label ?? "");
     setEditingId(row.engagementId);
     requestAnimationFrame(() => inputRef.current?.focus());
   }
@@ -116,8 +134,16 @@ export function ClientRosterTable({
   }
 
   async function commitEdit(row: RosterEngagement) {
-    const trimmed = editValue.trim();
-    if (!trimmed || trimmed === row.buyer) {
+    const trimmedBuyer = editValue.trim();
+    const trimmedLabel = editLabelValue.trim();
+    if (!trimmedBuyer) {
+      setErrorRowId(row.engagementId);
+      setErrorMessage("Client name can't be empty.");
+      return;
+    }
+    const buyerChanged = trimmedBuyer !== row.buyer;
+    const labelChanged = trimmedLabel !== (row.label ?? "");
+    if (!buyerChanged && !labelChanged) {
       cancelEditing();
       return;
     }
@@ -127,20 +153,29 @@ export function ClientRosterTable({
       const res = await fetch(`/api/engagements/${row.engagementId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ buyer: trimmed }),
+        body: JSON.stringify({
+          ...(buyerChanged ? { buyer: trimmedBuyer } : {}),
+          ...(labelChanged ? { label: trimmedLabel } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setRows((prev) => prev.map((r) => (r.engagementId === row.engagementId ? { ...r, buyer: trimmed } : r)));
+        setRows((prev) =>
+          prev.map((r) =>
+            r.engagementId === row.engagementId
+              ? { ...r, buyer: trimmedBuyer, label: trimmedLabel.length > 0 ? trimmedLabel : null }
+              : r
+          )
+        );
         setEditingId(null);
         router.refresh();
       } else {
         setErrorRowId(row.engagementId);
-        setErrorMessage(data.error ?? "Failed to rename client.");
+        setErrorMessage(data.error ?? "Failed to save changes.");
       }
     } catch (e) {
       setErrorRowId(row.engagementId);
-      setErrorMessage(e instanceof Error ? e.message : "Failed to rename client.");
+      setErrorMessage(e instanceof Error ? e.message : "Failed to save changes.");
     } finally {
       setBusyId(null);
     }
@@ -200,31 +235,52 @@ export function ClientRosterTable({
                 </div>
 
                 {isEditing ? (
-                  <div className="flex items-center gap-1 min-w-0 flex-1">
-                    <input
-                      ref={inputRef}
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          commitEdit(eng);
-                        }
-                        if (e.key === "Escape") {
-                          e.preventDefault();
-                          cancelEditing();
-                        }
-                      }}
-                      disabled={isBusy}
-                      maxLength={200}
-                      className="flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-bold rounded-md px-2 py-1 outline-none ring-1 ring-zinc-300 dark:ring-zinc-600 focus:ring-zinc-500 disabled:opacity-60"
-                    />
+                  <div className="flex items-start gap-1 min-w-0 flex-1">
+                    <div className="flex flex-col gap-1 min-w-0 flex-1">
+                      <input
+                        ref={inputRef}
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            commitEdit(eng);
+                          }
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            cancelEditing();
+                          }
+                        }}
+                        disabled={isBusy}
+                        maxLength={200}
+                        placeholder="Client name"
+                        className="w-full min-w-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-bold rounded-md px-2 py-1 outline-none ring-1 ring-zinc-300 dark:ring-zinc-600 focus:ring-zinc-500 disabled:opacity-60"
+                      />
+                      <input
+                        value={editLabelValue}
+                        onChange={(e) => setEditLabelValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            commitEdit(eng);
+                          }
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            cancelEditing();
+                          }
+                        }}
+                        disabled={isBusy}
+                        maxLength={60}
+                        placeholder="Label (optional)"
+                        className="w-full min-w-0 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 text-[10.5px] rounded-md px-2 py-1 outline-none ring-1 ring-zinc-200 dark:ring-zinc-700 focus:ring-zinc-400 disabled:opacity-60"
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => commitEdit(eng)}
                       disabled={isBusy}
                       title="Save"
-                      className="p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                      className="p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer shrink-0 disabled:opacity-50 mt-0.5"
                     >
                       {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                     </button>
@@ -233,7 +289,7 @@ export function ClientRosterTable({
                       onClick={cancelEditing}
                       disabled={isBusy}
                       title="Cancel"
-                      className="p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                      className="p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer shrink-0 disabled:opacity-50 mt-0.5"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -245,6 +301,15 @@ export function ClientRosterTable({
                         <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 group-hover/row:text-amber-500 dark:group-hover/row:text-amber-400 transition-colors truncate">
                           {eng.buyer}
                         </p>
+                        {eng.label ? (
+                          <span className="text-[10.5px] text-zinc-400 dark:text-zinc-500 truncate">{eng.label}</span>
+                        ) : (
+                          duplicateBuyerNames.has(eng.buyer.trim().toLowerCase()) && (
+                            <span className="text-[10.5px] text-zinc-400 dark:text-zinc-500 italic truncate">
+                              created {new Date(eng.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                            </span>
+                          )
+                        )}
                         {syncSetupNeeded && (
                           <span
                             title="Direct webhook needed"

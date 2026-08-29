@@ -14,7 +14,9 @@ import {
   Sliders,
   Plus,
   UserPlus,
+  Eye,
   Loader2,
+  type LucideIcon,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
@@ -34,21 +36,36 @@ interface PrimaryRailProps {
 // lib/primary-nav.tsx so the tab set can't drift apart again.
 const RAIL_SECTIONS = PRIMARY_NAV_SECTIONS;
 
-function SquishyCounterClaimBadge({ active }: { active: boolean }) {
+const PRODUCT_BADGE_COLORS = {
+  amber: {
+    activeBg: "bg-amber-400 dark:bg-amber-500",
+    inactiveBg: "bg-amber-100 dark:bg-amber-950/60 hover:bg-amber-200/80 dark:hover:bg-amber-900/50",
+    activeIcon: "text-zinc-950 fill-white",
+    inactiveIcon: "text-amber-700 dark:text-amber-400 fill-amber-200/70 dark:fill-amber-900/60",
+  },
+  indigo: {
+    activeBg: "bg-indigo-400 dark:bg-indigo-500",
+    inactiveBg: "bg-indigo-100 dark:bg-indigo-950/60 hover:bg-indigo-200/80 dark:hover:bg-indigo-900/50",
+    activeIcon: "text-zinc-950 fill-white",
+    inactiveIcon: "text-indigo-700 dark:text-indigo-400 fill-indigo-200/70 dark:fill-indigo-900/60",
+  },
+} as const;
+
+/** Generalized from what was a Counter-Claim-only badge — every entry in
+ * PRODUCT_SECTIONS below was rendering this exact same icon/color
+ * regardless of which product it actually was, which only went unnoticed
+ * because there was ever just one entry. Parametrized by icon + color so
+ * a second product doesn't silently show the first product's badge. */
+function SquishyProductBadge({ active, icon: Icon, color }: { active: boolean; icon: LucideIcon; color: keyof typeof PRODUCT_BADGE_COLORS }) {
+  const c = PRODUCT_BADGE_COLORS[color];
   return (
     <div
       className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 select-none ${
-        active
-          ? "bg-amber-400 dark:bg-amber-500 shadow-xs scale-105"
-          : "bg-amber-100 dark:bg-amber-950/60 hover:bg-amber-200/80 dark:hover:bg-amber-900/50"
+        active ? `${c.activeBg} shadow-xs scale-105` : c.inactiveBg
       }`}
     >
-      <LayoutGrid
-        className={`w-3.5 h-3.5 stroke-[2.3px] transition-colors ${
-          active
-            ? "text-zinc-950 fill-white"
-            : "text-amber-700 dark:text-amber-400 fill-amber-200/70 dark:fill-amber-900/60"
-        }`}
+      <Icon
+        className={`w-3.5 h-3.5 stroke-[2.3px] transition-colors ${active ? c.activeIcon : c.inactiveIcon}`}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -57,7 +74,18 @@ function SquishyCounterClaimBadge({ active }: { active: boolean }) {
 }
 
 const PRODUCT_SECTIONS = [
-  { href: "/counter-claim", title: "Counter Claim" },
+  // href fix: was "/counter-claim" — a top-level route outside
+  // /dashboard, which is the only place PrimaryRail actually mounts
+  // (confirmed: it's rendered exclusively from dashboard/layout.tsx).
+  // Clicking either of these with a non-dashboard-prefixed href would
+  // have dropped out of the shell entirely — no rail, no workspace
+  // switcher — the opposite of "products share one persistent rail."
+  // Neither product has a real page behind its route yet at this specific
+  // path (Counter Claim still doesn't), but the href itself needs to be
+  // correct now so building that page later doesn't also require
+  // rediscovering this.
+  { href: "/dashboard/counter-claim", title: "Counter Claim", icon: LayoutGrid, color: "amber" as const },
+  { href: "/dashboard/reputation-manager", title: "Reputation Manager", icon: Eye, color: "indigo" as const },
 ];
 
 function activeSectionHref(pathname: string): string {
@@ -135,7 +163,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                     : "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
                 }
               >
-                <SquishyCounterClaimBadge active={isActive} />
+                <SquishyProductBadge active={isActive} icon={product.icon} color={product.color} />
                 <span className="text-[9.5px] font-medium leading-normal text-center truncate max-w-full px-0.5 pt-0.5 pb-1">
                   {product.title}
                 </span>

@@ -35,6 +35,41 @@ export default function NewEngagementPage() {
     setStep
   );
 
+  // Arriving here from an already-created client (the Products panel's
+  // "Set up Showtime" link, once that's wired up) means form.engagementId
+  // must end up as THAT client's id, not a freshly generated one —
+  // otherwise submit-payload.ts's `form.engagementId || generateEngagementId(...)`
+  // creates a second, orphaned row instead of finishing the one that
+  // already exists.
+  //
+  // Deliberately no dependency array, and deliberately returns the SAME
+  // object reference when nothing needs to change. useDraftPersistence's
+  // own mount effect above can restore a draft asynchronously (its
+  // server-draft fallback is awaited), so a normal mount-only effect here
+  // could run before, after, or get clobbered by that restoration
+  // depending on timing — a real race, not a hypothetical one. Running on
+  // every render and only ever bailing out via reference equality (React's
+  // documented bail-out for a functional update that returns the same
+  // object it received) means this keeps re-asserting the prefill until
+  // it sticks, then becomes a genuine no-op forever after — correct
+  // regardless of which order the two effects actually resolve in.
+  useEffect(() => {
+    const prefillEngagementId = searchParams.get("engagementId");
+    if (!prefillEngagementId) return;
+    const prefillBuyerName = searchParams.get("buyerName");
+    // Deferred via queueMicrotask, matching the Composio-callback effect
+    // above — react-hooks/set-state-in-effect flags a setState call
+    // synchronous with the effect body itself, not one deferred into a
+    // microtask.
+    queueMicrotask(() => {
+      setForm((f) =>
+        f.engagementId === prefillEngagementId && (!prefillBuyerName || f.buyerName === prefillBuyerName)
+          ? f
+          : { ...f, engagementId: prefillEngagementId, buyerName: prefillBuyerName ?? f.buyerName }
+      );
+    });
+  });
+
   const emailIntegrations = useEmailIntegrations(form, setForm);
   const smartPrefill = useSmartPrefill(setForm);
 
@@ -331,11 +366,8 @@ export default function NewEngagementPage() {
           )}
         </div>
 
-        {/* Navigation footer buttons — sticky so Back/Next stay visible without scrolling through the whole step */}
-     <div
-  className="sticky bottom-0 z-20 flex justify-between pt-4 pb-3 font-mono bg-transparent"
-  style={{ borderTop: "1px solid var(--border)" }}
->
+        {/* Navigation footer buttons */}
+        <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
           <button
             type="button"
             onClick={() => {
