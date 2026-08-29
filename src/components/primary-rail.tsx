@@ -84,7 +84,7 @@ const PRODUCT_SECTIONS = [
   // path (Counter Claim still doesn't), but the href itself needs to be
   // correct now so building that page later doesn't also require
   // rediscovering this.
-  { href: "/dashboard/counter-claim", title: "Counter Claim", icon: LayoutGrid, color: "amber" as const },
+  // { href: "/dashboard/counter-claim", title: "Counter Claim", icon: LayoutGrid, color: "amber" as const },
   { href: "/dashboard/reputation-manager", title: "Reputation Manager", icon: Eye, color: "indigo" as const },
 ];
 
