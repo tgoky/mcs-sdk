@@ -1932,6 +1932,48 @@ export const repIdentityGraphs = pgTable(
   })
 );
 
+// ── Reputation Manager: AI-Engine Findings ──────────────────────────────────
+// rep-engine-panel's own output. Scoped-down v1, not the OG skill pack's
+// full 46-prompt/5-engine/twice-daily design (460 calls/day/client) —
+// runs only the tripwire prompts already captured at intake
+// (repIdentityGraphs.seedPanelPrompts) on a slower cadence, to prove the
+// pipeline before committing to that volume. See rep-engine-panel's own
+// manifest entry and engine-panel-service.ts for the reasoning.
+//
+// One row per (prompt x engine) per run — fine-grained on purpose, not
+// batched into a single JSON blob per run, so a later "has this specific
+// question's answer changed on this specific engine" trend query doesn't
+// need to unpack a blob to answer it.
+export type RepEngineId = "chatgpt" | "claude" | "perplexity" | "grok" | "gemini";
+export type RepFindingSentiment = "positive" | "neutral" | "negative";
+
+export const repEngineFindings = pgTable(
+  "rep_engine_findings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+
+    engineId: text("engine_id").$type<RepEngineId>().notNull(),
+    promptText: text("prompt_text").notNull(),
+    responseText: text("response_text").notNull(),
+
+    // Set by the single batch-scoring pass over a run's whole response
+    // set (see engine-panel-service.ts) — not a separate LLM call per
+    // response, which would double the call count for no real benefit at
+    // this scale.
+    sentiment: text("sentiment").$type<RepFindingSentiment>().notNull(),
+    flagged: boolean("flagged").notNull().default(false),
+    flagReason: text("flag_reason"),
+
+    runAt: timestamp("run_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    repEngineFindingsEngagementIdx: index("rep_engine_findings_engagement_idx").on(table.engagementId, table.runAt),
+  })
+);
+
 // ── Chat threads (2026-08-30) ───────────────────────────────────────────
 // Persistence for Teammates chat (src/app/api/teammates/chat/route.ts),
 // which previously had none — the client resent full message history each
