@@ -135,7 +135,10 @@ async function callViaAnthropic(opts: ClaudeCallOptions): Promise<ClaudeResult> 
   };
 }
 
-async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult> {
+async function fetchOpenRouterCompletion(
+  modelString: string,
+  opts: { system: string; userMessage: string; maxTokens?: number; signal?: AbortSignal; runId?: string }
+): Promise<ClaudeResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -143,7 +146,6 @@ async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult>
       "or set USE_OPENROUTER=false to use Anthropic direct."
     );
   }
-  const modelString = OPENROUTER_MODELS[opts.model];
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -190,6 +192,34 @@ async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult>
     provider: "openrouter",
     modelUsed: modelString,
   };
+}
+
+async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult> {
+  return fetchOpenRouterCompletion(OPENROUTER_MODELS[opts.model], opts);
+}
+
+/**
+ * Queries an arbitrary OpenRouter model directly, not one of the
+ * internal SYNTHESIS/FAST keys — for callers that need to compare
+ * responses across specific external models rather than pick the best
+ * internal model for a task (rep-engine-panel's whole reason for
+ * existing: checking what ChatGPT/Claude/Perplexity/Grok/Gemini each say
+ * about a client, not asking "our" model anything).
+ *
+ * Always goes through OpenRouter regardless of USE_OPENROUTER — there's
+ * no "direct" fallback for arbitrary third-party models the way
+ * callClaude falls back to Anthropic's own API for Claude specifically.
+ *
+ * Cost tracking only works for models present in OPENROUTER_PRICING
+ * (currently a handful of entries) — anything else records $0 rather
+ * than a guessed number. Add real pricing there if a configured engine's
+ * cost needs to show up accurately.
+ */
+export async function callOpenRouterModel(
+  modelString: string,
+  opts: { system: string; userMessage: string; maxTokens?: number; signal?: AbortSignal; runId?: string }
+): Promise<ClaudeResult> {
+  return fetchOpenRouterCompletion(modelString, opts);
 }
 
 // Tool-calling

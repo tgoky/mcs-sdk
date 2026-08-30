@@ -1,5 +1,6 @@
 import type { GetStepTools, Inngest } from "inngest";
 import { runRepOnboarding } from "@/features/reputation-manager/server/onboarding-service";
+import { runRepEnginePanel } from "@/features/reputation-manager/server/engine-panel-service";
 import {
   REP_SKILL_IDS,
   REP_SKILL_MANIFEST,
@@ -25,5 +26,9 @@ export const REP_SKILL_REGISTRY: Record<RepSkillId, RepSkillDefinition> = {
   "rep-onboarding": {
     ...REP_SKILL_MANIFEST["rep-onboarding"],
     execute: (tenant, runId, step) => runRepOnboarding(tenant, runId, step),
+  },
+  "rep-engine-panel": {
+    ...REP_SKILL_MANIFEST["rep-engine-panel"],
+    execute: (tenant, runId, step) => runRepEnginePanel(tenant, runId, step),
   },
 };

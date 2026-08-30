@@ -44,7 +44,7 @@ export default function ReputationManagerNewPage() {
     <div className="max-w-2xl mx-auto py-12 px-4">
       <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">New Reputation Manager client</h1>
       <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-8">
-        Already a Showtime client? Add Reputation Manager from their own page instead — this is for starting fresh.
+        Already have this client set up somewhere else? Add Reputation Manager from their own page instead — this is for starting fresh.
       </p>
 
       <IdentityGraphForm form={form} onChange={setForm} />

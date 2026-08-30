@@ -65,8 +65,8 @@ export default async function ReputationManagerHomePage() {
         <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-700 p-10 text-center">
           <Shield className="w-8 h-8 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            Set up identity monitoring for a client to get started — either a brand-new client, or one you&apos;re
-            already running through Showtime.
+            Set up identity monitoring for a client to get started — brand new, or one you&apos;re already working
+            with elsewhere.
           </p>
           <Link
             href="/dashboard/reputation-manager/new"

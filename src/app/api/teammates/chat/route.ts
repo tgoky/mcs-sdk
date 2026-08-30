@@ -6,25 +6,32 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq, isNull } from "drizzle-orm";
 import { callClaudeWithTools, MODEL, type ClaudeMessage, type ClaudeContentBlock } from "@/lib/llm";
 import { triggerSkillRunForEngagement } from "@/lib/skill-trigger";
+import { createThread, getOwnedThread, appendMessage, loadThreadForModel } from "@/lib/chat-threads";
 
 export const runtime = "nodejs";
 
-// ── Teammates chat (2026-08-25) — v1 ─────────────────────────────────────
-// Scope, stated plainly: two real, already-existing manual-trigger actions
+// ── Teammates chat (2026-08-25, persistence added 2026-08-30) ───────────
+// v1 scope, still true: two real, already-existing manual-trigger actions
 // wired up as tools — trigger_call_brief (pre-call-read) and
 // trigger_leak_map — the only two skills that support a manual trigger at
-// all (see src/lib/skill-trigger.ts, extracted from the same endpoint the
-// dashboard's own "run now" buttons already call). No persistence yet —
-// the client sends the full message history each turn, same pattern
-// documented for Claude-in-artifacts ("no memory between completions").
-// Not built yet, on purpose: Slack/email delivery routing, the "create a
-// client from a URL" conversational flow, and @-mention autocomplete
-// beyond the client-side UI affordance — those are real next builds, not
-// silently promised as done here.
+// all (see src/lib/skill-trigger.ts). Not built yet, on purpose:
+// Slack/email delivery routing, the "create a client from a URL"
+// conversational flow, and @-mention autocomplete beyond the client-side
+// UI affordance.
+//
+// What changed today: the client used to resend full message history
+// every turn (no server memory between requests). It now sends only the
+// new message plus an optional threadId — the server is the source of
+// truth for history, via chat-threads.ts. A missing/omitted threadId
+// starts a new thread. Successful tool calls now also return `links` —
+// real page hrefs (a run's page, the client's engagement page) so the UI
+// can render them as clickable, rather than the user having to go find
+// what just happened.
 
-interface IncomingMessage {
-  role: "user" | "assistant";
-  content: string;
+interface RequestBody {
+  threadId?: string;
+  message?: string;
+  engagementId?: string | null;
 }
 
 const TOOLS = [
@@ -76,10 +83,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const incoming = (body?.messages ?? []) as IncomingMessage[];
-    if (!Array.isArray(incoming) || incoming.length === 0) {
-      return NextResponse.json({ error: "messages must be a non-empty array" }, { status: 400 });
+    const body = (await request.json()) as RequestBody;
+    const message = typeof body?.message === "string" ? body.message.trim() : "";
+    if (!message) {
+      return NextResponse.json({ error: "message is required" }, { status: 400 });
     }
 
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
@@ -88,47 +95,83 @@ export async function POST(request: Request) {
       .from(engagements)
       .where(and(eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId), isNull(engagements.deletedAt)));
 
-    const system = buildSystemPrompt(clients);
-    const messages: ClaudeMessage[] = incoming.map((m) => ({ role: m.role, content: m.content }));
+    // Resolve (or create) the thread this message belongs to. A threadId
+    // the caller doesn't actually own (wrong workspace, stale after a DB
+    // reset) is treated the same as no threadId — start fresh, rather
+    // than 404ing on something the UI's own localStorage handed back.
+    let threadId = body.threadId ? (await getOwnedThread(body.threadId, activeWorkspace.workspaceId))?.id : undefined;
+    if (!threadId) {
+      const created = await createThread({
+        whopUserId: session.whopUserId,
+        workspaceId: activeWorkspace.workspaceId,
+        engagementId: body.engagementId ?? null,
+        firstUserText: message,
+      });
+      threadId = created.id;
+    }
 
-    const first = await callClaudeWithTools({ model: MODEL.SYNTHESIS, system, messages, tools: TOOLS, maxTokens: 800 });
+    await appendMessage({ threadId, role: "user", kind: "text", rawContent: message, displayText: message });
+
+    const system = buildSystemPrompt(clients);
+    const history = await loadThreadForModel(threadId);
+
+    const first = await callClaudeWithTools({ model: MODEL.SYNTHESIS, system, messages: history, tools: TOOLS, maxTokens: 800 });
 
     const toolUseBlocks = first.content.filter((b): b is Extract<ClaudeContentBlock, { type: "tool_use" }> => b.type === "tool_use");
 
     if (toolUseBlocks.length === 0) {
       const text = first.content.find((b): b is Extract<ClaudeContentBlock, { type: "text" }> => b.type === "text")?.text ?? "";
-      return NextResponse.json({ reply: text, toolCalls: [] });
+      await appendMessage({ threadId, role: "assistant", kind: "text", rawContent: first.content, displayText: text });
+      return NextResponse.json({ threadId, reply: text, toolCalls: [], links: [] });
     }
 
     // Execute every requested tool call, in-process — same validated path
     // the dashboard's own "run now" buttons use, not a second copy.
     const toolResults: { name: string; input: Record<string, unknown>; ok: boolean; message: string }[] = [];
     const resultBlocks: ClaudeContentBlock[] = [];
+    const links: { label: string; href: string }[] = [];
 
     for (const block of toolUseBlocks) {
       const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
       const skillName = block.name === "trigger_call_brief" ? "pre-call-read" : block.name === "trigger_leak_map" ? "leak-map" : null;
 
       let ok = false;
-      let message = `Unknown tool: ${block.name}`;
+      let message2 = `Unknown tool: ${block.name}`;
       if (skillName && engagementId) {
         const result = await triggerSkillRunForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, skillName);
         ok = result.ok;
-        message = result.ok ? result.message : result.error;
+        message2 = result.ok ? result.message : result.error;
+        if (result.ok) {
+          const buyer = clients.find((c) => c.engagementId === engagementId)?.buyer;
+          links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+          links.push({ label: buyer ? `${buyer}'s page` : "Client page", href: `/dashboard/engagements/${engagementId}` });
+        }
       } else if (!engagementId) {
-        message = "No engagementId was provided for this tool call.";
+        message2 = "No engagementId was provided for this tool call.";
       }
 
-      toolResults.push({ name: block.name, input: block.input, ok, message });
-      resultBlocks.push({ type: "tool_result", tool_use_id: block.id, content: message, is_error: !ok });
+      toolResults.push({ name: block.name, input: block.input, ok, message: message2 });
+      resultBlocks.push({ type: "tool_result", tool_use_id: block.id, content: message2, is_error: !ok });
     }
 
-    const followUpMessages: ClaudeMessage[] = [...messages, { role: "assistant", content: first.content }, { role: "user", content: resultBlocks }];
+    await appendMessage({ threadId, role: "assistant", kind: "internal", rawContent: first.content });
+    await appendMessage({ threadId, role: "user", kind: "internal", rawContent: resultBlocks });
 
+    const followUpMessages: ClaudeMessage[] = [...history, { role: "assistant", content: first.content }, { role: "user", content: resultBlocks }];
     const followUp = await callClaudeWithTools({ model: MODEL.SYNTHESIS, system, messages: followUpMessages, tools: TOOLS, maxTokens: 500 });
     const followUpText = followUp.content.find((b): b is Extract<ClaudeContentBlock, { type: "text" }> => b.type === "text")?.text ?? "";
 
-    return NextResponse.json({ reply: followUpText, toolCalls: toolResults });
+    await appendMessage({
+      threadId,
+      role: "assistant",
+      kind: "text",
+      rawContent: followUp.content,
+      displayText: followUpText,
+      toolCalls: toolResults,
+      links,
+    });
+
+    return NextResponse.json({ threadId, reply: followUpText, toolCalls: toolResults, links });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[teammates/chat]", message);

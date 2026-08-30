@@ -8,14 +8,21 @@
 //
 // v1 scope, stated in the code same as everywhere else this session: two
 // real tools (Call Brief, Leak Map — see route.ts's header comment for
-// why only these two), no persistence (conversation resets on reload —
-// the backend has no memory between requests, same as documented for
-// Claude-in-artifacts), a minimal @ mention affordance that inserts a
+// why only these two), a minimal @ mention affordance that inserts a
 // skill name into the input (the model decides which tool to call
 // regardless — this is a typing convenience, not a hard trigger).
+//
+// Persistence added 2026-08-30: the active threadId is kept in
+// localStorage, same personal-per-browser convention as
+// usePinnedSkills/right-utility-panel's persisted width — it's "which
+// conversation this browser was last in," not account data. On mount,
+// a stored threadId is used to reload that thread's messages from the
+// server; a missing/expired one just starts blank, same as before this
+// round. Successful tool calls can also return `links` — real page
+// hrefs — rendered as clickable chips under the bubble.
 
-import { useRef, useState } from "react";
-import { Send, Sparkles, CheckCircle2, XCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Send, Sparkles, CheckCircle2, XCircle, ArrowUpRight } from "lucide-react";
 import { PrefillLoader } from "@/components/prefill-loader";
 import { PinnedSkillsBar } from "./pinned-skills-bar";
 
@@ -23,6 +30,28 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   toolCalls?: { name: string; ok: boolean; message: string }[];
+  links?: { label: string; href: string }[];
+}
+
+const THREAD_STORAGE_KEY = "mcs-teammates-active-thread-id";
+
+function readStoredThreadId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(THREAD_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredThreadId(id: string | null) {
+  try {
+    if (id) window.localStorage.setItem(THREAD_STORAGE_KEY, id);
+    else window.localStorage.removeItem(THREAD_STORAGE_KEY);
+  } catch {
+    // Best-effort, same as usePinnedSkills — an in-memory-only thread id
+    // for this session beats throwing.
+  }
 }
 
 export const MENTIONABLE_SKILLS = [
@@ -34,9 +63,45 @@ export function TeammatesChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState<boolean>(() => readStoredThreadId() !== null);
   const [error, setError] = useState<string | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [threadId, setThreadId] = useState<string | null>(() => readStoredThreadId());
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    // Reads localStorage directly rather than closing over the `threadId`
+    // state var, so this effect has no reactive dependency at all and
+    // legitimately only runs once on mount — no exhaustive-deps
+    // suppression needed.
+    const id = readStoredThreadId();
+    if (!id) return;
+    let cancelled = false;
+    fetch(`/api/teammates/threads/${id}`)
+      .then((r) => {
+        if (r.status === 404) {
+          // Stale local thread id (e.g. DB reset) — same as never having
+          // had one, not an error to surface.
+          writeStoredThreadId(null);
+          if (!cancelled) setThreadId(null);
+          return null;
+        }
+        if (!r.ok) throw new Error("Failed to load conversation");
+        return r.json();
+      })
+      .then((data) => {
+        if (!cancelled && data?.messages) setMessages(data.messages);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Couldn't reload the conversation.");
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function handleInputChange(value: string) {
     setInput(value);
@@ -71,8 +136,7 @@ export function TeammatesChat() {
     const text = input.trim();
     if (!text || loading) return;
 
-    const nextMessages: ChatMessage[] = [...messages, { role: "user", content: text }];
-    setMessages(nextMessages);
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
     setInput("");
     setMentionQuery(null);
     setLoading(true);
@@ -82,7 +146,7 @@ export function TeammatesChat() {
       const res = await fetch("/api/teammates/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMessages.map((m) => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({ threadId, message: text }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -90,7 +154,16 @@ export function TeammatesChat() {
         return;
       }
       const data = await res.json();
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply ?? "", toolCalls: data.toolCalls ?? [] }]);
+      // The route always returns a threadId — a fresh one the first time
+      // this browser sends a message, the same one on every turn after.
+      if (data.threadId && data.threadId !== threadId) {
+        setThreadId(data.threadId);
+        writeStoredThreadId(data.threadId);
+      }
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.reply ?? "", toolCalls: data.toolCalls ?? [], links: data.links ?? [] },
+      ]);
     } catch {
       setError("Network error — check your connection.");
     } finally {
@@ -102,7 +175,15 @@ export function TeammatesChat() {
     <div className="flex flex-col h-full">
       <PinnedSkillsBar onSelect={appendMention} />
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-        {messages.length === 0 && (
+        {historyLoading && (
+          <div className="flex items-center gap-2 px-1">
+            <PrefillLoader size={14} />
+            <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+              Loading conversation…
+            </span>
+          </div>
+        )}
+        {!historyLoading && messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-2 px-4">
             <span
               className="flex items-center justify-center w-9 h-9 rounded-full"
@@ -140,6 +221,21 @@ export function TeammatesChat() {
                       )}
                       <span>{tc.message}</span>
                     </div>
+                  ))}
+                </div>
+              )}
+              {m.links && m.links.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+                  {m.links.map((link, j) => (
+                    <a
+                      key={j}
+                      href={link.href}
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold transition-colors hover:opacity-80"
+                      style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-prefill-accent)" }}
+                    >
+                      {link.label}
+                      <ArrowUpRight size={10} />
+                    </a>
                   ))}
                 </div>
               )}

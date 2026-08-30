@@ -60,7 +60,8 @@ export async function getEngagementSkillStates(engagementId: string): Promise<Re
  * the pattern. A disabled skill should never appear to run and then reveal
  * itself as skipped; it should simply not appear.
  */
-export async function getDisabledEngagementIdsForSkill(skillId: SkillId): Promise<Set<string>> {
+/** skillId widened to string, same reasoning as isSkillEnabledForEngagement above — needed by rep-engine-panel's cron for the same efficient bulk-disabled-check pattern Showtime's crons already use. */
+export async function getDisabledEngagementIdsForSkill(skillId: string): Promise<Set<string>> {
   const rows = await db
     .select({ engagementId: engagementSkills.engagementId })
     .from(engagementSkills)

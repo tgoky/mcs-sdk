@@ -26,9 +26,9 @@
 // with a real third product being the trigger to generalize further, not
 // a guess made now from a sample size of one.
 
-export type RepSkillId = "rep-onboarding";
+export type RepSkillId = "rep-onboarding" | "rep-engine-panel";
 
-export const REP_SKILL_IDS: RepSkillId[] = ["rep-onboarding"];
+export const REP_SKILL_IDS: RepSkillId[] = ["rep-onboarding", "rep-engine-panel"];
 
 export interface RepSkillManifestEntry {
   id: RepSkillId;
@@ -56,6 +56,23 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
       "Captures the client's identity graph — brand, entities, competitors, same-name collisions, and sole response authority — that every other Reputation Manager skill reads.",
     runOnSetup: true,
     hasHingesPanel: true,
+  },
+  "rep-engine-panel": {
+    id: "rep-engine-panel",
+    name: "AI Engine Watch",
+    description:
+      "Checks what ChatGPT, Claude, Perplexity, Grok, and Gemini say when asked about this client, on a schedule, and flags answers that need a look.",
+    // Not runOnSetup: nothing to configure beyond what rep-onboarding
+    // already captured (seedPanelPrompts) — it starts running the
+    // moment the identity graph exists, same "no row = enabled" default
+    // engagementSkills already uses everywhere else, rather than
+    // needing an explicit turn-on action.
+    runOnSetup: false,
+    // v1 has no dedicated settings screen — nothing to configure yet
+    // beyond the identity graph. A hinges panel is worth adding once
+    // there's something to tune (which engines, which prompts, cadence)
+    // rather than building a settings screen with nothing on it.
+    hasHingesPanel: false,
   },
 };
 
