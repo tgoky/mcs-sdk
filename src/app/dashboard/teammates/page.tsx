@@ -3,8 +3,9 @@ import { TeammatesChat } from "./teammates-chat";
 
 export default function TeammatesPage() {
   return (
-    <div className="flex flex-col h-full w-full mx-auto tracking-tight antialiased font-sans px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
-      <div className="shrink-0 flex items-center gap-3 border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
+    <div className="flex flex-col h-full w-full mx-auto tracking-tight antialiased font-sans text-zinc-600 dark:text-zinc-400">
+      {/* Header */}
+      <div className="shrink-0 flex items-center gap-3 border-b border-zinc-200 dark:border-zinc-800/80 pb-3 mb-3">
         <span
           className="flex items-center justify-center w-8 h-8 rounded-full shrink-0"
           style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
@@ -20,7 +21,8 @@ export default function TeammatesPage() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 mt-3 rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+      {/* Main Workspace Frame */}
+      <div className="flex-1 min-h-0 w-full overflow-hidden">
         <TeammatesChat />
       </div>
     </div>
