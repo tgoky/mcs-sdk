@@ -1931,3 +1931,81 @@ export const repIdentityGraphs = pgTable(
     repIdentityGraphEngagementUnique: uniqueIndex("rep_identity_graph_engagement_unique").on(table.engagementId),
   })
 );
+
+// ── Chat threads (2026-08-30) ───────────────────────────────────────────
+// Persistence for Teammates chat (src/app/api/teammates/chat/route.ts),
+// which previously had none — the client resent full message history each
+// turn and nothing survived a reload. A thread is either scoped to one
+// engagement (buyer asked something about a specific client) or workspace-
+// wide (engagementId null — reserved for cross-client threads like a
+// future notify.ts "Ops" channel, not populated by anything yet).
+// whopUserId is kept for audit trail only, same convention as
+// credential_vault above — workspaceId is what every read path actually
+// filters on.
+export const chatThreads = pgTable(
+  "chat_threads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.workspaceId),
+    engagementId: text("engagement_id").references(() => engagements.engagementId),
+    whopUserId: text("whop_user_id").notNull(),
+    // Derived from the first user message (truncated), not an LLM call —
+    // titling a thread doesn't need model reasoning and every extra call
+    // here is pure cost for no real benefit, same reasoning this project
+    // has applied everywhere else a deterministic answer is available.
+    title: text("title").notNull(),
+    lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    chatThreadsWorkspaceLastMessageIdx: index("chat_threads_workspace_last_message_idx").on(table.workspaceId, table.lastMessageAt),
+  })
+);
+
+// Mirrors ClaudeContentBlock from src/lib/llm.ts by convention. Not
+// imported directly — schema.ts stays a leaf module with no app-logic
+// imports, same as every other table here — so this is kept in sync by
+// hand if that type ever changes shape.
+export type ChatMessageContentBlock =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | { type: "tool_result"; tool_use_id: string; content: string | unknown; is_error?: boolean };
+
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    threadId: uuid("thread_id").notNull().references(() => chatThreads.id),
+    role: text("role").notNull(), // "user" | "assistant"
+    // "text" is a real turn shown as a chat bubble. "internal" covers the
+    // two turns a tool round-trip needs but that were never a bubble in
+    // the UI even before persistence existed: the assistant's tool_use
+    // request, and the synthetic user-role turn carrying tool output back
+    // (see the followUp construction in the chat route). Stored so
+    // history reconstruction stays exact, never rendered.
+    kind: text("kind").notNull().default("text"),
+    // Exactly what's sent to/from callClaudeWithTools for this turn —
+    // string for a plain text turn, ClaudeContentBlock[] for a turn
+    // carrying tool_use or tool_result blocks. This, not displayText, is
+    // the source of truth used to reconstruct conversation history on the
+    // next turn.
+    rawContent: jsonb("raw_content").$type<string | ChatMessageContentBlock[]>().notNull(),
+    // Plain text for rendering a bubble. Null for kind="tool_result" rows
+    // (nothing to show — the human-readable outcome is the *next*
+    // assistant text turn, which already summarizes what happened).
+    displayText: text("display_text"),
+    // Per-tool-call outcome summary, same shape the UI already rendered
+    // pre-persistence (route.ts's toolResults) — kept alongside
+    // displayText rather than folded into it, so the checkmark/message
+    // list under a bubble survives a reload exactly as it looked live.
+    toolCalls: jsonb("tool_calls").$type<{ name: string; ok: boolean; message: string }[]>(),
+    // Page links surfaced after a tool call succeeded — e.g. the run just
+    // triggered, so the user can jump straight to it. Null when a turn
+    // triggered nothing.
+    links: jsonb("links").$type<{ label: string; href: string }[]>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    chatMessagesThreadCreatedIdx: index("chat_messages_thread_created_idx").on(table.threadId, table.createdAt),
+  })
+);
