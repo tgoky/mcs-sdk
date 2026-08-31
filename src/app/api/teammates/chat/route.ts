@@ -99,8 +99,16 @@ export async function POST(request: Request) {
     // the caller doesn't actually own (wrong workspace, stale after a DB
     // reset) is treated the same as no threadId — start fresh, rather
     // than 404ing on something the UI's own localStorage handed back.
-    let threadId = body.threadId ? (await getOwnedThread(body.threadId, activeWorkspace.workspaceId))?.id : undefined;
-    if (!threadId) {
+    // Title is carried alongside so the response can hand the left rail a
+    // real name immediately (new thread's derived title, or the existing
+    // one's) instead of it needing a second round trip to find out.
+    const existing = body.threadId ? await getOwnedThread(body.threadId, activeWorkspace.workspaceId) : null;
+    let threadId: string;
+    let threadTitle: string;
+    if (existing) {
+      threadId = existing.id;
+      threadTitle = existing.title;
+    } else {
       const created = await createThread({
         whopUserId: session.whopUserId,
         workspaceId: activeWorkspace.workspaceId,
@@ -108,6 +116,7 @@ export async function POST(request: Request) {
         firstUserText: message,
       });
       threadId = created.id;
+      threadTitle = created.title;
     }
 
     await appendMessage({ threadId, role: "user", kind: "text", rawContent: message, displayText: message });
@@ -122,7 +131,7 @@ export async function POST(request: Request) {
     if (toolUseBlocks.length === 0) {
       const text = first.content.find((b): b is Extract<ClaudeContentBlock, { type: "text" }> => b.type === "text")?.text ?? "";
       await appendMessage({ threadId, role: "assistant", kind: "text", rawContent: first.content, displayText: text });
-      return NextResponse.json({ threadId, reply: text, toolCalls: [], links: [] });
+      return NextResponse.json({ threadId, title: threadTitle, reply: text, toolCalls: [], links: [] });
     }
 
     // Execute every requested tool call, in-process — same validated path
@@ -171,7 +180,7 @@ export async function POST(request: Request) {
       links,
     });
 
-    return NextResponse.json({ threadId, reply: followUpText, toolCalls: toolResults, links });
+    return NextResponse.json({ threadId, title: threadTitle, reply: followUpText, toolCalls: toolResults, links });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[teammates/chat]", message);

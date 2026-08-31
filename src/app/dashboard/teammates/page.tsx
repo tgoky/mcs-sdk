@@ -1,7 +1,20 @@
 import { Users } from "lucide-react";
-import { TeammatesChat } from "./teammates-chat";
+import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
+import { listThreadsForWorkspace } from "@/lib/chat-threads";
+import { TeammatesWorkspace } from "./teammates-workspace";
 
-export default function TeammatesPage() {
+export const revalidate = 0;
+
+export default async function TeammatesPage() {
+  const session = await getSession();
+  const whopUserId = session.whopUserId!;
+  const activeWorkspace = await getActiveWorkspace(whopUserId);
+  const threads = await listThreadsForWorkspace(activeWorkspace.workspaceId).catch((err) => {
+    console.error("[TeammatesPage] thread list query failed:", err);
+    return [];
+  });
+
   return (
     <div className="flex flex-col h-full w-full mx-auto tracking-tight antialiased font-sans px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
       <div className="shrink-0 flex items-center gap-3 border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
@@ -20,8 +33,10 @@ export default function TeammatesPage() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 mt-3 rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
-        <TeammatesChat />
+      <div className="flex-1 min-h-0 mt-3">
+        <TeammatesWorkspace
+          initialThreads={threads.map((t) => ({ id: t.id, title: t.title, lastMessageAt: t.lastMessageAt.toISOString() }))}
+        />
       </div>
     </div>
   );

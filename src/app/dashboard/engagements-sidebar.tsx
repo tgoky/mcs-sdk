@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Building2, Plus } from "lucide-react";
 import { RecentEngagementsSection } from "./recent-engagements-section";
 import { ConnectProviderMenu } from "./connect-provider-menu";
+import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 
 /**
  * The Engagements section's secondary sidebar.
@@ -30,15 +31,18 @@ export async function EngagementsSidebar({
     .orderBy(desc(engagements.createdAt))
     .limit(5);
 
+  const allEngagementsLink: NavLinkItem[] = [
+    { href: "/dashboard/engagements", label: "All Engagements", icon: <Building2 className="w-4 h-4" /> },
+  ];
+
   return (
     <div className="flex flex-col gap-1">
-      <Link
-        href="/dashboard/engagements"
-        className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs border border-zinc-200/60 dark:border-transparent transition-all"
-      >
-        <Building2 className="w-4 h-4 text-zinc-900 dark:text-white shrink-0" />
-        <span>All Engagements</span>
-      </Link>
+      {/* Was hardcoded permanently-"active" styling regardless of which
+          engagements sub-route you're actually on (never dimmed even on
+          /engagements/new or a specific client's own page) — real
+          pathname-driven active state now, via the same component the
+          Work sidebar's links use, single-item list. */}
+      <SidebarNavLinks links={allEngagementsLink} />
 
       <div className="my-3 border-t border-zinc-200/80 dark:border-sidebar-border" />
 

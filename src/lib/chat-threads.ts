@@ -8,7 +8,7 @@
 
 import { db } from "@/lib/db";
 import { chatThreads, chatMessages, type ChatMessageContentBlock } from "@/models/schema";
-import { and, eq, asc } from "drizzle-orm";
+import { and, eq, asc, desc } from "drizzle-orm";
 import type { ClaudeMessage } from "@/lib/llm";
 import crypto from "crypto";
 
@@ -41,6 +41,20 @@ export async function createThread(opts: {
     title,
   });
   return { id, title };
+}
+
+// Powers the Teammates page's left rail. workspaceId-scoped only, same as
+// getOwnedThread — chatThreads.whopUserId is audit-only (matches
+// credential_vault's convention), not a filter, so every workspace member
+// sees the same shared thread list rather than a per-user one. Uses the
+// existing chat_threads_workspace_last_message_idx, no new index needed.
+export async function listThreadsForWorkspace(workspaceId: string, limit = 30) {
+  return db
+    .select({ id: chatThreads.id, title: chatThreads.title, lastMessageAt: chatThreads.lastMessageAt })
+    .from(chatThreads)
+    .where(eq(chatThreads.workspaceId, workspaceId))
+    .orderBy(desc(chatThreads.lastMessageAt))
+    .limit(limit);
 }
 
 // Ownership check on every read/write — a threadId is opaque to the

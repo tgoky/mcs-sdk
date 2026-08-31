@@ -22,6 +22,7 @@ export function ShellLayout({
   engagements,
   meetings,
   settings,
+  reports,
 }: {
   children: ReactNode;
   displayName: string;
@@ -32,6 +33,7 @@ export function ShellLayout({
   engagements: ReactNode;
   meetings: ReactNode;
   settings?: ReactNode;
+  reports: ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -93,6 +95,7 @@ export function ShellLayout({
               engagements={engagements}
               meetings={meetings}
               settings={settings ?? <SettingsSidebar />}
+              reports={reports}
             />
           </div>
         )}

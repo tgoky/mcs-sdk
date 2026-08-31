@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { SKILL_IDS, SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { SidebarNavLinks, type NavLinkItem } from "@/app/dashboard/sidebar-nav-links";
 
 /**
  * "Jump to a skill's module hub" list — every skill this workspace has,
@@ -12,32 +11,20 @@ import { SquishySkillBadge } from "@/components/squishy-skill-badge";
  * list sidebar can't drift into three independently-hardcoded copies (the
  * same class of bug skill-manifest.ts's own display-name comment calls
  * out). Highlights whichever skill's module hub is currently open.
+ *
+ * Renders through SidebarNavLinks (same component WorkSidebar's Home/
+ * Reports/Queue/Executions already use) rather than its own hand-rolled
+ * Link list — this used to have its own static bg-swap with no shared
+ * sliding indicator, the one thing in the codebase not wired to the
+ * motion-round highlight everything else in a NavLinkItem-shaped list
+ * already gets for free.
  */
 export function SkillsNavList() {
-  const pathname = usePathname();
+  const links: NavLinkItem[] = SKILL_IDS.map((skillId) => ({
+    href: `/dashboard/modules/${skillId}`,
+    label: SKILL_MANIFEST[skillId].name,
+    icon: <SquishySkillBadge skill={skillId} size={18} />,
+  }));
 
-  return (
-    <nav className="flex flex-col gap-0.5">
-      {SKILL_IDS.map((skillId) => {
-        const href = `/dashboard/modules/${skillId}`;
-        const active = pathname === href || pathname.startsWith(`${href}/`);
-
-        return (
-          <Link
-            key={skillId}
-            href={href}
-            aria-current={active ? "page" : undefined}
-            className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all truncate ${
-              active
-                ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-semibold shadow-xs border border-zinc-200/60 dark:border-transparent"
-                : "text-zinc-600 dark:text-zinc-400 hover:bg-[#f0edf6] dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100 border border-transparent"
-            }`}
-          >
-            <SquishySkillBadge skill={skillId} size={18} />
-            <span className="truncate">{SKILL_MANIFEST[skillId].name}</span>
-          </Link>
-        );
-      })}
-    </nav>
-  );
+  return <SidebarNavLinks links={links} />;
 }

@@ -8,15 +8,22 @@ interface SecondarySidebarProps {
   engagements: ReactNode;
   meetings: ReactNode;
   settings: ReactNode;
+  reports: ReactNode;
   analytics?: ReactNode;
 }
 
-type SectionKey = "engagements" | "meetings" | "settings" | "work";
+type SectionKey = "engagements" | "meetings" | "settings" | "reports" | "work";
 
 const SECTION_PREFIXES: Array<{ key: SectionKey; prefix: string }> = [
   { key: "engagements", prefix: "/dashboard/engagements" },
   { key: "meetings", prefix: "/dashboard/meetings" },
   { key: "settings", prefix: "/dashboard/settings" },
+  // Reports used to fall through to the generic "work" section (Home/
+  // Reports link/Queue/Executions + Installed Skills) even while you were
+  // actually on the Reports page — the sidebar had no idea a client was
+  // selected. Its own prefix, checked before the "work" fallback, same as
+  // every other real section.
+  { key: "reports", prefix: "/dashboard/reports" },
 ];
 
 function activeSection(pathname: string): SectionKey {
@@ -31,6 +38,7 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   engagements: "Engagements",
   meetings: "Meetings",
   settings: "Settings",
+  reports: "Reports",
 };
 
 export function SecondarySidebar({
@@ -38,6 +46,7 @@ export function SecondarySidebar({
   engagements,
   meetings,
   settings,
+  reports,
 }: SecondarySidebarProps) {
   const pathname = usePathname();
 
@@ -58,6 +67,7 @@ export function SecondarySidebar({
     engagements,
     meetings,
     settings,
+    reports,
   };
 
   return (

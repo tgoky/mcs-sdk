@@ -35,7 +35,11 @@ interface ChatMessage {
 
 const THREAD_STORAGE_KEY = "mcs-teammates-active-thread-id";
 
-function readStoredThreadId(): string | null {
+// Exported for teammates-workspace.tsx: the full page resolves the same
+// "last active thread" default once, up front, so the rail's initial
+// highlight and this component's initial load agree without two
+// independent localStorage reads racing or drifting.
+export function readStoredThreadId(): string | null {
   if (typeof window === "undefined") return null;
   try {
     return window.localStorage.getItem(THREAD_STORAGE_KEY);
@@ -59,30 +63,60 @@ export const MENTIONABLE_SKILLS = [
   { token: "leak-map", label: "Leak Map" },
 ];
 
-export function TeammatesChat() {
+export function TeammatesChat({
+  initialThreadId,
+  onThreadEvent,
+}: {
+  /**
+   * Which thread this instance loads on mount. Omitted (the compact
+   * right-utility-panel usage, via teammates-panel-content.tsx) falls
+   * back to the existing localStorage "last active thread" convention,
+   * unchanged. Provided (the full page, via teammates-workspace.tsx) —
+   * a real id loads that thread, `null` skips loading entirely for a
+   * blank "new conversation." The workspace forces a remount via `key`
+   * whenever this should change, same pattern calendar-view.tsx already
+   * uses for `key={period}` — so it's correct for this to be read once
+   * at mount and never treated as reactive.
+   */
+  initialThreadId?: string | null;
+  /**
+   * Fired once a thread identity is known for this instance: a brand new
+   * thread gets created (first message of a blank conversation) or an
+   * existing one takes a new turn. Lets the rail add/re-sort its list
+   * without a refetch. Not called in the compact-panel usage (no rail to
+   * update there).
+   */
+  onThreadEvent?: (thread: { id: string; title: string }) => void;
+} = {}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState<boolean>(() => readStoredThreadId() !== null);
+  const [historyLoading, setHistoryLoading] = useState<boolean>(
+    () => (initialThreadId !== undefined ? initialThreadId : readStoredThreadId()) !== null
+  );
   const [error, setError] = useState<string | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [threadId, setThreadId] = useState<string | null>(() => readStoredThreadId());
+  const [threadId, setThreadId] = useState<string | null>(() =>
+    initialThreadId !== undefined ? initialThreadId : readStoredThreadId()
+  );
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    // Reads localStorage directly rather than closing over the `threadId`
-    // state var, so this effect has no reactive dependency at all and
-    // legitimately only runs once on mount — no exhaustive-deps
-    // suppression needed.
-    const id = readStoredThreadId();
+    // initialThreadId is read directly here (not via the `threadId` state
+    // var) so this effect has no reactive dependency and legitimately
+    // only runs once on mount — same reasoning the original localStorage-
+    // only version already documented, extended to the controlled case.
+    const id = initialThreadId !== undefined ? initialThreadId : readStoredThreadId();
     if (!id) return;
     let cancelled = false;
     fetch(`/api/teammates/threads/${id}`)
       .then((r) => {
         if (r.status === 404) {
-          // Stale local thread id (e.g. DB reset) — same as never having
-          // had one, not an error to surface.
-          writeStoredThreadId(null);
+          // Stale thread id (e.g. DB reset) — same as never having had
+          // one, not an error to surface. Only clears localStorage in the
+          // uncontrolled case; a controlled (rail-driven) id going stale
+          // is the workspace's list to correct, not this instance's.
+          if (initialThreadId === undefined) writeStoredThreadId(null);
           if (!cancelled) setThreadId(null);
           return null;
         }
@@ -101,6 +135,7 @@ export function TeammatesChat() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleInputChange(value: string) {
@@ -156,9 +191,15 @@ export function TeammatesChat() {
       const data = await res.json();
       // The route always returns a threadId — a fresh one the first time
       // this browser sends a message, the same one on every turn after.
+      // localStorage is kept up to date regardless of controlled/
+      // uncontrolled mode — it's still "last active thread for this
+      // browser" for whenever the compact panel is opened next.
       if (data.threadId && data.threadId !== threadId) {
         setThreadId(data.threadId);
         writeStoredThreadId(data.threadId);
+      }
+      if (data.threadId && typeof data.title === "string") {
+        onThreadEvent?.({ id: data.threadId, title: data.title });
       }
       setMessages((prev) => [
         ...prev,

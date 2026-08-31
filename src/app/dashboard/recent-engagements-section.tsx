@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ChevronRight, ChevronDown, List } from "lucide-react";
 import { isSkillId, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
 import { SkillsNavList } from "@/components/skills-nav-list";
+import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 
 interface RecentEngagement {
   engagementId: string;
@@ -41,6 +42,16 @@ export function RecentEngagementsSection({ recent }: { recent: RecentEngagement[
     );
   }
 
+  const recentLinks: NavLinkItem[] = recent.map((client) => ({
+    href: `/dashboard/engagements/${client.engagementId}`,
+    label: client.buyer,
+    icon: (
+      <div className="w-7 h-7 rounded-[8px] bg-amber-400 dark:bg-[#b4a7f5] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
+        <List className="w-4 h-4 stroke-[2.5]" />
+      </div>
+    ),
+  }));
+
   return (
     <>
       <div className="my-3 border-t border-zinc-200/80 dark:border-sidebar-border" />
@@ -48,25 +59,7 @@ export function RecentEngagementsSection({ recent }: { recent: RecentEngagement[
         Recently Opened Clients
       </div>
       {recent.length > 0 ? (
-        <nav className="flex flex-col gap-1">
-          {recent.map((client) => (
-            <Link
-              key={client.engagementId}
-              href={`/dashboard/engagements/${client.engagementId}`}
-              className="group flex items-center justify-between gap-3 rounded-xl px-2.5 py-2 hover:bg-[#e7e7eb] dark:hover:bg-zinc-800/60 transition-all duration-150"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-7 h-7 rounded-[8px] bg-amber-400 dark:bg-[#b4a7f5] text-zinc-950 flex items-center justify-center shrink-0 shadow-xs">
-                  <List className="w-4 h-4 stroke-[2.5]" />
-                </div>
-                <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100 group-hover:text-zinc-950 dark:group-hover:text-white truncate">
-                  {client.buyer}
-                </span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-zinc-400 dark:text-zinc-500 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-hover:text-zinc-700 dark:group-hover:text-zinc-200 transition-all shrink-0" />
-            </Link>
-          ))}
-        </nav>
+        <SidebarNavLinks links={recentLinks} />
       ) : (
         <p className="px-2.5 py-1 text-xs text-zinc-500 dark:text-zinc-400">No engagements yet.</p>
       )}

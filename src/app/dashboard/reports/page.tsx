@@ -1,13 +1,10 @@
-import { db } from "@/lib/db";
-import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
-import { eq, and, isNull, asc } from "drizzle-orm";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { computeClientReportAllPeriods } from "@/features/reports/server/report-service";
 import { generateReportNote } from "@/features/reports/server/report-notes";
 import { ClientReportCard } from "@/components/client-report-card";
-import Link from "next/link";
-import { FileText, Building2 } from "lucide-react";
+import { listReportableClients } from "./reports-sidebar";
+import { FileText } from "lucide-react";
 
 export const revalidate = 0;
 
@@ -21,17 +18,7 @@ export default async function ReportsPage({
   const whopUserId = session.whopUserId!;
   const activeWorkspace = await getActiveWorkspace(whopUserId);
 
-  const clients = await db
-    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
-    .from(engagements)
-    .where(
-      and(
-        eq(engagements.whopUserId, whopUserId),
-        eq(engagements.workspaceId, activeWorkspace.workspaceId),
-        isNull(engagements.deletedAt)
-      )
-    )
-    .orderBy(asc(engagements.buyer));
+  const clients = await listReportableClients(whopUserId, activeWorkspace.workspaceId);
 
   const selected = clients.find((c) => c.engagementId === selectedFromQuery) ?? clients[0] ?? null;
 
@@ -59,31 +46,14 @@ export default async function ReportsPage({
           <p className="text-sm text-zinc-500 dark:text-zinc-400">No clients yet.</p>
         </div>
       ) : (
-        <>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {clients.map((c) => (
-              <Link
-                key={c.engagementId}
-                href={`/dashboard/reports?client=${c.engagementId}`}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                  selected?.engagementId === c.engagementId
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100"
-                    : "bg-white dark:bg-zinc-900/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                }`}
-              >
-                <Building2 className="w-3 h-3" /> {c.buyer}
-              </Link>
-            ))}
-          </div>
-
-          {selected && reportMetrics && (
-            <ClientReportCard
-              buyerName={selected.buyer}
-              metricsByPeriod={reportMetrics}
-              notesByPeriod={{ week: weekNote, month: monthNote }}
-            />
-          )}
-        </>
+        selected &&
+        reportMetrics && (
+          <ClientReportCard
+            buyerName={selected.buyer}
+            metricsByPeriod={reportMetrics}
+            notesByPeriod={{ week: weekNote, month: monthNote }}
+          />
+        )
       )}
     </div>
   );
