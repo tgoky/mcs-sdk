@@ -65,15 +65,15 @@ function SquishyProductBadge({
   const c = PRODUCT_BADGE_COLORS[color];
   return (
     <div
-      className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 select-none overflow-hidden ${
+      className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 select-none overflow-hidden ${
         active ? `${c.activeBg} shadow-xs scale-105` : c.inactiveBg
       }`}
     >
       {iconSrc ? (
-        <img src={iconSrc} alt="" className="w-3.5 h-3.5 object-contain" />
+        <img src={iconSrc} alt="" className="w-5 h-5 object-contain" />
       ) : Icon ? (
         <Icon
-          className={`w-3.5 h-3.5 stroke-[2.3px] transition-colors ${active ? c.activeIcon : c.inactiveIcon}`}
+          className={`w-4 h-4 stroke-[2.3px] transition-colors ${active ? c.activeIcon : c.inactiveIcon}`}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -137,7 +137,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 }
               >
                 {customIconSrc ? (
-                  <img src={customIconSrc} alt="" className="w-4 h-4 shrink-0 object-contain" />
+                  <img src={customIconSrc} alt="" className="w-6 h-6 shrink-0 object-contain" />
                 ) : (
                   <Icon className="w-4 h-4 shrink-0" />
                 )}
