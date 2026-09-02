@@ -7,7 +7,7 @@ import {
   MessageSquareQuote,
   Bell,
   Workflow,
-  ListChecks,
+  ClockArrowUp,
   NotebookText,
   type LucideIcon,
 } from "lucide-react";
@@ -28,7 +28,7 @@ export const RIGHT_PANEL_META: Record<
   calendar: { label: "Calendar", icon: CalendarRange, expandHref: "/dashboard/calendar" },
   teammates: { label: "Teammates", icon: MessageSquareQuote, expandHref: "/dashboard/teammates" },
   autopilot: { label: "Autopilot", icon: Workflow, expandHref: "/dashboard/autopilot" },
-  upcoming: { label: "Upcoming", icon: ListChecks, expandHref: "/dashboard/upcoming" },
+  upcoming: { label: "Upcoming", icon: ClockArrowUp, expandHref: "/dashboard/upcoming" },
   plan: { label: "Plan", icon: NotebookText, expandHref: "/dashboard/plan" },
 };
 

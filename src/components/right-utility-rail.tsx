@@ -5,7 +5,7 @@ import {
   MessageSquareQuote,
   Bell,
   Workflow,
-  ListChecks,
+  ClockArrowUp,
   NotebookText,
   type LucideIcon,
 } from "lucide-react";
@@ -15,7 +15,7 @@ interface UtilityIconConfig {
   key: RightPanelKey;
   icon: LucideIcon;
   label: string;
-  // Spectrum: Gray Lavender -> Soft Mauve -> Dusty Rose -> Pale Pink
+  // Smooth pastel fill with a subtle, non-stark gray stroke across light & dark themes
   fillStyle: string;
 }
 
@@ -24,37 +24,37 @@ const ICONS: UtilityIconConfig[] = [
     key: "calendar",
     icon: CalendarRange,
     label: "Calendar",
-    fillStyle: "fill-[#c5bcd3] dark:fill-[#5c4f70] text-zinc-800 dark:text-zinc-100",
+    fillStyle: "fill-[#c5bcd3] dark:fill-[#5c4f70] text-zinc-500 dark:text-zinc-400",
   },
   {
     key: "teammates",
     icon: MessageSquareQuote,
     label: "Teammates",
-    fillStyle: "fill-[#cfb8e0] dark:fill-[#684b7d] text-zinc-800 dark:text-zinc-100",
+    fillStyle: "fill-[#cfb8e0] dark:fill-[#684b7d] text-zinc-500 dark:text-zinc-400",
   },
   {
     key: "notifications",
     icon: Bell,
     label: "Notifications",
-    fillStyle: "fill-[#d8b5eb] dark:fill-[#734b82] text-zinc-800 dark:text-zinc-100",
+    fillStyle: "fill-[#d8b5eb] dark:fill-[#734b82] text-zinc-500 dark:text-zinc-400",
   },
   {
     key: "autopilot",
     icon: Workflow,
     label: "Autopilot",
-    fillStyle: "fill-[#e3b5dd] dark:fill-[#7c4978] text-zinc-800 dark:text-zinc-100",
+    fillStyle: "fill-[#e3b5dd] dark:fill-[#7c4978] text-zinc-500 dark:text-zinc-400",
   },
   {
     key: "upcoming",
-    icon: ListChecks,
+    icon: ClockArrowUp,
     label: "Upcoming",
-    fillStyle: "fill-[#eab6d2] dark:fill-[#82466d] text-zinc-800 dark:text-zinc-100",
+    fillStyle: "fill-[#eab6d2] dark:fill-[#82466d] text-zinc-500 dark:text-zinc-400",
   },
   {
     key: "plan",
     icon: NotebookText,
     label: "Plan",
-    fillStyle: "fill-[#f0b8c8] dark:fill-[#87465f] text-zinc-800 dark:text-zinc-100",
+    fillStyle: "fill-[#f0b8c8] dark:fill-[#87465f] text-zinc-500 dark:text-zinc-400",
   },
 ];
 
@@ -91,7 +91,7 @@ export function RightUtilityRail({
                 active ? "scale-115" : "scale-100 group-hover:scale-115"
               }`}
             >
-              <Icon size={19} className={`stroke-[1.8px] transition-all ${fillStyle}`} />
+              <Icon size={19} className={`stroke-[1.6px] transition-all ${fillStyle}`} />
             </div>
 
             {isBell && unreadCount > 0 && (
