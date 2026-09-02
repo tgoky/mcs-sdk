@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Plus, ArrowRight, LayoutGrid, List, Gavel } from "lucide-react";
 import { HOME_COPY, WORKSPACE_PRODUCTS } from "@/lib/copy";
@@ -33,6 +34,26 @@ const AVATAR_COLORS = [
   "bg-emerald-500 text-white",
 ];
 
+/* -------------------------------------------------------------------------- */
+/* RETRO BORDERLESS SEGMENTED LOADER                                          */
+/* -------------------------------------------------------------------------- */
+function SegmentedBarLoader({ count = 8 }: { count?: number }) {
+  return (
+    <div className="flex items-center gap-1 justify-center py-1 select-none">
+      {Array.from({ length: count }).map((_, i) => (
+        <span
+          key={i}
+          className="h-3.5 w-1.5 rounded-[1px] bg-amber-400 dark:bg-amber-400 animate-pulse shadow-[0_0_6px_rgba(251,191,36,0.4)]"
+          style={{
+            animationDelay: `${i * 75}ms`,
+            animationDuration: "750ms",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function PackageBadge({ packageId }: { packageId: string }) {
   if (packageId === "counter-claim") {
     return (
@@ -48,22 +69,35 @@ function PackageBadge({ packageId }: { packageId: string }) {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* CARD VIEW COMPONENT                                                        */
+/* -------------------------------------------------------------------------- */
 function WorkspaceCard({
   workspace,
   packageIds,
   workspaceCount,
+  isSwitching,
+  onSwitch,
 }: {
   workspace: Workspace;
   packageIds: string[];
   workspaceCount: number;
+  isSwitching: boolean;
+  onSwitch: (id: string) => void;
 }) {
   const hasShowtime = packageIds.includes("showtime");
 
   return (
     <div className="group relative flex h-full w-full flex-col justify-between rounded-md border border-zinc-200/80 bg-zinc-50/50 p-6 text-left transition-all duration-200 select-none hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/60">
-      <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="contents">
+      <form
+        action={`/api/workspaces/${workspace.workspaceId}/switch`}
+        method="POST"
+        onSubmit={() => onSwitch(workspace.workspaceId)}
+        className="contents"
+      >
         <button
           type="submit"
+          disabled={isSwitching}
           aria-label={`Open ${workspace.name}`}
           className="absolute inset-0 z-10 cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
         />
@@ -116,9 +150,15 @@ function WorkspaceCard({
         )}
       </div>
       <div className="pt-6">
-        <span className="inline-flex w-full items-center justify-center rounded-md bg-amber-400 px-2.5 py-1.5 text-xs font-bold text-zinc-950 transition-all group-hover:bg-amber-500">
-          {HOME_COPY.openLabel} {workspace.name}
-        </span>
+        {isSwitching ? (
+          <div className="flex h-8 w-full items-center justify-center">
+            <SegmentedBarLoader count={10} />
+          </div>
+        ) : (
+          <span className="inline-flex w-full items-center justify-center rounded-md bg-amber-400 px-2.5 py-1.5 text-xs font-bold text-zinc-950 transition-all group-hover:bg-amber-500">
+            {HOME_COPY.openLabel} {workspace.name}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -139,16 +179,23 @@ function CreateWorkspaceCard() {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* LIST VIEW ROW                                                               */
+/* -------------------------------------------------------------------------- */
 function WorkspaceRow({
   workspace,
   packageIds,
   index,
   workspaceCount,
+  isSwitching,
+  onSwitch,
 }: {
   workspace: Workspace;
   packageIds: string[];
   index: number;
   workspaceCount: number;
+  isSwitching: boolean;
+  onSwitch: (id: string) => void;
 }) {
   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const initial = workspace.name.slice(0, 1).toUpperCase() || "W";
@@ -157,9 +204,15 @@ function WorkspaceRow({
   return (
     <tr className="group border-b border-zinc-200/80 dark:border-zinc-800/60 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60 transition-colors">
       <td className="py-3.5 pl-4 pr-3 text-sm">
-        <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="inline-block">
+        <form
+          action={`/api/workspaces/${workspace.workspaceId}/switch`}
+          method="POST"
+          onSubmit={() => onSwitch(workspace.workspaceId)}
+          className="inline-block"
+        >
           <button
             type="submit"
+            disabled={isSwitching}
             className="flex items-center gap-3 text-left group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors cursor-pointer"
           >
             <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-mono text-xs font-bold ${avatarColor} shadow-2xs`}>
@@ -209,21 +262,35 @@ function WorkspaceRow({
       <td className="py-3.5 pr-4 pl-3 text-right text-xs whitespace-nowrap">
         <div className="flex items-center justify-end gap-2">
           <WorkspaceCardMenu workspace={workspace} canDelete={workspaceCount > 1 && !workspace.isLegacy} />
-          <form action={`/api/workspaces/${workspace.workspaceId}/switch`} method="POST" className="inline-block">
-            <button
-              type="submit"
-              className="inline-flex items-center gap-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+          {isSwitching ? (
+            <div className="px-2">
+              <SegmentedBarLoader count={6} />
+            </div>
+          ) : (
+            <form
+              action={`/api/workspaces/${workspace.workspaceId}/switch`}
+              method="POST"
+              onSubmit={() => onSwitch(workspace.workspaceId)}
+              className="inline-block"
             >
-              <span>Enter</span>
-              <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
-            </button>
-          </form>
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              >
+                <span>Enter</span>
+                <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </form>
+          )}
         </div>
       </td>
     </tr>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* MAIN CLIENT CONTAINER                                                      */
+/* -------------------------------------------------------------------------- */
 interface WorkspaceHomeClientProps {
   workspaceList: Workspace[];
   installedByWorkspace: Record<string, string[]>;
@@ -234,6 +301,7 @@ export function WorkspaceHomeClient({
   installedByWorkspace,
 }: WorkspaceHomeClientProps) {
   const [viewMode, setViewMode] = useLocalViewState<"card" | "list">("mcs:home:view-mode", "card");
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
 
   return (
     <main className="flex-1 py-4">
@@ -290,6 +358,8 @@ export function WorkspaceHomeClient({
               workspace={workspace}
               packageIds={installedByWorkspace[workspace.workspaceId] ?? []}
               workspaceCount={workspaceList.length}
+              isSwitching={switchingId === workspace.workspaceId}
+              onSwitch={(id) => setSwitchingId(id)}
             />
           ))}
           <CreateWorkspaceCard />
@@ -314,6 +384,8 @@ export function WorkspaceHomeClient({
                   packageIds={installedByWorkspace[workspace.workspaceId] ?? []}
                   index={idx}
                   workspaceCount={workspaceList.length}
+                  isSwitching={switchingId === workspace.workspaceId}
+                  onSwitch={(id) => setSwitchingId(id)}
                 />
               ))}
             </tbody>
