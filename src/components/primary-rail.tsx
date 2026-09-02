@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutGrid,
   LogOut,
   User,
   Settings,
@@ -29,6 +28,13 @@ interface PrimaryRailProps {
 }
 
 const RAIL_SECTIONS = PRIMARY_NAV_SECTIONS;
+
+const NAV_ICON_MAP: Record<string, string> = {
+  "/dashboard/engagements": "/images/engagement.png",
+  "/dashboard/analytics": "/images/analytic.png",
+  "/dashboard/library": "/images/lib.png",
+  "/dashboard/meetings": "/images/meeting.png",
+};
 
 const PRODUCT_BADGE_COLORS = {
   amber: {
@@ -116,6 +122,8 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
           {RAIL_SECTIONS.map((section) => {
             const isActive = section.href === activeHref;
             const Icon = section.icon;
+            const customIconSrc = NAV_ICON_MAP[section.href];
+
             return (
               <Link
                 key={section.href}
@@ -128,7 +136,11 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                     : "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
                 }
               >
-                <Icon className="w-4 h-4 shrink-0" />
+                {customIconSrc ? (
+                  <img src={customIconSrc} alt="" className="w-4 h-4 shrink-0 object-contain" />
+                ) : (
+                  <Icon className="w-4 h-4 shrink-0" />
+                )}
                 <span className="text-[9.5px] font-medium leading-normal text-center truncate max-w-full px-0.5 pt-0.5 pb-1">
                   {section.title}
                 </span>
