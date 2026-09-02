@@ -185,7 +185,7 @@ export async function deleteComposioConnection(connectedAccountId: string): Prom
  * open redirect target. Exact-match only, no prefix matching: add a new
  * entry here deliberately rather than widening the check.
  */
-const COMPOSIO_RETURN_ALLOWLIST = ["/dashboard/settings/apps", "/dashboard/engagements/new"];
+const COMPOSIO_RETURN_ALLOWLIST = ["/dashboard/settings/apps", "/dashboard/engagements/new", "/dashboard/teammates"];
 
 export function isAllowedComposioReturnPath(path: string): boolean {
   return COMPOSIO_RETURN_ALLOWLIST.includes(path);

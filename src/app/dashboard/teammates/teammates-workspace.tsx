@@ -32,7 +32,7 @@
 // "Loading conversation…" for content already on screen. `selected` still
 // updates in handleThreadEvent so the rail's highlight and list re-sort
 // correctly — that update just doesn't carry a key bump with it.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TeammatesChat, readStoredThreadId } from "./teammates-chat";
 import { TeammatesThreadRail, type ThreadSummary } from "./teammates-thread-rail";
 
@@ -40,6 +40,32 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
   const [threads, setThreads] = useState(initialThreads);
   const [selected, setSelected] = useState<string | null>(() => readStoredThreadId());
   const [epoch, setEpoch] = useState(0);
+
+  // Landing back from a real Composio OAuth redirect (connect_credential's
+  // link, chat-credentials.ts) — /dashboard/teammates is on the return
+  // allowlist and the callback appends ?composio_connected=<provider>. The
+  // thread this browser was last in is already `selected` above (same
+  // localStorage read, no extra plumbing needed for that part) — this
+  // only needs to turn the query param into one auto-sent message so the
+  // model picks the conversation back up itself instead of the user
+  // having to retype "I just connected X." No epoch bump: this continues
+  // the current thread, it doesn't switch to a different one.
+  const [pendingMessage] = useState<string | undefined>(() => {
+    if (typeof window === "undefined") return undefined;
+    const provider = new URLSearchParams(window.location.search).get("composio_connected");
+    return provider ? `I just connected ${provider}.` : undefined;
+  });
+
+  useEffect(() => {
+    if (!pendingMessage) return;
+    // Strips the param so a refresh doesn't re-fire the same auto-send —
+    // separated from the read above (a pure lazy initializer) since a
+    // history mutation doesn't belong there.
+    const url = new URL(window.location.href);
+    url.searchParams.delete("composio_connected");
+    window.history.replaceState({}, "", url.toString());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function selectThread(id: string) {
     // Re-clicking the already-active thread shouldn't reload it — that'd
@@ -67,7 +93,7 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
     <div className="flex h-full min-h-0 gap-3">
       <TeammatesThreadRail threads={threads} selectedId={selected} onSelect={selectThread} onNewChat={startNewChat} />
       <div className="flex-1 min-h-0 rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
-        <TeammatesChat key={epoch} initialThreadId={selected} onThreadEvent={handleThreadEvent} />
+        <TeammatesChat key={epoch} initialThreadId={selected} onThreadEvent={handleThreadEvent} initialPendingMessage={epoch === 0 ? pendingMessage : undefined} />
       </div>
     </div>
   );

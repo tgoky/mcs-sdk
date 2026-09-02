@@ -66,6 +66,7 @@ export const MENTIONABLE_SKILLS = [
 export function TeammatesChat({
   initialThreadId,
   onThreadEvent,
+  initialPendingMessage,
 }: {
   /**
    * Which thread this instance loads on mount. Omitted (the compact
@@ -87,6 +88,15 @@ export function TeammatesChat({
    * update there).
    */
   onThreadEvent?: (thread: { id: string; title: string }) => void;
+  /**
+   * A message to send automatically, once, right after mount — read once
+   * the same way initialThreadId is, never treated as reactive. Built for
+   * exactly one caller: teammates-workspace.tsx, landing back from a
+   * Composio OAuth redirect, telling the assistant a platform just got
+   * connected so it can pick the conversation back up on its own rather
+   * than the user having to retype it. Omitted everywhere else.
+   */
+  initialPendingMessage?: string;
 } = {}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -107,8 +117,24 @@ export function TeammatesChat({
     // only runs once on mount — same reasoning the original localStorage-
     // only version already documented, extended to the controlled case.
     const id = initialThreadId !== undefined ? initialThreadId : readStoredThreadId();
-    if (!id) return;
     let cancelled = false;
+
+    // Deliberately sequenced after history load resolves (or immediately,
+    // in the no-history branch below) rather than fired in parallel with
+    // it. Firing it in parallel raced the two: if the history fetch
+    // resolved after the auto-send's own optimistic append, its
+    // setMessages(data.messages) would wholesale replace the array and
+    // silently drop the just-added pending message from view (still
+    // persisted server-side, just invisible until a manual reload).
+    function sendPendingMessageIfAny() {
+      if (initialPendingMessage) send(initialPendingMessage);
+    }
+
+    if (!id) {
+      sendPendingMessageIfAny();
+      return;
+    }
+
     fetch(`/api/teammates/threads/${id}`)
       .then((r) => {
         if (r.status === 404) {
@@ -131,6 +157,7 @@ export function TeammatesChat({
       })
       .finally(() => {
         if (!cancelled) setHistoryLoading(false);
+        if (!cancelled) sendPendingMessageIfAny();
       });
     return () => {
       cancelled = true;
@@ -167,12 +194,12 @@ export function TeammatesChat({
     inputRef.current?.focus();
   }
 
-  async function send() {
-    const text = input.trim();
+  async function send(overrideText?: string) {
+    const text = (overrideText ?? input).trim();
     if (!text || loading) return;
 
     setMessages((prev) => [...prev, { role: "user", content: text }]);
-    setInput("");
+    if (overrideText === undefined) setInput("");
     setMentionQuery(null);
     setLoading(true);
     setError(null);
@@ -338,7 +365,7 @@ export function TeammatesChat({
           />
           <button
             type="button"
-            onClick={send}
+            onClick={() => send()}
             disabled={loading || !input.trim()}
             className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             style={{ background: "var(--text-prefill-accent)" }}
