@@ -6,7 +6,6 @@ import { SkillSequence } from "@/components/library/skill-sequence";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { MediaGallery } from "@/components/library/media-gallery";
 import {
-  LayoutGrid,
   Webhook,
   KeyRound,
   Download,
@@ -162,8 +161,12 @@ export default async function ShowtimePackagePage() {
       <div className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-6 sm:p-8 space-y-8 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
           <div className="flex items-start gap-4 min-w-0">
-            <div className="shrink-0 flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-teal-500 dark:bg-teal-400 shadow-[0_0_0_1px_rgba(45,212,191,0.25),0_8px_24px_-8px_rgba(45,212,191,0.5)]">
-              <LayoutGrid className="size-8 sm:size-10 text-zinc-950 stroke-[2.3px]" />
+            <div className="shrink-0 flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-teal-500 dark:bg-teal-400 shadow-[0_0_0_1px_rgba(45,212,191,0.25),0_8px_24px_-8px_rgba(45,212,191,0.5)] overflow-hidden">
+              <img
+                src="/images/showtime.png"
+                alt="Showtime"
+                className="size-8 sm:size-10 object-contain"
+              />
             </div>
             <div className="min-w-0 pt-0.5 space-y-1.5">
               <div className="flex items-center gap-3">
