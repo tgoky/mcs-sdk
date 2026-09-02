@@ -82,12 +82,12 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
                 Marketplace Apps
               </h1>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 font-medium">
-                Explore automation suites and integrate them into your client workspace.
+                Explore automation workers and integrate them into your client workspace.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400 -mt-1">
               <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-800 dark:text-zinc-200 font-mono text-[11px] font-semibold">
-                {packages.length} suites
+                {packages.length} workers
               </span>
               <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-800 dark:text-zinc-200 font-mono text-[11px] font-semibold">
                 {packages.filter((p) => p.status === "installed").length} installed
@@ -108,7 +108,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
               : "border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
           }`}
         >
-          All Suites ({packages.length})
+          All Workers ({packages.length})
         </button>
         <button
           type="button"
@@ -251,7 +251,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
         <div className="lg:col-span-9 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <p className="text-sm font-bold text-zinc-900 dark:text-white font-mono">
-              {filteredPackages.length} {filteredPackages.length === 1 ? "Suite" : "Suites"} Available
+              {filteredPackages.length} {filteredPackages.length === 1 ? "Worker" : "Workers"} Available
             </p>
 
             <div className="relative w-full sm:w-72">
@@ -260,7 +260,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search Suites..."
+                placeholder="Search Workers..."
                 className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-amber-400 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400 shadow-sm"
               />
             </div>
