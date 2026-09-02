@@ -1,3 +1,5 @@
+// src/components/right-utility-panel.tsx
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X, Maximize2, CalendarDays, Users, Bot, ListChecks, Workflow, type LucideIcon } from "lucide-react";
@@ -10,16 +12,13 @@ import { TeammatesPanelContent } from "@/app/dashboard/teammates/teammates-panel
 
 export type RightPanelKey = "notifications" | "calendar" | "teammates" | "autopilot" | "upcoming" | "plan";
 
-export const RIGHT_PANEL_META: Record<
-  RightPanelKey,
-  { label: string; icon: LucideIcon; iconSrc?: string; expandHref: string }
-> = {
+export const RIGHT_PANEL_META: Record<RightPanelKey, { label: string; icon: LucideIcon; expandHref: string }> = {
   notifications: { label: "Notifications", icon: X, expandHref: "/dashboard/inbox" },
-  calendar: { label: "Calendar", icon: CalendarDays, iconSrc: "/images/cal.png", expandHref: "/dashboard/calendar" },
-  teammates: { label: "Teammates", icon: Users, iconSrc: "/images/teammates.png", expandHref: "/dashboard/teammates" },
-  autopilot: { label: "Autopilot", icon: Bot, iconSrc: "/images/pilot.png", expandHref: "/dashboard/autopilot" },
-  upcoming: { label: "Upcoming", icon: ListChecks, iconSrc: "/images/upcoming.png", expandHref: "/dashboard/upcoming" },
-  plan: { label: "Plan", icon: Workflow, iconSrc: "/images/plan.png", expandHref: "/dashboard/plan" },
+  calendar: { label: "Calendar", icon: CalendarDays, expandHref: "/dashboard/calendar" },
+  teammates: { label: "Teammates", icon: Users, expandHref: "/dashboard/teammates" },
+  autopilot: { label: "Autopilot", icon: Bot, expandHref: "/dashboard/autopilot" },
+  upcoming: { label: "Upcoming", icon: ListChecks, expandHref: "/dashboard/upcoming" },
+  plan: { label: "Plan", icon: Workflow, expandHref: "/dashboard/plan" },
 };
 
 const MIN_WIDTH = 320;
@@ -36,14 +35,10 @@ function ComingSoonPanel({ panelKey }: { panelKey: StillComingKey }) {
   return (
     <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
       <span
-        className="flex items-center justify-center w-10 h-10 rounded-full overflow-hidden"
+        className="flex items-center justify-center w-10 h-10 rounded-full"
         style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
       >
-        {meta.iconSrc ? (
-          <img src={meta.iconSrc} alt="" className="w-5 h-5 object-contain" />
-        ) : (
-          <Icon size={18} />
-        )}
+        <Icon size={18} />
       </span>
       <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
         {meta.label} is coming next
@@ -77,6 +72,21 @@ export function RightUtilityPanel({
   const draggingRef = useRef(false);
   const isOpen = activePanel !== null;
 
+  // This panel is a flex sibling of <main> in shell-layout.tsx, not an
+  // overlay — opening/closing it already reflows the whole page, and it
+  // already had a `transition-[width]` for the drag-resize handle below.
+  // So the open/close motion is that same width transition, driven all
+  // the way down to 0 instead of unmounting outright: <main> reflows in
+  // step with it for free, rather than snapping the instant a `return
+  // null` mounts/unmounts a sibling. (A transform-based slide-in would
+  // animate the panel's own content but leave <main> jumping instantly —
+  // wrong technique for a layout-affecting sibling, right one for an
+  // overlay like the Sheet drawers already use.)
+  //
+  // Content still needs to hang around a beat past `activePanel` going
+  // null, or the box would visibly go blank first and *then* shrink —
+  // same reasoning as closeItemWithAnimation in queue-panel.tsx, just
+  // holding onto "what to render" instead of "whether to render".
   const [displayedPanel, setDisplayedPanel] = useState<RightPanelKey | null>(activePanel);
   if (activePanel && activePanel !== displayedPanel) {
     setDisplayedPanel(activePanel);
@@ -124,17 +134,20 @@ export function RightUtilityPanel({
     >
       {meta && displayedPanel && (
         <>
+          {/* --- HYPER-MICRO TIGHT DOT GRID --- */}
           <div 
             className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" 
             aria-hidden="true"
           />
 
+          {/* Drag handle */}
           <div
             onMouseDown={onDragStart}
             className="absolute left-0 top-0 bottom-0 w-1.5 -ml-0.5 cursor-col-resize z-20 hover:bg-zinc-400/40 dark:hover:bg-zinc-600/40 transition-colors"
             title="Drag to resize"
           />
 
+          {/* Header */}
           <div className="relative z-10 flex items-center justify-between px-3 h-11 border-b shrink-0 border-zinc-200/80 dark:border-zinc-800/80">
             <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
               {meta.label}
@@ -164,6 +177,10 @@ export function RightUtilityPanel({
             </div>
           </div>
 
+          {/* Content area — keyed on displayedPanel so switching straight
+              from one open panel to another (Calendar -> Notifications,
+              no close in between) plays a quick settle-in instead of the
+              content just being replaced mid-frame. */}
           <div key={displayedPanel} className="relative z-10 flex-1 min-h-0 right-panel-content-enter">
             {displayedPanel === "notifications" ? (
               <NotificationList

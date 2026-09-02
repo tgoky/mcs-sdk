@@ -1,15 +1,24 @@
 "use client";
 
-import { CalendarDays, Users, Bell, Bot, ListChecks, Workflow, type LucideIcon } from "lucide-react";
+// src/components/right-utility-rail.tsx
+//
+// The 6-icon row in the top-nav's right corner: Calendar, Teammates,
+// Notifications, Autopilot, Upcoming, Plan — in that order, matching how
+// they were spec'd this round. Each opens the same right-utility-panel.tsx
+// slot; clicking the already-open one closes it (that's the only way it
+// closes — no click-outside dismiss). The bell is sized up from the old
+// solo bell (17px) since it's now one of six, not the only icon here.
+
+import { CalendarDays, Users, Bell, Bot, ListChecks, Workflow } from "lucide-react";
 import type { RightPanelKey } from "@/components/right-utility-panel";
 
-const ICONS: { key: RightPanelKey; icon: LucideIcon; iconSrc?: string; label: string }[] = [
-  { key: "calendar", icon: CalendarDays, iconSrc: "/images/cal.png", label: "Calendar" },
-  { key: "teammates", icon: Users, iconSrc: "/images/teammates.png", label: "Teammates" },
+const ICONS: { key: RightPanelKey; icon: typeof Bell; label: string }[] = [
+  { key: "calendar", icon: CalendarDays, label: "Calendar" },
+  { key: "teammates", icon: Users, label: "Teammates" },
   { key: "notifications", icon: Bell, label: "Notifications" },
-  { key: "autopilot", icon: Bot, iconSrc: "/images/pilot.png", label: "Autopilot" },
-  { key: "upcoming", icon: ListChecks, iconSrc: "/images/upcoming.png", label: "Upcoming" },
-  { key: "plan", icon: Workflow, iconSrc: "/images/plan.png", label: "Plan" },
+  { key: "autopilot", icon: Bot, label: "Autopilot" },
+  { key: "upcoming", icon: ListChecks, label: "Upcoming" },
+  { key: "plan", icon: Workflow, label: "Plan" },
 ];
 
 export function RightUtilityRail({
@@ -22,8 +31,8 @@ export function RightUtilityRail({
   unreadCount: number;
 }) {
   return (
-    <div className="flex items-center gap-1">
-      {ICONS.map(({ key, icon: Icon, iconSrc, label }) => {
+    <div className="flex items-center gap-0.5">
+      {ICONS.map(({ key, icon: Icon, label }) => {
         const active = activePanel === key;
         const isBell = key === "notifications";
         return (
@@ -34,27 +43,17 @@ export function RightUtilityRail({
             aria-label={label}
             aria-pressed={active}
             title={label}
-            className={`group relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 cursor-pointer overflow-hidden ${
+            className={`relative flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
+              isBell ? "w-9 h-9" : "w-8 h-8"
+            } ${
               active
-                ? "text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-800 shadow-xs"
+                ? "text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-800"
                 : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900"
             }`}
           >
-            <div
-              className={`transition-all duration-300 ease-out transform flex items-center justify-center ${
-                active
-                  ? "scale-110"
-                  : "scale-100 group-hover:scale-110"
-              }`}
-            >
-              {iconSrc ? (
-                <img src={iconSrc} alt="" className="w-6 h-6 object-contain" />
-              ) : (
-                <Icon size={21} />
-              )}
-            </div>
+            <Icon size={isBell ? 19 : 16} />
             {isBell && unreadCount > 0 && (
-              <span className="absolute top-1 right-1 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-[10px] font-bold text-white leading-none z-10">
+              <span className="absolute top-0.5 right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-[10px] font-bold text-white leading-none">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
