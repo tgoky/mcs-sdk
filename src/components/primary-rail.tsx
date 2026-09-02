@@ -65,8 +65,8 @@ function SquishyProductBadge({
   const c = PRODUCT_BADGE_COLORS[color];
   return (
     <div
-      className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 select-none overflow-hidden ${
-        active ? `${c.activeBg} shadow-xs scale-105` : c.inactiveBg
+      className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 select-none overflow-hidden ${
+        active ? `${c.activeBg} shadow-xs` : c.inactiveBg
       }`}
     >
       {iconSrc ? (
@@ -118,7 +118,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
     <aside className="w-[76px] bg-background border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1.5 shrink-0 select-none z-20 transition-colors duration-200">
       {/* Top Section */}
       <div className="flex flex-col items-center gap-1.5 w-full">
-        <nav className="flex flex-col items-center gap-1 w-full">
+        <nav className="flex flex-col items-center gap-1.5 w-full">
           {RAIL_SECTIONS.map((section) => {
             const isActive = section.href === activeHref;
             const Icon = section.icon;
@@ -131,17 +131,37 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 title={section.title}
                 aria-current={isActive ? "page" : undefined}
                 className={
-                  isActive
-                    ? "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl transition-all shadow-xs font-semibold"
-                    : "w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
+                  "group relative w-full h-[58px] flex flex-col items-center justify-center p-1 rounded-xl transition-all duration-300 overflow-hidden " +
+                  (isActive
+                    ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
                 }
               >
-                {customIconSrc ? (
-                  <img src={customIconSrc} alt="" className="w-6 h-6 shrink-0 object-contain" />
-                ) : (
-                  <Icon className="w-4 h-4 shrink-0" />
-                )}
-                <span className="text-[9.5px] font-medium leading-normal text-center truncate max-w-full px-0.5 pt-0.5 pb-1">
+                {/* Icon / Image - Zooms up and centers when active or hovered */}
+                <div
+                  className={
+                    "transition-all duration-300 ease-out transform flex items-center justify-center " +
+                    (isActive
+                      ? "scale-[1.4] translate-y-[3px]"
+                      : "scale-100 group-hover:scale-[1.4] group-hover:translate-y-[3px]")
+                  }
+                >
+                  {customIconSrc ? (
+                    <img src={customIconSrc} alt="" className="w-6 h-6 shrink-0 object-contain" />
+                  ) : (
+                    <Icon className="w-5 h-5 shrink-0" />
+                  )}
+                </div>
+
+                {/* Title Text - Smoothly collapses and fades out on hover or active */}
+                <span
+                  className={
+                    "text-[9.5px] font-medium leading-none text-center truncate max-w-full px-0.5 transition-all duration-300 ease-out origin-bottom " +
+                    (isActive
+                      ? "max-h-0 opacity-0 scale-75 mt-0 pointer-events-none"
+                      : "max-h-4 opacity-100 scale-100 mt-1.5 group-hover:max-h-0 group-hover:opacity-0 group-hover:scale-75 group-hover:mt-0 group-hover:pointer-events-none")
+                  }
+                >
                   {section.title}
                 </span>
               </Link>
@@ -151,7 +171,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
 
         <div className="-mx-1.5 w-[76px] border-t border-zinc-200 dark:border-zinc-800/80 my-2 shrink-0" />
 
-        <nav className="flex flex-col items-center gap-1 w-full">
+        <nav className="flex flex-col items-center gap-1.5 w-full">
           {PRODUCT_SECTIONS.map((product) => {
             const isActive = product.href === activeHref;
             return (
@@ -161,18 +181,38 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 title={product.title}
                 aria-current={isActive ? "page" : undefined}
                 className={
-                  isActive
-                    ? "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl transition-all shadow-xs font-semibold"
-                    : "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
+                  "group relative w-full h-[58px] flex flex-col items-center justify-center p-1 rounded-xl transition-all duration-300 overflow-hidden " +
+                  (isActive
+                    ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
                 }
               >
-                <SquishyProductBadge
-                  active={isActive}
-                  icon={product.icon}
-                  iconSrc={product.iconSrc}
-                  color={product.color}
-                />
-                <span className="text-[9.5px] font-medium leading-normal text-center truncate max-w-full px-0.5 pt-0.5 pb-1">
+                {/* Product Badge - Zooms and centers on hover/active */}
+                <div
+                  className={
+                    "transition-all duration-300 ease-out transform flex items-center justify-center " +
+                    (isActive
+                      ? "scale-[1.3] translate-y-[3px]"
+                      : "scale-100 group-hover:scale-[1.3] group-hover:translate-y-[3px]")
+                  }
+                >
+                  <SquishyProductBadge
+                    active={isActive}
+                    icon={product.icon}
+                    iconSrc={product.iconSrc}
+                    color={product.color}
+                  />
+                </div>
+
+                {/* Product Title Text - Collapses and fades out */}
+                <span
+                  className={
+                    "text-[9.5px] font-medium leading-none text-center truncate max-w-full px-0.5 transition-all duration-300 ease-out origin-bottom " +
+                    (isActive
+                      ? "max-h-0 opacity-0 scale-75 mt-0 pointer-events-none"
+                      : "max-h-4 opacity-100 scale-100 mt-1.5 group-hover:max-h-0 group-hover:opacity-0 group-hover:scale-75 group-hover:mt-0 group-hover:pointer-events-none")
+                  }
+                >
                   {product.title}
                 </span>
               </Link>
@@ -186,10 +226,14 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
         <a
           href="/home"
           title="Back to account"
-          className="w-full flex flex-col items-center justify-center gap-1 py-2 px-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-colors"
+          className="group relative w-full h-[58px] flex flex-col items-center justify-center p-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-all duration-300 overflow-hidden"
         >
-          <Home className="w-4 h-4 shrink-0" />
-          <span className="text-[9.5px] font-medium leading-normal pt-0.5 pb-1">Home</span>
+          <div className="transition-all duration-300 ease-out transform group-hover:scale-[1.35] group-hover:translate-y-[3px] flex items-center justify-center">
+            <Home className="w-5 h-5 shrink-0" />
+          </div>
+          <span className="text-[9.5px] font-medium leading-none text-center max-h-4 opacity-100 scale-100 mt-1.5 group-hover:max-h-0 group-hover:opacity-0 group-hover:scale-75 group-hover:mt-0 group-hover:pointer-events-none transition-all duration-300 ease-out origin-bottom">
+            Home
+          </span>
         </a>
 
         {/* User Profile Avatar Trigger */}
