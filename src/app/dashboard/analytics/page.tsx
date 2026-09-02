@@ -731,285 +731,294 @@ export default async function AnalyticsPage() {
   }
 
   return (
-    <div className="w-full space-y-10 px-6 py-6 transition-colors duration-200">
-      <div>
-        <h1 className="text-xl tracking-tight" style={{ color: "var(--text-primary)", fontWeight: 700 }}>
-          Analytics
-        </h1>
-        <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-          Last {TREND_DAYS} days of activity, and up to {LOOKBACK_DAYS} days of slower-moving signals, across every engagement on this account.
-        </p>
-      </div>
+    <div className="relative min-h-screen w-full transition-colors duration-200 overflow-hidden pb-10">
+      {/* --- HYPER-MICRO TIGHT DOT GRID (0.5px / 6px grid) --- */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0 bg-dot-grid"
+        aria-hidden="true"
+      />
 
-      {/* Top-line stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard label="Total runs" value={String(totalRuns)} sub={`${engagementRows.length} engagement${engagementRows.length !== 1 ? "s" : ""}`} />
-        <StatCard label="Success rate" value={successRate !== null ? `${successRate}%` : "—"} sub={resolvedRuns > 0 ? `${totalSuccess}/${resolvedRuns} resolved runs` : "No resolved runs yet"} />
-        <StatCard label="Model spend" value={fmtCents(totalCostCents)} sub={`last ${TREND_DAYS}d, all skills`} />
-        <StatCard
-          label="Revenue recovered"
-          value={revenueTotal > 0 ? fmtDollars(revenueTotal) : "—"}
-          sub={`${revenueRecoveredCount} rebooked, ${revenuePeriodLabel}`}
-        />
-        <StatCard label="Queue open" value={String(openPending.length + openBlockers.length)} sub={`${decidedActions.length + resolvedBlockers.length} resolved in ${LOOKBACK_DAYS}d`} />
-        <StatCard
-          label="Median resolution time"
-          value={overallMedianResolutionMs !== null ? fmtDuration(overallMedianResolutionMs) : "—"}
-          sub={`across ${decidedActions.length + resolvedBlockers.length} decisions, ${LOOKBACK_DAYS}d`}
-        />
-      </div>
-
-      {/* Daily activity trend */}
-      <Section title="Daily activity" caption={`Run volume and outcome mix, last ${TREND_DAYS} days`}>
-        <Card className="p-4">
-          {totalRuns === 0 ? <EmptyState>No skill runs in the last {TREND_DAYS} days.</EmptyState> : <DailyActivityChart days={dailyActivity} />}
-        </Card>
-      </Section>
-
-      {/* Cross-skill comparison */}
-      <Section title="Skill comparison" caption={`Last ${TREND_DAYS} days — volume share, success rate, and unit cost side by side`}>
-        <Card>
-          <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-x-4 px-4 py-2 text-[10.5px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600 border-b border-zinc-200 dark:border-zinc-900">
-            <span>Skill</span>
-            <span>Volume share</span>
-            <span>Success rate</span>
-            <span className="text-right">Avg cost</span>
-            <span className="text-right">Avg duration</span>
-          </div>
-          <div className="divide-y divide-zinc-200 dark:divide-zinc-900">
-            {SKILLS.map((skill) => {
-              const s = perSkill[skill];
-              const resolved = s.success + s.terminalFailure;
-              const rate = pct(s.success, resolved);
-              const volumeSharePct = pct(s.total, totalRuns) ?? 0;
-              const avgCost = s.total > 0 ? s.costCents / s.total : 0;
-              const avgDurationMs = s.durationsMs.length > 0 ? s.durationsMs.reduce((a, b) => a + b, 0) / s.durationsMs.length : null;
-              return (
-                <div key={skill} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-x-4 px-4 py-3 items-center">
-                  <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">{SKILL_INFO[skill].name}</span>
-                  <div className="space-y-1">
-                    <Bar value={s.total} max={maxSkillRuns} className="bg-ink" />
-                    <span className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600">{s.total} run{s.total !== 1 ? "s" : ""} ({volumeSharePct}%)</span>
-                  </div>
-                  <div className="space-y-1">
-                    {resolved > 0 ? (
-                      <>
-                        <Bar value={s.success} max={resolved} className={s.terminalFailure > 0 ? "bg-rose-500" : "bg-emerald-500"} />
-                        <span className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600">{rate}% of {resolved}</span>
-                      </>
-                    ) : (
-                      <span className="text-[10.5px] font-mono text-zinc-300 dark:text-zinc-700">no resolved runs</span>
-                    )}
-                  </div>
-                  <span className="text-xs font-mono text-zinc-500 dark:text-zinc-500 text-right">{s.total > 0 ? fmtCents(avgCost) : "—"}</span>
-                  <span className="text-xs font-mono text-zinc-500 dark:text-zinc-500 text-right">{avgDurationMs !== null ? fmtDuration(avgDurationMs) : "—"}</span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      </Section>
-
-      {/* Show-rate calibration */}
-      <Section
-        title="Show-rate prediction accuracy"
-        caption={`Predicted show probability vs. what actually happened, last ${LOOKBACK_DAYS} days — points near the dashed diagonal mean the score is well-calibrated`}
-      >
-        <Card className="p-4">
-          {calibrationBuckets.length < 2 ? (
-            <EmptyState>
-              Not enough calls with both a predicted score and a confirmed outcome yet to plot calibration. This fills in as brief outcomes get logged.
-            </EmptyState>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 items-center">
-              <div className="max-w-sm mx-auto md:mx-0">
-                <CalibrationChart buckets={calibrationBuckets} />
-              </div>
-              <div className="grid grid-cols-3 md:grid-cols-1 gap-3">
-                <StatCard label="Calls scored" value={String(usableScored.length)} />
-                <StatCard label="Actual show rate" value={overallActualShowRate !== null ? `${overallActualShowRate}%` : "—"} />
-                <StatCard label="Brier score" value={brierScore !== null ? brierScore.toFixed(3) : "—"} sub="0 = perfect, 0.25 ≈ a coin flip" />
-              </div>
-            </div>
-          )}
-        </Card>
-      </Section>
-
-      {/* Win-Back recovery */}
-      <Section title="Win-back recovery" caption={`Enrollments opened in the last ${LOOKBACK_DAYS} days, by current status`}>
-        <Card className="p-4 space-y-4">
-          {winBackTotal === 0 ? (
-            <EmptyState>No win-back enrollments in the last {LOOKBACK_DAYS} days.</EmptyState>
-          ) : (
-            <>
-              <SegmentedBar
-                total={winBackTotal}
-                segments={[
-                  { label: "Rebooked", value: winBackCounts.rebooked, className: "bg-emerald-500" },
-                  { label: "Active", value: winBackCounts.active, className: "bg-zinc-300 dark:bg-zinc-700" },
-                  { label: "Lost", value: winBackCounts.lost, className: "bg-rose-500" },
-                  { label: "Reply exited", value: winBackCounts.reply_exited, className: "bg-amber-500" },
-                  { label: "Corrected", value: winBackCounts.corrected, className: "bg-zinc-400 dark:bg-zinc-600" },
-                ]}
-              />
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
-                <StatCard label="Recovery rate" value={recoveryRateOfResolved !== null ? `${recoveryRateOfResolved}%` : "—"} sub={`of ${winBackResolved} resolved (excludes still-active)`} />
-                <StatCard label="Median time to rebook" value={medianRecoveryDays !== null ? `${Math.round(medianRecoveryDays)}d` : "—"} sub="enrollment to rebooking" />
-                <StatCard label="Revenue attributed" value={revenueTotal > 0 ? fmtDollars(revenueTotal) : "—"} sub={revenuePeriodLabel} />
-              </div>
-            </>
-          )}
-        </Card>
-      </Section>
-
-      {/* Resolution analytics */}
-      <Section title="How outcomes get resolved" caption={`Last ${LOOKBACK_DAYS} days`}>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <Card className="p-4 space-y-3">
-            <p className="text-xs font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Call outcome source</p>
-            {outcomeTotal === 0 ? (
-              <EmptyState>No call outcomes logged yet.</EmptyState>
-            ) : (
-              <SegmentedBar
-                total={outcomeTotal}
-                segments={[
-                  { label: "Dashboard", value: sourceCounts.dashboard, className: "bg-ink dark:bg-ink-hover" },
-                  { label: "Slack", value: sourceCounts.slack, className: "bg-zinc-400 dark:bg-zinc-600" },
-                  { label: "Recall bot", value: sourceCounts.recall_bot, className: "bg-emerald-500" },
-                  { label: "Auto-sweep", value: sourceCounts.auto_sweep, className: "bg-amber-500" },
-                  ...(sourceCounts.other > 0 ? [{ label: "Other", value: sourceCounts.other, className: "bg-zinc-300 dark:bg-zinc-800" }] : []),
-                ]}
-              />
-            )}
-          </Card>
-          <Card className="p-4 space-y-3">
-            <p className="text-xs font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Time to human decision</p>
-            {decidedActions.length === 0 && resolvedBlockers.length === 0 ? (
-              <EmptyState>Nothing has been decided or resolved yet in this window.</EmptyState>
-            ) : (
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-zinc-500 dark:text-zinc-500">Pending actions (approve/reject)</span>
-                  <span className="font-mono text-zinc-800 dark:text-zinc-200">
-                    {actionMedianMs !== null ? `${fmtDuration(actionMedianMs)} median` : "—"}
-                    {actionP90Ms !== null && <span className="text-zinc-400 dark:text-zinc-600">{` · ${fmtDuration(actionP90Ms)} p90`}</span>}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-zinc-500 dark:text-zinc-500">Human blockers</span>
-                  <span className="font-mono text-zinc-800 dark:text-zinc-200">
-                    {blockerMedianMs !== null ? `${fmtDuration(blockerMedianMs)} median` : "—"}
-                    {blockerP90Ms !== null && <span className="text-zinc-400 dark:text-zinc-600">{` · ${fmtDuration(blockerP90Ms)} p90`}</span>}
-                  </span>
-                </div>
-                {(actionTypeMedians.size > 0 || blockerTypeMedians.size > 0) && (
-                  <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-zinc-900 space-y-1.5">
-                    {[...actionTypeMedians.entries()].map(([type, arr]) => (
-                      <div key={`a-${type}`} className="flex items-center justify-between text-xs">
-                        <span className="text-zinc-400 dark:text-zinc-600 font-mono">{type}</span>
-                        <span className="font-mono text-zinc-600 dark:text-zinc-400">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
-                      </div>
-                    ))}
-                    {[...blockerTypeMedians.entries()].map(([type, arr]) => (
-                      <div key={`b-${type}`} className="flex items-center justify-between text-xs">
-                        <span className="text-zinc-400 dark:text-zinc-600 font-mono">{type}</span>
-                        <span className="font-mono text-zinc-600 dark:text-zinc-400">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
+      {/* --- ANALYTICS CONTENT --- */}
+      <div className="relative z-10 w-full space-y-10 px-6 py-6">
+        <div>
+          <h1 className="text-xl tracking-tight" style={{ color: "var(--text-primary)", fontWeight: 700 }}>
+            Analytics
+          </h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+            Last {TREND_DAYS} days of activity, and up to {LOOKBACK_DAYS} days of slower-moving signals, across every engagement on this account.
+          </p>
         </div>
-      </Section>
 
-      {/* Top objections */}
-      <Section title="Top objections detected" caption={`From Recall.ai call transcripts, last ${LOOKBACK_DAYS} days`}>
-        <Card>
-          {topObjections.length === 0 ? (
-            <EmptyState>No objections extracted from calls yet — this needs conversation intelligence sessions with a completed transcript.</EmptyState>
-          ) : (
-            <RankedList items={topObjections.map((o) => ({ label: o.display, count: o.count }))} unit="×" />
-          )}
-        </Card>
-      </Section>
+        {/* Top-line stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard label="Total runs" value={String(totalRuns)} sub={`${engagementRows.length} engagement${engagementRows.length !== 1 ? "s" : ""}`} />
+          <StatCard label="Success rate" value={successRate !== null ? `${successRate}%` : "—"} sub={resolvedRuns > 0 ? `${totalSuccess}/${resolvedRuns} resolved runs` : "No resolved runs yet"} />
+          <StatCard label="Model spend" value={fmtCents(totalCostCents)} sub={`last ${TREND_DAYS}d, all skills`} />
+          <StatCard
+            label="Revenue recovered"
+            value={revenueTotal > 0 ? fmtDollars(revenueTotal) : "—"}
+            sub={`${revenueRecoveredCount} rebooked, ${revenuePeriodLabel}`}
+          />
+          <StatCard label="Queue open" value={String(openPending.length + openBlockers.length)} sub={`${decidedActions.length + resolvedBlockers.length} resolved in ${LOOKBACK_DAYS}d`} />
+          <StatCard
+            label="Median resolution time"
+            value={overallMedianResolutionMs !== null ? fmtDuration(overallMedianResolutionMs) : "—"}
+            sub={`across ${decidedActions.length + resolvedBlockers.length} decisions, ${LOOKBACK_DAYS}d`}
+          />
+        </div>
 
-      {/* Recurring leaks */}
-      <Section title="Recurring funnel leaks" caption={`Issues flagged medium/high severity across ${auditRunCount} Funnel Audit run${auditRunCount !== 1 ? "s" : ""}, last ${LOOKBACK_DAYS} days`}>
-        <Card>
-          {topLeaks.length === 0 ? (
-            <EmptyState>No recurring medium/high-severity issues in this window.</EmptyState>
-          ) : (
-            <RankedList items={topLeaks} unit="×" />
-          )}
-        </Card>
-      </Section>
+        {/* Daily activity trend */}
+        <Section title="Daily activity" caption={`Run volume and outcome mix, last ${TREND_DAYS} days`}>
+          <Card className="p-4">
+            {totalRuns === 0 ? <EmptyState>No skill runs in the last {TREND_DAYS} days.</EmptyState> : <DailyActivityChart days={dailyActivity} />}
+          </Card>
+        </Section>
 
-      {/* Pile-On delivery */}
-      <Section title="Pre-call sequence delivery" caption={`Email 1 personalization path, last ${LOOKBACK_DAYS} days`}>
-        <Card className="p-4 space-y-3">
-          {pileOnTotal === 0 ? (
-            <EmptyState>No Pre-Call Sequence sends in this window.</EmptyState>
-          ) : (
-            <>
-              <SegmentedBar
-                total={pileOnTotal}
-                segments={[
-                  { label: "AI-personalized", value: pileOnHybrid, className: "bg-emerald-500" },
-                  { label: "Template fallback", value: pileOnFallback, className: "bg-zinc-400 dark:bg-zinc-600" },
-                ]}
-              />
-              <p className="text-xs text-zinc-400 dark:text-zinc-600">
-                {pileOnErrors} send error{pileOnErrors !== 1 ? "s" : ""} ({pct(pileOnErrors, pileOnTotal) ?? 0}%) of {pileOnTotal} total sends
-              </p>
-            </>
-          )}
-        </Card>
-      </Section>
-
-      {/* Cross-client benchmark */}
-      <Section title="Cross-client benchmark" caption="This account's latest audit numbers against anonymized peers in the same offer bucket (min. 20 contributing engagements)">
-        <Card className="divide-y divide-zinc-200 dark:divide-zinc-900">
-          {topBenchmarkComparisons.length === 0 ? (
-            <EmptyState>
-              No benchmark available yet — either this account&apos;s offer bucket (traffic temperature + price + vertical) hasn&apos;t cleared the 20-tenant
-              anonymity floor, or no audit has run yet.
-            </EmptyState>
-          ) : (
-            topBenchmarkComparisons.map((c, i) => (
-              <div key={i} className="px-4 py-3">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <div className="min-w-0">
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{c.metricName}</span>
-                    <span className="text-zinc-400 dark:text-zinc-600 ml-2 text-xs truncate">{c.buyer} · {c.bucketDisplay}</span>
-                  </div>
-                  <span className="font-mono text-xs text-zinc-500 dark:text-zinc-500 shrink-0">
-                    You: {c.current} · peer median: {c.p50} (n={c.sampleSize})
-                  </span>
-                </div>
-                <RangeBar current={c.current} p25={c.p25} p50={c.p50} p75={c.p75} p90={c.p90} />
-              </div>
-            ))
-          )}
-        </Card>
-      </Section>
-
-      {/* Booking sync distribution */}
-      <Section title="Booking sync">
-        <Card className="p-4">
-          {connectedCount === 0 ? (
-            <EmptyState>No booking platforms connected yet.</EmptyState>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatCard label="Direct webhook" value={String(webhookCount)} sub="instant sync" />
-              <StatCard label="Auto-polling" value={String(pollingCount)} sub="5-min checks" />
-              <StatCard label="Not configured" value={String(unsetCount)} sub="needs setup" />
-              <StatCard label="Setup needed" value={String(setupNeededCount)} sub="see Settings → Booking Sync" />
+        {/* Cross-skill comparison */}
+        <Section title="Skill comparison" caption={`Last ${TREND_DAYS} days — volume share, success rate, and unit cost side by side`}>
+          <Card>
+            <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-x-4 px-4 py-2 text-[10.5px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600 border-b border-zinc-200 dark:border-zinc-900">
+              <span>Skill</span>
+              <span>Volume share</span>
+              <span>Success rate</span>
+              <span className="text-right">Avg cost</span>
+              <span className="text-right">Avg duration</span>
             </div>
-          )}
-        </Card>
-      </Section>
+            <div className="divide-y divide-zinc-200 dark:divide-zinc-900">
+              {SKILLS.map((skill) => {
+                const s = perSkill[skill];
+                const resolved = s.success + s.terminalFailure;
+                const rate = pct(s.success, resolved);
+                const volumeSharePct = pct(s.total, totalRuns) ?? 0;
+                const avgCost = s.total > 0 ? s.costCents / s.total : 0;
+                const avgDurationMs = s.durationsMs.length > 0 ? s.durationsMs.reduce((a, b) => a + b, 0) / s.durationsMs.length : null;
+                return (
+                  <div key={skill} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-x-4 px-4 py-3 items-center">
+                    <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">{SKILL_INFO[skill].name}</span>
+                    <div className="space-y-1">
+                      <Bar value={s.total} max={maxSkillRuns} className="bg-ink" />
+                      <span className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600">{s.total} run{s.total !== 1 ? "s" : ""} ({volumeSharePct}%)</span>
+                    </div>
+                    <div className="space-y-1">
+                      {resolved > 0 ? (
+                        <>
+                          <Bar value={s.success} max={resolved} className={s.terminalFailure > 0 ? "bg-rose-500" : "bg-emerald-500"} />
+                          <span className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600">{rate}% of {resolved}</span>
+                        </>
+                      ) : (
+                        <span className="text-[10.5px] font-mono text-zinc-300 dark:text-zinc-700">no resolved runs</span>
+                      )}
+                    </div>
+                    <span className="text-xs font-mono text-zinc-500 dark:text-zinc-500 text-right">{s.total > 0 ? fmtCents(avgCost) : "—"}</span>
+                    <span className="text-xs font-mono text-zinc-500 dark:text-zinc-500 text-right">{avgDurationMs !== null ? fmtDuration(avgDurationMs) : "—"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </Section>
+
+        {/* Show-rate calibration */}
+        <Section
+          title="Show-rate prediction accuracy"
+          caption={`Predicted show probability vs. what actually happened, last ${LOOKBACK_DAYS} days — points near the dashed diagonal mean the score is well-calibrated`}
+        >
+          <Card className="p-4">
+            {calibrationBuckets.length < 2 ? (
+              <EmptyState>
+                Not enough calls with both a predicted score and a confirmed outcome yet to plot calibration. This fills in as brief outcomes get logged.
+              </EmptyState>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 items-center">
+                <div className="max-w-sm mx-auto md:mx-0">
+                  <CalibrationChart buckets={calibrationBuckets} />
+                </div>
+                <div className="grid grid-cols-3 md:grid-cols-1 gap-3">
+                  <StatCard label="Calls scored" value={String(usableScored.length)} />
+                  <StatCard label="Actual show rate" value={overallActualShowRate !== null ? `${overallActualShowRate}%` : "—"} />
+                  <StatCard label="Brier score" value={brierScore !== null ? brierScore.toFixed(3) : "—"} sub="0 = perfect, 0.25 ≈ a coin flip" />
+                </div>
+              </div>
+            )}
+          </Card>
+        </Section>
+
+        {/* Win-Back recovery */}
+        <Section title="Win-back recovery" caption={`Enrollments opened in the last ${LOOKBACK_DAYS} days, by current status`}>
+          <Card className="p-4 space-y-4">
+            {winBackTotal === 0 ? (
+              <EmptyState>No win-back enrollments in the last {LOOKBACK_DAYS} days.</EmptyState>
+            ) : (
+              <>
+                <SegmentedBar
+                  total={winBackTotal}
+                  segments={[
+                    { label: "Rebooked", value: winBackCounts.rebooked, className: "bg-emerald-500" },
+                    { label: "Active", value: winBackCounts.active, className: "bg-zinc-300 dark:bg-zinc-700" },
+                    { label: "Lost", value: winBackCounts.lost, className: "bg-rose-500" },
+                    { label: "Reply exited", value: winBackCounts.reply_exited, className: "bg-amber-500" },
+                    { label: "Corrected", value: winBackCounts.corrected, className: "bg-zinc-400 dark:bg-zinc-600" },
+                  ]}
+                />
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
+                  <StatCard label="Recovery rate" value={recoveryRateOfResolved !== null ? `${recoveryRateOfResolved}%` : "—"} sub={`of ${winBackResolved} resolved (excludes still-active)`} />
+                  <StatCard label="Median time to rebook" value={medianRecoveryDays !== null ? `${Math.round(medianRecoveryDays)}d` : "—"} sub="enrollment to rebooking" />
+                  <StatCard label="Revenue attributed" value={revenueTotal > 0 ? fmtDollars(revenueTotal) : "—"} sub={revenuePeriodLabel} />
+                </div>
+              </>
+            )}
+          </Card>
+        </Section>
+
+        {/* Resolution analytics */}
+        <Section title="How outcomes get resolved" caption={`Last ${LOOKBACK_DAYS} days`}>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <Card className="p-4 space-y-3">
+              <p className="text-xs font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Call outcome source</p>
+              {outcomeTotal === 0 ? (
+                <EmptyState>No call outcomes logged yet.</EmptyState>
+              ) : (
+                <SegmentedBar
+                  total={outcomeTotal}
+                  segments={[
+                    { label: "Dashboard", value: sourceCounts.dashboard, className: "bg-ink dark:bg-ink-hover" },
+                    { label: "Slack", value: sourceCounts.slack, className: "bg-zinc-400 dark:bg-zinc-600" },
+                    { label: "Recall bot", value: sourceCounts.recall_bot, className: "bg-emerald-500" },
+                    { label: "Auto-sweep", value: sourceCounts.auto_sweep, className: "bg-amber-500" },
+                    ...(sourceCounts.other > 0 ? [{ label: "Other", value: sourceCounts.other, className: "bg-zinc-300 dark:bg-zinc-800" }] : []),
+                  ]}
+                />
+              )}
+            </Card>
+            <Card className="p-4 space-y-3">
+              <p className="text-xs font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Time to human decision</p>
+              {decidedActions.length === 0 && resolvedBlockers.length === 0 ? (
+                <EmptyState>Nothing has been decided or resolved yet in this window.</EmptyState>
+              ) : (
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500 dark:text-zinc-500">Pending actions (approve/reject)</span>
+                    <span className="font-mono text-zinc-800 dark:text-zinc-200">
+                      {actionMedianMs !== null ? `${fmtDuration(actionMedianMs)} median` : "—"}
+                      {actionP90Ms !== null && <span className="text-zinc-400 dark:text-zinc-600">{` · ${fmtDuration(actionP90Ms)} p90`}</span>}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500 dark:text-zinc-500">Human blockers</span>
+                    <span className="font-mono text-zinc-800 dark:text-zinc-200">
+                      {blockerMedianMs !== null ? `${fmtDuration(blockerMedianMs)} median` : "—"}
+                      {blockerP90Ms !== null && <span className="text-zinc-400 dark:text-zinc-600">{` · ${fmtDuration(blockerP90Ms)} p90`}</span>}
+                    </span>
+                  </div>
+                  {(actionTypeMedians.size > 0 || blockerTypeMedians.size > 0) && (
+                    <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-zinc-900 space-y-1.5">
+                      {[...actionTypeMedians.entries()].map(([type, arr]) => (
+                        <div key={`a-${type}`} className="flex items-center justify-between text-xs">
+                          <span className="text-zinc-400 dark:text-zinc-600 font-mono">{type}</span>
+                          <span className="font-mono text-zinc-600 dark:text-zinc-400">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
+                        </div>
+                      ))}
+                      {[...blockerTypeMedians.entries()].map(([type, arr]) => (
+                        <div key={`b-${type}`} className="flex items-center justify-between text-xs">
+                          <span className="text-zinc-400 dark:text-zinc-600 font-mono">{type}</span>
+                          <span className="font-mono text-zinc-600 dark:text-zinc-400">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </Card>
+          </div>
+        </Section>
+
+        {/* Top objections */}
+        <Section title="Top objections detected" caption={`From Recall.ai call transcripts, last ${LOOKBACK_DAYS} days`}>
+          <Card>
+            {topObjections.length === 0 ? (
+              <EmptyState>No objections extracted from calls yet — this needs conversation intelligence sessions with a completed transcript.</EmptyState>
+            ) : (
+              <RankedList items={topObjections.map((o) => ({ label: o.display, count: o.count }))} unit="×" />
+            )}
+          </Card>
+        </Section>
+
+        {/* Recurring leaks */}
+        <Section title="Recurring funnel leaks" caption={`Issues flagged medium/high severity across ${auditRunCount} Funnel Audit run${auditRunCount !== 1 ? "s" : ""}, last ${LOOKBACK_DAYS} days`}>
+          <Card>
+            {topLeaks.length === 0 ? (
+              <EmptyState>No recurring medium/high-severity issues in this window.</EmptyState>
+            ) : (
+              <RankedList items={topLeaks} unit="×" />
+            )}
+          </Card>
+        </Section>
+
+        {/* Pile-On delivery */}
+        <Section title="Pre-call sequence delivery" caption={`Email 1 personalization path, last ${LOOKBACK_DAYS} days`}>
+          <Card className="p-4 space-y-3">
+            {pileOnTotal === 0 ? (
+              <EmptyState>No Pre-Call Sequence sends in this window.</EmptyState>
+            ) : (
+              <>
+                <SegmentedBar
+                  total={pileOnTotal}
+                  segments={[
+                    { label: "AI-personalized", value: pileOnHybrid, className: "bg-emerald-500" },
+                    { label: "Template fallback", value: pileOnFallback, className: "bg-zinc-400 dark:bg-zinc-600" },
+                  ]}
+                />
+                <p className="text-xs text-zinc-400 dark:text-zinc-600">
+                  {pileOnErrors} send error{pileOnErrors !== 1 ? "s" : ""} ({pct(pileOnErrors, pileOnTotal) ?? 0}%) of {pileOnTotal} total sends
+                </p>
+              </>
+            )}
+          </Card>
+        </Section>
+
+        {/* Cross-client benchmark */}
+        <Section title="Cross-client benchmark" caption="This account's latest audit numbers against anonymized peers in the same offer bucket (min. 20 contributing engagements)">
+          <Card className="divide-y divide-zinc-200 dark:divide-zinc-900">
+            {topBenchmarkComparisons.length === 0 ? (
+              <EmptyState>
+                No benchmark available yet — either this account&apos;s offer bucket (traffic temperature + price + vertical) hasn&apos;t cleared the 20-tenant
+                anonymity floor, or no audit has run yet.
+              </EmptyState>
+            ) : (
+              topBenchmarkComparisons.map((c, i) => (
+                <div key={i} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <div className="min-w-0">
+                      <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{c.metricName}</span>
+                      <span className="text-zinc-400 dark:text-zinc-600 ml-2 text-xs truncate">{c.buyer} · {c.bucketDisplay}</span>
+                    </div>
+                    <span className="font-mono text-xs text-zinc-500 dark:text-zinc-500 shrink-0">
+                      You: {c.current} · peer median: {c.p50} (n={c.sampleSize})
+                    </span>
+                  </div>
+                  <RangeBar current={c.current} p25={c.p25} p50={c.p50} p75={c.p75} p90={c.p90} />
+                </div>
+              ))
+            )}
+          </Card>
+        </Section>
+
+        {/* Booking sync distribution */}
+        <Section title="Booking sync">
+          <Card className="p-4">
+            {connectedCount === 0 ? (
+              <EmptyState>No booking platforms connected yet.</EmptyState>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <StatCard label="Direct webhook" value={String(webhookCount)} sub="instant sync" />
+                <StatCard label="Auto-polling" value={String(pollingCount)} sub="5-min checks" />
+                <StatCard label="Not configured" value={String(unsetCount)} sub="needs setup" />
+                <StatCard label="Setup needed" value={String(setupNeededCount)} sub="see Settings → Booking Sync" />
+              </div>
+            )}
+          </Card>
+        </Section>
+      </div>
     </div>
   );
 }

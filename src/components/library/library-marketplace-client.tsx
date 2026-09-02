@@ -30,7 +30,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
         id: "showtime",
         name: "Showtime",
         category: "Revenue Execution",
-        collection: "Top Installed Apps",
+        collection: "Top Installed Workers",
         executionMode: "Hybrid Webhook & Cron",
         status: "installed" as const,
       },
@@ -119,7 +119,7 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
               : "border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
           }`}
         >
-          Installed Apps ({packages.filter((p) => p.status === "installed").length})
+          Installed Workers ({packages.filter((p) => p.status === "installed").length})
         </button>
         <button
           type="button"
@@ -153,8 +153,8 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
               <div className="space-y-2 pt-1">
                 {[
                   { id: "all", label: "All Collections" },
-                  { id: "Top Installed Apps", label: "Top Installed Apps" },
-                  { id: "Newly Added Apps", label: "Newly Added Apps" },
+                  { id: "Top Installed Workers", label: "Top Installed Workers" },
+                  { id: "Newly Added Workers", label: "Newly Added Workers" },
                 ].map((col) => (
                   <label
                     key={col.id}
