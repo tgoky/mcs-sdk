@@ -14,7 +14,6 @@ import {
   Sliders,
   Plus,
   UserPlus,
-  Eye,
   Loader2,
   type LucideIcon,
 } from "lucide-react";
@@ -29,11 +28,6 @@ interface PrimaryRailProps {
   activeWorkspaceId: string;
 }
 
-// Fix: this used to be its own hardcoded RAIL_SECTIONS list — the mobile
-// menu had a second, independently-authored list that named these same
-// 5 destinations differently and added two more that don't exist here
-// ("Modules", "Credentials"). Now both read PRIMARY_NAV_SECTIONS from
-// lib/primary-nav.tsx so the tab set can't drift apart again.
 const RAIL_SECTIONS = PRIMARY_NAV_SECTIONS;
 
 const PRODUCT_BADGE_COLORS = {
@@ -51,41 +45,47 @@ const PRODUCT_BADGE_COLORS = {
   },
 } as const;
 
-/** Generalized from what was a Counter-Claim-only badge — every entry in
- * PRODUCT_SECTIONS below was rendering this exact same icon/color
- * regardless of which product it actually was, which only went unnoticed
- * because there was ever just one entry. Parametrized by icon + color so
- * a second product doesn't silently show the first product's badge. */
-function SquishyProductBadge({ active, icon: Icon, color }: { active: boolean; icon: LucideIcon; color: keyof typeof PRODUCT_BADGE_COLORS }) {
+function SquishyProductBadge({
+  active,
+  icon: Icon,
+  iconSrc,
+  color,
+}: {
+  active: boolean;
+  icon?: LucideIcon;
+  iconSrc?: string;
+  color: keyof typeof PRODUCT_BADGE_COLORS;
+}) {
   const c = PRODUCT_BADGE_COLORS[color];
   return (
     <div
-      className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 select-none ${
+      className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 select-none overflow-hidden ${
         active ? `${c.activeBg} shadow-xs scale-105` : c.inactiveBg
       }`}
     >
-      <Icon
-        className={`w-3.5 h-3.5 stroke-[2.3px] transition-colors ${active ? c.activeIcon : c.inactiveIcon}`}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {iconSrc ? (
+        <img src={iconSrc} alt="" className="w-3.5 h-3.5 object-contain" />
+      ) : Icon ? (
+        <Icon
+          className={`w-3.5 h-3.5 stroke-[2.3px] transition-colors ${active ? c.activeIcon : c.inactiveIcon}`}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
     </div>
   );
 }
 
-const PRODUCT_SECTIONS = [
-  // href fix: was "/counter-claim" — a top-level route outside
-  // /dashboard, which is the only place PrimaryRail actually mounts
-  // (confirmed: it's rendered exclusively from dashboard/layout.tsx).
-  // Clicking either of these with a non-dashboard-prefixed href would
-  // have dropped out of the shell entirely — no rail, no workspace
-  // switcher — the opposite of "products share one persistent rail."
-  // Neither product has a real page behind its route yet at this specific
-  // path (Counter Claim still doesn't), but the href itself needs to be
-  // correct now so building that page later doesn't also require
-  // rediscovering this.
-  // { href: "/dashboard/counter-claim", title: "Counter Claim", icon: LayoutGrid, color: "amber" as const },
-  { href: "/dashboard/reputation-manager", title: "Reputation Manager", icon: Eye, color: "indigo" as const },
+type ProductSection = {
+  href: string;
+  title: string;
+  icon?: LucideIcon;
+  iconSrc?: string;
+  color: keyof typeof PRODUCT_BADGE_COLORS;
+};
+
+const PRODUCT_SECTIONS: ProductSection[] = [
+  { href: "/dashboard/reputation-manager", title: "Reputation Manager", iconSrc: "/images/repm.png", color: "indigo" as const },
 ];
 
 function activeSectionHref(pathname: string): string {
@@ -103,15 +103,6 @@ function activeSectionHref(pathname: string): string {
 
 export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
-  // Switching workspaces is a plain <form method="POST"> to a route
-  // handler that sets an httpOnly cookie and redirects — deliberately no
-  // client-side fetch (see the route handler's own comment), which also
-  // means there's no async step for something like useFormStatus to
-  // observe: a string `action` triggers a real, synchronous browser
-  // navigation, not a React-tracked Action. This just marks which
-  // workspace was clicked before that navigation fires, so there's some
-  // visible response before the new page arrives instead of the click
-  // appearing to do nothing until it does.
   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
   const pathname = usePathname();
   const activeHref = activeSectionHref(pathname);
@@ -163,7 +154,12 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                     : "w-full flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 rounded-xl border border-transparent transition-all"
                 }
               >
-                <SquishyProductBadge active={isActive} icon={product.icon} color={product.color} />
+                <SquishyProductBadge
+                  active={isActive}
+                  icon={product.icon}
+                  iconSrc={product.iconSrc}
+                  color={product.color}
+                />
                 <span className="text-[9.5px] font-medium leading-normal text-center truncate max-w-full px-0.5 pt-0.5 pb-1">
                   {product.title}
                 </span>
@@ -184,7 +180,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
           <span className="text-[9.5px] font-medium leading-normal pt-0.5 pb-1">Home</span>
         </a>
 
-        {/* User Profile Avatar Trigger: Plum / Purple Accent */}
+        {/* User Profile Avatar Trigger */}
         <button
           type="button"
           onClick={() => setPopoverOpen((prev) => !prev)}
@@ -234,7 +230,6 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                                     : "cursor-pointer hover:bg-zinc-200/60 dark:hover:bg-zinc-900"
                               }`}
                             >
-                              {/* Workspace Avatar: Plum / Purple Accent */}
                               <div className="w-6 h-6 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
                                 {workspace.name.slice(0, 2).toUpperCase()}
                               </div>
@@ -287,7 +282,6 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900">
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      {/* User Header Avatar: Plum / Purple Accent */}
                       <div className="w-11 h-11 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-xs">
                         {initials}
                       </div>
@@ -340,7 +334,6 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                       </Link>
                     </div>
 
-                    {/* Upgrade button: Soft Plum / Purple Accent */}
                     <button
                       type="button"
                       className="w-full mt-1 flex items-center justify-center px-3 py-2 text-xs font-semibold bg-[#f0ebf8] hover:bg-[#e3dcf3] dark:bg-purple-950/50 dark:hover:bg-purple-900/60 text-[#2a233c] dark:text-purple-200 border border-[#d6caec] dark:border-purple-800/60 rounded-xl transition-colors cursor-pointer"
