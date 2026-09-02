@@ -15,13 +15,11 @@ export function PackageHeroCard({ overview }: { overview: PackageOverview }) {
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3.5 min-w-0">
-            <div className="relative shrink-0 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-400 group-hover:scale-105 transition-transform overflow-hidden">
-              <img
-                src="/images/showtime.png"
-                alt="Showtime"
-                className="w-8 h-8 object-contain"
-              />
-            </div>
+            <img
+              src="/images/showtime.png"
+              alt="Showtime"
+              className="w-14 h-14 shrink-0 object-contain rounded-2xl group-hover:scale-105 transition-transform"
+            />
             <div className="min-w-0 pt-0.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base font-bold text-zinc-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">

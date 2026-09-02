@@ -162,11 +162,12 @@ export default async function ShowtimePackagePage() {
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
           <div className="flex items-start gap-4 min-w-0">
             <div className="shrink-0 flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-teal-500 dark:bg-teal-400 shadow-[0_0_0_1px_rgba(45,212,191,0.25),0_8px_24px_-8px_rgba(45,212,191,0.5)] overflow-hidden">
-              <img
-                src="/images/showtime.png"
-                alt="Showtime"
-                className="size-8 sm:size-10 object-contain"
-              />
+         
+         <img
+  src="/images/showtime.png"
+  alt="Showtime"
+  className="shrink-0 h-16 w-16 sm:h-20 sm:w-20 object-contain rounded-2xl"
+/>
             </div>
             <div className="min-w-0 pt-0.5 space-y-1.5">
               <div className="flex items-center gap-3">
