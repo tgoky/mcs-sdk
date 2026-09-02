@@ -15,7 +15,8 @@ interface UtilityIconConfig {
   key: RightPanelKey;
   icon: LucideIcon;
   label: string;
-  colorClass: string;
+  // Spectrum: Gray Lavender -> Soft Mauve -> Dusty Rose -> Pale Pink
+  fillStyle: string;
 }
 
 const ICONS: UtilityIconConfig[] = [
@@ -23,37 +24,37 @@ const ICONS: UtilityIconConfig[] = [
     key: "calendar",
     icon: CalendarRange,
     label: "Calendar",
-    colorClass: "text-sky-500 fill-sky-500/25 dark:text-sky-400 dark:fill-sky-400/25",
+    fillStyle: "fill-[#c5bcd3] dark:fill-[#5c4f70] text-zinc-800 dark:text-zinc-100",
   },
   {
     key: "teammates",
     icon: MessageSquareQuote,
     label: "Teammates",
-    colorClass: "text-purple-500 fill-purple-500/25 dark:text-purple-400 dark:fill-purple-400/25",
+    fillStyle: "fill-[#cfb8e0] dark:fill-[#684b7d] text-zinc-800 dark:text-zinc-100",
   },
   {
     key: "notifications",
     icon: Bell,
     label: "Notifications",
-    colorClass: "text-amber-500 fill-amber-500/25 dark:text-amber-400 dark:fill-amber-400/25",
+    fillStyle: "fill-[#d8b5eb] dark:fill-[#734b82] text-zinc-800 dark:text-zinc-100",
   },
   {
     key: "autopilot",
     icon: Workflow,
     label: "Autopilot",
-    colorClass: "text-emerald-500 fill-emerald-500/25 dark:text-emerald-400 dark:fill-emerald-400/25",
+    fillStyle: "fill-[#e3b5dd] dark:fill-[#7c4978] text-zinc-800 dark:text-zinc-100",
   },
   {
     key: "upcoming",
     icon: ListChecks,
     label: "Upcoming",
-    colorClass: "text-teal-500 fill-teal-500/25 dark:text-teal-400 dark:fill-teal-400/25",
+    fillStyle: "fill-[#eab6d2] dark:fill-[#82466d] text-zinc-800 dark:text-zinc-100",
   },
   {
     key: "plan",
     icon: NotebookText,
     label: "Plan",
-    colorClass: "text-rose-500 fill-rose-500/25 dark:text-rose-400 dark:fill-rose-400/25",
+    fillStyle: "fill-[#f0b8c8] dark:fill-[#87465f] text-zinc-800 dark:text-zinc-100",
   },
 ];
 
@@ -68,7 +69,7 @@ export function RightUtilityRail({
 }) {
   return (
     <div className="flex items-center gap-1">
-      {ICONS.map(({ key, icon: Icon, label, colorClass }) => {
+      {ICONS.map(({ key, icon: Icon, label, fillStyle }) => {
         const active = activePanel === key;
         const isBell = key === "notifications";
         return (
@@ -90,7 +91,7 @@ export function RightUtilityRail({
                 active ? "scale-115" : "scale-100 group-hover:scale-115"
               }`}
             >
-              <Icon size={19} className={`transition-colors ${colorClass}`} />
+              <Icon size={19} className={`stroke-[1.8px] transition-all ${fillStyle}`} />
             </div>
 
             {isBell && unreadCount > 0 && (
