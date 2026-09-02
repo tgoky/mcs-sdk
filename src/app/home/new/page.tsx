@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, LayoutGrid, Gavel, Check } from "lucide-react";
+import { ChevronLeft, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
 
@@ -7,34 +7,33 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 function PackageIcon({ productId }: { productId: string }) {
-  if (productId === "counter-claim") {
+  if (productId === "reputation-manager") {
     return (
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-400 dark:bg-amber-500 shadow-xs select-none">
-        <Gavel size={18} className="text-zinc-950 stroke-[2.3px] fill-white" strokeLinecap="round" strokeLinejoin="round" />
-      </div>
+      <img
+        src="/images/repm.png"
+        alt="Reputation Manager"
+        className="h-10 w-10 shrink-0 object-contain select-none"
+      />
     );
   }
   return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-500 dark:bg-teal-400 shadow-xs select-none">
-      <LayoutGrid size={18} className="text-zinc-950 stroke-[2.3px] fill-white" strokeLinecap="round" strokeLinejoin="round" />
-    </div>
+    <img
+      src="/images/showtime.png"
+      alt="Showtime"
+      className="h-10 w-10 shrink-0 object-contain select-none"
+    />
   );
 }
 
-/**
- * Workspace creation — a plain HTML form posting to POST /api/workspaces.
- * No client component, no useState, no submit handler: the "which
- * packages are selected" visual state is pure CSS (peer-checked), and
- * validation errors round-trip through a redirect + ?error= query param
- * instead of client-side state. Nothing here can race or get stuck
- * mid-submit.
- */
 export default async function NewWorkspacePage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
+  const filteredProducts = WORKSPACE_PRODUCTS.filter(
+    (product) => product.id !== "counter-claim"
+  );
 
   return (
     <div className="relative min-h-screen bg-zinc-50/50 font-sans text-zinc-600 antialiased dark:bg-zinc-950 dark:text-zinc-400 transition-colors duration-200">
@@ -46,10 +45,10 @@ export default async function NewWorkspacePage({
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-2xl flex-col px-6 py-10 sm:px-10">
         <Link
           href="/home"
-          className="inline-flex w-fit items-center gap-1.5 font-mono text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors mb-8"
+          className="flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mb-8"
+          aria-label="Back to workspaces"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          Back to workspaces
+          <ChevronLeft className="w-4 h-4" />
         </Link>
 
         <div className="mb-8 space-y-1.5">
@@ -92,7 +91,7 @@ export default async function NewWorkspacePage({
             </label>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {WORKSPACE_PRODUCTS.map((product) => {
+              {filteredProducts.map((product) => {
                 const installable = product.status === "available";
                 return (
                   <label key={product.id} className={installable ? "cursor-pointer" : "cursor-not-allowed"}>
@@ -104,12 +103,6 @@ export default async function NewWorkspacePage({
                       className="peer sr-only"
                     />
                     <div
-                      // Tailwind's peer-checked: only matches a *direct*
-                      // sibling of the checkbox — this div qualifies, but
-                      // the dot/check further below don't, so their state
-                      // is driven from here via peer-checked:[&_selector]
-                      // compound arbitrary variants instead of their own
-                      // peer-checked: classes.
                       className={`relative flex h-full flex-col gap-3 rounded-2xl border p-4 transition-all select-none ${
                         installable
                           ? "border-zinc-200/90 bg-white/80 peer-checked:border-teal-500 peer-checked:bg-teal-50/60 peer-focus-visible:ring-2 peer-focus-visible:ring-teal-500/30 peer-checked:[&_.select-dot]:border-teal-500 peer-checked:[&_.select-dot]:bg-teal-500 peer-checked:[&_.select-check]:block dark:border-zinc-800/90 dark:bg-zinc-900/60 dark:peer-checked:border-teal-400 dark:peer-checked:bg-teal-950/30"
