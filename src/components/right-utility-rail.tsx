@@ -1,24 +1,60 @@
 "use client";
 
-// src/components/right-utility-rail.tsx
-//
-// The 6-icon row in the top-nav's right corner: Calendar, Teammates,
-// Notifications, Autopilot, Upcoming, Plan — in that order, matching how
-// they were spec'd this round. Each opens the same right-utility-panel.tsx
-// slot; clicking the already-open one closes it (that's the only way it
-// closes — no click-outside dismiss). The bell is sized up from the old
-// solo bell (17px) since it's now one of six, not the only icon here.
-
-import { CalendarDays, Users, Bell, Bot, ListChecks, Workflow } from "lucide-react";
+import {
+  CalendarRange,
+  MessageSquareQuote,
+  Bell,
+  Workflow,
+  ListChecks,
+  NotebookText,
+  type LucideIcon,
+} from "lucide-react";
 import type { RightPanelKey } from "@/components/right-utility-panel";
 
-const ICONS: { key: RightPanelKey; icon: typeof Bell; label: string }[] = [
-  { key: "calendar", icon: CalendarDays, label: "Calendar" },
-  { key: "teammates", icon: Users, label: "Teammates" },
-  { key: "notifications", icon: Bell, label: "Notifications" },
-  { key: "autopilot", icon: Bot, label: "Autopilot" },
-  { key: "upcoming", icon: ListChecks, label: "Upcoming" },
-  { key: "plan", icon: Workflow, label: "Plan" },
+interface UtilityIconConfig {
+  key: RightPanelKey;
+  icon: LucideIcon;
+  label: string;
+  colorClass: string;
+}
+
+const ICONS: UtilityIconConfig[] = [
+  {
+    key: "calendar",
+    icon: CalendarRange,
+    label: "Calendar",
+    colorClass: "text-sky-500 fill-sky-500/25 dark:text-sky-400 dark:fill-sky-400/25",
+  },
+  {
+    key: "teammates",
+    icon: MessageSquareQuote,
+    label: "Teammates",
+    colorClass: "text-purple-500 fill-purple-500/25 dark:text-purple-400 dark:fill-purple-400/25",
+  },
+  {
+    key: "notifications",
+    icon: Bell,
+    label: "Notifications",
+    colorClass: "text-amber-500 fill-amber-500/25 dark:text-amber-400 dark:fill-amber-400/25",
+  },
+  {
+    key: "autopilot",
+    icon: Workflow,
+    label: "Autopilot",
+    colorClass: "text-emerald-500 fill-emerald-500/25 dark:text-emerald-400 dark:fill-emerald-400/25",
+  },
+  {
+    key: "upcoming",
+    icon: ListChecks,
+    label: "Upcoming",
+    colorClass: "text-teal-500 fill-teal-500/25 dark:text-teal-400 dark:fill-teal-400/25",
+  },
+  {
+    key: "plan",
+    icon: NotebookText,
+    label: "Plan",
+    colorClass: "text-rose-500 fill-rose-500/25 dark:text-rose-400 dark:fill-rose-400/25",
+  },
 ];
 
 export function RightUtilityRail({
@@ -31,8 +67,8 @@ export function RightUtilityRail({
   unreadCount: number;
 }) {
   return (
-    <div className="flex items-center gap-0.5">
-      {ICONS.map(({ key, icon: Icon, label }) => {
+    <div className="flex items-center gap-1">
+      {ICONS.map(({ key, icon: Icon, label, colorClass }) => {
         const active = activePanel === key;
         const isBell = key === "notifications";
         return (
@@ -43,17 +79,22 @@ export function RightUtilityRail({
             aria-label={label}
             aria-pressed={active}
             title={label}
-            className={`relative flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
-              isBell ? "w-9 h-9" : "w-8 h-8"
-            } ${
+            className={`group relative flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-300 cursor-pointer ${
               active
-                ? "text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-800"
-                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                ? "bg-zinc-200/80 dark:bg-zinc-800/80 shadow-xs"
+                : "hover:bg-zinc-100 dark:hover:bg-zinc-900"
             }`}
           >
-            <Icon size={isBell ? 19 : 16} />
+            <div
+              className={`transition-all duration-300 ease-out transform flex items-center justify-center ${
+                active ? "scale-115" : "scale-100 group-hover:scale-115"
+              }`}
+            >
+              <Icon size={19} className={`transition-colors ${colorClass}`} />
+            </div>
+
             {isBell && unreadCount > 0 && (
-              <span className="absolute top-0.5 right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-[10px] font-bold text-white leading-none">
+              <span className="absolute top-0.5 right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-[10px] font-bold text-white leading-none z-10">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
