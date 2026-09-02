@@ -1,10 +1,27 @@
+"use client";
+
+import { useState, use } from "react";
 import Link from "next/link";
 import { ChevronLeft, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+function SegmentedBarLoader({ count = 8 }: { count?: number }) {
+  return (
+    <div className="flex items-center gap-1 justify-center py-1 select-none">
+      {Array.from({ length: count }).map((_, i) => (
+        <span
+          key={i}
+          className="h-3.5 w-1.5 rounded-[1px] bg-zinc-900 dark:bg-zinc-100 animate-pulse shadow-[0_0_6px_rgba(255,255,255,0.3)]"
+          style={{
+            animationDelay: `${i * 75}ms`,
+            animationDuration: "750ms",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 function PackageIcon({ productId }: { productId: string }) {
   if (productId === "reputation-manager") {
@@ -12,7 +29,7 @@ function PackageIcon({ productId }: { productId: string }) {
       <img
         src="/images/repm.png"
         alt="Reputation Manager"
-        className="h-10 w-10 shrink-0 object-contain select-none"
+        className="h-10 w-10 shrink-0 object-contain select-none transition-transform duration-200 group-hover:scale-105"
       />
     );
   }
@@ -20,20 +37,36 @@ function PackageIcon({ productId }: { productId: string }) {
     <img
       src="/images/showtime.png"
       alt="Showtime"
-      className="h-10 w-10 shrink-0 object-contain select-none"
+      className="h-10 w-10 shrink-0 object-contain select-none transition-transform duration-200 group-hover:scale-105"
     />
   );
 }
 
-export default async function NewWorkspacePage({
+export default function NewWorkspacePage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const { error } = await searchParams;
+  const resolvedParams = use(searchParams);
+  const error = resolvedParams?.error;
+
   const filteredProducts = WORKSPACE_PRODUCTS.filter(
     (product) => product.id !== "counter-claim"
   );
+
+  const [selectedPackages, setSelectedPackages] = useState<string[]>(() =>
+    filteredProducts
+      .filter((p) => p.status === "available")
+      .map((p) => p.id)
+  );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const togglePackage = (id: string, available: boolean) => {
+    if (!available) return;
+    setSelectedPackages((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+    );
+  };
 
   return (
     <div className="relative min-h-screen bg-zinc-50/50 font-sans text-zinc-600 antialiased dark:bg-zinc-950 dark:text-zinc-400 transition-colors duration-200">
@@ -42,10 +75,10 @@ export default async function NewWorkspacePage({
         aria-hidden="true"
       />
 
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-2xl flex-col px-6 py-10 sm:px-10">
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-2xl flex-col px-6 py-10 sm:px-10 animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out">
         <Link
           href="/home"
-          className="flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mb-8"
+          className="flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-all duration-200 hover:scale-105 active:scale-95 shrink-0 mb-8 shadow-2xs"
           aria-label="Back to workspaces"
         >
           <ChevronLeft className="w-4 h-4" />
@@ -64,12 +97,17 @@ export default async function NewWorkspacePage({
         </div>
 
         {error && (
-          <div className="mb-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">
+          <div className="mb-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300 animate-in fade-in duration-200">
             {error}
           </div>
         )}
 
-        <form action="/api/workspaces" method="POST" className="space-y-8">
+        <form
+          action="/api/workspaces"
+          method="POST"
+          onSubmit={() => setIsSubmitting(true)}
+          className={`space-y-8 transition-opacity duration-200 ${isSubmitting ? "opacity-75 pointer-events-none" : ""}`}
+        >
           <div className="space-y-2">
             <label htmlFor="name" className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
               Workspace name
@@ -79,9 +117,10 @@ export default async function NewWorkspacePage({
               name="name"
               type="text"
               required
+              disabled={isSubmitting}
               maxLength={80}
               placeholder="e.g. Acme Sales Team"
-              className="w-full rounded-xl border border-zinc-200 bg-white/80 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:placeholder:text-zinc-600 transition-colors"
+              className="w-full rounded-xl border border-zinc-200 bg-white/80 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:placeholder:text-zinc-600 transition-all duration-200"
             />
           </div>
 
@@ -93,40 +132,60 @@ export default async function NewWorkspacePage({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {filteredProducts.map((product) => {
                 const installable = product.status === "available";
+                const isSelected = selectedPackages.includes(product.id);
+
                 return (
-                  <label key={product.id} className={installable ? "cursor-pointer" : "cursor-not-allowed"}>
+                  <label
+                    key={product.id}
+                    onClick={() => togglePackage(product.id, installable)}
+                    className={`group relative flex flex-col justify-between rounded-2xl border p-4 transition-all duration-200 select-none ${
+                      installable
+                        ? "cursor-pointer active:scale-[0.98]"
+                        : "cursor-not-allowed opacity-60"
+                    } ${
+                      installable && isSelected
+                        ? "border-teal-500/80 bg-teal-50/50 dark:border-teal-400/80 dark:bg-teal-950/30 shadow-xs"
+                        : "border-zinc-200/90 bg-white/80 hover:border-zinc-300 dark:border-zinc-800/90 dark:bg-zinc-900/60 dark:hover:border-zinc-700"
+                    }`}
+                  >
                     <input
                       type="checkbox"
                       name="packageIds"
                       value={product.id}
-                      disabled={!installable}
-                      className="peer sr-only"
+                      checked={isSelected}
+                      disabled={!installable || isSubmitting}
+                      onChange={() => {}}
+                      className="sr-only"
                     />
-                    <div
-                      className={`relative flex h-full flex-col gap-3 rounded-2xl border p-4 transition-all select-none ${
-                        installable
-                          ? "border-zinc-200/90 bg-white/80 peer-checked:border-teal-500 peer-checked:bg-teal-50/60 peer-focus-visible:ring-2 peer-focus-visible:ring-teal-500/30 peer-checked:[&_.select-dot]:border-teal-500 peer-checked:[&_.select-dot]:bg-teal-500 peer-checked:[&_.select-check]:block dark:border-zinc-800/90 dark:bg-zinc-900/60 dark:peer-checked:border-teal-400 dark:peer-checked:bg-teal-950/30"
-                          : "border-zinc-200/60 bg-zinc-50/50 opacity-60 dark:border-zinc-800/40 dark:bg-zinc-950/20"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <PackageIcon productId={product.id} />
-                        {installable ? (
-                          <div className="select-dot flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-zinc-300 dark:border-zinc-700 transition-colors">
-                            <Check className="select-check hidden h-3 w-3 text-white" />
-                          </div>
-                        ) : (
-                          <span className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 font-mono text-[10px] font-bold text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500">
-                            Coming soon
-                          </span>
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{product.name}</h3>
-                        <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-                          {product.description}
-                        </p>
-                      </div>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <PackageIcon productId={product.id} />
+                      {installable ? (
+                        <div
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all duration-200 ${
+                            isSelected
+                              ? "border-teal-500 bg-teal-500 text-white scale-100 dark:border-teal-400 dark:bg-teal-400 dark:text-zinc-950"
+                              : "border-zinc-300 dark:border-zinc-700 bg-transparent scale-95"
+                          }`}
+                        >
+                          <Check
+                            className={`h-3 w-3 transition-transform duration-200 ${
+                              isSelected ? "scale-100" : "scale-0"
+                            }`}
+                          />
+                        </div>
+                      ) : (
+                        <span className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 font-mono text-[10px] font-bold text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500">
+                          Coming soon
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                        {product.name}
+                      </h3>
+                      <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                        {product.description}
+                      </p>
                     </div>
                   </label>
                 );
@@ -135,8 +194,19 @@ export default async function NewWorkspacePage({
           </div>
 
           <div className="flex items-center gap-3 pt-2">
-            <Button type="submit" className="cursor-pointer bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 font-bold text-xs shadow-xs">
-              Create workspace
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="relative cursor-pointer min-w-[140px] bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 font-bold text-xs shadow-xs transition-all duration-200 hover:scale-[1.01] active:scale-[0.98] disabled:opacity-80"
+            >
+              {isSubmitting ? (
+                <div className="flex items-center gap-2">
+                  <SegmentedBarLoader count={6} />
+                  <span>Creating...</span>
+                </div>
+              ) : (
+                "Create workspace"
+              )}
             </Button>
             <Link
               href="/home"

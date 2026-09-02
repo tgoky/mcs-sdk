@@ -34,9 +34,6 @@ const AVATAR_COLORS = [
   "bg-emerald-500 text-white",
 ];
 
-/* -------------------------------------------------------------------------- */
-/* RETRO BORDERLESS SEGMENTED LOADER                                          */
-/* -------------------------------------------------------------------------- */
 function SegmentedBarLoader({ count = 8 }: { count?: number }) {
   return (
     <div className="flex items-center gap-1 justify-center py-1 select-none">
@@ -69,9 +66,6 @@ function PackageBadge({ packageId }: { packageId: string }) {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* CARD VIEW COMPONENT                                                        */
-/* -------------------------------------------------------------------------- */
 function WorkspaceCard({
   workspace,
   packageIds,
@@ -113,7 +107,7 @@ function WorkspaceCard({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 z-20">
             <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400">
               Active
             </span>
@@ -168,20 +162,18 @@ function CreateWorkspaceCard() {
   return (
     <Link
       href="/home/new"
-      prefetch={false}
-      className="flex h-full flex-col items-center justify-center gap-2.5 rounded-md border border-dashed border-zinc-300 dark:border-zinc-800 bg-transparent p-6 text-center transition-all duration-200 hover:-translate-y-1 hover:border-zinc-400 hover:bg-zinc-100/50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/30 min-h-[220px]"
+      className="group flex h-full flex-col items-center justify-center gap-2.5 rounded-md border border-dashed border-zinc-300 dark:border-zinc-800 bg-transparent p-6 text-center transition-all duration-200 hover:-translate-y-1 hover:scale-[1.01] active:scale-[0.98] hover:border-zinc-400 hover:bg-zinc-100/50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/30 min-h-[220px]"
     >
-      <div className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500">
+      <div className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500 group-hover:border-amber-400 group-hover:text-amber-500 transition-colors">
         <Plus size={16} />
       </div>
-      <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Create workspace</span>
+      <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors">
+        Create workspace
+      </span>
     </Link>
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* LIST VIEW ROW                                                               */
-/* -------------------------------------------------------------------------- */
 function WorkspaceRow({
   workspace,
   packageIds,
@@ -275,7 +267,7 @@ function WorkspaceRow({
             >
               <button
                 type="submit"
-                className="inline-flex items-center gap-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                className="inline-flex items-center gap-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
               >
                 <span>Enter</span>
                 <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
@@ -288,9 +280,6 @@ function WorkspaceRow({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* MAIN CLIENT CONTAINER                                                      */
-/* -------------------------------------------------------------------------- */
 interface WorkspaceHomeClientProps {
   workspaceList: Workspace[];
   installedByWorkspace: Record<string, string[]>;
@@ -342,8 +331,7 @@ export function WorkspaceHomeClient({
           </div>
           <Link
             href="/home/new"
-            prefetch={false}
-            className="inline-flex items-center gap-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all shadow-2xs"
+            className="inline-flex items-center gap-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-2xs"
           >
             <Plus size={14} />
             <span>Add workspace</span>
