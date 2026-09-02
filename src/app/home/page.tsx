@@ -23,8 +23,21 @@ export default async function WorkspaceHomePage() {
   });
 
   return (
-    <div className="relative min-h-screen w-full bg-cover bg-center bg-no-repeat bg-fixed bg-[url('/images/forwhite.jpeg')] dark:bg-[url('/images/forblack.jpeg')] font-sans text-zinc-600 antialiased dark:text-zinc-400 transition-colors duration-200 flex items-center justify-center p-4 sm:p-6 lg:p-10">
-      <div className="relative z-10 w-full max-w-6xl rounded-xl border border-zinc-200/80 bg-white/95 dark:bg-zinc-950/95 p-6 sm:p-8 lg:p-10 shadow-2xl backdrop-blur-md dark:border-zinc-800/80 flex flex-col justify-between min-h-[80vh]">
+    <div className="relative min-h-screen w-full font-sans text-zinc-600 antialiased dark:text-zinc-400 transition-colors duration-200 flex items-center justify-center p-4 sm:p-6 lg:p-10 overflow-hidden">
+      {/* Blurred background image layer */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat bg-fixed bg-[url('/images/forwhite.jpeg')] dark:bg-[url('/images/forblack.jpeg')] blur-md scale-105"
+        aria-hidden="true"
+      />
+
+      {/* Subtle overlay to enhance contrast and focus on the main card */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0 bg-black/5 dark:bg-black/40"
+        aria-hidden="true"
+      />
+
+      {/* Primary Card */}
+      <div className="relative z-10 w-full max-w-6xl rounded-xl border border-zinc-200/80 bg-white/90 dark:bg-zinc-950/90 p-6 sm:p-8 lg:p-10 shadow-2xl backdrop-blur-xl dark:border-zinc-800/80 flex flex-col justify-between min-h-[80vh]">
         <div className="space-y-6">
           <header className="flex items-center justify-between gap-4 border-b border-zinc-200/80 pb-5 dark:border-zinc-800/80">
             <div className="flex items-center gap-3">
