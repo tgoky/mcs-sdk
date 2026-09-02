@@ -1,23 +1,38 @@
 import { BackLink } from "@/components/back-link";
-import { Gavel, Lock, FileWarning, Bell, ShieldCheck } from "lucide-react";
+import { Lock, Brain, Database, Bell, ShieldCheck, MessageSquare, Radar } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 const WHATS_COMING = [
   {
-    icon: FileWarning,
-    title: "Evidence packs",
-    body: "Generated automatically as a chargeback comes in, pulling together whatever this workspace already has on that transaction.",
+    icon: Brain,
+    title: "AI engine panel",
+    body: "46-prompt panel wired to ChatGPT, Claude, Perplexity, Grok, and Gemini with your own API keys.",
+  },
+  {
+    icon: MessageSquare,
+    title: "Trustpilot & Reddit ingestion",
+    body: "Read-only review ingestion plus a comment-only 'Move C' ramp tracker for Reddit mentions.",
   },
   {
     icon: Bell,
-    title: "Dispute alerts",
-    body: "A notification the moment a dispute is filed, instead of finding out from your payment processor's dashboard days later.",
+    title: "Scheduled runs & alerts",
+    body: "7am/7pm recurring runs with ntfy.sh push notifications and Twilio SMS fallback.",
   },
   {
     icon: ShieldCheck,
-    title: "One place, not five tabs",
-    body: "Runs alongside Showtime in the same workspace — same clients, same login, no separate account to manage.",
+    title: "Crisis playbook",
+    body: "Threshold-80 trigger evaluator with 6 force-trigger classes. Buyer-only authority to declare and publish.",
+  },
+  {
+    icon: Database,
+    title: "Schema.org & Wikidata",
+    body: "Generates Schema.org JSON-LD plus a Wikidata disambiguation submission ('Move A').",
+  },
+  {
+    icon: Radar,
+    title: "Identity graph foundation",
+    body: "Counterclaim intake interviews the buyer, writes identity-graph.md, and clones the Python reputation-system-template.",
   },
 ];
 
@@ -27,20 +42,25 @@ export default function CounterClaimPackagePage() {
       <BackLink href="/dashboard/library" label="Library" />
 
       <div className="flex items-start gap-4">
-        <div className="shrink-0 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-400/90 dark:bg-amber-500/90 opacity-80">
-          <Gavel size={26} className="text-zinc-950 stroke-[2.3px]" />
+        <div className="shrink-0 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-900 dark:bg-zinc-800/80 border border-zinc-800">
+          <img
+            src="/images/repm.png"
+            alt="Reputation Manager"
+            className="w-10 h-10 object-contain"
+          />
         </div>
         <div className="min-w-0 pt-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold text-zinc-200">Counter Claim</h1>
+            <h1 className="text-xl font-bold text-zinc-200">Reputation Manager</h1>
             <span className="inline-flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
               Coming soon
             </span>
           </div>
           <p className="text-sm text-zinc-500 mt-1 leading-relaxed max-w-xl">
-            Automated dispute responses for chargebacks — evidence packs and alerts generated as
-            disputes come in.
+            9-skill Reputation workers built for Cowork/explicit-invocation 
+            Clones the Python reputation-system-template into your own repo.
           </p>
+          <p className="text-[11px] font-mono text-zinc-600 mt-1">By Mudd Labs · v1.0.2</p>
         </div>
       </div>
 
