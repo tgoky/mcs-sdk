@@ -1974,6 +1974,133 @@ export const repEngineFindings = pgTable(
   })
 );
 
+// ── Reputation Manager: Trustpilot Reviews ──────────────────────────────────
+// rep-trustpilot-watch's own output. Trustpilot's official API requires a
+// Trustpilot for Business account with API access, reportedly Enterprise-
+// tier only (~$6k-$30k+/year) — confirmed by reading their own docs, not
+// assumed. Sourced instead via Outscraper's own /trustpilot-reviews
+// endpoint — one company, one maintained API, verified directly against
+// their OpenAPI spec, not a marketplace of unverified third-party actors.
+//
+// Dedup mirrors webhookEvents' own pattern exactly: a unique constraint on
+// (engagementId, externalReviewId) that a bulk onConflictDoNothing insert
+// collides against, so re-polling a domain that already has 200 stored
+// reviews only ever writes the genuinely new ones — same "no separate
+// SELECT-then-filter step needed" reasoning as the booking webhook path.
+export const repTrustpilotReviews = pgTable(
+  "rep_trustpilot_reviews",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+
+    // Trustpilot's own review identifier (Outscraper's review_id field,
+    // confirmed from their documented example response).
+    externalReviewId: text("external_review_id").notNull(),
+    reviewerName: text("reviewer_name"),
+    rating: integer("rating").notNull(), // 1-5
+    reviewText: text("review_text").notNull(),
+    publishedAt: timestamp("published_at"),
+
+    // Same scoring shape as repEngineFindings — one batch-scoring pass
+    // over a run's new reviews, not a call per review.
+    sentiment: text("sentiment").$type<RepFindingSentiment>().notNull(),
+    flagged: boolean("flagged").notNull().default(false),
+    flagReason: text("flag_reason"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    repTrustpilotReviewUnique: uniqueIndex("rep_trustpilot_review_unique").on(table.engagementId, table.externalReviewId),
+    repTrustpilotReviewsEngagementIdx: index("rep_trustpilot_reviews_engagement_idx").on(table.engagementId, table.createdAt),
+  })
+);
+
+// ── Reputation Manager: Reddit Mentions ─────────────────────────────────────
+// rep-reddit-watch's own output. Reddit's official commercial API tier is
+// reportedly ~$12,000/month minimum and requires written approval for
+// exactly this use case (their own terms name "monitoring brand mentions"
+// and "building a SaaS product" as needing it) — confirmed by reading
+// their current developer terms, not assumed. Sourced instead via
+// redditapis.com's search endpoints — verified directly against their own
+// docs (both post search and comment search, since most mentions that
+// matter happen in comment replies, not post titles).
+//
+// Same dedup shape as rep_trustpilot_reviews: unique constraint on
+// (engagementId, externalMentionId) — Reddit's own item id, which
+// redditapis.com's own FAQ confirms exists specifically for this
+// "dedupe on the item id" purpose.
+export const repRedditMentions = pgTable(
+  "rep_reddit_mentions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+
+    externalMentionId: text("external_mention_id").notNull(), // Reddit's own item id
+    subreddit: text("subreddit").notNull(),
+    author: text("author"),
+    permalink: text("permalink").notNull(),
+    mentionText: text("mention_text").notNull(),
+    publishedAt: timestamp("published_at"),
+
+    sentiment: text("sentiment").$type<RepFindingSentiment>().notNull(),
+    flagged: boolean("flagged").notNull().default(false),
+    flagReason: text("flag_reason"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    repRedditMentionUnique: uniqueIndex("rep_reddit_mention_unique").on(table.engagementId, table.externalMentionId),
+    repRedditMentionsEngagementIdx: index("rep_reddit_mentions_engagement_idx").on(table.engagementId, table.createdAt),
+  })
+);
+
+// ── Reputation Manager: Incidents ───────────────────────────────────────────
+// rep-crisis-response's own output — the last of the original 5-skill
+// roadmap. Reads across everything the other three watch skills flagged
+// since this skill's own last successful run for the engagement (derived
+// from skillRuns, no separate tracking column needed — see
+// crisis-response-service.ts), assesses cumulative severity with one LLM
+// call, and declares an incident when that score crosses
+// REP_THRESHOLD_DEFAULTS.crisisScoreFloor (rep-thresholds.ts — built
+// early on, sitting unused until this skill).
+//
+// contributingFindings is a snapshot, not a set of foreign keys — the
+// findings tables have no delete path today, but taking a point-in-time
+// copy of what actually triggered this incident is still the more
+// correct choice: an incident's record of "why this got declared" should
+// never change even if something about the underlying finding rows ever
+// does.
+//
+// Never a path to auto-publish anything. This table only ever records
+// that a human was notified — see runRepCrisisResponse's own comment for
+// why the notification goes to the workspace operator, not literally to
+// soleAuthorityName as a delivery address.
+export const repIncidents = pgTable("rep_incidents", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+
+  severityScore: integer("severity_score").notNull(), // 0-100, same scale as REP_THRESHOLD_DEFAULTS.crisisScoreFloor
+  summary: text("summary").notNull(), // the LLM's synthesis of what's actually happening, across every contributing finding
+  contributingFindings: jsonb("contributing_findings").$type<
+    { source: "engine_panel" | "trustpilot" | "reddit"; excerpt: string; flagReason: string | null }[]
+  >().notNull(),
+
+  // "open" (declared, operator notified) | "acknowledged" (operator has
+  // seen it — set by a future dashboard action, nothing writes this yet)
+  // | "resolved" (set by a future dashboard action)
+  status: text("status").notNull().default("open"),
+
+  declaredAt: timestamp("declared_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: text("resolved_by"),
+});
+
 // ── Chat threads (2026-08-30) ───────────────────────────────────────────
 // Persistence for Teammates chat (src/app/api/teammates/chat/route.ts),
 // which previously had none — the client resent full message history each
