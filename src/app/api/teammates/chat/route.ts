@@ -11,6 +11,7 @@ import { createMinimalEngagement } from "@/lib/create-minimal-engagement";
 import { checkCredentialAvailability, linkReusableCredential, getComposioConnectLink, hasBookingCredential } from "@/lib/chat-credentials";
 import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries } from "@/lib/chat-status-queries";
 import { enrollProspectInWinBack } from "@/lib/chat-winback";
+import { triggerVoiceExtractionForEngagement, triggerScriptPackForEngagement, triggerAdCreativeBriefsForEngagement, triggerPageAuditForEngagement } from "@/lib/chat-skill-trigger";
 import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS } from "@/lib/copy";
 
 export const runtime = "nodejs";
@@ -177,12 +178,57 @@ const TOOLS = [
       required: ["engagementId", "prospectEmail"],
     },
   },
+  {
+    name: "extract_brand_voice",
+    description:
+      "Runs a real brand voice extraction from a client's website in the background — crawls the site, distills a voice profile via AI analysis, and saves it to the client (the same result Show Rate Setup's onboarding produces, standalone). This takes a while (real web crawling), so it dispatches and returns immediately with a runId — it does not complete within this reply. Tell the user it's running and to check back or ask for a status update; use get_run_history to check progress later.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to extract this for." },
+        domain: { type: "string", description: "The client's website URL or domain." },
+      },
+      required: ["engagementId", "domain"],
+    },
+  },
+  {
+    name: "generate_video_scripts",
+    description:
+      "Generates a hero confirmation-page video script plus breakout scripts for each top call question, in the background — the same script pack Show Rate Setup generates, standalone. Uses whatever brand voice, offer details, and call questions are already on the client — none of that needs asking for first, it'll just produce a more generic result if some of it isn't set. This takes a while, dispatches and returns immediately with a runId. Tell the user it's running.",
+    input_schema: {
+      type: "object",
+      properties: { engagementId: { type: "string", description: "The client to generate scripts for." } },
+      required: ["engagementId"],
+    },
+  },
+  {
+    name: "generate_ad_briefs",
+    description:
+      "Generates ad creative briefs across all 4 content pillars, in the background — the same output Show Rate Setup generates, standalone. Same graceful degradation as generate_video_scripts — uses whatever's already on the client. Dispatches and returns immediately with a runId. Tell the user it's running.",
+    input_schema: {
+      type: "object",
+      properties: { engagementId: { type: "string", description: "The client to generate briefs for." } },
+      required: ["engagementId"],
+    },
+  },
+  {
+    name: "audit_confirmation_page",
+    description:
+      "Audits an existing confirmation page URL against what a well-built one should include (hero video, what-to-expect section, breakout content, social proof, reschedule path) and notes concrete gaps, in the background — the same audit Show Rate Setup runs. Does NOT build or deploy a new page — say so plainly if asked for that, it's a bigger, separate action not wired up here. Dispatches and returns immediately with a runId.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client whose page this is." },
+        pageUrl: { type: "string", description: "The URL of the existing confirmation page to audit." },
+      },
+      required: ["engagementId", "pageUrl"],
+    },
+  },
 ];
-
 function buildSystemPrompt(clients: { engagementId: string; buyer: string }[]): string {
   const clientList = clients.length > 0 ? clients.map((c) => `- ${c.buyer} (engagementId: ${c.engagementId})`).join("\n") : "(no clients yet)";
   return [
-    "You are Teammates, an assistant inside a sales-automation dashboard. You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new client by name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries — for any client, without triggering anything.",
+    "You are Teammates, an assistant inside a sales-automation dashboard. You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new client by name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries — for any client, without triggering anything.",
     "",
     "Clients:",
     clientList,
@@ -196,7 +242,8 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string }[]): 
     "- For status questions — what's on today, who cancelled, how did a run go, who's in an active recovery — use get_todays_calls / get_recent_cancellations / get_run_history / get_active_recoveries. These never change anything, so use them freely whenever the user is asking about current state rather than asking you to do something.",
     "- After a tool call, tell the user plainly what happened, including any error a tool returned (e.g. the skill being disabled for that client).",
     "- For enroll_in_winback: needs a working email-platform credential on the client already, plus the platform's recovery list/workflow configured — if the tool reports something's missing, tell the user plainly what and point them to the client's page, don't retry blindly.",
-    "- You can only trigger Call Brief, Leak Map, create a client, set up a booking or email credential, enroll someone in win-back, and answer status questions right now. If asked to run Pin-Down's onboarding or any of its individual pieces (brand voice, ad briefs, video scripts, confirmation page), say plainly that it's not wired up yet rather than pretending to do it. That's a real, separate capability, not a smaller version of what you can already do — don't approximate it with the tools you have.",
+    "- extract_brand_voice, generate_video_scripts, generate_ad_briefs, and audit_confirmation_page all run in the background and take a while — always tell the user it's running and won't finish instantly, and offer to check status with get_run_history if they ask later. None of these run the full Show Rate Setup wizard end to end (no booking webhook wiring, no new page deployment) — each does exactly the one piece it's named for, using whatever the client already has on file (brand voice, offer details, call questions) and degrading to a more generic result if some of that isn't set yet, never failing outright for missing optional context. If asked to build or deploy a new confirmation page (not audit an existing one), say plainly that's not wired up — audit_confirmation_page only reviews a page that already exists.",
+    "- You can only trigger Call Brief, Leak Map, create a client, set up a booking or email credential, enroll someone in win-back, run Show Rate Setup's four individual pieces above, and answer status questions right now. If asked for its full onboarding wizard end to end, or anything Pre-Call Sequence/Pile-On related (that's webhook-only, see the client's own page), say plainly that it's not wired up rather than pretending to do it.",
     "- Keep replies short and direct.",
   ].join("\n");
 }
@@ -395,6 +442,64 @@ export async function POST(request: Request) {
           }
         } else {
           message2 = "Missing engagementId or prospectEmail.";
+        }
+      } else if (block.name === "extract_brand_voice") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        const domain = typeof block.input.domain === "string" ? block.input.domain : "";
+        if (engagementId && domain) {
+          const result = await triggerVoiceExtractionForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, domain);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok) {
+            const buyer = clients.find((c) => c.engagementId === engagementId)?.buyer;
+            links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+            links.push({ label: buyer ? `${buyer}'s page` : "Client page", href: `/dashboard/engagements/${engagementId}` });
+          }
+        } else {
+          message2 = "Missing engagementId or domain.";
+        }
+      } else if (block.name === "generate_video_scripts") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (engagementId) {
+          const result = await triggerScriptPackForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok) {
+            const buyer = clients.find((c) => c.engagementId === engagementId)?.buyer;
+            links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+            links.push({ label: buyer ? `${buyer}'s page` : "Client page", href: `/dashboard/engagements/${engagementId}` });
+          }
+        } else {
+          message2 = "Missing engagementId.";
+        }
+      } else if (block.name === "generate_ad_briefs") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (engagementId) {
+          const result = await triggerAdCreativeBriefsForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok) {
+            const buyer = clients.find((c) => c.engagementId === engagementId)?.buyer;
+            links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+            links.push({ label: buyer ? `${buyer}'s page` : "Client page", href: `/dashboard/engagements/${engagementId}` });
+          }
+        } else {
+          message2 = "Missing engagementId.";
+        }
+      } else if (block.name === "audit_confirmation_page") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        const pageUrl = typeof block.input.pageUrl === "string" ? block.input.pageUrl : "";
+        if (engagementId && pageUrl) {
+          const result = await triggerPageAuditForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, pageUrl);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok) {
+            const buyer = clients.find((c) => c.engagementId === engagementId)?.buyer;
+            links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+            links.push({ label: buyer ? `${buyer}'s page` : "Client page", href: `/dashboard/engagements/${engagementId}` });
+          }
+        } else {
+          message2 = "Missing engagementId or pageUrl.";
         }
       } else {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";

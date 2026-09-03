@@ -26,9 +26,15 @@
 // with a real third product being the trigger to generalize further, not
 // a guess made now from a sample size of one.
 
-export type RepSkillId = "rep-onboarding" | "rep-engine-panel";
+export type RepSkillId = "rep-onboarding" | "rep-engine-panel" | "rep-trustpilot-watch" | "rep-reddit-watch" | "rep-crisis-response";
 
-export const REP_SKILL_IDS: RepSkillId[] = ["rep-onboarding", "rep-engine-panel"];
+export const REP_SKILL_IDS: RepSkillId[] = [
+  "rep-onboarding",
+  "rep-engine-panel",
+  "rep-trustpilot-watch",
+  "rep-reddit-watch",
+  "rep-crisis-response",
+];
 
 export interface RepSkillManifestEntry {
   id: RepSkillId;
@@ -72,6 +78,30 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
     // beyond the identity graph. A hinges panel is worth adding once
     // there's something to tune (which engines, which prompts, cadence)
     // rather than building a settings screen with nothing on it.
+    hasHingesPanel: false,
+  },
+  "rep-trustpilot-watch": {
+    id: "rep-trustpilot-watch",
+    name: "Trustpilot Watch",
+    description:
+      "Checks for new Trustpilot reviews of this client daily and flags anything that raises a serious issue.",
+    runOnSetup: false, // same reasoning as rep-engine-panel — starts once the identity graph has a domain, no separate turn-on
+    hasHingesPanel: false,
+  },
+  "rep-reddit-watch": {
+    id: "rep-reddit-watch",
+    name: "Reddit Watch",
+    description:
+      "Searches Reddit for new mentions of this client daily and flags anything that raises a serious issue.",
+    runOnSetup: false,
+    hasHingesPanel: false,
+  },
+  "rep-crisis-response": {
+    id: "rep-crisis-response",
+    name: "Crisis Response",
+    description:
+      "Reads everything the other Reputation Manager skills flagged and pages the operator the moment the cumulative severity crosses this client's threshold. Never publishes anything on its own.",
+    runOnSetup: false,
     hasHingesPanel: false,
   },
 };

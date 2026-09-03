@@ -3,7 +3,7 @@
 // Single fan-out point for "something happened that the buyer needs to
 // know about, right now, without them having to go check the dashboard."
 //
-// Three channels, in order of guarantee:
+// Four channels, in order of guarantee:
 //   1. In-app  — written by default. This is the reliability floor: every
 //      tenant has this channel by definition, no setup required. The
 //      dashboard notification bell AND the Queue panel (src/lib/queue.ts)
@@ -32,6 +32,29 @@
 //      so this goes over Resend's plain HTTP API rather than adding a new
 //      dependency for one fetch call. If RESEND_API_KEY isn't set, this
 //      channel silently no-ops — it is not a requirement to ship this file.
+//   4. Chat (2026-09-03) — Teammates chat is capable of a lot now (see
+//      chat-skill-registry.ts, chat-credentials.ts, chat-winback.ts) but
+//      still only ever *responds*. This is the piece that makes it an
+//      assistant rather than a request/response tool: the system telling
+//      *you*, in the same thread you'd naturally be checking on that
+//      client, rather than waiting to be asked. Opt-in via `workspaceId`
+//      — chatThreads is workspace-scoped and most existing notifyUser
+//      call sites don't currently look it up, so this channel silently
+//      no-ops without it rather than forcing every call site to change
+//      today, same graceful-degradation shape email already has around
+//      RESEND_API_KEY. Severity-gated to warning/critical only — the
+//      cognitive-overload problem this app already solved once for the
+//      dashboard (single-elevated-surface rule, alert-volume digest
+//      batching) doesn't get reopened in a new surface just because chat
+//      is a different UI. engagementId routes to that client's own most
+//      recent thread (or starts one); a null engagementId (a workspace-
+//      wide event with no single client to attach to, like weekly_metrics)
+//      goes to the workspace's standing "Ops" thread instead — see
+//      findOrCreateThreadForEvent in chat-threads.ts. No interactive
+//      buttons in chat yet (Slack's approve/reject via SlackAction below
+//      is the real precedent for how to wire that once it's built) — this
+//      round is the message and the same runId/engagementId deep link
+//      every other channel already gets, not the full interactive parity.
 //
 // Every channel is isolated in its own try/catch. A Slack outage or a
 // missing/invalid Resend key must NEVER prevent the in-app row (the one
@@ -40,6 +63,7 @@ import { db } from "@/lib/db";
 import { notifications, users } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
+import { findOrCreateThreadForEvent, appendMessage } from "@/lib/chat-threads";
 
 export type NotificationType =
   | "run_failed"
@@ -50,7 +74,18 @@ export type NotificationType =
   | "weekly_metrics"
   | "conversation_intelligence_objection_found"
   | "report_delivery_failed"
-  | "sequence_message_failed";
+  | "sequence_message_failed"
+  // Reputation Manager's rep-crisis-response — the first notification
+  // type from outside Showtime's own 5 skills. None of the existing
+  // types fit: this isn't a technical failure or a run problem, it's a
+  // business-critical "a human needs to look at this now" alert, and
+  // reusing e.g. credential_check_error the way human-blockers.ts does
+  // elsewhere for a genuinely close-enough fit would be actively
+  // misleading here — a crisis alert shouldn't read like a credential
+  // problem. Confirmed both real consumers of this union (inbox/page.tsx
+  // and human-blockers.ts) use array membership checks, not an
+  // exhaustive switch, so this is safe to add.
+  | "reputation_crisis_declared";
 
 export type NotificationSeverity = "info" | "warning" | "critical";
 
@@ -97,6 +132,13 @@ export interface NotifyOptions {
    * passes this today, for Approve/Reject.
    */
   slackActions?: SlackAction[];
+  /**
+   * Enables the chat channel (see file header) — omit and it silently
+   * no-ops, same as every other optional channel here. Needed because
+   * chatThreads is workspace-scoped and NotifyOptions otherwise has no
+   * workspace context.
+   */
+  workspaceId?: string;
 }
 
 export async function notifyUser(opts: NotifyOptions): Promise<void> {
@@ -192,6 +234,38 @@ export async function notifyUser(opts: NotifyOptions): Promise<void> {
       }
     } catch (e: any) {
       console.error("[notify] email channel error:", e.message);
+    }
+  }
+
+  // ── 4. Chat (best-effort, only if workspaceId provided AND severity
+  // clears the bar — see file header for why info-level never posts) ──
+  if (opts.workspaceId && (opts.severity === "warning" || opts.severity === "critical")) {
+    try {
+      const threadId = await findOrCreateThreadForEvent({
+        workspaceId: opts.workspaceId,
+        whopUserId: opts.whopUserId,
+        engagementId: opts.engagementId ?? null,
+        fallbackTitle: opts.title,
+      });
+
+      // Same runId-first, engagementId-otherwise deep-link convention the
+      // notification bell already uses — not a new rule invented here.
+      const link = opts.runId
+        ? { label: "View run", href: `/dashboard/runs/${opts.runId}` }
+        : opts.engagementId
+          ? { label: "View client", href: `/dashboard/engagements/${opts.engagementId}` }
+          : null;
+
+      await appendMessage({
+        threadId,
+        role: "assistant",
+        kind: "text",
+        rawContent: opts.body,
+        displayText: opts.body,
+        links: link ? [link] : null,
+      });
+    } catch (e) {
+      console.error("[notify] chat channel error:", e);
     }
   }
 }

@@ -13,6 +13,16 @@ type StepTools = GetStepTools<Inngest.Any>;
 /** Extra per-invocation params a skill's executor might need beyond (tenant, runId, step). */
 export interface SkillRunContext {
   auditType?: "weekly" | "monthly";
+  // Not read by any Showtime-5 skill today — declared here only so the
+  // object literal skill.ts builds once and passes uniformly across all
+  // three catalogs' execute calls type-checks without excess-property
+  // friction. pin-down-voice (chat-skill-registry.ts) is the real reader.
+  voiceExtractionDomain?: string;
+  // Not read by any Showtime-5 skill today — declared here only so the
+  // object literal skill.ts builds once and passes uniformly across all
+  // three catalogs' execute calls type-checks without excess-property
+  // friction. pin-down-page-audit (chat-skill-registry.ts) is the real reader.
+  pageAuditUrl?: string;
 }
 
 export interface SkillDefinition extends SkillManifestEntry {

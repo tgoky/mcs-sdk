@@ -24,7 +24,14 @@ export type SkillRunExecuteData = {
   // directly.
   skillName: string;
   auditType?: "weekly" | "monthly";
-  manualOverride?: boolean; // <--- ADD THIS
+  manualOverride?: boolean;
+  // Added for Teammates chat's pin-down-voice sub-skill (chat-skill-
+  // registry.ts) — a public website URL, not secret state, so this is
+  // the same safe category auditType already established for small,
+  // non-sensitive per-run config riding along in the event payload.
+  voiceExtractionDomain?: string;
+  // Same category, same reasoning, for pin-down-page-audit.
+  pageAuditUrl?: string;
 };
 
 

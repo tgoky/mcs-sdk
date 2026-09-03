@@ -61,7 +61,7 @@ export async function notifyRunOutcome(
 ): Promise<void> {
   try {
     const [tenant] = await db
-      .select({ whopUserId: engagements.whopUserId, stack: engagements.stack })
+      .select({ whopUserId: engagements.whopUserId, workspaceId: engagements.workspaceId, stack: engagements.stack })
       .from(engagements)
       .where(eq(engagements.engagementId, engagementId))
       .limit(1);
@@ -89,6 +89,11 @@ export async function notifyRunOutcome(
       // doc. Without this, every run failure also landed as a second,
       // unlinked "alert" Queue item pointing nowhere in particular.
       persistInApp: false,
+      // A run someone (or Teammates chat) started failing is exactly the
+      // "tell them in the thread they'd actually be checking" case
+      // notify.ts's chat channel exists for — critical severity clears
+      // the bar automatically.
+      workspaceId: tenant.workspaceId ?? undefined,
     });
   } catch (e) {
     console.error("[run-log] failed to dispatch run-outcome notification:", e);

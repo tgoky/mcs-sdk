@@ -8,7 +8,7 @@
 
 import { db } from "@/lib/db";
 import { chatThreads, chatMessages, type ChatMessageContentBlock } from "@/models/schema";
-import { and, eq, asc, desc } from "drizzle-orm";
+import { and, eq, asc, desc, isNull } from "drizzle-orm";
 import type { ClaudeMessage } from "@/lib/llm";
 import crypto from "crypto";
 
@@ -25,6 +25,41 @@ export function deriveThreadTitle(firstUserText: string): string {
 // this codebase relies on RETURNING against the Supabase pooler
 // connection db.ts uses, so this doesn't introduce a new dependency on
 // it working under pgbouncer's transaction-pooling mode.
+// The destination for notify.ts's chat channel — the most recent thread
+// for this engagement (or the workspace's standing "Ops" thread when
+// engagementId is null, for cross-cutting events with no single client
+// to attach to), or a fresh one if neither exists yet. A notification is
+// exactly as legitimate a way to start a conversation as a person typing
+// the first message — deriveThreadTitle just works off whatever string
+// it's given, here the notification's own title rather than user text.
+export async function findOrCreateThreadForEvent(opts: {
+  workspaceId: string;
+  whopUserId: string;
+  engagementId: string | null;
+  fallbackTitle: string;
+}): Promise<string> {
+  const [existing] = await db
+    .select({ id: chatThreads.id })
+    .from(chatThreads)
+    .where(
+      opts.engagementId
+        ? and(eq(chatThreads.workspaceId, opts.workspaceId), eq(chatThreads.engagementId, opts.engagementId))
+        : and(eq(chatThreads.workspaceId, opts.workspaceId), isNull(chatThreads.engagementId))
+    )
+    .orderBy(desc(chatThreads.lastMessageAt))
+    .limit(1);
+
+  if (existing) return existing.id;
+
+  const created = await createThread({
+    whopUserId: opts.whopUserId,
+    workspaceId: opts.workspaceId,
+    engagementId: opts.engagementId,
+    firstUserText: opts.engagementId ? opts.fallbackTitle : "Ops",
+  });
+  return created.id;
+}
+
 export async function createThread(opts: {
   whopUserId: string;
   workspaceId: string;

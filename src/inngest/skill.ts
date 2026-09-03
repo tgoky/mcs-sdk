@@ -5,29 +5,36 @@ import { eq } from "drizzle-orm";
 import { failRun, logStep, finishRun } from "@/lib/run-log";
 import { SKILL_REGISTRY, isSkillId, type SkillDefinition } from "@/lib/skill-registry";
 import { REP_SKILL_REGISTRY, isRepSkillId, type RepSkillDefinition } from "@/lib/rep-skill-registry";
+import { CHAT_SKILL_REGISTRY, isChatSkillId, type ChatSkillDefinition } from "@/lib/chat-skill-registry";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { isEngagementPaused } from "@/lib/engagement-status"; // <--- ADDED
 
 /**
  * Resolves a skill id against every product's catalog in turn. Showtime's
- * SKILL_REGISTRY and Reputation Manager's REP_SKILL_REGISTRY are
- * deliberately separate modules (see rep-skill-manifest.ts's file comment
- * for why), so this dispatcher is the one place that legitimately needs to
- * know both exist — everything downstream of this function (the run
- * itself, engagementSkills, skillRuns) already treats skillId as an
- * opaque, product-agnostic string, so adding a product here costs one
- * more `else if`, not a schema change.
+ * SKILL_REGISTRY, Reputation Manager's REP_SKILL_REGISTRY, and Teammates
+ * chat's own CHAT_SKILL_REGISTRY are deliberately separate modules (see
+ * rep-skill-manifest.ts's file comment for why) — this dispatcher is the
+ * one place that legitimately needs to know all three exist, everything
+ * downstream (the run itself, engagementSkills, skillRuns) already treats
+ * skillId as an opaque, product-agnostic string.
  *
- * A straight sequential check is the right amount of generalization for
- * two products. If/when a third product's skills need dispatching here,
- * that's the point to fold this into a loop over a registered list of
- * catalogs — not before, per the same reasoning skill.ts's neighbors in
- * this app apply elsewhere: generalize once a second real example exists,
- * not from a guess made on the first one.
+ * A real third catalog landing (chat-skill-manifest.ts, 2026-09-01) is
+ * exactly the trigger this function's own prior comment named for folding
+ * a sequential if-chain into a loop over a registered list — done now,
+ * not before, same "generalize once a real second (now third) example
+ * exists" reasoning this app applies everywhere else. A fourth catalog
+ * costs one array entry, not another branch.
  */
-function resolveSkillDefinition(skillName: string): SkillDefinition | RepSkillDefinition | null {
-  if (isSkillId(skillName)) return SKILL_REGISTRY[skillName];
-  if (isRepSkillId(skillName)) return REP_SKILL_REGISTRY[skillName];
+const SKILL_CATALOGS: { isId: (v: string) => boolean; registry: Record<string, SkillDefinition | RepSkillDefinition | ChatSkillDefinition> }[] = [
+  { isId: isSkillId, registry: SKILL_REGISTRY },
+  { isId: isRepSkillId, registry: REP_SKILL_REGISTRY },
+  { isId: isChatSkillId, registry: CHAT_SKILL_REGISTRY },
+];
+
+function resolveSkillDefinition(skillName: string): SkillDefinition | RepSkillDefinition | ChatSkillDefinition | null {
+  for (const { isId, registry } of SKILL_CATALOGS) {
+    if (isId(skillName)) return registry[skillName];
+  }
   return null;
 }
 
@@ -47,7 +54,7 @@ export const executeSkillRun = inngest.createFunction(
     },
   },
   async ({ event, step }) => {
-    const { runId, engagementId, skillName, auditType, manualOverride } = event.data; // <--- ADDED manualOverride
+    const { runId, engagementId, skillName, auditType, manualOverride, voiceExtractionDomain, pageAuditUrl } = event.data;
 
     const tenantRaw = await step.run("load-tenant", async () => {
       const [row] = await db
@@ -108,7 +115,7 @@ export const executeSkillRun = inngest.createFunction(
         throw new Error(`${definition.name} has no direct executor — it only runs from its own event handlers.`);
       }
 
-      await definition.execute(tenant, runId, step, { auditType });
+      await definition.execute(tenant, runId, step, { auditType, voiceExtractionDomain, pageAuditUrl });
     } catch (err: unknown) {
       await failRun(runId, err).catch(() => {});
       throw err;

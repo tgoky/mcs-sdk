@@ -48,7 +48,11 @@ const NEUTRAL_DEFAULT_VOICE_PROFILE = {
   ],
 };
 
-async function extractVoiceProfile(corpus: string, runId: string): Promise<any> {
+// Exported (2026-09-01) for reuse by pin-down-voice-only.ts — Teammates
+// chat's standalone "just extract brand voice from a URL" sub-skill.
+// Same reasoning generateEngagementId was pulled out for: a second real
+// caller existing is what earns something an export, not anticipation.
+export async function extractVoiceProfile(corpus: string, runId: string): Promise<any> {
   const wordCount = corpus.trim().split(/\s+/).filter(Boolean).length;
 
   if (wordCount < 500) {
