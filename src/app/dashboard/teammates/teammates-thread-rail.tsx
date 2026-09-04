@@ -1,6 +1,22 @@
 "use client";
 
 // src/app/dashboard/teammates/teammates-thread-rail.tsx
+//
+// Left rail of past conversations for the full /dashboard/teammates page
+// only — not the compact right-utility-panel tab, which is too narrow for
+// a third column. Same sliding-highlight technique as
+// sidebar-nav-links.tsx (measure the selected row's real offsetTop/
+// offsetHeight via useLayoutEffect, slide one shared indicator to it)
+// adapted for button+state selection instead of Link+pathname, since
+// switching threads here is instant client state, never a real navigation
+// — see teammates-workspace.tsx's file comment for why that's the right
+// call over a searchParams-driven page (the thread list is already
+// loaded; only the selected thread's messages need fetching, and
+// TeammatesChat already does that itself).
+//
+// Kept as its own component rather than a SidebarNavLinks variant so this
+// round doesn't touch a component the primary Work/Engagements sidebars
+// already depend on.
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { Plus, MessagesSquare } from "lucide-react";
@@ -43,39 +59,33 @@ export function TeammatesThreadRail({
   }, [selectedId, threads]);
 
   return (
-    <div className="w-56 shrink-0 flex flex-col rounded-2xl overflow-hidden bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl border border-zinc-200/80 dark:border-zinc-800/80 shadow-xs transition-all">
-      {/* Sleek Action Button Header */}
-      <div className="p-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
-        <button
-          type="button"
-          onClick={onNewChat}
-          className="flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl text-xs font-semibold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 active:scale-[0.98] transition-all shadow-2xs cursor-pointer"
-        >
-          <Plus size={14} className="stroke-[2.5]" />
-          <span>New conversation</span>
-        </button>
-      </div>
+    <div
+      className="w-56 shrink-0 flex flex-col rounded-xl overflow-hidden"
+      style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
+    >
+      <button
+        type="button"
+        onClick={onNewChat}
+        className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold border-b transition-colors cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-900"
+        style={{ borderColor: "var(--border)", color: "var(--text-prefill-accent)" }}
+      >
+        <Plus size={13} />
+        New conversation
+      </button>
 
-      {/* Thread List */}
       <div className="relative flex-1 min-h-0 overflow-y-auto p-1.5 flex flex-col gap-0.5">
-        {/* Animated Active Pill Indicator */}
         {indicator && (
           <div
             aria-hidden="true"
-            className="absolute left-1.5 right-1.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-700/80 shadow-2xs transition-[transform,height] duration-200 ease-out"
-            style={{
-              height: indicator.height,
-              transform: `translateY(${indicator.top}px)`,
-            }}
+            className="absolute left-1.5 right-1.5 rounded-lg transition-[transform,height] duration-150 ease-out"
+            style={{ height: indicator.height, transform: `translateY(${indicator.top}px)`, background: "var(--accent-dim)" }}
           />
         )}
 
         {threads.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-10 px-3 text-center">
-            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800/60 text-zinc-400">
-              <MessagesSquare size={15} />
-            </div>
-            <p className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+          <div className="flex flex-col items-center justify-center gap-2 py-8 px-3 text-center">
+            <MessagesSquare size={16} style={{ color: "var(--text-muted)" }} />
+            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
               No conversations yet
             </p>
           </div>
@@ -91,14 +101,11 @@ export function TeammatesThreadRail({
                   else rowRefs.current.delete(thread.id);
                 }}
                 onClick={() => onSelect(thread.id)}
-                className={`relative z-10 flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-xs transition-colors cursor-pointer ${
-                  active
-                    ? "text-zinc-900 dark:text-zinc-100 font-semibold"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-                }`}
+                className="relative z-10 flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}
               >
-                <span className="truncate flex-1">{thread.title}</span>
-                <span className="shrink-0 text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
+                <span className={`truncate ${active ? "font-semibold" : "font-medium"}`}>{thread.title}</span>
+                <span className="shrink-0 text-[10px] font-mono" style={{ color: "var(--text-muted)" }}>
                   {relativeTime(thread.lastMessageAt)}
                 </span>
               </button>
