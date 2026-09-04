@@ -14,7 +14,7 @@ import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 
 interface ChatMessage {
-  role: "user" | "assistant";
+  role: "user" | "worker";
   content: string;
   toolCalls?: { name: string; ok: boolean; message: string }[];
   links?: { label: string; href: string }[];
@@ -226,7 +226,7 @@ export function TeammatesChat({
       setMessages((prev) => [
         ...prev,
         {
-          role: "assistant",
+          role: "worker",
           content: data.reply ?? "",
           toolCalls: data.toolCalls ?? [],
           links: data.links ?? [],
@@ -274,10 +274,10 @@ export function TeammatesChat({
             }`}
           >
             <div className="flex items-center gap-1.5 px-1 text-[10px] font-medium text-zinc-500">
-              {m.role === "assistant" ? (
+              {m.role === "worker" ? (
                 <>
                   <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
-                  <span>Assistant</span>
+                  <span>Worker</span>
                 </>
               ) : (
                 <>
