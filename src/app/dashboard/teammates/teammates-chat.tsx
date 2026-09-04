@@ -115,7 +115,7 @@ export function TeammatesChat({
   const [threadId, setThreadId] = useState<string | null>(() =>
     initialThreadId !== undefined ? initialThreadId : readStoredThreadId()
   );
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const id = initialThreadId !== undefined ? initialThreadId : readStoredThreadId();
@@ -336,7 +336,7 @@ export function TeammatesChat({
         {error && <p className="text-xs text-rose-500 px-1">{error}</p>}
       </div>
 
-      {/* Input Surface — Single Horizontal Line */}
+      {/* Multi-line Input Box */}
       <div className="relative p-2 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white/40 dark:bg-zinc-950/40 backdrop-blur-md">
         {/* Upward Autocomplete Menu */}
         {showMentions && (
@@ -355,66 +355,72 @@ export function TeammatesChat({
           </div>
         )}
 
-        {/* Continuous Single-Row Control Bar */}
-        <div className="flex items-center gap-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1.5 shadow-2xs focus-within:border-zinc-400 dark:focus-within:border-zinc-700 transition-colors">
-          {/* Tagged Skills Inline */}
-          {taggedSkills.map((token) => {
-            const skill = MENTIONABLE_SKILLS.find((s) => s.token === token);
-            if (!skill) return null;
-            return (
-              <span
-                key={token}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${skill.pillStyle} shrink-0`}
-              >
-                <SquishySkillBadge skill={skill.token} size={14} />
-                <span>{skill.label}</span>
-                <button
-                  type="button"
-                  onClick={() => removeSkillTag(token)}
-                  className="hover:opacity-80 transition-opacity cursor-pointer ml-0.5"
-                >
-                  <X size={11} />
-                </button>
-              </span>
-            );
-          })}
+        {/* Outer Card Container */}
+        <div className="flex flex-col gap-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5 shadow-2xs focus-within:border-zinc-400 dark:focus-within:border-zinc-700 transition-colors">
+          {/* Tagged Skills & Textarea */}
+          <div className="flex flex-col gap-1.5">
+            {taggedSkills.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pb-1 border-b border-zinc-100 dark:border-zinc-800/60">
+                {taggedSkills.map((token) => {
+                  const skill = MENTIONABLE_SKILLS.find((s) => s.token === token);
+                  if (!skill) return null;
+                  return (
+                    <span
+                      key={token}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${skill.pillStyle} shrink-0`}
+                    >
+                      <SquishySkillBadge skill={skill.token} size={14} />
+                      <span>{skill.label}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeSkillTag(token)}
+                        className="hover:opacity-80 transition-opacity cursor-pointer ml-0.5"
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
 
-          {/* Text Input */}
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => handleInputChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                send();
-              }
-            }}
-            placeholder={taggedSkills.length > 0 ? "add details..." : "Ask Workers or type @..."}
-            className="flex-1 min-w-[120px] bg-transparent text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none"
-          />
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              placeholder={taggedSkills.length > 0 ? "add details..." : "Ask Workers or type @..."}
+              rows={Math.min(6, Math.max(1, input.split("\n").length))}
+              className="w-full min-h-[28px] max-h-36 resize-none bg-transparent text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none leading-relaxed overflow-y-auto"
+            />
+          </div>
 
-          {/* Inline @ Dropdown Trigger */}
-          <Dropdown
-            variant="icon"
-            icon={AtSign}
-            triggerTitle="Tag skill"
-            align="right"
-            items={dropdownItems}
-            onSelect={(key) => addSkillTag(key)}
-          />
+          {/* Action Toolbar */}
+          <div className="flex items-center justify-between pt-1">
+            <Dropdown
+              variant="icon"
+              icon={AtSign}
+              triggerTitle="Tag skill"
+              align="left"
+              items={dropdownItems}
+              onSelect={(key) => addSkillTag(key)}
+            />
 
-          {/* Send Button */}
-          <button
-            type="button"
-            onClick={() => send()}
-            disabled={loading || (!input.trim() && taggedSkills.length === 0)}
-            className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-950 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-black dark:hover:bg-white transition-all shadow-xs cursor-pointer shrink-0"
-            aria-label="Send message"
-          >
-            <ArrowUp size={13} className="stroke-[2.5]" />
-          </button>
+            <button
+              type="button"
+              onClick={() => send()}
+              disabled={loading || (!input.trim() && taggedSkills.length === 0)}
+              className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-950 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-black dark:hover:bg-white transition-all shadow-xs cursor-pointer shrink-0"
+              aria-label="Send message"
+            >
+              <ArrowUp size={13} className="stroke-[2.5]" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
