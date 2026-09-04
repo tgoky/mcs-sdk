@@ -8,15 +8,17 @@ import Link from "next/link";
 
 import { EngagementPauseControl } from "./pause-control";
 import { SkillsPanel } from "./skills-panel";
+import { RepSkillsPanel } from "./rep-skills-panel";
 import { ProductsPanel, type ProductCardData, type ProductSetupState } from "./products-panel";
 import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
 import { MasterRosterCalendar } from "./master-roster-calendar";
 import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
 import { RunRowActions } from "./run-row-actions";
-import { getEngagementSkillStates } from "@/lib/engagement-skills";
+import { getEngagementSkillStates, getRepEngagementSkillStates } from "@/lib/engagement-skills";
 import { getInstalledPackagesByWorkspace } from "@/lib/workspace";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
+import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { 
   CheckCircle2, 
@@ -186,6 +188,17 @@ export default async function EngagementDetailPage({
 
   const skillsWithRuns = SKILLS.filter((s) => runsBySkill[s].length > 0);
 
+  // Reputation Manager's Skills panel only means something once this
+  // client's identity graph exists (repIdentityGraphRow, computed above
+  // for the Products panel) — every other RM skill reads that graph, so
+  // there's nothing to toggle before then. `runs` already covers every
+  // skillRuns row for this engagement regardless of product (no
+  // skillName filter on that query), so no separate fetch is needed here.
+  const repSkillStates = repIdentityGraphRow ? await getRepEngagementSkillStates(id) : null;
+  const repRunsBySkill = Object.fromEntries(
+    REP_SKILL_IDS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
+  ) as Record<RepSkillId, typeof runs>;
+
   const filteredRuns = activeSkillFilter
     ? runs.filter((r) => r.skillName === activeSkillFilter)
     : runs;
@@ -329,6 +342,15 @@ export default async function EngagementDetailPage({
           runsBySkill={runsBySkill}
           isPaused={Boolean(engagement.pausedAt)}
         />
+
+        {repSkillStates && (
+          <RepSkillsPanel
+            engagementId={engagement.engagementId}
+            initialStates={repSkillStates}
+            runsBySkill={repRunsBySkill}
+            isPaused={Boolean(engagement.pausedAt)}
+          />
+        )}
 
         {engagement.pausedAt && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-xs font-mono text-amber-800 dark:text-amber-400">

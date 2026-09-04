@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { engagementSkills } from "@/models/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
+import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
 
 /**
  * No row for (engagementId, skillId) means enabled — this table only ever
@@ -43,6 +44,18 @@ export async function getEngagementSkillStates(engagementId: string): Promise<Re
   const disabled = new Set(rows.filter((r) => !r.enabled).map((r) => r.skillId));
 
   return Object.fromEntries(SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<SkillId, boolean>;
+}
+
+/** Same "no row = enabled" query as getEngagementSkillStates, for Reputation Manager's own Skills panel — same table, same convention, just REP_SKILL_IDS instead of Showtime's SKILL_IDS. */
+export async function getRepEngagementSkillStates(engagementId: string): Promise<Record<RepSkillId, boolean>> {
+  const rows = await db
+    .select({ skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
+    .from(engagementSkills)
+    .where(eq(engagementSkills.engagementId, engagementId));
+
+  const disabled = new Set(rows.filter((r) => !r.enabled).map((r) => r.skillId));
+
+  return Object.fromEntries(REP_SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<RepSkillId, boolean>;
 }
 
 /**
