@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { LiveCountBadge } from "./live-count-badge";
 
@@ -18,13 +18,24 @@ export interface NavLinkItem {
 
 export function SidebarNavLinks({ links }: { links: NavLinkItem[] }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const navRef = useRef<HTMLElement>(null);
   const linkRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
   const [indicator, setIndicator] = useState<{ top: number; height: number } | null>(null);
 
+  // A link's href can carry its own query string (e.g. the product-scoped
+  // Queue/Executions/Clients links) — pathname alone never includes one,
+  // so matching required checking the link's own product param against
+  // the current URL's, not just the path.
   const activeHref =
-    links.find((l) => (l.href === "/dashboard" ? pathname === "/dashboard" : pathname === l.href || pathname.startsWith(`${l.href}/`)))
-      ?.href ?? null;
+    links.find((l) => {
+      const [linkPath, linkQuery] = l.href.split("?");
+      const pathMatches = linkPath === "/dashboard" ? pathname === "/dashboard" : pathname === linkPath || pathname.startsWith(`${linkPath}/`);
+      if (!pathMatches) return false;
+      if (!linkQuery) return true;
+      const linkProduct = new URLSearchParams(linkQuery).get("product");
+      return linkProduct === null || searchParams.get("product") === linkProduct;
+    })?.href ?? null;
 
   // Each link previously carried its own active background and animated
   // it in/out independently (`transition-all` on the individual button),

@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Search, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { PRIMARY_NAV_SECTIONS, PRODUCT_NAV_SECTIONS, SETTINGS_NAV } from "@/lib/primary-nav";
 
@@ -18,6 +18,7 @@ import { PRIMARY_NAV_SECTIONS, PRODUCT_NAV_SECTIONS, SETTINGS_NAV } from "@/lib/
 
 export function MobileNavPill({ installedPackageIds = [] }: { installedPackageIds?: string[] }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
@@ -170,8 +171,14 @@ export function MobileNavPill({ installedPackageIds = [] }: { installedPackageId
 
             {PRODUCT_NAV_SECTIONS.filter((section) => installedPackageIds.includes(section.productId)).map((section) => {
               const Icon = section.icon;
+              // Engagements is a shared route scoped by `?product=`, not owned
+              // outright by Showtime — see primary-rail.tsx's PRODUCT_SCOPED_ROOTS.
+              const engagementsScopedToShowtime =
+                pathname === "/dashboard/engagements"
+                  ? searchParams.get("product") === "showtime"
+                  : pathname.startsWith("/dashboard/engagements/");
               const isActive = pathname === section.href ||
-                (section.productId === "showtime" && (pathname.startsWith("/dashboard/engagements") || pathname.startsWith("/dashboard/analytics") || pathname.startsWith("/dashboard/meetings") || pathname.startsWith("/dashboard/modules") || pathname.startsWith("/dashboard/reports"))) ||
+                (section.productId === "showtime" && (engagementsScopedToShowtime || pathname.startsWith("/dashboard/analytics") || pathname.startsWith("/dashboard/meetings") || pathname.startsWith("/dashboard/modules") || pathname.startsWith("/dashboard/reports"))) ||
                 (section.productId === "reputation-manager" && pathname.startsWith("/dashboard/reputation-manager"));
               return (
                 <Link key={section.productId} href={section.href} className={`flex items-center gap-3.5 px-5 py-4 text-base transition-colors ${isActive ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white" : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 hover:text-zinc-900 dark:hover:text-white font-medium"}`}>

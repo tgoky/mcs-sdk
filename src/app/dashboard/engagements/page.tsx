@@ -1,29 +1,66 @@
 import { db } from "@/lib/db";
-import { engagements, skillRuns } from "@/models/schema";
+import { engagements, skillRuns, repIdentityGraphs } from "@/models/schema";
 import { getSession } from "@/lib/session";
-import { eq, desc, inArray, isNull, and } from "drizzle-orm";
+import { eq, desc, inArray, isNull, isNotNull, and } from "drizzle-orm";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getActiveWorkspace } from "@/lib/workspace";
+import { isProductId, type ProductId } from "@/lib/product-catalog";
 import { ClientRosterTable } from "./client-roster-table";
 
 export const revalidate = 0;
 
-export default async function EngagementsPage() {
+/**
+ * Product scoping, driven by the same `?product=` param Queue/Executions
+ * already use. Every row here lives in the shared `engagements` table —
+ * there's no separate per-product client list — so "is this client on
+ * product X" comes from a signal that product's own onboarding already
+ * writes, not a new membership table:
+ *  - Showtime: /api/engagements/setup always sets `stack` (it rejects the
+ *    request without booking_platform + email_platform) the same request
+ *    that creates the row, so `stack` is never null for a Showtime client.
+ *  - Reputation Manager: onboarding always writes a rep_identity_graphs
+ *    row for the engagement (see /dashboard/reputation-manager/page.tsx,
+ *    which uses the same join).
+ * No `product` param means the combined roster — every client in the
+ * workspace regardless of which product(s) it's enrolled in — which is
+ * what Work's "Clients" link points at.
+ */
+export default async function EngagementsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ product?: string }>;
+}) {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
   const activeWorkspace = await getActiveWorkspace(whopUserId);
+  const { product } = await searchParams;
+  const scopedProduct: ProductId | null = isProductId(product) ? product : null;
 
-  const userEngagements = await db
-    .select()
-    .from(engagements)
-    .where(
-      and(
-        eq(engagements.whopUserId, whopUserId),
-        eq(engagements.workspaceId, activeWorkspace.workspaceId),
-        isNull(engagements.deletedAt)
-      )
-    );
+  const baseFilter = and(
+    eq(engagements.whopUserId, whopUserId),
+    eq(engagements.workspaceId, activeWorkspace.workspaceId),
+    isNull(engagements.deletedAt)
+  );
+
+  let userEngagements;
+  if (scopedProduct === "showtime") {
+    userEngagements = await db
+      .select()
+      .from(engagements)
+      .where(and(baseFilter, isNotNull(engagements.stack)));
+  } else if (scopedProduct === "reputation-manager") {
+    const repRows = await db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs);
+    const repEngagementIds = repRows.map((r) => r.engagementId);
+    userEngagements = repEngagementIds.length
+      ? await db
+          .select()
+          .from(engagements)
+          .where(and(baseFilter, inArray(engagements.engagementId, repEngagementIds)))
+      : [];
+  } else {
+    userEngagements = await db.select().from(engagements).where(baseFilter);
+  }
 
   const targetEngagementIds = userEngagements.map((e) => e.engagementId);
 
@@ -72,10 +109,16 @@ export default async function EngagementsPage() {
       <div className="shrink-0 flex flex-col space-y-3 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
         <div className="space-y-0.5">
           <h1 className="text-base font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
-            Client Portfolio
+            {scopedProduct === "showtime"
+              ? "Showtime Clients"
+              : scopedProduct === "reputation-manager"
+                ? "Reputation Manager Clients"
+                : "Client Portfolio"}
           </h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Real-time module telemetry across all active client automations in {activeWorkspace.name}, most recently active first.
+            {scopedProduct
+              ? `Clients enrolled in ${scopedProduct === "showtime" ? "Showtime" : "Reputation Manager"} in ${activeWorkspace.name}, most recently active first.`
+              : `Every client across all installed products in ${activeWorkspace.name}, most recently active first.`}
           </p>
         </div>
 
@@ -98,7 +141,7 @@ export default async function EngagementsPage() {
             href="/dashboard/engagements/new"
             className="text-xs font-semibold text-amber-500 hover:underline transition-colors"
           >
-            Add your first client →
+            Add your first client 
           </Link>
         </div>
       ) : (

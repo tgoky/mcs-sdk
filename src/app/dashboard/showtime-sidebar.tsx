@@ -6,7 +6,7 @@ import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
  * overview; this area contains only sales-execution routes. */
 export function ShowtimeSidebar() {
   const links: NavLinkItem[] = [
-    { href: "/dashboard/engagements", label: "Clients", icon: <Building2 className="w-4 h-4" /> },
+    { href: "/dashboard/engagements?product=showtime", label: "Clients", icon: <Building2 className="w-4 h-4" /> },
     { href: "/dashboard/engagements/new", label: "New client", icon: <Plus className="w-4 h-4" /> },
     { href: "/dashboard/analytics", label: "Analytics", icon: <BarChart3 className="w-4 h-4" /> },
     { href: "/dashboard/meetings", label: "Meetings", icon: <CalendarClock className="w-4 h-4" /> },

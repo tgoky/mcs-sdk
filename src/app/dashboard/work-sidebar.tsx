@@ -8,6 +8,7 @@ import {
   FileText,
   ListTodo,
   Activity,
+  Building2,
   ChevronDown,
 } from "lucide-react";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
@@ -51,6 +52,11 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
   // becomes unreachable.
   const group1Links: NavLinkItem[] = [
     { href: "/dashboard", label: "Home", icon: <Home className="w-4 h-4" /> },
+    // Every client in the workspace, regardless of which product(s) it's
+    // enrolled in — the combined view Showtime's and Reputation Manager's
+    // own (product-scoped) Clients links don't show. Same route as
+    // theirs, just without a `product` param — see engagements/page.tsx.
+    { href: "/dashboard/engagements", label: "Clients", icon: <Building2 className="w-4 h-4" /> },
     { href: "/dashboard/reports", label: "Reports", icon: <FileText className="w-4 h-4" /> },
   ];
 

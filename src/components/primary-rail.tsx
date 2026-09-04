@@ -83,16 +83,25 @@ function SquishyProductBadge({
   );
 }
 
+// Routes that mean something different per product depending on a
+// `?product=` param, rather than owning a whole route prefix outright —
+// same shared surface (Queue, Executions, and the Engagements/Clients
+// roster), scoped by query string instead of by path. Only the roster's
+// own list route (exact match) is scoped this way; its detail/new
+// sub-pages (/dashboard/engagements/[id], /dashboard/engagements/new)
+// still fall through to the prefix-based Showtime bucket below.
+const PRODUCT_SCOPED_ROOTS = ["/dashboard/queue", "/dashboard/runs", "/dashboard/engagements"];
+
 function activeSectionHref(pathname: string, productParam: string | null): string {
-  if ((pathname === "/dashboard/queue" || pathname === "/dashboard/runs") && productParam === "reputation-manager") {
+  if (PRODUCT_SCOPED_ROOTS.includes(pathname) && productParam === "reputation-manager") {
     return "/dashboard/reputation-manager";
   }
-  if ((pathname === "/dashboard/queue" || pathname === "/dashboard/runs") && productParam === "showtime") {
+  if (PRODUCT_SCOPED_ROOTS.includes(pathname) && productParam === "showtime") {
     return "/dashboard/showtime";
   }
   if (
     pathname === "/dashboard/showtime" ||
-    pathname.startsWith("/dashboard/engagements") ||
+    pathname.startsWith("/dashboard/engagements/") ||
     pathname.startsWith("/dashboard/analytics") ||
     pathname.startsWith("/dashboard/meetings") ||
     pathname.startsWith("/dashboard/modules") ||

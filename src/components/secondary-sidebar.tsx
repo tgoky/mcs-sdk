@@ -55,12 +55,18 @@ export function SecondarySidebar({
   }
 
   const scopedProduct = searchParams.get("product");
+  // Mirrors primary-rail.tsx's PRODUCT_SCOPED_ROOTS — the Engagements
+  // list route is shared across products and scoped by `?product=`
+  // rather than owning its own path, same as Queue/Executions already are.
+  const isProductScopedRoot = pathname === "/dashboard/queue" || pathname === "/dashboard/runs" || pathname === "/dashboard/engagements";
   const section: SectionKey =
-    (pathname === "/dashboard/queue" || pathname === "/dashboard/runs") && scopedProduct === "reputation-manager"
+    isProductScopedRoot && scopedProduct === "reputation-manager"
       ? "reputation-manager"
-      : (pathname === "/dashboard/queue" || pathname === "/dashboard/runs") && scopedProduct === "showtime"
+      : isProductScopedRoot && scopedProduct === "showtime"
         ? "showtime"
-        : activeSection(pathname);
+        : isProductScopedRoot
+          ? "work"
+          : activeSection(pathname);
 
   const content: Record<SectionKey, ReactNode> = {
     work,
