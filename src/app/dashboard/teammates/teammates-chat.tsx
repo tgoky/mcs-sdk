@@ -252,7 +252,7 @@ export function TeammatesChat({
           <div className="flex flex-col items-center justify-center h-full text-center gap-2 px-4 py-12">
       
             <p className="text-sm font-bold text-zinc-100 tracking-tight">
-              Ask Teammates to run something
+              Ask Workers to run something
             </p>
             <p className="text-xs leading-relaxed max-w-[260px] text-zinc-500">
               Try &quot;run a call brief for Acme Co&quot; — type @ to see available skills.
@@ -393,7 +393,7 @@ export function TeammatesChat({
                 send();
               }
             }}
-            placeholder={taggedSkills.length > 0 ? "Add details..." : "Ask Teammates..."}
+            placeholder={taggedSkills.length > 0 ? "Add details..." : "Ask Workers..."}
             rows={2}
             className="w-full resize-none bg-transparent text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none"
           />
@@ -412,9 +412,7 @@ export function TeammatesChat({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-medium text-zinc-500 hidden sm:inline">
-                Teammates AI
-              </span>
+          
               <button
                 type="button"
                 onClick={() => send()}
