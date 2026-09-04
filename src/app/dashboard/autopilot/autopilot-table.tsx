@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PauseCircle, PlayCircle, Loader2 } from "lucide-react";
+import { PauseCircle, PlayCircle, Loader2, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { SKILL_IDS, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
 import { SKILL_INFO, ACTION_TYPE_LABELS } from "@/lib/copy";
 import type { PendingActionType } from "@/lib/approval-gate";
@@ -14,7 +14,6 @@ export type AutopilotClientRow = AutopilotClientDTO;
 
 const ACTION_TYPES = Object.keys(ACTION_TYPE_LABELS) as PendingActionType[];
 
-/** macOS-style frosted glass toggle switch. */
 function ToggleSwitch({ on, busy, onClick, label }: { on: boolean; busy: boolean; onClick: () => void; label: string }) {
   return (
     <button
@@ -23,15 +22,15 @@ function ToggleSwitch({ on, busy, onClick, label }: { on: boolean; busy: boolean
       disabled={busy}
       aria-label={label}
       aria-pressed={on}
-      className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-all duration-300 ease-out focus:outline-none ${
+      className={`relative inline-flex h-3.5 w-6 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 focus:outline-none ${
         on
-          ? "bg-amber-400 dark:bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.3)]"
-          : "bg-zinc-200/80 dark:bg-zinc-700/60 border border-zinc-300/50 dark:border-zinc-600/40 backdrop-blur-sm"
+          ? "bg-amber-400 dark:bg-amber-500 shadow-[0_0_6px_rgba(251,191,36,0.3)]"
+          : "bg-zinc-300 dark:bg-zinc-700/80 border border-zinc-400/30 dark:border-zinc-600/50"
       } ${busy ? "opacity-50" : ""}`}
     >
       <span
-        className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform duration-300 ease-out ${
-          on ? "translate-x-[12px]" : "translate-x-[2px]"
+        className={`inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-xs transition-transform duration-200 ${
+          on ? "translate-x-[11px]" : "translate-x-[1px]"
         }`}
       />
     </button>
@@ -42,6 +41,16 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
   const router = useRouter();
   const [clients, setClients] = useState(initialClients);
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+
+  function toggleExpanded(id: string) {
+    setExpandedClients((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function setBusy(key: string, busy: boolean) {
     setBusyKeys((prev) => {
@@ -151,126 +160,167 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5 p-1">
       {clients.map((row) => {
         const isPaused = row.pausedAt !== null;
         const pauseBusy = busyKeys.has(`${row.engagementId}:pause`);
         const approvalBusy = busyKeys.has(`${row.engagementId}:approval-mode`);
+        const isExpanded = expandedClients.has(row.engagementId);
+        
+        const enabledSkillsCount = Object.values(row.skills).filter(Boolean).length;
+        const gatedActionsCount = row.requireApprovalActionTypes.length;
 
         return (
           <div
             key={row.engagementId}
-            className="rounded-xl p-2.5 space-y-2 bg-white/40 dark:bg-zinc-900/40 backdrop-blur-xl border border-white/60 dark:border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all"
+            className="rounded-lg bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md border border-zinc-200/70 dark:border-white/5 transition-all"
           >
-            {/* Row 1: client name + pause/resume */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold truncate text-zinc-900 dark:text-zinc-100 tracking-tight">
+            {/* Main compact row */}
+            <div className="flex items-center justify-between gap-2 px-2.5 py-2">
+              <div className="min-w-0 flex-1 flex items-center gap-2">
+                <p className="text-xs font-semibold truncate text-zinc-900 dark:text-zinc-100">
                   {row.buyer}
                 </p>
                 {isPaused && (
-                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    Paused{row.pausedReason ? ` — ${row.pausedReason}` : ""}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => togglePause(row)}
-                disabled={pauseBusy}
-                className={`flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded-lg backdrop-blur-md border transition-all cursor-pointer disabled:opacity-60 shrink-0 ${
-                  isPaused
-                    ? "text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20"
-                    : "text-zinc-700 dark:text-zinc-300 bg-zinc-200/50 dark:bg-zinc-800/50 border-zinc-300/40 dark:border-zinc-700/50 hover:bg-zinc-300/50 dark:hover:bg-zinc-700/50"
-                }`}
-              >
-                {pauseBusy ? (
-                  <Loader2 size={11} className="animate-spin" />
-                ) : isPaused ? (
-                  <PlayCircle size={11} />
-                ) : (
-                  <PauseCircle size={11} />
-                )}
-                {isPaused ? "Resume" : "Pause"}
-              </button>
-            </div>
-
-            {/* Row 2: Co-Pilot / Autopilot + scoped action types */}
-            <div className="rounded-lg p-2 space-y-1.5 bg-zinc-50/50 dark:bg-zinc-950/30 backdrop-blur-md border border-zinc-200/40 dark:border-white/5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200">
-                    {row.requireApprovalForSideEffects ? "Co-Pilot" : "Autopilot"}
-                  </p>
-                  <p className="text-[10px] leading-tight text-zinc-500 dark:text-zinc-400">
-                    {row.requireApprovalForSideEffects
-                      ? "Side-effectful actions wait for your approval in the Queue first."
-                      : "Side-effectful actions run automatically, with no approval step."}
-                  </p>
-                </div>
-                <ToggleSwitch
-                  on={row.requireApprovalForSideEffects}
-                  busy={approvalBusy}
-                  onClick={() => toggleApprovalMode(row)}
-                  label={`Toggle Co-Pilot for ${row.buyer}`}
-                />
-              </div>
-
-              {row.requireApprovalForSideEffects && (
-                <div className="flex flex-wrap gap-1 pt-1 border-t border-zinc-200/40 dark:border-white/5">
-                  {ACTION_TYPES.map((actionType) => {
-                    const selected = row.requireApprovalActionTypes.includes(actionType);
-                    const scopeBusy = busyKeys.has(`${row.engagementId}:scope:${actionType}`);
-                    return (
-                      <button
-                        key={actionType}
-                        type="button"
-                        onClick={() => toggleActionTypeScope(row, actionType)}
-                        disabled={scopeBusy}
-                        title={ACTION_TYPE_LABELS[actionType]}
-                        className={`px-1.5 py-0.5 text-[9px] font-mono font-bold rounded transition-all cursor-pointer disabled:opacity-60 backdrop-blur-sm ${
-                          selected
-                            ? "bg-amber-400/20 dark:bg-amber-400/10 text-amber-800 dark:text-amber-300 border border-amber-500/40"
-                            : "bg-transparent text-zinc-500 dark:text-zinc-400 border border-zinc-300/40 dark:border-white/10 hover:border-zinc-400/50"
-                        }`}
-                      >
-                        {actionType.replace(/_/g, " ")}
-                      </button>
-                    );
-                  })}
-                  <span className="text-[9px] text-zinc-400 dark:text-zinc-500 self-center">
-                    {row.requireApprovalActionTypes.length === 0 ? "— none picked, so all are gated" : ""}
+                  <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-zinc-200/60 dark:bg-zinc-800 text-zinc-500">
+                    Paused
                   </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* Mode toggle with tooltip */}
+                <div 
+                  className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-zinc-100/80 dark:bg-zinc-800/50 border border-zinc-200/50 dark:border-white/5"
+                  title={
+                    row.requireApprovalForSideEffects
+                      ? "Co-Pilot: Actions wait for approval"
+                      : "Autopilot: Actions execute automatically"
+                  }
+                >
+                  <span className="text-[10px] font-medium text-zinc-600 dark:text-zinc-300">
+                    {row.requireApprovalForSideEffects ? "Co-Pilot" : "Autopilot"}
+                  </span>
+                  <ToggleSwitch
+                    on={row.requireApprovalForSideEffects}
+                    busy={approvalBusy}
+                    onClick={() => toggleApprovalMode(row)}
+                    label={`Toggle mode for ${row.buyer}`}
+                  />
                 </div>
-              )}
+
+                {/* Pause/Resume Button */}
+                <button
+                  type="button"
+                  onClick={() => togglePause(row)}
+                  disabled={pauseBusy}
+                  className="p-1 rounded text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-zinc-800 transition-colors"
+                  title={isPaused ? "Resume client" : "Pause client"}
+                >
+                  {pauseBusy ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : isPaused ? (
+                    <PlayCircle size={13} className="text-emerald-500" />
+                  ) : (
+                    <PauseCircle size={13} />
+                  )}
+                </button>
+
+                {/* Expand / Configure Drawer Trigger */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(row.engagementId)}
+                  className={`p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-transform ${
+                    isExpanded ? "rotate-180 bg-zinc-200/50 dark:bg-zinc-800" : ""
+                  }`}
+                  title="Configure skills and gates"
+                >
+                  <ChevronDown size={13} />
+                </button>
+              </div>
             </div>
 
-            {/* Row 3: per-skill toggles */}
-            <div className="flex flex-wrap gap-1">
-              {SKILL_IDS.map((skill) => {
-                const enabled = row.skills[skill];
-                const skillBusy = busyKeys.has(`${row.engagementId}:skill:${skill}`);
-                return (
-                  <button
-                    key={skill}
-                    type="button"
-                    onClick={() => !skillBusy && toggleSkill(row, skill)}
-                    disabled={skillBusy}
-                    title={SKILL_INFO[skill].description}
-                    className={`flex items-center gap-1 pl-2 pr-1 py-0.5 text-[9px] font-semibold rounded-full backdrop-blur-sm transition-all cursor-pointer disabled:opacity-60 ${
-                      enabled
-                        ? "bg-amber-400/15 dark:bg-amber-400/10 text-amber-800 dark:text-amber-300 border border-amber-500/30"
-                        : "bg-zinc-100/60 dark:bg-zinc-800/40 text-zinc-600 dark:text-zinc-400 border border-zinc-200/60 dark:border-white/5 hover:border-zinc-300"
-                    }`}
-                  >
-                    {SKILL_INFO[skill].name}
-                    <span
-                      className={`inline-block w-1 h-1 rounded-full ${enabled ? "bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.6)]" : "bg-zinc-400 dark:bg-zinc-600"}`}
-                    />
-                  </button>
-                );
-              })}
-            </div>
+            {/* Quick Summary Strip (When collapsed) */}
+            {!isExpanded && (
+              <div 
+                onClick={() => toggleExpanded(row.engagementId)}
+                className="flex items-center justify-between px-2.5 pb-2 text-[10px] text-zinc-400 dark:text-zinc-500 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors"
+              >
+                <span>{enabledSkillsCount} of {SKILL_IDS.length} skills active</span>
+                {row.requireApprovalForSideEffects && (
+                  <span>{gatedActionsCount === 0 ? "All actions gated" : `${gatedActionsCount} gated`}</span>
+                )}
+              </div>
+            )}
+
+            {/* Expanded Detailed Configuration */}
+            {isExpanded && (
+              <div className="px-2.5 pb-2.5 pt-1 space-y-2 border-t border-zinc-200/40 dark:border-white/5">
+                {/* Action Gate Scopes */}
+                {row.requireApprovalForSideEffects && (
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">
+                      Require Approval For:
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {ACTION_TYPES.map((actionType) => {
+                        const selected = row.requireApprovalActionTypes.includes(actionType);
+                        const scopeBusy = busyKeys.has(`${row.engagementId}:scope:${actionType}`);
+                        return (
+                          <button
+                            key={actionType}
+                            type="button"
+                            onClick={() => toggleActionTypeScope(row, actionType)}
+                            disabled={scopeBusy}
+                            className={`px-1.5 py-0.5 text-[9px] font-mono rounded transition-colors ${
+                              selected
+                                ? "bg-amber-400/20 text-amber-800 dark:text-amber-300 border border-amber-500/40"
+                                : "bg-zinc-100 dark:bg-zinc-800/40 text-zinc-500 border border-zinc-200/60 dark:border-white/5"
+                            }`}
+                          >
+                            {actionType.replace(/_/g, " ")}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Skill Toggles */}
+                <div className="space-y-1">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">
+                    Active Skills:
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {SKILL_IDS.map((skill) => {
+                      const enabled = row.skills[skill];
+                      const skillBusy = busyKeys.has(`${row.engagementId}:skill:${skill}`);
+                      return (
+                        <button
+                          key={skill}
+                          type="button"
+                          onClick={() => !skillBusy && toggleSkill(row, skill)}
+                          disabled={skillBusy}
+                          title={SKILL_INFO[skill].description}
+                          className={`flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-medium rounded-full transition-colors ${
+                            enabled
+                              ? "bg-amber-400/15 text-amber-800 dark:text-amber-300 border border-amber-500/30"
+                              : "bg-zinc-100/80 dark:bg-zinc-800/30 text-zinc-400 border border-zinc-200/50 dark:border-white/5"
+                          }`}
+                        >
+                          {SKILL_INFO[skill].name}
+                          <span
+                            className={`w-1 h-1 rounded-full ${
+                              enabled ? "bg-amber-500" : "bg-zinc-300 dark:bg-zinc-600"
+                            }`}
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
