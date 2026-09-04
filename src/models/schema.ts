@@ -2137,6 +2137,60 @@ export const repIncidents = pgTable("rep_incidents", {
   resolvedBy: text("resolved_by"),
 });
 
+// ── Reputation Manager: Audit log ────────────────────────────────────────
+// Ported from mcs/cms's audit-log-schema.md (Section 3.7 of the reputation
+// system spec) — "the single source of truth for what the reputation
+// system did." The original is a JSON-Lines file the buyer's own machine
+// appends to (audit/events.jsonl); here it's a real table, since this
+// product runs hosted rather than on the buyer's filesystem.
+//
+// The spec's eight event types (detection, draft, approval,
+// external_action, outcome, compliance_block, ai_engine_notice,
+// reflection) share four common fields and otherwise have entirely
+// different shapes — kept as one generic `payload` jsonb column rather
+// than eight column sets, discriminated by `eventType` at read time (see
+// src/features/reputation-manager/server/audit-log.ts's typed
+// RepAuditEventPayload union, which is what every write actually goes
+// through — this table's shape is intentionally generic, the type safety
+// lives in that file).
+//
+// The spec's per-type `event_id`-string chain references
+// (triggered_by_event_id / draft_event_id / approval_event_id /
+// action_event_id — always "the prior event in this chain") collapse into
+// one `parentEventId` column here: same relationship every time, just
+// named differently per hop in the original flat-file design where each
+// type's own field needed a self-describing name. No FK constraint on it
+// (or on engagementId->engagements pattern used elsewhere for jsonb
+// snapshots) — same "it's a record of what happened, not a live
+// relationship to keep in sync" reasoning repIncidents.contributingFindings
+// already documents.
+//
+// Only "detection" has a real producer today (the three ingestion
+// skills — rep-engine-panel, rep-trustpilot-watch, rep-reddit-watch — log
+// one per scored mention, flagged or not). The other seven exist as a
+// complete, typed data model for when draft/approval/publish/outcome
+// flows actually exist — not speculative rows, just an honest reflection
+// that this table's schema shouldn't need to change shape when they do.
+export const repAuditEvents = pgTable(
+  "rep_audit_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+
+    eventType: text("event_type").notNull(),
+    parentEventId: uuid("parent_event_id"),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    schemaVersion: text("schema_version").notNull().default("1.0"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    repAuditEventsEngagementIdx: index("rep_audit_events_engagement_idx").on(table.engagementId, table.createdAt),
+  })
+);
+
 // ── Chat threads (2026-08-30) ───────────────────────────────────────────
 // Persistence for Teammates chat (src/app/api/teammates/chat/route.ts),
 // which previously had none — the client resent full message history each

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { callClaude } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import { resolveOutscraperConfig } from "@/features/reputation-manager/trustpilot-config";
+import { logAuditEventsBatch, type RepAuditEvent } from "@/features/reputation-manager/server/audit-log";
 import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
@@ -202,6 +203,24 @@ export async function runRepTrustpilotWatch(tenant: any, runId: string, step: St
         .set({ sentiment: s.sentiment, flagged: s.flagged, flagReason: s.flagReason })
         .where(eq(repTrustpilotReviews.externalReviewId, s.externalReviewId));
     }
+
+    // audit-log-schema.md's "detection" event — see engine-panel-service.ts's
+    // same call for why this logs every scored review, not just flagged ones.
+    await logAuditEventsBatch(
+      engagementId,
+      scored.map(
+        (s): RepAuditEvent => ({
+          eventType: "detection",
+          payload: {
+            source: "trustpilot",
+            entityMatched: graph.operatorName,
+            mentionText: `${s.rating}/5: ${s.reviewText}`,
+            sentimentLabel: s.sentiment,
+            threatCategory: s.flagged ? s.flagReason : null,
+          },
+        })
+      )
+    );
 
     const flaggedCount = scored.filter((s) => s.flagged).length;
     await logStep(runId, {

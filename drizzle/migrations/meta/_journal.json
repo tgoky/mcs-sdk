@@ -225,6 +225,13 @@
       "when": 1788535664798,
       "tag": "0031_black_wasp",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788536653157,
+      "tag": "0032_broad_bishop",
+      "breakpoints": true
     }
   ]
 }

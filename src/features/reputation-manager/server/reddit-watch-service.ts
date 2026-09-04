@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { callClaude } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import { resolveRedditApiKey } from "@/features/reputation-manager/reddit-config";
+import { logAuditEventsBatch, type RepAuditEvent } from "@/features/reputation-manager/server/audit-log";
 import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
@@ -245,6 +246,25 @@ export async function runRepRedditWatch(tenant: any, runId: string, step: StepTo
         .set({ sentiment: s.sentiment, flagged: s.flagged, flagReason: s.flagReason })
         .where(eq(repRedditMentions.externalMentionId, s.externalMentionId));
     }
+
+    // audit-log-schema.md's "detection" event — see engine-panel-service.ts's
+    // same call for why this logs every scored mention, not just flagged ones.
+    await logAuditEventsBatch(
+      engagementId,
+      scored.map(
+        (s): RepAuditEvent => ({
+          eventType: "detection",
+          payload: {
+            source: "reddit",
+            sourceUrl: s.permalink,
+            entityMatched: graph.operatorName,
+            mentionText: s.mentionText,
+            sentimentLabel: s.sentiment,
+            threatCategory: s.flagged ? s.flagReason : null,
+          },
+        })
+      )
+    );
 
     const flaggedCount = scored.filter((s) => s.flagged).length;
     await logStep(runId, {

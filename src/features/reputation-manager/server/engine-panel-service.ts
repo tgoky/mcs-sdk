@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { callOpenRouterModel, callClaude } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import { REP_ENGINE_IDS, REP_ENGINE_LABELS, resolveEngineModel } from "@/features/reputation-manager/engine-models";
+import { logAuditEventsBatch, type RepAuditEvent } from "@/features/reputation-manager/server/audit-log";
 import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
@@ -193,6 +194,27 @@ export async function runRepEnginePanel(tenant: any, runId: string, step: StepTo
         flagged: f.flagged,
         flagReason: f.flagReason,
       }))
+    );
+
+    // audit-log-schema.md's "detection" event — one per scored mention,
+    // flagged or not ("A monitored entity was mentioned somewhere and the
+    // ingestion/analysis layer scored it," no flagged-only qualifier in
+    // the spec). Batched: a full panel run can score up to
+    // len(seedPanelPrompts) x activeEngines.length findings in one go.
+    await logAuditEventsBatch(
+      engagementId,
+      scored.map(
+        (f): RepAuditEvent => ({
+          eventType: "detection",
+          payload: {
+            source: f.engineId,
+            entityMatched: graph.operatorName,
+            mentionText: `Q: ${f.promptText}\nA: ${f.responseText}`,
+            sentimentLabel: f.sentiment,
+            threatCategory: f.flagged ? f.flagReason : null,
+          },
+        })
+      )
     );
 
     const flaggedCount = scored.filter((f) => f.flagged).length;

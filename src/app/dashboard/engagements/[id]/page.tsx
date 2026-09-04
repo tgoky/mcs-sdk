@@ -9,6 +9,7 @@ import Link from "next/link";
 import { EngagementPauseControl } from "./pause-control";
 import { SkillsPanel } from "./skills-panel";
 import { RepSkillsPanel } from "./rep-skills-panel";
+import { RepAuditLogPanel } from "./rep-audit-log-panel";
 import { ProductsPanel, type ProductCardData, type ProductSetupState } from "./products-panel";
 import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
 import { MasterRosterCalendar } from "./master-roster-calendar";
@@ -16,6 +17,7 @@ import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
 import { RunRowActions } from "./run-row-actions";
 import { getEngagementSkillStates, getRepEngagementSkillStates } from "@/lib/engagement-skills";
+import { getRecentAuditEvents } from "@/features/reputation-manager/server/audit-log";
 import { getInstalledPackagesByWorkspace } from "@/lib/workspace";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
 import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
@@ -198,6 +200,7 @@ export default async function EngagementDetailPage({
   const repRunsBySkill = Object.fromEntries(
     REP_SKILL_IDS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
   ) as Record<RepSkillId, typeof runs>;
+  const repAuditEvents = repIdentityGraphRow ? await getRecentAuditEvents(id, 20) : [];
 
   const filteredRuns = activeSkillFilter
     ? runs.filter((r) => r.skillName === activeSkillFilter)
@@ -351,6 +354,8 @@ export default async function EngagementDetailPage({
             isPaused={Boolean(engagement.pausedAt)}
           />
         )}
+
+        {repIdentityGraphRow && <RepAuditLogPanel events={repAuditEvents} />}
 
         {engagement.pausedAt && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-xs font-mono text-amber-800 dark:text-amber-400">
