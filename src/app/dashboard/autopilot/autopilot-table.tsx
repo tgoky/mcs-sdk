@@ -14,7 +14,7 @@ export type AutopilotClientRow = AutopilotClientDTO;
 
 const ACTION_TYPES = Object.keys(ACTION_TYPE_LABELS) as PendingActionType[];
 
-/** Compact switch styled to match the reduced scale. */
+/** macOS-style frosted glass toggle switch. */
 function ToggleSwitch({ on, busy, onClick, label }: { on: boolean; busy: boolean; onClick: () => void; label: string }) {
   return (
     <button
@@ -23,14 +23,14 @@ function ToggleSwitch({ on, busy, onClick, label }: { on: boolean; busy: boolean
       disabled={busy}
       aria-label={label}
       aria-pressed={on}
-      className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
+      className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-all duration-300 ease-out focus:outline-none ${
         on
-          ? "bg-amber-400 border border-amber-500/30"
-          : "bg-zinc-300 dark:bg-zinc-700 border border-zinc-400/30 dark:border-zinc-600/50"
+          ? "bg-amber-400 dark:bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.3)]"
+          : "bg-zinc-200/80 dark:bg-zinc-700/60 border border-zinc-300/50 dark:border-zinc-600/40 backdrop-blur-sm"
       } ${busy ? "opacity-50" : ""}`}
     >
       <span
-        className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-md transition-transform duration-200 ease-in-out ${
+        className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform duration-300 ease-out ${
           on ? "translate-x-[12px]" : "translate-x-[2px]"
         }`}
       />
@@ -86,7 +86,7 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
     const key = `${row.engagementId}:approval-mode`;
     const nextValue = !row.requireApprovalForSideEffects;
     const previous = { requireApprovalForSideEffects: row.requireApprovalForSideEffects, requireApprovalActionTypes: row.requireApprovalActionTypes };
-    
+
     patchClient(row.engagementId, {
       requireApprovalForSideEffects: nextValue,
       requireApprovalActionTypes: nextValue ? row.requireApprovalActionTypes : [],
@@ -160,12 +160,12 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
         return (
           <div
             key={row.engagementId}
-            className="rounded-lg p-2.5 space-y-2 bg-zinc-100/70 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800"
+            className="rounded-xl p-2.5 space-y-2 bg-white/40 dark:bg-zinc-900/40 backdrop-blur-xl border border-white/60 dark:border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all"
           >
             {/* Row 1: client name + pause/resume */}
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold truncate text-zinc-800 dark:text-zinc-200">
+                <p className="text-xs font-bold truncate text-zinc-900 dark:text-zinc-100 tracking-tight">
                   {row.buyer}
                 </p>
                 {isPaused && (
@@ -178,10 +178,10 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
                 type="button"
                 onClick={() => togglePause(row)}
                 disabled={pauseBusy}
-                className={`flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded-md transition-colors cursor-pointer disabled:opacity-60 shrink-0 ${
+                className={`flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded-lg backdrop-blur-md border transition-all cursor-pointer disabled:opacity-60 shrink-0 ${
                   isPaused
-                    ? "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-950/70"
-                    : "text-zinc-600 dark:text-zinc-300 bg-zinc-200/60 dark:bg-zinc-800 hover:bg-zinc-300/50 dark:hover:bg-zinc-700"
+                    ? "text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20"
+                    : "text-zinc-700 dark:text-zinc-300 bg-zinc-200/50 dark:bg-zinc-800/50 border-zinc-300/40 dark:border-zinc-700/50 hover:bg-zinc-300/50 dark:hover:bg-zinc-700/50"
                 }`}
               >
                 {pauseBusy ? (
@@ -196,7 +196,7 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
             </div>
 
             {/* Row 2: Co-Pilot / Autopilot + scoped action types */}
-            <div className="rounded-md p-2 space-y-1.5 bg-zinc-200/40 dark:bg-zinc-950/50 border border-zinc-200/50 dark:border-zinc-800/50">
+            <div className="rounded-lg p-2 space-y-1.5 bg-zinc-50/50 dark:bg-zinc-950/30 backdrop-blur-md border border-zinc-200/40 dark:border-white/5">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200">
@@ -217,7 +217,7 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
               </div>
 
               {row.requireApprovalForSideEffects && (
-                <div className="flex flex-wrap gap-1 pt-1 border-t border-zinc-200/60 dark:border-zinc-800">
+                <div className="flex flex-wrap gap-1 pt-1 border-t border-zinc-200/40 dark:border-white/5">
                   {ACTION_TYPES.map((actionType) => {
                     const selected = row.requireApprovalActionTypes.includes(actionType);
                     const scopeBusy = busyKeys.has(`${row.engagementId}:scope:${actionType}`);
@@ -228,10 +228,10 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
                         onClick={() => toggleActionTypeScope(row, actionType)}
                         disabled={scopeBusy}
                         title={ACTION_TYPE_LABELS[actionType]}
-                        className={`px-1.5 py-0.5 text-[9px] font-mono font-bold rounded transition-colors cursor-pointer disabled:opacity-60 ${
+                        className={`px-1.5 py-0.5 text-[9px] font-mono font-bold rounded transition-all cursor-pointer disabled:opacity-60 backdrop-blur-sm ${
                           selected
-                            ? "bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-500/40"
-                            : "bg-transparent text-zinc-500 dark:text-zinc-500 border border-zinc-300/60 dark:border-zinc-800"
+                            ? "bg-amber-400/20 dark:bg-amber-400/10 text-amber-800 dark:text-amber-300 border border-amber-500/40"
+                            : "bg-transparent text-zinc-500 dark:text-zinc-400 border border-zinc-300/40 dark:border-white/10 hover:border-zinc-400/50"
                         }`}
                       >
                         {actionType.replace(/_/g, " ")}
@@ -257,15 +257,15 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
                     onClick={() => !skillBusy && toggleSkill(row, skill)}
                     disabled={skillBusy}
                     title={SKILL_INFO[skill].description}
-                    className={`flex items-center gap-1 pl-2 pr-1 py-0.5 text-[9px] font-semibold rounded-full transition-colors cursor-pointer disabled:opacity-60 ${
+                    className={`flex items-center gap-1 pl-2 pr-1 py-0.5 text-[9px] font-semibold rounded-full backdrop-blur-sm transition-all cursor-pointer disabled:opacity-60 ${
                       enabled
-                        ? "bg-amber-400/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
-                        : "bg-zinc-200/50 dark:bg-zinc-800/60 text-zinc-500 dark:text-zinc-400 border border-zinc-300/40 dark:border-zinc-700/40"
+                        ? "bg-amber-400/15 dark:bg-amber-400/10 text-amber-800 dark:text-amber-300 border border-amber-500/30"
+                        : "bg-zinc-100/60 dark:bg-zinc-800/40 text-zinc-600 dark:text-zinc-400 border border-zinc-200/60 dark:border-white/5 hover:border-zinc-300"
                     }`}
                   >
                     {SKILL_INFO[skill].name}
                     <span
-                      className={`inline-block w-1 h-1 rounded-full ${enabled ? "bg-amber-500" : "bg-zinc-400 dark:bg-zinc-600"}`}
+                      className={`inline-block w-1 h-1 rounded-full ${enabled ? "bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.6)]" : "bg-zinc-400 dark:bg-zinc-600"}`}
                     />
                   </button>
                 );
