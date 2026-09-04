@@ -2096,11 +2096,33 @@ export const repIncidents = pgTable("rep_incidents", {
     .notNull()
     .references(() => engagements.engagementId),
 
-  severityScore: integer("severity_score").notNull(), // 0-100, same scale as REP_THRESHOLD_DEFAULTS.crisisScoreFloor
+  severityScore: integer("severity_score").notNull(), // 0-100 — max composite across contributing findings, see rep-thresholds.ts's SEVERITY_COMPOSITION_WEIGHTS
   summary: text("summary").notNull(), // the LLM's synthesis of what's actually happening, across every contributing finding
   contributingFindings: jsonb("contributing_findings").$type<
-    { source: "engine_panel" | "trustpilot" | "reddit"; excerpt: string; flagReason: string | null }[]
+    {
+      source: "engine_panel" | "trustpilot" | "reddit";
+      excerpt: string;
+      flagReason: string | null;
+      // Per-axis 1-10 scores and the resulting 0-100 composite (see
+      // rep-thresholds.ts's SEVERITY_COMPOSITION_WEIGHTS/SEVERITY_AXIS_RUBRIC)
+      // plus this finding's own signal-class classification, if any.
+      // Optional: null on incidents declared before this scoring model —
+      // never backfilled, same "snapshot of what triggered this at the
+      // time" reasoning this column's own original comment already gives
+      // for not using foreign keys.
+      reach?: number;
+      sentiment?: number;
+      permanence?: number;
+      compositeScore?: number;
+      signalClass?: string | null;
+    }[]
   >().notNull(),
+
+  // Set when any contributing finding classified into one of
+  // SIGNAL_CLASSES_FORCE_TRIGGER (rep-thresholds.ts) — this incident was
+  // declared because of what it is, not because the composite score
+  // crossed the engagement's threshold. Null means score-driven.
+  signalClass: text("signal_class"),
 
   // "open" (declared, operator notified) | "acknowledged" (operator has
   // seen it — set by a future dashboard action, nothing writes this yet)

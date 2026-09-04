@@ -4,12 +4,26 @@ import { and, eq, gt, desc } from "drizzle-orm";
 import { callClaude } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import { notifyUser } from "@/lib/notify";
-import { resolveCrisisScoreFloor } from "@/features/reputation-manager/rep-thresholds";
+import {
+  resolveCrisisScoreFloor,
+  SEVERITY_COMPOSITION_WEIGHTS,
+  SEVERITY_AXIS_RUBRIC,
+  SIGNAL_CLASSES_FORCE_TRIGGER,
+  isForceTriggerSignalClass,
+  type SignalClass,
+} from "@/features/reputation-manager/rep-thresholds";
 import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
 type ContributingFinding = { source: "engine_panel" | "trustpilot" | "reddit"; excerpt: string; flagReason: string | null };
+type ScoredFinding = ContributingFinding & {
+  reach: number;
+  sentiment: number;
+  permanence: number;
+  compositeScore: number;
+  signalClass: SignalClass | null;
+};
 
 async function loadFlaggedFindingsSince(engagementId: string, since: Date | null): Promise<ContributingFinding[]> {
   const [engineFindings, trustpilotReviews, redditMentions] = await Promise.all([
@@ -56,9 +70,34 @@ async function lastSuccessfulRunAt(engagementId: string): Promise<Date | null> {
   return row?.completedAt ?? null;
 }
 
-type SeverityAssessment = { severityScore: number; summary: string };
+type SeverityAssessment = { scored: ScoredFinding[]; severityScore: number; forceTriggerClass: SignalClass | null; summary: string };
 
-async function assessSeverity(operatorName: string, findings: ContributingFinding[], runId: string): Promise<SeverityAssessment> {
+function clampAxisScore(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(10, Math.max(1, Math.round(n)));
+}
+
+/**
+ * Replaces the old single "the LLM says 73" holistic guess with the
+ * spec's actual model (thresholds.yml.template's severity_scoring +
+ * crisis-triggers.yml.template's auto_activation.signal_classes_force_trigger):
+ * one LLM call scores EACH finding on reach/sentiment/permanence (1-10,
+ * grounded in the same rubric anchors the spec ships) and classifies it
+ * into a force-trigger signal class or null — but the composite score
+ * itself is computed here in code from the fixed 40/35/25 weights, not
+ * guessed by the model. Deterministic and auditable: given the same
+ * three axis scores, the composite is always the same number, and
+ * that number is stored per-finding in contributingFindings for anyone
+ * to re-check later.
+ *
+ * The LLM still sees every finding together in one call specifically so
+ * it CAN classify coordinated_review_bomb (3+ negative items, same
+ * surface, short window) — cross-finding pattern awareness lives in the
+ * classification step now, not in a fuzzy "does this feel like a
+ * pattern" holistic score.
+ */
+async function scoreFindings(operatorName: string, findings: ContributingFinding[], runId: string): Promise<SeverityAssessment> {
   const numbered = findings
     .map((f, i) => `[${i}] Source: ${f.source}\n${f.excerpt}${f.flagReason ? `\nWhy flagged: ${f.flagReason}` : ""}`)
     .join("\n\n");
@@ -66,25 +105,56 @@ async function assessSeverity(operatorName: string, findings: ContributingFindin
   const result = await callClaude({
     model: "FAST",
     runId,
-    maxTokens: 800,
+    maxTokens: 1200,
     system:
-      `You assess reputation-crisis severity for a business ("${operatorName}") given everything flagged across its ` +
-      "AI-engine, Trustpilot, and Reddit monitoring since the last check. Score the CUMULATIVE situation 0-100 — " +
-      "not any single item in isolation. Consider: is this one isolated complaint, or a real pattern across " +
-      "sources? Does it involve a serious accusation (fraud, safety, legality)? Is it something a prospect would " +
-      "actually see and be swayed by? A single mildly negative review is low (10-30). A coordinated pattern of " +
-      "serious accusations across multiple sources is high (80+). Respond with ONLY JSON, no preamble, no " +
-      'markdown fences:\n{"severityScore": 0-100, "summary": "2-3 sentences on what is actually happening and why it scored this way"}',
+      `You score reputation-risk findings for a business ("${operatorName}"), flagged across its AI-engine, ` +
+      "Trustpilot, and Reddit monitoring since the last check. For EACH numbered finding, score three axes 1-10:\n\n" +
+      `- reach: ${SEVERITY_AXIS_RUBRIC.reach}\n` +
+      `- sentiment: ${SEVERITY_AXIS_RUBRIC.sentiment}\n` +
+      `- permanence: ${SEVERITY_AXIS_RUBRIC.permanence}\n\n` +
+      "Also classify each finding's signalClass — one of " +
+      `${SIGNAL_CLASSES_FORCE_TRIGGER.join(", ")}, or null if none apply. Classify coordinated_review_bomb only ` +
+      "when you see 3 or more negative findings on the same surface (e.g. Trustpilot) clustered in a short window " +
+      "across the finding set you're given now — not from a single item in isolation.\n\n" +
+      "Finally, write ONE 2-3 sentence summary of what's actually happening across every finding together. " +
+      'Respond with ONLY JSON, no preamble, no markdown fences:\n' +
+      '{"findings": [{"index": 0, "reach": 1-10, "sentiment": 1-10, "permanence": 1-10, "signalClass": "..."|null}], "summary": "..."}',
     userMessage: numbered,
   });
 
   try {
     const parsed = JSON.parse(result.text.trim().replace(/^```json\s*|\s*```$/g, ""));
-    const score = Number(parsed.severityScore);
-    if (!Number.isFinite(score) || score < 0 || score > 100 || typeof parsed.summary !== "string") {
+    if (!Array.isArray(parsed.findings) || typeof parsed.summary !== "string") {
       throw new Error("Malformed severity assessment response");
     }
-    return { severityScore: Math.round(score), summary: parsed.summary };
+
+    const byIndex = new Map<number, { reach: number; sentiment: number; permanence: number; signalClass: SignalClass | null }>(
+      parsed.findings.map((f: any) => [
+        Number(f.index),
+        {
+          reach: clampAxisScore(f.reach),
+          sentiment: clampAxisScore(f.sentiment),
+          permanence: clampAxisScore(f.permanence),
+          signalClass: isForceTriggerSignalClass(f.signalClass) ? f.signalClass : null,
+        },
+      ])
+    );
+
+    const scored: ScoredFinding[] = findings.map((finding, i) => {
+      const axes = byIndex.get(i) ?? { reach: 3, sentiment: 5, permanence: 3, signalClass: null };
+      const compositeScore = Math.round(
+        (axes.reach * SEVERITY_COMPOSITION_WEIGHTS.reach +
+          axes.sentiment * SEVERITY_COMPOSITION_WEIGHTS.sentiment +
+          axes.permanence * SEVERITY_COMPOSITION_WEIGHTS.permanence) *
+          10
+      );
+      return { ...finding, ...axes, compositeScore: Math.min(100, Math.max(0, compositeScore)) };
+    });
+
+    const severityScore = Math.max(...scored.map((f) => f.compositeScore));
+    const forceTriggerClass = scored.find((f) => f.signalClass !== null)?.signalClass ?? null;
+
+    return { scored, severityScore, forceTriggerClass, summary: parsed.summary };
   } catch (err) {
     throw new Error(`Could not parse severity assessment: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -123,12 +193,18 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     await logStep(runId, { phase: "crisis_response", status: "running", detail: `Assessing ${findings.length} flagged finding(s).` });
 
     const assessment = await (step
-      ? step.run("assess-severity", () => assessSeverity(graph.operatorName, findings, runId))
-      : assessSeverity(graph.operatorName, findings, runId));
+      ? step.run("score-findings", () => scoreFindings(graph.operatorName, findings, runId))
+      : scoreFindings(graph.operatorName, findings, runId));
 
     const floor = resolveCrisisScoreFloor(graph.crisisThresholdOverride);
+    // Force-trigger classes declare an incident regardless of score — the
+    // composite model may under-rate a record whose real risk isn't
+    // reach/sentiment/permanence-shaped (e.g. a legal notice with low
+    // reach is still regulatory_or_legal_action). Matches crisis-
+    // triggers.yml.template's auto_activation block exactly.
+    const forceTriggered = assessment.forceTriggerClass !== null;
 
-    if (assessment.severityScore < floor) {
+    if (!forceTriggered && assessment.severityScore < floor) {
       await logStep(runId, {
         phase: "crisis_response",
         status: "success",
@@ -145,9 +221,14 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
         engagementId,
         severityScore: assessment.severityScore,
         summary: assessment.summary,
-        contributingFindings: findings,
+        contributingFindings: assessment.scored,
+        signalClass: assessment.forceTriggerClass,
       })
       .returning({ id: repIncidents.id });
+
+    const triggerReason = forceTriggered
+      ? `Force-triggered: classified as ${assessment.forceTriggerClass} (declares regardless of score).`
+      : `Severity ${assessment.severityScore}/100 crossed this engagement's threshold of ${floor}.`;
 
     await notifyUser({
       whopUserId: tenant.whopUserId,
@@ -157,7 +238,7 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
       severity: "critical",
       title: `Reputation crisis declared — ${graph.operatorName}`,
       body:
-        `${assessment.summary}\n\nSeverity: ${assessment.severityScore}/100 (threshold: ${floor}). ` +
+        `${assessment.summary}\n\n${triggerReason} Severity: ${assessment.severityScore}/100. ` +
         `Sole authority on record: ${graph.soleAuthorityName}. Nothing has been published — this is a notification only.`,
       slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
     });
@@ -165,10 +246,12 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     await logStep(runId, {
       phase: "crisis_response",
       status: "success",
-      detail: `Incident declared (severity ${assessment.severityScore}/100) and operator notified.`,
+      detail: `Incident declared (severity ${assessment.severityScore}/100${forceTriggered ? `, force-triggered: ${assessment.forceTriggerClass}` : ""}) and operator notified.`,
     });
     summary.whatWorked.push(`Declared an incident — severity ${assessment.severityScore}/100 — and notified the operator.`);
-    summary.decisionsMade.push(`Incident ${incident.id} created from ${findings.length} contributing finding(s).`);
+    summary.decisionsMade.push(
+      `Incident ${incident.id} created from ${findings.length} contributing finding(s)${forceTriggered ? ` (force-triggered: ${assessment.forceTriggerClass})` : ""}.`
+    );
 
     await finishRun(runId, { summary });
   } catch (err) {

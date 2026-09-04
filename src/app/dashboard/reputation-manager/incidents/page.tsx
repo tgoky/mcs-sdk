@@ -17,6 +17,11 @@ const STATUS_STYLES: Record<string, string> = {
   resolved: "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-400",
 };
 
+/** "coordinated_review_bomb" -> "Coordinated review bomb" — signalClass is stored as the SIGNAL_CLASSES_FORCE_TRIGGER id verbatim (rep-thresholds.ts). */
+function signalClassLabel(signalClass: string): string {
+  return signalClass.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
+
 /**
  * Reputation Manager's Meetings-equivalent primary-rail destination —
  * Meetings has no RM analogue (nothing here is call-based), so this fills
@@ -42,6 +47,7 @@ export default async function ReputationManagerIncidentsPage() {
           severityScore: repIncidents.severityScore,
           summary: repIncidents.summary,
           status: repIncidents.status,
+          signalClass: repIncidents.signalClass,
           declaredAt: repIncidents.declaredAt,
           buyer: engagements.buyer,
         })
@@ -78,9 +84,17 @@ export default async function ReputationManagerIncidentsPage() {
               <div className="flex items-start gap-3 min-w-0">
                 <AlertTriangle className="w-4 h-4 mt-0.5 text-rose-500 dark:text-rose-400 shrink-0" />
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">{incident.buyer}</p>
                     <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">severity {incident.severityScore}</span>
+                    {incident.signalClass && (
+                      <span
+                        className="text-[10px] font-semibold uppercase rounded-md border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 px-1.5 py-0.5"
+                        title="Declared regardless of severity score because of this signal class"
+                      >
+                        Force-triggered · {signalClassLabel(incident.signalClass)}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 line-clamp-2">{incident.summary}</p>
                 </div>
