@@ -1,0 +1,1 @@
+ALTER TABLE "rep_identity_graphs" ADD COLUMN "active_engines" jsonb;

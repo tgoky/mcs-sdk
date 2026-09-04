@@ -1904,6 +1904,17 @@ export const repIdentityGraphs = pgTable(
     // boundary (intake seeds, ai-engine-panel locks the full panel).
     seedPanelPrompts: jsonb("seed_panel_prompts").$type<string[]>().notNull().default([]),
 
+    // Per-client restriction of which platform-configured AI engines
+    // rep-engine-panel checks the seed prompts against. Null (every row
+    // before this field existed, and every row saved with all 5 engines
+    // checked in the form) means "no restriction — check every engine
+    // that's platform-configured." Only ever narrows a client down from
+    // that set; it can't add an engine nobody's configured a model for
+    // in the first place. See engine-panel-service.ts's runRepEnginePanel
+    // and identity-graph-form.tsx's toIntakePayload for the two ends of
+    // this field's null-means-all convention.
+    activeEngines: jsonb("active_engines").$type<RepEngineId[] | null>(),
+
     // ── Sole authority (question 10) ────────────────────────────────────
     // The one person who can declare a crisis, approve a public response,
     // or stand down. Recorded, never defaulted — every engagement using

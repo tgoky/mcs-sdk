@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { repIdentityGraphs, type RepEntity, type RepOffering, type RepCompetitor, type RepCollision } from "@/models/schema";
+import { repIdentityGraphs, type RepEntity, type RepOffering, type RepCompetitor, type RepCollision, type RepEngineId } from "@/models/schema";
+import { REP_ENGINE_IDS } from "@/features/reputation-manager/engine-models";
 import { eq } from "drizzle-orm";
 import { callClaudeWithWebSearch } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
@@ -30,6 +31,10 @@ export type RepIntakeInput = {
   seedPanelPrompts: string[]; // Q8
   soleAuthorityName: string; // Q10
   crisisThresholdOverride?: number | null;
+  // Null (or omitted) means "no restriction — every platform-configured
+  // engine runs," matching every row's behavior before this field
+  // existed. See repIdentityGraphs.activeEngines' own comment.
+  activeEngines?: RepEngineId[] | null;
 };
 
 const MAX_LIST_LENGTH = 50; // generous ceiling against a malformed/scripted payload, not a real-world limit
@@ -77,6 +82,15 @@ function validateCompetitors(value: unknown): value is RepCompetitor[] {
   if (!Array.isArray(value) || value.length > MAX_LIST_LENGTH) return false;
   return value.every(
     (c) => c && typeof c === "object" && isNonEmptyTrimmed(c.name) && isStringArray(c.monitorFor ?? []) && typeof c.highPriority === "boolean"
+  );
+}
+
+function validateActiveEngines(value: unknown): value is RepEngineId[] | null {
+  if (value === null || value === undefined) return true;
+  return (
+    Array.isArray(value) &&
+    value.length <= REP_ENGINE_IDS.length &&
+    value.every((v): v is RepEngineId => typeof v === "string" && REP_ENGINE_IDS.includes(v as RepEngineId))
   );
 }
 
@@ -136,6 +150,9 @@ export async function saveRepIdentityGraphIntake(
       error: "Each collision needs a name, who they are, and a disambiguation note — an empty note defeats the point of listing it.",
     };
   }
+  if (!validateActiveEngines(input.activeEngines)) {
+    return { error: "Active engines must be a list drawn from the platform's supported engine ids, or omitted for no restriction." };
+  }
   if (
     input.crisisThresholdOverride !== undefined &&
     input.crisisThresholdOverride !== null &&
@@ -162,6 +179,7 @@ export async function saveRepIdentityGraphIntake(
     seedPanelPrompts: input.seedPanelPrompts,
     soleAuthorityName: input.soleAuthorityName.trim(),
     crisisThresholdOverride: input.crisisThresholdOverride ?? null,
+    activeEngines: input.activeEngines ?? null,
     updatedAt: new Date(),
   };
 
@@ -189,6 +207,7 @@ export async function saveRepIdentityGraphIntake(
         seedPanelPrompts: values.seedPanelPrompts,
         soleAuthorityName: values.soleAuthorityName,
         crisisThresholdOverride: values.crisisThresholdOverride,
+        activeEngines: values.activeEngines,
         updatedAt: values.updatedAt,
         // collisions intentionally omitted here — merged below in a
         // separate statement so a collision_check-sourced entry from a

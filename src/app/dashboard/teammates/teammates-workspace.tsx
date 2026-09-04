@@ -32,14 +32,73 @@
 // "Loading conversation…" for content already on screen. `selected` still
 // updates in handleThreadEvent so the rail's highlight and list re-sort
 // correctly — that update just doesn't carry a key bump with it.
-import { useEffect, useState } from "react";
+//
+// `railWidth` is a plain draggable-divider setup, same shape as
+// shell-layout.tsx's right-utility-panel width state (lazy localStorage
+// read, a handler that sets state + persists on every drag tick, no
+// try/catch — matches that exact precedent, not teammates-chat.tsx's
+// best-effort thread-id reads). No gap and no separate bordered box
+// around either side anymore: the rail and TeammatesChat sit flush
+// against each other, divided only by the draggable line rendered
+// between them, matching how Claude's own chat sidebar and message pane
+// are one continuous surface instead of two floating panels.
+import { useCallback, useEffect, useRef, useState } from "react";
 import { TeammatesChat, readStoredThreadId } from "./teammates-chat";
 import { TeammatesThreadRail, type ThreadSummary } from "./teammates-thread-rail";
+
+const RAIL_WIDTH_KEY = "mcs-teammates-rail-width";
+const MIN_RAIL_WIDTH = 200;
+const MAX_RAIL_WIDTH = 400;
+const DEFAULT_RAIL_WIDTH = 260;
+
+function readStoredRailWidth(): number {
+  if (typeof window === "undefined") return DEFAULT_RAIL_WIDTH;
+  const stored = window.localStorage.getItem(RAIL_WIDTH_KEY);
+  const n = stored ? Number(stored) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.min(MAX_RAIL_WIDTH, Math.max(MIN_RAIL_WIDTH, n)) : DEFAULT_RAIL_WIDTH;
+}
 
 export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadSummary[] }) {
   const [threads, setThreads] = useState(initialThreads);
   const [selected, setSelected] = useState<string | null>(() => readStoredThreadId());
   const [epoch, setEpoch] = useState(0);
+  const [railWidth, setRailWidth] = useState(readStoredRailWidth);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  const handleRailWidthChange = useCallback((w: number) => {
+    setRailWidth(w);
+    window.localStorage.setItem(RAIL_WIDTH_KEY, String(w));
+  }, []);
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!draggingRef.current || !containerRef.current) return;
+      const left = containerRef.current.getBoundingClientRect().left;
+      const next = Math.min(MAX_RAIL_WIDTH, Math.max(MIN_RAIL_WIDTH, e.clientX - left));
+      handleRailWidthChange(next);
+    }
+    function onUp() {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [handleRailWidthChange]);
 
   // Landing back from a real Composio OAuth redirect (connect_credential's
   // link, chat-credentials.ts) — /dashboard/teammates is on the return
@@ -90,10 +149,27 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
   }
 
   return (
-    <div className="flex h-full min-h-0 gap-3">
-      <TeammatesThreadRail threads={threads} selectedId={selected} onSelect={selectThread} onNewChat={startNewChat} />
-      <div className="flex-1 min-h-0 rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
-        <TeammatesChat key={epoch} initialThreadId={selected} onThreadEvent={handleThreadEvent} initialPendingMessage={epoch === 0 ? pendingMessage : undefined} />
+    <div ref={containerRef} className="relative flex h-full min-h-0">
+      <div style={{ width: railWidth }} className="h-full min-h-0 shrink-0">
+        <TeammatesThreadRail threads={threads} selectedId={selected} onSelect={selectThread} onNewChat={startNewChat} />
+      </div>
+
+      {/* The "single vertical line" divider — draggable, no boxed panels
+         on either side of it. Wider invisible hit target than the visible
+         line itself, same trick as right-utility-panel.tsx's own handle. */}
+      <div onMouseDown={onDragStart} className="relative w-px shrink-0 cursor-col-resize group" title="Drag to resize">
+        <div className="absolute inset-y-0 -left-1.5 -right-1.5" />
+        <div className="absolute inset-y-0 left-0 w-px bg-zinc-200 dark:bg-zinc-800 group-hover:bg-zinc-400 dark:group-hover:bg-zinc-600 transition-colors" />
+      </div>
+
+      <div className="flex-1 min-w-0 h-full min-h-0">
+        <TeammatesChat
+          key={epoch}
+          initialThreadId={selected}
+          onThreadEvent={handleThreadEvent}
+          initialPendingMessage={epoch === 0 ? pendingMessage : undefined}
+          size="full"
+        />
       </div>
     </div>
   );

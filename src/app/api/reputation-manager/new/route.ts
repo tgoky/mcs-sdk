@@ -7,6 +7,8 @@ import { generateEngagementId } from "@/lib/engagement-id";
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
 import { saveRepIdentityGraphIntake, type RepIntakeInput } from "@/features/reputation-manager/server/onboarding-service";
+import { REP_ENGINE_IDS } from "@/features/reputation-manager/engine-models";
+import type { RepEngineId } from "@/models/schema";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
@@ -67,6 +69,9 @@ export async function POST(request: Request) {
       seedPanelPrompts: Array.isArray(body.seedPanelPrompts) ? body.seedPanelPrompts : [],
       soleAuthorityName: typeof body.soleAuthorityName === "string" ? body.soleAuthorityName : "",
       crisisThresholdOverride: typeof body.crisisThresholdOverride === "number" ? body.crisisThresholdOverride : null,
+      activeEngines: Array.isArray(body.activeEngines)
+        ? body.activeEngines.filter((v: unknown): v is RepEngineId => typeof v === "string" && REP_ENGINE_IDS.includes(v as RepEngineId))
+        : null,
     };
 
     const result = await saveRepIdentityGraphIntake(engagementId, input);

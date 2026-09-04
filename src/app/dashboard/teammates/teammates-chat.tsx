@@ -68,7 +68,7 @@ export const MENTIONABLE_SKILLS = [
   },
 ];
 
-function FormattedMessage({ content }: { content: string }) {
+function FormattedMessage({ content, mentionPillTextSize }: { content: string; mentionPillTextSize: string }) {
   const parts = content.split(/(@[\w-]+)/g);
   return (
     <span className="whitespace-pre-wrap leading-relaxed">
@@ -80,7 +80,7 @@ function FormattedMessage({ content }: { content: string }) {
             return (
               <span
                 key={i}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-full text-[11px] font-medium border ${skill.pillStyle}`}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-full font-medium border ${mentionPillTextSize} ${skill.pillStyle}`}
               >
                 <SquishySkillBadge skill={skill.token} size={14} />
                 <span>{skill.label}</span>
@@ -94,15 +94,52 @@ function FormattedMessage({ content }: { content: string }) {
   );
 }
 
+/**
+ * The chat pane behind both the right-utility-panel's compact
+ * "Teammates" tab (teammates-panel-content.tsx, `size` left at its
+ * "compact" default) and the full /dashboard/teammates page
+ * (teammates-workspace.tsx, `size="full"`). Same component, same
+ * behavior — only the type scale and spacing differ, so the compact
+ * panel keeps looking exactly like it did before this size prop existed.
+ * "full" drops the composer/bubble sizing up a notch and centers the
+ * message stream in a readable column (like Claude's own chat) instead
+ * of letting lines stretch edge-to-edge across a whole monitor — the
+ * outer "no box" treatment itself lives one level up, in
+ * teammates-workspace.tsx, which no longer wraps this in a bordered card.
+ */
 export function TeammatesChat({
   initialThreadId,
   onThreadEvent,
   initialPendingMessage,
+  size = "compact",
 }: {
   initialThreadId?: string | null;
   onThreadEvent?: (thread: { id: string; title: string }) => void;
   initialPendingMessage?: string;
+  size?: "compact" | "full";
 } = {}) {
+  const isFull = size === "full";
+
+  const textSize = isFull ? "text-sm" : "text-xs";
+  const labelSize = isFull ? "text-xs" : "text-[10px]";
+  const emptyTitleSize = isFull ? "text-base" : "text-xs";
+  const emptySubSize = isFull ? "text-sm" : "text-[11px]";
+  const emptyMaxWidth = isFull ? "max-w-[360px]" : "max-w-[240px]";
+  const bubbleMaxWidth = isFull ? "max-w-[70%]" : "max-w-[85%]";
+  const bubblePadding = isFull ? "px-4 py-3" : "px-3 py-2";
+  const streamColumn = isFull ? "max-w-3xl mx-auto w-full" : "";
+  const streamPadding = isFull ? "px-6 py-8 md:px-0" : "px-3 py-3";
+  const streamGap = isFull ? "space-y-6" : "space-y-3";
+  const toolLinkTextSize = isFull ? "text-xs" : "text-[10px]";
+  const composerPadding = isFull ? "p-4 md:pb-8" : "p-2.5";
+  const composerColumn = isFull ? "max-w-3xl mx-auto w-full" : "";
+  const inputCardPadding = isFull ? "p-3.5" : "p-2.5";
+  const tagPillTextSize = isFull ? "text-sm" : "text-xs";
+  const dropdownItemTextSize = isFull ? "text-sm" : "text-xs";
+  const sendButtonSize = isFull ? "w-8 h-8" : "w-6 h-6";
+  const sendIconSize = isFull ? 15 : 13;
+  const dotSize = isFull ? "w-2 h-2" : "w-1.5 h-1.5";
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [taggedSkills, setTaggedSkills] = useState<string[]>([]);
@@ -247,20 +284,21 @@ export function TeammatesChat({
   return (
     <div className="flex flex-col h-full text-zinc-900 dark:text-zinc-100">
       {/* Message Stream */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 text-xs">
+      <div className={`flex-1 overflow-y-auto ${streamPadding} ${textSize}`}>
+        <div className={`${streamColumn} min-h-full ${streamGap}`}>
         {historyLoading && (
           <div className="flex items-center gap-2 px-1 text-zinc-500">
             <PrefillLoader size={12} />
-            <span className="text-xs">Loading conversation...</span>
+            <span className={textSize}>Loading conversation...</span>
           </div>
         )}
 
         {!historyLoading && messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-1.5 px-4 py-8">
-            <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+            <p className={`${emptyTitleSize} font-bold text-zinc-900 dark:text-zinc-100 tracking-tight`}>
               Ask Workers to run something
             </p>
-            <p className="text-[11px] leading-relaxed max-w-[240px] text-zinc-500 dark:text-zinc-400">
+            <p className={`${emptySubSize} leading-relaxed ${emptyMaxWidth} text-zinc-500 dark:text-zinc-400`}>
               Try &quot;run a call brief for Acme Co&quot; or use @ to tag a skill.
             </p>
           </div>
@@ -273,35 +311,35 @@ export function TeammatesChat({
               m.role === "user" ? "items-end" : "items-start"
             }`}
           >
-            <div className="flex items-center gap-1.5 px-1 text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
+            <div className={`flex items-center gap-1.5 px-1 font-medium text-zinc-500 dark:text-zinc-400 ${labelSize}`}>
               {m.role === "worker" ? (
                 <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+                  <span className={`${dotSize} rounded-full bg-zinc-400 dark:bg-zinc-500`} />
                   <span>Worker</span>
                 </>
               ) : (
                 <>
                   <span>You</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 dark:bg-zinc-400" />
+                  <span className={`${dotSize} rounded-full bg-zinc-600 dark:bg-zinc-400`} />
                 </>
               )}
             </div>
             <div
-              className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)] border transition-colors ${
+              className={`${bubbleMaxWidth} rounded-2xl ${bubblePadding} ${textSize} backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)] border transition-colors ${
                 m.role === "user"
                   ? "bg-zinc-900/90 dark:bg-zinc-800/80 text-zinc-100 border-white/10 dark:border-white/10"
                   : "bg-white/50 dark:bg-zinc-900/40 text-zinc-900 dark:text-zinc-100 border-white/60 dark:border-white/10"
               }`}
             >
-              <FormattedMessage content={m.content} />
+              <FormattedMessage content={m.content} mentionPillTextSize={isFull ? "text-xs" : "text-[11px]"} />
               {m.toolCalls && m.toolCalls.length > 0 && (
                 <div className="mt-2 space-y-1 pt-1.5 border-t border-zinc-200/50 dark:border-zinc-800/60">
                   {m.toolCalls.map((tc, j) => (
-                    <div key={j} className="flex items-start gap-1 text-[10px] text-zinc-500 dark:text-zinc-400">
+                    <div key={j} className={`flex items-start gap-1 text-zinc-500 dark:text-zinc-400 ${toolLinkTextSize}`}>
                       {tc.ok ? (
-                        <CheckCircle2 size={10} className="text-emerald-500 shrink-0 mt-0.5" />
+                        <CheckCircle2 size={isFull ? 12 : 10} className="text-emerald-500 shrink-0 mt-0.5" />
                       ) : (
-                        <XCircle size={10} className="text-rose-500 shrink-0 mt-0.5" />
+                        <XCircle size={isFull ? 12 : 10} className="text-rose-500 shrink-0 mt-0.5" />
                       )}
                       <span>{tc.message}</span>
                     </div>
@@ -314,10 +352,10 @@ export function TeammatesChat({
                     <a
                       key={j}
                       href={link.href}
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold bg-white/60 dark:bg-zinc-800/60 backdrop-blur-xs hover:bg-white/80 dark:hover:bg-zinc-700/80 text-zinc-800 dark:text-zinc-200 transition-colors border border-white/40 dark:border-white/10"
+                      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-semibold bg-white/60 dark:bg-zinc-800/60 backdrop-blur-xs hover:bg-white/80 dark:hover:bg-zinc-700/80 text-zinc-800 dark:text-zinc-200 transition-colors border border-white/40 dark:border-white/10 ${toolLinkTextSize}`}
                     >
                       {link.label}
-                      <ArrowUpRight size={10} />
+                      <ArrowUpRight size={isFull ? 12 : 10} />
                     </a>
                   ))}
                 </div>
@@ -329,15 +367,17 @@ export function TeammatesChat({
         {loading && (
           <div className="flex items-center gap-2 px-1 text-zinc-500">
             <PrefillLoader size={12} />
-            <span className="text-xs">Working on it...</span>
+            <span className={textSize}>Working on it...</span>
           </div>
         )}
 
-        {error && <p className="text-xs text-rose-500 px-1">{error}</p>}
+        {error && <p className={`text-rose-500 px-1 ${textSize}`}>{error}</p>}
+        </div>
       </div>
 
       {/* Input Surface (macOS Glassmorphism Panel) */}
-      <div className="relative p-2.5 border-t border-white/20 dark:border-white/10 bg-white/15 dark:bg-zinc-950/20 backdrop-blur-2xl">
+      <div className={`relative ${composerPadding} border-t border-white/20 dark:border-white/10 bg-white/15 dark:bg-zinc-950/20 backdrop-blur-2xl`}>
+        <div className={composerColumn}>
         {/* Upward Autocomplete Menu */}
         {showMentions && (
           <div className="absolute bottom-full left-2 mb-2 w-52 rounded-2xl bg-white/70 dark:bg-zinc-900/70 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] overflow-hidden z-50">
@@ -346,7 +386,7 @@ export function TeammatesChat({
                 key={s.token}
                 type="button"
                 onClick={() => addSkillTag(s.token)}
-                className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs font-medium hover:bg-white/50 dark:hover:bg-white/10 text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer"
+                className={`flex items-center gap-2 w-full text-left px-3 py-2 font-medium hover:bg-white/50 dark:hover:bg-white/10 text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer ${dropdownItemTextSize}`}
               >
                 <SquishySkillBadge skill={s.token} size={16} />
                 <span>@{s.token}</span>
@@ -356,7 +396,7 @@ export function TeammatesChat({
         )}
 
         {/* Glass Input Card Container */}
-        <div className="flex flex-col gap-2 rounded-2xl bg-white/35 dark:bg-zinc-900/35 backdrop-blur-xl border border-white/50 dark:border-white/10 p-2.5 shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] focus-within:border-white/80 dark:focus-within:border-white/20 focus-within:bg-white/50 dark:focus-within:bg-zinc-900/50 transition-all duration-200">
+        <div className={`flex flex-col gap-2 rounded-2xl bg-white/35 dark:bg-zinc-900/35 backdrop-blur-xl border border-white/50 dark:border-white/10 ${inputCardPadding} shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] focus-within:border-white/80 dark:focus-within:border-white/20 focus-within:bg-white/50 dark:focus-within:bg-zinc-900/50 transition-all duration-200`}>
           {/* Continuous Inline Row: Tags + Textarea */}
           <div className="flex flex-wrap items-center gap-1.5 min-h-[28px]">
             {taggedSkills.map((token) => {
@@ -365,7 +405,7 @@ export function TeammatesChat({
               return (
                 <span
                   key={token}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${skill.pillStyle} shrink-0`}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium border ${tagPillTextSize} ${skill.pillStyle} shrink-0`}
                 >
                   <SquishySkillBadge skill={skill.token} size={14} />
                   <span>{skill.label}</span>
@@ -392,7 +432,7 @@ export function TeammatesChat({
               }}
               placeholder={taggedSkills.length > 0 ? "add details..." : "Ask Workers or type @..."}
               rows={1}
-              className="flex-1 min-w-[140px] max-h-36 resize-none bg-transparent text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none leading-relaxed overflow-y-auto py-0.5"
+              className={`flex-1 min-w-[140px] max-h-36 resize-none bg-transparent text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none leading-relaxed overflow-y-auto py-0.5 ${textSize}`}
             />
           </div>
 
@@ -411,12 +451,13 @@ export function TeammatesChat({
               type="button"
               onClick={() => send()}
               disabled={loading || (!input.trim() && taggedSkills.length === 0)}
-              className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 backdrop-blur-md text-zinc-100 dark:text-zinc-950 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-black dark:hover:bg-white transition-all shadow-xs cursor-pointer shrink-0"
+              className={`flex items-center justify-center ${sendButtonSize} rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 backdrop-blur-md text-zinc-100 dark:text-zinc-950 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-black dark:hover:bg-white transition-all shadow-xs cursor-pointer shrink-0`}
               aria-label="Send message"
             >
-              <ArrowUp size={13} className="stroke-[2.5]" />
+              <ArrowUp size={sendIconSize} className="stroke-[2.5]" />
             </button>
           </div>
+        </div>
         </div>
       </div>
     </div>

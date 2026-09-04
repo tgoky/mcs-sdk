@@ -7,6 +7,8 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import { setSkillEnabledForEngagement, isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
 import { saveRepIdentityGraphIntake, type RepIntakeInput } from "@/features/reputation-manager/server/onboarding-service";
+import { REP_ENGINE_IDS } from "@/features/reputation-manager/engine-models";
+import type { RepEngineId } from "@/models/schema";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -64,6 +66,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           seedPanelPrompts: graph.seedPanelPrompts,
           soleAuthorityName: graph.soleAuthorityName,
           crisisThresholdOverride: graph.crisisThresholdOverride,
+          activeEngines: graph.activeEngines,
         }
       : null,
   });
@@ -114,6 +117,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       soleAuthorityName: typeof body.soleAuthorityName === "string" ? body.soleAuthorityName : "",
       crisisThresholdOverride:
         typeof body.crisisThresholdOverride === "number" ? body.crisisThresholdOverride : null,
+      // null (anything other than a real array, including "not sent at
+      // all") means no restriction — matches toIntakePayload's own
+      // null-means-all-engines convention on the form side.
+      activeEngines: Array.isArray(body.activeEngines)
+        ? body.activeEngines.filter((v: unknown): v is RepEngineId => typeof v === "string" && REP_ENGINE_IDS.includes(v as RepEngineId))
+        : null,
     };
 
     // saveRepIdentityGraphIntake owns every actual validation rule (see
