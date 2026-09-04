@@ -122,13 +122,13 @@ export default async function EngagementsPage({
           </p>
         </div>
 
-        {/* <Link
-          href="/dashboard/engagements/new"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-lg shadow-xs hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.98] transition-all"
+        <Link
+          href={scopedProduct === "reputation-manager" ? "/dashboard/reputation-manager/new" : "/dashboard/engagements/new"}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-lg shadow-xs hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.98] transition-all shrink-0"
         >
           <Plus size={14} strokeWidth={2.5} />
           <span>Add Client</span>
-        </Link> */}
+        </Link>
       </div>
 
       {/* Empty State */}
@@ -138,10 +138,10 @@ export default async function EngagementsPage({
             No active client engagements found in this workspace.
           </p>
           <Link
-            href="/dashboard/engagements/new"
+            href={scopedProduct === "reputation-manager" ? "/dashboard/reputation-manager/new" : "/dashboard/engagements/new"}
             className="text-xs font-semibold text-amber-500 hover:underline transition-colors"
           >
-            Add your first client 
+            Add your first client
           </Link>
         </div>
       ) : (
