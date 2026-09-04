@@ -2192,6 +2192,91 @@ export const repAuditEvents = pgTable(
   })
 );
 
+// ── Reputation Manager: Offensive playbook (Moves A/B/C) ─────────────────
+// Ported from mcs/cms's offensive/ templates — the three-move disambiguation
+// system that runs alongside the defensive monitoring skills:
+//   Move A: Schema.org JSON-LD + Wikidata submission (schema-wikidata.ts)
+//   Move B: Tier-1 publication outreach (pitch-package.ts)
+//   Move C: Reddit thread-density ramp (reddit-ramp.ts)
+// All three are operator-executed, not automated — the templates are
+// explicit that outreach personalization and Reddit's anti-automation
+// norms make a one-click "do this for me" button the wrong shape. What
+// these tables give the operator is generation (Move A's JSON-LD),
+// drafting assistance (Move B's pitches), and tracking (all three) —
+// never an auto-send or auto-post.
+
+// Move A/B/C's own checklists (A.1/A.2 deploy steps, B's outreach
+// checklist, C's knock-on-updates) collapse into one generic table rather
+// than three, same reasoning engagementSkills already uses: itemKey is
+// free text, not an enum, so a checklist's exact items can evolve per
+// move without a migration.
+export const repOffensiveChecklist = pgTable(
+  "rep_offensive_checklist",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+
+    move: text("move").notNull(), // "a" | "b" | "c"
+    itemKey: text("item_key").notNull(),
+    completed: boolean("completed").notNull().default(false),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => ({
+    repOffensiveChecklistUnique: uniqueIndex("rep_offensive_checklist_unique").on(table.engagementId, table.move, table.itemKey),
+  })
+);
+
+// Move B: the Tier-1 target list plus its own outreach history. One row
+// per target rather than a separate pitch-log table — "history" is a
+// small, naturally-bounded append-only list (sent, one follow-up, replies,
+// placement) per the template's own cadence rules ("one follow-up only, a
+// second is noise"), not the kind of volume repEngineFindings has.
+export const repPitchTargets = pgTable("rep_pitch_targets", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+
+  target: text("target").notNull(), // publication/newsletter/podcast name
+  beat: text("beat"),
+  contact: text("contact"),
+  channel: text("channel"), // email, DM platform, etc.
+  fitNotes: text("fit_notes"),
+
+  status: text("status").notNull().default("not_contacted"), // not_contacted | sent | followed_up | replied | placed | declined
+  history: jsonb("history").$type<{ type: "sent" | "follow_up" | "reply" | "placement" | "declined"; note: string | null; occurredAt: string }[]>().notNull().default([]),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Move C: one row per engagement (a ramp is a single 90-day plan, not a
+// repeatable log entity) — confirmed handle, ramp start date, the tiered
+// subreddit map, and the activity log all live together since they're
+// read and written as one unit (the ramp-phase computation needs
+// startedAt, the subreddit list, and recent activity all at once).
+export const repRedditRamp = pgTable(
+  "rep_reddit_ramp",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .unique()
+      .references(() => engagements.engagementId),
+
+    confirmedHandle: text("confirmed_handle"),
+    startedAt: timestamp("started_at"),
+
+    subreddits: jsonb("subreddits").$type<{ subreddit: string; tier: 1 | 2 | 3 }[]>().notNull().default([]),
+    activityLog: jsonb("activity_log").$type<{ occurredAt: string; type: "comment" | "post"; subreddit: string; note: string | null }[]>().notNull().default([]),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  }
+);
+
 // ── Chat threads (2026-08-30) ───────────────────────────────────────────
 // Persistence for Teammates chat (src/app/api/teammates/chat/route.ts),
 // which previously had none — the client resent full message history each

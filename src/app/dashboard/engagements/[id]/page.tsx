@@ -27,9 +27,10 @@ import {
   XCircle, 
   Loader2, 
   AlertCircle, 
-  ArrowRight, 
+  ArrowRight,
   Server,
-  ChevronLeft
+  ChevronLeft,
+  Megaphone
 } from "lucide-react";
 import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
 import { BookingSyncChip } from "@/components/booking-sync-chip";
@@ -356,6 +357,26 @@ export default async function EngagementDetailPage({
         )}
 
         {repIdentityGraphRow && <RepAuditLogPanel events={repAuditEvents} />}
+
+        {repIdentityGraphRow && (
+          <Link
+            href={`/dashboard/engagements/${engagement.engagementId}/offensive`}
+            className="group flex items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/60 p-4 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all shadow-2xs"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                <Megaphone size={16} />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                  Offensive Playbook
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Schema/Wikidata, press outreach, and the Reddit ramp — Moves A, B, and C.</p>
+              </div>
+            </div>
+            <ArrowRight size={16} className="text-zinc-400 shrink-0" />
+          </Link>
+        )}
 
         {engagement.pausedAt && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-xs font-mono text-amber-800 dark:text-amber-400">
