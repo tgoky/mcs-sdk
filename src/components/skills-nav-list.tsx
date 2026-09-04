@@ -4,6 +4,7 @@ import { SKILL_IDS, SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { REP_SKILL_IDS, REP_SKILL_MANIFEST } from "@/lib/rep-skill-manifest";
 import type { ProductId } from "@/lib/product-catalog";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { RepSkillBadge } from "@/components/rep-skill-badge";
 import { SidebarNavLinks, type NavLinkItem } from "@/app/dashboard/sidebar-nav-links";
 
 /**
@@ -31,10 +32,16 @@ export function SkillsNavList({ productIds = ["showtime"] }: { productIds?: Prod
       }));
     }
 
+    // No per-capability hub page exists for these yet (unlike Showtime's
+    // /dashboard/modules/[skill]) — links to the real RM dashboard rather
+    // than a fake per-skill destination or the dead ?skill= param the
+    // dashboard page no longer reads. The #skillId suffix is only there
+    // to keep each entry's href (SidebarNavLinks' React key) unique; it
+    // isn't a real anchor on that page.
     return REP_SKILL_IDS.map((skillId) => ({
-      href: `/dashboard/reputation-manager?skill=${encodeURIComponent(skillId)}`,
+      href: `/dashboard/reputation-manager#${skillId}`,
       label: REP_SKILL_MANIFEST[skillId].name,
-      icon: <span className="w-[18px] h-[18px] rounded-full border border-indigo-300 dark:border-indigo-700 bg-indigo-100 dark:bg-indigo-950/50" />,
+      icon: <RepSkillBadge skill={skillId} size={18} />,
     }));
   });
 
