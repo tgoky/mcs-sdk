@@ -114,10 +114,10 @@ export function TeammatesChat({
   const bubbleMaxWidth = isFull ? "max-w-[70%]" : "max-w-[85%]";
   const bubblePadding = isFull ? "px-4 py-3" : "px-3 py-2";
   const streamColumn = isFull ? "max-w-3xl mx-auto w-full" : "";
-  const streamPadding = isFull ? "px-6 py-8 md:px-0" : "px-3 py-3";
+  const streamPadding = isFull ? "px-6 py-6 md:px-0" : "px-3 py-3";
   const streamGap = isFull ? "space-y-6" : "space-y-3";
   const toolLinkTextSize = isFull ? "text-xs" : "text-[10px]";
-  const composerPadding = isFull ? "p-4 md:pb-8" : "p-2.5";
+  const composerPadding = isFull ? "px-6 pb-6 pt-2 md:px-0" : "p-2.5";
   const composerColumn = isFull ? "max-w-3xl mx-auto w-full" : "";
   const inputCardPadding = isFull ? "p-3.5" : "p-2.5";
   const tagPillTextSize = isFull ? "text-sm" : "text-xs";
@@ -269,7 +269,7 @@ export function TeammatesChat({
   }));
 
   return (
-    <div className="flex flex-col h-full text-zinc-900 dark:text-zinc-100">
+    <div className="flex flex-col h-full text-zinc-900 dark:text-zinc-100 min-h-0">
       {/* Message Stream */}
       <div className={`flex-1 overflow-y-auto ${streamPadding} ${textSize}`}>
         <div className={`${streamColumn} min-h-full ${streamGap}`}>
@@ -368,8 +368,8 @@ export function TeammatesChat({
         </div>
       </div>
 
-      {/* Input Surface */}
-      <div className={`relative ${composerPadding} border-t border-white/20 dark:border-white/10 bg-white/15 dark:bg-zinc-950/20 backdrop-blur-2xl`}>
+      {/* Floating Composer Container (No full-bleed line or shelf background) */}
+      <div className={`relative shrink-0 ${composerPadding}`}>
         <div className={composerColumn}>
           {showMentions && (
             <div className="absolute bottom-full left-2 mb-2 w-52 rounded-2xl bg-white/70 dark:bg-zinc-900/70 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] overflow-hidden z-50">
@@ -387,7 +387,8 @@ export function TeammatesChat({
             </div>
           )}
 
-          <div className={`flex flex-col gap-2 rounded-2xl bg-white/35 dark:bg-zinc-900/35 backdrop-blur-xl border border-white/50 dark:border-white/10 ${inputCardPadding} shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] focus-within:border-white/80 dark:focus-within:border-white/20 focus-within:bg-white/50 dark:focus-within:bg-zinc-900/50 transition-all duration-200`}>
+          {/* Unified Floating Input Box */}
+          <div className={`flex flex-col gap-2 rounded-2xl bg-zinc-900/40 dark:bg-zinc-900/60 backdrop-blur-xl border border-zinc-200/20 dark:border-zinc-800/80 ${inputCardPadding} shadow-lg focus-within:border-zinc-300/40 dark:focus-within:border-zinc-700 transition-all duration-200`}>
             <div className="flex flex-wrap items-center gap-1.5 min-h-[28px]">
               {taggedSkills.map((token) => {
                 const skill = MENTIONABLE_SKILLS.find((s) => s.token === token);
@@ -421,11 +422,12 @@ export function TeammatesChat({
                 }}
                 placeholder={taggedSkills.length > 0 ? "add details..." : "Ask Workers or type @..."}
                 rows={1}
-                className={`flex-1 min-w-[140px] max-h-36 resize-none bg-transparent text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none leading-relaxed overflow-y-auto py-0.5 ${textSize}`}
+                className={`flex-1 min-w-[140px] max-h-36 resize-none bg-transparent text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 focus:outline-none leading-relaxed overflow-y-auto py-0.5 ${textSize}`}
               />
             </div>
 
-            <div className="flex items-center justify-between pt-1.5 border-t border-white/20 dark:border-white/5">
+            {/* Integrated Action Row (No border-t divider line) */}
+            <div className="flex items-center justify-between pt-1">
               <Dropdown
                 variant="icon"
                 icon={AtSign}
@@ -438,7 +440,7 @@ export function TeammatesChat({
                 type="button"
                 onClick={() => send()}
                 disabled={loading || (!input.trim() && taggedSkills.length === 0)}
-                className={`flex items-center justify-center ${sendButtonSize} rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 backdrop-blur-md text-zinc-100 dark:text-zinc-950 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-black dark:hover:bg-white transition-all shadow-xs cursor-pointer shrink-0`}
+                className={`flex items-center justify-center ${sendButtonSize} rounded-full bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-950 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-black dark:hover:bg-white transition-all shadow-xs cursor-pointer shrink-0`}
                 aria-label="Send message"
               >
                 <ArrowUp size={sendIconSize} className="stroke-[2.5]" />

@@ -15,8 +15,8 @@ export default async function TeammatesPage() {
   });
 
   return (
-    <div className="relative h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden">
-      {/* --- HYPER-MICRO TIGHT DOT GRID (0.5px / 6px grid) --- */}
+    <div className="relative h-[calc(100vh-3.5rem)] w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none transition-colors duration-200 overflow-hidden">
+      {/* --- HYPER-MICRO TIGHT DOT GRID --- */}
       <div
         className="pointer-events-none absolute inset-0 z-0 bg-dot-grid"
         aria-hidden="true"
