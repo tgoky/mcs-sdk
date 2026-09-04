@@ -44,27 +44,27 @@ export const MENTIONABLE_SKILLS = [
   {
     token: "pin-down",
     label: "Pin-Down",
-    pillStyle: "bg-amber-400/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+    pillStyle: "bg-amber-400/20 text-amber-700 dark:text-amber-300 border-amber-500/30 backdrop-blur-xs",
   },
   {
     token: "pile-on",
     label: "Pile-On",
-    pillStyle: "bg-purple-400/15 text-purple-700 dark:text-purple-300 border-purple-500/30",
+    pillStyle: "bg-purple-400/20 text-purple-700 dark:text-purple-300 border-purple-500/30 backdrop-blur-xs",
   },
   {
     token: "pre-call-read",
     label: "Pre-Call Read",
-    pillStyle: "bg-pink-400/15 text-pink-700 dark:text-pink-300 border-pink-500/30",
+    pillStyle: "bg-pink-400/20 text-pink-700 dark:text-pink-300 border-pink-500/30 backdrop-blur-xs",
   },
   {
     token: "win-back",
     label: "Win-Back",
-    pillStyle: "bg-rose-400/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
+    pillStyle: "bg-rose-400/20 text-rose-700 dark:text-rose-300 border-rose-500/30 backdrop-blur-xs",
   },
   {
     token: "leak-map",
     label: "Leak Map",
-    pillStyle: "bg-sky-400/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
+    pillStyle: "bg-sky-400/20 text-sky-700 dark:text-sky-300 border-sky-500/30 backdrop-blur-xs",
   },
 ];
 
@@ -260,7 +260,7 @@ export function TeammatesChat({
             <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
               Ask Workers to run something
             </p>
-            <p className="text-[11px] leading-relaxed max-w-[240px] text-zinc-500">
+            <p className="text-[11px] leading-relaxed max-w-[240px] text-zinc-500 dark:text-zinc-400">
               Try &quot;run a call brief for Acme Co&quot; or use @ to tag a skill.
             </p>
           </div>
@@ -273,7 +273,7 @@ export function TeammatesChat({
               m.role === "user" ? "items-end" : "items-start"
             }`}
           >
-            <div className="flex items-center gap-1.5 px-1 text-[10px] font-medium text-zinc-500">
+            <div className="flex items-center gap-1.5 px-1 text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
               {m.role === "worker" ? (
                 <>
                   <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
@@ -287,15 +287,15 @@ export function TeammatesChat({
               )}
             </div>
             <div
-              className={`max-w-[85%] rounded-xl px-3 py-2 text-xs border ${
+              className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)] border transition-colors ${
                 m.role === "user"
-                  ? "bg-zinc-900 dark:bg-zinc-800 text-zinc-100 border-zinc-800 dark:border-zinc-700/80"
-                  : "bg-white/80 dark:bg-zinc-900/80 text-zinc-900 dark:text-zinc-100 border-zinc-200 dark:border-zinc-800"
+                  ? "bg-zinc-900/90 dark:bg-zinc-800/80 text-zinc-100 border-white/10 dark:border-white/10"
+                  : "bg-white/50 dark:bg-zinc-900/40 text-zinc-900 dark:text-zinc-100 border-white/60 dark:border-white/10"
               }`}
             >
               <FormattedMessage content={m.content} />
               {m.toolCalls && m.toolCalls.length > 0 && (
-                <div className="mt-2 space-y-1 pt-1.5 border-t border-zinc-200 dark:border-zinc-800">
+                <div className="mt-2 space-y-1 pt-1.5 border-t border-zinc-200/50 dark:border-zinc-800/60">
                   {m.toolCalls.map((tc, j) => (
                     <div key={j} className="flex items-start gap-1 text-[10px] text-zinc-500 dark:text-zinc-400">
                       {tc.ok ? (
@@ -309,12 +309,12 @@ export function TeammatesChat({
                 </div>
               )}
               {m.links && m.links.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1 pt-1.5 border-t border-zinc-200 dark:border-zinc-800">
+                <div className="mt-2 flex flex-wrap gap-1 pt-1.5 border-t border-zinc-200/50 dark:border-zinc-800/60">
                   {m.links.map((link, j) => (
                     <a
                       key={j}
                       href={link.href}
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 transition-colors border border-zinc-200 dark:border-zinc-700/60"
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold bg-white/60 dark:bg-zinc-800/60 backdrop-blur-xs hover:bg-white/80 dark:hover:bg-zinc-700/80 text-zinc-800 dark:text-zinc-200 transition-colors border border-white/40 dark:border-white/10"
                     >
                       {link.label}
                       <ArrowUpRight size={10} />
@@ -336,17 +336,17 @@ export function TeammatesChat({
         {error && <p className="text-xs text-rose-500 px-1">{error}</p>}
       </div>
 
-      {/* Input Surface */}
-      <div className="relative p-2 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white/40 dark:bg-zinc-950/40 backdrop-blur-md">
+      {/* Input Surface (macOS Glassmorphism Panel) */}
+      <div className="relative p-2.5 border-t border-white/20 dark:border-white/10 bg-white/15 dark:bg-zinc-950/20 backdrop-blur-2xl">
         {/* Upward Autocomplete Menu */}
         {showMentions && (
-          <div className="absolute bottom-full left-2 mb-2 w-52 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl overflow-hidden z-50">
+          <div className="absolute bottom-full left-2 mb-2 w-52 rounded-2xl bg-white/70 dark:bg-zinc-900/70 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] overflow-hidden z-50">
             {filteredMentions.map((s) => (
               <button
                 key={s.token}
                 type="button"
                 onClick={() => addSkillTag(s.token)}
-                className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer"
+                className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs font-medium hover:bg-white/50 dark:hover:bg-white/10 text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer"
               >
                 <SquishySkillBadge skill={s.token} size={16} />
                 <span>@{s.token}</span>
@@ -355,8 +355,8 @@ export function TeammatesChat({
           </div>
         )}
 
-        {/* Input Card Container */}
-        <div className="flex flex-col gap-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5 shadow-2xs focus-within:border-zinc-400 dark:focus-within:border-zinc-700 transition-colors">
+        {/* Glass Input Card Container */}
+        <div className="flex flex-col gap-2 rounded-2xl bg-white/35 dark:bg-zinc-900/35 backdrop-blur-xl border border-white/50 dark:border-white/10 p-2.5 shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] focus-within:border-white/80 dark:focus-within:border-white/20 focus-within:bg-white/50 dark:focus-within:bg-zinc-900/50 transition-all duration-200">
           {/* Continuous Inline Row: Tags + Textarea */}
           <div className="flex flex-wrap items-center gap-1.5 min-h-[28px]">
             {taggedSkills.map((token) => {
@@ -397,7 +397,7 @@ export function TeammatesChat({
           </div>
 
           {/* Action Toolbar */}
-          <div className="flex items-center justify-between pt-1.5 border-t border-zinc-100 dark:border-zinc-800/60">
+          <div className="flex items-center justify-between pt-1.5 border-t border-white/20 dark:border-white/5">
             <Dropdown
               variant="icon"
               icon={AtSign}
@@ -411,7 +411,7 @@ export function TeammatesChat({
               type="button"
               onClick={() => send()}
               disabled={loading || (!input.trim() && taggedSkills.length === 0)}
-              className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-950 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-black dark:hover:bg-white transition-all shadow-xs cursor-pointer shrink-0"
+              className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 backdrop-blur-md text-zinc-100 dark:text-zinc-950 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-black dark:hover:bg-white transition-all shadow-xs cursor-pointer shrink-0"
               aria-label="Send message"
             >
               <ArrowUp size={13} className="stroke-[2.5]" />

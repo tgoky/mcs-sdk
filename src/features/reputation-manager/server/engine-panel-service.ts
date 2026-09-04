@@ -128,9 +128,26 @@ export async function runRepEnginePanel(tenant: any, runId: string, step: StepTo
     }
 
     const configuredEngines = REP_ENGINE_IDS.filter((id) => resolveEngineModel(id) !== null);
-    if (configuredEngines.length === 0) {
-      await logStep(runId, { phase: "engine_panel", status: "skipped", detail: "No engines have a model configured." });
-      summary.openItems.push("Set at least one REP_ENGINE_MODEL_* env var to start checking anything.");
+    // Narrow to this client's selection, if they've set one — a null
+    // activeEngines (the default, and every row before this field
+    // existed) means "all configured engines," identical to the
+    // behavior before this filter existed. Only ever narrows; a client
+    // can't select an engine that isn't platform-configured in the
+    // first place.
+    const activeEngines = graph.activeEngines
+      ? configuredEngines.filter((id) => graph.activeEngines!.includes(id))
+      : configuredEngines;
+    if (activeEngines.length === 0) {
+      const detail =
+        configuredEngines.length === 0
+          ? "No engines have a model configured."
+          : "This client's selected engines don't overlap with any platform-configured engine.";
+      await logStep(runId, { phase: "engine_panel", status: "skipped", detail });
+      summary.openItems.push(
+        configuredEngines.length === 0
+          ? "Set at least one REP_ENGINE_MODEL_* env var to start checking anything."
+          : "This client's active-engines selection doesn't match any configured engine — check their identity graph settings."
+      );
       await finishRun(runId, { summary, status: "skipped" });
       return;
     }
@@ -138,12 +155,12 @@ export async function runRepEnginePanel(tenant: any, runId: string, step: StepTo
     await logStep(runId, {
       phase: "engine_panel",
       status: "running",
-      detail: `Checking ${graph.seedPanelPrompts.length} prompt(s) against ${configuredEngines.length} engine(s).`,
+      detail: `Checking ${graph.seedPanelPrompts.length} prompt(s) against ${activeEngines.length} engine(s).`,
     });
 
     const queries: Promise<RawFinding | { error: string; engineId: RepEngineId }>[] = [];
     for (const promptText of graph.seedPanelPrompts) {
-      for (const engineId of configuredEngines) {
+      for (const engineId of activeEngines) {
         queries.push(queryEngine(engineId, graph.operatorName, promptText, runId));
       }
     }
@@ -184,7 +201,7 @@ export async function runRepEnginePanel(tenant: any, runId: string, step: StepTo
       status: "success",
       detail: `Recorded ${scored.length} finding(s)${flaggedCount > 0 ? `, ${flaggedCount} flagged` : ""}.`,
     });
-    summary.whatWorked.push(`Checked ${configuredEngines.length} engine(s) across ${graph.seedPanelPrompts.length} prompt(s).`);
+    summary.whatWorked.push(`Checked ${activeEngines.length} engine(s) across ${graph.seedPanelPrompts.length} prompt(s).`);
     if (flaggedCount > 0) summary.decisionsMade.push(`${flaggedCount} finding(s) flagged for review.`);
     if (errors.length > 0) summary.whatFailed.push(`${errors.length} engine/prompt quer${errors.length === 1 ? "y" : "ies"} failed or skipped.`);
 

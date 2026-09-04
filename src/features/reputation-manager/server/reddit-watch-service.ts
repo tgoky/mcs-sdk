@@ -30,20 +30,36 @@ const REDDIT_API_BASE = "https://api.redditapis.com";
  *   GET https://api.redditapis.com/api/reddit/search/comments?q=&sort=new&limit=
  *   Header: Authorization: Bearer <key>
  *
- * Both endpoints are queried — their own monitoring-API page is explicit
- * that "most conversations that matter happen in the comments," and a
- * post-only search misses a mention buried in a reply thread.
+ * Both endpoints are queried per search term — their own monitoring-API
+ * page is explicit that "most conversations that matter happen in the
+ * comments," and a post-only search misses a mention buried in a reply
+ * thread. Multiple terms (operator name plus high-priority entity names
+ * — see runRepRedditWatch) are queried in parallel and deduped by
+ * Reddit's own item id, since a business is often better known by a
+ * brand/entity name than the operator's own name, and the same mention
+ * could otherwise match more than one term.
  */
-async function fetchRedditMentions(searchTerm: string): Promise<RawMention[]> {
+async function fetchRedditMentions(searchTerms: string[]): Promise<RawMention[]> {
   const apiKey = resolveRedditApiKey();
   if (!apiKey) return [];
 
-  const [postResults, commentResults] = await Promise.all([
-    searchEndpoint("/api/reddit/search", searchTerm, apiKey),
-    searchEndpoint("/api/reddit/search/comments", searchTerm, apiKey),
-  ]);
+  const perTermResults = await Promise.all(
+    searchTerms.map((term) =>
+      Promise.all([searchEndpoint("/api/reddit/search", term, apiKey), searchEndpoint("/api/reddit/search/comments", term, apiKey)])
+    )
+  );
 
-  return [...postResults, ...commentResults];
+  const combined = perTermResults.flat(2);
+  // The same post/comment can match more than one search term (e.g. both
+  // the operator name and an entity name) — dedup by Reddit's own item id
+  // before this goes anywhere near insertion or scoring, so a genuinely
+  // single mention never gets counted or written twice.
+  const seen = new Set<string>();
+  return combined.filter((m) => {
+    if (seen.has(m.externalMentionId)) return false;
+    seen.add(m.externalMentionId);
+    return true;
+  });
 }
 
 async function searchEndpoint(path: string, searchTerm: string, apiKey: string): Promise<RawMention[]> {
@@ -169,11 +185,14 @@ export async function runRepRedditWatch(tenant: any, runId: string, step: StepTo
       return;
     }
 
-    await logStep(runId, { phase: "reddit_watch", status: "running", detail: `Searching Reddit for "${graph.operatorName}".` });
+    const searchTerms = [graph.operatorName, ...graph.entities.filter((e) => e.highPriority).map((e) => e.name)];
+    await logStep(runId, {
+      phase: "reddit_watch",
+      status: "running",
+      detail: `Searching Reddit for: ${searchTerms.join(", ")}.`,
+    });
 
-    const fetched = await (step
-      ? step.run("fetch-mentions", () => fetchRedditMentions(graph.operatorName))
-      : fetchRedditMentions(graph.operatorName));
+    const fetched = await (step ? step.run("fetch-mentions", () => fetchRedditMentions(searchTerms)) : fetchRedditMentions(searchTerms));
 
     if (fetched.length === 0) {
       await logStep(runId, { phase: "reddit_watch", status: "success", detail: "No mentions found." });

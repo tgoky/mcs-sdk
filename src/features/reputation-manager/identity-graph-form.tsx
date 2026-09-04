@@ -2,7 +2,8 @@
 
 import { InputField, TextAreaField } from "@/app/dashboard/engagements/new/form-fields";
 import { Plus, Trash2 } from "lucide-react";
-import type { RepEntity, RepCompetitor, RepCollision } from "@/models/schema";
+import type { RepEntity, RepCompetitor, RepCollision, RepEngineId } from "@/models/schema";
+import { REP_ENGINE_IDS, REP_ENGINE_LABELS } from "@/features/reputation-manager/engine-models";
 
 /**
  * Everything rep-onboarding's form needs to hold, in the shape the save
@@ -29,6 +30,13 @@ export type IdentityGraphFormState = {
   trustedSources: string; // newline-separated
   seedPanelPrompts: string; // newline-separated
   crisisThresholdOverride: string; // numeric string, "" means unset
+  // Always a concrete array in form state (checkbox-friendly) — the
+  // null-means-"all engines, unrestricted" semantics (see
+  // repIdentityGraphs.activeEngines) is handled at the toIntakePayload/
+  // fromSavedGraph boundary, not in the form itself: all 5 checked here
+  // converts to null on save, matching every row's default before this
+  // field existed.
+  activeEngines: RepEngineId[];
   entities: RepEntity[];
   competitors: RepCompetitor[];
   collisions: RepCollision[];
@@ -44,6 +52,7 @@ export const EMPTY_IDENTITY_GRAPH_FORM: IdentityGraphFormState = {
   trustedSources: "",
   seedPanelPrompts: "",
   crisisThresholdOverride: "",
+  activeEngines: [...REP_ENGINE_IDS],
   entities: [],
   competitors: [],
   collisions: [],
@@ -88,6 +97,10 @@ export function toIntakePayload(form: IdentityGraphFormState) {
     trustedSources: splitLines(form.trustedSources),
     seedPanelPrompts: splitLines(form.seedPanelPrompts),
     crisisThresholdOverride: form.crisisThresholdOverride.trim() ? Number(form.crisisThresholdOverride.trim()) : null,
+    // All 5 checked means "no restriction" — send null, matching every
+    // row's state before this field existed, rather than an explicit
+    // list that happens to equal the full set.
+    activeEngines: form.activeEngines.length === REP_ENGINE_IDS.length ? null : form.activeEngines,
     entities: form.entities,
     offerings: [],
     competitors: form.competitors,
@@ -111,6 +124,7 @@ export function fromSavedGraph(graph: {
   seedPanelPrompts: string[];
   soleAuthorityName: string;
   crisisThresholdOverride: number | null;
+  activeEngines: RepEngineId[] | null;
 }): IdentityGraphFormState {
   return {
     operatorName: graph.operatorName,
@@ -122,6 +136,7 @@ export function fromSavedGraph(graph: {
     trustedSources: graph.trustedSources.join("\n"),
     seedPanelPrompts: graph.seedPanelPrompts.join("\n"),
     crisisThresholdOverride: graph.crisisThresholdOverride != null ? String(graph.crisisThresholdOverride) : "",
+    activeEngines: graph.activeEngines ?? [...REP_ENGINE_IDS],
     entities: graph.entities,
     // collision_check-sourced entries are shown read-only lower in the
     // form (see IdentityGraphForm's collisions section) rather than
@@ -447,6 +462,28 @@ export function IdentityGraphForm({
           rows={3}
           helpText="5-8 starting prompts. Expanded into the full monitoring panel by a future skill — this just seeds it."
         />
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold block text-zinc-900 dark:text-zinc-100">Engines checked</label>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+            Only engines your workspace has a model configured for actually run — unchecking one here just narrows
+            it further for this client specifically.
+          </p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1">
+            {REP_ENGINE_IDS.map((id) => (
+              <label key={id} className="flex items-center gap-1.5 text-[12px] text-zinc-700 dark:text-zinc-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.activeEngines.includes(id)}
+                  onChange={(e) => {
+                    const next = e.target.checked ? [...form.activeEngines, id] : form.activeEngines.filter((x) => x !== id);
+                    set("activeEngines", next);
+                  }}
+                />
+                {REP_ENGINE_LABELS[id]}
+              </label>
+            ))}
+          </div>
+        </div>
         <InputField
           label="Crisis threshold override"
           value={form.crisisThresholdOverride}
