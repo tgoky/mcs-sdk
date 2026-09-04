@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { repIdentityGraphs, repEngineFindings, repTrustpilotReviews, repRedditMentions, repIncidents, skillRuns } from "@/models/schema";
-import { and, eq, gt, desc } from "drizzle-orm";
+import { and, eq, gt, gte, desc } from "drizzle-orm";
 import { callClaude } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import { notifyUser } from "@/lib/notify";
@@ -12,11 +12,12 @@ import {
   isForceTriggerSignalClass,
   type SignalClass,
 } from "@/features/reputation-manager/rep-thresholds";
+import { detectAnomalies, anomalyCooldownMs, type AnomalyResult } from "@/features/reputation-manager/server/anomaly-detection";
 import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
-type ContributingFinding = { source: "engine_panel" | "trustpilot" | "reddit"; excerpt: string; flagReason: string | null };
+type ContributingFinding = { source: "engine_panel" | "trustpilot" | "reddit" | "anomaly"; excerpt: string; flagReason: string | null };
 type ScoredFinding = ContributingFinding & {
   reach: number;
   sentiment: number;
@@ -68,6 +69,46 @@ async function lastSuccessfulRunAt(engagementId: string): Promise<Date | null> {
     .orderBy(desc(skillRuns.completedAt))
     .limit(1);
   return row?.completedAt ?? null;
+}
+
+/** What actually gets persisted in contributingFindings — looser than
+ * ScoredFinding (whose five score fields are all required, since the LLM
+ * scores every real finding it's given) because a synthetic "anomaly"
+ * entry was never scored on reach/sentiment/permanence and shouldn't
+ * fabricate numbers to fit that shape. */
+type StoredFinding = ContributingFinding & {
+  reach?: number;
+  sentiment?: number;
+  permanence?: number;
+  compositeScore?: number;
+  signalClass?: string | null;
+};
+
+function anomalyToFinding(anomaly: AnomalyResult): StoredFinding {
+  return { source: "anomaly", excerpt: anomaly.description, flagReason: anomaly.anomalyClass, signalClass: anomaly.anomalyClass };
+}
+
+/**
+ * Anomaly checks re-evaluate a rolling window every run rather than a
+ * "since last check" delta, so a condition that's still true on the next
+ * cron tick would otherwise redeclare the same incident every time (see
+ * anomalyCooldownMs's own comment). Drops any detected anomaly whose
+ * class already has an incident declared for this engagement within its
+ * own cooldown window — same anomaly, already known and notified.
+ */
+async function suppressRecentlyDeclaredAnomalies(engagementId: string, anomalies: AnomalyResult[], now: Date): Promise<AnomalyResult[]> {
+  if (anomalies.length === 0) return anomalies;
+
+  const recentSignalClasses = await db
+    .select({ signalClass: repIncidents.signalClass, declaredAt: repIncidents.declaredAt })
+    .from(repIncidents)
+    .where(and(eq(repIncidents.engagementId, engagementId), gte(repIncidents.declaredAt, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000))));
+
+  return anomalies.filter((anomaly) => {
+    const cooldownStart = new Date(now.getTime() - anomalyCooldownMs(anomaly.anomalyClass));
+    const alreadyDeclared = recentSignalClasses.some((row) => row.signalClass === anomaly.anomalyClass && row.declaredAt >= cooldownStart);
+    return !alreadyDeclared;
+  });
 }
 
 type SeverityAssessment = { scored: ScoredFinding[]; severityScore: number; forceTriggerClass: SignalClass | null; summary: string };
@@ -176,6 +217,17 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
       return;
     }
 
+    // Anomaly detection runs independent of flagged findings — a spike can
+    // fire on ordinary-looking mentions arriving too fast, with zero
+    // individual records ever flagged. Checked before the "nothing
+    // flagged" early-return below so a pure-volume/pure-pattern anomaly
+    // isn't silently missed just because nothing was individually flagged.
+    const now = new Date();
+    const rawAnomalies = await (step ? step.run("detect-anomalies", () => detectAnomalies(engagementId, now)) : detectAnomalies(engagementId, now));
+    const anomalies = await (step
+      ? step.run("suppress-recent-anomalies", () => suppressRecentlyDeclaredAnomalies(engagementId, rawAnomalies, now))
+      : suppressRecentlyDeclaredAnomalies(engagementId, rawAnomalies, now));
+
     const sinceRaw = await (step ? step.run("find-last-run", () => lastSuccessfulRunAt(engagementId)) : lastSuccessfulRunAt(engagementId));
     const since = sinceRaw ? new Date(sinceRaw) : null;
 
@@ -183,52 +235,82 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
       ? step.run("load-flagged-findings", () => loadFlaggedFindingsSince(engagementId, since))
       : loadFlaggedFindingsSince(engagementId, since));
 
-    if (findings.length === 0) {
-      await logStep(runId, { phase: "crisis_response", status: "success", detail: "Nothing flagged since last check." });
-      summary.whatWorked.push("Checked for new flagged findings — none since last check.");
+    if (findings.length === 0 && anomalies.length === 0) {
+      await logStep(runId, { phase: "crisis_response", status: "success", detail: "Nothing flagged and no anomalies detected since last check." });
+      summary.whatWorked.push("Checked for new flagged findings and anomalies — none since last check.");
       await finishRun(runId, { summary });
       return;
     }
 
-    await logStep(runId, { phase: "crisis_response", status: "running", detail: `Assessing ${findings.length} flagged finding(s).` });
+    let scoredFindings: ScoredFinding[] = [];
+    let contentSummary: string | null = null;
+    let contentForceTriggerClass: SignalClass | null = null;
+    let maxCompositeScore = 0;
 
-    const assessment = await (step
-      ? step.run("score-findings", () => scoreFindings(graph.operatorName, findings, runId))
-      : scoreFindings(graph.operatorName, findings, runId));
+    if (findings.length > 0) {
+      await logStep(runId, { phase: "crisis_response", status: "running", detail: `Assessing ${findings.length} flagged finding(s).` });
+      const assessment = await (step
+        ? step.run("score-findings", () => scoreFindings(graph.operatorName, findings, runId))
+        : scoreFindings(graph.operatorName, findings, runId));
+      scoredFindings = assessment.scored;
+      contentSummary = assessment.summary;
+      contentForceTriggerClass = assessment.forceTriggerClass;
+      maxCompositeScore = assessment.severityScore;
+    }
 
     const floor = resolveCrisisScoreFloor(graph.crisisThresholdOverride);
-    // Force-trigger classes declare an incident regardless of score — the
-    // composite model may under-rate a record whose real risk isn't
-    // reach/sentiment/permanence-shaped (e.g. a legal notice with low
-    // reach is still regulatory_or_legal_action). Matches crisis-
-    // triggers.yml.template's auto_activation block exactly.
-    const forceTriggered = assessment.forceTriggerClass !== null;
+    // Force-trigger classes AND anomalies both declare an incident
+    // regardless of score — the composite model may under-rate a record
+    // whose real risk isn't reach/sentiment/permanence-shaped (e.g. a
+    // legal notice with low reach is still regulatory_or_legal_action),
+    // and a statistical spike has no per-item score to compare against a
+    // threshold in the first place. Matches crisis-triggers.yml.template's
+    // auto_activation block plus thresholds.yml.template's
+    // anomaly_detection block.
+    const contentForceTriggered = contentForceTriggerClass !== null;
+    const anomalyForceTriggered = anomalies.length > 0;
+    const forceTriggered = contentForceTriggered || anomalyForceTriggered;
+    // An anomaly firing guarantees at least floor-level severity is
+    // recorded (there's no per-item composite to fall back on); flagged
+    // findings can still push the number higher if their own scores
+    // exceed it.
+    const severityScore = anomalyForceTriggered ? Math.max(maxCompositeScore, floor) : maxCompositeScore;
 
-    if (!forceTriggered && assessment.severityScore < floor) {
+    if (!forceTriggered && severityScore < floor) {
       await logStep(runId, {
         phase: "crisis_response",
         status: "success",
-        detail: `Severity ${assessment.severityScore}/100, below this engagement's threshold of ${floor}. No incident declared.`,
+        detail: `Severity ${severityScore}/100, below this engagement's threshold of ${floor}. No incident declared.`,
       });
-      summary.whatWorked.push(`Assessed ${findings.length} flagged finding(s) — severity ${assessment.severityScore}/100, below threshold.`);
+      summary.whatWorked.push(`Assessed ${findings.length} flagged finding(s) — severity ${severityScore}/100, below threshold.`);
       await finishRun(runId, { summary });
       return;
     }
+
+    const anomalyFindings = anomalies.map(anomalyToFinding);
+    const allFindings: StoredFinding[] = [...scoredFindings, ...anomalyFindings];
+    const declaredSignalClass: string | null = contentForceTriggerClass ?? anomalies[0]?.anomalyClass ?? null;
+    const summaryText =
+      contentSummary && anomalies.length > 0
+        ? `${contentSummary} Additionally: ${anomalies.map((a) => a.description).join(" ")}`
+        : contentSummary ?? anomalies.map((a) => a.description).join(" ");
 
     const [incident] = await db
       .insert(repIncidents)
       .values({
         engagementId,
-        severityScore: assessment.severityScore,
-        summary: assessment.summary,
-        contributingFindings: assessment.scored,
-        signalClass: assessment.forceTriggerClass,
+        severityScore,
+        summary: summaryText,
+        contributingFindings: allFindings,
+        signalClass: declaredSignalClass,
       })
       .returning({ id: repIncidents.id });
 
-    const triggerReason = forceTriggered
-      ? `Force-triggered: classified as ${assessment.forceTriggerClass} (declares regardless of score).`
-      : `Severity ${assessment.severityScore}/100 crossed this engagement's threshold of ${floor}.`;
+    const triggerReason = contentForceTriggered
+      ? `Force-triggered: classified as ${contentForceTriggerClass} (declares regardless of score).`
+      : anomalyForceTriggered
+        ? `Force-triggered by anomaly detection: ${anomalies.map((a) => a.anomalyClass).join(", ")} (declares regardless of score).`
+        : `Severity ${severityScore}/100 crossed this engagement's threshold of ${floor}.`;
 
     await notifyUser({
       whopUserId: tenant.whopUserId,
@@ -238,7 +320,7 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
       severity: "critical",
       title: `Reputation crisis declared — ${graph.operatorName}`,
       body:
-        `${assessment.summary}\n\n${triggerReason} Severity: ${assessment.severityScore}/100. ` +
+        `${summaryText}\n\n${triggerReason} Severity: ${severityScore}/100. ` +
         `Sole authority on record: ${graph.soleAuthorityName}. Nothing has been published — this is a notification only.`,
       slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
     });
@@ -246,11 +328,11 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     await logStep(runId, {
       phase: "crisis_response",
       status: "success",
-      detail: `Incident declared (severity ${assessment.severityScore}/100${forceTriggered ? `, force-triggered: ${assessment.forceTriggerClass}` : ""}) and operator notified.`,
+      detail: `Incident declared (severity ${severityScore}/100${forceTriggered ? `, force-triggered: ${declaredSignalClass}` : ""}) and operator notified.`,
     });
-    summary.whatWorked.push(`Declared an incident — severity ${assessment.severityScore}/100 — and notified the operator.`);
+    summary.whatWorked.push(`Declared an incident — severity ${severityScore}/100 — and notified the operator.`);
     summary.decisionsMade.push(
-      `Incident ${incident.id} created from ${findings.length} contributing finding(s)${forceTriggered ? ` (force-triggered: ${assessment.forceTriggerClass})` : ""}.`
+      `Incident ${incident.id} created from ${allFindings.length} contributing item(s)${forceTriggered ? ` (force-triggered: ${declaredSignalClass})` : ""}.`
     );
 
     await finishRun(runId, { summary });

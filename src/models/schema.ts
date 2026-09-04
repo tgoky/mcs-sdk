@@ -2100,7 +2100,10 @@ export const repIncidents = pgTable("rep_incidents", {
   summary: text("summary").notNull(), // the LLM's synthesis of what's actually happening, across every contributing finding
   contributingFindings: jsonb("contributing_findings").$type<
     {
-      source: "engine_panel" | "trustpilot" | "reddit";
+      // "anomaly" is a synthetic entry anomaly-detection.ts produces when
+      // a statistical spike/drop fires independent of any individual
+      // flagged record — see crisis-response-service.ts.
+      source: "engine_panel" | "trustpilot" | "reddit" | "anomaly";
       excerpt: string;
       flagReason: string | null;
       // Per-axis 1-10 scores and the resulting 0-100 composite (see

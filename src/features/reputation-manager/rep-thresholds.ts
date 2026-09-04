@@ -26,13 +26,15 @@
 // opaque "the LLM says 73" score with the spec's actual deterministic
 // three-factor composite plus signal-class classification.
 //
-// STILL NOT ported: anomaly_detection's four composite multipliers (no
-// skill computes mention/sentiment time-series yet to feed them) and the
-// full write_low_or_medium / write_high / external_escalation routing
-// tiers (those gate a draft-for-approval flow — nothing in this product
-// drafts a response yet, so there's nothing for those tiers to route).
-// Same reasoning as before: added alongside whichever skill first needs
-// them, not speculatively here.
+// NOW ALSO ported: anomaly_detection's four composite multipliers —
+// anomaly-detection.ts is their consumer, computed and force-triggered
+// into crisis-response-service.ts alongside signal-class classification.
+//
+// STILL NOT ported: the full write_low_or_medium / write_high /
+// external_escalation routing tiers. Those gate a draft-for-approval
+// flow — nothing in this product drafts a response yet, so there's
+// nothing for those tiers to route. Added alongside whichever skill
+// first needs them, not speculatively here.
 
 export const REP_THRESHOLD_DEFAULTS = {
   /** Composite threat-score (0-100, produced downstream by whatever skill
@@ -118,3 +120,49 @@ export type SignalClass = (typeof SIGNAL_CLASSES_FORCE_TRIGGER)[number];
 export function isForceTriggerSignalClass(value: string | null | undefined): value is SignalClass {
   return Boolean(value) && (SIGNAL_CLASSES_FORCE_TRIGGER as readonly string[]).includes(value!);
 }
+
+/**
+ * thresholds.yml.template's anomaly_detection block — four composite
+ * operator triggers, defaults matching "the research document's composite
+ * operator thresholds." These watch for a STATISTICAL shape (a rate or
+ * mix suddenly changing), independent of whether any individual record
+ * was flagged — a spike can fire with zero flagged findings if enough
+ * ordinary-looking mentions arrive at once.
+ */
+export const ANOMALY_DETECTION_DEFAULTS = {
+  totalMentionSpike: {
+    multiplier: 3.0,
+    windowMinutes: 60,
+    baselineWindowDays: 7,
+  },
+  negativeSentimentSpike: {
+    thresholdPct: 25,
+    windowMinutes: 30,
+    baselineWindowDays: 7,
+    baselineNegativePctCeiling: 10,
+  },
+  /** Scoped to Reddit only in this port — subreddit is the only
+   * domain-like dimension in the current schema (Trustpilot has no
+   * per-review domain; the five AI engines are a fixed set, not
+   * "sources" in the spec's sense of a proliferating attack surface). */
+  newSourceSpike: {
+    newDomainCount: 5,
+    windowHours: 24,
+  },
+  /** Scoped to Trustpilot only — the only source with a "reviewer"
+   * concept and a velocity worth tracking. */
+  reviewerVelocityDrop: {
+    dropPct: 50,
+    windowWeeks: 1,
+    baselineWindowWeeks: 12,
+  },
+} as const;
+
+export const ANOMALY_CLASSES = [
+  "total_mention_spike",
+  "negative_sentiment_spike",
+  "new_source_spike",
+  "reviewer_velocity_drop",
+] as const;
+
+export type AnomalyClass = (typeof ANOMALY_CLASSES)[number];
