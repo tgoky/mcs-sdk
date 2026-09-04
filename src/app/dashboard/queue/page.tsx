@@ -5,17 +5,20 @@ import { getQueueItems } from "@/lib/queue";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { QueuePanel } from "../queue-panel";
 import { eq, and, isNull } from "drizzle-orm";
+import { isProductId, skillIdsForProduct } from "@/lib/product-catalog";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function QueuePage() {
+export default async function QueuePage({ searchParams }: { searchParams: Promise<{ product?: string }> }) {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
   const activeWorkspace = await getActiveWorkspace(whopUserId);
+  const { product: requestedProduct } = await searchParams;
+  const product = isProductId(requestedProduct) ? requestedProduct : null;
 
   const [items, clientRows] = await Promise.all([
-    getQueueItems(whopUserId, activeWorkspace.workspaceId),
+    getQueueItems(whopUserId, activeWorkspace.workspaceId, product ? { skillIds: skillIdsForProduct(product) } : undefined),
     db
       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, pausedAt: engagements.pausedAt })
       .from(engagements)
@@ -45,7 +48,7 @@ export default async function QueuePage() {
 
       {/* --- PAGE CONTENT --- */}
       <div className="relative z-10 space-y-5">
-        <QueuePanel initialItems={items} clients={clients} title="Queue" />
+        <QueuePanel initialItems={items} clients={clients} title={product ? `${product === "showtime" ? "Showtime" : "Reputation Manager"} queue` : "Queue"} apiUrl={product ? `/api/queue?product=${product}` : undefined} />
       </div>
     </div>
   );

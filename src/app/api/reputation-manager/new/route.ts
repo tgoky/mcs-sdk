@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
-import { getActiveWorkspace } from "@/lib/workspace";
+import { getActiveWorkspace, isPackageInstalledInWorkspace } from "@/lib/workspace";
 import { generateEngagementId } from "@/lib/engagement-id";
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
@@ -32,6 +32,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+    if (!(await isPackageInstalledInWorkspace(activeWorkspace.workspaceId, "reputation-manager"))) {
+      return NextResponse.json({ error: "Install Reputation Manager before adding a client." }, { status: 403 });
+    }
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {

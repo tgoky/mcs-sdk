@@ -33,7 +33,7 @@ export default function ReputationManagerNewPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create client");
-      router.push(`/dashboard/engagements/${data.engagementId}`);
+      router.push(`/dashboard/reputation-manager`);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed to create client");
       setSaving(false);

@@ -251,6 +251,38 @@ export async function getInstalledPackagesByWorkspace(
   return byWorkspace;
 }
 
+/** Installs one available product into a workspace the caller owns. Product
+ * access is workspace-scoped, never inferred from a route or client input. */
+export async function installPackageInWorkspace(
+  whopUserId: string,
+  workspaceId: string,
+  packageId: string
+): Promise<{ installed: true } | { error: string }> {
+  if (!INSTALLABLE_PACKAGE_IDS.has(packageId)) {
+    return { error: "That product is not available to install." };
+  }
+
+  const workspace = await getOwnedWorkspace(whopUserId, workspaceId);
+  if (!workspace) return { error: "Workspace not found." };
+
+  await db
+    .insert(workspacePackages)
+    .values({ id: crypto.randomUUID(), workspaceId, packageId })
+    .onConflictDoNothing({ target: [workspacePackages.workspaceId, workspacePackages.packageId] });
+
+  return { installed: true };
+}
+
+/** Explicit entitlement check for product routes and mutations. */
+export async function isPackageInstalledInWorkspace(workspaceId: string, packageId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: workspacePackages.id })
+    .from(workspacePackages)
+    .where(and(eq(workspacePackages.workspaceId, workspaceId), eq(workspacePackages.packageId, packageId)))
+    .limit(1);
+  return Boolean(row);
+}
+
 /**
  * Persists the workspace-level default timezone/locale — the write path
  * for Settings > Timezones & Region. Ownership is enforced the same way

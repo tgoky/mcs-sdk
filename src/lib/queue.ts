@@ -255,7 +255,11 @@ async function failedRunQueueItems(
   return items;
 }
 
-export async function getQueueItems(whopUserId: string, workspaceId: string): Promise<QueueItem[]> {
+export async function getQueueItems(
+  whopUserId: string,
+  workspaceId: string,
+  options?: { skillIds?: readonly string[] }
+): Promise<QueueItem[]> {
   const [actionRows, blockerRows, notificationRows, engagementStackRows] = await Promise.all([
     db
       .select({
@@ -392,6 +396,7 @@ export async function getQueueItems(whopUserId: string, workspaceId: string): Pr
       // Was hardcoded to null — the real runId was sitting in the DB
       // the whole time, just never selected/passed through.
       runId: b.runId ?? null,
+      skillName: b.skillName ?? undefined,
       createdAt: b.createdAt.toISOString(),
     })),
     ...scopedNotificationRows.map((n): QueueItem => ({
@@ -411,6 +416,26 @@ export async function getQueueItems(whopUserId: string, workspaceId: string): Pr
     ...item,
     engagementPausedAt: item.engagementId ? pausedByEngagement.get(item.engagementId) ?? null : null,
   }));
+
+  // Product-scoped queues only retain items traceable to a skill in that
+  // product. Notifications carry a run id rather than a skill name, so
+  // resolve those ids once instead of guessing from copy or client names.
+  const allowedSkillIds = options?.skillIds;
+  if (allowedSkillIds && allowedSkillIds.length > 0) {
+    const runIds = items.flatMap((item) => (item.runId ? [item.runId] : []));
+    const runSkillById = new Map(
+      runIds.length
+        ? (await db
+            .select({ id: skillRuns.id, skillName: skillRuns.skillName })
+            .from(skillRuns)
+            .where(inArray(skillRuns.id, runIds))).map((row) => [row.id, row.skillName])
+        : []
+    );
+    const allowed = new Set(allowedSkillIds);
+    const scopedItems = items.filter((item) => allowed.has(item.skillName ?? runSkillById.get(item.runId ?? "") ?? ""));
+    items.length = 0;
+    items.push(...scopedItems);
+  }
 
   items.sort((x, y) => {
     const p = CATEGORY_PRIORITY[x.category] - CATEGORY_PRIORITY[y.category];

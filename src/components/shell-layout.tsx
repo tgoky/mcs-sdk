@@ -19,10 +19,10 @@ export function ShellLayout({
   workspaces,
   activeWorkspaceId,
   work,
-  engagements,
-  meetings,
   settings,
-  reports,
+  reputationManager,
+  showtime,
+  installedPackageIds,
 }: {
   children: ReactNode;
   displayName: string;
@@ -30,10 +30,10 @@ export function ShellLayout({
   workspaces: Workspace[];
   activeWorkspaceId: string;
   work: ReactNode;
-  engagements: ReactNode;
-  meetings: ReactNode;
   settings?: ReactNode;
-  reports: ReactNode;
+  reputationManager: ReactNode;
+  showtime: ReactNode;
+  installedPackageIds: string[];
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -83,6 +83,7 @@ export function ShellLayout({
             userEmail={userEmail}
             workspaces={workspaces}
             activeWorkspaceId={activeWorkspaceId}
+            installedPackageIds={installedPackageIds}
           />
         </div>
 
@@ -92,10 +93,9 @@ export function ShellLayout({
           <div className="hidden md:flex">
             <SecondarySidebar
               work={work}
-              engagements={engagements}
-              meetings={meetings}
               settings={settings ?? <SettingsSidebar />}
-              reports={reports}
+              reputationManager={reputationManager}
+              showtime={showtime}
             />
           </div>
         )}

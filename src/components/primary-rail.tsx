@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   LogOut,
   User,
@@ -18,13 +18,14 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
-import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
+import { PRIMARY_NAV_SECTIONS, PRODUCT_NAV_SECTIONS } from "@/lib/primary-nav";
 
 interface PrimaryRailProps {
   displayName: string;
   userEmail: string;
   workspaces: Workspace[];
   activeWorkspaceId: string;
+  installedPackageIds: string[];
 }
 
 const RAIL_SECTIONS = PRIMARY_NAV_SECTIONS;
@@ -82,20 +83,23 @@ function SquishyProductBadge({
   );
 }
 
-type ProductSection = {
-  href: string;
-  title: string;
-  icon?: LucideIcon;
-  iconSrc?: string;
-  color: keyof typeof PRODUCT_BADGE_COLORS;
-};
+function activeSectionHref(pathname: string, productParam: string | null): string {
+  if ((pathname === "/dashboard/queue" || pathname === "/dashboard/runs") && productParam === "reputation-manager") {
+    return "/dashboard/reputation-manager";
+  }
+  if ((pathname === "/dashboard/queue" || pathname === "/dashboard/runs") && productParam === "showtime") {
+    return "/dashboard/showtime";
+  }
+  if (
+    pathname === "/dashboard/showtime" ||
+    pathname.startsWith("/dashboard/engagements") ||
+    pathname.startsWith("/dashboard/analytics") ||
+    pathname.startsWith("/dashboard/meetings") ||
+    pathname.startsWith("/dashboard/modules") ||
+    pathname.startsWith("/dashboard/reports")
+  ) return "/dashboard/showtime";
 
-const PRODUCT_SECTIONS: ProductSection[] = [
-  { href: "/dashboard/reputation-manager", title: "Reputation Manager", iconSrc: "/images/repm.png", color: "indigo" as const },
-];
-
-function activeSectionHref(pathname: string): string {
-  const allSections = [...RAIL_SECTIONS, ...PRODUCT_SECTIONS];
+  const allSections = [...RAIL_SECTIONS, ...PRODUCT_NAV_SECTIONS];
   const nonRootMatches = allSections.filter(
     (s) => s.href !== "/dashboard" && (pathname === s.href || pathname.startsWith(`${s.href}/`))
   );
@@ -107,11 +111,13 @@ function activeSectionHref(pathname: string): string {
   return "/dashboard";
 }
 
-export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId }: PrimaryRailProps) {
+export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, installedPackageIds }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
   const pathname = usePathname();
-  const activeHref = activeSectionHref(pathname);
+  const searchParams = useSearchParams();
+  const activeHref = activeSectionHref(pathname, searchParams.get("product"));
+  const productSections = PRODUCT_NAV_SECTIONS.filter((section) => installedPackageIds.includes(section.productId));
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
@@ -172,7 +178,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
         <div className="-mx-1.5 w-[76px] border-t border-zinc-200 dark:border-zinc-800/80 my-2 shrink-0" />
 
         <nav className="flex flex-col items-center gap-1.5 w-full">
-          {PRODUCT_SECTIONS.map((product) => {
+          {productSections.map((product) => {
             const isActive = product.href === activeHref;
             return (
               <Link

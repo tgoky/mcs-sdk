@@ -639,7 +639,7 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
     description:
       "Monitors what AI engines, Trustpilot, and Reddit say about your business, and pages you the moment something crosses into crisis territory.",
     href: "/dashboard/reputation-manager",
-    status: "coming_soon",
+    status: "available",
   },
 ];
 

@@ -3,13 +3,14 @@ import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getQueueItems } from "@/lib/queue";
 import { getActiveWorkspace } from "@/lib/workspace";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { LiveExecutionFeed } from "../live-execution-feed";
 import { latestStepLabel } from "@/lib/run-display";
 import { markExecutionsSeen } from "@/lib/run-log";
 import { EXECUTIONS_TOOLBAR_COPY as copy, skillName as skillDisplayName } from "@/lib/copy";
 import { SquishySkillBadge, SKILL_SQUISHY_CONFIG } from "@/components/squishy-skill-badge";
 import Link from "next/link";
+import { isProductId, skillIdsForProduct } from "@/lib/product-catalog";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -22,11 +23,13 @@ export const revalidate = 0;
  * this page exists so the sidebar's "Executions" nav item has a focused
  * destination of its own, the same way /dashboard/queue exists for Queue.
  */
-export default async function RunsPage() {
+export default async function RunsPage({ searchParams }: { searchParams: Promise<{ product?: string }> }) {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
   const activeWorkspace = await getActiveWorkspace(whopUserId);
   const workspaceId = activeWorkspace.workspaceId;
+  const { product: requestedProduct } = await searchParams;
+  const product = isProductId(requestedProduct) ? requestedProduct : null;
 
   const [rows, , queueItems] = await Promise.all([
     db
@@ -49,7 +52,11 @@ export default async function RunsPage() {
       })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId)))
+      .where(and(
+        eq(engagements.whopUserId, whopUserId),
+        eq(engagements.workspaceId, workspaceId),
+        ...(product ? [inArray(skillRuns.skillName, [...skillIdsForProduct(product)])] : [])
+      ))
       .orderBy(desc(skillRuns.startedAt))
       .limit(150),
     // Clears the Executions nav badge's unseen-completed count — see
@@ -92,7 +99,7 @@ export default async function RunsPage() {
       <div className="relative z-10 space-y-5">
         <div className="border-b border-zinc-200 dark:border-zinc-900 pb-3">
           <h1 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 tracking-tight">
-            {copy.allExecutionsTitle}
+            {product ? `${product === "showtime" ? "Showtime" : "Reputation Manager"} executions` : copy.allExecutionsTitle}
           </h1>
           <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
             Every skill run across your engagements — filter by module, status, or client below.
@@ -109,7 +116,12 @@ export default async function RunsPage() {
           )}
         </div>
 
-        <LiveExecutionFeed initialRuns={runs} title={copy.allExecutionsTitle} storageKey="all" />
+        <LiveExecutionFeed
+          initialRuns={runs}
+          title={product ? `${product === "showtime" ? "Showtime" : "Reputation Manager"} executions` : copy.allExecutionsTitle}
+          storageKey={product ?? "all"}
+          apiUrl={product ? `/api/skill-runs/recent?product=${product}` : undefined}
+        />
 
         {queueItems.length > 0 && (
           <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600 pt-1">

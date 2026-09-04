@@ -5,10 +5,9 @@ import { ShellLayout } from "@/components/shell-layout";
 import { BreadcrumbProvider } from "@/components/breadcrumbs/breadcrumb-context";
 import { BookingToast } from "./booking-toast";
 import { WorkSidebar, WorkSidebarSkeleton } from "./work-sidebar";
-import { EngagementsSidebar, EngagementsSidebarSkeleton } from "./engagements-sidebar";
-import { ReportsSidebar, ReportsSidebarSkeleton } from "./reports/reports-sidebar";
-import { MeetingsSidebar } from "./meetings-sidebar";
-import { getActiveWorkspace, listWorkspaces } from "@/lib/workspace";
+import { ReputationManagerSidebar } from "./reputation-manager-sidebar";
+import { ShowtimeSidebar } from "./showtime-sidebar";
+import { getActiveWorkspace, getInstalledPackagesByWorkspace, listWorkspaces } from "@/lib/workspace";
 import { MobileNavPill } from "@/components/mobile-nav-pill";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +40,7 @@ export default async function DashboardLayout({
     getActiveWorkspace(whopUserId),
     listWorkspaces(whopUserId),
   ]);
+  const installedPackageIds = (await getInstalledPackagesByWorkspace([activeWorkspace.workspaceId])).get(activeWorkspace.workspaceId) ?? [];
 
   return (
     <BreadcrumbProvider>
@@ -66,28 +66,20 @@ export default async function DashboardLayout({
         userEmail={userEmail}
         workspaces={workspaceList}
         activeWorkspaceId={activeWorkspace.workspaceId}
+        installedPackageIds={installedPackageIds}
         work={
           <Suspense fallback={<WorkSidebarSkeleton />}>
             <WorkSidebar whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} />
           </Suspense>
         }
-        engagements={
-          <Suspense fallback={<EngagementsSidebarSkeleton />}>
-            <EngagementsSidebar whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} />
-          </Suspense>
-        }
-        reports={
-          <Suspense fallback={<ReportsSidebarSkeleton />}>
-            <ReportsSidebar whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} />
-          </Suspense>
-        }
-        meetings={<MeetingsSidebar />}
+        showtime={<ShowtimeSidebar />}
+        reputationManager={<ReputationManagerSidebar />}
       >
         {children}
       </ShellLayout>
 
       {/* Floating Mobile Nav Pill & Accordion Navigation */}
-      <MobileNavPill />
+      <MobileNavPill installedPackageIds={installedPackageIds} />
     </BreadcrumbProvider>
   );
 }

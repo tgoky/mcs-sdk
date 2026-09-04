@@ -133,9 +133,10 @@ describe("HOME_COPY / WORKSPACE_PRODUCTS", () => {
     }
   });
 
-  it("has exactly one available product (Showtime) pointing at /dashboard", () => {
+  it("exposes the two currently installable products at their own entry points", () => {
     const available = WORKSPACE_PRODUCTS.filter((p) => p.status === "available");
-    expect(available).toHaveLength(1);
-    expect(available[0].href).toBe("/dashboard");
+    expect(available.map((p) => p.id).sort()).toEqual(["reputation-manager", "showtime"]);
+    expect(available.find((p) => p.id === "showtime")?.href).toBe("/dashboard");
+    expect(available.find((p) => p.id === "reputation-manager")?.href).toBe("/dashboard/reputation-manager");
   });
 });

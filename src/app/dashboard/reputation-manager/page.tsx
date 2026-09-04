@@ -5,6 +5,9 @@ import { engagements, repIdentityGraphs } from "@/models/schema";
 import { and, eq, isNull, desc } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
+import { isPackageInstalledInWorkspace } from "@/lib/workspace";
+import { REP_SKILL_MANIFEST, isRepSkillId, type RepSkillId } from "@/lib/rep-skill-manifest";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -17,10 +20,16 @@ export const revalidate = 0;
  * Showtime client. First real page a click into a product's rail icon
  * lands on in this app — Counter Claim still doesn't have one.
  */
-export default async function ReputationManagerHomePage() {
+export default async function ReputationManagerHomePage({ searchParams }: { searchParams: Promise<{ skill?: string }> }) {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
   const activeWorkspace = await getActiveWorkspace(whopUserId);
+  if (!(await isPackageInstalledInWorkspace(activeWorkspace.workspaceId, "reputation-manager"))) {
+    redirect("/dashboard/library");
+  }
+  const { skill } = await searchParams;
+  const requestedSkill = skill ?? "";
+  const selectedSkill: RepSkillId | null = isRepSkillId(requestedSkill) ? requestedSkill : null;
 
   const rows = await db
     .select({
@@ -48,7 +57,9 @@ export default async function ReputationManagerHomePage() {
         <div>
           <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Reputation Manager</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-            {rows.length === 0
+            {selectedSkill
+              ? `${REP_SKILL_MANIFEST[selectedSkill].name} across this workspace.`
+              : rows.length === 0
               ? "No clients set up yet."
               : `${rows.length} client${rows.length === 1 ? "" : "s"} being monitored.`}
           </p>

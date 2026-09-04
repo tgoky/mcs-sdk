@@ -3,9 +3,10 @@ import { db } from "@/lib/db";
 import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
-import { and, eq, desc, isNull } from "drizzle-orm";
+import { and, eq, desc, isNull, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { SKILL_IDS } from "@/lib/skill-manifest";
+import { isProductId, skillIdsForProduct } from "@/lib/product-catalog";
 import { latestStepLabel } from "@/lib/run-display";
 
 export const runtime = "nodejs";
@@ -14,7 +15,7 @@ export const revalidate = 0;
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 200;
 
-export async function GET(request: Request) {
+export async function GET(request?: Request) {
   try {
     const session = await getSession();
     if (!session?.whopUserId) {
@@ -23,10 +24,12 @@ export async function GET(request: Request) {
 
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(request?.url ?? "http://localhost/api/skill-runs/recent");
 
     const skillParam = searchParams.get("skill");
     const skill = skillParam && (SKILL_IDS as readonly string[]).includes(skillParam) ? skillParam : null;
+    const productParam = searchParams.get("product");
+    const productSkillIds = isProductId(productParam) ? skillIdsForProduct(productParam) : null;
 
     const limitParam = Number(searchParams.get("limit"));
     const limit = Number.isFinite(limitParam) && limitParam > 0
@@ -73,6 +76,7 @@ export async function GET(request: Request) {
           : and(
               eq(engagements.whopUserId, session.whopUserId),
               eq(engagements.workspaceId, activeWorkspace.workspaceId),
+              ...(productSkillIds ? [inArray(skillRuns.skillName, [...productSkillIds])] : []),
               isNull(engagements.deletedAt)
             )
       )

@@ -627,11 +627,13 @@ export function QueuePanel({
   clients = [],
   title = "Queue",
   viewAllHref,
+  apiUrl = "/api/queue",
 }: {
   initialItems: QueueItemDTO[];
   clients?: ClientOption[];
   title?: string;
   viewAllHref?: string;
+  apiUrl?: string;
 }) {
   const [items, setItems] = useState<QueueItemDTO[]>(initialItems);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -979,7 +981,7 @@ export function QueuePanel({
 
   const load = useCallback(async (signal: AbortSignal) => {
     try {
-      const res = await fetch("/api/queue", { cache: "no-store", signal });
+      const res = await fetch(apiUrl, { cache: "no-store", signal });
       if (signal.aborted || !res.ok) return;
       const data = await res.json();
       if (signal.aborted) return;
@@ -987,7 +989,7 @@ export function QueuePanel({
     } catch {
       // Silent catch
     }
-  }, []);
+  }, [apiUrl]);
 
   useEffect(() => {
     const controller = new AbortController();

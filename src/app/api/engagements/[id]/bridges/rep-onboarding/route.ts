@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { engagements, repIdentityGraphs } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
-import { getActiveWorkspace } from "@/lib/workspace";
+import { getActiveWorkspace, isPackageInstalledInWorkspace } from "@/lib/workspace";
 import { setSkillEnabledForEngagement, isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
 import { saveRepIdentityGraphIntake, type RepIntakeInput } from "@/features/reputation-manager/server/onboarding-service";
@@ -80,6 +80,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+    if (!(await isPackageInstalledInWorkspace(activeWorkspace.workspaceId, "reputation-manager"))) {
+      return NextResponse.json({ error: "Install Reputation Manager before configuring it for a client." }, { status: 403 });
+    }
 
     const [engagementRow] = await db
       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })

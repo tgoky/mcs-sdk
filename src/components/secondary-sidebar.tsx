@@ -1,29 +1,26 @@
 "use client";
 
 import { ReactNode } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 interface SecondarySidebarProps {
   work: ReactNode;
-  engagements: ReactNode;
-  meetings: ReactNode;
   settings: ReactNode;
-  reports: ReactNode;
-  analytics?: ReactNode;
+  reputationManager: ReactNode;
+  showtime: ReactNode;
 }
 
-type SectionKey = "engagements" | "meetings" | "settings" | "reports" | "work";
+type SectionKey = "reputation-manager" | "showtime" | "settings" | "work";
 
 const SECTION_PREFIXES: Array<{ key: SectionKey; prefix: string }> = [
-  { key: "engagements", prefix: "/dashboard/engagements" },
-  { key: "meetings", prefix: "/dashboard/meetings" },
+  { key: "reputation-manager", prefix: "/dashboard/reputation-manager" },
+  { key: "showtime", prefix: "/dashboard/showtime" },
+  { key: "showtime", prefix: "/dashboard/engagements" },
+  { key: "showtime", prefix: "/dashboard/meetings" },
+  { key: "showtime", prefix: "/dashboard/analytics" },
+  { key: "showtime", prefix: "/dashboard/modules" },
   { key: "settings", prefix: "/dashboard/settings" },
-  // Reports used to fall through to the generic "work" section (Home/
-  // Reports link/Queue/Executions + Installed Skills) even while you were
-  // actually on the Reports page — the sidebar had no idea a client was
-  // selected. Its own prefix, checked before the "work" fallback, same as
-  // every other real section.
-  { key: "reports", prefix: "/dashboard/reports" },
+  { key: "showtime", prefix: "/dashboard/reports" },
 ];
 
 function activeSection(pathname: string): SectionKey {
@@ -35,39 +32,41 @@ function activeSection(pathname: string): SectionKey {
 
 const SECTION_LABELS: Record<SectionKey, string> = {
   work: "Work",
-  engagements: "Engagements",
-  meetings: "Meetings",
+  showtime: "Showtime",
+  "reputation-manager": "Reputation Manager",
   settings: "Settings",
-  reports: "Reports",
 };
 
 export function SecondarySidebar({
   work,
-  engagements,
-  meetings,
   settings,
-  reports,
+  reputationManager,
+  showtime,
 }: SecondarySidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  // Library and Analytics both get no secondary sidebar (single-page destinations)
+  // Library is intentionally a single-page marketplace.
   if (
     pathname === "/dashboard/library" ||
-    pathname.startsWith("/dashboard/library/") ||
-    pathname === "/dashboard/analytics" ||
-    pathname.startsWith("/dashboard/analytics/")
+    pathname.startsWith("/dashboard/library/")
   ) {
     return null;
   }
 
-  const section = activeSection(pathname);
+  const scopedProduct = searchParams.get("product");
+  const section: SectionKey =
+    (pathname === "/dashboard/queue" || pathname === "/dashboard/runs") && scopedProduct === "reputation-manager"
+      ? "reputation-manager"
+      : (pathname === "/dashboard/queue" || pathname === "/dashboard/runs") && scopedProduct === "showtime"
+        ? "showtime"
+        : activeSection(pathname);
 
   const content: Record<SectionKey, ReactNode> = {
     work,
-    engagements,
-    meetings,
+    showtime,
+    "reputation-manager": reputationManager,
     settings,
-    reports,
   };
 
   return (

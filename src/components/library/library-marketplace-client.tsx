@@ -2,12 +2,60 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { PackageOverview } from "@/lib/package-overview";
 import { PackageHeroCard } from "@/components/library/package-hero-card";
-import { PackageTeaserCard } from "@/components/library/package-teaser-card";
 import { Search, ChevronDown, ChevronRight, ChevronLeft } from "lucide-react";
 
-export function LibraryMarketplaceClient({ overview }: { overview: PackageOverview }) {
+function ReputationManagerCard({ installed, onInstall }: { installed: boolean; onInstall: () => Promise<void> }) {
+  const [installing, setInstalling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function install() {
+    setInstalling(true);
+    setError(null);
+    try {
+      await onInstall();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not install Reputation Manager.");
+      setInstalling(false);
+    }
+  }
+
+  return (
+    <div className="relative flex flex-col justify-between rounded-2xl border border-indigo-200 dark:border-indigo-900/70 bg-white dark:bg-zinc-900/60 p-6 shadow-sm min-h-[280px]">
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <img src="/images/repm.png" alt="" className="w-14 h-14 object-contain" />
+            <div>
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Reputation Manager</h2>
+              <p className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400">Monitoring &amp; crisis response</p>
+            </div>
+          </div>
+          <span className="rounded-md bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 uppercase">{installed ? "Installed" : "Available"}</span>
+        </div>
+        <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          Monitor AI engines, Trustpilot, and Reddit; investigate signals and route crisis decisions to the named authority.
+        </p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-500">Includes Identity Setup, AI Engine Watch, Trustpilot Watch, Reddit Watch, and Crisis Response.</p>
+      </div>
+      <div className="pt-5">
+        {installed ? (
+          <Link href="/dashboard/reputation-manager" className="inline-flex items-center justify-center rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3.5 py-2 text-xs font-bold text-white transition-colors">Open Reputation Manager</Link>
+        ) : (
+          <button type="button" onClick={install} disabled={installing} className="inline-flex items-center justify-center rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 px-3.5 py-2 text-xs font-bold text-white transition-colors cursor-pointer">
+            {installing ? "Installing…" : "Install Reputation Manager"}
+          </button>
+        )}
+        {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+      </div>
+    </div>
+  );
+}
+
+export function LibraryMarketplaceClient({ overview, installedPackageIds }: { overview: PackageOverview; installedPackageIds: string[] }) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCollection, setSelectedCollection] = useState<string>("all");
@@ -24,7 +72,14 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const packages = useMemo(
+  const packages = useMemo<Array<{
+    id: string;
+    name: string;
+    category: string;
+    collection: string;
+    executionMode: string;
+    status: "installed" | "available" | "coming_soon";
+  }>>(
     () => [
       {
         id: "showtime",
@@ -32,19 +87,26 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
         category: "Revenue Execution",
         collection: "Top Installed Workers",
         executionMode: "Hybrid Webhook & Cron",
-        status: "installed" as const,
+        status: installedPackageIds.includes("showtime") ? "installed" as const : "available" as const,
       },
       {
-        id: "counter-claim",
-        name: "Counter Claim",
-        category: "Disputes & Compliance",
+        id: "reputation-manager",
+        name: "Reputation Manager",
+        category: "Reputation & Risk",
         collection: "Newly Added Apps",
-        executionMode: "Dispute Event Listener",
-        status: "coming_soon" as const,
+        executionMode: "Scheduled monitoring",
+        status: installedPackageIds.includes("reputation-manager") ? "installed" as const : "available" as const,
       },
     ],
-    []
+    [installedPackageIds]
   );
+
+  async function installReputationManager() {
+    const response = await fetch("/api/workspaces/packages/reputation-manager", { method: "POST" });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error ?? "Could not install Reputation Manager.");
+    router.refresh();
+  }
 
   const filteredPackages = useMemo(() => {
     return packages.filter((pkg) => {
@@ -278,8 +340,8 @@ export function LibraryMarketplaceClient({ overview }: { overview: PackageOvervi
               {filteredPackages.some((p) => p.id === "showtime") && (
                 <PackageHeroCard overview={overview} />
               )}
-              {filteredPackages.some((p) => p.id === "counter-claim") && (
-                <PackageTeaserCard />
+              {filteredPackages.some((p) => p.id === "reputation-manager") && (
+                <ReputationManagerCard installed={installedPackageIds.includes("reputation-manager")} onInstall={installReputationManager} />
               )}
             </div>
           </div>
