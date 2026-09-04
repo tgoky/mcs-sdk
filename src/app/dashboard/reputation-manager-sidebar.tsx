@@ -1,13 +1,22 @@
 import Link from "next/link";
-import { Activity, Building2, ListTodo, Plus } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, Building2, ListTodo, Plus } from "lucide-react";
 import { REP_SKILL_IDS, REP_SKILL_MANIFEST } from "@/lib/rep-skill-manifest";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 
-/** Reputation Manager deliberately has no meetings or sales-only links. */
+/**
+ * Reputation Manager deliberately has no meetings or sales-only links.
+ * /dashboard/reputation-manager itself is the dashboard (reached via the
+ * product's own primary-rail badge) — Clients, Incidents, and Analytics
+ * are the same destinations the primary rail shows as their own icons
+ * once this product is the active context, listed again here the same
+ * way Showtime's own sidebar re-lists its Analytics/Meetings links.
+ */
 export function ReputationManagerSidebar() {
   const links: NavLinkItem[] = [
-    { href: "/dashboard/reputation-manager", label: "Clients", icon: <Building2 className="w-4 h-4" /> },
+    { href: "/dashboard/engagements?product=reputation-manager", label: "Clients", icon: <Building2 className="w-4 h-4" /> },
     { href: "/dashboard/reputation-manager/new", label: "New client", icon: <Plus className="w-4 h-4" /> },
+    { href: "/dashboard/reputation-manager/incidents", label: "Incidents", icon: <AlertTriangle className="w-4 h-4" /> },
+    { href: "/dashboard/reputation-manager/analytics", label: "Analytics", icon: <BarChart3 className="w-4 h-4" /> },
     { href: "/dashboard/queue?product=reputation-manager", label: "Queue", icon: <ListTodo className="w-4 h-4" /> },
     { href: "/dashboard/runs?product=reputation-manager", label: "Executions", icon: <Activity className="w-4 h-4" /> },
   ];

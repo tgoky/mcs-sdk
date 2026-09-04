@@ -1,11 +1,12 @@
 import { db } from "@/lib/db";
-import { engagements, skillRuns, repIdentityGraphs } from "@/models/schema";
+import { engagements, skillRuns } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { eq, desc, inArray, isNull, isNotNull, and } from "drizzle-orm";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { isProductId, type ProductId } from "@/lib/product-catalog";
+import { getRepEnrolledEngagementIds } from "@/lib/rep-engagements";
 import { ClientRosterTable } from "./client-roster-table";
 
 export const revalidate = 0;
@@ -50,8 +51,7 @@ export default async function EngagementsPage({
       .from(engagements)
       .where(and(baseFilter, isNotNull(engagements.stack)));
   } else if (scopedProduct === "reputation-manager") {
-    const repRows = await db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs);
-    const repEngagementIds = repRows.map((r) => r.engagementId);
+    const repEngagementIds = await getRepEnrolledEngagementIds(whopUserId, activeWorkspace.workspaceId);
     userEngagements = repEngagementIds.length
       ? await db
           .select()

@@ -1,6 +1,17 @@
 // Canonical top-level navigation. Work is the cross-product hallway; product
 // sections own their product-specific secondary navigation.
-import { BookOpen, LayoutGrid, MonitorPlay, Settings, ShieldCheck, type LucideIcon } from "lucide-react";
+import {
+  AlertTriangle,
+  BarChart3,
+  BookOpen,
+  Building2,
+  CalendarClock,
+  LayoutGrid,
+  MonitorPlay,
+  Settings,
+  ShieldCheck,
+  type LucideIcon,
+} from "lucide-react";
 import type { ProductId } from "@/lib/product-catalog";
 
 export interface PrimaryNavSection {
@@ -46,3 +57,31 @@ export const PRODUCT_NAV_SECTIONS: ProductNavSection[] = [
 ];
 
 export const SETTINGS_NAV = { label: "Settings", href: "/dashboard/settings", icon: Settings };
+
+export interface ProductRailChild {
+  title: string;
+  href: string;
+  icon: LucideIcon;
+}
+
+/**
+ * The primary-rail icons a product contributes ON TOP OF Work/Library
+ * while that product is the active context — the blueprint's original
+ * flat Work/Engagements/Analytics/Library/Meetings rail (see d106e89's
+ * primary-nav.ts), just re-scoped per product instead of being one
+ * global list. Meetings has no Reputation Manager equivalent (nothing in
+ * that product is call-based), so it's replaced with Incidents — backed
+ * by the real rep_incidents table, not a placeholder.
+ */
+export const PRODUCT_RAIL_CHILDREN: Record<ProductId, ProductRailChild[]> = {
+  showtime: [
+    { title: "Engagements", href: "/dashboard/engagements?product=showtime", icon: Building2 },
+    { title: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+    { title: "Meetings", href: "/dashboard/meetings", icon: CalendarClock },
+  ],
+  "reputation-manager": [
+    { title: "Engagements", href: "/dashboard/engagements?product=reputation-manager", icon: Building2 },
+    { title: "Incidents", href: "/dashboard/reputation-manager/incidents", icon: AlertTriangle },
+    { title: "Analytics", href: "/dashboard/reputation-manager/analytics", icon: BarChart3 },
+  ],
+};

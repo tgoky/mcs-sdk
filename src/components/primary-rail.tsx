@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
-import { PRIMARY_NAV_SECTIONS, PRODUCT_NAV_SECTIONS } from "@/lib/primary-nav";
+import { PRIMARY_NAV_SECTIONS, PRODUCT_NAV_SECTIONS, PRODUCT_RAIL_CHILDREN } from "@/lib/primary-nav";
+import type { ProductId } from "@/lib/product-catalog";
 
 interface PrimaryRailProps {
   displayName: string;
@@ -29,6 +30,27 @@ interface PrimaryRailProps {
 }
 
 const RAIL_SECTIONS = PRIMARY_NAV_SECTIONS;
+const WORK_SECTION = PRIMARY_NAV_SECTIONS.find((s) => s.href === "/dashboard")!;
+const LIBRARY_SECTION = PRIMARY_NAV_SECTIONS.find((s) => s.href === "/dashboard/library")!;
+
+/**
+ * A rail item's own active state, independent of activeSectionHref's
+ * bucketing (which only needs to know "which whole section is active" to
+ * pick a secondary sidebar). Once a product context can contribute
+ * several of its own icons at once (Engagements/Analytics/Meetings-or-
+ * Incidents), each needs to tell whether IT specifically is the current
+ * page — including the ones whose href carries its own `?product=`
+ * query string, which a plain pathname comparison can't see.
+ */
+function isRailItemActive(href: string, pathname: string, searchParams: URLSearchParams): boolean {
+  const [itemPath, itemQuery] = href.split("?");
+  if (itemPath === "/dashboard") return pathname === "/dashboard";
+  const pathMatches = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+  if (!pathMatches) return false;
+  if (!itemQuery) return true;
+  const wantedProduct = new URLSearchParams(itemQuery).get("product");
+  return wantedProduct === null || searchParams.get("product") === wantedProduct;
+}
 
 const NAV_ICON_MAP: Record<string, string> = {
   "/dashboard/engagements": "/images/engagement.png",
@@ -129,15 +151,30 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
   const productSections = PRODUCT_NAV_SECTIONS.filter((section) => installedPackageIds.includes(section.productId));
   const initials = displayName.slice(0, 2).toUpperCase();
 
+  // Which product's own icons (Engagements/Analytics/Meetings-or-
+  // Incidents) join Work/Library in the rail right now — derived from
+  // the same bucket activeSectionHref already resolves pathname+product
+  // into, so this stays in sync with which secondary sidebar is showing
+  // without a second, separately-maintained notion of "current context."
+  const activeProductId: ProductId | null =
+    activeHref === "/dashboard/showtime"
+      ? "showtime"
+      : activeHref === "/dashboard/reputation-manager"
+        ? "reputation-manager"
+        : null;
+  const contextualChildren =
+    activeProductId && installedPackageIds.includes(activeProductId) ? PRODUCT_RAIL_CHILDREN[activeProductId] : [];
+  const topNavItems = [WORK_SECTION, ...contextualChildren, LIBRARY_SECTION];
+
   return (
     <aside className="w-[76px] bg-background border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1.5 shrink-0 select-none z-20 transition-colors duration-200">
       {/* Top Section */}
       <div className="flex flex-col items-center gap-1.5 w-full">
         <nav className="flex flex-col items-center gap-1.5 w-full">
-          {RAIL_SECTIONS.map((section) => {
-            const isActive = section.href === activeHref;
+          {topNavItems.map((section) => {
+            const isActive = isRailItemActive(section.href, pathname, searchParams);
             const Icon = section.icon;
-            const customIconSrc = NAV_ICON_MAP[section.href];
+            const customIconSrc = NAV_ICON_MAP[section.href.split("?")[0]];
 
             return (
               <Link
