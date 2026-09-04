@@ -218,6 +218,13 @@
       "when": 1788514920505,
       "tag": "0030_old_nehzno",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788535664798,
+      "tag": "0031_black_wasp",
+      "breakpoints": true
     }
   ]
 }

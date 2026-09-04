@@ -1,0 +1,1 @@
+ALTER TABLE "rep_incidents" ADD COLUMN "signal_class" text;
