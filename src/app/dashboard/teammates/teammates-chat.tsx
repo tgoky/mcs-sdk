@@ -14,7 +14,7 @@ import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 
 interface ChatMessage {
-  role: "user" | "worker";
+  role: "user" | "worker" | "assistant";
   content: string;
   toolCalls?: { name: string; ok: boolean; message: string }[];
   links?: { label: string; href: string }[];
@@ -94,19 +94,6 @@ function FormattedMessage({ content, mentionPillTextSize }: { content: string; m
   );
 }
 
-/**
- * The chat pane behind both the right-utility-panel's compact
- * "Teammates" tab (teammates-panel-content.tsx, `size` left at its
- * "compact" default) and the full /dashboard/teammates page
- * (teammates-workspace.tsx, `size="full"`). Same component, same
- * behavior — only the type scale and spacing differ, so the compact
- * panel keeps looking exactly like it did before this size prop existed.
- * "full" drops the composer/bubble sizing up a notch and centers the
- * message stream in a readable column (like Claude's own chat) instead
- * of letting lines stretch edge-to-edge across a whole monitor — the
- * outer "no box" treatment itself lives one level up, in
- * teammates-workspace.tsx, which no longer wraps this in a bordered card.
- */
 export function TeammatesChat({
   initialThreadId,
   onThreadEvent,
@@ -119,7 +106,6 @@ export function TeammatesChat({
   size?: "compact" | "full";
 } = {}) {
   const isFull = size === "full";
-
   const textSize = isFull ? "text-sm" : "text-xs";
   const labelSize = isFull ? "text-xs" : "text-[10px]";
   const emptyTitleSize = isFull ? "text-base" : "text-xs";
@@ -152,6 +138,7 @@ export function TeammatesChat({
   const [threadId, setThreadId] = useState<string | null>(() =>
     initialThreadId !== undefined ? initialThreadId : readStoredThreadId()
   );
+
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -286,178 +273,178 @@ export function TeammatesChat({
       {/* Message Stream */}
       <div className={`flex-1 overflow-y-auto ${streamPadding} ${textSize}`}>
         <div className={`${streamColumn} min-h-full ${streamGap}`}>
-        {historyLoading && (
-          <div className="flex items-center gap-2 px-1 text-zinc-500">
-            <PrefillLoader size={12} />
-            <span className={textSize}>Loading conversation...</span>
-          </div>
-        )}
-
-        {!historyLoading && messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center gap-1.5 px-4 py-8">
-            <p className={`${emptyTitleSize} font-bold text-zinc-900 dark:text-zinc-100 tracking-tight`}>
-              Ask Workers to run something
-            </p>
-            <p className={`${emptySubSize} leading-relaxed ${emptyMaxWidth} text-zinc-500 dark:text-zinc-400`}>
-              Try &quot;run a call brief for Acme Co&quot; or use @ to tag a skill.
-            </p>
-          </div>
-        )}
-
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className={`flex flex-col space-y-1 ${
-              m.role === "user" ? "items-end" : "items-start"
-            }`}
-          >
-            <div className={`flex items-center gap-1.5 px-1 font-medium text-zinc-500 dark:text-zinc-400 ${labelSize}`}>
-              {m.role === "worker" ? (
-                <>
-                  <span className={`${dotSize} rounded-full bg-zinc-400 dark:bg-zinc-500`} />
-                  <span>Worker</span>
-                </>
-              ) : (
-                <>
-                  <span>You</span>
-                  <span className={`${dotSize} rounded-full bg-zinc-600 dark:bg-zinc-400`} />
-                </>
-              )}
+          {historyLoading && (
+            <div className="flex items-center gap-2 px-1 text-zinc-500">
+              <PrefillLoader size={12} />
+              <span className={textSize}>Loading conversation...</span>
             </div>
-            <div
-              className={`${bubbleMaxWidth} rounded-2xl ${bubblePadding} ${textSize} backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)] border transition-colors ${
-                m.role === "user"
-                  ? "bg-zinc-900/90 dark:bg-zinc-800/80 text-zinc-100 border-white/10 dark:border-white/10"
-                  : "bg-white/50 dark:bg-zinc-900/40 text-zinc-900 dark:text-zinc-100 border-white/60 dark:border-white/10"
-              }`}
-            >
-              <FormattedMessage content={m.content} mentionPillTextSize={isFull ? "text-xs" : "text-[11px]"} />
-              {m.toolCalls && m.toolCalls.length > 0 && (
-                <div className="mt-2 space-y-1 pt-1.5 border-t border-zinc-200/50 dark:border-zinc-800/60">
-                  {m.toolCalls.map((tc, j) => (
-                    <div key={j} className={`flex items-start gap-1 text-zinc-500 dark:text-zinc-400 ${toolLinkTextSize}`}>
-                      {tc.ok ? (
-                        <CheckCircle2 size={isFull ? 12 : 10} className="text-emerald-500 shrink-0 mt-0.5" />
-                      ) : (
-                        <XCircle size={isFull ? 12 : 10} className="text-rose-500 shrink-0 mt-0.5" />
-                      )}
-                      <span>{tc.message}</span>
+          )}
+
+          {!historyLoading && messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-center gap-1.5 px-4 py-8">
+              <p className={`${emptyTitleSize} font-bold text-zinc-900 dark:text-zinc-100 tracking-tight`}>
+                Ask Workers to run something
+              </p>
+              <p className={`${emptySubSize} leading-relaxed ${emptyMaxWidth} text-zinc-500 dark:text-zinc-400`}>
+                Try &quot;run a call brief for Acme Co&quot; or use @ to tag a skill.
+              </p>
+            </div>
+          )}
+
+          {messages.map((m, i) => {
+            const isUser = m.role === "user";
+            return (
+              <div
+                key={i}
+                className={`flex flex-col space-y-1 ${
+                  isUser ? "items-end" : "items-start"
+                }`}
+              >
+                <div className={`flex items-center gap-1.5 px-1 font-medium text-zinc-500 dark:text-zinc-400 ${labelSize}`}>
+                  {!isUser ? (
+                    <>
+                      <span className={`${dotSize} rounded-full bg-zinc-400 dark:bg-zinc-500`} />
+                      <span>Worker</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>You</span>
+                      <span className={`${dotSize} rounded-full bg-zinc-600 dark:bg-zinc-400`} />
+                    </>
+                  )}
+                </div>
+
+                <div
+                  className={`${bubbleMaxWidth} rounded-2xl ${bubblePadding} ${textSize} backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)] border transition-colors ${
+                    isUser
+                      ? "bg-zinc-900/90 dark:bg-zinc-800/80 text-zinc-100 border-white/10 dark:border-white/10"
+                      : "bg-white/50 dark:bg-zinc-900/40 text-zinc-900 dark:text-zinc-100 border-white/60 dark:border-white/10"
+                  }`}
+                >
+                  <FormattedMessage content={m.content} mentionPillTextSize={isFull ? "text-xs" : "text-[11px]"} />
+
+                  {m.toolCalls && m.toolCalls.length > 0 && (
+                    <div className="mt-2 space-y-1 pt-1.5 border-t border-zinc-200/50 dark:border-zinc-800/60">
+                      {m.toolCalls.map((tc, j) => (
+                        <div key={j} className={`flex items-start gap-1 text-zinc-500 dark:text-zinc-400 ${toolLinkTextSize}`}>
+                          {tc.ok ? (
+                            <CheckCircle2 size={isFull ? 12 : 10} className="text-emerald-500 shrink-0 mt-0.5" />
+                          ) : (
+                            <XCircle size={isFull ? 12 : 10} className="text-rose-500 shrink-0 mt-0.5" />
+                          )}
+                          <span>{tc.message}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+
+                  {m.links && m.links.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1 pt-1.5 border-t border-zinc-200/50 dark:border-zinc-800/60">
+                      {m.links.map((link, j) => (
+                        <a
+                          key={j}
+                          href={link.href}
+                          className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-semibold bg-white/60 dark:bg-zinc-800/60 backdrop-blur-xs hover:bg-white/80 dark:hover:bg-zinc-700/80 text-zinc-800 dark:text-zinc-200 transition-colors border border-white/40 dark:border-white/10 ${toolLinkTextSize}`}
+                        >
+                          {link.label}
+                          <ArrowUpRight size={isFull ? 12 : 10} />
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-              {m.links && m.links.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1 pt-1.5 border-t border-zinc-200/50 dark:border-zinc-800/60">
-                  {m.links.map((link, j) => (
-                    <a
-                      key={j}
-                      href={link.href}
-                      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-semibold bg-white/60 dark:bg-zinc-800/60 backdrop-blur-xs hover:bg-white/80 dark:hover:bg-zinc-700/80 text-zinc-800 dark:text-zinc-200 transition-colors border border-white/40 dark:border-white/10 ${toolLinkTextSize}`}
-                    >
-                      {link.label}
-                      <ArrowUpRight size={isFull ? 12 : 10} />
-                    </a>
-                  ))}
-                </div>
-              )}
+              </div>
+            );
+          })}
+
+          {loading && (
+            <div className="flex items-center gap-2 px-1 text-zinc-500">
+              <PrefillLoader size={12} />
+              <span className={textSize}>Working on it...</span>
             </div>
-          </div>
-        ))}
+          )}
 
-        {loading && (
-          <div className="flex items-center gap-2 px-1 text-zinc-500">
-            <PrefillLoader size={12} />
-            <span className={textSize}>Working on it...</span>
-          </div>
-        )}
-
-        {error && <p className={`text-rose-500 px-1 ${textSize}`}>{error}</p>}
+          {error && <p className={`text-rose-500 px-1 ${textSize}`}>{error}</p>}
         </div>
       </div>
 
-      {/* Input Surface (macOS Glassmorphism Panel) */}
+      {/* Input Surface */}
       <div className={`relative ${composerPadding} border-t border-white/20 dark:border-white/10 bg-white/15 dark:bg-zinc-950/20 backdrop-blur-2xl`}>
         <div className={composerColumn}>
-        {/* Upward Autocomplete Menu */}
-        {showMentions && (
-          <div className="absolute bottom-full left-2 mb-2 w-52 rounded-2xl bg-white/70 dark:bg-zinc-900/70 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] overflow-hidden z-50">
-            {filteredMentions.map((s) => (
-              <button
-                key={s.token}
-                type="button"
-                onClick={() => addSkillTag(s.token)}
-                className={`flex items-center gap-2 w-full text-left px-3 py-2 font-medium hover:bg-white/50 dark:hover:bg-white/10 text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer ${dropdownItemTextSize}`}
-              >
-                <SquishySkillBadge skill={s.token} size={16} />
-                <span>@{s.token}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Glass Input Card Container */}
-        <div className={`flex flex-col gap-2 rounded-2xl bg-white/35 dark:bg-zinc-900/35 backdrop-blur-xl border border-white/50 dark:border-white/10 ${inputCardPadding} shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] focus-within:border-white/80 dark:focus-within:border-white/20 focus-within:bg-white/50 dark:focus-within:bg-zinc-900/50 transition-all duration-200`}>
-          {/* Continuous Inline Row: Tags + Textarea */}
-          <div className="flex flex-wrap items-center gap-1.5 min-h-[28px]">
-            {taggedSkills.map((token) => {
-              const skill = MENTIONABLE_SKILLS.find((s) => s.token === token);
-              if (!skill) return null;
-              return (
-                <span
-                  key={token}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium border ${tagPillTextSize} ${skill.pillStyle} shrink-0`}
+          {showMentions && (
+            <div className="absolute bottom-full left-2 mb-2 w-52 rounded-2xl bg-white/70 dark:bg-zinc-900/70 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] overflow-hidden z-50">
+              {filteredMentions.map((s) => (
+                <button
+                  key={s.token}
+                  type="button"
+                  onClick={() => addSkillTag(s.token)}
+                  className={`flex items-center gap-2 w-full text-left px-3 py-2 font-medium hover:bg-white/50 dark:hover:bg-white/10 text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer ${dropdownItemTextSize}`}
                 >
-                  <SquishySkillBadge skill={skill.token} size={14} />
-                  <span>{skill.label}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeSkillTag(token)}
-                    className="hover:opacity-80 transition-opacity cursor-pointer ml-0.5"
+                  <SquishySkillBadge skill={s.token} size={16} />
+                  <span>@{s.token}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className={`flex flex-col gap-2 rounded-2xl bg-white/35 dark:bg-zinc-900/35 backdrop-blur-xl border border-white/50 dark:border-white/10 ${inputCardPadding} shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] focus-within:border-white/80 dark:focus-within:border-white/20 focus-within:bg-white/50 dark:focus-within:bg-zinc-900/50 transition-all duration-200`}>
+            <div className="flex flex-wrap items-center gap-1.5 min-h-[28px]">
+              {taggedSkills.map((token) => {
+                const skill = MENTIONABLE_SKILLS.find((s) => s.token === token);
+                if (!skill) return null;
+                return (
+                  <span
+                    key={token}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium border ${tagPillTextSize} ${skill.pillStyle} shrink-0`}
                   >
-                    <X size={11} />
-                  </button>
-                </span>
-              );
-            })}
+                    <SquishySkillBadge skill={skill.token} size={14} />
+                    <span>{skill.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeSkillTag(token)}
+                      className="hover:opacity-80 transition-opacity cursor-pointer ml-0.5"
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                );
+              })}
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => handleInputChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                placeholder={taggedSkills.length > 0 ? "add details..." : "Ask Workers or type @..."}
+                rows={1}
+                className={`flex-1 min-w-[140px] max-h-36 resize-none bg-transparent text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none leading-relaxed overflow-y-auto py-0.5 ${textSize}`}
+              />
+            </div>
 
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              placeholder={taggedSkills.length > 0 ? "add details..." : "Ask Workers or type @..."}
-              rows={1}
-              className={`flex-1 min-w-[140px] max-h-36 resize-none bg-transparent text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none leading-relaxed overflow-y-auto py-0.5 ${textSize}`}
-            />
+            <div className="flex items-center justify-between pt-1.5 border-t border-white/20 dark:border-white/5">
+              <Dropdown
+                variant="icon"
+                icon={AtSign}
+                triggerTitle="Tag skill"
+                align="left"
+                items={dropdownItems}
+                onSelect={(key) => addSkillTag(key)}
+              />
+              <button
+                type="button"
+                onClick={() => send()}
+                disabled={loading || (!input.trim() && taggedSkills.length === 0)}
+                className={`flex items-center justify-center ${sendButtonSize} rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 backdrop-blur-md text-zinc-100 dark:text-zinc-950 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-black dark:hover:bg-white transition-all shadow-xs cursor-pointer shrink-0`}
+                aria-label="Send message"
+              >
+                <ArrowUp size={sendIconSize} className="stroke-[2.5]" />
+              </button>
+            </div>
           </div>
-
-          {/* Action Toolbar */}
-          <div className="flex items-center justify-between pt-1.5 border-t border-white/20 dark:border-white/5">
-            <Dropdown
-              variant="icon"
-              icon={AtSign}
-              triggerTitle="Tag skill"
-              align="left"
-              items={dropdownItems}
-              onSelect={(key) => addSkillTag(key)}
-            />
-
-            <button
-              type="button"
-              onClick={() => send()}
-              disabled={loading || (!input.trim() && taggedSkills.length === 0)}
-              className={`flex items-center justify-center ${sendButtonSize} rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 backdrop-blur-md text-zinc-100 dark:text-zinc-950 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-black dark:hover:bg-white transition-all shadow-xs cursor-pointer shrink-0`}
-              aria-label="Send message"
-            >
-              <ArrowUp size={sendIconSize} className="stroke-[2.5]" />
-            </button>
-          </div>
-        </div>
         </div>
       </div>
     </div>
