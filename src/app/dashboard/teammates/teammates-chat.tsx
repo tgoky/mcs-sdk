@@ -7,10 +7,9 @@ import {
   XCircle,
   ArrowUpRight,
   X,
-  Plus,
+  AtSign,
 } from "lucide-react";
 import { PrefillLoader } from "@/components/prefill-loader";
-import { PinnedSkillsBar } from "./pinned-skills-bar";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 
@@ -45,27 +44,27 @@ export const MENTIONABLE_SKILLS = [
   {
     token: "pin-down",
     label: "Pin-Down",
-    pillStyle: "bg-amber-400/15 text-amber-600 dark:text-amber-300 border-amber-500/30",
+    pillStyle: "bg-amber-400/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
   },
   {
     token: "pile-on",
     label: "Pile-On",
-    pillStyle: "bg-purple-400/15 text-purple-600 dark:text-purple-300 border-purple-500/30",
+    pillStyle: "bg-purple-400/15 text-purple-700 dark:text-purple-300 border-purple-500/30",
   },
   {
     token: "pre-call-read",
     label: "Pre-Call Read",
-    pillStyle: "bg-pink-400/15 text-pink-600 dark:text-pink-300 border-pink-500/30",
+    pillStyle: "bg-pink-400/15 text-pink-700 dark:text-pink-300 border-pink-500/30",
   },
   {
     token: "win-back",
     label: "Win-Back",
-    pillStyle: "bg-rose-400/15 text-rose-600 dark:text-rose-300 border-rose-500/30",
+    pillStyle: "bg-rose-400/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
   },
   {
     token: "leak-map",
     label: "Leak Map",
-    pillStyle: "bg-sky-400/15 text-sky-600 dark:text-sky-300 border-sky-500/30",
+    pillStyle: "bg-sky-400/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
   },
 ];
 
@@ -116,7 +115,7 @@ export function TeammatesChat({
   const [threadId, setThreadId] = useState<string | null>(() =>
     initialThreadId !== undefined ? initialThreadId : readStoredThreadId()
   );
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const id = initialThreadId !== undefined ? initialThreadId : readStoredThreadId();
@@ -180,7 +179,7 @@ export function TeammatesChat({
   }
 
   function removeSkillTag(token: string) {
-    setTaggedSkills((prev) => [...prev, token]);
+    setTaggedSkills((prev) => prev.filter((t) => t !== token));
   }
 
   async function send(overrideText?: string) {
@@ -247,8 +246,6 @@ export function TeammatesChat({
 
   return (
     <div className="flex flex-col h-full text-zinc-900 dark:text-zinc-100">
-      <PinnedSkillsBar onSelect={addSkillTag} />
-
       {/* Message Stream */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 text-xs">
         {historyLoading && (
@@ -264,7 +261,7 @@ export function TeammatesChat({
               Ask Workers to run something
             </p>
             <p className="text-[11px] leading-relaxed max-w-[240px] text-zinc-500">
-              Try &quot;run a call brief for Acme Co&quot; or click + to tag a skill.
+              Try &quot;run a call brief for Acme Co&quot; or use @ to tag a skill.
             </p>
           </div>
         )}
@@ -279,21 +276,21 @@ export function TeammatesChat({
             <div className="flex items-center gap-1.5 px-1 text-[10px] font-medium text-zinc-500">
               {m.role === "assistant" ? (
                 <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
                   <span>Assistant</span>
                 </>
               ) : (
                 <>
                   <span>You</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 dark:bg-zinc-400" />
                 </>
               )}
             </div>
             <div
               className={`max-w-[85%] rounded-xl px-3 py-2 text-xs border ${
                 m.role === "user"
-                  ? "bg-zinc-800 text-zinc-100 border-zinc-700/80"
-                  : "bg-zinc-100 dark:bg-zinc-900/90 text-zinc-900 dark:text-zinc-100 border-zinc-200 dark:border-zinc-800"
+                  ? "bg-zinc-900 dark:bg-zinc-800 text-zinc-100 border-zinc-800 dark:border-zinc-700/80"
+                  : "bg-white/80 dark:bg-zinc-900/80 text-zinc-900 dark:text-zinc-100 border-zinc-200 dark:border-zinc-800"
               }`}
             >
               <FormattedMessage content={m.content} />
@@ -317,7 +314,7 @@ export function TeammatesChat({
                     <a
                       key={j}
                       href={link.href}
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 transition-colors border border-zinc-300 dark:border-zinc-700/60"
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 transition-colors border border-zinc-200 dark:border-zinc-700/60"
                     >
                       {link.label}
                       <ArrowUpRight size={10} />
@@ -339,85 +336,85 @@ export function TeammatesChat({
         {error && <p className="text-xs text-rose-500 px-1">{error}</p>}
       </div>
 
-      {/* Input Surface */}
-      <div className="p-2 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/60">
-        <div className="relative rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 p-2 shadow-xs transition-all focus-within:border-zinc-400 dark:focus-within:border-zinc-700">
-          {/* Autocomplete Dropdown Menu */}
-          {showMentions && (
-            <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl overflow-hidden z-20">
-              {filteredMentions.map((s) => (
+      {/* Input Surface — Single Horizontal Line */}
+      <div className="relative p-2 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white/40 dark:bg-zinc-950/40 backdrop-blur-md">
+        {/* Upward Autocomplete Menu */}
+        {showMentions && (
+          <div className="absolute bottom-full left-2 mb-2 w-52 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl overflow-hidden z-50">
+            {filteredMentions.map((s) => (
+              <button
+                key={s.token}
+                type="button"
+                onClick={() => addSkillTag(s.token)}
+                className="flex items-center gap-2 w-full text-left px-3 py-2 text-xs font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer"
+              >
+                <SquishySkillBadge skill={s.token} size={16} />
+                <span>@{s.token}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Continuous Single-Row Control Bar */}
+        <div className="flex items-center gap-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1.5 shadow-2xs focus-within:border-zinc-400 dark:focus-within:border-zinc-700 transition-colors">
+          {/* Tagged Skills Inline */}
+          {taggedSkills.map((token) => {
+            const skill = MENTIONABLE_SKILLS.find((s) => s.token === token);
+            if (!skill) return null;
+            return (
+              <span
+                key={token}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${skill.pillStyle} shrink-0`}
+              >
+                <SquishySkillBadge skill={skill.token} size={14} />
+                <span>{skill.label}</span>
                 <button
-                  key={s.token}
                   type="button"
-                  onClick={() => addSkillTag(s.token)}
-                  className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-xs font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer"
+                  onClick={() => removeSkillTag(token)}
+                  className="hover:opacity-80 transition-opacity cursor-pointer ml-0.5"
                 >
-                  <SquishySkillBadge skill={s.token} size={16} />
-                  <span>@{s.token}</span>
+                  <X size={11} />
                 </button>
-              ))}
-            </div>
-          )}
+              </span>
+            );
+          })}
 
-          {/* Unified Sentence Area */}
-          <div className="flex flex-wrap items-center gap-1.5 min-h-[28px]">
-            {taggedSkills.map((token) => {
-              const skill = MENTIONABLE_SKILLS.find((s) => s.token === token);
-              if (!skill) return null;
-              return (
-                <span
-                  key={token}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${skill.pillStyle} shrink-0`}
-                >
-                  <SquishySkillBadge skill={skill.token} size={16} />
-                  <span>{skill.label}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeSkillTag(token)}
-                    className="hover:opacity-80 transition-opacity cursor-pointer"
-                  >
-                    <X size={11} />
-                  </button>
-                </span>
-              );
-            })}
+          {/* Text Input */}
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                send();
+              }
+            }}
+            placeholder={taggedSkills.length > 0 ? "add details..." : "Ask Workers or type @..."}
+            className="flex-1 min-w-[120px] bg-transparent text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none"
+          />
 
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              placeholder={taggedSkills.length > 0 ? "add details..." : "Ask Workers or type @..."}
-              rows={1}
-              className="flex-1 min-w-[120px] resize-none bg-transparent text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none py-1"
-            />
-          </div>
+          {/* Inline @ Dropdown Trigger */}
+          <Dropdown
+            variant="icon"
+            icon={AtSign}
+            triggerTitle="Tag skill"
+            align="right"
+            items={dropdownItems}
+            onSelect={(key) => addSkillTag(key)}
+          />
 
-          {/* Bottom Toolbar */}
-          <div className="flex items-center justify-between pt-1 mt-1 border-t border-zinc-100 dark:border-zinc-800/60">
-            <Dropdown
-              variant="icon"
-              icon={Plus}
-              triggerTitle="Tag skill"
-              items={dropdownItems}
-              onSelect={(key) => addSkillTag(key)}
-            />
-
-            <button
-              type="button"
-              onClick={() => send()}
-              disabled={loading || (!input.trim() && taggedSkills.length === 0)}
-              className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-950 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-black dark:hover:bg-white transition-all shadow-xs cursor-pointer"
-              aria-label="Send message"
-            >
-              <ArrowUp size={13} className="stroke-[2.5]" />
-            </button>
-          </div>
+          {/* Send Button */}
+          <button
+            type="button"
+            onClick={() => send()}
+            disabled={loading || (!input.trim() && taggedSkills.length === 0)}
+            className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-950 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-black dark:hover:bg-white transition-all shadow-xs cursor-pointer shrink-0"
+            aria-label="Send message"
+          >
+            <ArrowUp size={13} className="stroke-[2.5]" />
+          </button>
         </div>
       </div>
     </div>
