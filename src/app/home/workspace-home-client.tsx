@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, ArrowRight, LayoutGrid, List, Gavel } from "lucide-react";
+import { Plus, ArrowRight, LayoutGrid, List } from "lucide-react";
 import { HOME_COPY, WORKSPACE_PRODUCTS } from "@/lib/copy";
 import type { Workspace } from "@/lib/workspace";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
@@ -52,13 +52,6 @@ function SegmentedBarLoader({ count = 8 }: { count?: number }) {
 }
 
 function PackageBadge({ packageId }: { packageId: string }) {
-  if (packageId === "counter-claim") {
-    return (
-      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-none">
-        <Gavel size={11} className="stroke-[2.5px]" />
-      </div>
-    );
-  }
   return (
     <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-none">
       <LayoutGrid size={11} className="stroke-[2.5px]" />

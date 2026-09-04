@@ -531,9 +531,10 @@ export const workspaces = pgTable("workspaces", {
 
 // Which skill packages (see copy.ts's WORKSPACE_PRODUCTS) are installed in
 // a given workspace — chosen from the library-kit step of workspace
-// creation, or later from /dashboard/library. "showtime" is the only real
-// package today; the table exists so future packages (counter-claim, etc.)
-// slot in without another migration.
+// creation, or later from /dashboard/library. "showtime" and
+// "reputation-manager" are the two real packages today; the table's
+// free-text packageId means a third product slots in without another
+// migration.
 export const workspacePackages = pgTable(
   "workspace_packages",
   {

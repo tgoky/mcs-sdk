@@ -36,14 +36,14 @@ describe("WorkspaceHomePage", () => {
     expect(screen.getByRole("button", { name: /Open Showtime/ })).not.toBeDisabled();
   });
 
-  it("shows Counter Claim as coming soon and not clickable", async () => {
+  it("shows Reputation Manager as available and links it to /dashboard/reputation-manager", async () => {
     vi.mocked(getSession).mockResolvedValue({ email: "sarah@acme.com" } as any);
     await renderHomePage();
 
-    const heading = screen.getByRole("heading", { name: "Counter Claim" });
-    // Not wrapped in a link — the coming-soon card is inert.
-    expect(heading.closest("a")).toBeNull();
-    expect(screen.getByRole("button", { name: "Coming soon" })).toBeDisabled();
+    const heading = screen.getByRole("heading", { name: "Reputation Manager" });
+    const card = heading.closest("a");
+    expect(card).toHaveAttribute("href", "/dashboard/reputation-manager");
+    expect(screen.getByRole("button", { name: /Open Reputation Manager/ })).not.toBeDisabled();
   });
 
   it("provides a sign-out link", async () => {

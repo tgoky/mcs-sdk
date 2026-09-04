@@ -50,12 +50,8 @@ export default function NewWorkspacePage({
   const resolvedParams = use(searchParams);
   const error = resolvedParams?.error;
 
-  const filteredProducts = WORKSPACE_PRODUCTS.filter(
-    (product) => product.id !== "counter-claim"
-  );
-
   const [selectedPackages, setSelectedPackages] = useState<string[]>(() =>
-    filteredProducts
+    WORKSPACE_PRODUCTS
       .filter((p) => p.status === "available")
       .map((p) => p.id)
   );
@@ -130,7 +126,7 @@ export default function NewWorkspacePage({
             </label>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {filteredProducts.map((product) => {
+              {WORKSPACE_PRODUCTS.map((product) => {
                 const installable = product.status === "available";
                 const isSelected = selectedPackages.includes(product.id);
 

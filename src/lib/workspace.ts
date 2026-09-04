@@ -178,8 +178,8 @@ export async function getOwnedWorkspace(whopUserId: string, workspaceId: string)
  * zero, scoped by workspace_id on every engagement created inside it from
  * here on. `packageIds` comes straight off the creation form's checkboxes;
  * only ids that are actually installable today (see copy.ts's
- * WORKSPACE_PRODUCTS) are trusted, so a tampered or leftover "counter-claim"
- * value is silently dropped rather than installed as if it were real.
+ * WORKSPACE_PRODUCTS) are trusted, so a tampered or stale "coming_soon"
+ * product id is silently dropped rather than installed as if it were real.
  */
 export async function createWorkspace(
   whopUserId: string,
