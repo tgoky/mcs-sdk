@@ -41,24 +41,30 @@ export default function ReputationManagerNewPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto py-12 px-4">
-      <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">New Reputation Manager client</h1>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-8">
-        Already have this client set up somewhere else? Add Reputation Manager from their own page instead — this is for starting fresh.
-      </p>
+    <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
+      <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
 
-      <IdentityGraphForm form={form} onChange={setForm} />
+      <div className="relative z-10 space-y-6 w-full max-w-3xl">
+        <div className="pb-3 border-b border-zinc-200/80 dark:border-zinc-800/80">
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">New Reputation Manager client</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Already have this client set up somewhere else? Add Reputation Manager from their own page instead — this is for starting fresh.
+          </p>
+        </div>
 
-      {saveError && <p className="text-xs text-red-600 dark:text-red-400 mt-4">{saveError}</p>}
+        <IdentityGraphForm form={form} onChange={setForm} />
 
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={saving || !form.operatorName.trim() || !form.soleAuthorityName.trim()}
-        className="mt-6 px-4 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer border bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        {saving ? "Creating…" : "Create client"}
-      </button>
+        {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
+
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={saving || !form.operatorName.trim() || !form.soleAuthorityName.trim()}
+          className="px-4 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer border bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {saving ? "Creating…" : "Create client"}
+        </button>
+      </div>
     </div>
   );
 }

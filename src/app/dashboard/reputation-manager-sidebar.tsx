@@ -1,5 +1,6 @@
 import { Activity, Building2, ListTodo } from "lucide-react";
 import { REP_SKILL_IDS, REP_SKILL_MANIFEST } from "@/lib/rep-skill-manifest";
+import { RepSkillBadge } from "@/components/rep-skill-badge";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 
 /**
@@ -37,7 +38,7 @@ export function ReputationManagerSidebar() {
       <div className="flex flex-col gap-0.5">
         {REP_SKILL_IDS.map((skillId) => (
           <div key={skillId} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 dark:bg-indigo-500 shrink-0" />
+            <RepSkillBadge skill={skillId} size={20} />
             <span>{REP_SKILL_MANIFEST[skillId].name}</span>
           </div>
         ))}
