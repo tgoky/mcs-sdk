@@ -21,18 +21,32 @@ const REVIEWS_LIMIT = 100; // matches Outscraper's own documented default for th
  * below are all confirmed real:
  *
  *   GET https://api.outscraper.cloud/trustpilot-reviews
- *     ?query={domain}&limit={n}&async=false
+ *     ?query={domain}&limit={n}&sort=recency&async=false
  *   Header: X-API-KEY: {key}
+ *
+ * sort=recency (the only real value that param takes, per their own
+ * docs) matters more than it looks: this only ever fetches the top
+ * REVIEWS_LIMIT reviews per check, and dedupes against what's already
+ * stored to find what's new. Without an explicit sort, a business with
+ * more than REVIEWS_LIMIT total reviews has no guarantee those top-100
+ * are the newest ones — a genuinely new review could land outside that
+ * window and never surface in any future check either, not just get
+ * delayed. Newest-first ordering is what makes "top 100" reliably mean
+ * "everything published since last time" instead of an arbitrary slice.
  *
  * async=false per their own docs opens the connection and holds it until
  * results are ready — no polling loop needed, same shape as a typical
- * synchronous scrape-and-return endpoint.
+ * synchronous scrape-and-return endpoint. Their docs recommend async=true
+ * for calls that may run long (large batches, enrichments); a single-
+ * domain review fetch is small enough that the simpler synchronous call
+ * is the right tradeoff here — a timeout still fails cleanly into
+ * Inngest's normal retry path (see runRepTrustpilotWatch's catch block).
  */
 async function fetchTrustpilotReviews(domain: string): Promise<RawReview[]> {
   const config = resolveOutscraperConfig();
   if (!config) return [];
 
-  const url = `https://api.outscraper.cloud/trustpilot-reviews?query=${encodeURIComponent(domain)}&limit=${REVIEWS_LIMIT}&async=false`;
+  const url = `https://api.outscraper.cloud/trustpilot-reviews?query=${encodeURIComponent(domain)}&limit=${REVIEWS_LIMIT}&sort=recency&async=false`;
   const res = await fetch(url, { headers: { "X-API-KEY": config.apiKey } });
 
   if (!res.ok) {
