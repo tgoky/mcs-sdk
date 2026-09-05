@@ -25,6 +25,7 @@ export default function RepOnboardingBridgePage({ params }: { params: Promise<{ 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [buyer, setBuyer] = useState("");
+  const [wasDisabled, setWasDisabled] = useState(false);
   const [form, setForm] = useState<IdentityGraphFormState>(EMPTY_IDENTITY_GRAPH_FORM);
   const [foundCollisions, setFoundCollisions] = useState<(RepCollision & { source: "collision_check" })[]>([]);
 
@@ -42,6 +43,7 @@ export default function RepOnboardingBridgePage({ params }: { params: Promise<{ 
         if (cancelled) return;
 
         setBuyer(data.buyer ?? "");
+        setWasDisabled(data.enabled === false);
         if (data.graph) {
           setForm(fromSavedGraph(data.graph));
           setFoundCollisions(
@@ -75,6 +77,7 @@ export default function RepOnboardingBridgePage({ params }: { params: Promise<{ 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
       setSaved(true);
+      setWasDisabled(false);
       router.refresh();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed to save");
@@ -93,9 +96,18 @@ export default function RepOnboardingBridgePage({ params }: { params: Promise<{ 
   return (
     <div className="max-w-2xl mx-auto py-12 px-4">
       <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">Reputation Manager — Identity Setup</h1>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-8">for {buyer}</p>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-1">for {buyer}</p>
 
-      <IdentityGraphForm form={form} onChange={setForm} readOnlyCollisions={foundCollisions} />
+      {wasDisabled && (
+        <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg px-3 py-2 mt-4 mb-4">
+          Identity Setup is currently turned off for this client — every other Reputation Manager skill reads from this
+          graph, so it can only be turned back on by saving it here. Saving below will turn it back on.
+        </p>
+      )}
+
+      <div className={wasDisabled ? "" : "mt-8"}>
+        <IdentityGraphForm form={form} onChange={setForm} readOnlyCollisions={foundCollisions} />
+      </div>
 
       {saveError && <p className="text-xs text-red-600 dark:text-red-400 mt-4">{saveError}</p>}
       {saved && <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-4">Saved.</p>}

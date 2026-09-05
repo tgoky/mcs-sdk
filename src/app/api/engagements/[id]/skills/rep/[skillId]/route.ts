@@ -43,10 +43,17 @@ export async function POST(
     // rep-onboarding (runOnSetup) can be turned OFF via plain bookkeeping,
     // but turning it on requires the identity-graph bridge — every other
     // Reputation Manager skill reads that graph, so there's nothing for
-    // this row to mean until the bridge has actually run once.
+    // this row to mean until the bridge has actually run once. The panel's
+    // own toggle already redirects here instead of calling this endpoint
+    // (see rep-skills-panel.tsx's handleToggleClick), so a real user never
+    // sees this response — it's defense-in-depth for any other caller,
+    // which is exactly why it carries a bridgeUrl instead of just prose.
     if (REP_SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
       return NextResponse.json(
-        { error: "Identity Setup runs once during onboarding and must be configured from its bridge panel." },
+        {
+          error: "Identity Setup runs once during onboarding and must be configured from its bridge panel.",
+          bridgeUrl: `/dashboard/engagements/${id}/bridges/${skillId}`,
+        },
         { status: 422 }
       );
     }
