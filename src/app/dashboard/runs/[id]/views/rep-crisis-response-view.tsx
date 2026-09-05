@@ -9,7 +9,19 @@ const SOURCE_LABEL: Record<string, string> = {
   engine_panel: "AI engine",
   trustpilot: "Trustpilot",
   reddit: "Reddit",
+  twitter: "Twitter/X",
   anomaly: "Anomaly detection",
+};
+
+// Matches each source's own badge hue elsewhere in Reputation Manager
+// (rep-skill-badge.tsx's REP_SKILL_SQUISHY_CONFIG) so "sky = AI engine",
+// "orange = Reddit" etc. reads the same wherever it shows up.
+const SOURCE_SWATCH: Record<string, string> = {
+  engine_panel: "bg-sky-400",
+  trustpilot: "bg-lime-500",
+  reddit: "bg-orange-400",
+  twitter: "bg-violet-400",
+  anomaly: "bg-rose-500",
 };
 
 export function RepCrisisResponseView({ detail }: { detail: RepCrisisResponseDetail }) {
@@ -57,8 +69,11 @@ export function RepCrisisResponseView({ detail }: { detail: RepCrisisResponseDet
             {incident.contributingFindings.map((f, i) => (
               <div key={i} className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/60 p-3">
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-[10px] font-mono font-bold uppercase text-zinc-500 dark:text-zinc-500">
-                    {SOURCE_LABEL[f.source] ?? f.source}
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-[2.5px] shrink-0 ${SOURCE_SWATCH[f.source] ?? "bg-zinc-400"}`} aria-hidden="true" />
+                    <span className="text-[10px] font-mono font-bold uppercase text-zinc-600 dark:text-zinc-400">
+                      {SOURCE_LABEL[f.source] ?? f.source}
+                    </span>
                   </span>
                   {f.compositeScore !== undefined && (
                     <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500">composite {f.compositeScore}</span>

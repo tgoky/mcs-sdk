@@ -4,9 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Settings2, PauseCircle } from "lucide-react";
-import { type ModuleStatus, MODULE_STATUS_LABELS, MODULE_STATUS_COLORS, phaseLabel } from "@/lib/copy";
+import { type ModuleStatus, phaseLabel } from "@/lib/copy";
 import { REP_SKILL_IDS, REP_SKILL_MANIFEST, type RepSkillId } from "@/lib/rep-skill-manifest";
 import { RepSkillBadge } from "@/components/rep-skill-badge";
+import { StatusSwatch } from "@/components/status-swatch";
 import { TriggerSkillButton } from "./trigger-skill-button";
 import type { ModuleRunDTO } from "./skills-panel";
 
@@ -162,7 +163,7 @@ export function RepSkillsPanel({
                     disabled={isBusy}
                     aria-label={`Toggle ${info.name}`}
                     className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
-                      isEnabled ? "bg-indigo-400 border border-indigo-500/30" : "bg-zinc-300 dark:bg-zinc-800 border border-zinc-400/30 dark:border-zinc-700/50"
+                      isEnabled ? "bg-amber-400 border border-amber-500/30" : "bg-zinc-300 dark:bg-zinc-800 border border-zinc-400/30 dark:border-zinc-700/50"
                     } ${isBusy ? "opacity-50" : ""}`}
                   >
                     <span
@@ -176,15 +177,7 @@ export function RepSkillsPanel({
                 <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-2.5 space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-semibold">Status</span>
-                    {status === "disabled" ? (
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-zinc-200/60 dark:bg-zinc-800/60 text-zinc-500 border border-zinc-300/40 dark:border-zinc-700/40">
-                        Turned Off
-                      </span>
-                    ) : (
-                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border bg-zinc-100 dark:bg-zinc-900 border-border ${MODULE_STATUS_COLORS[status]}`}>
-                        {MODULE_STATUS_LABELS[status]}
-                      </span>
-                    )}
+                    <StatusSwatch status={status} />
                   </div>
 
                   {isEnabled && latestRun ? (

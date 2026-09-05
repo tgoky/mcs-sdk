@@ -139,6 +139,21 @@ export type ConversationIntelligenceState = {
   lastProcessedAt?: string;
 } | null;
 
+// Small color square + label instead of plain uppercase text — same
+// swatch-then-label convention used for module status (status-swatch.tsx)
+// and Crisis Response's contributing findings, applied here so every
+// field inside a brief (hook, angle, talking points, CTA) reads as one
+// consistent list instead of the CTA row's old label-left/value-right
+// layout standing apart from the other three.
+function SquareLabel({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500">
+      <span className={`w-2 h-2 rounded-[2.5px] shrink-0 ${color}`} aria-hidden="true" />
+      {children}
+    </span>
+  );
+}
+
 function DeliverableRow({
   id,
   isOpen,
@@ -514,26 +529,20 @@ export function DeliverablesPanel({
             >
               <div className="space-y-4 text-xs font-sans pt-1">
                 <div className="space-y-1">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
-                    Scroll-Stopper Hook (First 3 Seconds)
-                  </span>
+                  <SquareLabel color="bg-amber-400">Scroll-Stopper Hook (First 3 Seconds)</SquareLabel>
                   <div className="text-sm font-bold text-zinc-900 dark:text-white leading-snug">
                     &ldquo;{b.hook}&rdquo;
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
-                    Strategic Angle &amp; Framing
-                  </span>
+                  <SquareLabel color="bg-sky-400">Strategic Angle &amp; Framing</SquareLabel>
                   <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed">{b.angle}</p>
                 </div>
 
                 {b.talkingPoints?.length > 0 && (
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
-                      Script Beats / Talking Points
-                    </span>
+                    <SquareLabel color="bg-emerald-400">Script Beats / Talking Points</SquareLabel>
                     <ul className="space-y-1 pl-1">
                       {b.talkingPoints.map((tp, i) => (
                         <li key={i} className="flex items-start gap-2 text-zinc-800 dark:text-zinc-200">
@@ -545,11 +554,9 @@ export function DeliverablesPanel({
                   </div>
                 )}
 
-                <div className="pt-2 flex items-center justify-between border-t border-zinc-200 dark:border-zinc-800">
-                  <span className="text-[11px] font-mono text-zinc-500 font-medium">Call to Action (CTA):</span>
-                  <span className="text-xs font-bold text-zinc-900 dark:text-white font-mono">
-                    {b.cta}
-                  </span>
+                <div className="space-y-1 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+                  <SquareLabel color="bg-rose-400">Call to Action (CTA)</SquareLabel>
+                  <p className="text-sm font-bold text-zinc-900 dark:text-white">{b.cta}</p>
                 </div>
               </div>
             </DeliverableRow>

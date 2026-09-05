@@ -21,7 +21,8 @@ import { getRecentAuditEvents } from "@/features/reputation-manager/server/audit
 import { getInstalledPackagesByWorkspace } from "@/lib/workspace";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
 import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
-import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { AnySkillBadge } from "@/components/any-skill-badge";
+import { anySkillDisplayName } from "@/lib/any-skill";
 import { 
   CheckCircle2, 
   XCircle, 
@@ -41,7 +42,6 @@ import { generateReportNote } from "@/features/reports/server/report-notes";
 import { ClientReportCard } from "@/components/client-report-card";
 import {
   SKILLS,
-  skillName,
   phaseLabel,
   runStatusLabel,
   runStatusColor,
@@ -206,6 +206,17 @@ export default async function EngagementDetailPage({
   const filteredRuns = activeSkillFilter
     ? runs.filter((r) => r.skillName === activeSkillFilter)
     : runs;
+
+  // Run History's filter chips used to be Showtime-only (SKILLS is that
+  // product's own 5-value union) — a client with only Reputation Manager
+  // runs got zero chips at all (the row only renders once more than one
+  // skill has runs), and every run in the unfiltered list below rendered
+  // with a raw skill id and no badge (SquishySkillBadge silently returns
+  // null for an id it doesn't recognize). This combines both catalogs so
+  // Run History looks equally finished for either product.
+  const repSkillsWithRuns = REP_SKILL_IDS.filter((s) => repRunsBySkill[s].length > 0);
+  const runsBySkillAnyProduct: Record<string, typeof runs> = { ...runsBySkill, ...repRunsBySkill };
+  const skillsWithRunsAnyProduct: string[] = [...skillsWithRuns, ...repSkillsWithRuns];
 
   const artifactRows = await db
     .select()
@@ -449,7 +460,7 @@ export default async function EngagementDetailPage({
             </div>
 
             {/* Filter chips */}
-            {skillsWithRuns.length > 1 && (
+            {skillsWithRunsAnyProduct.length > 1 && (
               <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Filter runs by module">
                 <Link
                   href={`/dashboard/engagements/${id}`}
@@ -463,7 +474,7 @@ export default async function EngagementDetailPage({
                     {runs.length}
                   </span>
                 </Link>
-                {skillsWithRuns.map((skill) => (
+                {skillsWithRunsAnyProduct.map((skill) => (
                   <Link
                     key={skill}
                     href={`/dashboard/engagements/${id}?skill=${skill}`}
@@ -472,10 +483,10 @@ export default async function EngagementDetailPage({
                     aria-selected={activeSkillFilter === skill}
                     className={`${chipBase} ${activeSkillFilter === skill ? chipActive : chipInactive}`}
                   >
-                    <SquishySkillBadge skill={skill} size={14} enabled={true} />
-                    {skillName(skill)}
+                    <AnySkillBadge skill={skill} size={14} enabled={true} />
+                    {anySkillDisplayName(skill)}
                     <span className={`${activeSkillFilter === skill ? "opacity-70" : "opacity-50"} ml-0.5`}>
-                      {runsBySkill[skill].length}
+                      {runsBySkillAnyProduct[skill].length}
                     </span>
                   </Link>
                 ))}
@@ -494,7 +505,7 @@ export default async function EngagementDetailPage({
                         <Link
                           href={`/dashboard/runs/${run.id}`}
                           className="absolute inset-0 z-10"
-                          aria-label={`View run details for ${skillName(run.skillName)}`}
+                          aria-label={`View run details for ${anySkillDisplayName(run.skillName)}`}
                         />
                         <div className="relative flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
                           <RunStatusIcon status={run.status} />
@@ -502,7 +513,7 @@ export default async function EngagementDetailPage({
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">
-                                  {skillName(run.skillName)}
+                                  {anySkillDisplayName(run.skillName)}
                                 </span>
                                 <span className={`text-xs font-normal font-mono ${runStatusColor(run.status)}`}>
                                   {runStatusLabel(run.status)}
@@ -529,14 +540,14 @@ export default async function EngagementDetailPage({
                               className="shrink-0 flex items-center gap-2 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 pt-0.5"
                               title={new Date(run.startedAt).toLocaleString()}
                             >
-                              <SquishySkillBadge skill={run.skillName} size={22} enabled={true} />
+                              <AnySkillBadge skill={run.skillName} size={22} enabled={true} />
                               <span>{relativeTime(String(run.startedAt))}</span>
                               <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
                               <RunRowActions
                                 runId={run.id}
                                 engagementId={engagement.engagementId}
                                 skillName={run.skillName}
-                                skillLabel={skillName(run.skillName)}
+                                skillLabel={anySkillDisplayName(run.skillName)}
                                 status={run.status}
                               />
                             </div>
@@ -550,7 +561,7 @@ export default async function EngagementDetailPage({
             ) : (
               <div className="h-28 border border-dashed border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-transparent rounded-xl flex flex-col items-center justify-center space-y-1 transition-colors">
                 <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
-                  No <span className="font-medium text-zinc-500 dark:text-zinc-400">{skillName(activeSkillFilter)}</span> runs yet.
+                  No <span className="font-medium text-zinc-500 dark:text-zinc-400">{anySkillDisplayName(activeSkillFilter)}</span> runs yet.
                 </p>
                 <Link
                   href={`/dashboard/engagements/${id}`}

@@ -9,12 +9,11 @@ import {
   SKILL_INFO,
   type SkillName,
   type ModuleStatus,
-  MODULE_STATUS_LABELS,
-  MODULE_STATUS_COLORS,
   phaseLabel,
 } from "@/lib/copy";
 import { SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { StatusSwatch } from "@/components/status-swatch";
 import { TriggerSkillButton } from "./trigger-skill-button";
 
 const TOGGLEABLE_SKILLS: SkillName[] = [...SKILLS];
@@ -224,17 +223,7 @@ export function SkillsPanel({
                     <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-semibold">
                       Status
                     </span>
-                    {status === "disabled" ? (
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-zinc-200/60 dark:bg-zinc-800/60 text-zinc-500 border border-zinc-300/40 dark:border-zinc-700/40">
-                        Turned Off
-                      </span>
-                    ) : (
-                      <span
-                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border bg-zinc-100 dark:bg-zinc-900 border-border ${MODULE_STATUS_COLORS[status]}`}
-                      >
-                        {MODULE_STATUS_LABELS[status]}
-                      </span>
-                    )}
+                    <StatusSwatch status={status} />
                   </div>
 
                   {/* Latest Execution Details */}
