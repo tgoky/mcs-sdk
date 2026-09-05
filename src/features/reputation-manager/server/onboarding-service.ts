@@ -233,37 +233,49 @@ export async function saveRepIdentityGraphIntake(
  * found collisions, de-duplicated by name (case-insensitive) against
  * whatever's already there from either source, so re-running the check
  * (if that ever happens) can't produce duplicate entries.
+ *
+ * Runs the read-merge-write as one transaction with a row lock (same
+ * `.for("update")` pattern run-log.ts uses for skillRuns.steps) rather
+ * than a plain select-then-update — the dedup/merge logic here can't be
+ * expressed as a single atomic SQL statement the way a flat array append
+ * can, so without the lock, two near-simultaneous callers (a form
+ * double-submit racing the collision-check pass) could both read the
+ * same starting array and the second write would silently overwrite
+ * whichever entries the first one added.
  */
 async function mergeCollisions(
   engagementId: string,
   incoming: (RepCollision & { source: "buyer" | "collision_check" })[],
   mode: "replace_buyer_entries" | "append_found"
 ): Promise<void> {
-  const [existing] = await db
-    .select({ collisions: repIdentityGraphs.collisions })
-    .from(repIdentityGraphs)
-    .where(eq(repIdentityGraphs.engagementId, engagementId))
-    .limit(1);
+  await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ collisions: repIdentityGraphs.collisions })
+      .from(repIdentityGraphs)
+      .where(eq(repIdentityGraphs.engagementId, engagementId))
+      .for("update")
+      .limit(1);
 
-  const current = existing?.collisions ?? [];
-  const seenNames = new Set<string>();
-  const merged: (RepCollision & { source: "buyer" | "collision_check" })[] = [];
+    const current = existing?.collisions ?? [];
+    const seenNames = new Set<string>();
+    const merged: (RepCollision & { source: "buyer" | "collision_check" })[] = [];
 
-  const base = mode === "replace_buyer_entries" ? current.filter((c) => c.source !== "buyer") : current;
-  for (const c of base) {
-    const key = c.name.trim().toLowerCase();
-    if (seenNames.has(key)) continue;
-    seenNames.add(key);
-    merged.push(c);
-  }
-  for (const c of incoming) {
-    const key = c.name.trim().toLowerCase();
-    if (seenNames.has(key)) continue;
-    seenNames.add(key);
-    merged.push(c);
-  }
+    const base = mode === "replace_buyer_entries" ? current.filter((c) => c.source !== "buyer") : current;
+    for (const c of base) {
+      const key = c.name.trim().toLowerCase();
+      if (seenNames.has(key)) continue;
+      seenNames.add(key);
+      merged.push(c);
+    }
+    for (const c of incoming) {
+      const key = c.name.trim().toLowerCase();
+      if (seenNames.has(key)) continue;
+      seenNames.add(key);
+      merged.push(c);
+    }
 
-  await db.update(repIdentityGraphs).set({ collisions: merged, updatedAt: new Date() }).where(eq(repIdentityGraphs.engagementId, engagementId));
+    await tx.update(repIdentityGraphs).set({ collisions: merged, updatedAt: new Date() }).where(eq(repIdentityGraphs.engagementId, engagementId));
+  });
 }
 
 // ── Onboarding executor (the runOnSetup dispatch path) ──────────────────────

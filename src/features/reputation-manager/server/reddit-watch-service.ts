@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { repIdentityGraphs, repRedditMentions, type RepFindingSentiment } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { callClaude } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import { resolveRedditApiKey } from "@/features/reputation-manager/reddit-config";
@@ -155,6 +155,100 @@ async function scoreMentions(operatorName: string, mentions: RawMention[], runId
 }
 
 /**
+ * Same select-then-score-then-insert-already-scored shape as
+ * trustpilot-watch-service.ts's processNewReviews (see that function's
+ * own comment for why this replaced a placeholder-insert-then-update
+ * design) — plus one more thing that shape happens to fix for free here:
+ * the old update-by-externalMentionId step scoped ONLY by that id, with
+ * no engagementId in the WHERE clause. Reddit's item ids are globally
+ * unique across all of Reddit, not per-client, so if two different
+ * engagements were ever mentioned in the same thread, one engagement's
+ * scoring pass could silently overwrite the other's sentiment/flag data.
+ * There's no update-by-bare-id anywhere now — every insert is scoped by
+ * (engagementId, externalMentionId) from the start.
+ */
+async function processNewMentions(
+  engagementId: string,
+  operatorName: string,
+  fetched: RawMention[],
+  runId: string
+): Promise<{ newCount: number; flaggedCount: number }> {
+  const existingIds = new Set(
+    (
+      await db
+        .select({ externalMentionId: repRedditMentions.externalMentionId })
+        .from(repRedditMentions)
+        .where(
+          and(
+            eq(repRedditMentions.engagementId, engagementId),
+            inArray(
+              repRedditMentions.externalMentionId,
+              fetched.map((m) => m.externalMentionId)
+            )
+          )
+        )
+    ).map((r) => r.externalMentionId)
+  );
+
+  const newRaw = fetched.filter((m) => !existingIds.has(m.externalMentionId));
+  if (newRaw.length === 0) return { newCount: 0, flaggedCount: 0 };
+
+  const scored = await scoreMentions(operatorName, newRaw, runId);
+
+  const actuallyInserted = await db.transaction(async (tx) => {
+    const rows = await tx
+      .insert(repRedditMentions)
+      .values(
+        scored.map((s) => ({
+          engagementId,
+          externalMentionId: s.externalMentionId,
+          subreddit: s.subreddit,
+          author: s.author,
+          permalink: s.permalink,
+          mentionText: s.mentionText,
+          publishedAt: s.publishedAt ? new Date(s.publishedAt) : null,
+          sentiment: s.sentiment,
+          flagged: s.flagged,
+          flagReason: s.flagReason,
+        }))
+      )
+      // Safety net, not the primary dedup mechanism (the select above
+      // already is) — only matters if a different engagement's run
+      // inserted the exact same Reddit item between that select and this
+      // insert.
+      .onConflictDoNothing({ target: [repRedditMentions.engagementId, repRedditMentions.externalMentionId] })
+      .returning({ externalMentionId: repRedditMentions.externalMentionId });
+
+    const insertedIds = new Set(rows.map((r) => r.externalMentionId));
+    const inserted = scored.filter((s) => insertedIds.has(s.externalMentionId));
+
+    if (inserted.length > 0) {
+      await logAuditEventsBatch(
+        engagementId,
+        inserted.map(
+          (s): RepAuditEvent => ({
+            eventType: "detection",
+            payload: {
+              source: "reddit",
+              sourceUrl: s.permalink,
+              entityMatched: operatorName,
+              mentionText: s.mentionText,
+              sentimentLabel: s.sentiment,
+              threatCategory: s.flagged ? s.flagReason : null,
+            },
+          })
+        ),
+        tx
+      );
+    }
+
+    return inserted;
+  });
+
+  return { newCount: actuallyInserted.length, flaggedCount: actuallyInserted.filter((s) => s.flagged).length };
+}
+
+/**
  * rep-reddit-watch's execute() — same shape as the Trustpilot and
  * AI-engine-panel skills. Searches by operator name (not domain — Reddit
  * mentions are prose, not URL-keyed the way Trustpilot reviews are).
@@ -202,27 +296,17 @@ export async function runRepRedditWatch(tenant: any, runId: string, step: StepTo
       return;
     }
 
-    // Same insert-with-conflict-skip-then-score-only-what's-new pattern as
-    // trustpilot-watch-service.ts.
-    const inserted = await db
-      .insert(repRedditMentions)
-      .values(
-        fetched.map((m) => ({
-          engagementId,
-          externalMentionId: m.externalMentionId,
-          subreddit: m.subreddit,
-          author: m.author,
-          permalink: m.permalink,
-          mentionText: m.mentionText,
-          publishedAt: m.publishedAt ? new Date(m.publishedAt) : null,
-          sentiment: "neutral" as const,
-          flagged: false,
-        }))
-      )
-      .onConflictDoNothing({ target: [repRedditMentions.engagementId, repRedditMentions.externalMentionId] })
-      .returning({ id: repRedditMentions.id, externalMentionId: repRedditMentions.externalMentionId });
+    // One step: dedupe, score only what's new, insert already-scored, and
+    // log — see processNewMentions's own comment for why this replaced
+    // the old two-phase placeholder-then-update design (and fixed the
+    // missing-engagementId-scope bug on the old update). Wrapped in
+    // step.run so an Inngest retry replays the memoized result instead of
+    // re-scoring or re-inserting anything that already committed.
+    const result = await (step
+      ? step.run("process-new-mentions", () => processNewMentions(engagementId, graph.operatorName, fetched, runId))
+      : processNewMentions(engagementId, graph.operatorName, fetched, runId));
 
-    if (inserted.length === 0) {
+    if (result.newCount === 0) {
       await logStep(runId, {
         phase: "reddit_watch",
         status: "success",
@@ -233,47 +317,13 @@ export async function runRepRedditWatch(tenant: any, runId: string, step: StepTo
       return;
     }
 
-    const insertedIds = new Set(inserted.map((m) => m.externalMentionId));
-    const newMentions = fetched.filter((m) => insertedIds.has(m.externalMentionId));
-
-    const scored = await (step
-      ? step.run("score-mentions", () => scoreMentions(graph.operatorName, newMentions, runId))
-      : scoreMentions(graph.operatorName, newMentions, runId));
-
-    for (const s of scored) {
-      await db
-        .update(repRedditMentions)
-        .set({ sentiment: s.sentiment, flagged: s.flagged, flagReason: s.flagReason })
-        .where(eq(repRedditMentions.externalMentionId, s.externalMentionId));
-    }
-
-    // audit-log-schema.md's "detection" event — see engine-panel-service.ts's
-    // same call for why this logs every scored mention, not just flagged ones.
-    await logAuditEventsBatch(
-      engagementId,
-      scored.map(
-        (s): RepAuditEvent => ({
-          eventType: "detection",
-          payload: {
-            source: "reddit",
-            sourceUrl: s.permalink,
-            entityMatched: graph.operatorName,
-            mentionText: s.mentionText,
-            sentimentLabel: s.sentiment,
-            threatCategory: s.flagged ? s.flagReason : null,
-          },
-        })
-      )
-    );
-
-    const flaggedCount = scored.filter((s) => s.flagged).length;
     await logStep(runId, {
       phase: "reddit_watch",
       status: "success",
-      detail: `${newMentions.length} new mention(s)${flaggedCount > 0 ? `, ${flaggedCount} flagged` : ""}.`,
+      detail: `${result.newCount} new mention(s)${result.flaggedCount > 0 ? `, ${result.flaggedCount} flagged` : ""}.`,
     });
-    summary.whatWorked.push(`Found ${newMentions.length} new mention(s) since last check.`);
-    if (flaggedCount > 0) summary.decisionsMade.push(`${flaggedCount} mention(s) flagged for review.`);
+    summary.whatWorked.push(`Found ${result.newCount} new mention(s) since last check.`);
+    if (result.flaggedCount > 0) summary.decisionsMade.push(`${result.flaggedCount} mention(s) flagged for review.`);
 
     await finishRun(runId, { summary });
   } catch (err) {

@@ -201,6 +201,60 @@ async function scoreFindings(operatorName: string, findings: ContributingFinding
   }
 }
 
+/**
+ * Inserts the incident row and sends the crisis notification. Wrapped by
+ * the caller in a single step.run — this used to be two un-stepped
+ * operations run directly in the main function body, which meant an
+ * Inngest retry triggered by ANY later failure (even something as benign
+ * as a transient error writing the run's final summary) would re-execute
+ * both: a second, duplicate incident row, and the operator paged twice
+ * for the same crisis. notifyUser itself never throws (every channel —
+ * in-app, Slack, email, chat — is isolated in its own try/catch, see
+ * notify.ts's file header), so once this step completes it's safe to
+ * treat as atomic; step.run's memoization is what actually prevents the
+ * replay, not anything inside this function.
+ */
+async function declareIncident(params: {
+  tenant: any;
+  engagementId: string;
+  runId: string;
+  severityScore: number;
+  summaryText: string;
+  allFindings: StoredFinding[];
+  declaredSignalClass: string | null;
+  triggerReason: string;
+  operatorName: string;
+  soleAuthorityName: string;
+}): Promise<{ incidentId: string }> {
+  const { tenant, engagementId, runId, severityScore, summaryText, allFindings, declaredSignalClass, triggerReason, operatorName, soleAuthorityName } = params;
+
+  const [incident] = await db
+    .insert(repIncidents)
+    .values({
+      engagementId,
+      severityScore,
+      summary: summaryText,
+      contributingFindings: allFindings,
+      signalClass: declaredSignalClass,
+    })
+    .returning({ id: repIncidents.id });
+
+  await notifyUser({
+    whopUserId: tenant.whopUserId,
+    engagementId,
+    runId,
+    type: "reputation_crisis_declared",
+    severity: "critical",
+    title: `Reputation crisis declared — ${operatorName}`,
+    body:
+      `${summaryText}\n\n${triggerReason} Severity: ${severityScore}/100. ` +
+      `Sole authority on record: ${soleAuthorityName}. Nothing has been published — this is a notification only.`,
+    slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
+  });
+
+  return { incidentId: incident.id };
+}
+
 export async function runRepCrisisResponse(tenant: any, runId: string, step: StepTools | undefined): Promise<void> {
   const summary = emptySummary();
   const engagementId: string = tenant.engagementId;
@@ -295,35 +349,42 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
         ? `${contentSummary} Additionally: ${anomalies.map((a) => a.description).join(" ")}`
         : contentSummary ?? anomalies.map((a) => a.description).join(" ");
 
-    const [incident] = await db
-      .insert(repIncidents)
-      .values({
-        engagementId,
-        severityScore,
-        summary: summaryText,
-        contributingFindings: allFindings,
-        signalClass: declaredSignalClass,
-      })
-      .returning({ id: repIncidents.id });
-
     const triggerReason = contentForceTriggered
       ? `Force-triggered: classified as ${contentForceTriggerClass} (declares regardless of score).`
       : anomalyForceTriggered
         ? `Force-triggered by anomaly detection: ${anomalies.map((a) => a.anomalyClass).join(", ")} (declares regardless of score).`
         : `Severity ${severityScore}/100 crossed this engagement's threshold of ${floor}.`;
 
-    await notifyUser({
-      whopUserId: tenant.whopUserId,
-      engagementId,
-      runId,
-      type: "reputation_crisis_declared",
-      severity: "critical",
-      title: `Reputation crisis declared — ${graph.operatorName}`,
-      body:
-        `${summaryText}\n\n${triggerReason} Severity: ${severityScore}/100. ` +
-        `Sole authority on record: ${graph.soleAuthorityName}. Nothing has been published — this is a notification only.`,
-      slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
-    });
+    // One step: insert the incident and notify — see declareIncident's
+    // own comment for why both needed to move behind a single step.run
+    // rather than running directly here.
+    const { incidentId } = await (step
+      ? step.run("declare-incident", () =>
+          declareIncident({
+            tenant,
+            engagementId,
+            runId,
+            severityScore,
+            summaryText,
+            allFindings,
+            declaredSignalClass,
+            triggerReason,
+            operatorName: graph.operatorName,
+            soleAuthorityName: graph.soleAuthorityName,
+          })
+        )
+      : declareIncident({
+          tenant,
+          engagementId,
+          runId,
+          severityScore,
+          summaryText,
+          allFindings,
+          declaredSignalClass,
+          triggerReason,
+          operatorName: graph.operatorName,
+          soleAuthorityName: graph.soleAuthorityName,
+        }));
 
     await logStep(runId, {
       phase: "crisis_response",
@@ -332,7 +393,7 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     });
     summary.whatWorked.push(`Declared an incident — severity ${severityScore}/100 — and notified the operator.`);
     summary.decisionsMade.push(
-      `Incident ${incident.id} created from ${allFindings.length} contributing item(s)${forceTriggered ? ` (force-triggered: ${declaredSignalClass})` : ""}.`
+      `Incident ${incidentId} created from ${allFindings.length} contributing item(s)${forceTriggered ? ` (force-triggered: ${declaredSignalClass})` : ""}.`
     );
 
     await finishRun(runId, { summary });

@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { repPitchTargets } from "@/models/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { callClaude, MODEL } from "@/lib/llm";
 
 /**
@@ -84,29 +84,33 @@ const STATUS_FOR_HISTORY_TYPE: Record<PitchHistoryEntry["type"], PitchTargetStat
  * second is noise." This function doesn't enforce that rule mechanically
  * (an operator can still log a second follow-up if they judge it right),
  * it just records what actually happened.
+ *
+ * Appends via a single atomic UPDATE (Postgres's jsonb `||` concat)
+ * rather than read-the-array-then-write-it-back — the read-modify-write
+ * version had a real lost-update race: two near-simultaneous calls (a
+ * double-click, a retried request) could both read the same array before
+ * either write committed, and the second UPDATE would overwrite the
+ * first's appended entry with its own stale-based version, silently
+ * dropping it from history.
  */
 export async function logPitchEvent(
   engagementId: string,
   targetId: string,
   entry: { type: PitchHistoryEntry["type"]; note?: string | null }
 ): Promise<PitchTargetRow> {
-  const [existing] = await db
-    .select({ history: repPitchTargets.history })
-    .from(repPitchTargets)
-    .where(and(eq(repPitchTargets.id, targetId), eq(repPitchTargets.engagementId, engagementId)))
-    .limit(1);
-
-  if (!existing) throw new Error("Pitch target not found.");
-
   const newEntry: PitchHistoryEntry = { type: entry.type, note: entry.note?.trim() || null, occurredAt: new Date().toISOString() };
-  const history = [...existing.history, newEntry];
 
   const [row] = await db
     .update(repPitchTargets)
-    .set({ history, status: STATUS_FOR_HISTORY_TYPE[entry.type], updatedAt: new Date() })
+    .set({
+      history: sql`${repPitchTargets.history} || ${JSON.stringify([newEntry])}::jsonb`,
+      status: STATUS_FOR_HISTORY_TYPE[entry.type],
+      updatedAt: new Date(),
+    })
     .where(and(eq(repPitchTargets.id, targetId), eq(repPitchTargets.engagementId, engagementId)))
     .returning();
 
+  if (!row) throw new Error("Pitch target not found.");
   return row as PitchTargetRow;
 }
 

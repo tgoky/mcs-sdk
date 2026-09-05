@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { repIdentityGraphs, repTrustpilotReviews, type RepFindingSentiment } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { callClaude } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import { resolveOutscraperConfig } from "@/features/reputation-manager/trustpilot-config";
@@ -113,6 +113,102 @@ async function scoreReviews(operatorName: string, reviews: RawReview[], runId: s
 }
 
 /**
+ * Dedupes against what's already stored, scores only the genuinely new
+ * reviews, then inserts them already-scored — never a placeholder row
+ * scored in a second pass. That two-phase design (insert neutral/
+ * unflagged placeholders, then UPDATE them with real scores) had a real
+ * gap: if anything failed between the insert and the update (a transient
+ * DB blip, the audit-log write), the placeholder row was stuck unscored
+ * forever, and a retry's dedup insert would see it as "already on file"
+ * and report success — silently losing the score, permanently. There's
+ * no placeholder state to get stuck in now: insert + the matching audit
+ * log entries happen in one transaction, so a retry either finds nothing
+ * committed (redoes the full select-score-insert-log cycle cleanly) or
+ * finds a fully-formed, already-scored, already-logged row.
+ */
+async function processNewReviews(
+  engagementId: string,
+  operatorName: string,
+  fetched: RawReview[],
+  runId: string
+): Promise<{ newCount: number; flaggedCount: number }> {
+  const existingIds = new Set(
+    (
+      await db
+        .select({ externalReviewId: repTrustpilotReviews.externalReviewId })
+        .from(repTrustpilotReviews)
+        .where(
+          and(
+            eq(repTrustpilotReviews.engagementId, engagementId),
+            inArray(
+              repTrustpilotReviews.externalReviewId,
+              fetched.map((r) => r.externalReviewId)
+            )
+          )
+        )
+    ).map((r) => r.externalReviewId)
+  );
+
+  const newRaw = fetched.filter((r) => !existingIds.has(r.externalReviewId));
+  if (newRaw.length === 0) return { newCount: 0, flaggedCount: 0 };
+
+  const scored = await scoreReviews(operatorName, newRaw, runId);
+
+  const actuallyInserted = await db.transaction(async (tx) => {
+    const rows = await tx
+      .insert(repTrustpilotReviews)
+      .values(
+        scored.map((s) => ({
+          engagementId,
+          externalReviewId: s.externalReviewId,
+          reviewerName: s.reviewerName,
+          rating: s.rating,
+          reviewText: s.reviewText,
+          publishedAt: s.publishedAt ? new Date(s.publishedAt) : null,
+          sentiment: s.sentiment,
+          flagged: s.flagged,
+          flagReason: s.flagReason,
+        }))
+      )
+      // Safety net, not the primary dedup mechanism (the select above
+      // already is) — only matters if a different engagement watching
+      // the same domain inserted the exact same review between that
+      // select and this insert.
+      .onConflictDoNothing({ target: [repTrustpilotReviews.engagementId, repTrustpilotReviews.externalReviewId] })
+      .returning({ externalReviewId: repTrustpilotReviews.externalReviewId });
+
+    const insertedIds = new Set(rows.map((r) => r.externalReviewId));
+    const inserted = scored.filter((s) => insertedIds.has(s.externalReviewId));
+
+    if (inserted.length > 0) {
+      // audit-log-schema.md's "detection" event, logged in the SAME
+      // transaction as the insert it describes — see this function's own
+      // comment for why that matters.
+      await logAuditEventsBatch(
+        engagementId,
+        inserted.map(
+          (s): RepAuditEvent => ({
+            eventType: "detection",
+            payload: {
+              source: "trustpilot",
+              entityMatched: operatorName,
+              mentionText: `${s.rating}/5: ${s.reviewText}`,
+              sentimentLabel: s.sentiment,
+              threatCategory: s.flagged ? s.flagReason : null,
+            },
+          })
+        ),
+        tx
+      );
+    }
+
+    return inserted;
+  });
+
+  return { newCount: actuallyInserted.length, flaggedCount: actuallyInserted.filter((s) => s.flagged).length };
+}
+
+/**
  * rep-trustpilot-watch's execute() — same shape as runRepEnginePanel and
  * runRepOnboarding: load identity graph, do the work, log + finish.
  * Requires at least one domain in repIdentityGraphs.operatorDomains —
@@ -157,29 +253,16 @@ export async function runRepTrustpilotWatch(tenant: any, runId: string, step: St
       return;
     }
 
-    // Insert-with-conflict-skip first, THEN score only what actually got
-    // inserted — same dedup mechanism webhookEvents uses (a unique
-    // constraint the bulk insert collides against), avoiding both a
-    // separate SELECT-then-filter round trip and re-scoring reviews
-    // already on file from a prior run.
-    const inserted = await db
-      .insert(repTrustpilotReviews)
-      .values(
-        fetched.map((r) => ({
-          engagementId,
-          externalReviewId: r.externalReviewId,
-          reviewerName: r.reviewerName,
-          rating: r.rating,
-          reviewText: r.reviewText,
-          publishedAt: r.publishedAt ? new Date(r.publishedAt) : null,
-          sentiment: "neutral" as const, // placeholder — overwritten below for genuinely new rows
-          flagged: false,
-        }))
-      )
-      .onConflictDoNothing({ target: [repTrustpilotReviews.engagementId, repTrustpilotReviews.externalReviewId] })
-      .returning({ id: repTrustpilotReviews.id, externalReviewId: repTrustpilotReviews.externalReviewId });
+    // One step: dedupe, score only what's new, insert already-scored, and
+    // log — see processNewReviews's own comment for why this replaced the
+    // old two-phase placeholder-then-update design. Wrapped in step.run so
+    // an Inngest retry replays the whole memoized result instead of
+    // re-scoring or re-inserting anything that already committed.
+    const result = await (step
+      ? step.run("process-new-reviews", () => processNewReviews(engagementId, graph.operatorName, fetched, runId))
+      : processNewReviews(engagementId, graph.operatorName, fetched, runId));
 
-    if (inserted.length === 0) {
+    if (result.newCount === 0) {
       await logStep(runId, {
         phase: "trustpilot_watch",
         status: "success",
@@ -190,46 +273,13 @@ export async function runRepTrustpilotWatch(tenant: any, runId: string, step: St
       return;
     }
 
-    const insertedIds = new Set(inserted.map((r) => r.externalReviewId));
-    const newReviews = fetched.filter((r) => insertedIds.has(r.externalReviewId));
-
-    const scored = await (step
-      ? step.run("score-reviews", () => scoreReviews(graph.operatorName, newReviews, runId))
-      : scoreReviews(graph.operatorName, newReviews, runId));
-
-    for (const s of scored) {
-      await db
-        .update(repTrustpilotReviews)
-        .set({ sentiment: s.sentiment, flagged: s.flagged, flagReason: s.flagReason })
-        .where(eq(repTrustpilotReviews.externalReviewId, s.externalReviewId));
-    }
-
-    // audit-log-schema.md's "detection" event — see engine-panel-service.ts's
-    // same call for why this logs every scored review, not just flagged ones.
-    await logAuditEventsBatch(
-      engagementId,
-      scored.map(
-        (s): RepAuditEvent => ({
-          eventType: "detection",
-          payload: {
-            source: "trustpilot",
-            entityMatched: graph.operatorName,
-            mentionText: `${s.rating}/5: ${s.reviewText}`,
-            sentimentLabel: s.sentiment,
-            threatCategory: s.flagged ? s.flagReason : null,
-          },
-        })
-      )
-    );
-
-    const flaggedCount = scored.filter((s) => s.flagged).length;
     await logStep(runId, {
       phase: "trustpilot_watch",
       status: "success",
-      detail: `${newReviews.length} new review(s)${flaggedCount > 0 ? `, ${flaggedCount} flagged` : ""}.`,
+      detail: `${result.newCount} new review(s)${result.flaggedCount > 0 ? `, ${result.flaggedCount} flagged` : ""}.`,
     });
-    summary.whatWorked.push(`Found ${newReviews.length} new review(s) since last check.`);
-    if (flaggedCount > 0) summary.decisionsMade.push(`${flaggedCount} review(s) flagged for review.`);
+    summary.whatWorked.push(`Found ${result.newCount} new review(s) since last check.`);
+    if (result.flaggedCount > 0) summary.decisionsMade.push(`${result.flaggedCount} review(s) flagged for review.`);
 
     await finishRun(runId, { summary });
   } catch (err) {

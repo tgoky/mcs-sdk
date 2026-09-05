@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { repRedditRamp } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 /**
  * Move C — 90-day Reddit thread-density ramp (offensive/reddit-ramp.md).
@@ -83,13 +83,18 @@ export async function setSubredditMap(engagementId: string, subreddits: RedditRa
   return row as RedditRampRow;
 }
 
+/**
+ * Appends via a single atomic UPDATE (Postgres's jsonb `||` concat)
+ * rather than read-the-array-then-write-it-back — see
+ * pitch-package.ts's logPitchEvent for why the read-modify-write version
+ * of this exact pattern is a real lost-update race, not just a style
+ * preference.
+ */
 export async function logRedditActivity(
   engagementId: string,
   entry: { type: "comment" | "post"; subreddit: string; note?: string | null }
 ): Promise<RedditRampRow> {
   await ensureRamp(engagementId);
-  const existing = await getRedditRamp(engagementId);
-  if (!existing) throw new Error("Reddit ramp not found.");
 
   const newEntry: RedditRampActivity = {
     type: entry.type,
@@ -97,14 +102,17 @@ export async function logRedditActivity(
     note: entry.note?.trim() || null,
     occurredAt: new Date().toISOString(),
   };
-  const activityLog = [...existing.activityLog, newEntry];
 
   const [row] = await db
     .update(repRedditRamp)
-    .set({ activityLog, updatedAt: new Date() })
+    .set({
+      activityLog: sql`${repRedditRamp.activityLog} || ${JSON.stringify([newEntry])}::jsonb`,
+      updatedAt: new Date(),
+    })
     .where(eq(repRedditRamp.engagementId, engagementId))
     .returning();
 
+  if (!row) throw new Error("Reddit ramp not found.");
   return row as RedditRampRow;
 }
 

@@ -96,6 +96,47 @@ async function scoreFindings(operatorName: string, findings: RawFinding[], runId
   }
 }
 
+/** Inserts this run's scored findings and their matching audit-log
+ * "detection" events in one transaction — see the call site's comment
+ * for why both the transaction and the surrounding step.run matter here. */
+async function recordFindings(engagementId: string, operatorName: string, scored: ScoredFinding[]): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.insert(repEngineFindings).values(
+      scored.map((f) => ({
+        engagementId,
+        engineId: f.engineId,
+        promptText: f.promptText,
+        responseText: f.responseText,
+        sentiment: f.sentiment,
+        flagged: f.flagged,
+        flagReason: f.flagReason,
+      }))
+    );
+
+    // audit-log-schema.md's "detection" event — one per scored mention,
+    // flagged or not ("A monitored entity was mentioned somewhere and the
+    // ingestion/analysis layer scored it," no flagged-only qualifier in
+    // the spec). Batched: a full panel run can score up to
+    // len(seedPanelPrompts) x activeEngines.length findings in one go.
+    await logAuditEventsBatch(
+      engagementId,
+      scored.map(
+        (f): RepAuditEvent => ({
+          eventType: "detection",
+          payload: {
+            source: f.engineId,
+            entityMatched: operatorName,
+            mentionText: `Q: ${f.promptText}\nA: ${f.responseText}`,
+            sentimentLabel: f.sentiment,
+            threatCategory: f.flagged ? f.flagReason : null,
+          },
+        })
+      ),
+      tx
+    );
+  });
+}
+
 /**
  * rep-engine-panel's execute() — runs the tripwire prompts already
  * captured at intake (repIdentityGraphs.seedPanelPrompts) against
@@ -184,38 +225,19 @@ export async function runRepEnginePanel(tenant: any, runId: string, step: StepTo
       ? step.run("score-findings", () => scoreFindings(graph.operatorName, rawFindings, runId))
       : scoreFindings(graph.operatorName, rawFindings, runId));
 
-    await db.insert(repEngineFindings).values(
-      scored.map((f) => ({
-        engagementId,
-        engineId: f.engineId,
-        promptText: f.promptText,
-        responseText: f.responseText,
-        sentiment: f.sentiment,
-        flagged: f.flagged,
-        flagReason: f.flagReason,
-      }))
-    );
-
-    // audit-log-schema.md's "detection" event — one per scored mention,
-    // flagged or not ("A monitored entity was mentioned somewhere and the
-    // ingestion/analysis layer scored it," no flagged-only qualifier in
-    // the spec). Batched: a full panel run can score up to
-    // len(seedPanelPrompts) x activeEngines.length findings in one go.
-    await logAuditEventsBatch(
-      engagementId,
-      scored.map(
-        (f): RepAuditEvent => ({
-          eventType: "detection",
-          payload: {
-            source: f.engineId,
-            entityMatched: graph.operatorName,
-            mentionText: `Q: ${f.promptText}\nA: ${f.responseText}`,
-            sentimentLabel: f.sentiment,
-            threatCategory: f.flagged ? f.flagReason : null,
-          },
-        })
-      )
-    );
+    // repEngineFindings has no natural external id to dedupe against
+    // (unlike Trustpilot reviews/Reddit mentions, this content is
+    // generated fresh by the LLM query each run, not sourced from a
+    // third-party item id) — so the only way to make this safe against an
+    // Inngest retry is to make sure it never runs twice at all. The
+    // transaction gives all-or-nothing atomicity (a failure partway can't
+    // leave findings recorded with no matching audit event, or vice
+    // versa); wrapping that transaction in step.run means a retry
+    // triggered by a LATER failure (e.g. finishRun) replays the memoized
+    // result instead of re-inserting this same batch a second time.
+    await (step
+      ? step.run("record-findings", () => recordFindings(engagementId, graph.operatorName, scored))
+      : recordFindings(engagementId, graph.operatorName, scored));
 
     const flaggedCount = scored.filter((f) => f.flagged).length;
     await logStep(runId, {

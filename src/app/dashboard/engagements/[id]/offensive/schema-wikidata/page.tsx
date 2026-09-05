@@ -54,7 +54,14 @@ export default function SchemaWikidataPage({ params }: { params: Promise<{ id: s
   const jsonLdText = jsonLd ? JSON.stringify(jsonLd, null, 2) : "";
 
   async function copyJsonLd() {
-    await navigator.clipboard.writeText(`<script type="application/ld+json">\n${jsonLdText}\n</script>`);
+    // Escape "<" so a client-entered name/alias/handle containing
+    // "</script>" can't break out of the tag once this is pasted into a
+    // real page's <head> — < is still valid inside a JSON string and
+    // decodes back to "<" when parsed, so this doesn't change the data,
+    // only how it's embedded in this literal script tag. The on-screen
+    // preview above stays unescaped/readable; only the copied text needs this.
+    const escapedForScriptTag = jsonLdText.replace(/</g, "\\u003c");
+    await navigator.clipboard.writeText(`<script type="application/ld+json">\n${escapedForScriptTag}\n</script>`);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }

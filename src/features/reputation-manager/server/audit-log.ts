@@ -2,6 +2,14 @@ import { db } from "@/lib/db";
 import { repAuditEvents } from "@/models/schema";
 import { desc, eq } from "drizzle-orm";
 
+// Either the module-level pooled db, or the `tx` handle inside a
+// db.transaction() callback — same DbClient pattern as credentials.ts.
+// Lets a caller (e.g. the watch services' insert-and-log step) fold the
+// audit-log write into the same transaction as the row it's describing,
+// so a failure after the insert can't leave a scored review/mention with
+// no matching detection event, or vice versa.
+type DbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 /**
  * Typed payloads for mcs/cms's eight audit-log event types
  * (audit-log-schema.md, Section 3.7 of the reputation system spec).
@@ -100,10 +108,16 @@ export async function logAuditEvent(engagementId: string, event: RepAuditEvent, 
  * (rep-engine-panel can score up to 46 prompts x 5 engines) — one insert
  * instead of N round trips. All events in a batch share no parent by
  * design; a skill that needs per-event chaining should call
- * logAuditEvent individually instead. */
-export async function logAuditEventsBatch(engagementId: string, events: RepAuditEvent[]): Promise<void> {
+ * logAuditEvent individually instead.
+ *
+ * Accepts an optional transaction client so a caller can fold this write
+ * into the same transaction as the rows it's describing (see
+ * trustpilot-watch-service.ts / reddit-watch-service.ts) — a retry after
+ * a partial failure should never leave a scored row with no audit event,
+ * or an audit event for a row that got rolled back. */
+export async function logAuditEventsBatch(engagementId: string, events: RepAuditEvent[], dbClient: DbClient = db): Promise<void> {
   if (events.length === 0) return;
-  await db.insert(repAuditEvents).values(
+  await dbClient.insert(repAuditEvents).values(
     events.map((event) => ({
       engagementId,
       eventType: event.eventType,
