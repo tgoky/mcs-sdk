@@ -68,6 +68,15 @@ async function searchEndpoint(path: string, searchTerm: string, apiKey: string):
   url.searchParams.set("q", searchTerm);
   url.searchParams.set("sort", "new");
   url.searchParams.set("limit", String(RESULTS_LIMIT));
+  // Their docs are explicit that nsfw defaults to excluded — "Omitted or
+  // false excludes them" — which for a reputation monitor is a real
+  // coverage gap, not a feature: a genuine complaint thread that Reddit
+  // happens to have flagged NSFW (common for e.g. adult-adjacent
+  // industries, or a spicy/controversial thread auto-tagged that way)
+  // would otherwise never reach this search at all. We score sentiment
+  // downstream regardless of the flag, so there's no reason to pre-filter
+  // it out at the source.
+  url.searchParams.set("nsfw", "true");
 
   const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` } });
   if (!res.ok) {
@@ -94,7 +103,18 @@ async function searchEndpoint(path: string, searchTerm: string, apiKey: string):
 /** Field names confirmed from redditapis.com's own documented example —
  * title/text, author, upvotes, permalink — plus `id`, which their own
  * FAQ confirms exists on every post/comment specifically for dedup
- * ("Dedupe on the item id Reddit returns for every post and comment"). */
+ * ("Dedupe on the item id Reddit returns for every post and comment").
+ *
+ * publishedAt is the one field their docs never show in a response
+ * example at all — the closest hint is sort_type's own option list
+ * ("re-sort the filtered page by score, num_comments, or created"),
+ * which implies the real field is named `created`, not `createdAt`.
+ * Checked defensively for both that and Reddit's own upstream
+ * convention (`created_utc`, in case this proxy passes it through
+ * unrenamed) rather than betting on one guess — same "unverified field,
+ * check plausible variants" pattern as the posts/comments/results key
+ * check above. Worth confirming for real once a live key is in and a
+ * response can be inspected directly. */
 function normalizeMention(raw: unknown): RawMention | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -106,13 +126,21 @@ function normalizeMention(raw: unknown): RawMention | null {
 
   if (!externalMentionId || !permalink || !text || !subreddit) return null;
 
+  const rawCreated = r.createdAt ?? r.created ?? r.created_utc;
+  const publishedAt =
+    typeof rawCreated === "string"
+      ? rawCreated
+      : typeof rawCreated === "number"
+        ? new Date(rawCreated * (rawCreated < 1e12 ? 1000 : 1)).toISOString()
+        : null;
+
   return {
     externalMentionId,
     subreddit,
     author: typeof r.author === "string" ? r.author : null,
     permalink: permalink.startsWith("http") ? permalink : `https://reddit.com${permalink}`,
     mentionText: text,
-    publishedAt: typeof r.createdAt === "string" ? r.createdAt : null,
+    publishedAt,
   };
 }
 
