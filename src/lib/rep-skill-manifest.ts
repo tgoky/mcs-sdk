@@ -26,13 +26,14 @@
 // with a real third product being the trigger to generalize further, not
 // a guess made now from a sample size of one.
 
-export type RepSkillId = "rep-onboarding" | "rep-engine-panel" | "rep-trustpilot-watch" | "rep-reddit-watch" | "rep-crisis-response";
+export type RepSkillId = "rep-onboarding" | "rep-engine-panel" | "rep-trustpilot-watch" | "rep-reddit-watch" | "rep-twitter-watch" | "rep-crisis-response";
 
 export const REP_SKILL_IDS: RepSkillId[] = [
   "rep-onboarding",
   "rep-engine-panel",
   "rep-trustpilot-watch",
   "rep-reddit-watch",
+  "rep-twitter-watch",
   "rep-crisis-response",
 ];
 
@@ -93,6 +94,14 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
     name: "Reddit Watch",
     description:
       "Searches Reddit for new mentions of this client daily and flags anything that raises a serious issue.",
+    runOnSetup: false,
+    hasHingesPanel: false,
+  },
+  "rep-twitter-watch": {
+    id: "rep-twitter-watch",
+    name: "Twitter/X Watch",
+    description:
+      "Searches X for new mentions of this client daily and flags anything that raises a serious issue.",
     runOnSetup: false,
     hasHingesPanel: false,
   },

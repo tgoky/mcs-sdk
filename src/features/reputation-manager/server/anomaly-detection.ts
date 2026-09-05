@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { repEngineFindings, repTrustpilotReviews, repRedditMentions } from "@/models/schema";
+import { repEngineFindings, repTrustpilotReviews, repRedditMentions, repTwitterMentions } from "@/models/schema";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { ANOMALY_DETECTION_DEFAULTS, type AnomalyClass } from "@/features/reputation-manager/rep-thresholds";
 
@@ -14,7 +14,7 @@ const WEEK_MS = 7 * DAY_MS;
 
 async function countInWindow(
   engagementId: string,
-  table: typeof repEngineFindings | typeof repTrustpilotReviews | typeof repRedditMentions,
+  table: typeof repEngineFindings | typeof repTrustpilotReviews | typeof repRedditMentions | typeof repTwitterMentions,
   timeCol: any,
   start: Date,
   end: Date
@@ -41,17 +41,20 @@ async function checkTotalMentionSpike(engagementId: string, now: Date): Promise<
   const windowStart = new Date(now.getTime() - cfg.windowMinutes * 60 * 1000);
   const baselineStart = new Date(now.getTime() - cfg.baselineWindowDays * DAY_MS);
 
-  const [recentEngine, recentTrustpilot, recentReddit, baselineEngine, baselineTrustpilot, baselineReddit] = await Promise.all([
-    countInWindow(engagementId, repEngineFindings, repEngineFindings.runAt, windowStart, now),
-    countInWindow(engagementId, repTrustpilotReviews, repTrustpilotReviews.createdAt, windowStart, now),
-    countInWindow(engagementId, repRedditMentions, repRedditMentions.createdAt, windowStart, now),
-    countInWindow(engagementId, repEngineFindings, repEngineFindings.runAt, baselineStart, windowStart),
-    countInWindow(engagementId, repTrustpilotReviews, repTrustpilotReviews.createdAt, baselineStart, windowStart),
-    countInWindow(engagementId, repRedditMentions, repRedditMentions.createdAt, baselineStart, windowStart),
-  ]);
+  const [recentEngine, recentTrustpilot, recentReddit, recentTwitter, baselineEngine, baselineTrustpilot, baselineReddit, baselineTwitter] =
+    await Promise.all([
+      countInWindow(engagementId, repEngineFindings, repEngineFindings.runAt, windowStart, now),
+      countInWindow(engagementId, repTrustpilotReviews, repTrustpilotReviews.createdAt, windowStart, now),
+      countInWindow(engagementId, repRedditMentions, repRedditMentions.createdAt, windowStart, now),
+      countInWindow(engagementId, repTwitterMentions, repTwitterMentions.createdAt, windowStart, now),
+      countInWindow(engagementId, repEngineFindings, repEngineFindings.runAt, baselineStart, windowStart),
+      countInWindow(engagementId, repTrustpilotReviews, repTrustpilotReviews.createdAt, baselineStart, windowStart),
+      countInWindow(engagementId, repRedditMentions, repRedditMentions.createdAt, baselineStart, windowStart),
+      countInWindow(engagementId, repTwitterMentions, repTwitterMentions.createdAt, baselineStart, windowStart),
+    ]);
 
-  const recentCount = recentEngine + recentTrustpilot + recentReddit;
-  const baselineCount = baselineEngine + baselineTrustpilot + baselineReddit;
+  const recentCount = recentEngine + recentTrustpilot + recentReddit + recentTwitter;
+  const baselineCount = baselineEngine + baselineTrustpilot + baselineReddit + baselineTwitter;
   if (baselineCount === 0) return null;
 
   const baselineHours = cfg.baselineWindowDays * 24 - cfg.windowMinutes / 60;
@@ -74,12 +77,13 @@ async function checkNegativeSentimentSpike(engagementId: string, now: Date): Pro
   const baselineStart = new Date(now.getTime() - cfg.baselineWindowDays * DAY_MS);
 
   async function sentimentSplit(start: Date, end: Date): Promise<{ total: number; negative: number }> {
-    const [engine, trustpilot, reddit] = await Promise.all([
+    const [engine, trustpilot, reddit, twitter] = await Promise.all([
       db.select({ sentiment: repEngineFindings.sentiment }).from(repEngineFindings).where(and(eq(repEngineFindings.engagementId, engagementId), gte(repEngineFindings.runAt, start), lt(repEngineFindings.runAt, end))),
       db.select({ sentiment: repTrustpilotReviews.sentiment }).from(repTrustpilotReviews).where(and(eq(repTrustpilotReviews.engagementId, engagementId), gte(repTrustpilotReviews.createdAt, start), lt(repTrustpilotReviews.createdAt, end))),
       db.select({ sentiment: repRedditMentions.sentiment }).from(repRedditMentions).where(and(eq(repRedditMentions.engagementId, engagementId), gte(repRedditMentions.createdAt, start), lt(repRedditMentions.createdAt, end))),
+      db.select({ sentiment: repTwitterMentions.sentiment }).from(repTwitterMentions).where(and(eq(repTwitterMentions.engagementId, engagementId), gte(repTwitterMentions.createdAt, start), lt(repTwitterMentions.createdAt, end))),
     ]);
-    const all = [...engine, ...trustpilot, ...reddit];
+    const all = [...engine, ...trustpilot, ...reddit, ...twitter];
     return { total: all.length, negative: all.filter((r) => r.sentiment === "negative").length };
   }
 

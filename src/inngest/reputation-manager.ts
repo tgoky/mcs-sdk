@@ -168,9 +168,58 @@ export const repRedditWatchCron = inngest.createFunction(
 );
 
 /**
+ * Dispatches rep-twitter-watch once daily. Same shape again.
+ */
+export const repTwitterWatchCron = inngest.createFunction(
+  { id: "rep-twitter-watch-cron", triggers: [{ cron: "TZ=UTC 30 8 * * *" }], retries: 1 }, // 08:30 UTC daily
+  async ({ step }) => {
+    const prepared = await step.run("prepare-twitter-watch-runs", async () => {
+      const rows = await db
+        .select({
+          engagementId: engagements.engagementId,
+          buyer: engagements.buyer,
+          pausedAt: engagements.pausedAt,
+          deletedAt: engagements.deletedAt,
+        })
+        .from(repIdentityGraphs)
+        .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
+        .where(isNull(engagements.deletedAt));
+
+      const disabled = await getDisabledEngagementIdsForSkill("rep-twitter-watch");
+
+      const out: { runId: string; engagementId: string }[] = [];
+      for (const row of rows) {
+        if (isEngagementPaused(row)) continue;
+        if (disabled.has(row.engagementId)) continue;
+
+        const runId = crypto.randomUUID();
+        await startRun({
+          id: runId,
+          engagementId: row.engagementId,
+          skillName: "rep-twitter-watch",
+          phase: "twitter_watch",
+          label: row.buyer,
+        });
+        out.push({ runId, engagementId: row.engagementId });
+      }
+      return out;
+    });
+
+    if (prepared.length > 0) {
+      await step.sendEvent(
+        "dispatch-rep-twitter-watch-runs",
+        prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-twitter-watch" }))
+      );
+    }
+
+    return { dispatched: prepared.length };
+  }
+);
+
+/**
  * Dispatches rep-crisis-response once daily, after the three watch
  * skills above have had a chance to run — 09:00 UTC gives booking-poll-
- * style margin past even the latest of them (08:00). Same eligibility
+ * style margin past even the latest of them (08:30). Same eligibility
  * gate as the others (has a real identity graph); no separate
  * "has anything actually been flagged" pre-filter here — the service's
  * own early-return (loadFlaggedFindingsSince returning empty) already

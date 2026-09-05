@@ -2070,6 +2070,42 @@ export const repRedditMentions = pgTable(
   })
 );
 
+// ── Reputation Manager: Twitter/X Mentions ──────────────────────────────────
+// rep-twitter-watch's own output. Same shape as rep_reddit_mentions —
+// search-by-keyword rather than a known-source scrape (see
+// twitter-config.ts for the vendor reasoning), same dedup-on-the-
+// platform's-own-item-id pattern. Endpoint and field names verified
+// against docs.twitterapis.com's own Advanced Tweet Search reference —
+// see twitter-watch-service.ts's fetchTwitterMentions. permalink is
+// notNull because the vendor's response has no url field at all (not an
+// occasional gap) — it's always constructed from the tweet id and
+// author handle, X's URL scheme being public and stable.
+export const repTwitterMentions = pgTable(
+  "rep_twitter_mentions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+
+    externalMentionId: text("external_mention_id").notNull(), // the tweet's own id
+    author: text("author"), // @handle, without the leading @
+    permalink: text("permalink").notNull(),
+    mentionText: text("mention_text").notNull(),
+    publishedAt: timestamp("published_at"),
+
+    sentiment: text("sentiment").$type<RepFindingSentiment>().notNull(),
+    flagged: boolean("flagged").notNull().default(false),
+    flagReason: text("flag_reason"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    repTwitterMentionUnique: uniqueIndex("rep_twitter_mention_unique").on(table.engagementId, table.externalMentionId),
+    repTwitterMentionsEngagementIdx: index("rep_twitter_mentions_engagement_idx").on(table.engagementId, table.createdAt),
+  })
+);
+
 // ── Reputation Manager: Incidents ───────────────────────────────────────────
 // rep-crisis-response's own output — the last of the original 5-skill
 // roadmap. Reads across everything the other three watch skills flagged
@@ -2104,7 +2140,7 @@ export const repIncidents = pgTable("rep_incidents", {
       // "anomaly" is a synthetic entry anomaly-detection.ts produces when
       // a statistical spike/drop fires independent of any individual
       // flagged record — see crisis-response-service.ts.
-      source: "engine_panel" | "trustpilot" | "reddit" | "anomaly";
+      source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "anomaly";
       excerpt: string;
       flagReason: string | null;
       // Per-axis 1-10 scores and the resulting 0-100 composite (see

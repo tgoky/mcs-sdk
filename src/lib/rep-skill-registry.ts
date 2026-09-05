@@ -3,6 +3,7 @@ import { runRepOnboarding } from "@/features/reputation-manager/server/onboardin
 import { runRepEnginePanel } from "@/features/reputation-manager/server/engine-panel-service";
 import { runRepTrustpilotWatch } from "@/features/reputation-manager/server/trustpilot-watch-service";
 import { runRepRedditWatch } from "@/features/reputation-manager/server/reddit-watch-service";
+import { runRepTwitterWatch } from "@/features/reputation-manager/server/twitter-watch-service";
 import { runRepCrisisResponse } from "@/features/reputation-manager/server/crisis-response-service";
 import {
   REP_SKILL_IDS,
@@ -46,6 +47,10 @@ export const REP_SKILL_REGISTRY: Record<RepSkillId, RepSkillDefinition> = {
   "rep-reddit-watch": {
     ...REP_SKILL_MANIFEST["rep-reddit-watch"],
     execute: (tenant, runId, step) => runRepRedditWatch(tenant, runId, step),
+  },
+  "rep-twitter-watch": {
+    ...REP_SKILL_MANIFEST["rep-twitter-watch"],
+    execute: (tenant, runId, step) => runRepTwitterWatch(tenant, runId, step),
   },
   "rep-crisis-response": {
     ...REP_SKILL_MANIFEST["rep-crisis-response"],

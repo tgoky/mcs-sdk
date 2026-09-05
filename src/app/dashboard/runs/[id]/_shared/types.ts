@@ -280,8 +280,20 @@ export interface RepRedditMentionRow {
   createdAt: string;
 }
 
+export interface RepTwitterMentionRow {
+  id: string;
+  author: string | null;
+  permalink: string;
+  mentionText: string;
+  publishedAt: string | null;
+  sentiment: "positive" | "neutral" | "negative";
+  flagged: boolean;
+  flagReason: string | null;
+  createdAt: string;
+}
+
 export interface RepIncidentContributingFinding {
-  source: "engine_panel" | "trustpilot" | "reddit" | "anomaly";
+  source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "anomaly";
   excerpt: string;
   flagReason: string | null;
   reach?: number;
@@ -307,6 +319,7 @@ export type RepOnboardingDetail = { run: RunDetailBase; identityGraph: RepIdenti
 export type RepEnginePanelDetail = { run: RunDetailBase; findings: RepEngineFindingRow[] };
 export type RepTrustpilotWatchDetail = { run: RunDetailBase; reviews: RepTrustpilotReviewRow[] };
 export type RepRedditWatchDetail = { run: RunDetailBase; mentions: RepRedditMentionRow[] };
+export type RepTwitterWatchDetail = { run: RunDetailBase; mentions: RepTwitterMentionRow[] };
 export type RepCrisisResponseDetail = { run: RunDetailBase; incident: RepIncidentRow | null };
 
 export type RunDetailPayload =
@@ -319,4 +332,5 @@ export type RunDetailPayload =
   | RepEnginePanelDetail
   | RepTrustpilotWatchDetail
   | RepRedditWatchDetail
+  | RepTwitterWatchDetail
   | RepCrisisResponseDetail;

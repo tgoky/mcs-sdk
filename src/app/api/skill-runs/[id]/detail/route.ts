@@ -13,6 +13,7 @@ import {
   repEngineFindings,
   repTrustpilotReviews,
   repRedditMentions,
+  repTwitterMentions,
   repIncidents,
 } from "@/models/schema";
 import { getSession } from "@/lib/session";
@@ -184,6 +185,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             )
           )
           .orderBy(asc(repRedditMentions.createdAt));
+        return NextResponse.json({ run: row, mentions });
+      }
+
+      case "rep-twitter-watch": {
+        const windowEnd = row.completedAt ?? new Date();
+        const mentions = await db
+          .select()
+          .from(repTwitterMentions)
+          .where(
+            and(
+              eq(repTwitterMentions.engagementId, row.engagementId),
+              gte(repTwitterMentions.createdAt, row.startedAt),
+              lte(repTwitterMentions.createdAt, windowEnd)
+            )
+          )
+          .orderBy(asc(repTwitterMentions.createdAt));
         return NextResponse.json({ run: row, mentions });
       }
 

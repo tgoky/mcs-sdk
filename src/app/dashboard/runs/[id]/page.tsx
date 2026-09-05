@@ -30,6 +30,7 @@ import { RepOnboardingView } from "./views/rep-onboarding-view";
 import { RepEnginePanelView } from "./views/rep-engine-panel-view";
 import { RepTrustpilotWatchView } from "./views/rep-trustpilot-watch-view";
 import { RepRedditWatchView } from "./views/rep-reddit-watch-view";
+import { RepTwitterWatchView } from "./views/rep-twitter-watch-view";
 import { RepCrisisResponseView } from "./views/rep-crisis-response-view";
 import { runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
 import { anySkillDisplayName } from "@/lib/any-skill";
@@ -37,7 +38,7 @@ import { formatDiaryDateTime, formatReadableDuration } from "@/lib/format-dateti
 import { classifyRunError } from "@/lib/error-classification";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import type { RunStep, RunSummary } from "@/models/schema";
-import type { RunDetailPayload } from "./_shared/types";
+import type { RunDetailPayload, RepRedditWatchDetail, RepTwitterWatchDetail } from "./_shared/types";
 
 interface RunDetail {
   id: string;
@@ -119,8 +120,15 @@ function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayloa
       return "findings" in detail ? <RepEnginePanelView detail={detail} /> : null;
     case "rep-trustpilot-watch":
       return "reviews" in detail ? <RepTrustpilotWatchView detail={detail} /> : null;
+    // rep-reddit-watch and rep-twitter-watch both surface a `mentions`
+    // array, so the `"mentions" in detail` guard alone can't distinguish
+    // their row shapes (subreddit vs. author-only). The switch on
+    // skillName already guarantees which one this actually is at
+    // runtime, so the cast just tells TS what the guard can't.
     case "rep-reddit-watch":
-      return "mentions" in detail ? <RepRedditWatchView detail={detail} /> : null;
+      return "mentions" in detail ? <RepRedditWatchView detail={detail as RepRedditWatchDetail} /> : null;
+    case "rep-twitter-watch":
+      return "mentions" in detail ? <RepTwitterWatchView detail={detail as RepTwitterWatchDetail} /> : null;
     case "rep-crisis-response":
       return "incident" in detail ? <RepCrisisResponseView detail={detail} /> : null;
     case "pin-down":

@@ -8,7 +8,7 @@ import { processWinBackSmsSequence } from "@/inngest/win-back-sms";
 import { processWinBackEmailSmtpSequence } from "@/inngest/win-back-email-smtp";
 import { processConversationIntelligenceTranscript } from "@/inngest/conversation-intelligence";
 import { processBookingWebhookEvent } from "@/inngest/booking-webhook";
-import { repEnginePanelCron, repTrustpilotWatchCron, repRedditWatchCron, repCrisisResponseCron } from "@/inngest/reputation-manager";
+import { repEnginePanelCron, repTrustpilotWatchCron, repRedditWatchCron, repTwitterWatchCron, repCrisisResponseCron } from "@/inngest/reputation-manager";
 import {
   nightlyBriefsCron,
   leakMapScheduleCron,
@@ -134,6 +134,7 @@ export const { GET, POST, PUT } = serve({
     repEnginePanelCron,
     repTrustpilotWatchCron,
     repRedditWatchCron,
+    repTwitterWatchCron,
     repCrisisResponseCron,
   ],
 });

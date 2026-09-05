@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { repIdentityGraphs, repEngineFindings, repTrustpilotReviews, repRedditMentions, repIncidents, skillRuns } from "@/models/schema";
+import { repIdentityGraphs, repEngineFindings, repTrustpilotReviews, repRedditMentions, repTwitterMentions, repIncidents, skillRuns } from "@/models/schema";
 import { and, eq, gt, gte, desc } from "drizzle-orm";
 import { callClaude } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
@@ -17,7 +17,7 @@ import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
-type ContributingFinding = { source: "engine_panel" | "trustpilot" | "reddit" | "anomaly"; excerpt: string; flagReason: string | null };
+type ContributingFinding = { source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "anomaly"; excerpt: string; flagReason: string | null };
 type ScoredFinding = ContributingFinding & {
   reach: number;
   sentiment: number;
@@ -27,7 +27,7 @@ type ScoredFinding = ContributingFinding & {
 };
 
 async function loadFlaggedFindingsSince(engagementId: string, since: Date | null): Promise<ContributingFinding[]> {
-  const [engineFindings, trustpilotReviews, redditMentions] = await Promise.all([
+  const [engineFindings, trustpilotReviews, redditMentions, twitterMentions] = await Promise.all([
     db
       .select({ promptText: repEngineFindings.promptText, responseText: repEngineFindings.responseText, flagReason: repEngineFindings.flagReason })
       .from(repEngineFindings)
@@ -52,12 +52,21 @@ async function loadFlaggedFindingsSince(engagementId: string, since: Date | null
           ? and(eq(repRedditMentions.engagementId, engagementId), eq(repRedditMentions.flagged, true), gt(repRedditMentions.createdAt, since))
           : and(eq(repRedditMentions.engagementId, engagementId), eq(repRedditMentions.flagged, true))
       ),
+    db
+      .select({ mentionText: repTwitterMentions.mentionText, permalink: repTwitterMentions.permalink, flagReason: repTwitterMentions.flagReason })
+      .from(repTwitterMentions)
+      .where(
+        since
+          ? and(eq(repTwitterMentions.engagementId, engagementId), eq(repTwitterMentions.flagged, true), gt(repTwitterMentions.createdAt, since))
+          : and(eq(repTwitterMentions.engagementId, engagementId), eq(repTwitterMentions.flagged, true))
+      ),
   ]);
 
   return [
     ...engineFindings.map((f) => ({ source: "engine_panel" as const, excerpt: `Q: ${f.promptText}\nA: ${f.responseText}`, flagReason: f.flagReason })),
     ...trustpilotReviews.map((r) => ({ source: "trustpilot" as const, excerpt: `${r.rating}/5: ${r.reviewText}`, flagReason: r.flagReason })),
     ...redditMentions.map((m) => ({ source: "reddit" as const, excerpt: m.mentionText, flagReason: m.flagReason })),
+    ...twitterMentions.map((m) => ({ source: "twitter" as const, excerpt: m.mentionText, flagReason: m.flagReason })),
   ];
 }
 
