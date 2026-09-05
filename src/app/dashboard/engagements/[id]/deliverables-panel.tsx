@@ -162,7 +162,6 @@ function DeliverableRow({
   squircleClass = "bg-teal-200 text-teal-950 dark:bg-teal-900/60 dark:text-teal-200",
   title,
   subtitle,
-  formatBadge,
   children,
 }: {
   id: string;
@@ -172,7 +171,6 @@ function DeliverableRow({
   squircleClass?: string;
   title: string;
   subtitle: string;
-  formatBadge?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -208,17 +206,6 @@ function DeliverableRow({
               >
                 {title}
               </span>
-              {formatBadge && (
-                <span
-                  className={
-                    isOpen
-                      ? "text-[10px] font-mono font-medium px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 shrink-0 hidden sm:inline-block"
-                      : "text-[10px] font-mono font-medium px-2 py-0.5 rounded-md bg-zinc-200/60 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 shrink-0 hidden sm:inline-block"
-                  }
-                >
-                  {formatBadge}
-                </span>
-              )}
             </div>
             <p className={isOpen ? "text-xs text-zinc-600 dark:text-zinc-400 truncate font-medium" : "text-xs text-zinc-500 dark:text-zinc-400 truncate"}>
               {subtitle}
@@ -525,7 +512,6 @@ export function DeliverablesPanel({
               squircleClass={cfg.squircleClass}
               title={PILLAR_LABELS[b.pillar] ?? b.pillar}
               subtitle={`Hook: "${b.hook}"`}
-              formatBadge={b.suggestedFormat}
             >
               <div className="space-y-4 text-xs font-sans pt-1">
                 <div className="space-y-1">
@@ -554,10 +540,12 @@ export function DeliverablesPanel({
                   </div>
                 )}
 
-                <div className="space-y-1 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-                  <SquareLabel color="bg-rose-400">Call to Action (CTA)</SquareLabel>
-                  <p className="text-sm font-bold text-zinc-900 dark:text-white">{b.cta}</p>
-                </div>
+                {b.cta && (
+                  <div className="space-y-1 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+                    <SquareLabel color="bg-rose-400">Call to Action (CTA)</SquareLabel>
+                    <p className="text-sm font-bold text-zinc-900 dark:text-white">{b.cta}</p>
+                  </div>
+                )}
               </div>
             </DeliverableRow>
           );

@@ -27,6 +27,28 @@ const PILLARS: Array<{ id: AdCreativeBrief["pillar"]; description: string }> = [
 ];
 
 /**
+ * Fixed, human-written stand-in for the success_proof brief when there's
+ * no real testimonial to build it around. Previously the model was asked
+ * to write this brief anyway with instructions to "be honest about
+ * needing that input rather than fabricating a claim" — technically
+ * correct, but what it actually produced was bracketed, prompt-engineer-
+ * style text like "[NEEDS INPUT: a specific result...]" landing directly
+ * in the buyer's hook field, reading like a broken template instead of a
+ * next step. This is deterministic instead: no model call for this
+ * pillar at all when there's nothing to work with, so the copy is
+ * controlled and always makes sense to the person reading it.
+ */
+const NEEDS_PROOF_BRIEF: Omit<AdCreativeBrief, "id"> = {
+  pillar: "success_proof",
+  hook: "This brief needs a real result to lead with.",
+  angle:
+    "A success-proof ad leads with something a real client actually said or achieved — not a general claim about the offer. Add a testimonial or a specific before/after result under Client Details → Voice & proof, then regenerate this brief.",
+  talkingPoints: [],
+  suggestedFormat: "",
+  cta: "",
+};
+
+/**
  * Generates one structured ad creative brief per content pillar — a brief
  * a copywriter or video editor works FROM, not finished ad copy itself.
  * Same generation-only philosophy as buildRecoveryCadence/buildLongTermNurture:
@@ -48,6 +70,14 @@ export async function buildAdCreativeBriefs(
   input: AdCreativeBriefsInput,
   runId?: string
 ): Promise<{ briefs: AdCreativeBrief[] }> {
+  const hasProof = (input.existingProof?.testimonials?.length ?? 0) > 0;
+  // success_proof is the one pillar whose entire premise doesn't exist
+  // without real input — the other three (questions, objections) always
+  // have something reasonable to say even from an empty list. Excluded
+  // from the model call entirely when there's nothing to work with; see
+  // NEEDS_PROOF_BRIEF above for what fills its slot instead.
+  const pillarsToGenerate = hasProof ? PILLARS : PILLARS.filter((p) => p.id !== "success_proof");
+
   const system = `You are an ad creative strategist writing CREATIVE BRIEFS (not finished ad
 scripts) for ${input.buyer}. A brief tells a copywriter/video editor what
 to make — a hook, an angle, talking points, a suggested visual format, and
@@ -59,15 +89,14 @@ possible: ${JSON.stringify(input.brandVoiceProfile ?? {})}
 Offer: ${JSON.stringify(input.offerDetails ?? {})}
 Top call questions on file: ${JSON.stringify(input.topCallQuestions ?? [])}
 Top objections on file: ${JSON.stringify(input.topObjections ?? [])}
-Existing proof on file: ${JSON.stringify(input.existingProof?.testimonials ?? [])}
+${hasProof ? `Existing proof on file: ${JSON.stringify(input.existingProof?.testimonials ?? [])}` : ""}
 
-Generate exactly one brief per pillar below. If the relevant source data
-above is empty for a pillar (e.g., no testimonials on file for
-success_proof), write a brief that's honest about needing that input
-rather than fabricating a specific claim, testimonial, or statistic.
+Generate exactly one brief per pillar below, using only the real data
+given above — never fabricate a specific claim, testimonial, or statistic
+that isn't backed by it.
 
 Pillars:
-${PILLARS.map((p) => `- ${p.id}: ${p.description}`).join("\n")}
+${pillarsToGenerate.map((p) => `- ${p.id}: ${p.description}`).join("\n")}
 
 For each brief:
 - hook: the first line/visual beat that stops the scroll — specific, not generic.
@@ -77,13 +106,13 @@ For each brief:
 - cta: the exact call-to-action line to close on.
 
 Return ONLY a JSON object with this exact shape, no prose, no markdown fences:
-{ "briefs": [{"pillar": "common_questions", "hook": "...", "angle": "...", "talkingPoints": ["...", "..."], "suggestedFormat": "...", "cta": "..."}, ...] }
-Include all 4 pillars, in the order listed above.`;
+{ "briefs": [{"pillar": "${pillarsToGenerate[0].id}", "hook": "...", "angle": "...", "talkingPoints": ["...", "..."], "suggestedFormat": "...", "cta": "..."}, ...] }
+Include all ${pillarsToGenerate.length} pillar(s) listed above, in the order listed.`;
 
   const result = await callClaudeWithRetry({
     model: MODEL.SYNTHESIS,
     system,
-    userMessage: "Generate the 4 ad creative briefs now.",
+    userMessage: `Generate the ${pillarsToGenerate.length} ad creative brief(s) now.`,
     maxTokens: 2500,
     runId,
   });
@@ -96,7 +125,7 @@ Include all 4 pillars, in the order listed above.`;
     throw new Error(`Ad creative brief generation returned non-JSON output: ${result.text.slice(0, 200)}`);
   }
 
-  const briefs: AdCreativeBrief[] = PILLARS.map((pillar, i) => {
+  const generatedBriefs: AdCreativeBrief[] = pillarsToGenerate.map((pillar, i) => {
     const match = parsed.briefs.find((b: any) => b.pillar === pillar.id) ?? parsed.briefs[i];
     if (!match) throw new Error(`Ad creative brief generation missing pillar ${pillar.id}`);
     return {
@@ -109,6 +138,11 @@ Include all 4 pillars, in the order listed above.`;
       cta: match.cta,
     };
   });
+
+  const generatedByPillar = new Map(generatedBriefs.map((b) => [b.pillar, b]));
+  const briefs: AdCreativeBrief[] = PILLARS.map(
+    (pillar) => generatedByPillar.get(pillar.id) ?? { id: `brief_${pillar.id}`, ...NEEDS_PROOF_BRIEF }
+  );
 
   return { briefs };
 }
