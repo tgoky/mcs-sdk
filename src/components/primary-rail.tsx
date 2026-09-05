@@ -20,6 +20,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
 import { PRIMARY_NAV_SECTIONS, PRODUCT_NAV_SECTIONS, PRODUCT_RAIL_CHILDREN } from "@/lib/primary-nav";
 import type { ProductId } from "@/lib/product-catalog";
+import { isRepSkillId } from "@/lib/rep-skill-manifest";
 
 interface PrimaryRailProps {
   displayName: string;
@@ -114,19 +115,47 @@ function SquishyProductBadge({
 // still fall through to the prefix-based Showtime bucket below.
 const PRODUCT_SCOPED_ROOTS = ["/dashboard/queue", "/dashboard/runs", "/dashboard/engagements"];
 
-function activeSectionHref(pathname: string, productParam: string | null): string {
+function activeSectionHref(pathname: string, productParam: string | null, fromParam: string | null): string {
   if (PRODUCT_SCOPED_ROOTS.includes(pathname) && productParam === "reputation-manager") {
     return "/dashboard/reputation-manager";
   }
   if (PRODUCT_SCOPED_ROOTS.includes(pathname) && productParam === "showtime") {
     return "/dashboard/showtime";
   }
+
+  // /dashboard/modules/[skill] serves BOTH catalogs (see modules/[skill]/
+  // page.tsx) — which rail icon lights up depends on which catalog the
+  // skill segment belongs to, not just the shared path prefix. Bug fix:
+  // this used to bucket every /dashboard/modules/* path under Showtime
+  // unconditionally, which was invisible before Reputation Manager's
+  // module hub was reachable at all and became a real, visible wrong
+  // highlight (Showtime lighting up while looking at an RM module) the
+  // moment it was.
+  if (pathname.startsWith("/dashboard/modules/")) {
+    const skillSegment = pathname.slice("/dashboard/modules/".length);
+    return isRepSkillId(skillSegment) ? "/dashboard/reputation-manager" : "/dashboard/showtime";
+  }
+
+  // /dashboard/engagements/[id] is one shared detail page for both
+  // products (it shows Showtime's SkillsPanel and RM's RepSkillsPanel/
+  // RepAuditLogPanel on the client that has each set up) — there's no
+  // single right answer from the path alone. `from` carries where the
+  // visit actually came from (ModuleClientRoster's hrefFor sets it);
+  // trust it when it points at an RM module, default to Showtime
+  // otherwise — the same default this bucket always used before RM
+  // linked into this page at all.
+  if (pathname.startsWith("/dashboard/engagements/")) {
+    if (fromParam?.startsWith("/dashboard/modules/")) {
+      const skillSegment = fromParam.slice("/dashboard/modules/".length);
+      if (isRepSkillId(skillSegment)) return "/dashboard/reputation-manager";
+    }
+    return "/dashboard/showtime";
+  }
+
   if (
     pathname === "/dashboard/showtime" ||
-    pathname.startsWith("/dashboard/engagements/") ||
     pathname.startsWith("/dashboard/analytics") ||
     pathname.startsWith("/dashboard/meetings") ||
-    pathname.startsWith("/dashboard/modules") ||
     pathname.startsWith("/dashboard/reports")
   ) return "/dashboard/showtime";
 
@@ -147,7 +176,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const activeHref = activeSectionHref(pathname, searchParams.get("product"));
+  const activeHref = activeSectionHref(pathname, searchParams.get("product"), searchParams.get("from"));
   const productSections = PRODUCT_NAV_SECTIONS.filter((section) => installedPackageIds.includes(section.productId));
   const initials = displayName.slice(0, 2).toUpperCase();
 

@@ -5,6 +5,7 @@ import { isRepSkillId, REP_SKILL_MANIFEST } from "@/lib/rep-skill-manifest";
 import { db } from "@/lib/db";
 import { skillRuns, engagements } from "@/models/schema";
 import { and, eq, desc, sql } from "drizzle-orm";
+import { getRepEnrolledEngagementIds } from "@/lib/rep-engagements";
 import { type SkillName } from "@/lib/copy";
 import { getModuleClientSummaries } from "@/lib/module-overview";
 import { getActiveWorkspace } from "@/lib/workspace";
@@ -42,9 +43,22 @@ export default async function ModulePage({
   // fake a destination, the Activity tab simply doesn't appear (see
   // ModuleClientRoster — it only offers that tab when `runs` is passed).
   if (isRepSkillId(rawSkill)) {
+    // Bug fix: getModuleClientSummaries returns every engagement in the
+    // workspace, which is the right behavior for Showtime (every
+    // engagement IS a Showtime client — /dashboard/engagements/new is
+    // Showtime's own client-creation flow, there's no separate one for
+    // RM) but wrong here. Reputation Manager has no client-creation flow
+    // of its own — it's layered onto an existing engagement by running
+    // rep-onboarding — so most workspace engagements were never
+    // candidates for it at all. Same "has a rep_identity_graphs row"
+    // scoping signal /dashboard/engagements/page.tsx already uses,
+    // centralized in rep-engagements.ts.
+    const repEnrolledIds = new Set(await getRepEnrolledEngagementIds(whopUserId, workspaceId));
+    const repClientSummaries = clientSummaries.filter((c) => repEnrolledIds.has(c.engagementId));
+
     return (
       <div className="w-full max-w-none -mt-6 -mx-2 sm:-mx-6 pt-0 px-2 sm:px-6 pb-6 font-sans antialiased text-zinc-900 dark:text-zinc-100">
-        <ModuleClientRoster summaries={clientSummaries} manifest={REP_SKILL_MANIFEST[rawSkill]} skill={rawSkill} />
+        <ModuleClientRoster summaries={repClientSummaries} manifest={REP_SKILL_MANIFEST[rawSkill]} skill={rawSkill} />
       </div>
     );
   }
