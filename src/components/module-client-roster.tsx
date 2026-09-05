@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, Fragment, type ReactNode } from "react";
+import { useMemo, useState, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import {
   Users,
@@ -22,6 +22,7 @@ import type { ModuleClientSummary } from "@/lib/module-overview";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { pauseEngagement, resumeEngagement, copyToClipboard } from "@/lib/quick-actions";
 import { AnySkillBadge } from "@/components/any-skill-badge";
+import { SwatchLabel } from "@/components/swatch-label";
 import { formatVerboseDate } from "@/components/relative-time";
 import { PinDownModuleView, type SkillRun } from "@/components/pin-down-module-view";
 import { PileOnModuleView } from "@/components/pile-on-module-view";
@@ -69,30 +70,21 @@ function deriveLabel(client: ModuleClientSummary): string {
   return client.lastStatus;
 }
 
+const TONE_COLOR: Record<"success" | "danger" | "warning" | "neutral", string> = {
+  success: "bg-emerald-500",
+  warning: "bg-amber-500",
+  danger: "bg-rose-500",
+  neutral: "bg-zinc-400 dark:bg-zinc-600",
+};
+
 function StatusBadge({
   tone,
   children,
 }: {
   tone: "success" | "danger" | "warning" | "neutral";
-  children: ReactNode;
+  children: string;
 }) {
-  const styles = {
-    success: "bg-emerald-400 text-white dark:text-zinc-950 font-bold",
-    warning: "bg-amber-400 text-white dark:text-zinc-950 font-bold",
-    danger: "bg-rose-400 text-white dark:text-zinc-950 font-bold",
-    neutral: "bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-100 font-medium",
-  }[tone];
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-sans tracking-wide select-none shrink-0",
-        styles
-      )}
-    >
-      {children}
-    </span>
-  );
+  return <SwatchLabel colorClass={TONE_COLOR[tone]} label={children} />;
 }
 
 function buildClientSections(

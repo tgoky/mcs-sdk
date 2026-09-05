@@ -74,14 +74,6 @@ export const MODULE_STATUS_LABELS: Record<ModuleStatus, string> = {
   paused: "Automation paused",
 };
 
-export const MODULE_STATUS_COLORS: Record<ModuleStatus, string> = {
-  live: "text-status-success font-medium",
-  running: "text-sky-600 dark:text-sky-400",
-  failed: "text-status-error",
-  not_run: "text-zinc-600 dark:text-zinc-500",
-  paused: "text-amber-600 dark:text-amber-400 font-medium",
-};
-
 // ---------------------------------------------------------------------------
 // Individual run status (run-history tables, activity feed)
 // ---------------------------------------------------------------------------

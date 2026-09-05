@@ -1,4 +1,5 @@
 import { MODULE_STATUS_LABELS, type ModuleStatus } from "@/lib/copy";
+import { SwatchLabel } from "@/components/swatch-label";
 
 /**
  * Small color square + label — replaces the colored-background rounded
@@ -24,12 +25,5 @@ const SWATCH_LABEL: Record<ModuleStatus | "disabled", string> = {
 };
 
 export function StatusSwatch({ status }: { status: ModuleStatus | "disabled" }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={`w-2 h-2 rounded-[2.5px] shrink-0 ${SWATCH_COLOR[status]}`} aria-hidden="true" />
-      <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
-        {SWATCH_LABEL[status]}
-      </span>
-    </span>
-  );
+  return <SwatchLabel colorClass={SWATCH_COLOR[status]} label={SWATCH_LABEL[status]} />;
 }
