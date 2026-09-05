@@ -100,7 +100,19 @@ export default async function ReputationManagerHomePage() {
           .limit(3)
       : [],
     getQueueItems(whopUserId, workspaceId, { skillIds: REP_SKILL_IDS_ARR }),
-    db.select({ engagementId: engagements.engagementId, buyer: engagements.buyer, pausedAt: engagements.pausedAt }).from(engagements).where(baseFilter),
+    // Bug fix: this was querying every engagement in the workspace with
+    // no RM scope at all — a leftover from copying Work's own dashboard
+    // page, which is right for Work (every engagement belongs there) but
+    // wrong here (most workspace engagements were never onboarded onto
+    // RM — see rep-engagements.ts). Left unscoped, a pure Showtime
+    // client would show up as a filter option in this page's own Queue
+    // panel, which makes no sense on a page scoped to Reputation Manager.
+    engagementIds.length
+      ? db
+          .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, pausedAt: engagements.pausedAt })
+          .from(engagements)
+          .where(and(baseFilter, inArray(engagements.engagementId, engagementIds)))
+      : [],
     db
       .select({
         id: skillRuns.id,

@@ -47,16 +47,24 @@ export async function POST(request: Request) {
     const buyerName = body.operatorName.trim();
     const engagementId = generateEngagementId(buyerName);
 
-    await db.insert(engagements).values({
-      id: crypto.randomUUID(),
-      engagementId,
-      whopUserId: session.whopUserId,
-      workspaceId: activeWorkspace.workspaceId,
-      buyer: buyerName,
-      schemaVersion: "1.0",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    // onConflictDoNothing as defense-in-depth, matching
+    // /api/engagements/setup's own pattern — engagementId is timestamp-
+    // suffixed (engagement-id.ts) so a real collision is astronomically
+    // rare, but there's no reason for this route to be less defensive
+    // than Showtime's own creation path is.
+    await db
+      .insert(engagements)
+      .values({
+        id: crypto.randomUUID(),
+        engagementId,
+        whopUserId: session.whopUserId,
+        workspaceId: activeWorkspace.workspaceId,
+        buyer: buyerName,
+        schemaVersion: "1.0",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing({ target: engagements.engagementId });
 
     const input: RepIntakeInput = {
       operatorName: buyerName,
