@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { isRepSkillId } from "@/lib/rep-skill-manifest";
 
 interface SecondarySidebarProps {
   work: ReactNode;
@@ -12,18 +13,48 @@ interface SecondarySidebarProps {
 
 type SectionKey = "reputation-manager" | "showtime" | "settings" | "work";
 
+// /dashboard/modules and /dashboard/engagements are deliberately NOT in
+// this static table — both are shared across products (see
+// activeSection's own handling below) and a blanket prefix->showtime
+// mapping for either was a real, previously-invisible bug: this file
+// duplicates primary-rail.tsx's activeSectionHref (same concept, two
+// unsynced implementations — worth unifying at some point, not done
+// here to keep this fix minimal) and had the identical hardcoded
+// "every /dashboard/modules/* path is Showtime" rule, which only ever
+// mattered once Reputation Manager's module hub became reachable.
 const SECTION_PREFIXES: Array<{ key: SectionKey; prefix: string }> = [
   { key: "reputation-manager", prefix: "/dashboard/reputation-manager" },
   { key: "showtime", prefix: "/dashboard/showtime" },
-  { key: "showtime", prefix: "/dashboard/engagements" },
   { key: "showtime", prefix: "/dashboard/meetings" },
   { key: "showtime", prefix: "/dashboard/analytics" },
-  { key: "showtime", prefix: "/dashboard/modules" },
   { key: "settings", prefix: "/dashboard/settings" },
   { key: "showtime", prefix: "/dashboard/reports" },
 ];
 
-function activeSection(pathname: string): SectionKey {
+function activeSection(pathname: string, fromParam: string | null): SectionKey {
+  // /dashboard/modules/[skill] serves both catalogs — which section
+  // shows depends on which catalog the skill segment belongs to.
+  if (pathname.startsWith("/dashboard/modules/")) {
+    const skillSegment = pathname.slice("/dashboard/modules/".length);
+    return isRepSkillId(skillSegment) ? "reputation-manager" : "showtime";
+  }
+
+  // /dashboard/engagements/[id] is one shared detail page for both
+  // products — there's no single right answer from the path alone.
+  // `from` carries where the visit actually came from (set by
+  // ModuleClientRoster's hrefFor); trust it when it points at an RM
+  // module, default to Showtime otherwise (the original assumption,
+  // correct for a bare/bookmarked engagement link since every engagement
+  // is a Showtime client by construction — see rep-engagements.ts).
+  if (pathname.startsWith("/dashboard/engagements/")) {
+    if (fromParam?.startsWith("/dashboard/modules/")) {
+      const skillSegment = fromParam.slice("/dashboard/modules/".length);
+      if (isRepSkillId(skillSegment)) return "reputation-manager";
+    }
+    return "showtime";
+  }
+  if (pathname === "/dashboard/engagements") return "showtime";
+
   const match = SECTION_PREFIXES.filter(
     (s) => pathname === s.prefix || pathname.startsWith(`${s.prefix}/`)
   ).sort((a, b) => b.prefix.length - a.prefix.length)[0];
@@ -66,7 +97,7 @@ export function SecondarySidebar({
         ? "showtime"
         : isProductScopedRoot
           ? "work"
-          : activeSection(pathname);
+          : activeSection(pathname, searchParams.get("from"));
 
   const content: Record<SectionKey, ReactNode> = {
     work,

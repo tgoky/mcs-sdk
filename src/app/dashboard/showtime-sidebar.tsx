@@ -1,4 +1,4 @@
-import { Building2, FileText, ListTodo, Activity } from "lucide-react";
+import { Home, Building2, FileText, ListTodo, Activity } from "lucide-react";
 import { SkillsNavList } from "@/components/skills-nav-list";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 
@@ -12,9 +12,15 @@ import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
  * sidebar only needs the destinations that DON'T have a rail icon of
  * their own (Reports) plus this product's queue/activity, grouped the
  * same way Work's own sidebar groups Home+Reports apart from Queue+Executions.
+ *
+ * Bug fix: this sidebar never linked to /dashboard/showtime (Showtime's
+ * own dashboard page) at all — there was no way back to it from within
+ * Showtime's own secondary sidebar. Added to match
+ * reputation-manager-sidebar.tsx's own Home entry.
  */
 export function ShowtimeSidebar() {
   const group1: NavLinkItem[] = [
+    { href: "/dashboard/showtime", label: "Home", icon: <Home className="w-4 h-4" /> },
     { href: "/dashboard/engagements?product=showtime", label: "Clients", icon: <Building2 className="w-4 h-4" /> },
     { href: "/dashboard/reports", label: "Reports", icon: <FileText className="w-4 h-4" /> },
   ];
