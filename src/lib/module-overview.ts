@@ -19,6 +19,15 @@ import { db } from "@/lib/db";
 import { engagements, engagementSkills, skillRuns } from "@/models/schema";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { SkillId } from "@/lib/skill-manifest";
+import type { RepSkillId } from "@/lib/rep-skill-manifest";
+
+// Both catalogs' ids work here unchanged — every query below is a plain
+// string comparison against skillRuns.skillName / engagementSkills.skillId
+// (free-text columns shared across products, see rep-skill-manifest.ts's
+// file comment), so this never needed to be Showtime-only in the first
+// place. Widened to a union rather than plain `string` so a typo'd skill
+// id still fails to typecheck at call sites.
+type AnySkillId = SkillId | RepSkillId;
 
 export type SkillSidebarClient = {
   engagementId: string;
@@ -57,7 +66,7 @@ const FAILURE_STATUSES = new Set(["failed", "timed_out"]);
 export async function getModuleClientSummaries(
   whopUserId: string,
   workspaceId: string,
-  skill: SkillId
+  skill: AnySkillId
 ): Promise<ModuleClientSummary[]> {
   const allEngagements = await db
     .select({
@@ -170,7 +179,7 @@ export async function getModuleClientSummaries(
 export async function getSkillActiveClients(
   whopUserId: string,
   workspaceId: string,
-  skill: SkillId,
+  skill: AnySkillId,
   excludeEngagementId?: string
 ): Promise<SkillSidebarClient[]> {
   const allEngagements = await db

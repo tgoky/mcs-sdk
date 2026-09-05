@@ -9,10 +9,15 @@ import {
   winBackSendLog,
   auditRunsLog,
   sequenceMessageLog,
+  repIdentityGraphs,
+  repEngineFindings,
+  repTrustpilotReviews,
+  repRedditMentions,
+  repIncidents,
 } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
-import { and, eq, asc } from "drizzle-orm";
+import { and, eq, asc, gte, lte } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -33,6 +38,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         id: skillRuns.id,
         skillName: skillRuns.skillName,
         status: skillRuns.status,
+        startedAt: skillRuns.startedAt,
+        completedAt: skillRuns.completedAt,
         engagementId: skillRuns.engagementId,
         buyer: engagements.buyer,
         stack: engagements.stack,
@@ -112,6 +119,88 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           .where(eq(auditRunsLog.runId, row.id))
           .limit(1);
         return NextResponse.json({ run: row, audit: audit ?? null });
+      }
+
+      // Reputation Manager's 5 skills. Their ingestion/finding tables
+      // (rep_engine_findings, rep_trustpilot_reviews, rep_reddit_mentions,
+      // rep_incidents) were built without a runId column — unlike
+      // Showtime's per-skill log tables above, they only carry
+      // engagementId + their own timestamp. Rather than a migration to add
+      // one, this scopes to rows whose timestamp falls inside this run's
+      // own execution window [startedAt, completedAt ?? now] — accurate
+      // as long as the same (engagement, skill) pair never runs twice
+      // concurrently, which a per-client cron skill never does.
+      case "rep-onboarding": {
+        const [identityGraph] = await db
+          .select()
+          .from(repIdentityGraphs)
+          .where(eq(repIdentityGraphs.engagementId, row.engagementId))
+          .limit(1);
+        return NextResponse.json({ run: row, identityGraph: identityGraph ?? null });
+      }
+
+      case "rep-engine-panel": {
+        const windowEnd = row.completedAt ?? new Date();
+        const findings = await db
+          .select()
+          .from(repEngineFindings)
+          .where(
+            and(
+              eq(repEngineFindings.engagementId, row.engagementId),
+              gte(repEngineFindings.runAt, row.startedAt),
+              lte(repEngineFindings.runAt, windowEnd)
+            )
+          )
+          .orderBy(asc(repEngineFindings.runAt));
+        return NextResponse.json({ run: row, findings });
+      }
+
+      case "rep-trustpilot-watch": {
+        const windowEnd = row.completedAt ?? new Date();
+        const reviews = await db
+          .select()
+          .from(repTrustpilotReviews)
+          .where(
+            and(
+              eq(repTrustpilotReviews.engagementId, row.engagementId),
+              gte(repTrustpilotReviews.createdAt, row.startedAt),
+              lte(repTrustpilotReviews.createdAt, windowEnd)
+            )
+          )
+          .orderBy(asc(repTrustpilotReviews.createdAt));
+        return NextResponse.json({ run: row, reviews });
+      }
+
+      case "rep-reddit-watch": {
+        const windowEnd = row.completedAt ?? new Date();
+        const mentions = await db
+          .select()
+          .from(repRedditMentions)
+          .where(
+            and(
+              eq(repRedditMentions.engagementId, row.engagementId),
+              gte(repRedditMentions.createdAt, row.startedAt),
+              lte(repRedditMentions.createdAt, windowEnd)
+            )
+          )
+          .orderBy(asc(repRedditMentions.createdAt));
+        return NextResponse.json({ run: row, mentions });
+      }
+
+      case "rep-crisis-response": {
+        const windowEnd = row.completedAt ?? new Date();
+        const [incident] = await db
+          .select()
+          .from(repIncidents)
+          .where(
+            and(
+              eq(repIncidents.engagementId, row.engagementId),
+              gte(repIncidents.declaredAt, row.startedAt),
+              lte(repIncidents.declaredAt, windowEnd)
+            )
+          )
+          .limit(1);
+        return NextResponse.json({ run: row, incident: incident ?? null });
       }
 
       case "pin-down":

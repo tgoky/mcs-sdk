@@ -7,8 +7,11 @@ import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { LiveExecutionFeed } from "../live-execution-feed";
 import { latestStepLabel } from "@/lib/run-display";
 import { markExecutionsSeen } from "@/lib/run-log";
-import { EXECUTIONS_TOOLBAR_COPY as copy, skillName as skillDisplayName } from "@/lib/copy";
-import { SquishySkillBadge, SKILL_SQUISHY_CONFIG } from "@/components/squishy-skill-badge";
+import { EXECUTIONS_TOOLBAR_COPY as copy } from "@/lib/copy";
+import { anySkillDisplayName } from "@/lib/any-skill";
+import { SKILL_SQUISHY_CONFIG } from "@/components/squishy-skill-badge";
+import { REP_SKILL_SQUISHY_CONFIG } from "@/components/rep-skill-badge";
+import { AnySkillBadge } from "@/components/any-skill-badge";
 import Link from "next/link";
 import { isProductId, skillIdsForProduct } from "@/lib/product-catalog";
 
@@ -77,12 +80,12 @@ export default async function RunsPage({ searchParams }: { searchParams: Promise
 
   // At-a-glance per-skill breakdown for the strip below — counts within
   // this page's existing 150-run live window (see the file comment
-  // above), not a lifetime total. Only counts skills SquishySkillBadge
-  // actually has art for; an unrecognized skillName is silently dropped
-  // here rather than showing a blank/broken badge.
+  // above), not a lifetime total. Only counts skills with real badge art
+  // (either catalog — see any-skill-badge.tsx); an unrecognized skillName
+  // is silently dropped here rather than showing a blank/broken badge.
   const skillCounts = new Map<string, number>();
   for (const run of runs) {
-    if (!SKILL_SQUISHY_CONFIG[run.skillName]) continue;
+    if (!SKILL_SQUISHY_CONFIG[run.skillName] && !REP_SKILL_SQUISHY_CONFIG[run.skillName as keyof typeof REP_SKILL_SQUISHY_CONFIG]) continue;
     skillCounts.set(run.skillName, (skillCounts.get(run.skillName) ?? 0) + 1);
   }
 
@@ -108,8 +111,8 @@ export default async function RunsPage({ searchParams }: { searchParams: Promise
           {skillCounts.size > 0 && (
             <div className="flex items-center gap-3 pt-3" role="list" aria-label="Runs by skill">
               {Array.from(skillCounts.entries()).map(([skill, n]) => (
-                <div key={skill} role="listitem" title={`${n} ${skillDisplayName(skill)} run${n === 1 ? "" : "s"}`}>
-                  <SquishySkillBadge skill={skill} size={30} count={n} />
+                <div key={skill} role="listitem" title={`${n} ${anySkillDisplayName(skill)} run${n === 1 ? "" : "s"}`}>
+                  <AnySkillBadge skill={skill} size={30} count={n} />
                 </div>
               ))}
             </div>

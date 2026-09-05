@@ -18,7 +18,9 @@ import {
   Copy,
   SkipForward,
 } from "lucide-react";
-import { skillName, phaseLabel, SKILL_INFO, SKILLS, EXECUTIONS_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, type SkillName } from "@/lib/copy";
+import { phaseLabel, SKILL_INFO, SKILLS, EXECUTIONS_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, type SkillName } from "@/lib/copy";
+import { anySkillDisplayName } from "@/lib/any-skill";
+import { REP_SKILL_IDS, REP_SKILL_MANIFEST } from "@/lib/rep-skill-manifest";
 import { classifyRunError } from "@/lib/error-classification";
 import type { RunSummary } from "@/models/schema";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
@@ -30,7 +32,7 @@ import { useLocalViewState } from "@/lib/use-local-view-state";
 import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
 import { VerboseTime } from "@/components/relative-time";
-import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { AnySkillBadge } from "@/components/any-skill-badge";
 
 interface SkillRun {
   id: string;
@@ -78,13 +80,25 @@ interface ExecutionsChipDef {
   predicate: (run: SkillRun) => boolean;
 }
 
-const MODULE_CHIP_DEFS: ExecutionsChipDef[] = SKILLS.map((skill) => ({
-  id: `module-${skill}`,
-  label: SKILL_INFO[skill].name,
-  section: toolbarCopy.chipSections.module,
-  group: "module",
-  predicate: (run) => run.skillName === skill,
-}));
+const MODULE_CHIP_DEFS: ExecutionsChipDef[] = [
+  ...SKILLS.map((skill) => ({
+    id: `module-${skill}`,
+    label: SKILL_INFO[skill].name,
+    section: toolbarCopy.chipSections.module,
+    group: "module",
+    predicate: (run: SkillRun) => run.skillName === skill,
+  })),
+  // Reputation Manager's 5 skills, same shape — this used to only cover
+  // Showtime's SKILLS, so an RM run had no module chip to filter by at all
+  // on this page (it still showed up under "All", just unfilterable).
+  ...REP_SKILL_IDS.map((skill) => ({
+    id: `module-${skill}`,
+    label: REP_SKILL_MANIFEST[skill].name,
+    section: toolbarCopy.chipSections.module,
+    group: "module",
+    predicate: (run: SkillRun) => run.skillName === skill,
+  })),
+];
 
 const STATUS_ACCOUNT_CHIP_DEFS: ExecutionsChipDef[] = [
   {
@@ -247,7 +261,7 @@ function RunPreview({ run }: { run: SkillRun }) {
         <VerboseTime isoString={run.startedAt} className="text-xs" />
       </div>
       <div className="flex items-center gap-1.5 text-muted-foreground">
-        <span className="font-mono font-bold uppercase tracking-wide text-[11px]">{skillName(run.skillName)}</span>
+        <span className="font-mono font-bold uppercase tracking-wide text-[11px]">{anySkillDisplayName(run.skillName)}</span>
         <span>·</span>
         <div className="flex items-center gap-1">
           <RunStatusIcon status={run.status} />
@@ -367,13 +381,13 @@ function RunRow({
 
       <td className="px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <SquishySkillBadge
+          <AnySkillBadge
             skill={run.skillName}
             size={26}
             paused={!!run.engagementPausedAt}
           />
           <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-            {skillName(run.skillName)}
+            {anySkillDisplayName(run.skillName)}
           </span>
         </div>
         {(run.stepCount ?? 0) > 0 && (
@@ -591,7 +605,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
     const q = search.trim().toLowerCase();
     if (!q) return rangeFiltered;
     return rangeFiltered.filter((r) => {
-      const skillLabel = skillName(r.skillName).toLowerCase();
+      const skillLabel = anySkillDisplayName(r.skillName).toLowerCase();
       return (
         (r.buyerName ?? "").toLowerCase().includes(q) ||
         skillLabel.includes(q) ||
@@ -801,7 +815,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
                   key={skill}
                   className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 bg-zinc-100/70 dark:bg-zinc-900/60 px-1.5 py-0.5 rounded-sm whitespace-nowrap"
                 >
-                  {skillName(skill)} {count}
+                  {anySkillDisplayName(skill)} {count}
                 </span>
               ))}
             </div>

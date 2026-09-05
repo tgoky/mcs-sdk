@@ -32,14 +32,11 @@ export function SkillsNavList({ productIds = ["showtime"] }: { productIds?: Prod
       }));
     }
 
-    // No per-capability hub page exists for these yet (unlike Showtime's
-    // /dashboard/modules/[skill]) — links to the real RM dashboard rather
-    // than a fake per-skill destination or the dead ?skill= param the
-    // dashboard page no longer reads. The #skillId suffix is only there
-    // to keep each entry's href (SidebarNavLinks' React key) unique; it
-    // isn't a real anchor on that page.
+    // Same module hub route Showtime's skills use — /dashboard/modules/[skill]
+    // now checks both catalogs (isSkillId then isRepSkillId), so this no
+    // longer needs its own placeholder destination.
     return REP_SKILL_IDS.map((skillId) => ({
-      href: `/dashboard/reputation-manager#${skillId}`,
+      href: `/dashboard/modules/${skillId}`,
       label: REP_SKILL_MANIFEST[skillId].name,
       icon: <RepSkillBadge skill={skillId} size={18} />,
     }));

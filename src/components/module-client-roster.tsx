@@ -21,7 +21,7 @@ import type { SkillManifestEntry, SkillId } from "@/lib/skill-manifest";
 import type { ModuleClientSummary } from "@/lib/module-overview";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { pauseEngagement, resumeEngagement, copyToClipboard } from "@/lib/quick-actions";
-import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { AnySkillBadge } from "@/components/any-skill-badge";
 import { formatVerboseDate } from "@/components/relative-time";
 import { PinDownModuleView, type SkillRun } from "@/components/pin-down-module-view";
 import { PileOnModuleView } from "@/components/pile-on-module-view";
@@ -36,8 +36,13 @@ const HAS_SKILL_DETAIL_PAGE: Partial<Record<SkillId, true>> = {
   "leak-map": true,
 };
 
-function hrefFor(skill: SkillId, engagementId: string): string {
-  const basePath = HAS_SKILL_DETAIL_PAGE[skill]
+// Reputation Manager's skills have no per-skill detail page (their skill
+// ids aren't in SkillId at all — see rep-skill-manifest.ts) — the lookup
+// below returns undefined for any of them, which is exactly the "fall
+// back to the plain engagement page" behavior this needs, same as any
+// Showtime skill not in the map above.
+function hrefFor(skill: string, engagementId: string): string {
+  const basePath = HAS_SKILL_DETAIL_PAGE[skill as SkillId]
     ? `/dashboard/engagements/${engagementId}/skills/${skill}`
     : `/dashboard/engagements/${engagementId}`;
 
@@ -92,7 +97,7 @@ function StatusBadge({
 
 function buildClientSections(
   client: ModuleClientSummary,
-  skill: SkillId,
+  skill: string,
   dispatch: ReturnType<typeof useQuickActions>["run"],
   closePanel: () => void
 ): ActionPanelSection[] {
@@ -148,8 +153,13 @@ export function ModuleClientRoster({
   runs,
 }: {
   summaries: ModuleClientSummary[];
-  manifest: SkillManifestEntry;
-  skill: SkillId;
+  // Loosened from SkillManifestEntry: the only fields this component (as
+  // opposed to the Showtime-only module views it forwards `manifest` to
+  // untouched, gated on `runs` being present) ever needs are name/description.
+  // Reputation Manager's RepSkillManifestEntry has both; widening this let
+  // one roster serve both catalogs instead of forking the component.
+  manifest: Pick<SkillManifestEntry, "name" | "description">;
+  skill: string;
   runs?: SkillRun[];
 }) {
   const router = useRouter();
@@ -170,7 +180,13 @@ export function ModuleClientRoster({
   // boundary don't survive serialization.
   const activityWithBack = useMemo(() => {
     if (!runs) return null;
-    const props = { runs, manifest, onBack: handleBackToClients };
+    // Cast: this whole branch only runs for one of the 5 Showtime skills
+    // below, which is the only case callers ever pass `runs` for (see
+    // /dashboard/modules/[skill]/page.tsx — Reputation Manager skills
+    // never do) — full SkillManifestEntry is genuinely what these five
+    // module views get at runtime, the narrower prop type above just
+    // widens what THIS component itself requires from its caller.
+    const props = { runs, manifest: manifest as SkillManifestEntry, onBack: handleBackToClients };
     switch (skill) {
       case "pin-down":
         return <PinDownModuleView {...props} />;
@@ -409,7 +425,7 @@ export function ModuleClientRoster({
 
                           <td className="px-4 py-3.5 text-center">
                             <div className="flex justify-center">
-                              <SquishySkillBadge skill={skill} size={24} enabled={client.skillEnabled} />
+                              <AnySkillBadge skill={skill} size={24} enabled={client.skillEnabled} />
                             </div>
                           </td>
 
@@ -532,7 +548,7 @@ export function ModuleClientRoster({
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
-                              <SquishySkillBadge skill={skill} size={24} enabled={c.skillEnabled} />
+                              <AnySkillBadge skill={skill} size={24} enabled={c.skillEnabled} />
                               <div className="min-w-0">
                                 <p className="text-xs font-bold text-zinc-900 dark:text-white group-hover:text-amber-300 transition-colors truncate">
                                   {c.buyerName}

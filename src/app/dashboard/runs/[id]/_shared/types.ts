@@ -214,4 +214,109 @@ export type WinBackDetail = { run: RunDetailBase; enrollment: WinBackEnrollment 
 export type LeakMapDetail = { run: RunDetailBase; audit: AuditRow | null };
 export type PinDownDetail = { run: RunDetailBase };
 
-export type RunDetailPayload = PreCallReadDetail | PileOnDetail | WinBackDetail | LeakMapDetail | PinDownDetail;
+// ── Reputation Manager run-detail shapes ────────────────────────────────
+// Same RunDetailBase `run` field every Showtime detail type above uses —
+// the API route's initial select always pulls the full engagement row
+// regardless of skill, so there's nothing RM-specific about that half.
+// Only the second field (what this particular skill produced) differs
+// per skill, same as Showtime's own PreCallReadDetail/PileOnDetail/etc.
+
+export interface RepEntityLite {
+  name: string;
+  aliases: string[];
+  type: "company" | "brand" | "product" | "service" | "publication";
+  domainsOwned: string[];
+  highPriority: boolean;
+}
+
+export interface RepIdentityGraphRow {
+  id: string;
+  operatorName: string;
+  operatorAliases: string[];
+  soleAuthorityName: string;
+  entities: RepEntityLite[];
+  offerings: { name: string; parentEntityName: string }[];
+  competitors: { name: string; highPriority: boolean }[];
+  collisions: { name: string; whoTheyAre: string; disambiguationNote: string; source: "buyer" | "collision_check" }[];
+  seedPanelPrompts: string[];
+  crisisThresholdOverride: number | null;
+  collisionCheckRunAt: string | null;
+}
+
+export interface RepEngineFindingRow {
+  id: string;
+  engineId: string;
+  promptText: string;
+  responseText: string;
+  sentiment: "positive" | "neutral" | "negative";
+  flagged: boolean;
+  flagReason: string | null;
+  runAt: string;
+}
+
+export interface RepTrustpilotReviewRow {
+  id: string;
+  externalReviewId: string;
+  reviewerName: string | null;
+  rating: number;
+  reviewText: string;
+  publishedAt: string | null;
+  sentiment: "positive" | "neutral" | "negative";
+  flagged: boolean;
+  flagReason: string | null;
+  createdAt: string;
+}
+
+export interface RepRedditMentionRow {
+  id: string;
+  subreddit: string;
+  author: string | null;
+  permalink: string;
+  mentionText: string;
+  publishedAt: string | null;
+  sentiment: "positive" | "neutral" | "negative";
+  flagged: boolean;
+  flagReason: string | null;
+  createdAt: string;
+}
+
+export interface RepIncidentContributingFinding {
+  source: "engine_panel" | "trustpilot" | "reddit" | "anomaly";
+  excerpt: string;
+  flagReason: string | null;
+  reach?: number;
+  sentiment?: number;
+  permanence?: number;
+  compositeScore?: number;
+  signalClass?: string | null;
+}
+
+export interface RepIncidentRow {
+  id: string;
+  severityScore: number;
+  summary: string;
+  contributingFindings: RepIncidentContributingFinding[];
+  signalClass: string | null;
+  status: string;
+  declaredAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+}
+
+export type RepOnboardingDetail = { run: RunDetailBase; identityGraph: RepIdentityGraphRow | null };
+export type RepEnginePanelDetail = { run: RunDetailBase; findings: RepEngineFindingRow[] };
+export type RepTrustpilotWatchDetail = { run: RunDetailBase; reviews: RepTrustpilotReviewRow[] };
+export type RepRedditWatchDetail = { run: RunDetailBase; mentions: RepRedditMentionRow[] };
+export type RepCrisisResponseDetail = { run: RunDetailBase; incident: RepIncidentRow | null };
+
+export type RunDetailPayload =
+  | PreCallReadDetail
+  | PileOnDetail
+  | WinBackDetail
+  | LeakMapDetail
+  | PinDownDetail
+  | RepOnboardingDetail
+  | RepEnginePanelDetail
+  | RepTrustpilotWatchDetail
+  | RepRedditWatchDetail
+  | RepCrisisResponseDetail;

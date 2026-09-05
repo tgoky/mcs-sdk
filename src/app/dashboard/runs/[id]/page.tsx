@@ -26,7 +26,13 @@ import { PileOnView } from "./views/pile-on-view";
 import { PreCallReadView } from "./views/pre-call-read-view";
 import { WinBackView } from "./views/win-back-view";
 import { LeakMapView } from "./views/leak-map-view";
-import { skillName, runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
+import { RepOnboardingView } from "./views/rep-onboarding-view";
+import { RepEnginePanelView } from "./views/rep-engine-panel-view";
+import { RepTrustpilotWatchView } from "./views/rep-trustpilot-watch-view";
+import { RepRedditWatchView } from "./views/rep-reddit-watch-view";
+import { RepCrisisResponseView } from "./views/rep-crisis-response-view";
+import { runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
+import { anySkillDisplayName } from "@/lib/any-skill";
 import { formatDiaryDateTime, formatReadableDuration } from "@/lib/format-datetime";
 import { classifyRunError } from "@/lib/error-classification";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
@@ -107,6 +113,16 @@ function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayloa
       return "enrollment" in detail ? <WinBackView detail={detail} /> : null;
     case "leak-map":
       return "audit" in detail ? <LeakMapView detail={detail} /> : null;
+    case "rep-onboarding":
+      return "identityGraph" in detail ? <RepOnboardingView detail={detail} /> : null;
+    case "rep-engine-panel":
+      return "findings" in detail ? <RepEnginePanelView detail={detail} /> : null;
+    case "rep-trustpilot-watch":
+      return "reviews" in detail ? <RepTrustpilotWatchView detail={detail} /> : null;
+    case "rep-reddit-watch":
+      return "mentions" in detail ? <RepRedditWatchView detail={detail} /> : null;
+    case "rep-crisis-response":
+      return "incident" in detail ? <RepCrisisResponseView detail={detail} /> : null;
     case "pin-down":
     default:
       return <PinDownView detail={detail} />;
@@ -324,7 +340,7 @@ export default function RunDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-3 pb-8 text-zinc-700 dark:text-zinc-300 font-sans">
-      <SetBreadcrumbLabel label={`${skillName(run.skillName)} run`} />
+      <SetBreadcrumbLabel label={`${anySkillDisplayName(run.skillName)} run`} />
 
       {/* 1. COMPACT 1-LINE HEADER */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2.5">
@@ -339,7 +355,7 @@ export default function RunDetailPage() {
           </Link>
 
           <h1 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white truncate">
-            {skillName(run.skillName)}
+            {anySkillDisplayName(run.skillName)}
           </h1>
           <span className="text-xs text-zinc-500 dark:text-zinc-500 hidden sm:inline">
             {run.buyerName ? `(${run.buyerName})` : ""}
