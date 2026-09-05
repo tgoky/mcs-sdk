@@ -31,7 +31,8 @@ import {
   type EngagementStack,
 } from "@/models/schema";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
-import { ACTION_TYPE_LABELS, BLOCKER_TYPE_LABELS, bookingPlatformLabel, skillName as skillDisplayName } from "@/lib/copy";
+import { ACTION_TYPE_LABELS, BLOCKER_TYPE_LABELS, bookingPlatformLabel } from "@/lib/copy";
+import { anySkillDisplayName as skillDisplayName } from "@/lib/any-skill";
 import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
 import { classifyRunError, type StackSection } from "@/lib/error-classification";
 
@@ -390,7 +391,7 @@ export async function getQueueItems(
       source: "blocker",
       category: "action_needed",
       title: BLOCKER_TYPE_LABELS[b.blockerType] ?? b.blockerType,
-      subtitle: b.description || `${b.buyer} · ${b.skillName}`,
+      subtitle: b.description || (b.skillName ? `${b.buyer} · ${skillDisplayName(b.skillName)}` : b.buyer),
       engagementId: b.engagementId,
       buyer: b.buyer,
       // Was hardcoded to null — the real runId was sitting in the DB
