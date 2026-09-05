@@ -1,0 +1,320 @@
+From 4d41c44e63c12e87176f54ad96ff0489a0691729 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 4 Sep 2026 15:54:30 +0000
+Subject: [PATCH 1/2] fix: delete the Counter Claim stub, the actual collision
+ was worse than a name clash
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Went looking for "just delete the stub route" and found the collision
+was already live: PackageTeaserCard (src/components/library/) had its
+own H2 saying "Reputation Manager" — but its href, alt text, and body
+copy all still said "counter-claim", describing RM's real feature set
+(46-prompt AI engine, Schema.org/Wikidata, crisis triggers) under the
+wrong internal name and pointing at the wrong route. It had zero
+importers anywhere in the app — a previous rename attempt that got
+abandoned mid-way and left as dead, self-contradictory code.
+
+Removed every trace of the Counter Claim placeholder (a different,
+unbuilt chargeback/dispute product, not Reputation Manager):
+- Deleted /dashboard/library/counter-claim/page.tsx and the unused
+  PackageTeaserCard component.
+- Removed its entry from copy.ts's WORKSPACE_PRODUCTS (the home page's
+  product picker) — the array now lists Showtime and Reputation Manager,
+  the only two real products.
+- Removed the now-dead "counter-claim" filter in the workspace-creation
+  page and the now-dead counter-claim branch in the home page's
+  PackageBadge (both handled an id nothing installs anymore).
+- Updated home-page.test.tsx's coming-soon test into real coverage for
+  Reputation Manager's own card instead of asserting behavior for a
+  product no longer in the list.
+- Genericized two comments (schema.ts, workspace.ts) that used
+  "counter-claim" as their example id.
+
+Left alone: landing-wrapper.tsx's public marketing nav still has a
+"Counter Claim" hover-menu item. It's decorative only (no link, no real
+content — the dropdown lists generic sales-automation copy unrelated to
+either product) on the pre-login marketing page, not a functional
+collision — renaming or removing that copy is a marketing-content call,
+not a code cleanup one, so flagging it rather than changing it myself.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_016ctkFwrbNbZjKR8asGq6VG
+---
+ .../dashboard/library/counter-claim/page.tsx  | 40 ----------
+ src/app/home/new/page.tsx                     |  8 +-
+ src/app/home/workspace-home-client.tsx        |  9 +--
+ .../library/package-teaser-card.tsx           | 78 -------------------
+ src/lib/copy.ts                               |  8 --
+ src/lib/workspace.ts                          |  4 +-
+ src/models/schema.ts                          |  7 +-
+ tests/unit/home-page.test.tsx                 | 10 +--
+ 8 files changed, 14 insertions(+), 150 deletions(-)
+ delete mode 100644 src/app/dashboard/library/counter-claim/page.tsx
+ delete mode 100644 src/components/library/package-teaser-card.tsx
+
+diff --git a/src/app/dashboard/library/counter-claim/page.tsx b/src/app/dashboard/library/counter-claim/page.tsx
+deleted file mode 100644
+index 010c0fb..0000000
+--- a/src/app/dashboard/library/counter-claim/page.tsx
++++ /dev/null
+@@ -1,40 +0,0 @@
+-import { BackLink } from "@/components/back-link";
+-import { Lock, Gavel } from "lucide-react";
+-
+-export const dynamic = "force-dynamic";
+-
+-export default function CounterClaimPackagePage() {
+-  return (
+-    <div className="w-full max-w-3xl space-y-8 px-6 py-6 font-sans">
+-      <BackLink href="/dashboard/library" label="Library" />
+-
+-      <div className="flex items-start gap-4">
+-        <div className="shrink-0 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-900 dark:bg-zinc-800/80 border border-zinc-800">
+-          <Gavel className="w-7 h-7 text-zinc-400" />
+-        </div>
+-        <div className="min-w-0 pt-1">
+-          <div className="flex items-center gap-2 flex-wrap">
+-            <h1 className="text-xl font-bold text-zinc-200">Counter Claim</h1>
+-            <span className="inline-flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+-              Coming soon
+-            </span>
+-          </div>
+-          <p className="text-sm text-zinc-500 mt-1 leading-relaxed max-w-xl">
+-            Chargeback and dispute-response automation. This is a separate future product and is not Reputation Manager.
+-          </p>
+-          <p className="text-[11px] font-mono text-zinc-600 mt-1">By Mudd Labs · v1.0.2</p>
+-        </div>
+-      </div>
+-
+-      <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/20 p-5 sm:p-6 space-y-4">
+-        <div className="flex items-center gap-2 text-xs font-mono text-zinc-500">
+-          <Lock size={13} />
+-          Not available in this workspace yet
+-        </div>
+-        <div className="space-y-4">
+-          <p className="text-sm text-zinc-500 leading-relaxed">Evidence packs and dispute alerts will live here when Counter Claim is ready to install.</p>
+-        </div>
+-      </div>
+-    </div>
+-  );
+-}
+diff --git a/src/app/home/new/page.tsx b/src/app/home/new/page.tsx
+index 270face..7110dce 100644
+--- a/src/app/home/new/page.tsx
++++ b/src/app/home/new/page.tsx
+@@ -50,12 +50,8 @@ export default function NewWorkspacePage({
+   const resolvedParams = use(searchParams);
+   const error = resolvedParams?.error;
+ 
+-  const filteredProducts = WORKSPACE_PRODUCTS.filter(
+-    (product) => product.id !== "counter-claim"
+-  );
+-
+   const [selectedPackages, setSelectedPackages] = useState<string[]>(() =>
+-    filteredProducts
++    WORKSPACE_PRODUCTS
+       .filter((p) => p.status === "available")
+       .map((p) => p.id)
+   );
+@@ -130,7 +126,7 @@ export default function NewWorkspacePage({
+             </label>
+ 
+             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+-              {filteredProducts.map((product) => {
++              {WORKSPACE_PRODUCTS.map((product) => {
+                 const installable = product.status === "available";
+                 const isSelected = selectedPackages.includes(product.id);
+ 
+diff --git a/src/app/home/workspace-home-client.tsx b/src/app/home/workspace-home-client.tsx
+index f4f96f6..19e35aa 100644
+--- a/src/app/home/workspace-home-client.tsx
++++ b/src/app/home/workspace-home-client.tsx
+@@ -2,7 +2,7 @@
+ 
+ import { useState } from "react";
+ import Link from "next/link";
+-import { Plus, ArrowRight, LayoutGrid, List, Gavel } from "lucide-react";
++import { Plus, ArrowRight, LayoutGrid, List } from "lucide-react";
+ import { HOME_COPY, WORKSPACE_PRODUCTS } from "@/lib/copy";
+ import type { Workspace } from "@/lib/workspace";
+ import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+@@ -52,13 +52,6 @@ function SegmentedBarLoader({ count = 8 }: { count?: number }) {
+ }
+ 
+ function PackageBadge({ packageId }: { packageId: string }) {
+-  if (packageId === "counter-claim") {
+-    return (
+-      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-none">
+-        <Gavel size={11} className="stroke-[2.5px]" />
+-      </div>
+-    );
+-  }
+   return (
+     <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-none">
+       <LayoutGrid size={11} className="stroke-[2.5px]" />
+diff --git a/src/components/library/package-teaser-card.tsx b/src/components/library/package-teaser-card.tsx
+deleted file mode 100644
+index 9d40033..0000000
+--- a/src/components/library/package-teaser-card.tsx
++++ /dev/null
+@@ -1,78 +0,0 @@
+-import Link from "next/link";
+-import { Lock, FileWarning, Bell, ShieldCheck, ArrowRight, Brain, Database, MessageSquare, Radar } from "lucide-react";
+-
+-export function PackageTeaserCard() {
+-  return (
+-    <Link
+-      href="/dashboard/library/counter-claim"
+-      className="group relative flex flex-col justify-between rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900/20 backdrop-blur-md p-6 transition-all duration-200 hover:border-zinc-400 dark:hover:border-zinc-700 shadow-sm hover:shadow-md"
+-    >
+-      <div className="space-y-5">
+-        <div className="flex items-start justify-between gap-4">
+-          <div className="flex items-center gap-4 min-w-0">
+-            <img
+-              src="/images/repm.png"
+-              alt="Counter Claim"
+-              className="w-20 h-20 shrink-0 object-contain group-hover:scale-105 transition-transform"
+-            />
+-            <div className="min-w-0">
+-              <div className="flex items-center gap-2">
+-                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-200 truncate">
+-                  Reputation Manager
+-                </h2>
+-              </div>
+-              <p className="text-[11px] font-mono text-zinc-500 mt-0.5">By Mudd Labs</p>
+-            </div>
+-          </div>
+-
+-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700/60 shrink-0">
+-            <Lock size={11} /> Coming Soon
+-          </span>
+-        </div>
+-
+-        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+-          9-skill counter-claim pack with AI panel, Trustpilot/Reddit monitoring, Schema.org markup, and crisis playbook.
+-        </p>
+-
+-        <div className="space-y-2 py-1">
+-          <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block">
+-            Planned Capabilities
+-          </span>
+-          <div className="space-y-2 text-xs text-zinc-600 dark:text-zinc-400 font-sans">
+-            <div className="flex items-center gap-2">
+-              <Brain size={13} className="text-zinc-400 shrink-0" />
+-              <span>46-prompt AI engine </span>
+-            </div>
+-            <div className="flex items-center gap-2">
+-              <Database size={13} className="text-zinc-400 shrink-0" />
+-              <span>Schema.org JSON-LD + Wikidata disambiguation</span>
+-            </div>
+-            <div className="flex items-center gap-2">
+-              <Bell size={13} className="text-zinc-400 shrink-0" />
+-              <span>7am/7pm scheduled runs with ntfy.sh + Twilio alerts</span>
+-            </div>
+-            <div className="flex items-center gap-2">
+-              <ShieldCheck size={13} className="text-zinc-400 shrink-0" />
+-              <span>Threshold-80 crisis trigger + 6 force-trigger classes</span>
+-            </div>
+-            <div className="flex items-center gap-2">
+-              <MessageSquare size={13} className="text-zinc-400 shrink-0" />
+-              <span>Trustpilot & Reddit ingestion (read-only + comment ramp)</span>
+-            </div>
+-            <div className="flex items-center gap-2">
+-              <Radar size={13} className="text-zinc-400 shrink-0" />
+-              <span>Buyer-only authority to declare/publish responses</span>
+-            </div>
+-          </div>
+-        </div>
+-      </div>
+-
+-      <div className="mt-6 pt-3.5 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs font-mono text-zinc-400">
+-        <span>Reputation Manager Workers </span>
+-        <span className="inline-flex items-center gap-1 group-hover:text-zinc-900 dark:group-hover:text-zinc-200 transition-colors">
+-          View Teaser <ArrowRight size={12} />
+-        </span>
+-      </div>
+-    </Link>
+-  );
+-}
+\ No newline at end of file
+diff --git a/src/lib/copy.ts b/src/lib/copy.ts
+index 20537e8..df2da9a 100644
+--- a/src/lib/copy.ts
++++ b/src/lib/copy.ts
+@@ -625,14 +625,6 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
+     href: "/dashboard",
+     status: "available",
+   },
+-  {
+-    id: "counter-claim",
+-    name: "Counter Claim",
+-    description:
+-      "Automated dispute responses for chargebacks — evidence packs and alerts generated as disputes come in.",
+-    href: "/dashboard/counter-claim",
+-    status: "coming_soon",
+-  },
+   {
+     id: "reputation-manager",
+     name: "Reputation Manager",
+diff --git a/src/lib/workspace.ts b/src/lib/workspace.ts
+index c77d98c..2271a8d 100644
+--- a/src/lib/workspace.ts
++++ b/src/lib/workspace.ts
+@@ -178,8 +178,8 @@ export async function getOwnedWorkspace(whopUserId: string, workspaceId: string)
+  * zero, scoped by workspace_id on every engagement created inside it from
+  * here on. `packageIds` comes straight off the creation form's checkboxes;
+  * only ids that are actually installable today (see copy.ts's
+- * WORKSPACE_PRODUCTS) are trusted, so a tampered or leftover "counter-claim"
+- * value is silently dropped rather than installed as if it were real.
++ * WORKSPACE_PRODUCTS) are trusted, so a tampered or stale "coming_soon"
++ * product id is silently dropped rather than installed as if it were real.
+  */
+ export async function createWorkspace(
+   whopUserId: string,
+diff --git a/src/models/schema.ts b/src/models/schema.ts
+index d1ad821..58e75bd 100644
+--- a/src/models/schema.ts
++++ b/src/models/schema.ts
+@@ -531,9 +531,10 @@ export const workspaces = pgTable("workspaces", {
+ 
+ // Which skill packages (see copy.ts's WORKSPACE_PRODUCTS) are installed in
+ // a given workspace — chosen from the library-kit step of workspace
+-// creation, or later from /dashboard/library. "showtime" is the only real
+-// package today; the table exists so future packages (counter-claim, etc.)
+-// slot in without another migration.
++// creation, or later from /dashboard/library. "showtime" and
++// "reputation-manager" are the two real packages today; the table's
++// free-text packageId means a third product slots in without another
++// migration.
+ export const workspacePackages = pgTable(
+   "workspace_packages",
+   {
+diff --git a/tests/unit/home-page.test.tsx b/tests/unit/home-page.test.tsx
+index b6cbe7d..18b1163 100644
+--- a/tests/unit/home-page.test.tsx
++++ b/tests/unit/home-page.test.tsx
+@@ -36,14 +36,14 @@ describe("WorkspaceHomePage", () => {
+     expect(screen.getByRole("button", { name: /Open Showtime/ })).not.toBeDisabled();
+   });
+ 
+-  it("shows Counter Claim as coming soon and not clickable", async () => {
++  it("shows Reputation Manager as available and links it to /dashboard/reputation-manager", async () => {
+     vi.mocked(getSession).mockResolvedValue({ email: "sarah@acme.com" } as any);
+     await renderHomePage();
+ 
+-    const heading = screen.getByRole("heading", { name: "Counter Claim" });
+-    // Not wrapped in a link — the coming-soon card is inert.
+-    expect(heading.closest("a")).toBeNull();
+-    expect(screen.getByRole("button", { name: "Coming soon" })).toBeDisabled();
++    const heading = screen.getByRole("heading", { name: "Reputation Manager" });
++    const card = heading.closest("a");
++    expect(card).toHaveAttribute("href", "/dashboard/reputation-manager");
++    expect(screen.getByRole("button", { name: /Open Reputation Manager/ })).not.toBeDisabled();
+   });
+ 
+   it("provides a sign-out link", async () => {
+-- 
+2.43.0
+
