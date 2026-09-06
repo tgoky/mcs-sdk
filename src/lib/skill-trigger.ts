@@ -14,6 +14,7 @@ import { startRun, failRun } from "@/lib/run-log";
 import { inngest, skillRunExecute } from "@/lib/inngest";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { SKILL_REGISTRY } from "@/lib/skill-registry";
+import { isRepSkillId } from "@/lib/rep-skill-manifest";
 import crypto from "crypto";
 
 export type TriggerSkillRunResult =
@@ -87,6 +88,20 @@ export async function triggerSkillRunForEngagement(
       ok: false,
       status: 422,
       error: "This module fires automatically on bookings. Send a test event from your booking platform to trigger it.",
+    };
+  }
+  // Reputation Manager's 5 watch skills have no manual trigger anywhere in
+  // the app, dashboard or chat — same honest disclosure the Teammates chat
+  // system prompt already gives, not a WorkersPanel-specific gap. Without
+  // this case, clicking "Run" on one of these fell through to the generic
+  // "Unknown skill" error below, which is technically correct but doesn't
+  // explain why — this worker was never dispatchable this way, unlike an
+  // actually-unrecognized id.
+  if (isRepSkillId(skillName)) {
+    return {
+      ok: false,
+      status: 422,
+      error: "This runs automatically on its own schedule once Identity Setup is complete — there's no manual run yet.",
     };
   }
   return { ok: false, status: 400, error: `Unknown skill: ${skillName}` };
