@@ -24,7 +24,9 @@ import {
   UserCheck,
   CalendarClock,
 } from "lucide-react";
-import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, skillName as skillDisplayName, SKILLS } from "@/lib/copy";
+import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, SKILLS } from "@/lib/copy";
+import { anySkillDisplayName as skillDisplayName } from "@/lib/any-skill";
+import { REP_SKILL_IDS } from "@/lib/rep-skill-manifest";
 import type { StackSection } from "@/lib/error-classification";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
@@ -1198,7 +1200,7 @@ export function QueuePanel({
 
   const skillTargetLabels: Record<string, string> = {
     all: "Any Skill",
-    ...Object.fromEntries(SKILLS.map((id) => [id, skillDisplayName(id)])),
+    ...Object.fromEntries([...SKILLS, ...REP_SKILL_IDS].map((id) => [id, skillDisplayName(id)])),
   };
 
   const categoryTargetLabels: Record<string, string> = {

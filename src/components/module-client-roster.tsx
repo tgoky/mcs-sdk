@@ -74,7 +74,9 @@ const TONE_COLOR: Record<"success" | "danger" | "warning" | "neutral", string> =
   success: "bg-emerald-500",
   warning: "bg-amber-500",
   danger: "bg-rose-500",
-  neutral: "bg-zinc-400 dark:bg-zinc-600",
+  // "Not run yet" — genuinely neutral, but neutral doesn't mean gray here;
+  // matches StatusSwatch's own not_run color for the same reasoning.
+  neutral: "bg-violet-400",
 };
 
 function StatusBadge({

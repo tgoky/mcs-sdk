@@ -65,13 +65,13 @@ export function skillName(raw: string | null | undefined): string {
 export type ModuleStatus = "live" | "running" | "failed" | "not_run" | "paused";
 
 export const MODULE_STATUS_LABELS: Record<ModuleStatus, string> = {
-  live: "Running fine",
+  live: "Healthy",
   running: "In progress",
   failed: "Needs attention",
   not_run: "Not started yet",
   // Distinct from "disabled": the skill itself is still turned ON, it's the
   // whole client/engagement that's on hold, so nothing will actually fire.
-  paused: "Automation paused",
+  paused: "Paused",
 };
 
 // ---------------------------------------------------------------------------

@@ -11,7 +11,7 @@ export function SwatchLabel({ colorClass, label }: { colorClass: string; label: 
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className={`w-2 h-2 rounded-[2.5px] shrink-0 ${colorClass}`} aria-hidden="true" />
-      <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+      <span className="text-[10px] font-mono font-bold text-zinc-600 dark:text-zinc-400">
         {label}
       </span>
     </span>

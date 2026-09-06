@@ -92,7 +92,7 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
           <span>Capabilities</span>
         </div>
 
-        <SkillsNavList productIds={installedProductIds} />
+        <SkillsNavList productIds={installedProductIds} layout="grid" />
       </div>
     </div>
   );

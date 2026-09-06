@@ -14,9 +14,13 @@ const SWATCH_COLOR: Record<ModuleStatus | "disabled", string> = {
   live: "bg-emerald-500",
   running: "bg-sky-500",
   failed: "bg-rose-500",
-  not_run: "bg-zinc-400 dark:bg-zinc-600",
+  // Every status gets a real, distinct color — no gray. "Not started yet"
+  // and "Turned off" are both genuinely neutral outcomes (neither good nor
+  // bad), but "neutral" doesn't have to mean "colorless" — violet and pink
+  // read as clearly their own category without implying success or failure.
+  not_run: "bg-violet-400",
   paused: "bg-amber-500",
-  disabled: "bg-zinc-300 dark:bg-zinc-700",
+  disabled: "bg-pink-400",
 };
 
 const SWATCH_LABEL: Record<ModuleStatus | "disabled", string> = {
