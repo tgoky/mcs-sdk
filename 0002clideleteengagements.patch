@@ -1,0 +1,133 @@
+From 86bfe964db5ce5d8196b05d1175f4bee034b97c0 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 6 Sep 2026 21:26:45 +0000
+Subject: [PATCH] feat: add CLI batch-delete for engagements
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Command-line equivalent of the existing per-engagement "Delete client"
+UI action, for clearing out test/scratch engagements in bulk before
+running the workspace split. Same soft-delete semantics as the DELETE
+/api/engagements/[id] route (sets deletedAt + pausedAt, never a hard
+delete) — dry-run by default, --yes required to actually write.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01RyH3xjJh5mTzvTxG4Rpbpi
+---
+ scripts/delete-engagements.ts | 103 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 103 insertions(+)
+ create mode 100644 scripts/delete-engagements.ts
+
+diff --git a/scripts/delete-engagements.ts b/scripts/delete-engagements.ts
+new file mode 100644
+index 0000000..11aee84
+--- /dev/null
++++ b/scripts/delete-engagements.ts
+@@ -0,0 +1,103 @@
++// scripts/delete-engagements.ts
++//
++// Command-line equivalent of the "Delete client" section on an
++// engagement's own page (src/app/dashboard/engagements/[id]/delete-
++// client-section.tsx → DELETE /api/engagements/[id]/route.ts) — same
++// soft-delete, just batched instead of clicking through confirmation on
++// each one individually. Sets deletedAt + pausedAt (pausedReason:
++// "Deleted"), exactly like that route does: hides the engagement from
++// every list and stops every cron/poller from touching it, without
++// destroying any row. Nothing is ever hard-deleted by this script.
++//
++// Dry-run by default — prints each engagement's buyer name and current
++// status so you can eyeball it before anything happens. Add --yes to
++// actually write.
++//
++// Usage:
++//   npx tsx scripts/delete-engagements.ts eng_mtesting_msowkkut eng_m4_msoxeipc
++//   npx tsx scripts/delete-engagements.ts eng_mtesting_msowkkut eng_m4_msoxeipc --yes
++//
++// Requires DIRECT_URL (or DATABASE_URL as a fallback) in .env.
++
++import * as dotenv from "dotenv";
++dotenv.config({ path: ".env" });
++
++import postgres from "postgres";
++import { drizzle } from "drizzle-orm/postgres-js";
++import { inArray } from "drizzle-orm";
++import { engagements } from "../src/models/schema";
++
++const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
++if (!connectionString) {
++  console.error("Error: neither DIRECT_URL nor DATABASE_URL is set in your .env file.");
++  process.exit(1);
++}
++
++const args = process.argv.slice(2);
++const CONFIRM = args.includes("--yes");
++const engagementIds = args.filter((a) => a !== "--yes");
++
++if (engagementIds.length === 0) {
++  console.error("Usage: npx tsx scripts/delete-engagements.ts <engagementId> [<engagementId> ...] [--yes]");
++  process.exit(1);
++}
++
++const client = postgres(connectionString, { max: 1, prepare: false });
++const db = drizzle(client);
++
++async function main() {
++  try {
++    const rows = await db
++      .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, deletedAt: engagements.deletedAt })
++      .from(engagements)
++      .where(inArray(engagements.engagementId, engagementIds));
++
++    const found = new Map(rows.map((r) => [r.engagementId, r]));
++    const missing = engagementIds.filter((id) => !found.has(id));
++    if (missing.length > 0) {
++      console.warn(`Not found, skipping: ${missing.join(", ")}`);
++    }
++
++    const alreadyDeleted = rows.filter((r) => r.deletedAt);
++    const toDelete = rows.filter((r) => !r.deletedAt);
++
++    if (alreadyDeleted.length > 0) {
++      console.log(`Already deleted, skipping: ${alreadyDeleted.map((r) => `${r.buyer} (${r.engagementId})`).join(", ")}`);
++    }
++
++    if (toDelete.length === 0) {
++      console.log("Nothing to delete.");
++      return;
++    }
++
++    console.log(CONFIRM ? "\nDeleting (soft-delete: sets deletedAt + pausedAt):" : "\nDRY RUN — would soft-delete (pass --yes to actually do it):");
++    for (const row of toDelete) {
++      console.log(`  - ${row.buyer}  (${row.engagementId})`);
++    }
++
++    if (!CONFIRM) {
++      console.log("\nNothing has been changed. Re-run with --yes once this list looks right.");
++      return;
++    }
++
++    const now = new Date();
++    await db
++      .update(engagements)
++      .set({ deletedAt: now, pausedAt: now, pausedReason: "Deleted", updatedAt: now })
++      .where(
++        inArray(
++          engagements.engagementId,
++          toDelete.map((r) => r.engagementId)
++        )
++      );
++
++    console.log(`\nDeleted ${toDelete.length} engagement(s).`);
++  } finally {
++    await client.end();
++  }
++}
++
++main().catch((error) => {
++  console.error("Delete failed:", error);
++  process.exit(1);
++});
+-- 
+2.43.0
+

@@ -1,0 +1,5642 @@
+From ab9592ef91fb66791ad577a10f524cd88ff8db2e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 6 Sep 2026 21:06:01 +0000
+Subject: [PATCH] feat: lay foundation for one-workspace-one-client worker
+ architecture
+
+Phase 1 of the client-workspace/worker restructure: audit and split
+tooling to enforce one live engagement per workspace (dry-run by
+default, guarded behind --execute), a unified worker registry merging
+Showtime's and Reputation Manager's separate skill manifests into one
+catalog for future Library/enablement UI to iterate, and an explicit
+enabledAt column + evidence-based resolver so "enabled" has one
+unambiguous meaning per client without touching the existing
+dispatch-gating convention any cron/poller already relies on. The
+combined Work sidebar's Capabilities grid now shows only a client's
+actually-enabled workers instead of the full catalog.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01RyH3xjJh5mTzvTxG4Rpbpi
+---
+ ...35_add_enabled_at_to_engagement_skills.sql |    1 +
+ drizzle/migrations/meta/0035_snapshot.json    | 4553 +++++++++++++++++
+ drizzle/migrations/meta/_journal.json         |    7 +
+ scripts/audit-multi-engagement-workspaces.ts  |  241 +
+ scripts/split-multi-engagement-workspaces.ts  |  290 ++
+ src/app/dashboard/work-sidebar.tsx            |   25 +-
+ src/components/skills-nav-list.tsx            |   27 +-
+ src/lib/engagement-skills.ts                  |   86 +-
+ src/lib/worker-registry.ts                    |  173 +
+ src/lib/workspace.ts                          |   25 +
+ src/models/schema.ts                          |   17 +
+ 11 files changed, 5435 insertions(+), 10 deletions(-)
+ create mode 100644 drizzle/migrations/0035_add_enabled_at_to_engagement_skills.sql
+ create mode 100644 drizzle/migrations/meta/0035_snapshot.json
+ create mode 100644 scripts/audit-multi-engagement-workspaces.ts
+ create mode 100644 scripts/split-multi-engagement-workspaces.ts
+ create mode 100644 src/lib/worker-registry.ts
+
+diff --git a/drizzle/migrations/0035_add_enabled_at_to_engagement_skills.sql b/drizzle/migrations/0035_add_enabled_at_to_engagement_skills.sql
+new file mode 100644
+index 0000000..ffe8d93
+--- /dev/null
++++ b/drizzle/migrations/0035_add_enabled_at_to_engagement_skills.sql
+@@ -0,0 +1 @@
++ALTER TABLE "engagement_skills" ADD COLUMN "enabled_at" timestamp;
+\ No newline at end of file
+diff --git a/drizzle/migrations/meta/0035_snapshot.json b/drizzle/migrations/meta/0035_snapshot.json
+new file mode 100644
+index 0000000..9febb94
+--- /dev/null
++++ b/drizzle/migrations/meta/0035_snapshot.json
+@@ -0,0 +1,4553 @@
++{
++  "id": "640312d9-7826-4395-a07e-7d83d96c80ce",
++  "prevId": "35d2773f-5ebf-4031-abc5-8e694edba2c1",
++  "version": "7",
++  "dialect": "postgresql",
++  "tables": {
++    "public.active_alerts": {
++      "name": "active_alerts",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "metric_name": {
++          "name": "metric_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "threshold": {
++          "name": "threshold",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "comparison": {
++          "name": "comparison",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "evaluation_period": {
++          "name": "evaluation_period",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "severity": {
++          "name": "severity",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "source": {
++          "name": "source",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "last_fired_at": {
++          "name": "last_fired_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "active_alerts_engagement_id_engagements_engagement_id_fk": {
++          "name": "active_alerts_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "active_alerts",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.artifacts": {
++      "name": "artifacts",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "skill_name": {
++          "name": "skill_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "artifact_type": {
++          "name": "artifact_type",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "storage_path": {
++          "name": "storage_path",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "owner": {
++          "name": "owner",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'mudd_ventures'"
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "artifacts_engagement_id_engagements_engagement_id_fk": {
++          "name": "artifacts_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "artifacts",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.audit_runs_log": {
++      "name": "audit_runs_log",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "run_type": {
++          "name": "run_type",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "run_id": {
++          "name": "run_id",
++          "type": "uuid",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "top_issues": {
++          "name": "top_issues",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "alerts_fired": {
++          "name": "alerts_fired",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "gaps": {
++          "name": "gaps",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "report_markdown": {
++          "name": "report_markdown",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "audit_runs_log_engagement_id_engagements_engagement_id_fk": {
++          "name": "audit_runs_log_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "audit_runs_log",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.booking_roster": {
++      "name": "booking_roster",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "external_call_id": {
++          "name": "external_call_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "prospect_name": {
++          "name": "prospect_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "prospect_email": {
++          "name": "prospect_email",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "prospect_phone": {
++          "name": "prospect_phone",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "call_time": {
++          "name": "call_time",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "call_end_time": {
++          "name": "call_end_time",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "meeting_url": {
++          "name": "meeting_url",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "booking_platform": {
++          "name": "booking_platform",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "status": {
++          "name": "status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'scheduled'"
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "booking_roster_engagement_call_uidx": {
++          "name": "booking_roster_engagement_call_uidx",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "external_call_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": true,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        },
++        "booking_roster_engagement_call_time_idx": {
++          "name": "booking_roster_engagement_call_time_idx",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "call_time",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": false,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "booking_roster_engagement_id_engagements_engagement_id_fk": {
++          "name": "booking_roster_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "booking_roster",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.brief_outcome_log": {
++      "name": "brief_outcome_log",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "booking_id": {
++          "name": "booking_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "prospect_email": {
++          "name": "prospect_email",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "outcome": {
++          "name": "outcome",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "logged_by_slack_user_id": {
++          "name": "logged_by_slack_user_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "source": {
++          "name": "source",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "logged_at": {
++          "name": "logged_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "brief_outcome_log_engagement_id_engagements_engagement_id_fk": {
++          "name": "brief_outcome_log_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "brief_outcome_log",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.briefed_calls_log": {
++      "name": "briefed_calls_log",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "call_id": {
++          "name": "call_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "run_id": {
++          "name": "run_id",
++          "type": "uuid",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "call_time": {
++          "name": "call_time",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "call_end_time": {
++          "name": "call_end_time",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "prospect_name": {
++          "name": "prospect_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "prospect_email": {
++          "name": "prospect_email",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "prospect_phone": {
++          "name": "prospect_phone",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "brief_delivered_at": {
++          "name": "brief_delivered_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "destination_delivered": {
++          "name": "destination_delivered",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "person_match_score": {
++          "name": "person_match_score",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "brief_text": {
++          "name": "brief_text",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "research_status": {
++          "name": "research_status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "ai_synthesis_status": {
++          "name": "ai_synthesis_status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "briefed_calls_log_engagement_call_time_idx": {
++          "name": "briefed_calls_log_engagement_call_time_idx",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "call_time",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": false,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "briefed_calls_log_engagement_id_engagements_engagement_id_fk": {
++          "name": "briefed_calls_log_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "briefed_calls_log",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {
++        "briefed_calls_log_call_id_unique": {
++          "name": "briefed_calls_log_call_id_unique",
++          "nullsNotDistinct": false,
++          "columns": [
++            "call_id"
++          ]
++        }
++      },
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.canary_runs": {
++      "name": "canary_runs",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "platform": {
++          "name": "platform",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "adapter_method": {
++          "name": "adapter_method",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "status": {
++          "name": "status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "detail": {
++          "name": "detail",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "latency_ms": {
++          "name": "latency_ms",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "run_at": {
++          "name": "run_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {},
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.chat_messages": {
++      "name": "chat_messages",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "thread_id": {
++          "name": "thread_id",
++          "type": "uuid",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "role": {
++          "name": "role",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "kind": {
++          "name": "kind",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'text'"
++        },
++        "raw_content": {
++          "name": "raw_content",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "display_text": {
++          "name": "display_text",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "tool_calls": {
++          "name": "tool_calls",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "links": {
++          "name": "links",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "chat_messages_thread_created_idx": {
++          "name": "chat_messages_thread_created_idx",
++          "columns": [
++            {
++              "expression": "thread_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "created_at",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": false,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "chat_messages_thread_id_chat_threads_id_fk": {
++          "name": "chat_messages_thread_id_chat_threads_id_fk",
++          "tableFrom": "chat_messages",
++          "tableTo": "chat_threads",
++          "columnsFrom": [
++            "thread_id"
++          ],
++          "columnsTo": [
++            "id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.chat_threads": {
++      "name": "chat_threads",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "workspace_id": {
++          "name": "workspace_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "whop_user_id": {
++          "name": "whop_user_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "title": {
++          "name": "title",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "last_message_at": {
++          "name": "last_message_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "chat_threads_workspace_last_message_idx": {
++          "name": "chat_threads_workspace_last_message_idx",
++          "columns": [
++            {
++              "expression": "workspace_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "last_message_at",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": false,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "chat_threads_workspace_id_workspaces_workspace_id_fk": {
++          "name": "chat_threads_workspace_id_workspaces_workspace_id_fk",
++          "tableFrom": "chat_threads",
++          "tableTo": "workspaces",
++          "columnsFrom": [
++            "workspace_id"
++          ],
++          "columnsTo": [
++            "workspace_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        },
++        "chat_threads_engagement_id_engagements_engagement_id_fk": {
++          "name": "chat_threads_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "chat_threads",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.client_report_notes": {
++      "name": "client_report_notes",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "period": {
++          "name": "period",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "period_key": {
++          "name": "period_key",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "notes_text": {
++          "name": "notes_text",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "metrics_snapshot": {
++          "name": "metrics_snapshot",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "generated_at": {
++          "name": "generated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "client_report_notes_engagement_period_uidx": {
++          "name": "client_report_notes_engagement_period_uidx",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "period",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "period_key",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": true,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "client_report_notes_engagement_id_engagements_engagement_id_fk": {
++          "name": "client_report_notes_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "client_report_notes",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.conversation_intelligence_sessions": {
++      "name": "conversation_intelligence_sessions",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "booking_id": {
++          "name": "booking_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "recall_bot_id": {
++          "name": "recall_bot_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "meeting_url": {
++          "name": "meeting_url",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "status": {
++          "name": "status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'scheduled'"
++        },
++        "sub_code": {
++          "name": "sub_code",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "transcript_id": {
++          "name": "transcript_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "extracted_objections": {
++          "name": "extracted_objections",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "extraction_summary": {
++          "name": "extraction_summary",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "completed_at": {
++          "name": "completed_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "conversation_intelligence_sessions_engagement_id_engagements_engagement_id_fk": {
++          "name": "conversation_intelligence_sessions_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "conversation_intelligence_sessions",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.credential_vault": {
++      "name": "credential_vault",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "whop_user_id": {
++          "name": "whop_user_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "workspace_id": {
++          "name": "workspace_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "provider": {
++          "name": "provider",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "label": {
++          "name": "label",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "ref_key": {
++          "name": "ref_key",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "encrypted_value": {
++          "name": "encrypted_value",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "iv": {
++          "name": "iv",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "key_version": {
++          "name": "key_version",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": true,
++          "default": 1
++        },
++        "health_status": {
++          "name": "health_status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'unknown'"
++        },
++        "last_checked_at": {
++          "name": "last_checked_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "last_check_error": {
++          "name": "last_check_error",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "credential_vault_workspace_id_workspaces_workspace_id_fk": {
++          "name": "credential_vault_workspace_id_workspaces_workspace_id_fk",
++          "tableFrom": "credential_vault",
++          "tableTo": "workspaces",
++          "columnsFrom": [
++            "workspace_id"
++          ],
++          "columnsTo": [
++            "workspace_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.credentials_refs": {
++      "name": "credentials_refs",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "provider": {
++          "name": "provider",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "ref_key": {
++          "name": "ref_key",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "encrypted_value": {
++          "name": "encrypted_value",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "iv": {
++          "name": "iv",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "vault_id": {
++          "name": "vault_id",
++          "type": "uuid",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "key_version": {
++          "name": "key_version",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": true,
++          "default": 1
++        },
++        "health_status": {
++          "name": "health_status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'unknown'"
++        },
++        "last_checked_at": {
++          "name": "last_checked_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "last_check_error": {
++          "name": "last_check_error",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "credentials_refs_engagement_id_engagements_engagement_id_fk": {
++          "name": "credentials_refs_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "credentials_refs",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        },
++        "credentials_refs_vault_id_credential_vault_id_fk": {
++          "name": "credentials_refs_vault_id_credential_vault_id_fk",
++          "tableFrom": "credentials_refs",
++          "tableTo": "credential_vault",
++          "columnsFrom": [
++            "vault_id"
++          ],
++          "columnsTo": [
++            "id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.engagement_drafts": {
++      "name": "engagement_drafts",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "whop_user_id": {
++          "name": "whop_user_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "step": {
++          "name": "step",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'offer'"
++        },
++        "form_data": {
++          "name": "form_data",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'{}'::jsonb"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {},
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {
++        "engagement_drafts_whop_user_id_unique": {
++          "name": "engagement_drafts_whop_user_id_unique",
++          "nullsNotDistinct": false,
++          "columns": [
++            "whop_user_id"
++          ]
++        }
++      },
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.engagement_skills": {
++      "name": "engagement_skills",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "skill_id": {
++          "name": "skill_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "enabled": {
++          "name": "enabled",
++          "type": "boolean",
++          "primaryKey": false,
++          "notNull": true,
++          "default": true
++        },
++        "config": {
++          "name": "config",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "enabled_at": {
++          "name": "enabled_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "engagement_skill_unique": {
++          "name": "engagement_skill_unique",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "skill_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": true,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "engagement_skills_engagement_id_engagements_engagement_id_fk": {
++          "name": "engagement_skills_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "engagement_skills",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.engagements": {
++      "name": "engagements",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "whop_user_id": {
++          "name": "whop_user_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "workspace_id": {
++          "name": "workspace_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "buyer": {
++          "name": "buyer",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "label": {
++          "name": "label",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "tag_color": {
++          "name": "tag_color",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "schema_version": {
++          "name": "schema_version",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'1.0'"
++        },
++        "launched_at": {
++          "name": "launched_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "stack": {
++          "name": "stack",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "offer_details": {
++          "name": "offer_details",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "brand_voice_profile": {
++          "name": "brand_voice_profile",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "confirmation_page_template": {
++          "name": "confirmation_page_template",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'signal'"
++        },
++        "confirmation_page_url": {
++          "name": "confirmation_page_url",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "confirmation_page_deployment": {
++          "name": "confirmation_page_deployment",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "top_call_questions": {
++          "name": "top_call_questions",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "top_objections": {
++          "name": "top_objections",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "prospect_meets": {
++          "name": "prospect_meets",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "casting_choice": {
++          "name": "casting_choice",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "raw_voice_corpus": {
++          "name": "raw_voice_corpus",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "paste_ready_html": {
++          "name": "paste_ready_html",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "paste_ready_instructions": {
++          "name": "paste_ready_instructions",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "existing_proof": {
++          "name": "existing_proof",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "pile_on_sequence_asset_map": {
++          "name": "pile_on_sequence_asset_map",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "ad_creative_briefs": {
++          "name": "ad_creative_briefs",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "win_back_sequence_asset_map": {
++          "name": "win_back_sequence_asset_map",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "win_back_counts": {
++          "name": "win_back_counts",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "long_term_nurture_asset_map": {
++          "name": "long_term_nurture_asset_map",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "pin_down_script_pack": {
++          "name": "pin_down_script_pack",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "pin_down_page_audit": {
++          "name": "pin_down_page_audit",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "voice_scrape_artifacts": {
++          "name": "voice_scrape_artifacts",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "discovery_prefill": {
++          "name": "discovery_prefill",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "pile_on_sms_asset_map": {
++          "name": "pile_on_sms_asset_map",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "pile_on_existing_sequence_audit": {
++          "name": "pile_on_existing_sequence_audit",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "existing_audit_audit_result": {
++          "name": "existing_audit_audit_result",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "paused_at": {
++          "name": "paused_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "paused_reason": {
++          "name": "paused_reason",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "deleted_at": {
++          "name": "deleted_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "engagements_workspace_id_workspaces_workspace_id_fk": {
++          "name": "engagements_workspace_id_workspaces_workspace_id_fk",
++          "tableFrom": "engagements",
++          "tableTo": "workspaces",
++          "columnsFrom": [
++            "workspace_id"
++          ],
++          "columnsTo": [
++            "workspace_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {
++        "engagements_engagement_id_unique": {
++          "name": "engagements_engagement_id_unique",
++          "nullsNotDistinct": false,
++          "columns": [
++            "engagement_id"
++          ]
++        }
++      },
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.human_blockers": {
++      "name": "human_blockers",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "skill_name": {
++          "name": "skill_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "run_id": {
++          "name": "run_id",
++          "type": "uuid",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "blocker_type": {
++          "name": "blocker_type",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "description": {
++          "name": "description",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "status": {
++          "name": "status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'open'"
++        },
++        "resume_event_name": {
++          "name": "resume_event_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'human_blocker.resolved'"
++        },
++        "resume_payload": {
++          "name": "resume_payload",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "resolved_at": {
++          "name": "resolved_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "resolved_by": {
++          "name": "resolved_by",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "human_blockers_engagement_id_engagements_engagement_id_fk": {
++          "name": "human_blockers_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "human_blockers",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.metrics_benchmark": {
++      "name": "metrics_benchmark",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "metric_name": {
++          "name": "metric_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "bucket": {
++          "name": "bucket",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "sample_size": {
++          "name": "sample_size",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "p25": {
++          "name": "p25",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "p50": {
++          "name": "p50",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "p75": {
++          "name": "p75",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "p90": {
++          "name": "p90",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "last_computed_at": {
++          "name": "last_computed_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {},
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.notifications": {
++      "name": "notifications",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "whop_user_id": {
++          "name": "whop_user_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "run_id": {
++          "name": "run_id",
++          "type": "uuid",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "type": {
++          "name": "type",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "severity": {
++          "name": "severity",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'info'"
++        },
++        "title": {
++          "name": "title",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "body": {
++          "name": "body",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "read": {
++          "name": "read",
++          "type": "boolean",
++          "primaryKey": false,
++          "notNull": true,
++          "default": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "notifications_engagement_id_engagements_engagement_id_fk": {
++          "name": "notifications_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "notifications",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.pending_actions": {
++      "name": "pending_actions",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "action_type": {
++          "name": "action_type",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "payload": {
++          "name": "payload",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "status": {
++          "name": "status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'pending'"
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "decided_at": {
++          "name": "decided_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "decided_by": {
++          "name": "decided_by",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "execution_error": {
++          "name": "execution_error",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "pending_actions_engagement_id_engagements_engagement_id_fk": {
++          "name": "pending_actions_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "pending_actions",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.pile_on_send_log": {
++      "name": "pile_on_send_log",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "booking_id": {
++          "name": "booking_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "prospect_email": {
++          "name": "prospect_email",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "run_id": {
++          "name": "run_id",
++          "type": "uuid",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "sent_via": {
++          "name": "sent_via",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "personalized_intro": {
++          "name": "personalized_intro",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "latency_ms": {
++          "name": "latency_ms",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "error": {
++          "name": "error",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "pile_on_send_log_engagement_id_engagements_engagement_id_fk": {
++          "name": "pile_on_send_log_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "pile_on_send_log",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.platform_adapter_drafts": {
++      "name": "platform_adapter_drafts",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "platform_kind": {
++          "name": "platform_kind",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "platform_name": {
++          "name": "platform_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "website_url": {
++          "name": "website_url",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "docs_url": {
++          "name": "docs_url",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "research_summary": {
++          "name": "research_summary",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "status": {
++          "name": "status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'pending_review'"
++        },
++        "reviewed_by": {
++          "name": "reviewed_by",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "reviewed_at": {
++          "name": "reviewed_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "review_notes": {
++          "name": "review_notes",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "platform_adapter_drafts_engagement_id_engagements_engagement_id_fk": {
++          "name": "platform_adapter_drafts_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "platform_adapter_drafts",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.platform_docs_links": {
++      "name": "platform_docs_links",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "platform": {
++          "name": "platform",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "docs_url": {
++          "name": "docs_url",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "status": {
++          "name": "status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'unknown'"
++        },
++        "last_checked_at": {
++          "name": "last_checked_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "last_check_status_code": {
++          "name": "last_check_status_code",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {},
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {
++        "platform_docs_links_platform_unique": {
++          "name": "platform_docs_links_platform_unique",
++          "nullsNotDistinct": false,
++          "columns": [
++            "platform"
++          ]
++        }
++      },
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.project_engagements": {
++      "name": "project_engagements",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "project_id": {
++          "name": "project_id",
++          "type": "uuid",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "added_at": {
++          "name": "added_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "project_engagement_unique": {
++          "name": "project_engagement_unique",
++          "columns": [
++            {
++              "expression": "project_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": true,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "project_engagements_project_id_projects_id_fk": {
++          "name": "project_engagements_project_id_projects_id_fk",
++          "tableFrom": "project_engagements",
++          "tableTo": "projects",
++          "columnsFrom": [
++            "project_id"
++          ],
++          "columnsTo": [
++            "id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        },
++        "project_engagements_engagement_id_engagements_engagement_id_fk": {
++          "name": "project_engagements_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "project_engagements",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.projects": {
++      "name": "projects",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "whop_user_id": {
++          "name": "whop_user_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "name": {
++          "name": "name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "description": {
++          "name": "description",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "enabled_skills": {
++          "name": "enabled_skills",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "deleted_at": {
++          "name": "deleted_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {},
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.rep_audit_events": {
++      "name": "rep_audit_events",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "event_type": {
++          "name": "event_type",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "parent_event_id": {
++          "name": "parent_event_id",
++          "type": "uuid",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "payload": {
++          "name": "payload",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "schema_version": {
++          "name": "schema_version",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'1.0'"
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "rep_audit_events_engagement_idx": {
++          "name": "rep_audit_events_engagement_idx",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "created_at",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": false,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "rep_audit_events_engagement_id_engagements_engagement_id_fk": {
++          "name": "rep_audit_events_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "rep_audit_events",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.rep_engine_findings": {
++      "name": "rep_engine_findings",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "engine_id": {
++          "name": "engine_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "prompt_text": {
++          "name": "prompt_text",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "response_text": {
++          "name": "response_text",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "sentiment": {
++          "name": "sentiment",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "flagged": {
++          "name": "flagged",
++          "type": "boolean",
++          "primaryKey": false,
++          "notNull": true,
++          "default": false
++        },
++        "flag_reason": {
++          "name": "flag_reason",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "run_at": {
++          "name": "run_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "rep_engine_findings_engagement_idx": {
++          "name": "rep_engine_findings_engagement_idx",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "run_at",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": false,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "rep_engine_findings_engagement_id_engagements_engagement_id_fk": {
++          "name": "rep_engine_findings_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "rep_engine_findings",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.rep_identity_graphs": {
++      "name": "rep_identity_graphs",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "operator_name": {
++          "name": "operator_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "operator_aliases": {
++          "name": "operator_aliases",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "operator_handles": {
++          "name": "operator_handles",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'{}'::jsonb"
++        },
++        "operator_domains": {
++          "name": "operator_domains",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "operator_email_contacts": {
++          "name": "operator_email_contacts",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "entities": {
++          "name": "entities",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "offerings": {
++          "name": "offerings",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "competitors": {
++          "name": "competitors",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "collisions": {
++          "name": "collisions",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "trusted_sources": {
++          "name": "trusted_sources",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "adversarial_sources": {
++          "name": "adversarial_sources",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "seed_panel_prompts": {
++          "name": "seed_panel_prompts",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "active_engines": {
++          "name": "active_engines",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "sole_authority_name": {
++          "name": "sole_authority_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "crisis_threshold_override": {
++          "name": "crisis_threshold_override",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "collision_check_run_at": {
++          "name": "collision_check_run_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "rep_identity_graph_engagement_unique": {
++          "name": "rep_identity_graph_engagement_unique",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": true,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "rep_identity_graphs_engagement_id_engagements_engagement_id_fk": {
++          "name": "rep_identity_graphs_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "rep_identity_graphs",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.rep_incidents": {
++      "name": "rep_incidents",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "severity_score": {
++          "name": "severity_score",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "summary": {
++          "name": "summary",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "contributing_findings": {
++          "name": "contributing_findings",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "signal_class": {
++          "name": "signal_class",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "status": {
++          "name": "status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'open'"
++        },
++        "declared_at": {
++          "name": "declared_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "resolved_at": {
++          "name": "resolved_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "resolved_by": {
++          "name": "resolved_by",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "rep_incidents_engagement_id_engagements_engagement_id_fk": {
++          "name": "rep_incidents_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "rep_incidents",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.rep_offensive_checklist": {
++      "name": "rep_offensive_checklist",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "move": {
++          "name": "move",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "item_key": {
++          "name": "item_key",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "completed": {
++          "name": "completed",
++          "type": "boolean",
++          "primaryKey": false,
++          "notNull": true,
++          "default": false
++        },
++        "completed_at": {
++          "name": "completed_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        }
++      },
++      "indexes": {
++        "rep_offensive_checklist_unique": {
++          "name": "rep_offensive_checklist_unique",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "move",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "item_key",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": true,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "rep_offensive_checklist_engagement_id_engagements_engagement_id_fk": {
++          "name": "rep_offensive_checklist_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "rep_offensive_checklist",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.rep_pitch_targets": {
++      "name": "rep_pitch_targets",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "target": {
++          "name": "target",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "beat": {
++          "name": "beat",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "contact": {
++          "name": "contact",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "channel": {
++          "name": "channel",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "fit_notes": {
++          "name": "fit_notes",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "status": {
++          "name": "status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'not_contacted'"
++        },
++        "history": {
++          "name": "history",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "rep_pitch_targets_engagement_id_engagements_engagement_id_fk": {
++          "name": "rep_pitch_targets_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "rep_pitch_targets",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.rep_reddit_mentions": {
++      "name": "rep_reddit_mentions",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "external_mention_id": {
++          "name": "external_mention_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "subreddit": {
++          "name": "subreddit",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "author": {
++          "name": "author",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "permalink": {
++          "name": "permalink",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "mention_text": {
++          "name": "mention_text",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "published_at": {
++          "name": "published_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "sentiment": {
++          "name": "sentiment",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "flagged": {
++          "name": "flagged",
++          "type": "boolean",
++          "primaryKey": false,
++          "notNull": true,
++          "default": false
++        },
++        "flag_reason": {
++          "name": "flag_reason",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "rep_reddit_mention_unique": {
++          "name": "rep_reddit_mention_unique",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "external_mention_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": true,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        },
++        "rep_reddit_mentions_engagement_idx": {
++          "name": "rep_reddit_mentions_engagement_idx",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "created_at",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": false,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "rep_reddit_mentions_engagement_id_engagements_engagement_id_fk": {
++          "name": "rep_reddit_mentions_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "rep_reddit_mentions",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.rep_reddit_ramp": {
++      "name": "rep_reddit_ramp",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "confirmed_handle": {
++          "name": "confirmed_handle",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "started_at": {
++          "name": "started_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "subreddits": {
++          "name": "subreddits",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "activity_log": {
++          "name": "activity_log",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'[]'::jsonb"
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "rep_reddit_ramp_engagement_id_engagements_engagement_id_fk": {
++          "name": "rep_reddit_ramp_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "rep_reddit_ramp",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {
++        "rep_reddit_ramp_engagement_id_unique": {
++          "name": "rep_reddit_ramp_engagement_id_unique",
++          "nullsNotDistinct": false,
++          "columns": [
++            "engagement_id"
++          ]
++        }
++      },
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.rep_trustpilot_reviews": {
++      "name": "rep_trustpilot_reviews",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "external_review_id": {
++          "name": "external_review_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "reviewer_name": {
++          "name": "reviewer_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "rating": {
++          "name": "rating",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "review_text": {
++          "name": "review_text",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "published_at": {
++          "name": "published_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "sentiment": {
++          "name": "sentiment",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "flagged": {
++          "name": "flagged",
++          "type": "boolean",
++          "primaryKey": false,
++          "notNull": true,
++          "default": false
++        },
++        "flag_reason": {
++          "name": "flag_reason",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "rep_trustpilot_review_unique": {
++          "name": "rep_trustpilot_review_unique",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "external_review_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": true,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        },
++        "rep_trustpilot_reviews_engagement_idx": {
++          "name": "rep_trustpilot_reviews_engagement_idx",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "created_at",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": false,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "rep_trustpilot_reviews_engagement_id_engagements_engagement_id_fk": {
++          "name": "rep_trustpilot_reviews_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "rep_trustpilot_reviews",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.rep_twitter_mentions": {
++      "name": "rep_twitter_mentions",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "external_mention_id": {
++          "name": "external_mention_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "author": {
++          "name": "author",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "permalink": {
++          "name": "permalink",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "mention_text": {
++          "name": "mention_text",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "published_at": {
++          "name": "published_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "sentiment": {
++          "name": "sentiment",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "flagged": {
++          "name": "flagged",
++          "type": "boolean",
++          "primaryKey": false,
++          "notNull": true,
++          "default": false
++        },
++        "flag_reason": {
++          "name": "flag_reason",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "rep_twitter_mention_unique": {
++          "name": "rep_twitter_mention_unique",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "external_mention_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": true,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        },
++        "rep_twitter_mentions_engagement_idx": {
++          "name": "rep_twitter_mentions_engagement_idx",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "created_at",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": false,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "rep_twitter_mentions_engagement_id_engagements_engagement_id_fk": {
++          "name": "rep_twitter_mentions_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "rep_twitter_mentions",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.sequence_message_log": {
++      "name": "sequence_message_log",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "run_id": {
++          "name": "run_id",
++          "type": "uuid",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "sequence_type": {
++          "name": "sequence_type",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "enrollment_id": {
++          "name": "enrollment_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "booking_id": {
++          "name": "booking_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "message_id": {
++          "name": "message_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "channel": {
++          "name": "channel",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "prospect_email": {
++          "name": "prospect_email",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "prospect_phone": {
++          "name": "prospect_phone",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "status": {
++          "name": "status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "error": {
++          "name": "error",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "sent_at": {
++          "name": "sent_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "sequence_message_log_engagement_id_engagements_engagement_id_fk": {
++          "name": "sequence_message_log_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "sequence_message_log",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.show_rate_features": {
++      "name": "show_rate_features",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "booking_id": {
++          "name": "booking_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "prospect_email": {
++          "name": "prospect_email",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "features": {
++          "name": "features",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "predicted_show_probability": {
++          "name": "predicted_show_probability",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "model_version": {
++          "name": "model_version",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'heuristic-v1'"
++        },
++        "actual_outcome": {
++          "name": "actual_outcome",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "outcome_recorded_at": {
++          "name": "outcome_recorded_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "show_rate_features_engagement_id_engagements_engagement_id_fk": {
++          "name": "show_rate_features_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "show_rate_features",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.skill_runs": {
++      "name": "skill_runs",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "skill_name": {
++          "name": "skill_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "phase": {
++          "name": "phase",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "status": {
++          "name": "status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'running'"
++        },
++        "steps": {
++          "name": "steps",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false,
++          "default": "'[]'::jsonb"
++        },
++        "summary": {
++          "name": "summary",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "error_message": {
++          "name": "error_message",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "token_usage": {
++          "name": "token_usage",
++          "type": "jsonb",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "cost_in_cents": {
++          "name": "cost_in_cents",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "started_at": {
++          "name": "started_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "completed_at": {
++          "name": "completed_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "skill_runs_engagement_id_engagements_engagement_id_fk": {
++          "name": "skill_runs_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "skill_runs",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.users": {
++      "name": "users",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "whop_user_id": {
++          "name": "whop_user_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "email": {
++          "name": "email",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "subscription_status": {
++          "name": "subscription_status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'inactive'"
++        },
++        "executions_last_seen_at": {
++          "name": "executions_last_seen_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {},
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {
++        "users_whop_user_id_unique": {
++          "name": "users_whop_user_id_unique",
++          "nullsNotDistinct": false,
++          "columns": [
++            "whop_user_id"
++          ]
++        }
++      },
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.webhook_events": {
++      "name": "webhook_events",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "event_source": {
++          "name": "event_source",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "idempotency_key": {
++          "name": "idempotency_key",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "event_kind": {
++          "name": "event_kind",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "received_at": {
++          "name": "received_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "processed_at": {
++          "name": "processed_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        }
++      },
++      "indexes": {
++        "webhook_events_source_key_uidx": {
++          "name": "webhook_events_source_key_uidx",
++          "columns": [
++            {
++              "expression": "event_source",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "idempotency_key",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": true,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "webhook_events_engagement_id_engagements_engagement_id_fk": {
++          "name": "webhook_events_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "webhook_events",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.win_back_enrollments": {
++      "name": "win_back_enrollments",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "prospect_email": {
++          "name": "prospect_email",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "prospect_name": {
++          "name": "prospect_name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "run_id": {
++          "name": "run_id",
++          "type": "uuid",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "enrolled_at": {
++          "name": "enrolled_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "recovery_window_days": {
++          "name": "recovery_window_days",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "status": {
++          "name": "status",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'active'"
++        },
++        "lost_at": {
++          "name": "lost_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "source_booking_id": {
++          "name": "source_booking_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "fresh_reschedule_link": {
++          "name": "fresh_reschedule_link",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "exit_reason": {
++          "name": "exit_reason",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "exited_at": {
++          "name": "exited_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "win_back_enrollments_engagement_id_engagements_engagement_id_fk": {
++          "name": "win_back_enrollments_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "win_back_enrollments",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.win_back_send_log": {
++      "name": "win_back_send_log",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "engagement_id": {
++          "name": "engagement_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "enrollment_id": {
++          "name": "enrollment_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "prospect_email": {
++          "name": "prospect_email",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "sent_via": {
++          "name": "sent_via",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "personalized_opening": {
++          "name": "personalized_opening",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "latency_ms": {
++          "name": "latency_ms",
++          "type": "integer",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "error": {
++          "name": "error",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": false
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {
++        "win_back_send_log_engagement_id_engagements_engagement_id_fk": {
++          "name": "win_back_send_log_engagement_id_engagements_engagement_id_fk",
++          "tableFrom": "win_back_send_log",
++          "tableTo": "engagements",
++          "columnsFrom": [
++            "engagement_id"
++          ],
++          "columnsTo": [
++            "engagement_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.workspace_packages": {
++      "name": "workspace_packages",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "workspace_id": {
++          "name": "workspace_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "package_id": {
++          "name": "package_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "installed_at": {
++          "name": "installed_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        }
++      },
++      "indexes": {
++        "workspace_package_unique": {
++          "name": "workspace_package_unique",
++          "columns": [
++            {
++              "expression": "workspace_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "package_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": true,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
++      "foreignKeys": {
++        "workspace_packages_workspace_id_workspaces_workspace_id_fk": {
++          "name": "workspace_packages_workspace_id_workspaces_workspace_id_fk",
++          "tableFrom": "workspace_packages",
++          "tableTo": "workspaces",
++          "columnsFrom": [
++            "workspace_id"
++          ],
++          "columnsTo": [
++            "workspace_id"
++          ],
++          "onDelete": "no action",
++          "onUpdate": "no action"
++        }
++      },
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {},
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    },
++    "public.workspaces": {
++      "name": "workspaces",
++      "schema": "",
++      "columns": {
++        "id": {
++          "name": "id",
++          "type": "uuid",
++          "primaryKey": true,
++          "notNull": true,
++          "default": "gen_random_uuid()"
++        },
++        "workspace_id": {
++          "name": "workspace_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "whop_user_id": {
++          "name": "whop_user_id",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "name": {
++          "name": "name",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true
++        },
++        "is_legacy": {
++          "name": "is_legacy",
++          "type": "boolean",
++          "primaryKey": false,
++          "notNull": true,
++          "default": false
++        },
++        "timezone": {
++          "name": "timezone",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'UTC'"
++        },
++        "locale": {
++          "name": "locale",
++          "type": "text",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "'en-US'"
++        },
++        "created_at": {
++          "name": "created_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "updated_at": {
++          "name": "updated_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": true,
++          "default": "now()"
++        },
++        "deleted_at": {
++          "name": "deleted_at",
++          "type": "timestamp",
++          "primaryKey": false,
++          "notNull": false
++        }
++      },
++      "indexes": {},
++      "foreignKeys": {},
++      "compositePrimaryKeys": {},
++      "uniqueConstraints": {
++        "workspaces_workspace_id_unique": {
++          "name": "workspaces_workspace_id_unique",
++          "nullsNotDistinct": false,
++          "columns": [
++            "workspace_id"
++          ]
++        }
++      },
++      "policies": {},
++      "checkConstraints": {},
++      "isRLSEnabled": false
++    }
++  },
++  "enums": {},
++  "schemas": {},
++  "sequences": {},
++  "roles": {},
++  "policies": {},
++  "views": {},
++  "_meta": {
++    "columns": {},
++    "schemas": {},
++    "tables": {}
++  }
++}
+\ No newline at end of file
+diff --git a/drizzle/migrations/meta/_journal.json b/drizzle/migrations/meta/_journal.json
+index a38ddda..63f2a1d 100644
+--- a/drizzle/migrations/meta/_journal.json
++++ b/drizzle/migrations/meta/_journal.json
+@@ -246,6 +246,13 @@
+       "when": 1788640207819,
+       "tag": "0034_greedy_aaron_stack",
+       "breakpoints": true
++    },
++    {
++      "idx": 35,
++      "version": "7",
++      "when": 1788728544468,
++      "tag": "0035_add_enabled_at_to_engagement_skills",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff --git a/scripts/audit-multi-engagement-workspaces.ts b/scripts/audit-multi-engagement-workspaces.ts
+new file mode 100644
+index 0000000..c87bd39
+--- /dev/null
++++ b/scripts/audit-multi-engagement-workspaces.ts
+@@ -0,0 +1,241 @@
++// scripts/audit-multi-engagement-workspaces.ts
++//
++// Read-only. Reports every workspace that currently holds more than one
++// live engagement — the exact condition the "one workspace = one client"
++// architecture decision needs eliminated (see the split script,
++// scripts/split-multi-engagement-workspaces.ts, for the actual fix).
++//
++// This script issues SELECT statements only. It never writes anything.
++// Run it before ever running the split script, so the actual blast radius
++// on real data is visible before anything gets touched.
++//
++// Usage:
++//   npx tsx scripts/audit-multi-engagement-workspaces.ts
++//   npx tsx scripts/audit-multi-engagement-workspaces.ts --json report.json
++//
++// Requires DIRECT_URL (or DATABASE_URL as a fallback) in .env — same
++// convention as migrate.ts.
++
++import * as dotenv from "dotenv";
++dotenv.config({ path: ".env" });
++
++import postgres from "postgres";
++import { drizzle } from "drizzle-orm/postgres-js";
++import { and, eq, isNull, inArray } from "drizzle-orm";
++import * as fs from "node:fs";
++import {
++  workspaces,
++  engagements,
++  workspacePackages,
++  engagementSkills,
++  credentialsRefs,
++  credentialVault,
++  repIdentityGraphs,
++} from "../src/models/schema";
++
++const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
++if (!connectionString) {
++  console.error("Error: neither DIRECT_URL nor DATABASE_URL is set in your .env file.");
++  process.exit(1);
++}
++
++const client = postgres(connectionString, { max: 1, prepare: false });
++const db = drizzle(client);
++
++interface WorkspaceReport {
++  workspaceId: string;
++  workspaceName: string;
++  whopUserId: string;
++  installedPackageIds: string[];
++  engagementCount: number;
++  engagements: {
++    engagementId: string;
++    buyer: string;
++    label: string | null;
++    status: "active" | "paused";
++    launchedAt: Date | null;
++    createdAt: Date;
++    /** Real, evidence-based signal of product usage — not just "installed at the workspace level." */
++    activeProducts: string[];
++    /** Skills this engagement explicitly turned off (SKILL_REGISTRY convention: absence of a row means enabled). */
++    explicitlyDisabledSkillIds: string[];
++    /** Credential vault rows (by label) this engagement actually links to — these need duplicating on split. */
++    linkedVaultCredentials: string[];
++  }[];
++  recommendedPrimaryEngagementId: string;
++}
++
++async function buildReport(): Promise<WorkspaceReport[]> {
++  const liveEngagements = await db
++    .select({
++      engagementId: engagements.engagementId,
++      buyer: engagements.buyer,
++      label: engagements.label,
++      workspaceId: engagements.workspaceId,
++      launchedAt: engagements.launchedAt,
++      pausedAt: engagements.pausedAt,
++      createdAt: engagements.createdAt,
++      hasStack: engagements.stack,
++    })
++    .from(engagements)
++    .where(isNull(engagements.deletedAt));
++
++  const byWorkspace = new Map<string, typeof liveEngagements>();
++  for (const row of liveEngagements) {
++    if (!row.workspaceId) continue; // pre-workspace legacy rows; ensureLegacyWorkspace backfills these on first visit
++    const bucket = byWorkspace.get(row.workspaceId) ?? [];
++    bucket.push(row);
++    byWorkspace.set(row.workspaceId, bucket);
++  }
++
++  const multiEngagementWorkspaceIds = [...byWorkspace.entries()]
++    .filter(([, rows]) => rows.length > 1)
++    .map(([workspaceId]) => workspaceId);
++
++  if (multiEngagementWorkspaceIds.length === 0) return [];
++
++  const [workspaceRows, packageRows, allRelevantEngagementIds] = await Promise.all([
++    db.select().from(workspaces).where(inArray(workspaces.workspaceId, multiEngagementWorkspaceIds)),
++    db.select().from(workspacePackages).where(inArray(workspacePackages.workspaceId, multiEngagementWorkspaceIds)),
++    Promise.resolve(
++      multiEngagementWorkspaceIds.flatMap((wsId) => (byWorkspace.get(wsId) ?? []).map((e) => e.engagementId))
++    ),
++  ]);
++
++  const [skillRows, repGraphRows, vaultLinkRows] = await Promise.all([
++    db
++      .select({ engagementId: engagementSkills.engagementId, skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
++      .from(engagementSkills)
++      .where(and(inArray(engagementSkills.engagementId, allRelevantEngagementIds), eq(engagementSkills.enabled, false))),
++    db
++      .select({ engagementId: repIdentityGraphs.engagementId })
++      .from(repIdentityGraphs)
++      .where(inArray(repIdentityGraphs.engagementId, allRelevantEngagementIds)),
++    db
++      .select({
++        engagementId: credentialsRefs.engagementId,
++        vaultLabel: credentialVault.label,
++        vaultProvider: credentialVault.provider,
++      })
++      .from(credentialsRefs)
++      .innerJoin(credentialVault, eq(credentialsRefs.vaultId, credentialVault.id))
++      .where(inArray(credentialsRefs.engagementId, allRelevantEngagementIds)),
++  ]);
++
++  const disabledByEngagement = new Map<string, string[]>();
++  for (const row of skillRows) {
++    const list = disabledByEngagement.get(row.engagementId) ?? [];
++    list.push(row.skillId);
++    disabledByEngagement.set(row.engagementId, list);
++  }
++
++  const repEnrolledEngagementIds = new Set(repGraphRows.map((r) => r.engagementId));
++
++  const vaultLinksByEngagement = new Map<string, string[]>();
++  for (const row of vaultLinkRows) {
++    const list = vaultLinksByEngagement.get(row.engagementId) ?? [];
++    list.push(`${row.vaultProvider} (${row.vaultLabel})`);
++    vaultLinksByEngagement.set(row.engagementId, list);
++  }
++
++  const packagesByWorkspace = new Map<string, string[]>();
++  for (const row of packageRows) {
++    const list = packagesByWorkspace.get(row.workspaceId) ?? [];
++    list.push(row.packageId);
++    packagesByWorkspace.set(row.workspaceId, list);
++  }
++
++  return workspaceRows.map((ws): WorkspaceReport => {
++    const engagementRows = (byWorkspace.get(ws.workspaceId) ?? []).slice().sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
++
++    const detailedEngagements = engagementRows.map((e) => {
++      const activeProducts: string[] = [];
++      if (e.hasStack) activeProducts.push("showtime");
++      if (repEnrolledEngagementIds.has(e.engagementId)) activeProducts.push("reputation-manager");
++
++      return {
++        engagementId: e.engagementId,
++        buyer: e.buyer,
++        label: e.label,
++        status: (e.pausedAt ? "paused" : "active") as "active" | "paused",
++        launchedAt: e.launchedAt,
++        createdAt: e.createdAt,
++        activeProducts,
++        explicitlyDisabledSkillIds: disabledByEngagement.get(e.engagementId) ?? [],
++        linkedVaultCredentials: vaultLinksByEngagement.get(e.engagementId) ?? [],
++      };
++    });
++
++    return {
++      workspaceId: ws.workspaceId,
++      workspaceName: ws.name,
++      whopUserId: ws.whopUserId,
++      installedPackageIds: packagesByWorkspace.get(ws.workspaceId) ?? [],
++      engagementCount: detailedEngagements.length,
++      engagements: detailedEngagements,
++      // Oldest live engagement keeps the existing workspaceId/record — the
++      // rest get promoted to brand-new workspaces by the split script.
++      // This is a default, not a mandate: review before running the split.
++      recommendedPrimaryEngagementId: detailedEngagements[0]?.engagementId ?? "",
++    };
++  });
++}
++
++function printReport(reports: WorkspaceReport[]): void {
++  if (reports.length === 0) {
++    console.log("No workspace currently holds more than one live engagement. Nothing to split.");
++    return;
++  }
++
++  console.log(`\n${reports.length} workspace(s) hold more than one live engagement:\n`);
++
++  for (const ws of reports) {
++    console.log("─".repeat(72));
++    console.log(`Workspace: ${ws.workspaceName}  (${ws.workspaceId})`);
++    console.log(`  whopUserId: ${ws.whopUserId}`);
++    console.log(`  workspace-level installed packages: ${ws.installedPackageIds.join(", ") || "(none)"}`);
++    console.log(`  ${ws.engagementCount} live engagements:\n`);
++
++    for (const e of ws.engagements) {
++      const marker = e.engagementId === ws.recommendedPrimaryEngagementId ? "  [keeps this workspaceId]" : "  [would move to a new workspace]";
++      console.log(`  - ${e.buyer}${e.label ? ` (${e.label})` : ""} — ${e.engagementId}${marker}`);
++      console.log(`      status: ${e.status}, launched: ${e.launchedAt?.toISOString() ?? "not launched"}`);
++      console.log(`      evidence of real product usage: ${e.activeProducts.join(", ") || "(none — likely a stale/test row)"}`);
++      if (e.explicitlyDisabledSkillIds.length > 0) {
++        console.log(`      explicitly disabled skills: ${e.explicitlyDisabledSkillIds.join(", ")}`);
++      }
++      if (e.linkedVaultCredentials.length > 0) {
++        console.log(`      linked shared credentials (would need duplicating): ${e.linkedVaultCredentials.join(", ")}`);
++      }
++    }
++    console.log("");
++  }
++
++  console.log("─".repeat(72));
++  console.log(
++    `\nNothing has been changed. Review this against your own knowledge of which engagement in each\n` +
++      `workspace is the one that should keep its existing workspaceId before running\n` +
++      `scripts/split-multi-engagement-workspaces.ts.\n`
++  );
++}
++
++async function main() {
++  const jsonFlagIndex = process.argv.indexOf("--json");
++  const jsonOutPath = jsonFlagIndex !== -1 ? process.argv[jsonFlagIndex + 1] : null;
++
++  try {
++    const reports = await buildReport();
++    printReport(reports);
++    if (jsonOutPath) {
++      fs.writeFileSync(jsonOutPath, JSON.stringify(reports, null, 2));
++      console.log(`Wrote machine-readable report to ${jsonOutPath}`);
++    }
++  } finally {
++    await client.end();
++  }
++}
++
++main().catch((error) => {
++  console.error("Audit failed:", error);
++  process.exit(1);
++});
+diff --git a/scripts/split-multi-engagement-workspaces.ts b/scripts/split-multi-engagement-workspaces.ts
+new file mode 100644
+index 0000000..683175e
+--- /dev/null
++++ b/scripts/split-multi-engagement-workspaces.ts
+@@ -0,0 +1,290 @@
++// scripts/split-multi-engagement-workspaces.ts
++//
++// Enforces "one workspace = one client" by splitting every workspace that
++// currently holds more than one live engagement into N single-engagement
++// workspaces. This is the actual Phase 1 migration from the architecture
++// discussion — see scripts/audit-multi-engagement-workspaces.ts first,
++// always, before running this for real.
++//
++// What this does NOT do: merge the `workspaces` and `engagements` tables.
++// Almost everything that makes a client a client (skillRuns,
++// credentialsRefs, repIdentityGraphs, engagementSkills, projectEngagements)
++// is already keyed off engagementId, not workspaceId — none of that moves.
++// Only two things are keyed off workspaceId directly, and both are handled
++// explicitly below:
++//   1. workspacePackages ("is product X installed for this workspace") —
++//      re-derived per split-off engagement from real evidence (a non-null
++//      `stack` for showtime, an existing repIdentityGraphs row for
++//      reputation-manager), NOT blindly copied. An engagement that never
++//      touched a product doesn't inherit "installed" just because a
++//      sibling engagement in the old workspace had it on.
++//   2. credentialVault rows a moved engagement actually links to (via
++//      credentialsRefs.vaultId) — duplicated into the engagement's new
++//      workspace so nothing breaks, and the engagement's own
++//      credentialsRefs row is repointed at the duplicate. Any OTHER
++//      engagement that shared that same vault row is untouched.
++//
++// Per-workspace rule for which engagement keeps the existing workspaceId:
++// the oldest live engagement (by createdAt) stays put; every other live
++// engagement in that workspace gets promoted to a brand-new workspace.
++// Review scripts/audit-multi-engagement-workspaces.ts's output first if
++// that default isn't what you want for a given workspace — override with
++// --primary <engagementId> when scoping to a single workspace via --only.
++//
++// SAFETY: dry-run by default. Nothing is written unless --execute is
++// passed. Strongly recommended: run with --only <workspaceId> the first
++// few times rather than every multi-engagement workspace at once.
++//
++// Usage:
++//   npx tsx scripts/split-multi-engagement-workspaces.ts                        # dry run, every workspace
++//   npx tsx scripts/split-multi-engagement-workspaces.ts --only ws_abc123       # dry run, one workspace
++//   npx tsx scripts/split-multi-engagement-workspaces.ts --only ws_abc123 --primary eng_foo --execute
++//   npx tsx scripts/split-multi-engagement-workspaces.ts --execute             # applies to every workspace found
++//
++// Requires DIRECT_URL (or DATABASE_URL as a fallback) in .env.
++
++import * as dotenv from "dotenv";
++dotenv.config({ path: ".env" });
++
++import postgres from "postgres";
++import { drizzle } from "drizzle-orm/postgres-js";
++import { and, eq, isNull, inArray } from "drizzle-orm";
++import * as fs from "node:fs";
++import * as path from "node:path";
++import {
++  workspaces,
++  engagements,
++  workspacePackages,
++  credentialsRefs,
++  credentialVault,
++  repIdentityGraphs,
++} from "../src/models/schema";
++
++const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
++if (!connectionString) {
++  console.error("Error: neither DIRECT_URL nor DATABASE_URL is set in your .env file.");
++  process.exit(1);
++}
++
++const args = process.argv.slice(2);
++const EXECUTE = args.includes("--execute");
++const onlyIndex = args.indexOf("--only");
++const ONLY_WORKSPACE_ID = onlyIndex !== -1 ? args[onlyIndex + 1] : null;
++const primaryIndex = args.indexOf("--primary");
++const OVERRIDE_PRIMARY_ENGAGEMENT_ID = primaryIndex !== -1 ? args[primaryIndex + 1] : null;
++
++if (OVERRIDE_PRIMARY_ENGAGEMENT_ID && !ONLY_WORKSPACE_ID) {
++  console.error("--primary requires --only <workspaceId> — it doesn't make sense across multiple workspaces at once.");
++  process.exit(1);
++}
++
++const client = postgres(connectionString, { max: 1, prepare: false });
++const db = drizzle(client);
++
++/** Turns "eng_mudd_ventures_msg8wc5y" into "ws_mudd_ventures_msg8wc5y" —
++ * deterministic and human-recognizable, and collision-free since
++ * engagementId is already globally unique. */
++function newWorkspaceIdFor(engagementId: string): string {
++  return `ws_${engagementId.replace(/^eng_/, "")}`;
++}
++
++interface MutationLogEntry {
++  engagementId: string;
++  buyer: string;
++  oldWorkspaceId: string;
++  newWorkspaceId: string;
++  reDerivedPackageIds: string[];
++  duplicatedVaultRows: { oldVaultId: string; newVaultId: string; provider: string; label: string }[];
++}
++
++async function planAndMaybeExecuteForWorkspace(workspaceId: string): Promise<MutationLogEntry[]> {
++  const liveEngagements = await db
++    .select()
++    .from(engagements)
++    .where(and(eq(engagements.workspaceId, workspaceId), isNull(engagements.deletedAt)));
++
++  if (liveEngagements.length <= 1) {
++    console.log(`Workspace ${workspaceId}: ${liveEngagements.length} live engagement(s) — nothing to split.`);
++    return [];
++  }
++
++  const [ws] = await db.select().from(workspaces).where(eq(workspaces.workspaceId, workspaceId)).limit(1);
++  if (!ws) {
++    console.warn(`Workspace ${workspaceId} not found — skipping.`);
++    return [];
++  }
++
++  const sorted = liveEngagements.slice().sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
++  const primaryEngagementId = OVERRIDE_PRIMARY_ENGAGEMENT_ID ?? sorted[0].engagementId;
++  if (!sorted.some((e) => e.engagementId === primaryEngagementId)) {
++    throw new Error(`--primary ${primaryEngagementId} is not a live engagement in workspace ${workspaceId}.`);
++  }
++
++  const toMove = sorted.filter((e) => e.engagementId !== primaryEngagementId);
++
++  console.log(`\nWorkspace ${ws.name} (${workspaceId}) — ${sorted.length} live engagements:`);
++  console.log(`  keeping ${primaryEngagementId} in this workspace`);
++  console.log(`  splitting off: ${toMove.map((e) => e.engagementId).join(", ")}`);
++
++  const engagementIds = toMove.map((e) => e.engagementId);
++  const [repGraphRows, vaultLinkRows] = engagementIds.length
++    ? await Promise.all([
++        db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs).where(inArray(repIdentityGraphs.engagementId, engagementIds)),
++        db
++          .select({
++            engagementId: credentialsRefs.engagementId,
++            vaultId: credentialVault.id,
++            provider: credentialVault.provider,
++            label: credentialVault.label,
++            refKey: credentialVault.refKey,
++            encryptedValue: credentialVault.encryptedValue,
++            iv: credentialVault.iv,
++            keyVersion: credentialVault.keyVersion,
++          })
++          .from(credentialsRefs)
++          .innerJoin(credentialVault, eq(credentialsRefs.vaultId, credentialVault.id))
++          .where(inArray(credentialsRefs.engagementId, engagementIds)),
++      ])
++    : [[], []];
++
++  const repEnrolled = new Set(repGraphRows.map((r) => r.engagementId));
++  const vaultLinksByEngagement = new Map<string, typeof vaultLinkRows>();
++  for (const row of vaultLinkRows) {
++    const list = vaultLinksByEngagement.get(row.engagementId) ?? [];
++    list.push(row);
++    vaultLinksByEngagement.set(row.engagementId, list);
++  }
++
++  const logEntries: MutationLogEntry[] = [];
++
++  for (const engagement of toMove) {
++    const newWorkspaceId = newWorkspaceIdFor(engagement.engagementId);
++    const activePackageIds: string[] = [];
++    if (engagement.stack) activePackageIds.push("showtime");
++    if (repEnrolled.has(engagement.engagementId)) activePackageIds.push("reputation-manager");
++
++    const vaultLinks = vaultLinksByEngagement.get(engagement.engagementId) ?? [];
++
++    console.log(`\n  -> ${engagement.buyer} (${engagement.engagementId})`);
++    console.log(`     new workspace: ${newWorkspaceId}`);
++    console.log(`     re-derived installed packages: ${activePackageIds.join(", ") || "(none)"}`);
++    if (vaultLinks.length > 0) {
++      console.log(`     will duplicate ${vaultLinks.length} shared credential(s): ${vaultLinks.map((v) => `${v.provider} (${v.label})`).join(", ")}`);
++    }
++
++    const entry: MutationLogEntry = {
++      engagementId: engagement.engagementId,
++      buyer: engagement.buyer,
++      oldWorkspaceId: workspaceId,
++      newWorkspaceId,
++      reDerivedPackageIds: activePackageIds,
++      duplicatedVaultRows: [],
++    };
++
++    if (EXECUTE) {
++      await db.transaction(async (tx) => {
++        await tx.insert(workspaces).values({
++          workspaceId: newWorkspaceId,
++          whopUserId: ws.whopUserId,
++          name: engagement.buyer,
++          isLegacy: false,
++          timezone: ws.timezone,
++          locale: ws.locale,
++        });
++
++        for (const packageId of activePackageIds) {
++          await tx.insert(workspacePackages).values({ workspaceId: newWorkspaceId, packageId });
++        }
++
++        for (const vaultRow of vaultLinks) {
++          const [duplicated] = await tx
++            .insert(credentialVault)
++            .values({
++              whopUserId: ws.whopUserId,
++              workspaceId: newWorkspaceId,
++              provider: vaultRow.provider,
++              label: vaultRow.label,
++              refKey: vaultRow.refKey,
++              encryptedValue: vaultRow.encryptedValue,
++              iv: vaultRow.iv,
++              keyVersion: vaultRow.keyVersion,
++            })
++            .returning({ id: credentialVault.id });
++
++          await tx
++            .update(credentialsRefs)
++            .set({ vaultId: duplicated.id, updatedAt: new Date() })
++            .where(and(eq(credentialsRefs.engagementId, engagement.engagementId), eq(credentialsRefs.vaultId, vaultRow.vaultId)));
++
++          entry.duplicatedVaultRows.push({
++            oldVaultId: vaultRow.vaultId,
++            newVaultId: duplicated.id,
++            provider: vaultRow.provider,
++            label: vaultRow.label,
++          });
++        }
++
++        await tx
++          .update(engagements)
++          .set({ workspaceId: newWorkspaceId, updatedAt: new Date() })
++          .where(eq(engagements.engagementId, engagement.engagementId));
++      });
++    }
++
++    logEntries.push(entry);
++  }
++
++  return logEntries;
++}
++
++async function main() {
++  try {
++    let targetWorkspaceIds: string[];
++
++    if (ONLY_WORKSPACE_ID) {
++      targetWorkspaceIds = [ONLY_WORKSPACE_ID];
++    } else {
++      const liveEngagements = await db
++        .select({ workspaceId: engagements.workspaceId })
++        .from(engagements)
++        .where(isNull(engagements.deletedAt));
++
++      const counts = new Map<string, number>();
++      for (const row of liveEngagements) {
++        if (!row.workspaceId) continue;
++        counts.set(row.workspaceId, (counts.get(row.workspaceId) ?? 0) + 1);
++      }
++      targetWorkspaceIds = [...counts.entries()].filter(([, count]) => count > 1).map(([workspaceId]) => workspaceId);
++    }
++
++    if (targetWorkspaceIds.length === 0) {
++      console.log("No matching multi-engagement workspaces found. Nothing to do.");
++      return;
++    }
++
++    console.log(EXECUTE ? "EXECUTING — this will write to the database.\n" : "DRY RUN — nothing will be written. Pass --execute to apply.\n");
++
++    const allLogEntries: MutationLogEntry[] = [];
++    for (const workspaceId of targetWorkspaceIds) {
++      const entries = await planAndMaybeExecuteForWorkspace(workspaceId);
++      allLogEntries.push(...entries);
++    }
++
++    if (EXECUTE && allLogEntries.length > 0) {
++      const logDir = path.join(process.cwd(), "scripts", ".split-migration-logs");
++      fs.mkdirSync(logDir, { recursive: true });
++      const logPath = path.join(logDir, `split-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
++      fs.writeFileSync(logPath, JSON.stringify(allLogEntries, null, 2));
++      console.log(`\nWrote rollback/audit log to ${logPath} — keep this until you've verified every moved client works correctly.`);
++    } else if (!EXECUTE) {
++      console.log("\nDry run complete. Re-run with --execute once you've reviewed the plan above.");
++    }
++  } finally {
++    await client.end();
++  }
++}
++
++main().catch((error) => {
++  console.error("Split migration failed:", error);
++  process.exit(1);
++});
+diff --git a/src/app/dashboard/work-sidebar.tsx b/src/app/dashboard/work-sidebar.tsx
+index 9d422c1..3131c67 100644
+--- a/src/app/dashboard/work-sidebar.tsx
++++ b/src/app/dashboard/work-sidebar.tsx
+@@ -13,11 +13,13 @@ import {
+ } from "lucide-react";
+ import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
+ import { SkillsNavList } from "@/components/skills-nav-list";
+-import { getInstalledPackagesByWorkspace } from "@/lib/workspace";
++import { getInstalledPackagesByWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
++import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
+ import type { ProductId } from "@/lib/product-catalog";
++import type { WorkerId } from "@/lib/worker-registry";
+ 
+ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: string; workspaceId: string }) {
+-  const [queueCount, runningCountResult, unseenCompletedCount, installedPackageMap] = await Promise.all([
++  const [queueCount, runningCountResult, unseenCompletedCount, installedPackageMap, primaryEngagementId] = await Promise.all([
+     getQueueActionableCount(whopUserId, workspaceId),
+ 
+     db
+@@ -35,14 +37,29 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
+     getUnseenCompletedExecutionCount(whopUserId),
+ 
+     getInstalledPackagesByWorkspace([workspaceId]),
++
++    getPrimaryEngagementIdForWorkspace(workspaceId),
+   ]).catch((err) => {
+     console.error("[WorkSidebar] query failed:", err);
+-    return [0, [{ count: 0 }], 0, new Map<string, string[]>()] as const;
++    return [0, [{ count: 0 }], 0, new Map<string, string[]>(), null] as const;
+   });
+   const installedProductIds = (installedPackageMap.get(workspaceId) ?? []).filter(
+     (id): id is ProductId => id === "showtime" || id === "reputation-manager"
+   );
+ 
++  // The Capabilities grid's whole job is "jump straight into something
++  // already running for this client" — it should show what's enabled, not
++  // the full catalog with color-coding bolted on to compensate (that's the
++  // Library's job). See getEnabledWorkerIdsForEngagement's own comment for
++  // how it reconciles that with engagements that predate explicit enable
++  // tracking.
++  const enabledWorkerIds: WorkerId[] = primaryEngagementId
++    ? await getEnabledWorkerIdsForEngagement(primaryEngagementId).catch((err) => {
++        console.error("[WorkSidebar] getEnabledWorkerIdsForEngagement failed:", err);
++        return [];
++      })
++    : [];
++
+   // Fix (2026-08-25): was "Notification" → /dashboard/inbox with an
+   // unread-count badge. Replaced per direct request with Reports — the
+   // per-client quality-breakdown page (report-service.ts + report-notes.ts).
+@@ -92,7 +109,7 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
+           <span>Capabilities</span>
+         </div>
+ 
+-        <SkillsNavList productIds={installedProductIds} layout="grid" />
++        <SkillsNavList productIds={installedProductIds} layout="grid" enabledWorkerIds={enabledWorkerIds} />
+       </div>
+     </div>
+   );
+diff --git a/src/components/skills-nav-list.tsx b/src/components/skills-nav-list.tsx
+index eab84ca..b7c7e93 100644
+--- a/src/components/skills-nav-list.tsx
++++ b/src/components/skills-nav-list.tsx
+@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
+ import { SKILL_IDS, SKILL_MANIFEST } from "@/lib/skill-manifest";
+ import { REP_SKILL_IDS, REP_SKILL_MANIFEST, type RepSkillId } from "@/lib/rep-skill-manifest";
+ import type { ProductId } from "@/lib/product-catalog";
++import type { WorkerId } from "@/lib/worker-registry";
+ import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+ import { RepSkillBadge } from "@/components/rep-skill-badge";
+ import { SidebarNavLinks, type NavLinkItem } from "@/app/dashboard/sidebar-nav-links";
+@@ -56,6 +57,17 @@ function buildEntries(productIds: ProductId[]): SkillEntry[] {
+ function SkillsGrid({ entries }: { entries: SkillEntry[] }) {
+   const pathname = usePathname();
+ 
++  if (entries.length === 0) {
++    return (
++      <Link
++        href="/dashboard/library"
++        className="block rounded-[10px] border border-dashed border-zinc-300 dark:border-zinc-700 px-3 py-3 text-center text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors"
++      >
++        No workers enabled yet — visit the Library to turn one on.
++      </Link>
++    );
++  }
++
+   return (
+     <div className="grid grid-cols-4 gap-1.5">
+       {entries.map((entry) => {
+@@ -105,11 +117,24 @@ function SkillsGrid({ entries }: { entries: SkillEntry[] }) {
+ export function SkillsNavList({
+   productIds = ["showtime"],
+   layout = "list",
++  enabledWorkerIds,
+ }: {
+   productIds?: ProductId[];
+   layout?: "list" | "grid";
++  /**
++   * When provided, restricts the rendered entries to this set — the grid
++   * layout's actual job is "jump into what's already running," not
++   * "browse the full catalog" (that's the Library). Omitted entirely for
++   * a product's own list-layout sidebar, which still shows every skill in
++   * that product's catalog on purpose — a product's own nav is meant to
++   * be a full skill directory, not a quick-access shortlist.
++   */
++  enabledWorkerIds?: WorkerId[];
+ }) {
+-  const entries = buildEntries(productIds);
++  const allEntries = buildEntries(productIds);
++  const entries = enabledWorkerIds
++    ? allEntries.filter((entry) => (enabledWorkerIds as string[]).includes(entry.skillId))
++    : allEntries;
+ 
+   if (layout === "grid") {
+     return <SkillsGrid entries={entries} />;
+diff --git a/src/lib/engagement-skills.ts b/src/lib/engagement-skills.ts
+index 1093618..c31fdf6 100644
+--- a/src/lib/engagement-skills.ts
++++ b/src/lib/engagement-skills.ts
+@@ -1,8 +1,9 @@
+ import { db } from "@/lib/db";
+-import { engagementSkills } from "@/models/schema";
+-import { and, eq, inArray } from "drizzle-orm";
++import { engagements, engagementSkills, repIdentityGraphs } from "@/models/schema";
++import { and, eq, inArray, sql } from "drizzle-orm";
+ import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
+ import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
++import { WORKER_IDS, type WorkerId } from "@/lib/worker-registry";
+ 
+ /**
+  * No row for (engagementId, skillId) means enabled — this table only ever
+@@ -156,7 +157,13 @@ export async function getRepSkillStatesForEngagements(
+ }
+ 
+ /** Upserts the enabled flag for one (engagementId, skillId) pair — see the Skills panel on the engagement detail page.
+- * skillId widened to string, same reasoning as isSkillEnabledForEngagement above. */
++ * skillId widened to string, same reasoning as isSkillEnabledForEngagement above.
++ *
++ * Also stamps enabledAt the first time a skill is explicitly turned on —
++ * COALESCE'd so a later disable/re-enable cycle doesn't reset "when was
++ * this first enabled" back to now(). Disabling never touches enabledAt:
++ * once a worker has genuinely been turned on, that fact is worth keeping
++ * even if it's later switched off. */
+ export async function setSkillEnabledForEngagement(
+   engagementId: string,
+   skillId: string,
+@@ -164,9 +171,78 @@ export async function setSkillEnabledForEngagement(
+ ): Promise<void> {
+   await db
+     .insert(engagementSkills)
+-    .values({ engagementId, skillId, enabled })
++    .values({ engagementId, skillId, enabled, enabledAt: enabled ? new Date() : null })
+     .onConflictDoUpdate({
+       target: [engagementSkills.engagementId, engagementSkills.skillId],
+-      set: { enabled, updatedAt: new Date() },
++      set: enabled
++        ? { enabled, updatedAt: new Date(), enabledAt: sql`coalesce(${engagementSkills.enabledAt}, now())` }
++        : { enabled, updatedAt: new Date() },
+     });
+ }
++
++/**
++ * Which workers actually count as "enabled" for the Library's enabled-
++ * first sort and per-worker Analytics — reconciling two eras of data
++ * without touching either:
++ *
++ *   1. Explicit: an engagementSkills row with enabled=true and enabledAt
++ *      set (someone pressed enable through the Library after this concept
++ *      existed).
++ *   2. Evidence-based, for clients that predate the Library: real proof
++ *      of usage the same way scripts/audit-multi-engagement-workspaces.ts
++ *      and getRepEnrolledEngagementIds already establish product
++ *      enrollment — a non-null `stack` means every Showtime worker that
++ *      isn't explicitly disabled counts as enabled, and an existing
++ *      repIdentityGraphs row means every Reputation Manager worker that
++ *      isn't explicitly disabled counts as enabled.
++ *
++ * This intentionally never consults "no row = enabled" on its own for a
++ * worker with zero other evidence — that convention answers "is dispatch
++ * allowed to run this," a different question from "should this show as
++ * enabled in the Library," and conflating them would make every brand-new
++ * client look like it already has all 11 workers turned on.
++ */
++export async function getEnabledWorkerIdsForEngagement(engagementId: string): Promise<WorkerId[]> {
++  const [rows, [engagement], repGraph] = await Promise.all([
++    db.select({ skillId: engagementSkills.skillId, enabled: engagementSkills.enabled, enabledAt: engagementSkills.enabledAt })
++      .from(engagementSkills)
++      .where(eq(engagementSkills.engagementId, engagementId)),
++    db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1),
++    db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1),
++  ]);
++
++  const explicitlyEnabled = new Set(rows.filter((r) => r.enabled && r.enabledAt).map((r) => r.skillId));
++  const explicitlyDisabled = new Set(rows.filter((r) => !r.enabled).map((r) => r.skillId));
++
++  const hasShowtimeEvidence = Boolean(engagement?.stack);
++  const hasRepEvidence = repGraph.length > 0;
++
++  return WORKER_IDS.filter((id) => {
++    if (explicitlyDisabled.has(id)) return false;
++    if (explicitlyEnabled.has(id)) return true;
++    const isShowtimeWorker = (SKILL_IDS as string[]).includes(id);
++    if (isShowtimeWorker) return hasShowtimeEvidence;
++    return hasRepEvidence;
++  });
++}
++
++/** Same reasoning as getEnabledWorkerIdsForEngagement's evidence fallback,
++ * without the extra round trips — for call sites that already have the
++ * engagement's stack presence and rep-enrollment on hand (e.g. a roster
++ * page rendering many engagements at once) and just need the explicit-
++ * disable/enable overlay applied. */
++export function resolveEnabledWorkerIds(opts: {
++  hasShowtimeEvidence: boolean;
++  hasRepEvidence: boolean;
++  explicitRows: { skillId: string; enabled: boolean; enabledAt: Date | null }[];
++}): WorkerId[] {
++  const explicitlyEnabled = new Set(opts.explicitRows.filter((r) => r.enabled && r.enabledAt).map((r) => r.skillId));
++  const explicitlyDisabled = new Set(opts.explicitRows.filter((r) => !r.enabled).map((r) => r.skillId));
++
++  return WORKER_IDS.filter((id) => {
++    if (explicitlyDisabled.has(id)) return false;
++    if (explicitlyEnabled.has(id)) return true;
++    const isShowtimeWorker = (SKILL_IDS as string[]).includes(id);
++    return isShowtimeWorker ? opts.hasShowtimeEvidence : opts.hasRepEvidence;
++  });
++}
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+new file mode 100644
+index 0000000..3b9f59d
+--- /dev/null
++++ b/src/lib/worker-registry.ts
+@@ -0,0 +1,173 @@
++// src/lib/worker-registry.ts
++//
++// One catalog for every worker across every product, in place of two
++// parallel, independently-maintained manifests (skill-manifest.ts for
++// Showtime, rep-skill-manifest.ts for Reputation Manager). Both of those
++// files stay as the source of truth for their own product's ids/names/
++// descriptions — see each file's own header for why they're deliberately
++// separate types (SkillId vs RepSkillId) rather than one widened union.
++// This module is the merge point: it reads both and exposes one flat,
++// product-tagged catalog so new code (the Library page, the capabilities
++// grid, chat-driven enablement) can iterate "every worker that exists"
++// once, instead of hand-writing a Showtime branch and a Reputation
++// Manager branch every time — the exact per-product duplication pattern
++// that doesn't scale past two products.
++//
++// Nothing here changes runtime dispatch. src/inngest/skill.ts still owns
++// executing a skill by id; this is a read-only catalog for UI and
++// enablement flows to iterate, not a second registry of executors.
++
++import { SKILL_IDS, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
++import { REP_SKILL_IDS, REP_SKILL_MANIFEST, type RepSkillId } from "@/lib/rep-skill-manifest";
++import type { ProductId } from "@/lib/product-catalog";
++
++export type WorkerId = SkillId | RepSkillId;
++
++/**
++ * How a worker's config field should be sourced when it's being enabled
++ * for a client, instead of defaulting every field to a blank input on a
++ * form:
++ *   - "derivable": the agent can look this up itself from a seed the
++ *     client profile already has (e.g. brand voice from a domain, the
++ *     way pin-down-voice already works via chat-skill-trigger.ts) —
++ *     present it as a value to confirm/edit, never an empty box.
++ *   - "ask": no reasonable way to derive it; it's a real judgment call
++ *     that has to come from the person enabling the worker, asked as one
++ *     natural question rather than buried in a field grid.
++ *   - "secret": routes to the one secure credential path (reuse a saved
++ *     credential, OAuth connect, or the dedicated paste-a-key page) —
++ *     never rendered as a plain text input and never sent through chat.
++ *     See chat-credentials.ts's header for exactly why raw secrets are
++ *     excluded from the conversational path.
++ */
++export type WorkerConfigFieldKind = "derivable" | "ask" | "secret";
++
++export interface WorkerConfigField {
++  key: string;
++  label: string;
++  kind: WorkerConfigFieldKind;
++  /** What the field is and, for "derivable", what seed it can be derived from. */
++  description: string;
++}
++
++export interface WorkerDefinition {
++  id: WorkerId;
++  productId: ProductId;
++  name: string;
++  description: string;
++  runOnSetup: boolean;
++  hasHingesPanel: boolean;
++  /**
++   * Deliberately incomplete today. Filling this in correctly means tracing
++   * each skill's actual required inputs back to their real field on
++   * EngagementStack or repIdentityGraphs — the same kind of trace
++   * skill-manifest.ts's own header describes doing for display names — not
++   * something to guess at per-skill in one pass. rep-onboarding is filled
++   * in below as a verified worked example (traced against
++   * repIdentityGraphs' real columns in schema.ts); every other worker's
++   * array stays empty until it gets the same treatment. An empty array
++   * means "not yet classified," not "this worker needs no configuration."
++   */
++  configFields: WorkerConfigField[];
++}
++
++const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {};
++
++const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
++  "rep-onboarding": [
++    {
++      key: "operatorName",
++      label: "Operator / brand name",
++      kind: "derivable",
++      description: "Derivable from the client's domain, the same way pin-down-voice derives brand voice from a URL.",
++    },
++    {
++      key: "operatorDomains",
++      label: "Domains",
++      kind: "derivable",
++      description: "Derivable once a primary domain is known — the client profile's own domain is the seed.",
++    },
++    {
++      key: "operatorAliases",
++      label: "Known aliases",
++      kind: "ask",
++      description: "Not reliably derivable — other names the operator is known by, best answered directly.",
++    },
++    {
++      key: "operatorHandles",
++      label: "Social handles",
++      kind: "ask",
++      description: "Plausibly derivable from a domain in a future pass, but not verified yet — treated as ask for now.",
++    },
++    {
++      key: "competitors",
++      label: "Competitors",
++      kind: "ask",
++      description: "A judgment call about who counts as a competitor — not something to infer silently.",
++    },
++    {
++      key: "trustedSources",
++      label: "Trusted sources",
++      kind: "ask",
++      description: "Which review/mention sources actually matter to this client — a real preference, not a lookup.",
++    },
++    {
++      key: "crisisThresholdOverride",
++      label: "Crisis threshold",
++      kind: "ask",
++      description: "A subjective risk-tolerance call — has a sane default, only needs asking if they want to tune it.",
++    },
++  ],
++};
++
++function buildRegistry(): Record<WorkerId, WorkerDefinition> {
++  const registry = {} as Record<WorkerId, WorkerDefinition>;
++
++  for (const id of SKILL_IDS) {
++    const entry = SKILL_MANIFEST[id];
++    registry[id] = {
++      id,
++      productId: "showtime",
++      name: entry.name,
++      description: entry.description,
++      runOnSetup: entry.runOnSetup,
++      hasHingesPanel: entry.hasHingesPanel,
++      configFields: SHOWTIME_CONFIG_FIELDS[id] ?? [],
++    };
++  }
++
++  for (const id of REP_SKILL_IDS) {
++    const entry = REP_SKILL_MANIFEST[id];
++    registry[id] = {
++      id,
++      productId: "reputation-manager",
++      name: entry.name,
++      description: entry.description,
++      runOnSetup: entry.runOnSetup,
++      hasHingesPanel: entry.hasHingesPanel,
++      configFields: REP_CONFIG_FIELDS[id] ?? [],
++    };
++  }
++
++  return registry;
++}
++
++export const WORKER_REGISTRY: Record<WorkerId, WorkerDefinition> = buildRegistry();
++
++export const WORKER_IDS: WorkerId[] = [...SKILL_IDS, ...REP_SKILL_IDS];
++
++export function isWorkerId(value: string): value is WorkerId {
++  return (WORKER_IDS as string[]).includes(value);
++}
++
++export function getWorkerDefinition(id: WorkerId): WorkerDefinition {
++  return WORKER_REGISTRY[id];
++}
++
++export function workersForProduct(productId: ProductId): WorkerDefinition[] {
++  return WORKER_IDS.filter((id) => WORKER_REGISTRY[id].productId === productId).map((id) => WORKER_REGISTRY[id]);
++}
++
++export function allWorkers(): WorkerDefinition[] {
++  return WORKER_IDS.map((id) => WORKER_REGISTRY[id]);
++}
+diff --git a/src/lib/workspace.ts b/src/lib/workspace.ts
+index 2271a8d..6ac238a 100644
+--- a/src/lib/workspace.ts
++++ b/src/lib/workspace.ts
+@@ -251,6 +251,31 @@ export async function getInstalledPackagesByWorkspace(
+   return byWorkspace;
+ }
+ 
++/**
++ * The one engagement a workspace's own surfaces (the combined Work
++ * sidebar's Capabilities grid today) should treat as "this workspace's
++ * client" — oldest live engagement first, same rule
++ * scripts/split-multi-engagement-workspaces.ts uses to decide which
++ * engagement keeps a workspace's existing id when splitting it off.
++ *
++ * Once every workspace holds exactly one live engagement (the "one
++ * workspace = one client" migration), this is simply that engagement.
++ * Until that migration runs against a given workspace, this is a
++ * deliberate, deterministic choice rather than new ambiguity — it doesn't
++ * make today's multi-engagement-workspace confusion worse, and it's
++ * already correct for every workspace the migration has been applied to.
++ */
++export async function getPrimaryEngagementIdForWorkspace(workspaceId: string): Promise<string | null> {
++  const [row] = await db
++    .select({ engagementId: engagements.engagementId })
++    .from(engagements)
++    .where(and(eq(engagements.workspaceId, workspaceId), isNull(engagements.deletedAt)))
++    .orderBy(asc(engagements.createdAt))
++    .limit(1);
++
++  return row?.engagementId ?? null;
++}
++
+ /** Installs one available product into a workspace the caller owns. Product
+  * access is workspace-scoped, never inferred from a route or client input. */
+ export async function installPackageInWorkspace(
+diff --git a/src/models/schema.ts b/src/models/schema.ts
+index bd5fc46..00a4032 100644
+--- a/src/models/schema.ts
++++ b/src/models/schema.ts
+@@ -1637,6 +1637,23 @@ export const engagementSkills = pgTable(
+     // Per-skill overrides, if a skill ever needs config beyond what
+     // already lives on the engagement's stack. Unused by every skill today.
+     config: jsonb("config"),
++    // When this worker was explicitly turned on for this engagement, via a
++    // real enable action (setSkillEnabledForEngagement(..., true) in
++    // engagement-skills.ts). Deliberately NOT the same thing as "enabled":
++    // this table's long-standing convention is "no row = enabled" (see
++    // isSkillEnabledForEngagement's own comment) and that stays completely
++    // untouched here — every cron/poller gating dispatch off that
++    // convention keeps working exactly as before. This column exists only
++    // to answer a question that convention structurally can't: "did a
++    // human ever actually press enable on this, and when" — which is what
++    // the Library's enabled-first sort and per-worker Analytics need,
++    // without risking a change to which skills actually run for existing
++    // clients. NULL for any skill that predates the Worker Library concept
++    // or has only ever been implicitly on — see
++    // getEnabledWorkerIdsForEngagement in engagement-skills.ts for how the
++    // Library reconciles that legacy gap with real usage evidence instead
++    // of treating a NULL here as "not enabled."
++    enabledAt: timestamp("enabled_at"),
+     createdAt: timestamp("created_at").defaultNow().notNull(),
+     updatedAt: timestamp("updated_at").defaultNow().notNull(),
+   },
+-- 
+2.43.0
+
