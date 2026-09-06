@@ -50,7 +50,7 @@ function StatBlock({
  * product they're actually enrolled in — a pure-RM client got real stat
  * blocks that all read zero. This renders instead whenever the client has
  * an identity graph (repIdentityGraphRow), the same signal
- * RepSkillsPanel/RepAuditLogPanel already gate on elsewhere on this page.
+ * WorkersPanel/RepAuditLogPanel already gate on elsewhere on this page.
  */
 export function RepClientReportCard({
   operatorName,

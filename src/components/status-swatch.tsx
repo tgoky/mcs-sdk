@@ -7,8 +7,8 @@ import { SwatchLabel } from "@/components/swatch-label";
  * (`bg-zinc-100 ... ${MODULE_STATUS_COLORS[status]}`). Same status set,
  * same wording (MODULE_STATUS_LABELS is untouched), just a flatter,
  * legend-style treatment: a solid swatch carries the color, the text
- * stays plain. Shared by Showtime's SkillsPanel and Reputation Manager's
- * RepSkillsPanel so both products render status identically.
+ * stays plain. Shared by WorkersPanel (both Showtime's and Reputation
+ * Manager's workers) so every product renders status identically.
  */
 const SWATCH_COLOR: Record<ModuleStatus | "disabled", string> = {
   live: "bg-emerald-500",

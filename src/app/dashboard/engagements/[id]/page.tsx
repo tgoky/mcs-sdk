@@ -7,10 +7,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { EngagementPauseControl } from "./pause-control";
-import { SkillsPanel } from "./skills-panel";
-import { RepSkillsPanel } from "./rep-skills-panel";
+import { WorkersPanel } from "./workers-panel";
 import { RepAuditLogPanel } from "./rep-audit-log-panel";
-import { ProductsPanel, type ProductCardData, type ProductSetupState } from "./products-panel";
 import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
 import { MasterRosterCalendar } from "./master-roster-calendar";
 import { CallIntelligenceLog } from "./call-intelligence-log";
@@ -19,8 +17,9 @@ import { RunRowActions } from "./run-row-actions";
 import { getEngagementSkillStates, getRepEngagementSkillStates } from "@/lib/engagement-skills";
 import { getRecentAuditEvents } from "@/features/reputation-manager/server/audit-log";
 import { getInstalledPackagesByWorkspace } from "@/lib/workspace";
-import { WORKSPACE_PRODUCTS } from "@/lib/copy";
+import { SKILL_IDS } from "@/lib/skill-manifest";
 import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
+import type { WorkerId } from "@/lib/worker-registry";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { 
@@ -137,15 +136,11 @@ export default async function EngagementDetailPage({
   const offerDetails = engagement.offerDetails as Record<string, string | boolean> | null;
   const skillStates = await getEngagementSkillStates(id);
 
-  // ── Products panel data ─────────────────────────────────────────────
-  // Each product's own "is this set up for THIS client" criterion is its
-  // own concern, not a uniform flag — Showtime's is whether the wizard
-  // ever got as far as picking a booking platform (same signal
-  // bookingPlatformLabel(stack?.booking_platform) already uses just above
-  // for the header badge), Reputation Manager's is whether its identity
-  // graph row exists. A third product would add its own case here, same
-  // as SKILL_REGISTRY grew one entry at a time rather than trying to
-  // guess every future skill's shape up front.
+  // Whether Reputation Manager's own worker cards belong on this page —
+  // its identity graph existing is the real signal (same one the
+  // WorkersPanel-replaced RepSkillsPanel used), not just "is the product
+  // installed workspace-wide," since installing it and actually running
+  // Identity Setup for this specific client are different things.
   const installedProductIds = (
     await getInstalledPackagesByWorkspace([activeWorkspace.workspaceId])
   ).get(activeWorkspace.workspaceId) ?? [];
@@ -158,34 +153,14 @@ export default async function EngagementDetailPage({
         .limit(1)
     : [];
 
-  function productSetupState(productId: string): ProductSetupState {
-    if (productId === "showtime") return stack?.booking_platform ? "configured" : "needs_setup";
-    if (productId === "reputation-manager") return repIdentityGraphRow ? "configured" : "needs_setup";
-    return "needs_setup"; // a genuinely unknown product id defaults to "needs setup" rather than silently claiming it's configured
-  }
-
-  function productSetupHref(productId: string): string | undefined {
-    if (productId === "showtime") {
-      return `/dashboard/engagements/new?engagementId=${encodeURIComponent(engagement.engagementId)}&buyerName=${encodeURIComponent(engagement.buyer)}`;
-    }
-    // Reputation Manager's own hinges panel — attaches to this existing
-    // engagement, distinct from /dashboard/reputation-manager/new (that
-    // one creates a brand-new engagement instead).
-    if (productId === "reputation-manager") {
-      return `/dashboard/engagements/${encodeURIComponent(engagement.engagementId)}/bridges/rep-onboarding`;
-    }
-    return undefined;
-  }
-
-  const installedProducts: ProductCardData[] = WORKSPACE_PRODUCTS.filter(
-    (p) => p.status === "available" && installedProductIds.includes(p.id)
-  ).map((p) => ({
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    setupState: productSetupState(p.id),
-    setupHref: productSetupHref(p.id),
-  }));
+  // WorkersPanel's membership: every Showtime worker unconditionally
+  // (matching what SkillsPanel always rendered), plus every Reputation
+  // Manager worker once this client's identity graph exists (matching
+  // what RepSkillsPanel's own conditional render always required). Not a
+  // "currently enabled" filter — a worker's card stays visible even when
+  // toggled off, same as before, so there's still a way to turn it back
+  // on from this page.
+  const workerIds: WorkerId[] = [...SKILL_IDS, ...(repIdentityGraphRow ? REP_SKILL_IDS : [])];
 
   const runsBySkill = Object.fromEntries(
     SKILLS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
@@ -368,23 +343,13 @@ export default async function EngagementDetailPage({
           />
         )}
 
-        <ProductsPanel products={installedProducts} />
-
-        <SkillsPanel
+        <WorkersPanel
           engagementId={engagement.engagementId}
-          initialStates={skillStates}
-          runsBySkill={runsBySkill}
+          workerIds={workerIds}
+          initialStates={{ ...skillStates, ...(repSkillStates ?? {}) }}
+          runsByWorker={{ ...runsBySkill, ...repRunsBySkill }}
           isPaused={Boolean(engagement.pausedAt)}
         />
-
-        {repSkillStates && (
-          <RepSkillsPanel
-            engagementId={engagement.engagementId}
-            initialStates={repSkillStates}
-            runsBySkill={repRunsBySkill}
-            isPaused={Boolean(engagement.pausedAt)}
-          />
-        )}
 
         {repIdentityGraphRow && <RepAuditLogPanel events={repAuditEvents} />}
 

@@ -144,8 +144,8 @@ function activeSectionHref(pathname: string, productParam: string | null, fromPa
   }
 
   // /dashboard/engagements/[id] is one shared detail page for both
-  // products (it shows Showtime's SkillsPanel and RM's RepSkillsPanel/
-  // RepAuditLogPanel on the client that has each set up) — there's no
+  // products (its WorkersPanel shows both Showtime's and RM's workers
+  // together, plus RM's own RepAuditLogPanel) — there's no
   // single right answer from the path alone. `from` carries where the
   // visit actually came from (ModuleClientRoster's hrefFor sets it);
   // trust it when it points at an RM module, default to Showtime

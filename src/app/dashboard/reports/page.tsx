@@ -32,7 +32,7 @@ export default async function ReportsPage({
   // to always render Showtime's ClientReportCard regardless, so a pure-RM
   // client (booking_platform never set, no Showtime activity at all) got a
   // real card whose every stat read zero. Same repIdentityGraphRow signal
-  // the engagement page itself gates RepSkillsPanel/RepClientReportCard on.
+  // the engagement page itself gates WorkersPanel's RM half/RepClientReportCard on.
   const [repIdentityGraphRow] = selected
     ? await db
         .select({ operatorName: repIdentityGraphs.operatorName, soleAuthorityName: repIdentityGraphs.soleAuthorityName })
