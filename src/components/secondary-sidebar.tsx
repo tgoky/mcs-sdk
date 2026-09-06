@@ -80,10 +80,18 @@ export function SecondarySidebar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Library is intentionally a single-page marketplace.
+  // Library is intentionally a single-page marketplace. Teammates is
+  // intentionally a self-contained two-pane layout of its own (thread
+  // rail + chat, see teammates-workspace.tsx) — the generic Work sidebar
+  // (Home/Clients/Reports/Queue/Executions/Capabilities) was showing up
+  // to its left for no reason, wasting width and duplicating the "list of
+  // things" role its own thread rail already plays. Hiding this column
+  // for both routes lets their own content use the full width instead.
   if (
     pathname === "/dashboard/library" ||
-    pathname.startsWith("/dashboard/library/")
+    pathname.startsWith("/dashboard/library/") ||
+    pathname === "/dashboard/teammates" ||
+    pathname.startsWith("/dashboard/teammates/")
   ) {
     return null;
   }

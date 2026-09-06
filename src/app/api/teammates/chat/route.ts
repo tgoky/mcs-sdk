@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
-import { getActiveWorkspace } from "@/lib/workspace";
+import { getActiveWorkspace, isPackageInstalledInWorkspace } from "@/lib/workspace";
 import { and, eq, isNull } from "drizzle-orm";
 import { callClaudeWithTools, MODEL, type ClaudeMessage, type ClaudeContentBlock } from "@/lib/llm";
 import { triggerSkillRunForEngagement } from "@/lib/skill-trigger";
 import { createThread, getOwnedThread, appendMessage, loadThreadForModel } from "@/lib/chat-threads";
 import { createMinimalEngagement } from "@/lib/create-minimal-engagement";
+import { createMinimalRepEngagement } from "@/lib/create-minimal-rep-engagement";
+import { getRepEnrolledEngagementIds } from "@/lib/rep-engagements";
 import { checkCredentialAvailability, linkReusableCredential, getComposioConnectLink, hasBookingCredential } from "@/lib/chat-credentials";
 import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries } from "@/lib/chat-status-queries";
 import { enrollProspectInWinBack } from "@/lib/chat-winback";
@@ -17,13 +19,23 @@ import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS } from "@/lib/copy";
 export const runtime = "nodejs";
 
 // ── Teammates chat (2026-08-25, persistence 2026-08-30, create_client +
-// credential linking 2026-09-01) ─────────────────────────────────────────
+// credential linking 2026-09-01, Reputation Manager parity 2026-09-06)
+// ─────────────────────────────────────────────────────────────────────
 // v1 scope: six real actions wired up as tools — trigger_call_brief
 // (pre-call-read), trigger_leak_map (the only two skills that support a
 // manual trigger at all, see src/lib/skill-trigger.ts), create_client
 // (name-only, see create-minimal-engagement.ts), and three that close the
 // gap create_client deliberately left open — check_credential,
 // connect_credential, use_saved_credential (see chat-credentials.ts).
+// create_rep_client is Reputation Manager's counterpart to create_client —
+// same name-only shape, see create-minimal-rep-engagement.ts — but RM has
+// no counterpart to trigger_call_brief/trigger_leak_map yet: its watch
+// skills (engine panel, Trustpilot/Reddit/Twitter watch, crisis response)
+// have no manual "run now" anywhere in the app, dashboard included, only
+// their own cron schedule — building that is a real, separate feature
+// (a manual-trigger endpoint/Inngest event for those skills doesn't exist
+// to call), not something to fake here. The system prompt says as much
+// rather than pretending it's wired up.
 // Together those three get a client from "just a name" to "actually has a
 // real, launchable credential" without a raw secret ever passing through
 // a chat message — see chat-credentials.ts's header for exactly why that
@@ -67,13 +79,25 @@ const TOOLS = [
   {
     name: "create_client",
     description:
-      "Creates a new client (engagement) by name. Only sets the name — no booking/email platform, credentials, or offer details are collected here. The reply should tell the user to finish setup on the client's own page (linked automatically) before anything can actually run for them.",
+      "Creates a new Showtime client (engagement) by name. Only sets the name — no booking/email platform, credentials, or offer details are collected here. The reply should tell the user to finish setup on the client's own page (linked automatically) before anything can actually run for them.",
     input_schema: {
       type: "object",
       properties: {
         buyerName: { type: "string", description: "The client's name, exactly as the user said it." },
       },
       required: ["buyerName"],
+    },
+  },
+  {
+    name: "create_rep_client",
+    description:
+      "Creates a new Reputation Manager client by operator name — the person or brand whose online reputation will be monitored. Only sets the name, same minimal shape as create_client. No aliases, handles, domains, competitors, or engine selection are collected here — the reply should tell the user to finish Identity Setup on the client's own page (linked automatically), the same as anything created from Reputation Manager's own 'New client' page would need to.",
+    input_schema: {
+      type: "object",
+      properties: {
+        operatorName: { type: "string", description: "The operator's name, exactly as the user said it." },
+      },
+      required: ["operatorName"],
     },
   },
   {
@@ -225,17 +249,22 @@ const TOOLS = [
     },
   },
 ];
-function buildSystemPrompt(clients: { engagementId: string; buyer: string }[]): string {
-  const clientList = clients.length > 0 ? clients.map((c) => `- ${c.buyer} (engagementId: ${c.engagementId})`).join("\n") : "(no clients yet)";
+function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEnrolled: boolean }[], repInstalled: boolean): string {
+  const clientList =
+    clients.length > 0
+      ? clients.map((c) => `- ${c.buyer} (engagementId: ${c.engagementId}${c.repEnrolled ? ", Reputation Manager" : ""})`).join("\n")
+      : "(no clients yet)";
   return [
-    "You are Teammates, an assistant inside a sales-automation dashboard. You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new client by name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries — for any client, without triggering anything.",
+    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries — for any client, without triggering anything.",
     "",
-    "Clients:",
+    "Clients (a client tagged \"Reputation Manager\" is enrolled in that product; everyone else is Showtime-only unless just created and not yet set up):",
     clientList,
     "",
     "Rules:",
-    "- For Call Brief or Leak Map: only call the tool once you're sure which client the user means. If the client name is ambiguous, missing, or doesn't match anyone in the list above, ask a short clarifying question instead of guessing — never call a tool with a guessed engagementId. If they seem to mean a client who isn't in the list, ask whether they want to create that client first rather than assuming. Call Brief specifically needs a booking platform connected to run at all — if the tool says one isn't connected, offer to help set that up rather than just reporting the error and stopping.",
-    "- For create_client: only the name is needed. Don't ask for booking/email platform, credentials, or anything else — that happens on the client's own page afterward, which the reply will link to automatically.",
+    "- For Call Brief or Leak Map: only call the tool once you're sure which client the user means. If the client name is ambiguous, missing, or doesn't match anyone in the list above, ask a short clarifying question instead of guessing — never call a tool with a guessed engagementId. If they seem to mean a client who isn't in the list, ask whether they want to create that client first rather than assuming. Call Brief specifically needs a booking platform connected to run at all — if the tool says one isn't connected, offer to help set that up rather than just reporting the error and stopping. Neither tool applies to a Reputation Manager-only client — say so instead of trying.",
+    "- For create_client: only the name is needed. Don't ask for booking/email platform, credentials, or anything else — that happens on the client's own page afterward, which the reply will link to automatically. Use this for a Showtime client.",
+    `- For create_rep_client: only the operator name is needed (the person/brand whose reputation is being monitored) — same minimal shape as create_client, just for Reputation Manager. ${repInstalled ? "Full identity-graph setup (aliases, handles, domains, competitors, which engines to run) still happens on the client's own Identity Setup page afterward, which the reply will link to automatically." : "Reputation Manager isn't installed in this workspace — if asked to create one, say so plainly rather than calling the tool."}`,
+    "- Reputation Manager's own watch skills (AI Engine Watch, Trustpilot/Reddit/Twitter Watch, Crisis Response) run automatically on their own schedule once a client's Identity Setup is complete — there's no manual \"run now\" for them yet, in the dashboard or here. If asked to trigger one on demand, say so plainly rather than pretending to.",
     "- For booking or email platform setup: always call check_credential first, never assume whether one already exists or is reusable. If it finds a reusable saved credential, ask before calling use_saved_credential — don't link it without confirming. If none exists and the platform is Composio-managed (Calendly/GoHighLevel Calendar for booking; HubSpot/Klaviyo/Mailchimp/GoHighLevel for email), call connect_credential and tell the user to click the link — it's a real redirect, not something you can finish for them. For anything else (Cal.com, OnceHub, ActiveCampaign, ConvertKit, direct SMTP), or if they'd rather type a key directly, tell them to paste it on the client's own page instead — you can't collect a raw credential value in chat, only real links or saved-credential reuse. Always pass the correct field (\"booking\" or \"email\") matching which platform you're setting up.",
     "- Never ask the user to paste an API key or secret directly in this chat, under any circumstances, even if they offer to.",
     "- If a message arrives saying a platform was just connected, that means the user completed a connect_credential link and came back — call check_credential for that client/provider (it should now show a reusable credential) and then use_saved_credential to finish linking it, using whichever client was being set up earlier in the conversation.",
@@ -243,7 +272,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string }[]): 
     "- After a tool call, tell the user plainly what happened, including any error a tool returned (e.g. the skill being disabled for that client).",
     "- For enroll_in_winback: needs a working email-platform credential on the client already, plus the platform's recovery list/workflow configured — if the tool reports something's missing, tell the user plainly what and point them to the client's page, don't retry blindly.",
     "- extract_brand_voice, generate_video_scripts, generate_ad_briefs, and audit_confirmation_page all run in the background and take a while — always tell the user it's running and won't finish instantly, and offer to check status with get_run_history if they ask later. None of these run the full Show Rate Setup wizard end to end (no booking webhook wiring, no new page deployment) — each does exactly the one piece it's named for, using whatever the client already has on file (brand voice, offer details, call questions) and degrading to a more generic result if some of that isn't set yet, never failing outright for missing optional context. If asked to build or deploy a new confirmation page (not audit an existing one), say plainly that's not wired up — audit_confirmation_page only reviews a page that already exists.",
-    "- You can only trigger Call Brief, Leak Map, create a client, set up a booking or email credential, enroll someone in win-back, run Show Rate Setup's four individual pieces above, and answer status questions right now. If asked for its full onboarding wizard end to end, or anything Pre-Call Sequence/Pile-On related (that's webhook-only, see the client's own page), say plainly that it's not wired up rather than pretending to do it.",
+    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, run Show Rate Setup's four individual pieces above, and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, anything Pre-Call Sequence/Pile-On related (that's webhook-only, see the client's own page), or to manually trigger a Reputation Manager watch skill, say plainly that it's not wired up rather than pretending to do it.",
     "- Keep replies short and direct.",
   ].join("\n");
 }
@@ -262,10 +291,15 @@ export async function POST(request: Request) {
     }
 
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
-    const clients = await db
-      .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
-      .from(engagements)
-      .where(and(eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId), isNull(engagements.deletedAt)));
+    const [clients, repEnrolledIds, repInstalled] = await Promise.all([
+      db
+        .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
+        .from(engagements)
+        .where(and(eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId), isNull(engagements.deletedAt))),
+      getRepEnrolledEngagementIds(session.whopUserId, activeWorkspace.workspaceId),
+      isPackageInstalledInWorkspace(activeWorkspace.workspaceId, "reputation-manager"),
+    ]);
+    const repEnrolledSet = new Set(repEnrolledIds);
 
     // Resolve (or create) the thread this message belongs to. A threadId
     // the caller doesn't actually own (wrong workspace, stale after a DB
@@ -293,7 +327,8 @@ export async function POST(request: Request) {
 
     await appendMessage({ threadId, role: "user", kind: "text", rawContent: message, displayText: message });
 
-    const system = buildSystemPrompt(clients);
+    const clientsForPrompt = clients.map((c) => ({ ...c, repEnrolled: repEnrolledSet.has(c.engagementId) }));
+    const system = buildSystemPrompt(clientsForPrompt, repInstalled);
     const history = await loadThreadForModel(threadId);
 
     const first = await callClaudeWithTools({ model: MODEL.SYNTHESIS, system, messages: history, tools: TOOLS, maxTokens: 800 });
@@ -325,6 +360,22 @@ export async function POST(request: Request) {
           links.push({ label: `${buyerName}'s page`, href: `/dashboard/engagements/${created.engagementId}` });
         } else {
           message2 = "No client name was provided.";
+        }
+      } else if (block.name === "create_rep_client") {
+        const operatorName = typeof block.input.operatorName === "string" ? block.input.operatorName.trim() : "";
+        if (!operatorName) {
+          message2 = "No operator name was provided.";
+        } else if (!repInstalled) {
+          message2 = "Reputation Manager isn't installed in this workspace.";
+        } else {
+          const result = await createMinimalRepEngagement({ whopUserId: session.whopUserId, workspaceId: activeWorkspace.workspaceId, operatorName });
+          ok = result.ok;
+          message2 = result.ok
+            ? `Created ${operatorName}. Identity Setup (aliases, handles, domains, competitors, which engines to run) still needs to be finished on their page before monitoring actually starts.`
+            : result.error;
+          if (result.ok) {
+            links.push({ label: `${operatorName}'s Identity Setup`, href: `/dashboard/engagements/${result.engagementId}/bridges/rep-onboarding` });
+          }
         }
       } else if (block.name === "check_credential") {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";

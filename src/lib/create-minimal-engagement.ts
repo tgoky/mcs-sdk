@@ -1,50 +1,92 @@
-// src/lib/create-minimal-engagement.ts
+// src/lib/create-minimal-rep-engagement.ts
 //
-// A client created with just a name — nothing else. Same minimal insert
-// shape src/app/api/reputation-manager/new/route.ts already established
-// for its own "new client" entry point, generalized here for Teammates
-// chat's create_client tool rather than duplicated.
+// Extracted from src/app/api/reputation-manager/new/route.ts (2026-09-06)
+// so Teammates chat's create_rep_client tool can create a real
+// Reputation Manager client in-process — the exact same insert +
+// identity-graph-intake + rep-onboarding dispatch that route already
+// does, not a second, drifting copy. Same extraction shape
+// skill-trigger.ts already used for Showtime's manual triggers; the route
+// is now a thin wrapper around this function, behavior unchanged for its
+// existing caller.
 //
-// Deliberately does NOT try to be a chat replica of the full
-// /dashboard/engagements/new wizard (offer details, top call questions,
-// objections, credentials, hosting, testimonials, booking/email platform
-// — none of that is asked here). Same "additive, not a replacement" rule
-// this project settled on for chat-driven onboarding generally: this gets
-// a real, launchable-once-configured row into existence fast, full setup
-// still happens on the engagement's own page afterward, same as it would
-// for a client someone half-filled out in the wizard and came back to
-// later. launchedAt stays null exactly the way the wizard's own post-save
-// (pre-launch) state already works — this isn't a new lifecycle state,
-// it's the same one.
-//
-// stack is deliberately left unset, not partially set — EngagementStack
-// requires booking_platform_credentials_ref (and its email counterpart),
-// so a stack built from just a platform choice with no credential
-// wouldn't actually satisfy the type, and a half-valid stack would be a
-// more confusing state on the engagement's own page afterward than no
-// stack at all. Same reasoning the reputation-manager precedent already
-// applied — its own minimal insert leaves stack out entirely too.
+// Deliberately name-only, same "additive, not a replacement" rule
+// create-minimal-engagement.ts (Showtime's own chat counterpart) follows:
+// operatorAliases/handles/domains/offerings/competitors/etc. all default
+// empty here. Full identity-graph setup still happens on
+// /dashboard/engagements/[id]/bridges/rep-onboarding afterward, same as a
+// client created from the real "New client" page who didn't fill
+// everything in would need to finish there too.
 
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { generateEngagementId } from "@/lib/engagement-id";
+import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { dispatchSkillRun } from "@/lib/skill-dispatch";
+import { saveRepIdentityGraphIntake, type RepIntakeInput } from "@/features/reputation-manager/server/onboarding-service";
 import crypto from "crypto";
 
-export async function createMinimalEngagement(opts: {
+export type CreateMinimalRepEngagementResult =
+  | { ok: true; engagementId: string; runId: string }
+  | { ok: false; error: string };
+
+export async function createMinimalRepEngagement(opts: {
   whopUserId: string;
   workspaceId: string;
-  buyerName: string;
-}): Promise<{ engagementId: string }> {
-  const buyerName = opts.buyerName.trim();
+  operatorName: string;
+}): Promise<CreateMinimalRepEngagementResult> {
+  const buyerName = opts.operatorName.trim();
+  if (!buyerName) {
+    return { ok: false, error: "Operator name is required." };
+  }
+
   const engagementId = generateEngagementId(buyerName);
 
-  await db.insert(engagements).values({
-    id: crypto.randomUUID(),
-    engagementId,
-    whopUserId: opts.whopUserId,
-    workspaceId: opts.workspaceId,
-    buyer: buyerName,
-  });
+  // onConflictDoNothing as defense-in-depth, matching the route this was
+  // extracted from — engagementId is timestamp-suffixed (engagement-id.ts)
+  // so a real collision is astronomically rare.
+  await db
+    .insert(engagements)
+    .values({
+      id: crypto.randomUUID(),
+      engagementId,
+      whopUserId: opts.whopUserId,
+      workspaceId: opts.workspaceId,
+      buyer: buyerName,
+      schemaVersion: "1.0",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .onConflictDoNothing({ target: engagements.engagementId });
 
-  return { engagementId };
+  const input: RepIntakeInput = {
+    operatorName: buyerName,
+    operatorAliases: [],
+    operatorHandles: {},
+    operatorDomains: [],
+    operatorEmailContacts: [],
+    entities: [],
+    offerings: [],
+    competitors: [],
+    collisions: [],
+    trustedSources: [],
+    seedPanelPrompts: [],
+    soleAuthorityName: "",
+    crisisThresholdOverride: null,
+    activeEngines: null,
+  };
+
+  const result = await saveRepIdentityGraphIntake(engagementId, input);
+  if ("error" in result) {
+    // The row already exists at this point (created above) — a
+    // validation failure here means an incomplete-but-real client, not
+    // an orphan. Reachable again at the rep-onboarding bridge to finish,
+    // same as any other engagement whose setup didn't finish in one
+    // sitting.
+    return { ok: false, error: result.error };
+  }
+
+  await setSkillEnabledForEngagement(engagementId, "rep-onboarding", true);
+  const runId = await dispatchSkillRun(engagementId, "rep-onboarding", buyerName);
+
+  return { ok: true, engagementId, runId };
 }

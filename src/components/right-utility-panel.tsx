@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import {
   X,
   Maximize2,
+  Plus,
   CalendarRange,
   MessageSquareQuote,
   Bell,
@@ -87,6 +88,19 @@ export function RightUtilityPanel({
   if (activePanel && activePanel !== displayedPanel) {
     setDisplayedPanel(activePanel);
   }
+
+  // Teammates-only "new conversation" control (header button below) —
+  // mirrors teammates-workspace.tsx's own startNewChat/epoch pattern one
+  // level up, since the compact panel has no thread rail of its own to
+  // host that button. `teammatesThreadOverride` stays undefined until the
+  // button is clicked, so a plain panel-open keeps reading the last
+  // active thread from localStorage exactly as before.
+  const [teammatesEpoch, setTeammatesEpoch] = useState(0);
+  const [teammatesThreadOverride, setTeammatesThreadOverride] = useState<string | null | undefined>(undefined);
+  const startNewTeammatesChat = useCallback(() => {
+    setTeammatesThreadOverride(null);
+    setTeammatesEpoch((e) => e + 1);
+  }, []);
   useEffect(() => {
     if (activePanel) return;
     const timeout = setTimeout(() => setDisplayedPanel(null), 150);
@@ -146,6 +160,17 @@ export function RightUtilityPanel({
               {meta.label}
             </span>
             <div className="flex items-center gap-1">
+              {displayedPanel === "teammates" && (
+                <button
+                  type="button"
+                  onClick={startNewTeammatesChat}
+                  className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
+                  title="New conversation"
+                  aria-label="New conversation"
+                >
+                  <Plus size={14} />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -185,7 +210,7 @@ export function RightUtilityPanel({
             ) : displayedPanel === "upcoming" ? (
               <UpcomingPanelContent />
             ) : displayedPanel === "teammates" ? (
-              <TeammatesPanelContent />
+              <TeammatesPanelContent key={teammatesEpoch} initialThreadId={teammatesThreadOverride} />
             ) : (
               <ComingSoonPanel panelKey={displayedPanel} />
             )}

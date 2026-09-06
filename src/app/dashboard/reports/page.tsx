@@ -85,7 +85,9 @@ export default async function ReportsPage({
               land on a card whose heading didn't match what was just
               clicked. This is the one label guaranteed to agree with the
               picker no matter which product's card renders below it. */}
-          {selected && <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{selected.buyer}</p>}
+          {(repMetrics && repIdentityGraphRow) || (showtimeMetrics && selected) ? (
+            selected && <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{selected.buyer}</p>
+          ) : null}
           {repMetrics && repIdentityGraphRow ? (
             <RepClientReportCard
               operatorName={repIdentityGraphRow.operatorName}
