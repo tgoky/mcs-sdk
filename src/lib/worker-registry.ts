@@ -89,7 +89,125 @@ export interface WorkerDefinition {
   configFields: WorkerConfigField[];
 }
 
-const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {};
+// pin-down's fields, traced against the real wizard (offer-step.tsx,
+// stack-step.tsx, voice-step.tsx) and /api/engagements/setup's own
+// required-field check — the same rigor as rep-onboarding below, at the
+// same altitude: a platform CHOICE (booking/email/hosting/SMS/ad-data)
+// is one "ask" field even though each choice branches into its own
+// mechanical sub-fields (a Twilio SID, a Webflow site ID, a Google
+// Sheets spreadsheet ID) once picked — those sub-fields are downstream
+// mechanics of an already-classified decision, not separate client
+// facts worth their own entry, consistent with how rep-onboarding didn't
+// split "which Trustpilot URL format" out from trustedSources either.
+const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+  "pin-down": [
+    {
+      key: "buyerDomain",
+      label: "Client domain",
+      kind: "derivable",
+      description: "Pre-fillable from the client profile's shared primaryDomain — also what smart pre-fill and brand voice extraction crawl.",
+      derivableFrom: "primaryDomain",
+    },
+    {
+      key: "rawVoiceCorpus",
+      label: "Brand voice",
+      kind: "derivable",
+      description: "Derived by crawling the client's domain — the exact mechanism chat-skill-trigger.ts's extract_brand_voice already runs standalone, not a new capability.",
+      derivableFrom: "primaryDomain",
+    },
+    {
+      key: "publishDomain",
+      label: "Confirmation page domain",
+      kind: "derivable",
+      description: "Usually the same domain as buyerDomain, but stored separately since a confirmation page can publish to a different subdomain — pre-filled as a suggestion, not forced to match.",
+      derivableFrom: "primaryDomain",
+    },
+    {
+      key: "offerName",
+      label: "What they're selling",
+      kind: "ask",
+      description: "A real business fact only the operator knows — no seed to derive it from.",
+    },
+    {
+      key: "offerPrice",
+      label: "Price",
+      kind: "ask",
+      description: "Not derivable — the operator's own pricing.",
+    },
+    {
+      key: "offerVertical",
+      label: "Industry / vertical",
+      kind: "ask",
+      description: "Powers Leak Map's cross-client benchmarks — a real classification call, not inferred.",
+    },
+    {
+      key: "offerIcp",
+      label: "Ideal customer",
+      kind: "ask",
+      description: "A judgment call about who the offer targets.",
+    },
+    {
+      key: "trafficTemperature",
+      label: "Lead source temperature",
+      kind: "ask",
+      description: "Cold/warm/hot — a real classification, not derivable from a domain.",
+    },
+    {
+      key: "prospectMeets",
+      label: "Who runs the calls",
+      kind: "ask",
+      description: "A role/person fact, not derivable.",
+    },
+    {
+      key: "topCallQuestions",
+      label: "Common call questions",
+      kind: "ask",
+      description: "Plausibly derivable from FAQ content in a future pass, but not built — honestly ask for now rather than claim an unbuilt capability.",
+    },
+    {
+      key: "topObjections",
+      label: "Common objections",
+      kind: "ask",
+      description: "Same reasoning as topCallQuestions — real content only the operator has today.",
+    },
+    {
+      key: "bookingPlatform",
+      label: "Booking platform",
+      kind: "ask",
+      description: "Which calendar tool the client uses — a real choice.",
+    },
+    {
+      key: "bookingPlatformCredential",
+      label: "Booking platform credential",
+      kind: "secret",
+      description: "Routes to the credential reuse/OAuth/paste-a-key path — never a plain text field, never sent through chat.",
+    },
+    {
+      key: "emailPlatform",
+      label: "Email platform",
+      kind: "ask",
+      description: "Which email/CRM tool follow-ups send from — a real choice.",
+    },
+    {
+      key: "emailPlatformCredential",
+      label: "Email platform credential",
+      kind: "secret",
+      description: "Same secret path as the booking credential.",
+    },
+    {
+      key: "hostingPlatform",
+      label: "Confirmation page hosting",
+      kind: "ask",
+      description: "Where the confirmation page publishes — a real choice, each option branching into its own mechanical sub-fields once picked.",
+    },
+    {
+      key: "confirmationPageTemplate",
+      label: "Confirmation page template",
+      kind: "ask",
+      description: "A style preference, not derivable.",
+    },
+  ],
+};
 
 const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
   "rep-onboarding": [
