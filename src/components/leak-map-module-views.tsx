@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback, Fragment, type ReactNode } from "react";
+import { useMemo, useState, useEffect, useCallback, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -22,6 +22,7 @@ import {
   Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SwatchLabel } from "@/components/swatch-label";
 import type { SkillManifestEntry } from "@/lib/skill-manifest";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { cancelSkillRun, pauseEngagement, resumeEngagement, triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
@@ -79,30 +80,23 @@ function deriveLabel(status: string): string {
   return "Pending";
 }
 
+const TONE_COLOR: Record<"success" | "danger" | "warning" | "neutral", string> = {
+  success: "bg-emerald-500",
+  warning: "bg-amber-500",
+  danger: "bg-rose-500",
+  // Matches module-client-roster.tsx's own not_run/neutral color — no
+  // gray anywhere status shows up, "pending" isn't an exception.
+  neutral: "bg-violet-400",
+};
+
 function StatusBadge({
   tone,
   children,
 }: {
   tone: "success" | "danger" | "warning" | "neutral";
-  children: ReactNode;
+  children: string;
 }) {
-  const styles = {
-    success: "bg-emerald-400 text-zinc-950 font-bold",
-    warning: "bg-amber-400 text-zinc-950 font-bold",
-    danger: "bg-rose-400 text-zinc-950 font-bold",
-    neutral: "bg-zinc-700 text-zinc-100 font-medium",
-  }[tone];
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-sans tracking-wide select-none shrink-0",
-        styles
-      )}
-    >
-      {children}
-    </span>
-  );
+  return <SwatchLabel colorClass={TONE_COLOR[tone]} label={children} />;
 }
 
 function runSignature(run: SkillRun): string {

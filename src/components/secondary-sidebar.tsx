@@ -9,9 +9,10 @@ interface SecondarySidebarProps {
   settings: ReactNode;
   reputationManager: ReactNode;
   showtime: ReactNode;
+  reports: ReactNode;
 }
 
-type SectionKey = "reputation-manager" | "showtime" | "settings" | "work";
+type SectionKey = "reputation-manager" | "showtime" | "settings" | "work" | "reports";
 
 // /dashboard/modules and /dashboard/engagements are deliberately NOT in
 // this static table — both are shared across products (see
@@ -28,7 +29,7 @@ const SECTION_PREFIXES: Array<{ key: SectionKey; prefix: string }> = [
   { key: "showtime", prefix: "/dashboard/meetings" },
   { key: "showtime", prefix: "/dashboard/analytics" },
   { key: "settings", prefix: "/dashboard/settings" },
-  { key: "showtime", prefix: "/dashboard/reports" },
+  { key: "reports", prefix: "/dashboard/reports" },
 ];
 
 function activeSection(pathname: string, fromParam: string | null): SectionKey {
@@ -66,6 +67,7 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   showtime: "Showtime",
   "reputation-manager": "Reputation Manager",
   settings: "Settings",
+  reports: "Reports",
 };
 
 export function SecondarySidebar({
@@ -73,6 +75,7 @@ export function SecondarySidebar({
   settings,
   reputationManager,
   showtime,
+  reports,
 }: SecondarySidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -104,6 +107,7 @@ export function SecondarySidebar({
     showtime,
     "reputation-manager": reputationManager,
     settings,
+    reports,
   };
 
   return (
