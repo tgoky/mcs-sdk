@@ -10,7 +10,7 @@ import {
   AtSign,
 } from "lucide-react";
 import { PrefillLoader } from "@/components/prefill-loader";
-import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { AnySkillBadge } from "@/components/any-skill-badge";
 import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 
 interface ChatMessage {
@@ -66,6 +66,38 @@ export const MENTIONABLE_SKILLS = [
     label: "Leak Map",
     pillStyle: "bg-sky-400/20 text-sky-700 dark:text-sky-300 border-sky-500/30 backdrop-blur-xs",
   },
+  // Reputation Manager's 6 — distinct hues from the 5 above so a mention
+  // pill's color alone tells you which product it's from.
+  {
+    token: "rep-onboarding",
+    label: "Identity Setup",
+    pillStyle: "bg-teal-400/20 text-teal-700 dark:text-teal-300 border-teal-500/30 backdrop-blur-xs",
+  },
+  {
+    token: "rep-engine-panel",
+    label: "AI Engine Watch",
+    pillStyle: "bg-indigo-400/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 backdrop-blur-xs",
+  },
+  {
+    token: "rep-trustpilot-watch",
+    label: "Trustpilot Watch",
+    pillStyle: "bg-lime-400/20 text-lime-700 dark:text-lime-300 border-lime-500/30 backdrop-blur-xs",
+  },
+  {
+    token: "rep-reddit-watch",
+    label: "Reddit Watch",
+    pillStyle: "bg-orange-400/20 text-orange-700 dark:text-orange-300 border-orange-500/30 backdrop-blur-xs",
+  },
+  {
+    token: "rep-twitter-watch",
+    label: "Twitter/X Watch",
+    pillStyle: "bg-fuchsia-400/20 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30 backdrop-blur-xs",
+  },
+  {
+    token: "rep-crisis-response",
+    label: "Crisis Response",
+    pillStyle: "bg-red-400/20 text-red-700 dark:text-red-300 border-red-500/30 backdrop-blur-xs",
+  },
 ];
 
 function FormattedMessage({ content, mentionPillTextSize }: { content: string; mentionPillTextSize: string }) {
@@ -82,7 +114,7 @@ function FormattedMessage({ content, mentionPillTextSize }: { content: string; m
                 key={i}
                 className={`inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-full font-medium border ${mentionPillTextSize} ${skill.pillStyle}`}
               >
-                <SquishySkillBadge skill={skill.token} size={14} />
+                <AnySkillBadge skill={skill.token} size={14} />
                 <span>{skill.label}</span>
               </span>
             );
@@ -380,7 +412,7 @@ export function TeammatesChat({
                   onClick={() => addSkillTag(s.token)}
                   className={`flex items-center gap-2 w-full text-left px-3 py-2 font-medium hover:bg-white/50 dark:hover:bg-white/10 text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer ${dropdownItemTextSize}`}
                 >
-                  <SquishySkillBadge skill={s.token} size={16} />
+                  <AnySkillBadge skill={s.token} size={16} />
                   <span>@{s.token}</span>
                 </button>
               ))}
@@ -398,7 +430,7 @@ export function TeammatesChat({
                     key={token}
                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium border ${tagPillTextSize} ${skill.pillStyle} shrink-0`}
                   >
-                    <SquishySkillBadge skill={skill.token} size={14} />
+                    <AnySkillBadge skill={skill.token} size={14} />
                     <span>{skill.label}</span>
                     <button
                       type="button"

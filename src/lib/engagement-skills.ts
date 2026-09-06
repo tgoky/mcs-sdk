@@ -118,6 +118,43 @@ export async function getSkillStatesForEngagements(
   );
 }
 
+/** Same bulk shape as getSkillStatesForEngagements, for Reputation Manager's
+ * 6 skills — the Autopilot rail panel used to only ever fetch Showtime's
+ * skill states here, so an RM client showed there with 5 Showtime skill
+ * chips that never applied to them (and no way to see or toggle any of
+ * their actual 6). Callers still need to gate display on whether a given
+ * engagement is actually RM-enrolled (getRepEnrolledEngagementIds) — this
+ * returns "all enabled" defaults for a non-enrolled id same as
+ * getSkillStatesForEngagements does for Showtime, which is meaningless on
+ * its own but harmless since it's never rendered without that gate. */
+export async function getRepSkillStatesForEngagements(
+  engagementIds: string[]
+): Promise<Record<string, Record<RepSkillId, boolean>>> {
+  const allEnabled = Object.fromEntries(REP_SKILL_IDS.map((id) => [id, true])) as Record<RepSkillId, boolean>;
+  if (engagementIds.length === 0) return {};
+
+  const rows = await db
+    .select({ engagementId: engagementSkills.engagementId, skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
+    .from(engagementSkills)
+    .where(inArray(engagementSkills.engagementId, engagementIds));
+
+  const disabledByEngagement = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (row.enabled) continue;
+    const set = disabledByEngagement.get(row.engagementId) ?? new Set<string>();
+    set.add(row.skillId);
+    disabledByEngagement.set(row.engagementId, set);
+  }
+
+  return Object.fromEntries(
+    engagementIds.map((engagementId) => {
+      const disabled = disabledByEngagement.get(engagementId);
+      if (!disabled) return [engagementId, allEnabled];
+      return [engagementId, Object.fromEntries(REP_SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<RepSkillId, boolean>];
+    })
+  );
+}
+
 /** Upserts the enabled flag for one (engagementId, skillId) pair — see the Skills panel on the engagement detail page.
  * skillId widened to string, same reasoning as isSkillEnabledForEngagement above. */
 export async function setSkillEnabledForEngagement(

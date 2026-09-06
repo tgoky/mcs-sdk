@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PauseCircle, PlayCircle, Loader2, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { SKILL_IDS, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
+import { REP_SKILL_IDS, REP_SKILL_MANIFEST, type RepSkillId } from "@/lib/rep-skill-manifest";
 import { SKILL_INFO, ACTION_TYPE_LABELS } from "@/lib/copy";
 import type { PendingActionType } from "@/lib/approval-gate";
 import type { AutopilotClientDTO } from "@/lib/autopilot-clients";
@@ -133,16 +134,16 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
     }
   }
 
-  async function toggleSkill(row: AutopilotClientRow, skill: SkillId) {
-    const nextEnabled = !row.skills[skill];
+  async function toggleShowtimeSkill(row: AutopilotClientRow, skill: SkillId) {
+    const nextEnabled = !row.showtimeSkills[skill];
     if (nextEnabled && SKILL_MANIFEST[skill].runOnSetup) {
       router.push(`/dashboard/engagements/${row.engagementId}/bridges/${skill}`);
       return;
     }
 
     const key = `${row.engagementId}:skill:${skill}`;
-    const previous = row.skills[skill];
-    patchClient(row.engagementId, { skills: { ...row.skills, [skill]: nextEnabled } });
+    const previous = row.showtimeSkills[skill];
+    patchClient(row.engagementId, { showtimeSkills: { ...row.showtimeSkills, [skill]: nextEnabled } });
     setBusy(key, true);
     try {
       const res = await fetch(`/api/engagements/${row.engagementId}/skills/${skill}`, {
@@ -153,7 +154,33 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
       if (!res.ok) throw new Error("request failed");
       router.refresh();
     } catch {
-      patchClient(row.engagementId, { skills: { ...row.skills, [skill]: previous } });
+      patchClient(row.engagementId, { showtimeSkills: { ...row.showtimeSkills, [skill]: previous } });
+    } finally {
+      setBusy(key, false);
+    }
+  }
+
+  async function toggleRepSkill(row: AutopilotClientRow, skill: RepSkillId) {
+    const nextEnabled = !row.repSkills[skill];
+    if (nextEnabled && REP_SKILL_MANIFEST[skill].runOnSetup) {
+      router.push(`/dashboard/engagements/${row.engagementId}/bridges/${skill}`);
+      return;
+    }
+
+    const key = `${row.engagementId}:rep-skill:${skill}`;
+    const previous = row.repSkills[skill];
+    patchClient(row.engagementId, { repSkills: { ...row.repSkills, [skill]: nextEnabled } });
+    setBusy(key, true);
+    try {
+      const res = await fetch(`/api/engagements/${row.engagementId}/skills/rep/${skill}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: nextEnabled }),
+      });
+      if (!res.ok) throw new Error("request failed");
+      router.refresh();
+    } catch {
+      patchClient(row.engagementId, { repSkills: { ...row.repSkills, [skill]: previous } });
     } finally {
       setBusy(key, false);
     }
@@ -166,8 +193,17 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
         const pauseBusy = busyKeys.has(`${row.engagementId}:pause`);
         const approvalBusy = busyKeys.has(`${row.engagementId}:approval-mode`);
         const isExpanded = expandedClients.has(row.engagementId);
-        
-        const enabledSkillsCount = Object.values(row.skills).filter(Boolean).length;
+
+        // Combined across whichever product(s) this client is actually
+        // enrolled in — a pure-RM client used to be measured against
+        // Showtime's 5 regardless (and vice versa), which is exactly the
+        // "5 chips that never applied to them" problem this file existed
+        // to fix. Neither set counts at all unless that product is
+        // actually configured for this client.
+        const showtimeEnabledCount = row.showtimeConfigured ? Object.values(row.showtimeSkills).filter(Boolean).length : 0;
+        const repEnabledCount = row.repConfigured ? Object.values(row.repSkills).filter(Boolean).length : 0;
+        const totalSkillCount = (row.showtimeConfigured ? SKILL_IDS.length : 0) + (row.repConfigured ? REP_SKILL_IDS.length : 0);
+        const enabledSkillsCount = showtimeEnabledCount + repEnabledCount;
         const gatedActionsCount = row.requireApprovalActionTypes.length;
 
         return (
@@ -190,7 +226,7 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
 
               <div className="flex items-center gap-1.5 shrink-0">
                 {/* Mode toggle with tooltip */}
-                <div 
+                <div
                   className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-zinc-100/80 dark:bg-zinc-800/50 border border-zinc-200/50 dark:border-white/5"
                   title={
                     row.requireApprovalForSideEffects
@@ -242,11 +278,11 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
 
             {/* Quick Summary Strip (When collapsed) */}
             {!isExpanded && (
-              <div 
+              <div
                 onClick={() => toggleExpanded(row.engagementId)}
                 className="flex items-center justify-between px-2.5 pb-2 text-[10px] text-zinc-400 dark:text-zinc-500 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors"
               >
-                <span>{enabledSkillsCount} of {SKILL_IDS.length} skills active</span>
+                <span>{enabledSkillsCount} of {totalSkillCount} skills active</span>
                 {row.requireApprovalForSideEffects && (
                   <span>{gatedActionsCount === 0 ? "All actions gated" : `${gatedActionsCount} gated`}</span>
                 )}
@@ -286,39 +322,83 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
                   </div>
                 )}
 
-                {/* Skill Toggles */}
-                <div className="space-y-1">
-                  <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">
-                    Active Skills:
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {SKILL_IDS.map((skill) => {
-                      const enabled = row.skills[skill];
-                      const skillBusy = busyKeys.has(`${row.engagementId}:skill:${skill}`);
-                      return (
-                        <button
-                          key={skill}
-                          type="button"
-                          onClick={() => !skillBusy && toggleSkill(row, skill)}
-                          disabled={skillBusy}
-                          title={SKILL_INFO[skill].description}
-                          className={`flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-medium rounded-full transition-colors ${
-                            enabled
-                              ? "bg-amber-400/15 text-amber-800 dark:text-amber-300 border border-amber-500/30"
-                              : "bg-zinc-100/80 dark:bg-zinc-800/30 text-zinc-400 border border-zinc-200/50 dark:border-white/5"
-                          }`}
-                        >
-                          {SKILL_INFO[skill].name}
-                          <span
-                            className={`w-1 h-1 rounded-full ${
-                              enabled ? "bg-amber-500" : "bg-zinc-300 dark:bg-zinc-600"
+                {/* Showtime Skill Toggles */}
+                {row.showtimeConfigured && (
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">
+                      Showtime Skills:
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {SKILL_IDS.map((skill) => {
+                        const enabled = row.showtimeSkills[skill];
+                        const skillBusy = busyKeys.has(`${row.engagementId}:skill:${skill}`);
+                        return (
+                          <button
+                            key={skill}
+                            type="button"
+                            onClick={() => !skillBusy && toggleShowtimeSkill(row, skill)}
+                            disabled={skillBusy}
+                            title={SKILL_INFO[skill].description}
+                            className={`flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-medium rounded-full transition-colors ${
+                              enabled
+                                ? "bg-amber-400/15 text-amber-800 dark:text-amber-300 border border-amber-500/30"
+                                : "bg-zinc-100/80 dark:bg-zinc-800/30 text-zinc-400 border border-zinc-200/50 dark:border-white/5"
                             }`}
-                          />
-                        </button>
-                      );
-                    })}
+                          >
+                            {SKILL_INFO[skill].name}
+                            <span
+                              className={`w-1 h-1 rounded-full ${
+                                enabled ? "bg-amber-500" : "bg-zinc-300 dark:bg-zinc-600"
+                              }`}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Reputation Manager Skill Toggles */}
+                {row.repConfigured && (
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">
+                      Reputation Manager Capabilities:
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {REP_SKILL_IDS.map((skill) => {
+                        const enabled = row.repSkills[skill];
+                        const skillBusy = busyKeys.has(`${row.engagementId}:rep-skill:${skill}`);
+                        return (
+                          <button
+                            key={skill}
+                            type="button"
+                            onClick={() => !skillBusy && toggleRepSkill(row, skill)}
+                            disabled={skillBusy}
+                            title={REP_SKILL_MANIFEST[skill].description}
+                            className={`flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-medium rounded-full transition-colors ${
+                              enabled
+                                ? "bg-violet-400/15 text-violet-800 dark:text-violet-300 border border-violet-500/30"
+                                : "bg-zinc-100/80 dark:bg-zinc-800/30 text-zinc-400 border border-zinc-200/50 dark:border-white/5"
+                            }`}
+                          >
+                            {REP_SKILL_MANIFEST[skill].name}
+                            <span
+                              className={`w-1 h-1 rounded-full ${
+                                enabled ? "bg-violet-500" : "bg-zinc-300 dark:bg-zinc-600"
+                              }`}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {!row.showtimeConfigured && !row.repConfigured && (
+                  <p className="text-[9px] text-zinc-400 dark:text-zinc-600 italic">
+                    Not set up under Showtime or Reputation Manager yet — nothing to control here.
+                  </p>
+                )}
               </div>
             )}
           </div>

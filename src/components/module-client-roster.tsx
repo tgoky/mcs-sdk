@@ -3,7 +3,6 @@
 import { useMemo, useState, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Users,
   ChevronDown,
   LayoutList,
   Kanban,
@@ -22,6 +21,7 @@ import type { ModuleClientSummary } from "@/lib/module-overview";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { pauseEngagement, resumeEngagement, copyToClipboard } from "@/lib/quick-actions";
 import { AnySkillBadge } from "@/components/any-skill-badge";
+import { ClientAvatar } from "@/components/client-avatar";
 import { SwatchLabel } from "@/components/swatch-label";
 import { formatVerboseDate } from "@/components/relative-time";
 import { PinDownModuleView, type SkillRun } from "@/components/pin-down-module-view";
@@ -380,9 +380,7 @@ export function ModuleClientRoster({
                         >
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-3">
-                              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-mint text-accent-mint-foreground shrink-0 font-bold">
-                                <Users size={15} strokeWidth={2.5} />
-                              </div>
+                              <ClientAvatar name={client.buyerName} size={28} />
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
                                   <p className="text-xs font-semibold text-zinc-900 dark:text-white group-hover:text-amber-300 transition-colors truncate">

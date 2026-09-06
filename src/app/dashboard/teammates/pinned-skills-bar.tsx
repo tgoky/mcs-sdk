@@ -2,7 +2,7 @@
 
 import { usePinnedSkills } from "./pinned-skills";
 import { MENTIONABLE_SKILLS } from "./teammates-chat";
-import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { AnySkillBadge } from "@/components/any-skill-badge";
 import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 import { Plus } from "lucide-react";
 
@@ -29,7 +29,7 @@ export function PinnedSkillsBar({ onSelect }: { onSelect: (token: string) => voi
               onClick={() => onSelect(s.token)}
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors cursor-pointer ${s.pillStyle}`}
             >
-              <SquishySkillBadge skill={s.token} size={12} />
+              <AnySkillBadge skill={s.token} size={12} />
               <span>{s.label}</span>
             </button>
           ))

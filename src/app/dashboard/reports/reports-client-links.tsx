@@ -21,7 +21,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
-import { Building2 } from "lucide-react";
+import { ClientAvatar } from "@/components/client-avatar";
 
 export interface ReportableClient {
   engagementId: string;
@@ -71,9 +71,7 @@ export function ReportsClientLinks({ clients }: { clients: ReportableClient[] })
                 : "text-zinc-600 dark:text-zinc-300 hover:bg-[#f0edf6] dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white"
             }`}
           >
-            <Building2
-              className={`w-4 h-4 shrink-0 ${active ? "text-zinc-900 dark:text-white" : "text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-200"}`}
-            />
+            <ClientAvatar name={client.buyer} size={22} ring={active} />
             <span className="truncate">{client.buyer}</span>
           </Link>
         );
