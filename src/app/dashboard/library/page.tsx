@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/session";
-import { getPackageOverview } from "@/lib/package-overview";
 import { LibraryMarketplaceClient } from "@/components/library/library-marketplace-client";
-import { getActiveWorkspace, getInstalledPackagesByWorkspace } from "@/lib/workspace";
+import { getActiveWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
+import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -9,8 +9,9 @@ export const revalidate = 0;
 export default async function LibraryPage() {
   const session = await getSession();
   const whopUserId = session.whopUserId!;
-  const [overview, workspace] = await Promise.all([getPackageOverview(whopUserId), getActiveWorkspace(whopUserId)]);
-  const installedPackageIds = (await getInstalledPackagesByWorkspace([workspace.workspaceId])).get(workspace.workspaceId) ?? [];
+  const workspace = await getActiveWorkspace(whopUserId);
+  const engagementId = await getPrimaryEngagementIdForWorkspace(workspace.workspaceId);
+  const enabledWorkerIds = engagementId ? await getEnabledWorkerIdsForEngagement(engagementId) : [];
 
-  return <LibraryMarketplaceClient overview={overview} installedPackageIds={installedPackageIds} />;
+  return <LibraryMarketplaceClient engagementId={engagementId} enabledWorkerIds={enabledWorkerIds} />;
 }
