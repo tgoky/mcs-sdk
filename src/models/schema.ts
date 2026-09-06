@@ -582,6 +582,18 @@ export const engagements = pgTable("engagements", {
   // NULL meaning "use the default teal" — never a raw hex value, so the
   // palette can be re-themed later without a data migration.
   tagColor: text("tag_color"),
+  // The one shared client-level fact identified so far in the "shared
+  // client profile" push (see src/lib/client-profile.ts) — Showtime's
+  // stack.buyer_domain and Reputation Manager's repIdentityGraphs.
+  // operatorDomains both represent the same underlying thing (the
+  // client's own website) shaped differently for each product's real
+  // need (one domain to scrape vs. every domain an operator owns to
+  // monitor), so this isn't a replacement for either — it's the single
+  // authoritative source both read from and seed into at intake, via
+  // getPrimaryDomainForEngagement's coalesce order. Nullable: most
+  // existing engagements predate this column and haven't been backfilled
+  // (see scripts/backfill-primary-domain.ts) yet.
+  primaryDomain: text("primary_domain"),
   schemaVersion: text("schema_version").notNull().default("1.0"),
 
   // Set once, when the client is launched from the wizard's post-save

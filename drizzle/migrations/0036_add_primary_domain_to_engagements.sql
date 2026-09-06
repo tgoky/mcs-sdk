@@ -1,0 +1,1 @@
+ALTER TABLE "engagements" ADD COLUMN "primary_domain" text;

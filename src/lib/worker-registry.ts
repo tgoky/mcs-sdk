@@ -42,12 +42,30 @@ export type WorkerId = SkillId | RepSkillId;
  */
 export type WorkerConfigFieldKind = "derivable" | "ask" | "secret";
 
+/**
+ * A verified, cross-product client fact from src/lib/client-profile.ts —
+ * the actual thing a "derivable" field derives from, not just a
+ * description saying so. This is the piece that makes "derivable" mean
+ * something a future worker can rely on generically: declare
+ * `derivableFrom: "primaryDomain"` and the enablement flow calls
+ * getPrimaryDomainForEngagement, full stop — no per-worker bespoke
+ * lookup code, and no field can claim to be derivable without naming a
+ * real function that backs it. Grows only alongside client-profile.ts
+ * itself; adding a value here with nothing backing it in that module is
+ * exactly the unverified-claim problem this type exists to prevent.
+ */
+export type ClientProfileFact = "primaryDomain" | "buyerName";
+
 export interface WorkerConfigField {
   key: string;
   label: string;
   kind: WorkerConfigFieldKind;
   /** What the field is and, for "derivable", what seed it can be derived from. */
   description: string;
+  /** Required when kind is "derivable" — which client-profile fact backs
+   * it. A "derivable" field with no derivableFrom is a claim nothing
+   * actually fulfills; treat it as a bug to fix, not a valid state. */
+  derivableFrom?: ClientProfileFact;
 }
 
 export interface WorkerDefinition {
@@ -79,13 +97,15 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
       key: "operatorName",
       label: "Operator / brand name",
       kind: "derivable",
-      description: "Derivable from the client's domain, the same way pin-down-voice derives brand voice from a URL.",
+      description: "Pre-fillable from the client's own buyer name (engagements.buyer, always set) — a starting suggestion to confirm or edit, not forced to always match it.",
+      derivableFrom: "buyerName",
     },
     {
       key: "operatorDomains",
       label: "Domains",
       kind: "derivable",
-      description: "Derivable once a primary domain is known — the client profile's own domain is the seed.",
+      description: "Pre-fillable from the client profile's shared primaryDomain once any product has captured one.",
+      derivableFrom: "primaryDomain",
     },
     {
       key: "operatorAliases",
