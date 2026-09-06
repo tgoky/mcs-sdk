@@ -7,6 +7,7 @@ import { BookingToast } from "./booking-toast";
 import { WorkSidebar, WorkSidebarSkeleton } from "./work-sidebar";
 import { ReputationManagerSidebar } from "./reputation-manager-sidebar";
 import { ShowtimeSidebar } from "./showtime-sidebar";
+import { ReportsSidebar, ReportsSidebarSkeleton } from "./reports/reports-sidebar";
 import { getActiveWorkspace, getInstalledPackagesByWorkspace, listWorkspaces } from "@/lib/workspace";
 import { MobileNavPill } from "@/components/mobile-nav-pill";
 
@@ -74,6 +75,11 @@ export default async function DashboardLayout({
         }
         showtime={<ShowtimeSidebar />}
         reputationManager={<ReputationManagerSidebar />}
+        reports={
+          <Suspense fallback={<ReportsSidebarSkeleton />}>
+            <ReportsSidebar whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} />
+          </Suspense>
+        }
       >
         {children}
       </ShellLayout>
