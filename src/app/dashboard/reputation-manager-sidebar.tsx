@@ -18,7 +18,7 @@ export function ReputationManagerSidebar() {
   const group1: NavLinkItem[] = [
     { href: "/dashboard/reputation-manager", label: "Home", icon: <Home className="w-4 h-4" /> },
     { href: "/dashboard/engagements?product=reputation-manager", label: "Clients", icon: <Building2 className="w-4 h-4" /> },
-    { href: "/dashboard/reports", label: "Reports", icon: <FileText className="w-4 h-4" /> },
+    { href: "/dashboard/reports?product=reputation-manager", label: "Reports", icon: <FileText className="w-4 h-4" /> },
   ];
   const group2: NavLinkItem[] = [
     { href: "/dashboard/queue?product=reputation-manager", label: "Queue", icon: <ListTodo className="w-4 h-4" /> },

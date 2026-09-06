@@ -9,10 +9,9 @@ interface SecondarySidebarProps {
   settings: ReactNode;
   reputationManager: ReactNode;
   showtime: ReactNode;
-  reports: ReactNode;
 }
 
-type SectionKey = "reputation-manager" | "showtime" | "settings" | "work" | "reports";
+type SectionKey = "reputation-manager" | "showtime" | "settings" | "work";
 
 // /dashboard/modules and /dashboard/engagements are deliberately NOT in
 // this static table — both are shared across products (see
@@ -29,7 +28,6 @@ const SECTION_PREFIXES: Array<{ key: SectionKey; prefix: string }> = [
   { key: "showtime", prefix: "/dashboard/meetings" },
   { key: "showtime", prefix: "/dashboard/analytics" },
   { key: "settings", prefix: "/dashboard/settings" },
-  { key: "reports", prefix: "/dashboard/reports" },
 ];
 
 function activeSection(pathname: string, fromParam: string | null): SectionKey {
@@ -67,7 +65,6 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   showtime: "Showtime",
   "reputation-manager": "Reputation Manager",
   settings: "Settings",
-  reports: "Reports",
 };
 
 export function SecondarySidebar({
@@ -75,7 +72,6 @@ export function SecondarySidebar({
   settings,
   reputationManager,
   showtime,
-  reports,
 }: SecondarySidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -89,10 +85,21 @@ export function SecondarySidebar({
   }
 
   const scopedProduct = searchParams.get("product");
-  // Mirrors primary-rail.tsx's PRODUCT_SCOPED_ROOTS — the Engagements
-  // list route is shared across products and scoped by `?product=`
-  // rather than owning its own path, same as Queue/Executions already are.
-  const isProductScopedRoot = pathname === "/dashboard/queue" || pathname === "/dashboard/runs" || pathname === "/dashboard/engagements";
+  // Mirrors primary-rail.tsx's PRODUCT_SCOPED_ROOTS — these routes are
+  // shared across products and scoped by `?product=` rather than owning
+  // their own path or section. Reports joined this list rather than
+  // getting its own dedicated section: a standalone "reports" section
+  // used to fully replace whichever product's Home/Clients/Reports/
+  // Queue/Executions nav was showing with a bare, cross-product client
+  // list — every other shared route (Queue, Executions, Clients) keeps
+  // the current product's own sidebar and only swaps the page content,
+  // so Reports needed to follow the same rule instead of being the odd
+  // one out.
+  const isProductScopedRoot =
+    pathname === "/dashboard/queue" ||
+    pathname === "/dashboard/runs" ||
+    pathname === "/dashboard/engagements" ||
+    pathname === "/dashboard/reports";
   const section: SectionKey =
     isProductScopedRoot && scopedProduct === "reputation-manager"
       ? "reputation-manager"
@@ -107,7 +114,6 @@ export function SecondarySidebar({
     showtime,
     "reputation-manager": reputationManager,
     settings,
-    reports,
   };
 
   return (
