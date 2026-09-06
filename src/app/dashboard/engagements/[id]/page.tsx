@@ -40,6 +40,8 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import { computeClientReportAllPeriods } from "@/features/reports/server/report-service";
 import { generateReportNote } from "@/features/reports/server/report-notes";
 import { ClientReportCard } from "@/components/client-report-card";
+import { computeRepClientReportAllPeriods } from "@/features/reputation-manager/server/rep-report-service";
+import { RepClientReportCard } from "@/components/rep-client-report-card";
 import {
   SKILLS,
   phaseLabel,
@@ -150,7 +152,7 @@ export default async function EngagementDetailPage({
 
   const [repIdentityGraphRow] = installedProductIds.includes("reputation-manager")
     ? await db
-        .select({ id: repIdentityGraphs.id })
+        .select({ id: repIdentityGraphs.id, operatorName: repIdentityGraphs.operatorName, soleAuthorityName: repIdentityGraphs.soleAuthorityName })
         .from(repIdentityGraphs)
         .where(eq(repIdentityGraphs.engagementId, id))
         .limit(1)
@@ -202,6 +204,7 @@ export default async function EngagementDetailPage({
     REP_SKILL_IDS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
   ) as Record<RepSkillId, typeof runs>;
   const repAuditEvents = repIdentityGraphRow ? await getRecentAuditEvents(id, 20) : [];
+  const repReportMetrics = repIdentityGraphRow ? await computeRepClientReportAllPeriods(id) : null;
 
   const filteredRuns = activeSkillFilter
     ? runs.filter((r) => r.skillName === activeSkillFilter)
@@ -341,13 +344,29 @@ export default async function EngagementDetailPage({
           </div>
         </div>
 
-        {/* Merged Offer & Performance Report Card */}
-        <ClientReportCard
-          buyerName={engagement.buyer}
-          metricsByPeriod={reportMetrics}
-          notesByPeriod={{ week: weekNote, month: monthNote }}
-          offerDetails={offerDetails}
-        />
+        {/* Merged Offer & Performance Report Card — Showtime clients only.
+            Used to render unconditionally for every engagement regardless
+            of whether Showtime was ever set up for it, so a pure-RM client
+            got a real card whose every stat (bookings, show rate, Win-Back
+            recovery) reads zero — the exact bug /dashboard/reports had for
+            the same reason, just on this page instead. Same setup signal
+            productSetupState("showtime") already uses just below. */}
+        {stack?.booking_platform && (
+          <ClientReportCard
+            buyerName={engagement.buyer}
+            metricsByPeriod={reportMetrics}
+            notesByPeriod={{ week: weekNote, month: monthNote }}
+            offerDetails={offerDetails}
+          />
+        )}
+
+        {repIdentityGraphRow && repReportMetrics && (
+          <RepClientReportCard
+            operatorName={repIdentityGraphRow.operatorName}
+            soleAuthorityName={repIdentityGraphRow.soleAuthorityName}
+            metricsByPeriod={repReportMetrics}
+          />
+        )}
 
         <ProductsPanel products={installedProducts} />
 

@@ -6,13 +6,23 @@ import { ReportsClientLinks, type ReportableClient } from "./reports-client-link
 
 // Shared with page.tsx, which needs the same list to resolve the selected
 // client server-side — one query, not two independently-written copies of
-// the same where-clause drifting apart later.
+// the same where-clause drifting apart later. bookingPlatform is pulled
+// out of `stack` here (rather than page.tsx re-deriving it) so both the
+// list and the per-client "which product's card" decision agree on the
+// exact same signal productSetupState("showtime") uses on the engagement
+// page.
 export async function listReportableClients(whopUserId: string, workspaceId: string): Promise<ReportableClient[]> {
-  return db
-    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
+  const rows = await db
+    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, stack: engagements.stack })
     .from(engagements)
     .where(and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId), isNull(engagements.deletedAt)))
     .orderBy(asc(engagements.buyer));
+
+  return rows.map((r) => ({
+    engagementId: r.engagementId,
+    buyer: r.buyer,
+    bookingPlatform: (r.stack as { booking_platform?: string } | null)?.booking_platform ?? null,
+  }));
 }
 
 /**

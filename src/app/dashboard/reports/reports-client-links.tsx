@@ -26,6 +26,7 @@ import { Building2 } from "lucide-react";
 export interface ReportableClient {
   engagementId: string;
   buyer: string;
+  bookingPlatform: string | null;
 }
 
 export function ReportsClientLinks({ clients }: { clients: ReportableClient[] }) {
