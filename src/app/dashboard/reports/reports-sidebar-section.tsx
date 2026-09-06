@@ -48,8 +48,12 @@ export async function ReportsSidebarSection({
         <p className="px-2.5 text-xs text-zinc-500 dark:text-zinc-400">No clients yet.</p>
       ) : (
         <>
+          {/* Distinct from the "Clients" nav link above (which goes to the
+              full roster) — this labels the picker underneath it, so it
+              reads as "reports, one per client" rather than a second,
+              redundant Clients link. */}
           <div className="px-2.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 font-mono tracking-wider uppercase">
-            Clients
+            Client Reports
           </div>
           <ReportsClientLinks clients={clients} product={product} />
         </>

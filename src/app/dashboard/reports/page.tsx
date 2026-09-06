@@ -65,7 +65,7 @@ export default async function ReportsPage({
       </div>
 
       {clients.length === 0 ? (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-900/50 p-8 text-center">
+        <div className="text-center py-8">
           <FileText className="w-6 h-6 text-zinc-300 dark:text-zinc-700 mx-auto mb-2" />
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             {scopedProduct === "showtime"
@@ -75,25 +75,38 @@ export default async function ReportsPage({
                 : "No clients yet."}
           </p>
         </div>
-      ) : repMetrics && repIdentityGraphRow ? (
-        <RepClientReportCard
-          operatorName={repIdentityGraphRow.operatorName}
-          soleAuthorityName={repIdentityGraphRow.soleAuthorityName}
-          metricsByPeriod={repMetrics}
-        />
-      ) : showtimeMetrics && selected ? (
-        <ClientReportCard
-          buyerName={selected.buyer}
-          metricsByPeriod={showtimeMetrics}
-          notesByPeriod={{ week: weekNote, month: monthNote }}
-        />
       ) : (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-900/50 p-8 text-center">
-          <FileText className="w-6 h-6 text-zinc-300 dark:text-zinc-700 mx-auto mb-2" />
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {selected?.buyer ?? "This client"} isn&apos;t set up under Showtime or Reputation Manager yet — nothing to report.
-          </p>
-        </div>
+        <>
+          {/* Always the same name the sidebar picker shows for this client
+              (engagements.buyer) — RepClientReportCard's own heading is
+              operatorName, a separate field on the identity graph that can
+              read completely differently (a person's name vs. the client/
+              business name), so switching clients in the sidebar could
+              land on a card whose heading didn't match what was just
+              clicked. This is the one label guaranteed to agree with the
+              picker no matter which product's card renders below it. */}
+          {selected && <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{selected.buyer}</p>}
+          {repMetrics && repIdentityGraphRow ? (
+            <RepClientReportCard
+              operatorName={repIdentityGraphRow.operatorName}
+              soleAuthorityName={repIdentityGraphRow.soleAuthorityName}
+              metricsByPeriod={repMetrics}
+            />
+          ) : showtimeMetrics && selected ? (
+            <ClientReportCard
+              buyerName={selected.buyer}
+              metricsByPeriod={showtimeMetrics}
+              notesByPeriod={{ week: weekNote, month: monthNote }}
+            />
+          ) : (
+            <div className="text-center py-8">
+              <FileText className="w-6 h-6 text-zinc-300 dark:text-zinc-700 mx-auto mb-2" />
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                {selected?.buyer ?? "This client"} isn&apos;t set up under Showtime or Reputation Manager yet — nothing to report.
+              </p>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

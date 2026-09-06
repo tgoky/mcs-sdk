@@ -57,7 +57,7 @@ function SkillsGrid({ entries }: { entries: SkillEntry[] }) {
   const pathname = usePathname();
 
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-4 gap-1.5">
       {entries.map((entry) => {
         const active = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
         return (
@@ -65,19 +65,19 @@ function SkillsGrid({ entries }: { entries: SkillEntry[] }) {
             key={entry.href}
             href={entry.href}
             aria-current={active ? "page" : undefined}
-            className={`flex flex-col items-center gap-1.5 rounded-[10px] px-2 py-2.5 text-center transition-colors ${
+            className={`flex flex-col items-center gap-1 rounded-[8px] px-1 py-1.5 text-center transition-colors ${
               active
                 ? "bg-white dark:bg-zinc-700 shadow-xs border border-zinc-200/60 dark:border-transparent"
                 : "border border-transparent hover:bg-[#f0edf6] dark:hover:bg-zinc-800/60"
             }`}
           >
             {entry.isRep ? (
-              <RepSkillBadge skill={entry.skillId as RepSkillId} size={30} />
+              <RepSkillBadge skill={entry.skillId as RepSkillId} size={22} />
             ) : (
-              <SquishySkillBadge skill={entry.skillId} size={30} />
+              <SquishySkillBadge skill={entry.skillId} size={22} />
             )}
             <span
-              className={`text-[11px] leading-tight line-clamp-2 font-medium ${
+              className={`text-[9.5px] leading-tight line-clamp-2 font-medium ${
                 active ? "text-zinc-900 dark:text-white" : "text-zinc-600 dark:text-zinc-300"
               }`}
             >
