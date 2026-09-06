@@ -1,0 +1,1 @@
+ALTER TABLE "engagement_skills" ADD COLUMN "enabled_at" timestamp;

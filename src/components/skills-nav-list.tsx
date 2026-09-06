@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { SKILL_IDS, SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { REP_SKILL_IDS, REP_SKILL_MANIFEST, type RepSkillId } from "@/lib/rep-skill-manifest";
 import type { ProductId } from "@/lib/product-catalog";
+import type { WorkerId } from "@/lib/worker-registry";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { RepSkillBadge } from "@/components/rep-skill-badge";
 import { SidebarNavLinks, type NavLinkItem } from "@/app/dashboard/sidebar-nav-links";
@@ -56,6 +57,17 @@ function buildEntries(productIds: ProductId[]): SkillEntry[] {
 function SkillsGrid({ entries }: { entries: SkillEntry[] }) {
   const pathname = usePathname();
 
+  if (entries.length === 0) {
+    return (
+      <Link
+        href="/dashboard/library"
+        className="block rounded-[10px] border border-dashed border-zinc-300 dark:border-zinc-700 px-3 py-3 text-center text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors"
+      >
+        No workers enabled yet — visit the Library to turn one on.
+      </Link>
+    );
+  }
+
   return (
     <div className="grid grid-cols-4 gap-1.5">
       {entries.map((entry) => {
@@ -105,11 +117,24 @@ function SkillsGrid({ entries }: { entries: SkillEntry[] }) {
 export function SkillsNavList({
   productIds = ["showtime"],
   layout = "list",
+  enabledWorkerIds,
 }: {
   productIds?: ProductId[];
   layout?: "list" | "grid";
+  /**
+   * When provided, restricts the rendered entries to this set — the grid
+   * layout's actual job is "jump into what's already running," not
+   * "browse the full catalog" (that's the Library). Omitted entirely for
+   * a product's own list-layout sidebar, which still shows every skill in
+   * that product's catalog on purpose — a product's own nav is meant to
+   * be a full skill directory, not a quick-access shortlist.
+   */
+  enabledWorkerIds?: WorkerId[];
 }) {
-  const entries = buildEntries(productIds);
+  const allEntries = buildEntries(productIds);
+  const entries = enabledWorkerIds
+    ? allEntries.filter((entry) => (enabledWorkerIds as string[]).includes(entry.skillId))
+    : allEntries;
 
   if (layout === "grid") {
     return <SkillsGrid entries={entries} />;

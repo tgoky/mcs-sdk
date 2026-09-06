@@ -1637,6 +1637,23 @@ export const engagementSkills = pgTable(
     // Per-skill overrides, if a skill ever needs config beyond what
     // already lives on the engagement's stack. Unused by every skill today.
     config: jsonb("config"),
+    // When this worker was explicitly turned on for this engagement, via a
+    // real enable action (setSkillEnabledForEngagement(..., true) in
+    // engagement-skills.ts). Deliberately NOT the same thing as "enabled":
+    // this table's long-standing convention is "no row = enabled" (see
+    // isSkillEnabledForEngagement's own comment) and that stays completely
+    // untouched here — every cron/poller gating dispatch off that
+    // convention keeps working exactly as before. This column exists only
+    // to answer a question that convention structurally can't: "did a
+    // human ever actually press enable on this, and when" — which is what
+    // the Library's enabled-first sort and per-worker Analytics need,
+    // without risking a change to which skills actually run for existing
+    // clients. NULL for any skill that predates the Worker Library concept
+    // or has only ever been implicitly on — see
+    // getEnabledWorkerIdsForEngagement in engagement-skills.ts for how the
+    // Library reconciles that legacy gap with real usage evidence instead
+    // of treating a NULL here as "not enabled."
+    enabledAt: timestamp("enabled_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

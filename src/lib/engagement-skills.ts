@@ -1,8 +1,9 @@
 import { db } from "@/lib/db";
-import { engagementSkills } from "@/models/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { engagements, engagementSkills, repIdentityGraphs } from "@/models/schema";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
 import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
+import { WORKER_IDS, type WorkerId } from "@/lib/worker-registry";
 
 /**
  * No row for (engagementId, skillId) means enabled — this table only ever
@@ -156,7 +157,13 @@ export async function getRepSkillStatesForEngagements(
 }
 
 /** Upserts the enabled flag for one (engagementId, skillId) pair — see the Skills panel on the engagement detail page.
- * skillId widened to string, same reasoning as isSkillEnabledForEngagement above. */
+ * skillId widened to string, same reasoning as isSkillEnabledForEngagement above.
+ *
+ * Also stamps enabledAt the first time a skill is explicitly turned on —
+ * COALESCE'd so a later disable/re-enable cycle doesn't reset "when was
+ * this first enabled" back to now(). Disabling never touches enabledAt:
+ * once a worker has genuinely been turned on, that fact is worth keeping
+ * even if it's later switched off. */
 export async function setSkillEnabledForEngagement(
   engagementId: string,
   skillId: string,
@@ -164,9 +171,78 @@ export async function setSkillEnabledForEngagement(
 ): Promise<void> {
   await db
     .insert(engagementSkills)
-    .values({ engagementId, skillId, enabled })
+    .values({ engagementId, skillId, enabled, enabledAt: enabled ? new Date() : null })
     .onConflictDoUpdate({
       target: [engagementSkills.engagementId, engagementSkills.skillId],
-      set: { enabled, updatedAt: new Date() },
+      set: enabled
+        ? { enabled, updatedAt: new Date(), enabledAt: sql`coalesce(${engagementSkills.enabledAt}, now())` }
+        : { enabled, updatedAt: new Date() },
     });
+}
+
+/**
+ * Which workers actually count as "enabled" for the Library's enabled-
+ * first sort and per-worker Analytics — reconciling two eras of data
+ * without touching either:
+ *
+ *   1. Explicit: an engagementSkills row with enabled=true and enabledAt
+ *      set (someone pressed enable through the Library after this concept
+ *      existed).
+ *   2. Evidence-based, for clients that predate the Library: real proof
+ *      of usage the same way scripts/audit-multi-engagement-workspaces.ts
+ *      and getRepEnrolledEngagementIds already establish product
+ *      enrollment — a non-null `stack` means every Showtime worker that
+ *      isn't explicitly disabled counts as enabled, and an existing
+ *      repIdentityGraphs row means every Reputation Manager worker that
+ *      isn't explicitly disabled counts as enabled.
+ *
+ * This intentionally never consults "no row = enabled" on its own for a
+ * worker with zero other evidence — that convention answers "is dispatch
+ * allowed to run this," a different question from "should this show as
+ * enabled in the Library," and conflating them would make every brand-new
+ * client look like it already has all 11 workers turned on.
+ */
+export async function getEnabledWorkerIdsForEngagement(engagementId: string): Promise<WorkerId[]> {
+  const [rows, [engagement], repGraph] = await Promise.all([
+    db.select({ skillId: engagementSkills.skillId, enabled: engagementSkills.enabled, enabledAt: engagementSkills.enabledAt })
+      .from(engagementSkills)
+      .where(eq(engagementSkills.engagementId, engagementId)),
+    db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1),
+    db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1),
+  ]);
+
+  const explicitlyEnabled = new Set(rows.filter((r) => r.enabled && r.enabledAt).map((r) => r.skillId));
+  const explicitlyDisabled = new Set(rows.filter((r) => !r.enabled).map((r) => r.skillId));
+
+  const hasShowtimeEvidence = Boolean(engagement?.stack);
+  const hasRepEvidence = repGraph.length > 0;
+
+  return WORKER_IDS.filter((id) => {
+    if (explicitlyDisabled.has(id)) return false;
+    if (explicitlyEnabled.has(id)) return true;
+    const isShowtimeWorker = (SKILL_IDS as string[]).includes(id);
+    if (isShowtimeWorker) return hasShowtimeEvidence;
+    return hasRepEvidence;
+  });
+}
+
+/** Same reasoning as getEnabledWorkerIdsForEngagement's evidence fallback,
+ * without the extra round trips — for call sites that already have the
+ * engagement's stack presence and rep-enrollment on hand (e.g. a roster
+ * page rendering many engagements at once) and just need the explicit-
+ * disable/enable overlay applied. */
+export function resolveEnabledWorkerIds(opts: {
+  hasShowtimeEvidence: boolean;
+  hasRepEvidence: boolean;
+  explicitRows: { skillId: string; enabled: boolean; enabledAt: Date | null }[];
+}): WorkerId[] {
+  const explicitlyEnabled = new Set(opts.explicitRows.filter((r) => r.enabled && r.enabledAt).map((r) => r.skillId));
+  const explicitlyDisabled = new Set(opts.explicitRows.filter((r) => !r.enabled).map((r) => r.skillId));
+
+  return WORKER_IDS.filter((id) => {
+    if (explicitlyDisabled.has(id)) return false;
+    if (explicitlyEnabled.has(id)) return true;
+    const isShowtimeWorker = (SKILL_IDS as string[]).includes(id);
+    return isShowtimeWorker ? opts.hasShowtimeEvidence : opts.hasRepEvidence;
+  });
 }

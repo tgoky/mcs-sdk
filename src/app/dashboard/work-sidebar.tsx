@@ -13,11 +13,13 @@ import {
 } from "lucide-react";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 import { SkillsNavList } from "@/components/skills-nav-list";
-import { getInstalledPackagesByWorkspace } from "@/lib/workspace";
+import { getInstalledPackagesByWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
+import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
 import type { ProductId } from "@/lib/product-catalog";
+import type { WorkerId } from "@/lib/worker-registry";
 
 export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: string; workspaceId: string }) {
-  const [queueCount, runningCountResult, unseenCompletedCount, installedPackageMap] = await Promise.all([
+  const [queueCount, runningCountResult, unseenCompletedCount, installedPackageMap, primaryEngagementId] = await Promise.all([
     getQueueActionableCount(whopUserId, workspaceId),
 
     db
@@ -35,13 +37,28 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
     getUnseenCompletedExecutionCount(whopUserId),
 
     getInstalledPackagesByWorkspace([workspaceId]),
+
+    getPrimaryEngagementIdForWorkspace(workspaceId),
   ]).catch((err) => {
     console.error("[WorkSidebar] query failed:", err);
-    return [0, [{ count: 0 }], 0, new Map<string, string[]>()] as const;
+    return [0, [{ count: 0 }], 0, new Map<string, string[]>(), null] as const;
   });
   const installedProductIds = (installedPackageMap.get(workspaceId) ?? []).filter(
     (id): id is ProductId => id === "showtime" || id === "reputation-manager"
   );
+
+  // The Capabilities grid's whole job is "jump straight into something
+  // already running for this client" — it should show what's enabled, not
+  // the full catalog with color-coding bolted on to compensate (that's the
+  // Library's job). See getEnabledWorkerIdsForEngagement's own comment for
+  // how it reconciles that with engagements that predate explicit enable
+  // tracking.
+  const enabledWorkerIds: WorkerId[] = primaryEngagementId
+    ? await getEnabledWorkerIdsForEngagement(primaryEngagementId).catch((err) => {
+        console.error("[WorkSidebar] getEnabledWorkerIdsForEngagement failed:", err);
+        return [];
+      })
+    : [];
 
   // Fix (2026-08-25): was "Notification" → /dashboard/inbox with an
   // unread-count badge. Replaced per direct request with Reports — the
@@ -92,7 +109,7 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
           <span>Capabilities</span>
         </div>
 
-        <SkillsNavList productIds={installedProductIds} layout="grid" />
+        <SkillsNavList productIds={installedProductIds} layout="grid" enabledWorkerIds={enabledWorkerIds} />
       </div>
     </div>
   );

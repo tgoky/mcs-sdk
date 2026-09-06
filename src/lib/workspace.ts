@@ -251,6 +251,31 @@ export async function getInstalledPackagesByWorkspace(
   return byWorkspace;
 }
 
+/**
+ * The one engagement a workspace's own surfaces (the combined Work
+ * sidebar's Capabilities grid today) should treat as "this workspace's
+ * client" — oldest live engagement first, same rule
+ * scripts/split-multi-engagement-workspaces.ts uses to decide which
+ * engagement keeps a workspace's existing id when splitting it off.
+ *
+ * Once every workspace holds exactly one live engagement (the "one
+ * workspace = one client" migration), this is simply that engagement.
+ * Until that migration runs against a given workspace, this is a
+ * deliberate, deterministic choice rather than new ambiguity — it doesn't
+ * make today's multi-engagement-workspace confusion worse, and it's
+ * already correct for every workspace the migration has been applied to.
+ */
+export async function getPrimaryEngagementIdForWorkspace(workspaceId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ engagementId: engagements.engagementId })
+    .from(engagements)
+    .where(and(eq(engagements.workspaceId, workspaceId), isNull(engagements.deletedAt)))
+    .orderBy(asc(engagements.createdAt))
+    .limit(1);
+
+  return row?.engagementId ?? null;
+}
+
 /** Installs one available product into a workspace the caller owns. Product
  * access is workspace-scoped, never inferred from a route or client input. */
 export async function installPackageInWorkspace(
