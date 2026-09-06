@@ -9,7 +9,6 @@ import { ClientReportCard } from "@/components/client-report-card";
 import { computeRepClientReportAllPeriods } from "@/features/reputation-manager/server/rep-report-service";
 import { RepClientReportCard } from "@/components/rep-client-report-card";
 import { listReportableClients, isProductId } from "./reports-sidebar";
-import { ReportsClientLinks } from "./reports-client-links";
 import { FileText } from "lucide-react";
 
 export const revalidate = 0;
@@ -76,30 +75,25 @@ export default async function ReportsPage({
                 : "No clients yet."}
           </p>
         </div>
+      ) : repMetrics && repIdentityGraphRow ? (
+        <RepClientReportCard
+          operatorName={repIdentityGraphRow.operatorName}
+          soleAuthorityName={repIdentityGraphRow.soleAuthorityName}
+          metricsByPeriod={repMetrics}
+        />
+      ) : showtimeMetrics && selected ? (
+        <ClientReportCard
+          buyerName={selected.buyer}
+          metricsByPeriod={showtimeMetrics}
+          notesByPeriod={{ week: weekNote, month: monthNote }}
+        />
       ) : (
-        <>
-          {clients.length > 1 && <ReportsClientLinks clients={clients} />}
-          {repMetrics && repIdentityGraphRow ? (
-            <RepClientReportCard
-              operatorName={repIdentityGraphRow.operatorName}
-              soleAuthorityName={repIdentityGraphRow.soleAuthorityName}
-              metricsByPeriod={repMetrics}
-            />
-          ) : showtimeMetrics && selected ? (
-            <ClientReportCard
-              buyerName={selected.buyer}
-              metricsByPeriod={showtimeMetrics}
-              notesByPeriod={{ week: weekNote, month: monthNote }}
-            />
-          ) : (
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-900/50 p-8 text-center">
-              <FileText className="w-6 h-6 text-zinc-300 dark:text-zinc-700 mx-auto mb-2" />
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                {selected?.buyer ?? "This client"} isn&apos;t set up under Showtime or Reputation Manager yet — nothing to report.
-              </p>
-            </div>
-          )}
-        </>
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-900/50 p-8 text-center">
+          <FileText className="w-6 h-6 text-zinc-300 dark:text-zinc-700 mx-auto mb-2" />
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {selected?.buyer ?? "This client"} isn&apos;t set up under Showtime or Reputation Manager yet — nothing to report.
+          </p>
+        </div>
       )}
     </div>
   );

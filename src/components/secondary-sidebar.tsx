@@ -9,6 +9,8 @@ interface SecondarySidebarProps {
   settings: ReactNode;
   reputationManager: ReactNode;
   showtime: ReactNode;
+  reportsReputationManager: ReactNode;
+  reportsShowtime: ReactNode;
 }
 
 type SectionKey = "reputation-manager" | "showtime" | "settings" | "work";
@@ -72,6 +74,8 @@ export function SecondarySidebar({
   settings,
   reputationManager,
   showtime,
+  reportsReputationManager,
+  reportsShowtime,
 }: SecondarySidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -116,13 +120,25 @@ export function SecondarySidebar({
     settings,
   };
 
+  // /dashboard/reports gets a trimmed Home/Clients/Reports nav plus the
+  // client picker directly underneath, not the full product sidebar
+  // Queue/Executions/Clients share — see reports-sidebar-section.tsx's
+  // own file comment for why reusing that whole component was wrong.
+  const isReportsRoute = pathname === "/dashboard/reports";
+  const rendered =
+    isReportsRoute && section === "reputation-manager"
+      ? reportsReputationManager
+      : isReportsRoute && section === "showtime"
+        ? reportsShowtime
+        : content[section];
+
   return (
     <aside className="w-60 bg-[#f8f7fa] dark:bg-sidebar border-r border-zinc-200/80 dark:border-sidebar-border flex flex-col shrink-0 select-none py-3 px-2 overflow-y-auto font-sans antialiased text-zinc-700 dark:text-zinc-300">
       {/* Dynamic Section Header Title with theme support */}
       <div className="px-3 pt-1 pb-2 text-[14px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
         {SECTION_LABELS[section]}
       </div>
-      <div className="flex-1">{content[section]}</div>
+      <div className="flex-1">{rendered}</div>
     </aside>
   );
 }

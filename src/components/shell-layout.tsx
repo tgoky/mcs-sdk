@@ -22,6 +22,8 @@ export function ShellLayout({
   settings,
   reputationManager,
   showtime,
+  reportsReputationManager,
+  reportsShowtime,
   installedPackageIds,
 }: {
   children: ReactNode;
@@ -33,6 +35,8 @@ export function ShellLayout({
   settings?: ReactNode;
   reputationManager: ReactNode;
   showtime: ReactNode;
+  reportsReputationManager: ReactNode;
+  reportsShowtime: ReactNode;
   installedPackageIds: string[];
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -96,6 +100,8 @@ export function ShellLayout({
               settings={settings ?? <SettingsSidebar />}
               reputationManager={reputationManager}
               showtime={showtime}
+              reportsReputationManager={reportsReputationManager}
+              reportsShowtime={reportsShowtime}
             />
           </div>
         )}

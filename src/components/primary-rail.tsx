@@ -108,12 +108,19 @@ function SquishyProductBadge({
 
 // Routes that mean something different per product depending on a
 // `?product=` param, rather than owning a whole route prefix outright —
-// same shared surface (Queue, Executions, and the Engagements/Clients
-// roster), scoped by query string instead of by path. Only the roster's
-// own list route (exact match) is scoped this way; its detail/new
-// sub-pages (/dashboard/engagements/[id], /dashboard/engagements/new)
+// same shared surface (Queue, Executions, Reports, and the Engagements/
+// Clients roster), scoped by query string instead of by path. Only the
+// roster's own list route (exact match) is scoped this way; its detail/
+// new sub-pages (/dashboard/engagements/[id], /dashboard/engagements/new)
 // still fall through to the prefix-based Showtime bucket below.
-const PRODUCT_SCOPED_ROOTS = ["/dashboard/queue", "/dashboard/runs", "/dashboard/engagements"];
+//
+// Bug fix: /dashboard/reports used to be hardcoded to the Showtime bucket
+// further down (a leftover from before Reports carried `?product=` at
+// all), so opening Reputation Manager's own Reports link lit up
+// Showtime's rail icon instead of Reputation Manager's. Joining this list
+// means it's resolved the same way as Queue/Executions/Clients — by the
+// `?product=` param — before that hardcoded fallback is ever reached.
+const PRODUCT_SCOPED_ROOTS = ["/dashboard/queue", "/dashboard/runs", "/dashboard/engagements", "/dashboard/reports"];
 
 function activeSectionHref(pathname: string, productParam: string | null, fromParam: string | null): string {
   if (PRODUCT_SCOPED_ROOTS.includes(pathname) && productParam === "reputation-manager") {
@@ -155,8 +162,7 @@ function activeSectionHref(pathname: string, productParam: string | null, fromPa
   if (
     pathname === "/dashboard/showtime" ||
     pathname.startsWith("/dashboard/analytics") ||
-    pathname.startsWith("/dashboard/meetings") ||
-    pathname.startsWith("/dashboard/reports")
+    pathname.startsWith("/dashboard/meetings")
   ) return "/dashboard/showtime";
 
   const allSections = [...RAIL_SECTIONS, ...PRODUCT_NAV_SECTIONS];

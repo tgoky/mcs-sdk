@@ -7,6 +7,7 @@ import { BookingToast } from "./booking-toast";
 import { WorkSidebar, WorkSidebarSkeleton } from "./work-sidebar";
 import { ReputationManagerSidebar } from "./reputation-manager-sidebar";
 import { ShowtimeSidebar } from "./showtime-sidebar";
+import { ReportsSidebarSection, ReportsSidebarSectionSkeleton } from "./reports/reports-sidebar-section";
 import { getActiveWorkspace, getInstalledPackagesByWorkspace, listWorkspaces } from "@/lib/workspace";
 import { MobileNavPill } from "@/components/mobile-nav-pill";
 
@@ -58,10 +59,12 @@ export default async function DashboardLayout({
           deleted per the 2026-08-07 handoff's Observation 8 — see
           secondary-sidebar.tsx's file comment. Reports is product-scoped
           via `?product=` like Queue/Executions/Clients (see
-          secondary-sidebar.tsx's isProductScopedRoot) rather than owning
-          its own secondary-sidebar section — its client picker lives as
-          a row of pills inside the page content instead, scoped to
-          whichever product's Reports link was clicked. */}
+          secondary-sidebar.tsx's isProductScopedRoot), but unlike those
+          two it does NOT reuse the full product sidebar — it gets its
+          own trimmed Home/Clients/Reports nav plus a client picker
+          underneath, rendered once per product here so switching between
+          them never waits on the other's query (see
+          reports-sidebar-section.tsx). */}
       <ShellLayout
         displayName={displayName}
         userEmail={userEmail}
@@ -75,6 +78,16 @@ export default async function DashboardLayout({
         }
         showtime={<ShowtimeSidebar />}
         reputationManager={<ReputationManagerSidebar />}
+        reportsShowtime={
+          <Suspense fallback={<ReportsSidebarSectionSkeleton />}>
+            <ReportsSidebarSection whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} product="showtime" />
+          </Suspense>
+        }
+        reportsReputationManager={
+          <Suspense fallback={<ReportsSidebarSectionSkeleton />}>
+            <ReportsSidebarSection whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} product="reputation-manager" />
+          </Suspense>
+        }
       >
         {children}
       </ShellLayout>
