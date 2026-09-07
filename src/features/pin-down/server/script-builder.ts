@@ -18,6 +18,13 @@ export interface ScriptBuilderInput {
   };
   /** Pin-Down recovery gap 4 — drives buildRecordingChecklist below. Defaults to "founder_on_camera" when omitted, since that's the OG SKILL.md's most common case. */
   castingChoice?: CastingChoice;
+  /** Teammates chat's "regenerate with a different angle" action
+   * (pin-down-scripts, chat-skill-registry.ts) — forces the hero script's
+   * approach instead of letting selectHeroApproach auto-pick one from the
+   * offer's price/traffic_temperature. One of the 3 real, already-modeled
+   * approaches below (see APPROACH_BRIEF) — not a free-text tone/angle
+   * string, since there's no such knob in the actual prompt this feeds. */
+  approachOverride?: "research_assistance" | "urgency" | "faq";
 }
 
 export interface HeroScript {
@@ -93,6 +100,16 @@ const APPROACH_BRIEF: Record<string, string> = {
   urgency:
     "The prospect is warm/hot and the offer is high-price — the video should reinforce that they made the right call booking, build anticipation, and set a confident, decisive tone without being pushy.",
   faq: "Standard warm-lead confirmation tone — friendly, clear, sets expectations for what happens on the call.",
+};
+
+// Same target lengths selectHeroApproach's own return values use per
+// approach — extracted so an explicit approachOverride can look one up
+// without re-deriving it from an offer that override is deliberately
+// bypassing.
+const APPROACH_TARGET_LENGTH_SECONDS: Record<"research_assistance" | "urgency" | "faq", number> = {
+  research_assistance: 150,
+  urgency: 75,
+  faq: 105,
 };
 
 /**
@@ -180,7 +197,9 @@ function buildRecordingChecklist(
 }
 
 export async function buildScriptPack(input: ScriptBuilderInput, runId?: string): Promise<ScriptPack> {
-  const { approach, targetLengthSeconds } = selectHeroApproach(input.offerDetails);
+  const autoSelected = selectHeroApproach(input.offerDetails);
+  const approach = input.approachOverride ?? autoSelected.approach;
+  const targetLengthSeconds = input.approachOverride ? APPROACH_TARGET_LENGTH_SECONDS[input.approachOverride] : autoSelected.targetLengthSeconds;
   const host = input.prospectMeets ?? "our team";
   const breakoutTopics = selectBreakoutTopics(input.topCallQuestions ?? []);
   const testimonials = (input.existingProof?.testimonials ?? []).filter((t) => t.name && t.role && t.quote);

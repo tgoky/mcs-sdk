@@ -92,14 +92,21 @@ export async function triggerVoiceExtractionForEngagement(
   );
 }
 
-export async function triggerScriptPackForEngagement(whopUserId: string, workspaceId: string, engagementId: string): Promise<TriggerChatSkillResult> {
+export async function triggerScriptPackForEngagement(
+  whopUserId: string,
+  workspaceId: string,
+  engagementId: string,
+  approachOverride?: "research_assistance" | "urgency" | "faq"
+): Promise<TriggerChatSkillResult> {
   return triggerChatSkillForEngagement(
     whopUserId,
     workspaceId,
     engagementId,
     "pin-down-scripts",
-    {},
-    "Generating the hero and breakout video scripts. This can take a minute — check back or ask for the status.",
+    { scriptApproachOverride: approachOverride },
+    approachOverride
+      ? `Regenerating the hero and breakout video scripts with a ${approachOverride} approach. This can take a minute — check back or ask for the status.`
+      : "Generating the hero and breakout video scripts. This can take a minute — check back or ask for the status.",
     "script_pack"
   );
 }
@@ -248,17 +255,21 @@ export async function triggerPageAuditForEngagement(
   whopUserId: string,
   workspaceId: string,
   engagementId: string,
-  pageUrl: string
+  pageUrl: string,
+  competitorPageUrl?: string
 ): Promise<TriggerChatSkillResult> {
   const cleanUrl = pageUrl.trim();
   if (!cleanUrl) return { ok: false, error: "No page URL was provided." };
+  const cleanCompetitorUrl = competitorPageUrl?.trim() || undefined;
   return triggerChatSkillForEngagement(
     whopUserId,
     workspaceId,
     engagementId,
     "pin-down-page-audit",
-    { pageAuditUrl: cleanUrl },
-    `Auditing the confirmation page at ${cleanUrl}. This can take a minute — check back or ask for the status.`,
+    { pageAuditUrl: cleanUrl, competitorPageUrl: cleanCompetitorUrl },
+    cleanCompetitorUrl
+      ? `Auditing the confirmation page at ${cleanUrl} against ${cleanCompetitorUrl}. This can take a minute — check back or ask for the status.`
+      : `Auditing the confirmation page at ${cleanUrl}. This can take a minute — check back or ask for the status.`,
     "existing_page_audit",
     cleanUrl
   );

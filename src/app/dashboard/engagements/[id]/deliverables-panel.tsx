@@ -133,6 +133,7 @@ type PinDownPageAudit = {
   existingPageStrengths: string[];
   existingPageWeaknesses: string[];
   v1Improvements: string[];
+  competitorComparison?: { url: string; notes: string[] } | null;
 } | null;
 
 export type ConversationIntelligenceState = {
@@ -717,6 +718,19 @@ export function DeliverablesPanel({
                 </ul>
               </div>
             </div>
+
+            {pinDownPageAudit.competitorComparison && pinDownPageAudit.competitorComparison.notes.length > 0 && (
+              <div className="space-y-1.5 p-3 mt-3 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-xs">
+                <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
+                  Vs. {pinDownPageAudit.competitorComparison.url}
+                </span>
+                <ul className="space-y-1">
+                  {pinDownPageAudit.competitorComparison.notes.map((n, i) => (
+                    <li key={i} className="text-zinc-700 dark:text-zinc-300">⇄ {n}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </DeliverableRow>
         )}
 

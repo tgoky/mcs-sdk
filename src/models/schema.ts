@@ -766,6 +766,11 @@ export const engagements = pgTable("engagements", {
     existingPageStrengths: string[];
     existingPageWeaknesses: string[];
     v1Improvements: string[];
+    // Teammates chat's "audit against a competitor" action
+    // (pin-down-page-audit + competitorPageUrl, discovery-prefill.ts) —
+    // present only when a second URL was actually supplied and fetched
+    // successfully. Omitted (not a placeholder) otherwise.
+    competitorComparison?: { url: string; notes: string[] } | null;
   }>(),
 
   // ── Pin-Down recovery gap 2: site + brand-resource crawl for voice ────

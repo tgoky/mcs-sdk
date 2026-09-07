@@ -34,7 +34,8 @@ export async function runScriptPackOnly(
     castingChoice?: CastingChoice | null;
   },
   runId: string,
-  step: StepTools | undefined
+  step: StepTools | undefined,
+  ctx?: { approachOverride?: "research_assistance" | "urgency" | "faq" }
 ): Promise<void> {
   const summary = emptySummary();
   const run = step ? <T,>(id: string, fn: () => Promise<T>) => step.run(id, fn) : <T,>(_id: string, fn: () => Promise<T>) => fn();
@@ -51,6 +52,7 @@ export async function runScriptPackOnly(
           prospectMeets: tenant.prospectMeets ?? undefined,
           existingProof: tenant.existingProof ?? undefined,
           castingChoice: tenant.castingChoice ?? undefined,
+          approachOverride: ctx?.approachOverride,
         },
         runId
       )
@@ -72,7 +74,11 @@ export async function runScriptPackOnly(
     });
 
     await logStep(runId, { phase: "script_pack", status: "success", detail: `Hero + ${scriptPack.breakoutScripts.length} breakout scripts generated` });
-    summary.whatWasAttempted.push(`Generated a hero video script (${scriptPack.heroScript.chapters.length} chapters) and ${scriptPack.breakoutScripts.length} breakout scripts for ${tenant.buyer}.`);
+    summary.whatWasAttempted.push(
+      `Generated a hero video script (${scriptPack.heroScript.chapters.length} chapters) and ${scriptPack.breakoutScripts.length} breakout scripts for ${tenant.buyer}.${
+        ctx?.approachOverride ? ` Forced approach: ${ctx.approachOverride}.` : ""
+      }`
+    );
     await finishRun(runId, { summary });
   } catch (err) {
     await logStep(runId, { phase: "script_pack", status: "failed", detail: err instanceof Error ? err.message : String(err) });

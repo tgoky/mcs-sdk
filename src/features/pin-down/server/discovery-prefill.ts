@@ -271,6 +271,7 @@ export interface PageAuditResult {
   existingPageStrengths: string[];
   existingPageWeaknesses: string[];
   v1Improvements: string[];
+  competitorComparison?: { url: string; notes: string[] } | null;
 }
 
 function stripHtmlForAudit(html: string): string {
@@ -286,7 +287,8 @@ function stripHtmlForAudit(html: string): string {
 
 export async function auditExistingConfirmationPage(
   url: string,
-  context: { buyer: string; offerDetails?: any; brandVoiceProfile?: any }
+  context: { buyer: string; offerDetails?: any; brandVoiceProfile?: any },
+  competitorUrl?: string
 ): Promise<PageAuditResult> {
   const html = await fetchRaw(url, 8000);
   const now = new Date().toISOString();
@@ -303,6 +305,13 @@ export async function auditExistingConfirmationPage(
 
   const text = stripHtmlForAudit(html);
 
+  // Competitor comparison is genuinely optional and best-effort — a
+  // failed/empty competitor fetch degrades to no comparison section
+  // rather than failing the whole audit, same as this function's own
+  // existing "couldn't fetch" fallback above does for the primary URL.
+  const competitorHtml = competitorUrl ? await fetchRaw(competitorUrl, 8000) : null;
+  const competitorText = competitorHtml ? stripHtmlForAudit(competitorHtml) : null;
+
   const system = `You are auditing an existing post-booking confirmation page for
  ${context.buyer} against what a well-built confirmation page should
 include: a hero video/intro setting expectations, a clear "what to expect
@@ -315,14 +324,21 @@ Target brand voice: ${JSON.stringify(context.brandVoiceProfile ?? {})}
 
 Page content (text-extracted):
  ${text}
+${
+  competitorText
+    ? `\nA competitor's confirmation page at ${competitorUrl} (text-extracted) — compare against it specifically, calling out what it does that this page doesn't and vice versa:\n ${competitorText}\n`
+    : ""
+}
 
 Return ONLY a JSON object:
 {
   "existingPageStrengths": ["specific things this page already does well"],
   "existingPageWeaknesses": ["specific gaps or issues, e.g. no video, vague CTA, no reschedule path"],
-  "v1Improvements": ["specific, concrete improvements the new Pin-Down page should make over this one"]
+  "v1Improvements": ["specific, concrete improvements the new Pin-Down page should make over this one"]${
+    competitorText ? ',\n  "competitorComparisonNotes": ["specific, concrete comparisons against the competitor page — what they do better, what this page does better"]' : ""
+  }
 }
-Be specific and concrete — no generic filler like "could be more engaging." Never fabricate content that isn't actually on the page.`;
+Be specific and concrete — no generic filler like "could be more engaging." Never fabricate content that isn't actually on either page.`;
 
   const result = await callClaudeWithRetry({
     model: MODEL.SYNTHESIS,
@@ -341,6 +357,8 @@ Be specific and concrete — no generic filler like "could be more engaging." Ne
       existingPageStrengths: parsed.existingPageStrengths ?? [],
       existingPageWeaknesses: parsed.existingPageWeaknesses ?? [],
       v1Improvements: parsed.v1Improvements ?? [],
+      competitorComparison:
+        competitorText && competitorUrl ? { url: competitorUrl, notes: parsed.competitorComparisonNotes ?? [] } : undefined,
     };
   } catch {
     return {

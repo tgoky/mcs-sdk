@@ -21,7 +21,7 @@ export async function runPageAuditOnly(
   tenant: { engagementId: string; buyer: string; offerDetails?: unknown; brandVoiceProfile?: unknown },
   runId: string,
   step: StepTools | undefined,
-  ctx?: { pageAuditUrl?: string }
+  ctx?: { pageAuditUrl?: string; competitorPageUrl?: string }
 ): Promise<void> {
   const summary = emptySummary();
   const run = step ? <T,>(id: string, fn: () => Promise<T>) => step.run(id, fn) : <T,>(_id: string, fn: () => Promise<T>) => fn();
@@ -29,10 +29,11 @@ export async function runPageAuditOnly(
   try {
     const url = ctx?.pageAuditUrl?.trim();
     if (!url) throw new Error("No confirmation page URL was provided to audit.");
+    const competitorUrl = ctx?.competitorPageUrl?.trim() || undefined;
 
     await logStep(runId, { phase: "existing_page_audit", status: "running", label: url });
     const audit = await run("existing-page-audit", () =>
-      auditExistingConfirmationPage(url, { buyer: tenant.buyer, offerDetails: tenant.offerDetails, brandVoiceProfile: tenant.brandVoiceProfile })
+      auditExistingConfirmationPage(url, { buyer: tenant.buyer, offerDetails: tenant.offerDetails, brandVoiceProfile: tenant.brandVoiceProfile }, competitorUrl)
     );
 
     await run("persist", async () => {
@@ -44,7 +45,11 @@ export async function runPageAuditOnly(
       status: "success",
       detail: `${audit.existingPageStrengths.length} strengths, ${audit.existingPageWeaknesses.length} weaknesses noted`,
     });
-    summary.whatWasAttempted.push(`Audited ${tenant.buyer}'s confirmation page at ${url} — ${audit.existingPageWeaknesses.length} gap(s) identified.`);
+    summary.whatWasAttempted.push(
+      `Audited ${tenant.buyer}'s confirmation page at ${url} — ${audit.existingPageWeaknesses.length} gap(s) identified.${
+        audit.competitorComparison ? ` Compared against ${audit.competitorComparison.url}.` : competitorUrl ? " Competitor URL couldn't be fetched — audit ran without the comparison." : ""
+      }`
+    );
     await finishRun(runId, { summary });
   } catch (err) {
     await logStep(runId, { phase: "existing_page_audit", status: "failed", detail: err instanceof Error ? err.message : String(err) });

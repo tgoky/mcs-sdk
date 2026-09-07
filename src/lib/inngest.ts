@@ -56,6 +56,17 @@ export type SkillRunExecuteData = {
   // widen the search into (hour/day/week/month/year/all), since Reddit
   // search has no exact date-cutoff parameter the other two have.
   deepScanTimeframe?: string;
+  // Same category, for pin-down-scripts — forces the hero script's
+  // approach/framing (see selectHeroApproach in script-builder.ts) instead
+  // of letting it auto-select off the offer's price/traffic_temperature.
+  // Real, pre-modeled options only — not a free-text tone string, since
+  // buildScriptPack has no such knob.
+  scriptApproachOverride?: "research_assistance" | "urgency" | "faq";
+  // Same category, for pin-down-page-audit — a second URL (typically a
+  // competitor's confirmation page) fetched and included in the audit
+  // prompt as comparison context. Optional: omitting it is the existing
+  // single-page audit, unchanged.
+  competitorPageUrl?: string;
 };
 
 

@@ -11,7 +11,7 @@ import { createMinimalEngagement } from "@/lib/create-minimal-engagement";
 import { createMinimalRepEngagement } from "@/lib/create-minimal-rep-engagement";
 import { getRepEnrolledEngagementIds } from "@/lib/rep-engagements";
 import { checkCredentialAvailability, linkReusableCredential, getComposioConnectLink, hasBookingCredential } from "@/lib/chat-credentials";
-import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries } from "@/lib/chat-status-queries";
+import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries, getLeakMapBenchmarkComparison } from "@/lib/chat-status-queries";
 import { enrollProspectInWinBack } from "@/lib/chat-winback";
 import { previewManualPileOnEnrollment, enrollProspectInPileOn } from "@/lib/chat-pile-on";
 import { triggerVoiceExtractionForEngagement, triggerScriptPackForEngagement, triggerAdCreativeBriefsForEngagement, triggerPageAuditForEngagement, triggerEngineAdhocCheckForEngagement, triggerCrisisStressTestForEngagement, triggerDraftResponseForEngagement, triggerTwitterDeepScanForEngagement, triggerTrustpilotDeepScanForEngagement, triggerRedditDeepScanForEngagement } from "@/lib/chat-skill-trigger";
@@ -190,6 +190,16 @@ const TOOLS = [
     },
   },
   {
+    name: "compare_leak_map_benchmarks",
+    description:
+      "Compares a client's most recent Leak Map audit metrics against anonymized cross-client benchmarks for their same bucket (traffic temperature + price range + vertical) — read-only, no new audit run, no LLM call. Reuses the client's existing audit metrics, not a fresh scan. Only works if the client has run Leak Map at least once and has enough same-bucket peers on file (k-anonymity floor); the tool will say plainly if either is missing rather than fabricating a comparison.",
+    input_schema: {
+      type: "object",
+      properties: { engagementId: { type: "string", description: "The client to check." } },
+      required: ["engagementId"],
+    },
+  },
+  {
     name: "enroll_in_winback",
     description:
       "Manually enrolls one specific prospect into the client's win-back recovery cadence right now — a real action, it adds them to the actual configured list/workflow on the client's email platform. Requires the client to already have a working email-platform credential and the platform's recovery list/workflow already configured (Klaviyo needs a recovery list id, GoHighLevel needs a location id and workflow id, ActiveCampaign needs a list id and base URL — HubSpot needs nothing extra). If any of that is missing, the tool will say so plainly — don't guess whether it's configured, just try it and relay what comes back. Direct-send (SMTP) accounts aren't supported yet.",
@@ -250,7 +260,15 @@ const TOOLS = [
       "Generates a hero confirmation-page video script plus breakout scripts for each top call question, in the background — the same script pack Show Rate Setup generates, standalone. Uses whatever brand voice, offer details, and call questions are already on the client — none of that needs asking for first, it'll just produce a more generic result if some of it isn't set. This takes a while, dispatches and returns immediately with a runId. Tell the user it's running.",
     input_schema: {
       type: "object",
-      properties: { engagementId: { type: "string", description: "The client to generate scripts for." } },
+      properties: {
+        engagementId: { type: "string", description: "The client to generate scripts for." },
+        approach: {
+          type: "string",
+          enum: ["research_assistance", "urgency", "faq"],
+          description:
+            "Optional — forces the hero video's framing instead of letting it auto-pick from the offer's price/traffic temperature. research_assistance = lower-anxiety working-session framing for cold, complex/high-price offers. urgency = confident, decisive framing for warm/hot high-price offers. faq = standard friendly warm-lead framing. Only set this when the user explicitly asks for a different angle/approach on an already-generated script pack — there is no free-text tone override, only these 3 real options.",
+        },
+      },
       required: ["engagementId"],
     },
   },
@@ -267,12 +285,13 @@ const TOOLS = [
   {
     name: "audit_confirmation_page",
     description:
-      "Audits an existing confirmation page URL against what a well-built one should include (hero video, what-to-expect section, breakout content, social proof, reschedule path) and notes concrete gaps, in the background — the same audit Show Rate Setup runs. Does NOT build or deploy a new page — say so plainly if asked for that, it's a bigger, separate action not wired up here. Dispatches and returns immediately with a runId.",
+      "Audits an existing confirmation page URL against what a well-built one should include (hero video, what-to-expect section, breakout content, social proof, reschedule path) and notes concrete gaps, in the background — the same audit Show Rate Setup runs. Does NOT build or deploy a new page — say so plainly if asked for that, it's a bigger, separate action not wired up here. Optionally also fetches a second URL (typically a competitor's confirmation page) and compares directly against it. Dispatches and returns immediately with a runId.",
     input_schema: {
       type: "object",
       properties: {
         engagementId: { type: "string", description: "The client whose page this is." },
         pageUrl: { type: "string", description: "The URL of the existing confirmation page to audit." },
+        competitorPageUrl: { type: "string", description: "Optional — a competitor's confirmation page URL to fetch and compare against directly. Only include this if the user actually gave a specific competitor URL to compare against." },
       },
       required: ["engagementId", "pageUrl"],
     },
@@ -371,7 +390,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
       ? clients.map((c) => `- ${c.buyer} (engagementId: ${c.engagementId}${c.repEnrolled ? ", Reputation Manager" : ""})`).join("\n")
       : "(no clients yet)";
   return [
-    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries — for any client, without triggering anything.",
+    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries, how a client's Leak Map metrics compare to similar clients — for any client, without triggering anything.",
     "",
     "Clients (a client tagged \"Reputation Manager\" is enrolled in that product; everyone else is Showtime-only unless just created and not yet set up):",
     clientList,
@@ -384,7 +403,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
     "- For booking or email platform setup: always call check_credential first, never assume whether one already exists or is reusable. If it finds a reusable saved credential, ask before calling use_saved_credential — don't link it without confirming. If none exists and the platform is Composio-managed (Calendly/GoHighLevel Calendar for booking; HubSpot/Klaviyo/Mailchimp/GoHighLevel for email), call connect_credential and tell the user to click the link — it's a real redirect, not something you can finish for them. For anything else (Cal.com, OnceHub, ActiveCampaign, ConvertKit, direct SMTP), or if they'd rather type a key directly, tell them to paste it on the client's own page instead — you can't collect a raw credential value in chat, only real links or saved-credential reuse. Always pass the correct field (\"booking\" or \"email\") matching which platform you're setting up.",
     "- Never ask the user to paste an API key or secret directly in this chat, under any circumstances, even if they offer to.",
     "- If a message arrives saying a platform was just connected, that means the user completed a connect_credential link and came back — call check_credential for that client/provider (it should now show a reusable credential) and then use_saved_credential to finish linking it, using whichever client was being set up earlier in the conversation.",
-    "- For status questions — what's on today, who cancelled, how did a run go, who's in an active recovery — use get_todays_calls / get_recent_cancellations / get_run_history / get_active_recoveries. These never change anything, so use them freely whenever the user is asking about current state rather than asking you to do something.",
+    "- For status questions — what's on today, who cancelled, how did a run go, who's in an active recovery, how a client's Leak Map metrics compare to similar clients — use get_todays_calls / get_recent_cancellations / get_run_history / get_active_recoveries / compare_leak_map_benchmarks. These never change anything, so use them freely whenever the user is asking about current state rather than asking you to do something.",
     "- After a tool call, tell the user plainly what happened, including any error a tool returned (e.g. the skill being disabled for that client).",
     "- For enroll_in_winback: needs a working email-platform credential on the client already, plus the platform's recovery list/workflow configured — if the tool reports something's missing, tell the user plainly what and point them to the client's page, don't retry blindly.",
     "- For enroll_in_pile_on: ALWAYS call preview_pile_on_enrollment first and show the user its output before ever calling enroll_in_pile_on — never call enroll_in_pile_on in the same turn as the user's first request without a preview shown first. It only enrolls email, never SMS or an ad-data cohort sync (say so plainly if asked — deliberately not replicated for manual enrollment, see the tool's own description for why). If the preview or the real call reports an existing booking on file for that email, tell the user plainly and only pass force:true after they explicitly confirm they want to proceed anyway — never set force on your own judgment.",
@@ -394,6 +413,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
     "- For draft_response: this is for a REAL finding the user gives you (a real review, a real mention) — the draft never gets posted anywhere automatically, always tell the user to review and post it themselves. Don't fabricate specific facts, offers, or promises in how you relay the draft.",
     "- For check_ai_engines: omit subject to ask about the client themselves; to ask about a competitor, use the exact name from their tracked competitors list (shown on their Identity Setup) — never guess or paraphrase a competitor name that hasn't been confirmed as tracked, ask the user to confirm the exact name instead. This is a live spot-check, separate from the scheduled AI Engine Watch panel — nothing gets saved to the client's monitoring history, so don't present it as if it updates their ongoing findings.",
     "- extract_brand_voice, generate_video_scripts, generate_ad_briefs, and audit_confirmation_page all run in the background and take a while — always tell the user it's running and won't finish instantly, and offer to check status with get_run_history if they ask later. None of these run the full Show Rate Setup wizard end to end (no booking webhook wiring, no new page deployment) — each does exactly the one piece it's named for, using whatever the client already has on file (brand voice, offer details, call questions) and degrading to a more generic result if some of that isn't set yet, never failing outright for missing optional context. If asked to build or deploy a new confirmation page (not audit an existing one), say plainly that's not wired up — audit_confirmation_page only reviews a page that already exists.",
+    "- generate_video_scripts' approach param: only set it when the user explicitly asks to regenerate with a different angle/framing — never set it on a first-time script generation, and never invent a description beyond the 3 real options (research_assistance/urgency/faq) listed in the tool's own schema. audit_confirmation_page's competitorPageUrl: only set it when the user gives an actual competitor URL to compare against — never guess or reuse a URL from earlier in the conversation for a different purpose.",
     "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, preview or enroll someone in Pile-On (preview_pile_on_enrollment, enroll_in_pile_on — email only, see that rule above), run Show Rate Setup's four individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), deep-scan X/Twitter back to a date (twitter_deep_scan), deep-scan Trustpilot back to a date (trustpilot_deep_scan), widen a Reddit scan to an older timeframe (reddit_deep_scan), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, Pile-On's SMS or ad-data cohort sync specifically (not replicated for manual enrollment, only the real booking webhook does those), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves on their regular cadence, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, twitter_deep_scan, trustpilot_deep_scan, reddit_deep_scan, and enroll_in_pile_on are separate, narrower, manually-triggered actions, not a way to fire the scheduled skills themselves.",
     "- Keep replies short and direct.",
   ].join("\n");
@@ -601,6 +621,15 @@ export async function POST(request: Request) {
         } else {
           message2 = "Missing engagementId.";
         }
+      } else if (block.name === "compare_leak_map_benchmarks") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (engagementId) {
+          const result = await getLeakMapBenchmarkComparison(engagementId);
+          ok = !("error" in result);
+          message2 = "error" in result ? result.error : result.lines.join(" ");
+        } else {
+          message2 = "Missing engagementId.";
+        }
       } else if (block.name === "enroll_in_winback") {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
         const prospectEmail = typeof block.input.prospectEmail === "string" ? block.input.prospectEmail.trim() : "";
@@ -661,8 +690,12 @@ export async function POST(request: Request) {
         }
       } else if (block.name === "generate_video_scripts") {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        const approach =
+          block.input.approach === "research_assistance" || block.input.approach === "urgency" || block.input.approach === "faq"
+            ? block.input.approach
+            : undefined;
         if (engagementId) {
-          const result = await triggerScriptPackForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId);
+          const result = await triggerScriptPackForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, approach);
           ok = result.ok;
           message2 = result.ok ? result.message : result.error;
           if (result.ok) {
@@ -690,8 +723,9 @@ export async function POST(request: Request) {
       } else if (block.name === "audit_confirmation_page") {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
         const pageUrl = typeof block.input.pageUrl === "string" ? block.input.pageUrl : "";
+        const competitorPageUrl = typeof block.input.competitorPageUrl === "string" ? block.input.competitorPageUrl : undefined;
         if (engagementId && pageUrl) {
-          const result = await triggerPageAuditForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, pageUrl);
+          const result = await triggerPageAuditForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, pageUrl, competitorPageUrl);
           ok = result.ok;
           message2 = result.ok ? result.message : result.error;
           if (result.ok) {

@@ -31,6 +31,8 @@ export interface ChatSkillContext {
   findingPlatform?: string;
   deepScanSinceDate?: string;
   deepScanTimeframe?: string;
+  scriptApproachOverride?: "research_assistance" | "urgency" | "faq";
+  competitorPageUrl?: string;
 }
 
 export interface ChatSkillDefinition extends ChatSkillManifestEntry {
@@ -49,7 +51,7 @@ export const CHAT_SKILL_REGISTRY: Record<ChatSkillId, ChatSkillDefinition> = {
   },
   "pin-down-scripts": {
     ...CHAT_SKILL_MANIFEST["pin-down-scripts"],
-    execute: (tenant, runId, step) => runScriptPackOnly(tenant, runId, step),
+    execute: (tenant, runId, step, ctx) => runScriptPackOnly(tenant, runId, step, { approachOverride: ctx?.scriptApproachOverride }),
   },
   "pin-down-ad-briefs": {
     ...CHAT_SKILL_MANIFEST["pin-down-ad-briefs"],
