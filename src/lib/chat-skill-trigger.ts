@@ -116,6 +116,26 @@ export async function triggerAdCreativeBriefsForEngagement(whopUserId: string, w
   );
 }
 
+export async function triggerEngineAdhocCheckForEngagement(
+  whopUserId: string,
+  workspaceId: string,
+  engagementId: string,
+  subject: string | undefined,
+  question: string | undefined
+): Promise<TriggerChatSkillResult> {
+  const cleanSubject = subject?.trim();
+  return triggerChatSkillForEngagement(
+    whopUserId,
+    workspaceId,
+    engagementId,
+    "rep-engine-adhoc-check",
+    { engineCheckSubject: cleanSubject, engineCheckQuestion: question?.trim() },
+    `Asking the AI engines about ${cleanSubject || "this client"} now. This can take a moment — check back or ask for the status.`,
+    "engine_adhoc_check",
+    cleanSubject
+  );
+}
+
 export async function triggerPageAuditForEngagement(
   whopUserId: string,
   workspaceId: string,

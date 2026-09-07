@@ -13,7 +13,7 @@ import { getRepEnrolledEngagementIds } from "@/lib/rep-engagements";
 import { checkCredentialAvailability, linkReusableCredential, getComposioConnectLink, hasBookingCredential } from "@/lib/chat-credentials";
 import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries } from "@/lib/chat-status-queries";
 import { enrollProspectInWinBack } from "@/lib/chat-winback";
-import { triggerVoiceExtractionForEngagement, triggerScriptPackForEngagement, triggerAdCreativeBriefsForEngagement, triggerPageAuditForEngagement } from "@/lib/chat-skill-trigger";
+import { triggerVoiceExtractionForEngagement, triggerScriptPackForEngagement, triggerAdCreativeBriefsForEngagement, triggerPageAuditForEngagement, triggerEngineAdhocCheckForEngagement } from "@/lib/chat-skill-trigger";
 import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS } from "@/lib/copy";
 
 export const runtime = "nodejs";
@@ -248,6 +248,26 @@ const TOOLS = [
       required: ["engagementId", "pageUrl"],
     },
   },
+  {
+    name: "check_ai_engines",
+    description:
+      "Asks the client's configured AI engines (ChatGPT, Claude, Perplexity, Grok, Gemini) a live question right now — about the client themselves, or about a named competitor already tracked in their identity graph. This is a one-off spot-check, separate from the scheduled AI Engine Watch panel — nothing gets written to the client's monitoring history, it's a live snapshot only. Dispatches and returns immediately with a runId; tell the user it's running.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to check this for." },
+        subject: {
+          type: "string",
+          description: "Who to ask about — omit for the client themselves, or give the exact name of a competitor already tracked in their identity graph. Never guess a competitor name that hasn't been confirmed as tracked.",
+        },
+        question: {
+          type: "string",
+          description: "Optional — the exact question to ask. Omit to use a sensible default ('what do people generally say about X, anything concerning').",
+        },
+      },
+      required: ["engagementId"],
+    },
+  },
 ];
 function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEnrolled: boolean }[], repInstalled: boolean): string {
   const clientList =
@@ -255,7 +275,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
       ? clients.map((c) => `- ${c.buyer} (engagementId: ${c.engagementId}${c.repEnrolled ? ", Reputation Manager" : ""})`).join("\n")
       : "(no clients yet)";
   return [
-    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries — for any client, without triggering anything.",
+    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries — for any client, without triggering anything.",
     "",
     "Clients (a client tagged \"Reputation Manager\" is enrolled in that product; everyone else is Showtime-only unless just created and not yet set up):",
     clientList,
@@ -271,8 +291,9 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
     "- For status questions — what's on today, who cancelled, how did a run go, who's in an active recovery — use get_todays_calls / get_recent_cancellations / get_run_history / get_active_recoveries. These never change anything, so use them freely whenever the user is asking about current state rather than asking you to do something.",
     "- After a tool call, tell the user plainly what happened, including any error a tool returned (e.g. the skill being disabled for that client).",
     "- For enroll_in_winback: needs a working email-platform credential on the client already, plus the platform's recovery list/workflow configured — if the tool reports something's missing, tell the user plainly what and point them to the client's page, don't retry blindly.",
+    "- For check_ai_engines: omit subject to ask about the client themselves; to ask about a competitor, use the exact name from their tracked competitors list (shown on their Identity Setup) — never guess or paraphrase a competitor name that hasn't been confirmed as tracked, ask the user to confirm the exact name instead. This is a live spot-check, separate from the scheduled AI Engine Watch panel — nothing gets saved to the client's monitoring history, so don't present it as if it updates their ongoing findings.",
     "- extract_brand_voice, generate_video_scripts, generate_ad_briefs, and audit_confirmation_page all run in the background and take a while — always tell the user it's running and won't finish instantly, and offer to check status with get_run_history if they ask later. None of these run the full Show Rate Setup wizard end to end (no booking webhook wiring, no new page deployment) — each does exactly the one piece it's named for, using whatever the client already has on file (brand voice, offer details, call questions) and degrading to a more generic result if some of that isn't set yet, never failing outright for missing optional context. If asked to build or deploy a new confirmation page (not audit an existing one), say plainly that's not wired up — audit_confirmation_page only reviews a page that already exists.",
-    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, run Show Rate Setup's four individual pieces above, and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, anything Pre-Call Sequence/Pile-On related (that's webhook-only, see the client's own page), or to manually trigger a Reputation Manager watch skill, say plainly that it's not wired up rather than pretending to do it.",
+    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, run Show Rate Setup's four individual pieces above, run a live AI-engine spot-check (check_ai_engines), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, anything Pre-Call Sequence/Pile-On related (that's webhook-only, see the client's own page), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills, say plainly that it's not wired up rather than pretending to do it — check_ai_engines is a separate, live, one-off spot-check, not a way to manually fire the scheduled panel or any of those other four.",
     "- Keep replies short and direct.",
   ].join("\n");
 }
@@ -551,6 +572,22 @@ export async function POST(request: Request) {
           }
         } else {
           message2 = "Missing engagementId or pageUrl.";
+        }
+      } else if (block.name === "check_ai_engines") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        const subject = typeof block.input.subject === "string" ? block.input.subject : undefined;
+        const question = typeof block.input.question === "string" ? block.input.question : undefined;
+        if (engagementId) {
+          const result = await triggerEngineAdhocCheckForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, subject, question);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok) {
+            const buyer = clients.find((c) => c.engagementId === engagementId)?.buyer;
+            links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+            links.push({ label: buyer ? `${buyer}'s page` : "Client page", href: `/dashboard/engagements/${engagementId}` });
+          }
+        } else {
+          message2 = "Missing engagementId.";
         }
       } else {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";

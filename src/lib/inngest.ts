@@ -32,6 +32,13 @@ export type SkillRunExecuteData = {
   voiceExtractionDomain?: string;
   // Same category, same reasoning, for pin-down-page-audit.
   pageAuditUrl?: string;
+  // Same category, for rep-engine-adhoc-check (chat-skill-registry.ts) —
+  // who to ask the AI engines about (defaults to the client's own
+  // operatorName when omitted) and what to ask (defaults to a generic
+  // "what do people say about {subject}" prompt when omitted). Neither is
+  // secret state, same as the two fields above.
+  engineCheckSubject?: string;
+  engineCheckQuestion?: string;
 };
 
 

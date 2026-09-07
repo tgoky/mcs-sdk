@@ -17,9 +17,15 @@
 // on or off" — so these skip the enable/disable gate entirely (see
 // chat-skill-trigger.ts) rather than being force-fit into that model.
 
-export type ChatSkillId = "pin-down-voice" | "pin-down-scripts" | "pin-down-ad-briefs" | "pin-down-page-audit";
+export type ChatSkillId = "pin-down-voice" | "pin-down-scripts" | "pin-down-ad-briefs" | "pin-down-page-audit" | "rep-engine-adhoc-check";
 
-export const CHAT_SKILL_IDS: ChatSkillId[] = ["pin-down-voice", "pin-down-scripts", "pin-down-ad-briefs", "pin-down-page-audit"];
+export const CHAT_SKILL_IDS: ChatSkillId[] = [
+  "pin-down-voice",
+  "pin-down-scripts",
+  "pin-down-ad-briefs",
+  "pin-down-page-audit",
+  "rep-engine-adhoc-check",
+];
 
 export interface ChatSkillManifestEntry {
   id: ChatSkillId;
@@ -47,6 +53,12 @@ export const CHAT_SKILL_MANIFEST: Record<ChatSkillId, ChatSkillManifestEntry> = 
     id: "pin-down-page-audit",
     name: "Confirmation Page Audit",
     description: "Audits an existing confirmation page URL against what a well-built one should include, and notes concrete gaps — the same audit Show Rate Setup runs when a client already has a page, standalone. Does not build or deploy a new page — that's a bigger, separate action not wired up here.",
+  },
+  "rep-engine-adhoc-check": {
+    id: "rep-engine-adhoc-check",
+    name: "AI Engine Spot-Check",
+    description:
+      "Asks the client's configured AI engines a live, one-off question right now — about the client themselves, or about a named competitor already tracked in their identity graph. A live snapshot, not part of the scheduled AI Engine Watch panel — nothing gets written to the client's monitoring history.",
   },
 };
 

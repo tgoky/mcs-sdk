@@ -22,7 +22,7 @@ const MAX_TOKENS_PER_ENGINE_RESPONSE = 600;
  * checks are independent and shouldn't be held hostage by one that's
  * having a bad day.
  */
-async function queryEngine(engineId: RepEngineId, operatorName: string, promptText: string, runId: string): Promise<RawFinding | { error: string; engineId: RepEngineId }> {
+export async function queryEngine(engineId: RepEngineId, operatorName: string, promptText: string, runId: string): Promise<RawFinding | { error: string; engineId: RepEngineId }> {
   const modelString = resolveEngineModel(engineId);
   if (!modelString) {
     return { error: `No model configured for ${REP_ENGINE_LABELS[engineId]} (${engineId}) — skipped.`, engineId };

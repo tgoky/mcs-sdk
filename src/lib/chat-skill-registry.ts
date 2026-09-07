@@ -3,6 +3,7 @@ import { runVoiceExtractionOnly } from "@/features/pin-down/server/voice-extract
 import { runScriptPackOnly } from "@/features/pin-down/server/script-pack-only";
 import { runAdCreativeBriefsOnly } from "@/features/pin-down/server/ad-briefs-only";
 import { runPageAuditOnly } from "@/features/pin-down/server/page-audit-only";
+import { runRepEngineAdhocCheck } from "@/features/reputation-manager/server/engine-adhoc-check";
 import { CHAT_SKILL_IDS, CHAT_SKILL_MANIFEST, isChatSkillId, type ChatSkillId, type ChatSkillManifestEntry } from "@/lib/chat-skill-manifest";
 
 export { CHAT_SKILL_IDS, isChatSkillId };
@@ -17,6 +18,8 @@ type StepTools = GetStepTools<Inngest.Any>;
 export interface ChatSkillContext {
   voiceExtractionDomain?: string;
   pageAuditUrl?: string;
+  engineCheckSubject?: string;
+  engineCheckQuestion?: string;
 }
 
 export interface ChatSkillDefinition extends ChatSkillManifestEntry {
@@ -44,5 +47,9 @@ export const CHAT_SKILL_REGISTRY: Record<ChatSkillId, ChatSkillDefinition> = {
   "pin-down-page-audit": {
     ...CHAT_SKILL_MANIFEST["pin-down-page-audit"],
     execute: (tenant, runId, step, ctx) => runPageAuditOnly(tenant, runId, step, ctx),
+  },
+  "rep-engine-adhoc-check": {
+    ...CHAT_SKILL_MANIFEST["rep-engine-adhoc-check"],
+    execute: (tenant, runId, step, ctx) => runRepEngineAdhocCheck(tenant, runId, step, ctx),
   },
 };
