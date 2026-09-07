@@ -55,6 +55,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         pinDownPageAudit: engagements.pinDownPageAudit,
         winBackSequenceAssetMap: engagements.winBackSequenceAssetMap,
         winBackCounts: engagements.winBackCounts,
+        summary: skillRuns.summary,
       })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))

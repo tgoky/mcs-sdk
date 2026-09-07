@@ -43,6 +43,18 @@ export interface ModuleRunDTO {
 
 const SKILLS_WITH_PAGE: WorkerId[] = ["pre-call-read", "pile-on", "win-back", "leak-map"];
 
+// All 5 RM workers share ONE findings page (skills/reputation-manager) —
+// unlike Showtime's per-worker pages above, there's no separate "pipeline"
+// per RM skill, just one client-scoped view across all of them (findings,
+// reviews, mentions, incidents). See rep-findings-panel.tsx's own header.
+const REP_SKILLS_WITH_FINDINGS_PAGE: WorkerId[] = [
+  "rep-engine-panel",
+  "rep-trustpilot-watch",
+  "rep-reddit-watch",
+  "rep-twitter-watch",
+  "rep-crisis-response",
+];
+
 function deriveModuleStatus(runs: ModuleRunDTO[], isEnabled: boolean, isPaused: boolean): ModuleStatus | "disabled" {
   if (!isEnabled) return "disabled";
   if (isPaused) {
@@ -260,6 +272,16 @@ export function WorkersPanel({
                       className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors ml-auto"
                     >
                       <span>Pipeline</span>
+                      <ExternalLink size={11} />
+                    </Link>
+                  )}
+
+                  {REP_SKILLS_WITH_FINDINGS_PAGE.includes(workerId) && (
+                    <Link
+                      href={`/dashboard/engagements/${engagementId}/skills/reputation-manager`}
+                      className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors ml-auto"
+                    >
+                      <span>Findings</span>
                       <ExternalLink size={11} />
                     </Link>
                   )}

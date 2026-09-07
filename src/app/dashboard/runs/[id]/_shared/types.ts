@@ -1,4 +1,4 @@
-import type { EngagementStack } from "@/models/schema";
+import type { EngagementStack, RunSummary } from "@/models/schema";
 
 export interface BrandVoiceProfile {
   source_path: "ai_extracted" | "default";
@@ -89,6 +89,13 @@ export interface RunDetailBase {
     sms: Array<{ id: string; offsetDays: number; body: string }>;
   } | null;
   winBackCounts: { recovery_count: number; lost_count: number } | null;
+  // Only populated by the detail route for the 6 chat-only adhoc RM
+  // skills (rep-engine-adhoc-check, rep-crisis-stress-test,
+  // rep-draft-response, rep-twitter/trustpilot/reddit-deep-scan) — see
+  // AdhocRunSummaryView. Selected unconditionally for every skill (cheap,
+  // one jsonb column) rather than threading a second per-skill case
+  // through the route just to add one field to six of them.
+  summary: RunSummary | null;
 }
 
 export interface BriefedCall {
@@ -322,6 +329,18 @@ export type RepRedditWatchDetail = { run: RunDetailBase; mentions: RepRedditMent
 export type RepTwitterWatchDetail = { run: RunDetailBase; mentions: RepTwitterMentionRow[] };
 export type RepCrisisResponseDetail = { run: RunDetailBase; incident: RepIncidentRow | null };
 
+// The 6 chat-only adhoc actions built this session (rep-engine-adhoc-check,
+// rep-crisis-stress-test, rep-draft-response, rep-twitter-deep-scan,
+// rep-trustpilot-deep-scan, rep-reddit-deep-scan) never had a matching case
+// in the detail route's switch or this file's SkillView switch — they fell
+// through to `default: <PinDownView>`, which renders Showtime deliverables
+// (scripts/briefs/page-audit) that are always null for these runs. None of
+// them write to a dedicated ingestion table the way the 5 scheduled skills
+// do (see this file's own header on why those 5 use a time-window scope) —
+// their entire real output is the run's own summary, so that's all this
+// type carries.
+export type AdhocRunDetail = { run: RunDetailBase };
+
 export type RunDetailPayload =
   | PreCallReadDetail
   | PileOnDetail
@@ -333,4 +352,5 @@ export type RunDetailPayload =
   | RepTrustpilotWatchDetail
   | RepRedditWatchDetail
   | RepTwitterWatchDetail
-  | RepCrisisResponseDetail;
+  | RepCrisisResponseDetail
+  | AdhocRunDetail;

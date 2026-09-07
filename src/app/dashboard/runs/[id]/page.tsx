@@ -32,6 +32,7 @@ import { RepTrustpilotWatchView } from "./views/rep-trustpilot-watch-view";
 import { RepRedditWatchView } from "./views/rep-reddit-watch-view";
 import { RepTwitterWatchView } from "./views/rep-twitter-watch-view";
 import { RepCrisisResponseView } from "./views/rep-crisis-response-view";
+import { AdhocRunSummaryView } from "./views/adhoc-run-summary-view";
 import { runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { formatDiaryDateTime, formatReadableDuration } from "@/lib/format-datetime";
@@ -131,6 +132,17 @@ function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayloa
       return "mentions" in detail ? <RepTwitterWatchView detail={detail as RepTwitterWatchDetail} /> : null;
     case "rep-crisis-response":
       return "incident" in detail ? <RepCrisisResponseView detail={detail} /> : null;
+    // The 6 chat-only adhoc RM actions — see adhoc-run-summary-view.tsx's
+    // own header for why these fall to a generic summary view rather than
+    // their own dedicated one (they write to no dedicated table; their
+    // entire real output is the run's own summary).
+    case "rep-engine-adhoc-check":
+    case "rep-crisis-stress-test":
+    case "rep-draft-response":
+    case "rep-twitter-deep-scan":
+    case "rep-trustpilot-deep-scan":
+    case "rep-reddit-deep-scan":
+      return <AdhocRunSummaryView detail={detail} />;
     case "pin-down":
     default:
       return <PinDownView detail={detail} />;
