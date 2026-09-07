@@ -14,6 +14,7 @@ import { checkCredentialAvailability, linkReusableCredential, getComposioConnect
 import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries, getLeakMapBenchmarkComparison } from "@/lib/chat-status-queries";
 import { enrollProspectInWinBack } from "@/lib/chat-winback";
 import { previewManualPileOnEnrollment, enrollProspectInPileOn } from "@/lib/chat-pile-on";
+import { enablePileOnForEngagement } from "@/lib/enable-pile-on";
 import { triggerVoiceExtractionForEngagement, triggerScriptPackForEngagement, triggerAdCreativeBriefsForEngagement, triggerPageAuditForEngagement, triggerEngineAdhocCheckForEngagement, triggerCrisisStressTestForEngagement, triggerDraftResponseForEngagement, triggerTwitterDeepScanForEngagement, triggerTrustpilotDeepScanForEngagement, triggerRedditDeepScanForEngagement } from "@/lib/chat-skill-trigger";
 import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS } from "@/lib/copy";
 
@@ -214,6 +215,20 @@ const TOOLS = [
     },
   },
   {
+    name: "enable_pile_on",
+    description:
+      "Turns the Pile-On worker on for a client — a real action (installs Showtime into the workspace if needed, flips the worker on). Optionally sets the SMS follow-up platform and/or ad-data cohort sync platform at the same time; omit either (or pass \"none\") to leave it off, same as enabling from the Library without answering them — nothing is required beyond the client.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to enable Pile-On for." },
+        smsPlatform: { type: "string", enum: ["none", "twilio", "ghl_sms", "hubspot_sms"], description: "Optional — which platform sends the SMS follow-up sequence." },
+        adDataPlatform: { type: "string", enum: ["none", "hyros", "google_sheets", "native_crm"], description: "Optional — which platform receives the ad-spend attribution cohort sync." },
+      },
+      required: ["engagementId"],
+    },
+  },
+  {
     name: "preview_pile_on_enrollment",
     description:
       "Read-only — shows exactly what enroll_in_pile_on would do for a specific prospect, without doing any of it: no email sent, no writes. Always call this before enroll_in_pile_on and show the user what it says; never call enroll_in_pile_on without a preview shown to the user first in this conversation.",
@@ -390,7 +405,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
       ? clients.map((c) => `- ${c.buyer} (engagementId: ${c.engagementId}${c.repEnrolled ? ", Reputation Manager" : ""})`).join("\n")
       : "(no clients yet)";
   return [
-    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries, how a client's Leak Map metrics compare to similar clients — for any client, without triggering anything.",
+    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, turn the Pile-On worker on for a client (optionally with its SMS/ad-data platform), run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries, how a client's Leak Map metrics compare to similar clients — for any client, without triggering anything.",
     "",
     "Clients (a client tagged \"Reputation Manager\" is enrolled in that product; everyone else is Showtime-only unless just created and not yet set up):",
     clientList,
@@ -407,6 +422,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
     "- After a tool call, tell the user plainly what happened, including any error a tool returned (e.g. the skill being disabled for that client).",
     "- For enroll_in_winback: needs a working email-platform credential on the client already, plus the platform's recovery list/workflow configured — if the tool reports something's missing, tell the user plainly what and point them to the client's page, don't retry blindly.",
     "- For enroll_in_pile_on: ALWAYS call preview_pile_on_enrollment first and show the user its output before ever calling enroll_in_pile_on — never call enroll_in_pile_on in the same turn as the user's first request without a preview shown first. It only enrolls email, never SMS or an ad-data cohort sync (say so plainly if asked — deliberately not replicated for manual enrollment, see the tool's own description for why). If the preview or the real call reports an existing booking on file for that email, tell the user plainly and only pass force:true after they explicitly confirm they want to proceed anyway — never set force on your own judgment.",
+    "- For enable_pile_on: this is a DIFFERENT action from enroll_in_pile_on — enable_pile_on turns the worker itself on for a client (once), enroll_in_pile_on enrolls one specific prospect (repeatable). Don't confuse them. smsPlatform/adDataPlatform are both optional — if the user doesn't mention them, enable with neither set rather than asking a checklist of questions; only ask if they bring up SMS or ad-data tracking themselves.",
     "- For check_crisis_threshold: the finding must be explicitly hypothetical — if the user describes something that actually happened, don't use this tool, tell them the real watch skills (or draft_response) are what handle real findings. Never presents as declaring a real incident; always make clear in your reply that nothing was actually triggered, this only tested the threshold.",
     "- For twitter_deep_scan and trustpilot_deep_scan: deepScanSinceDate must be a real past date the user gives you, not something you pick. Both add real results to the client's actual monitoring history, the same as the regular scheduled watch — never present either as a preview or a dry run.",
     "- For reddit_deep_scan: Reddit's own search has no exact date cutoff the way Trustpilot/X do, only a timeframe bucket (hour/day/week/month/year/all) — never ask the user for a specific date for this one, ask which bucket to widen into instead, and if they give you a date, translate it to the closest bucket yourself rather than pushing back. Adds real results to the client's actual monitoring history, same as the regular scheduled watch.",
@@ -414,7 +430,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
     "- For check_ai_engines: omit subject to ask about the client themselves; to ask about a competitor, use the exact name from their tracked competitors list (shown on their Identity Setup) — never guess or paraphrase a competitor name that hasn't been confirmed as tracked, ask the user to confirm the exact name instead. This is a live spot-check, separate from the scheduled AI Engine Watch panel — nothing gets saved to the client's monitoring history, so don't present it as if it updates their ongoing findings.",
     "- extract_brand_voice, generate_video_scripts, generate_ad_briefs, and audit_confirmation_page all run in the background and take a while — always tell the user it's running and won't finish instantly, and offer to check status with get_run_history if they ask later. None of these run the full Show Rate Setup wizard end to end (no booking webhook wiring, no new page deployment) — each does exactly the one piece it's named for, using whatever the client already has on file (brand voice, offer details, call questions) and degrading to a more generic result if some of that isn't set yet, never failing outright for missing optional context. If asked to build or deploy a new confirmation page (not audit an existing one), say plainly that's not wired up — audit_confirmation_page only reviews a page that already exists.",
     "- generate_video_scripts' approach param: only set it when the user explicitly asks to regenerate with a different angle/framing — never set it on a first-time script generation, and never invent a description beyond the 3 real options (research_assistance/urgency/faq) listed in the tool's own schema. audit_confirmation_page's competitorPageUrl: only set it when the user gives an actual competitor URL to compare against — never guess or reuse a URL from earlier in the conversation for a different purpose.",
-    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, preview or enroll someone in Pile-On (preview_pile_on_enrollment, enroll_in_pile_on — email only, see that rule above), run Show Rate Setup's four individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), deep-scan X/Twitter back to a date (twitter_deep_scan), deep-scan Trustpilot back to a date (trustpilot_deep_scan), widen a Reddit scan to an older timeframe (reddit_deep_scan), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, Pile-On's SMS or ad-data cohort sync specifically (not replicated for manual enrollment, only the real booking webhook does those), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves on their regular cadence, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, twitter_deep_scan, trustpilot_deep_scan, reddit_deep_scan, and enroll_in_pile_on are separate, narrower, manually-triggered actions, not a way to fire the scheduled skills themselves.",
+    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, turn Pile-On on for a client (enable_pile_on), preview or enroll someone in Pile-On (preview_pile_on_enrollment, enroll_in_pile_on — email only, see that rule above), run Show Rate Setup's four individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), deep-scan X/Twitter back to a date (twitter_deep_scan), deep-scan Trustpilot back to a date (trustpilot_deep_scan), widen a Reddit scan to an older timeframe (reddit_deep_scan), compare a client's Leak Map metrics to benchmarks (compare_leak_map_benchmarks), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, Pile-On's SMS or ad-data cohort sync during MANUAL PROSPECT ENROLLMENT specifically (enroll_in_pile_on only does email — enable_pile_on can set the platform CHOICE when turning the worker on, that's a different thing), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves on their regular cadence, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, twitter_deep_scan, trustpilot_deep_scan, reddit_deep_scan, enable_pile_on, and enroll_in_pile_on are separate, narrower, manually-triggered actions, not a way to fire the scheduled skills themselves.",
     "- Keep replies short and direct.",
   ].join("\n");
 }
@@ -644,6 +660,21 @@ export async function POST(request: Request) {
           }
         } else {
           message2 = "Missing engagementId or prospectEmail.";
+        }
+      } else if (block.name === "enable_pile_on") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        const smsPlatform = typeof block.input.smsPlatform === "string" ? block.input.smsPlatform : undefined;
+        const adDataPlatform = typeof block.input.adDataPlatform === "string" ? block.input.adDataPlatform : undefined;
+        if (engagementId) {
+          const result = await enablePileOnForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, { smsPlatform, adDataPlatform });
+          ok = result.ok;
+          message2 = result.ok ? "Pile-On is now enabled for this client." : result.error;
+          if (result.ok) {
+            const buyer = clients.find((c) => c.engagementId === engagementId)?.buyer;
+            links.push({ label: buyer ? `${buyer}'s page` : "Client page", href: `/dashboard/engagements/${engagementId}` });
+          }
+        } else {
+          message2 = "Missing engagementId.";
         }
       } else if (block.name === "preview_pile_on_enrollment") {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";

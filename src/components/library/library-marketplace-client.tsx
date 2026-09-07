@@ -18,9 +18,11 @@ import { WorkerCard } from "@/components/library/worker-card";
 export function LibraryMarketplaceClient({
   engagementId,
   enabledWorkerIds,
+  buyerName,
 }: {
   engagementId: string | null;
   enabledWorkerIds: string[];
+  buyerName?: string | null;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [productFilter, setProductFilter] = useState<ProductId | "all">("all");
@@ -114,7 +116,7 @@ export function LibraryMarketplaceClient({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
           {sorted.map((worker) => (
-            <WorkerCard key={worker.id} worker={worker} enabled={enabledSet.has(worker.id)} engagementId={engagementId} />
+            <WorkerCard key={worker.id} worker={worker} enabled={enabledSet.has(worker.id)} engagementId={engagementId} buyerName={buyerName} />
           ))}
         </div>
       </div>

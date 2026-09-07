@@ -35,10 +35,12 @@ export function WorkerCard({
   worker,
   enabled,
   engagementId,
+  buyerName,
 }: {
   worker: WorkerDefinition;
   enabled: boolean;
   engagementId: string | null;
+  buyerName?: string | null;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -136,6 +138,7 @@ export function WorkerCard({
       {showEnableModal && engagementId && (
         <EnablePileOnModal
           engagementId={engagementId}
+          buyerName={buyerName ?? undefined}
           onClose={() => setShowEnableModal(false)}
           onEnabled={() => {
             setShowEnableModal(false);
