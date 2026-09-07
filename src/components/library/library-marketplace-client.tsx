@@ -3,9 +3,15 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { ChevronLeft, Search } from "lucide-react";
-import { WORKER_IDS, WORKER_REGISTRY } from "@/lib/worker-registry";
+import { WORKER_IDS, WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import type { ProductId } from "@/lib/product-catalog";
 import { WorkerCard } from "@/components/library/worker-card";
+import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
+import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
+import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
+import { RepOnboardingConfigForm } from "@/components/worker-config-forms/rep-onboarding-config-form";
+import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
+import { useRouter } from "next/navigation";
 
 /**
  * The Library — one card per worker (every skill across every product,
@@ -24,8 +30,13 @@ export function LibraryMarketplaceClient({
   enabledWorkerIds: string[];
   buyerName?: string | null;
 }) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [productFilter, setProductFilter] = useState<ProductId | "all">("all");
+  // Same inline-Configure pattern as WorkersPanel — see that file's own
+  // comment for why. The Library is exactly the other "see every skill at
+  // once" page this was asked to cover.
+  const [expandedWorker, setExpandedWorker] = useState<WorkerId | null>(null);
   const enabledSet = useMemo(() => new Set(enabledWorkerIds), [enabledWorkerIds]);
 
   const workers = useMemo(() => WORKER_IDS.map((id) => WORKER_REGISTRY[id]), []);
@@ -116,9 +127,46 @@ export function LibraryMarketplaceClient({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
           {sorted.map((worker) => (
-            <WorkerCard key={worker.id} worker={worker} enabled={enabledSet.has(worker.id)} engagementId={engagementId} buyerName={buyerName} />
+            <WorkerCard
+              key={worker.id}
+              worker={worker}
+              enabled={enabledSet.has(worker.id)}
+              engagementId={engagementId}
+              buyerName={buyerName}
+              isConfiguring={expandedWorker === worker.id}
+              onToggleConfigure={
+                worker.hasHingesPanel && engagementId
+                  ? () => setExpandedWorker((prev) => (prev === worker.id ? null : worker.id))
+                  : undefined
+              }
+            />
           ))}
         </div>
+
+        {expandedWorker && engagementId && (
+          <div className="rounded-2xl border border-border bg-white dark:bg-zinc-900/60 shadow-sm overflow-hidden">
+            {expandedWorker === "leak-map" && (
+              <LeakMapConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+            )}
+            {expandedWorker === "pre-call-read" && (
+              <PreCallReadConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+            )}
+            {expandedWorker === "win-back" && (
+              <WinBackConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+            )}
+            {expandedWorker === "rep-onboarding" && (
+              <RepOnboardingConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} />
+            )}
+            {expandedWorker === "pin-down" && (
+              <PinDownConfigForm
+                engagementId={engagementId}
+                onCancel={() => setExpandedWorker(null)}
+                onSaved={(result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : setExpandedWorker(null))}
+                cancelLabel="Close"
+              />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Settings, BarChart3 } from "lucide-react";
+import { Settings, BarChart3, X } from "lucide-react";
 import type { WorkerDefinition } from "@/lib/worker-registry";
 import { EnablePileOnModal } from "./enable-worker-modal";
 
@@ -31,11 +31,22 @@ export function WorkerCard({
   enabled,
   engagementId,
   buyerName,
+  isConfiguring = false,
+  onToggleConfigure,
 }: {
   worker: WorkerDefinition;
   enabled: boolean;
   engagementId: string | null;
   buyerName?: string | null;
+  /** Whether this card's Configure form is the one currently expanded
+   * inline (see library-marketplace-client.tsx, which owns that state
+   * across the whole grid and renders the actual form below it — a card
+   * doesn't know how to render any worker's form itself). */
+  isConfiguring?: boolean;
+  /** Only present for a hasHingesPanel worker with a real engagement to
+   * configure — same gate configureHref used to decide whether to render
+   * a Link at all. */
+  onToggleConfigure?: () => void;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -49,7 +60,16 @@ export function WorkerCard({
   // off configFields.
   const needsLighterForm = worker.id === "pile-on";
   const bridgeHref = engagementId ? `/dashboard/engagements/${engagementId}/bridges/${worker.id}` : null;
-  const configureHref = worker.hasHingesPanel && engagementId ? `/dashboard/engagements/${engagementId}/bridges/${worker.id}` : engagementId ? `/dashboard/engagements/${engagementId}` : null;
+  // UX fix: this used to always be a Link to the standalone bridges page
+  // — Configure now expands the same form inline on this page instead
+  // (see library-marketplace-client.tsx), matching the same "don't
+  // navigate away just to see a form" pattern WorkersPanel's own
+  // Configure button and the dashboard's Tasks/Issues tiles already use.
+  const canConfigureInline = worker.hasHingesPanel && Boolean(engagementId) && Boolean(onToggleConfigure);
+  // A worker with no dedicated hinges panel has nothing to expand inline
+  // — same fallback the old configureHref used, unaffected by the above:
+  // Configure just lands on the client's own page.
+  const plainConfigureHref = !worker.hasHingesPanel && engagementId ? `/dashboard/engagements/${engagementId}` : null;
   // Phase 8 — one destination shape for every worker's analytics,
   // regardless of product, instead of the old per-product lookup table
   // that routed Showtime and Reputation Manager workers to two
@@ -92,14 +112,29 @@ export function WorkerCard({
       <div className="pt-4 flex items-center gap-2">
         {enabled ? (
           <>
-            {configureHref && (
-              <Link
-                href={configureHref}
-                title="Configure"
-                className="inline-flex items-center justify-center rounded-lg border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 w-8 h-8 text-zinc-700 dark:text-zinc-200 transition-colors"
+            {canConfigureInline ? (
+              <button
+                type="button"
+                onClick={onToggleConfigure}
+                title={isConfiguring ? "Close" : "Configure"}
+                className={`inline-flex items-center justify-center rounded-lg border w-8 h-8 transition-colors cursor-pointer ${
+                  isConfiguring
+                    ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
+                    : "border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200"
+                }`}
               >
-                <Settings className="w-4 h-4" />
-              </Link>
+                {isConfiguring ? <X className="w-4 h-4" /> : <Settings className="w-4 h-4" />}
+              </button>
+            ) : (
+              plainConfigureHref && (
+                <Link
+                  href={plainConfigureHref}
+                  title="Configure"
+                  className="inline-flex items-center justify-center rounded-lg border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 w-8 h-8 text-zinc-700 dark:text-zinc-200 transition-colors"
+                >
+                  <Settings className="w-4 h-4" />
+                </Link>
+              )
             )}
             <Link
               href={analyticsHref}

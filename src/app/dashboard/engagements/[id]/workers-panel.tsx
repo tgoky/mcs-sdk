@@ -3,12 +3,17 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Settings2, ExternalLink, PauseCircle } from "lucide-react";
+import { ArrowRight, Settings2, ExternalLink, PauseCircle, X } from "lucide-react";
 import { type ModuleStatus, phaseLabel } from "@/lib/copy";
 import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { StatusSwatch } from "@/components/status-swatch";
 import { TriggerSkillButton } from "./trigger-skill-button";
+import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
+import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
+import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
+import { RepOnboardingConfigForm } from "@/components/worker-config-forms/rep-onboarding-config-form";
+import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
 
 /**
  * Replaces SkillsPanel + RepSkillsPanel — two near-identical components
@@ -104,6 +109,16 @@ export function WorkersPanel({
   // behave.
   const [updatingWorkers, setUpdatingWorkers] = useState<Set<string>>(new Set());
   const [, startTransition] = useTransition();
+  // UX fix: Configure used to always navigate to a whole new route just
+  // to show a form — same pattern OverviewStatsPanel's Tasks/Issues tiles
+  // already use for this exact reason (expand in place on the same page,
+  // don't make the user leave to see something that isn't a different
+  // page's worth of content). WorkersPanel already shows every worker for
+  // this one client, so it's exactly the kind of page that pattern was
+  // asked to extend to. The bridges/[workerId] routes themselves stay —
+  // still real, bookmarkable pages — this just stops Configure from being
+  // the only way to reach them.
+  const [expandedWorker, setExpandedWorker] = useState<WorkerId | null>(null);
 
   function toggleEndpoint(workerId: WorkerId): string {
     return WORKER_REGISTRY[workerId].productId === "reputation-manager"
@@ -272,13 +287,18 @@ export function WorkersPanel({
               <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/60 mt-3 space-y-2">
                 <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
                   {worker.hasHingesPanel ? (
-                    <Link
-                      href={`/dashboard/engagements/${engagementId}/bridges/${workerId}`}
-                      className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+                    <button
+                      type="button"
+                      onClick={() => setExpandedWorker((prev) => (prev === workerId ? null : workerId))}
+                      className={`inline-flex items-center gap-1 font-semibold transition-colors cursor-pointer ${
+                        expandedWorker === workerId
+                          ? "text-zinc-900 dark:text-zinc-100"
+                          : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                      }`}
                     >
-                      <Settings2 size={12} />
-                      <span>Configure</span>
-                    </Link>
+                      {expandedWorker === workerId ? <X size={12} /> : <Settings2 size={12} />}
+                      <span>{expandedWorker === workerId ? "Close" : "Configure"}</span>
+                    </button>
                   ) : (
                     <span />
                   )}
@@ -310,6 +330,31 @@ export function WorkersPanel({
           );
         })}
       </div>
+
+      {expandedWorker && (
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/60 backdrop-blur-xs overflow-hidden">
+          {expandedWorker === "leak-map" && (
+            <LeakMapConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "pre-call-read" && (
+            <PreCallReadConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "win-back" && (
+            <WinBackConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "rep-onboarding" && (
+            <RepOnboardingConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} />
+          )}
+          {expandedWorker === "pin-down" && (
+            <PinDownConfigForm
+              engagementId={engagementId}
+              onCancel={() => setExpandedWorker(null)}
+              onSaved={(result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : setExpandedWorker(null))}
+              cancelLabel="Close"
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

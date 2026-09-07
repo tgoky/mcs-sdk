@@ -1,15 +1,8 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use } from "react";
 import { useRouter } from "next/navigation";
-import {
-  IdentityGraphForm,
-  EMPTY_IDENTITY_GRAPH_FORM,
-  fromSavedGraph,
-  toIntakePayload,
-  type IdentityGraphFormState,
-} from "@/features/reputation-manager/identity-graph-form";
-import type { RepCollision } from "@/models/schema";
+import { RepOnboardingConfigForm } from "@/components/worker-config-forms/rep-onboarding-config-form";
 
 /**
  * Reputation Manager's hinges panel for a client that already exists —
@@ -22,104 +15,5 @@ export default function RepOnboardingBridgePage({ params }: { params: Promise<{ 
   const { id } = use(params);
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [buyer, setBuyer] = useState("");
-  const [wasDisabled, setWasDisabled] = useState(false);
-  const [form, setForm] = useState<IdentityGraphFormState>(EMPTY_IDENTITY_GRAPH_FORM);
-  const [foundCollisions, setFoundCollisions] = useState<(RepCollision & { source: "collision_check" })[]>([]);
-
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/engagements/${id}/bridges/rep-onboarding`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Failed to load");
-        if (cancelled) return;
-
-        setBuyer(data.buyer ?? "");
-        setWasDisabled(data.enabled === false);
-        if (data.graph) {
-          setForm(fromSavedGraph(data.graph));
-          setFoundCollisions(
-            (data.graph.collisions ?? []).filter((c: RepCollision & { source: string }) => c.source === "collision_check")
-          );
-        } else if (data.buyer) {
-          // Nothing saved yet — a reasonable start beats a blank field.
-          setForm((f) => ({ ...f, operatorName: data.buyer }));
-        }
-      } catch (e) {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : "Failed to load");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
-  async function handleSubmit() {
-    setSaving(true);
-    setSaveError(null);
-    setSaved(false);
-    try {
-      const res = await fetch(`/api/engagements/${id}/bridges/rep-onboarding`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toIntakePayload(form)),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to save");
-      setSaved(true);
-      setWasDisabled(false);
-      router.refresh();
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Failed to save");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (loading) {
-    return <div className="max-w-2xl mx-auto py-16 px-4 text-sm text-zinc-500 dark:text-zinc-400">Loading…</div>;
-  }
-  if (loadError) {
-    return <div className="max-w-2xl mx-auto py-16 px-4 text-sm text-red-600 dark:text-red-400">{loadError}</div>;
-  }
-
-  return (
-    <div className="max-w-2xl mx-auto py-12 px-4">
-      <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">Reputation Manager — Identity Setup</h1>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-1">for {buyer}</p>
-
-      {wasDisabled && (
-        <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg px-3 py-2 mt-4 mb-4">
-          Identity Setup is currently turned off for this client — every other Reputation Manager skill reads from this
-          graph, so it can only be turned back on by saving it here. Saving below will turn it back on.
-        </p>
-      )}
-
-      <div className={wasDisabled ? "" : "mt-8"}>
-        <IdentityGraphForm form={form} onChange={setForm} readOnlyCollisions={foundCollisions} />
-      </div>
-
-      {saveError && <p className="text-xs text-red-600 dark:text-red-400 mt-4">{saveError}</p>}
-      {saved && <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-4">Saved.</p>}
-
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={saving || !form.operatorName.trim() || !form.soleAuthorityName.trim()}
-        className="mt-6 px-4 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer border bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        {saving ? "Saving…" : "Save & enable"}
-      </button>
-    </div>
-  );
+  return <RepOnboardingConfigForm engagementId={id} onCancel={() => router.push(`/dashboard/engagements/${id}`)} />;
 }
