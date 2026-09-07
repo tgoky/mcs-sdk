@@ -7,6 +7,8 @@ import { runRepEngineAdhocCheck } from "@/features/reputation-manager/server/eng
 import { runCrisisStressTest } from "@/features/reputation-manager/server/crisis-stress-test";
 import { runDraftResponse } from "@/features/reputation-manager/server/draft-response";
 import { runRepTwitterDeepScan } from "@/features/reputation-manager/server/twitter-watch-service";
+import { runRepTrustpilotDeepScan } from "@/features/reputation-manager/server/trustpilot-watch-service";
+import { runRepRedditDeepScan } from "@/features/reputation-manager/server/reddit-watch-service";
 import { CHAT_SKILL_IDS, CHAT_SKILL_MANIFEST, isChatSkillId, type ChatSkillId, type ChatSkillManifestEntry } from "@/lib/chat-skill-manifest";
 
 export { CHAT_SKILL_IDS, isChatSkillId };
@@ -28,6 +30,7 @@ export interface ChatSkillContext {
   findingText?: string;
   findingPlatform?: string;
   deepScanSinceDate?: string;
+  deepScanTimeframe?: string;
 }
 
 export interface ChatSkillDefinition extends ChatSkillManifestEntry {
@@ -71,5 +74,13 @@ export const CHAT_SKILL_REGISTRY: Record<ChatSkillId, ChatSkillDefinition> = {
   "rep-twitter-deep-scan": {
     ...CHAT_SKILL_MANIFEST["rep-twitter-deep-scan"],
     execute: (tenant, runId, step, ctx) => runRepTwitterDeepScan(tenant, runId, step, ctx),
+  },
+  "rep-trustpilot-deep-scan": {
+    ...CHAT_SKILL_MANIFEST["rep-trustpilot-deep-scan"],
+    execute: (tenant, runId, step, ctx) => runRepTrustpilotDeepScan(tenant, runId, step, ctx),
+  },
+  "rep-reddit-deep-scan": {
+    ...CHAT_SKILL_MANIFEST["rep-reddit-deep-scan"],
+    execute: (tenant, runId, step, ctx) => runRepRedditDeepScan(tenant, runId, step, ctx),
   },
 };

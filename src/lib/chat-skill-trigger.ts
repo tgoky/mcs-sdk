@@ -198,6 +198,52 @@ export async function triggerTwitterDeepScanForEngagement(
   );
 }
 
+export async function triggerTrustpilotDeepScanForEngagement(
+  whopUserId: string,
+  workspaceId: string,
+  engagementId: string,
+  deepScanSinceDate: string
+): Promise<TriggerChatSkillResult> {
+  const cleanDate = deepScanSinceDate.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+    return { ok: false, error: 'The date to scan back to must be in YYYY-MM-DD format (e.g. "2025-01-01").' };
+  }
+  return triggerChatSkillForEngagement(
+    whopUserId,
+    workspaceId,
+    engagementId,
+    "rep-trustpilot-deep-scan",
+    { deepScanSinceDate: cleanDate },
+    `Scanning Trustpilot back to ${cleanDate}. This can take a moment — check back or ask for the status.`,
+    "trustpilot_deep_scan",
+    cleanDate
+  );
+}
+
+const VALID_REDDIT_TIMEFRAMES = ["hour", "day", "week", "month", "year", "all"];
+
+export async function triggerRedditDeepScanForEngagement(
+  whopUserId: string,
+  workspaceId: string,
+  engagementId: string,
+  deepScanTimeframe: string
+): Promise<TriggerChatSkillResult> {
+  const cleanTimeframe = deepScanTimeframe.trim().toLowerCase();
+  if (!VALID_REDDIT_TIMEFRAMES.includes(cleanTimeframe)) {
+    return { ok: false, error: `Timeframe must be one of: ${VALID_REDDIT_TIMEFRAMES.join(", ")}.` };
+  }
+  return triggerChatSkillForEngagement(
+    whopUserId,
+    workspaceId,
+    engagementId,
+    "rep-reddit-deep-scan",
+    { deepScanTimeframe: cleanTimeframe },
+    `Widening the Reddit scan to t=${cleanTimeframe}. This can take a moment — check back or ask for the status.`,
+    "reddit_deep_scan",
+    cleanTimeframe
+  );
+}
+
 export async function triggerPageAuditForEngagement(
   whopUserId: string,
   workspaceId: string,

@@ -48,9 +48,14 @@ export type SkillRunExecuteData = {
   // draft a suggested reply to, and which platform it came from.
   findingText?: string;
   findingPlatform?: string;
-  // Same category, for rep-twitter-deep-scan — how far back (YYYY-MM-DD)
-  // to scan using X's own since: search operator.
+  // Same category, for rep-twitter-deep-scan (X's since: operator) and
+  // rep-trustpilot-deep-scan (Outscraper's cutoff param) — how far back
+  // (YYYY-MM-DD) to scan.
   deepScanSinceDate?: string;
+  // Same category, for rep-reddit-deep-scan — which t timeframe bucket to
+  // widen the search into (hour/day/week/month/year/all), since Reddit
+  // search has no exact date-cutoff parameter the other two have.
+  deepScanTimeframe?: string;
 };
 
 

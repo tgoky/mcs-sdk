@@ -25,7 +25,9 @@ export type ChatSkillId =
   | "rep-engine-adhoc-check"
   | "rep-crisis-stress-test"
   | "rep-draft-response"
-  | "rep-twitter-deep-scan";
+  | "rep-twitter-deep-scan"
+  | "rep-trustpilot-deep-scan"
+  | "rep-reddit-deep-scan";
 
 export const CHAT_SKILL_IDS: ChatSkillId[] = [
   "pin-down-voice",
@@ -36,6 +38,8 @@ export const CHAT_SKILL_IDS: ChatSkillId[] = [
   "rep-crisis-stress-test",
   "rep-draft-response",
   "rep-twitter-deep-scan",
+  "rep-trustpilot-deep-scan",
+  "rep-reddit-deep-scan",
 ];
 
 export interface ChatSkillManifestEntry {
@@ -88,6 +92,18 @@ export const CHAT_SKILL_MANIFEST: Record<ChatSkillId, ChatSkillManifestEntry> = 
     name: "X/Twitter Deep Scan",
     description:
       "Scans X/Twitter back to a specific date, further than the regular daily watch's recent-only window — using X's own since: search operator, not a guess. Real mentions found this way get added to the client's real monitoring history, same as the regular watch.",
+  },
+  "rep-trustpilot-deep-scan": {
+    id: "rep-trustpilot-deep-scan",
+    name: "Trustpilot Deep Scan",
+    description:
+      "Scans Trustpilot back to a specific date using Outscraper's own documented cutoff parameter — a real, exact date-bound fetch, not a guess. Real reviews found this way get added to the client's real monitoring history, same as the regular watch.",
+  },
+  "rep-reddit-deep-scan": {
+    id: "rep-reddit-deep-scan",
+    name: "Reddit Deep Scan",
+    description:
+      "Widens the Reddit search beyond the regular daily watch's recency window, using verified sort=top + t=timeframe combinations Reddit's own search docs recommend for reaching older posts. Coarser than an exact date (timeframe buckets, not a specific day) since Reddit's search has no exact cutoff parameter. Real mentions found this way get added to the client's real monitoring history.",
   },
 };
 

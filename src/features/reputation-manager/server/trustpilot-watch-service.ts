@@ -42,11 +42,18 @@ const REVIEWS_LIMIT = 100; // matches Outscraper's own documented default for th
  * is the right tradeoff here — a timeout still fails cleanly into
  * Inngest's normal retry path (see runRepTrustpilotWatch's catch block).
  */
-async function fetchTrustpilotReviews(domain: string): Promise<RawReview[]> {
+async function fetchTrustpilotReviews(domain: string, cutoffUnixSeconds?: number): Promise<RawReview[]> {
   const config = resolveOutscraperConfig();
   if (!config) return [];
 
-  const url = `https://api.outscraper.cloud/trustpilot-reviews?query=${encodeURIComponent(domain)}&limit=${REVIEWS_LIMIT}&sort=recency&async=false`;
+  // cutoff (real, documented Outscraper param — "the oldest timestamp
+  // value for items") overwrites sort per their own docs, so sort=recency
+  // is omitted rather than sent alongside it when a deep scan supplies
+  // one — matching their documented behavior exactly, not guessing at
+  // how the two would interact if both were sent.
+  const url = cutoffUnixSeconds
+    ? `https://api.outscraper.cloud/trustpilot-reviews?query=${encodeURIComponent(domain)}&limit=${REVIEWS_LIMIT}&cutoff=${cutoffUnixSeconds}&async=false`
+    : `https://api.outscraper.cloud/trustpilot-reviews?query=${encodeURIComponent(domain)}&limit=${REVIEWS_LIMIT}&sort=recency&async=false`;
   const res = await fetch(url, { headers: { "X-API-KEY": config.apiKey } });
 
   if (!res.ok) {
@@ -293,6 +300,84 @@ export async function runRepTrustpilotWatch(tenant: any, runId: string, step: St
       detail: `${result.newCount} new review(s)${result.flaggedCount > 0 ? `, ${result.flaggedCount} flagged` : ""}.`,
     });
     summary.whatWorked.push(`Found ${result.newCount} new review(s) since last check.`);
+    if (result.flaggedCount > 0) summary.decisionsMade.push(`${result.flaggedCount} review(s) flagged for review.`);
+
+    await finishRun(runId, { summary });
+  } catch (err) {
+    await failRun(runId, err, { summary }).catch(() => {});
+    throw err;
+  }
+}
+
+/**
+ * Teammates chat's "scan Trustpilot further back than the daily watch"
+ * action — rep-trustpilot-deep-scan in chat-skill-registry.ts. Grounded
+ * in a real, documented Outscraper parameter this time, not a guess: the
+ * user supplied the actual /trustpilot-reviews reference docs, which
+ * confirm `cutoff` — "the oldest timestamp value for items" — is a real
+ * query param, not inferred the way it would have been without those
+ * docs. Reuses fetchTrustpilotReviews (now cutoff-aware) and
+ * processNewReviews completely unchanged otherwise. Real reviews found
+ * this way get inserted into repTrustpilotReviews exactly like the
+ * regular watch's finds — this is the client's own history being
+ * backfilled deeper, not an ephemeral/competitor check.
+ */
+export async function runRepTrustpilotDeepScan(
+  tenant: { engagementId: string },
+  runId: string,
+  step: StepTools | undefined,
+  ctx?: { deepScanSinceDate?: string }
+): Promise<void> {
+  const summary = emptySummary();
+  const engagementId: string = tenant.engagementId;
+
+  try {
+    const sinceDate = ctx?.deepScanSinceDate?.trim();
+    if (!sinceDate || !/^\d{4}-\d{2}-\d{2}$/.test(sinceDate)) {
+      throw new Error('A date to scan back to is required, in YYYY-MM-DD format (e.g. "2025-01-01").');
+    }
+    const cutoffMs = new Date(sinceDate).getTime();
+    if (Number.isNaN(cutoffMs)) {
+      throw new Error(`"${sinceDate}" isn't a valid date.`);
+    }
+    if (cutoffMs > Date.now()) {
+      throw new Error("The date to scan back to can't be in the future.");
+    }
+    const cutoffUnixSeconds = Math.floor(cutoffMs / 1000);
+
+    const graph = await (step ? step.run("load-identity-graph", () => loadIdentityGraph(engagementId)) : loadIdentityGraph(engagementId));
+
+    if (!graph || graph.operatorDomains.length === 0) {
+      throw new Error("No identity graph or no domain to check yet.");
+    }
+    if (!resolveOutscraperConfig()) {
+      throw new Error("OUTSCRAPER_API_KEY not configured.");
+    }
+
+    const domain = graph.operatorDomains[0];
+    await logStep(runId, { phase: "trustpilot_deep_scan", status: "running", detail: `Scanning Trustpilot for ${domain} back to ${sinceDate}.` });
+
+    const fetched = await (step
+      ? step.run("fetch-reviews", () => fetchTrustpilotReviews(domain, cutoffUnixSeconds))
+      : fetchTrustpilotReviews(domain, cutoffUnixSeconds));
+
+    if (fetched.length === 0) {
+      await logStep(runId, { phase: "trustpilot_deep_scan", status: "success", detail: "No reviews found in that window." });
+      summary.whatWorked.push(`Scanned Trustpilot back to ${sinceDate} — no reviews found.`);
+      await finishRun(runId, { summary });
+      return;
+    }
+
+    const result = await (step
+      ? step.run("process-new-reviews", () => processNewReviews(engagementId, graph.operatorName, fetched, runId))
+      : processNewReviews(engagementId, graph.operatorName, fetched, runId));
+
+    await logStep(runId, {
+      phase: "trustpilot_deep_scan",
+      status: "success",
+      detail: `${result.newCount} new review(s)${result.flaggedCount > 0 ? `, ${result.flaggedCount} flagged` : ""} found scanning back to ${sinceDate}.`,
+    });
+    summary.whatWorked.push(`Scanned Trustpilot back to ${sinceDate} — found ${result.newCount} new review(s) beyond what the regular watch already had on file.`);
     if (result.flaggedCount > 0) summary.decisionsMade.push(`${result.flaggedCount} review(s) flagged for review.`);
 
     await finishRun(runId, { summary });

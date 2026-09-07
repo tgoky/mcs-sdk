@@ -69,6 +69,7 @@ export const executeSkillRun = inngest.createFunction(
       findingText,
       findingPlatform,
       deepScanSinceDate,
+      deepScanTimeframe,
     } = event.data;
 
     const tenantRaw = await step.run("load-tenant", async () => {
@@ -141,6 +142,7 @@ export const executeSkillRun = inngest.createFunction(
         findingText,
         findingPlatform,
         deepScanSinceDate,
+        deepScanTimeframe,
       });
     } catch (err: unknown) {
       await failRun(runId, err).catch(() => {});

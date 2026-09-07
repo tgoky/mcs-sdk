@@ -13,7 +13,7 @@ import { getRepEnrolledEngagementIds } from "@/lib/rep-engagements";
 import { checkCredentialAvailability, linkReusableCredential, getComposioConnectLink, hasBookingCredential } from "@/lib/chat-credentials";
 import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries } from "@/lib/chat-status-queries";
 import { enrollProspectInWinBack } from "@/lib/chat-winback";
-import { triggerVoiceExtractionForEngagement, triggerScriptPackForEngagement, triggerAdCreativeBriefsForEngagement, triggerPageAuditForEngagement, triggerEngineAdhocCheckForEngagement, triggerCrisisStressTestForEngagement, triggerDraftResponseForEngagement, triggerTwitterDeepScanForEngagement } from "@/lib/chat-skill-trigger";
+import { triggerVoiceExtractionForEngagement, triggerScriptPackForEngagement, triggerAdCreativeBriefsForEngagement, triggerPageAuditForEngagement, triggerEngineAdhocCheckForEngagement, triggerCrisisStressTestForEngagement, triggerDraftResponseForEngagement, triggerTwitterDeepScanForEngagement, triggerTrustpilotDeepScanForEngagement, triggerRedditDeepScanForEngagement } from "@/lib/chat-skill-trigger";
 import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS } from "@/lib/copy";
 
 export const runtime = "nodejs";
@@ -309,6 +309,32 @@ const TOOLS = [
       required: ["engagementId", "deepScanSinceDate"],
     },
   },
+  {
+    name: "trustpilot_deep_scan",
+    description:
+      "Scans Trustpilot for a client's reviews back to a specific date, using Outscraper's own documented cutoff parameter — an exact, real date-bound fetch. Real reviews found this way get added to the client's real monitoring history, same as the regular watch. Dispatches and returns immediately with a runId; tell the user it's running.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to scan for." },
+        deepScanSinceDate: { type: "string", description: "How far back to scan, in YYYY-MM-DD format." },
+      },
+      required: ["engagementId", "deepScanSinceDate"],
+    },
+  },
+  {
+    name: "reddit_deep_scan",
+    description:
+      "Widens the Reddit search for a client beyond the regular daily watch's recency window, using verified sort=top + t=timeframe combinations Reddit's own search docs recommend for reaching older posts. Coarser than an exact date — a timeframe bucket, not a specific day, since Reddit search has no exact cutoff parameter the way Trustpilot/X do. Real mentions found this way get added to the client's real monitoring history. Dispatches and returns immediately with a runId; tell the user it's running.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to scan for." },
+        deepScanTimeframe: { type: "string", enum: ["hour", "day", "week", "month", "year", "all"], description: "Which timeframe bucket to widen into." },
+      },
+      required: ["engagementId", "deepScanTimeframe"],
+    },
+  },
 ];
 function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEnrolled: boolean }[], repInstalled: boolean): string {
   const clientList =
@@ -316,7 +342,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
       ? clients.map((c) => `- ${c.buyer} (engagementId: ${c.engagementId}${c.repEnrolled ? ", Reputation Manager" : ""})`).join("\n")
       : "(no clients yet)";
   return [
-    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, scan X/Twitter back to a specific date for a client, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries — for any client, without triggering anything.",
+    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries — for any client, without triggering anything.",
     "",
     "Clients (a client tagged \"Reputation Manager\" is enrolled in that product; everyone else is Showtime-only unless just created and not yet set up):",
     clientList,
@@ -333,11 +359,12 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
     "- After a tool call, tell the user plainly what happened, including any error a tool returned (e.g. the skill being disabled for that client).",
     "- For enroll_in_winback: needs a working email-platform credential on the client already, plus the platform's recovery list/workflow configured — if the tool reports something's missing, tell the user plainly what and point them to the client's page, don't retry blindly.",
     "- For check_crisis_threshold: the finding must be explicitly hypothetical — if the user describes something that actually happened, don't use this tool, tell them the real watch skills (or draft_response) are what handle real findings. Never presents as declaring a real incident; always make clear in your reply that nothing was actually triggered, this only tested the threshold.",
-    "- For twitter_deep_scan: this only works for X — if asked to do the same for Trustpilot or Reddit, say plainly that a verified deep-scan capability doesn't exist for those two yet, don't attempt it or guess at a similar-sounding action for them. deepScanSinceDate must be a real past date the user gives you, not something you pick.",
+    "- For twitter_deep_scan and trustpilot_deep_scan: deepScanSinceDate must be a real past date the user gives you, not something you pick. Both add real results to the client's actual monitoring history, the same as the regular scheduled watch — never present either as a preview or a dry run.",
+    "- For reddit_deep_scan: Reddit's own search has no exact date cutoff the way Trustpilot/X do, only a timeframe bucket (hour/day/week/month/year/all) — never ask the user for a specific date for this one, ask which bucket to widen into instead, and if they give you a date, translate it to the closest bucket yourself rather than pushing back. Adds real results to the client's actual monitoring history, same as the regular scheduled watch.",
     "- For draft_response: this is for a REAL finding the user gives you (a real review, a real mention) — the draft never gets posted anywhere automatically, always tell the user to review and post it themselves. Don't fabricate specific facts, offers, or promises in how you relay the draft.",
     "- For check_ai_engines: omit subject to ask about the client themselves; to ask about a competitor, use the exact name from their tracked competitors list (shown on their Identity Setup) — never guess or paraphrase a competitor name that hasn't been confirmed as tracked, ask the user to confirm the exact name instead. This is a live spot-check, separate from the scheduled AI Engine Watch panel — nothing gets saved to the client's monitoring history, so don't present it as if it updates their ongoing findings.",
     "- extract_brand_voice, generate_video_scripts, generate_ad_briefs, and audit_confirmation_page all run in the background and take a while — always tell the user it's running and won't finish instantly, and offer to check status with get_run_history if they ask later. None of these run the full Show Rate Setup wizard end to end (no booking webhook wiring, no new page deployment) — each does exactly the one piece it's named for, using whatever the client already has on file (brand voice, offer details, call questions) and degrading to a more generic result if some of that isn't set yet, never failing outright for missing optional context. If asked to build or deploy a new confirmation page (not audit an existing one), say plainly that's not wired up — audit_confirmation_page only reviews a page that already exists.",
-    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, run Show Rate Setup's four individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), scan X/Twitter back to a date (twitter_deep_scan), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, anything Pre-Call Sequence/Pile-On related (that's webhook-only, see the client's own page — including a preview or manual enrollment, neither is wired up), a Trustpilot or Reddit equivalent of twitter_deep_scan (doesn't exist, verified capability only built for X), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, and twitter_deep_scan are separate, narrower actions, not a way to manually fire any of those scheduled skills.",
+    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, run Show Rate Setup's four individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), deep-scan X/Twitter back to a date (twitter_deep_scan), deep-scan Trustpilot back to a date (trustpilot_deep_scan), widen a Reddit scan to an older timeframe (reddit_deep_scan), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, anything Pre-Call Sequence/Pile-On related (that's webhook-only, see the client's own page — including a preview or manual enrollment, neither is wired up), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves on their regular cadence, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, twitter_deep_scan, trustpilot_deep_scan, and reddit_deep_scan are separate, narrower, manually-triggered actions, not a way to fire the scheduled skills themselves.",
     "- Keep replies short and direct.",
   ].join("\n");
 }
@@ -679,6 +706,36 @@ export async function POST(request: Request) {
           }
         } else {
           message2 = "Missing engagementId or deepScanSinceDate.";
+        }
+      } else if (block.name === "trustpilot_deep_scan") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        const deepScanSinceDate = typeof block.input.deepScanSinceDate === "string" ? block.input.deepScanSinceDate : "";
+        if (engagementId && deepScanSinceDate) {
+          const result = await triggerTrustpilotDeepScanForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, deepScanSinceDate);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok) {
+            const buyer = clients.find((c) => c.engagementId === engagementId)?.buyer;
+            links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+            links.push({ label: buyer ? `${buyer}'s page` : "Client page", href: `/dashboard/engagements/${engagementId}` });
+          }
+        } else {
+          message2 = "Missing engagementId or deepScanSinceDate.";
+        }
+      } else if (block.name === "reddit_deep_scan") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        const deepScanTimeframe = typeof block.input.deepScanTimeframe === "string" ? block.input.deepScanTimeframe : "";
+        if (engagementId && deepScanTimeframe) {
+          const result = await triggerRedditDeepScanForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, deepScanTimeframe);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok) {
+            const buyer = clients.find((c) => c.engagementId === engagementId)?.buyer;
+            links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+            links.push({ label: buyer ? `${buyer}'s page` : "Client page", href: `/dashboard/engagements/${engagementId}` });
+          }
+        } else {
+          message2 = "Missing engagementId or deepScanTimeframe.";
         }
       } else {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
