@@ -24,7 +24,8 @@ import {
   RefreshCw,
   CalendarDays,
   CalendarX2,
-  ExternalLink
+  ExternalLink,
+  UserPlus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getDaysInMonthGrid, dateKey, timeStr } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
@@ -33,6 +34,7 @@ import { RunActivityPanel } from "@/app/dashboard/runs/[id]/_shared/run-activity
 import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import { classifyRunError } from "@/lib/error-classification";
 import { sentViaLabel } from "@/lib/copy";
+import { PileOnManualEnrollModal } from "./pile-on-manual-enroll-modal";
 import type { PileOnPipelineItem, PileOnStage, PileOnWeeklyTrend } from "@/app/api/engagements/[id]/pile-on-pipeline/route";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
@@ -96,6 +98,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [showRunActivity, setShowRunActivity] = useState(false);
   const [showUpcomingInMonth, setShowUpcomingInMonth] = useState(false);
+  const [showManualEnroll, setShowManualEnroll] = useState(false);
 
   const firstMeetingRef = useRef<HTMLDivElement | null>(null);
   const hasAutoJumped = useRef(false);
@@ -354,6 +357,16 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowManualEnroll(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            title="Manually enroll a prospect who booked outside a connected webhook"
+          >
+            <UserPlus size={13} />
+            <span className="hidden sm:inline">Manually enroll</span>
           </button>
 
           {!loading && callTodayCount > 0 && (
@@ -1126,6 +1139,14 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             )}
           </div>
         </div>
+      )}
+
+      {showManualEnroll && (
+        <PileOnManualEnrollModal
+          engagementId={engagementId}
+          onClose={() => setShowManualEnroll(false)}
+          onEnrolled={load}
+        />
       )}
     </div>
   );
