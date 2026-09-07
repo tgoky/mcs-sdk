@@ -4,6 +4,8 @@ import { runScriptPackOnly } from "@/features/pin-down/server/script-pack-only";
 import { runAdCreativeBriefsOnly } from "@/features/pin-down/server/ad-briefs-only";
 import { runPageAuditOnly } from "@/features/pin-down/server/page-audit-only";
 import { runRepEngineAdhocCheck } from "@/features/reputation-manager/server/engine-adhoc-check";
+import { runCrisisStressTest } from "@/features/reputation-manager/server/crisis-stress-test";
+import { runDraftResponse } from "@/features/reputation-manager/server/draft-response";
 import { CHAT_SKILL_IDS, CHAT_SKILL_MANIFEST, isChatSkillId, type ChatSkillId, type ChatSkillManifestEntry } from "@/lib/chat-skill-manifest";
 
 export { CHAT_SKILL_IDS, isChatSkillId };
@@ -20,6 +22,10 @@ export interface ChatSkillContext {
   pageAuditUrl?: string;
   engineCheckSubject?: string;
   engineCheckQuestion?: string;
+  hypotheticalFindingText?: string;
+  hypotheticalFindingSource?: string;
+  findingText?: string;
+  findingPlatform?: string;
 }
 
 export interface ChatSkillDefinition extends ChatSkillManifestEntry {
@@ -51,5 +57,13 @@ export const CHAT_SKILL_REGISTRY: Record<ChatSkillId, ChatSkillDefinition> = {
   "rep-engine-adhoc-check": {
     ...CHAT_SKILL_MANIFEST["rep-engine-adhoc-check"],
     execute: (tenant, runId, step, ctx) => runRepEngineAdhocCheck(tenant, runId, step, ctx),
+  },
+  "rep-crisis-stress-test": {
+    ...CHAT_SKILL_MANIFEST["rep-crisis-stress-test"],
+    execute: (tenant, runId, step, ctx) => runCrisisStressTest(tenant, runId, step, ctx),
+  },
+  "rep-draft-response": {
+    ...CHAT_SKILL_MANIFEST["rep-draft-response"],
+    execute: (tenant, runId, step, ctx) => runDraftResponse(tenant, runId, step, ctx),
   },
 };

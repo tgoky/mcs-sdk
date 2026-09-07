@@ -136,6 +136,46 @@ export async function triggerEngineAdhocCheckForEngagement(
   );
 }
 
+export async function triggerCrisisStressTestForEngagement(
+  whopUserId: string,
+  workspaceId: string,
+  engagementId: string,
+  hypotheticalFindingText: string,
+  hypotheticalFindingSource: string | undefined
+): Promise<TriggerChatSkillResult> {
+  const cleanText = hypotheticalFindingText.trim();
+  if (!cleanText) return { ok: false, error: "No hypothetical finding text was provided." };
+  return triggerChatSkillForEngagement(
+    whopUserId,
+    workspaceId,
+    engagementId,
+    "rep-crisis-stress-test",
+    { hypotheticalFindingText: cleanText, hypotheticalFindingSource },
+    "Testing that finding against this client's crisis threshold. This can take a moment — check back or ask for the status.",
+    "crisis_stress_test"
+  );
+}
+
+export async function triggerDraftResponseForEngagement(
+  whopUserId: string,
+  workspaceId: string,
+  engagementId: string,
+  findingText: string,
+  findingPlatform: string | undefined
+): Promise<TriggerChatSkillResult> {
+  const cleanText = findingText.trim();
+  if (!cleanText) return { ok: false, error: "No finding text was provided to draft a response to." };
+  return triggerChatSkillForEngagement(
+    whopUserId,
+    workspaceId,
+    engagementId,
+    "rep-draft-response",
+    { findingText: cleanText, findingPlatform },
+    "Drafting a suggested response. This can take a moment — check back or ask for the status.",
+    "draft_response"
+  );
+}
+
 export async function triggerPageAuditForEngagement(
   whopUserId: string,
   workspaceId: string,

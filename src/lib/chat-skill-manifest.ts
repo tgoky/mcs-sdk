@@ -17,7 +17,14 @@
 // on or off" — so these skip the enable/disable gate entirely (see
 // chat-skill-trigger.ts) rather than being force-fit into that model.
 
-export type ChatSkillId = "pin-down-voice" | "pin-down-scripts" | "pin-down-ad-briefs" | "pin-down-page-audit" | "rep-engine-adhoc-check";
+export type ChatSkillId =
+  | "pin-down-voice"
+  | "pin-down-scripts"
+  | "pin-down-ad-briefs"
+  | "pin-down-page-audit"
+  | "rep-engine-adhoc-check"
+  | "rep-crisis-stress-test"
+  | "rep-draft-response";
 
 export const CHAT_SKILL_IDS: ChatSkillId[] = [
   "pin-down-voice",
@@ -25,6 +32,8 @@ export const CHAT_SKILL_IDS: ChatSkillId[] = [
   "pin-down-ad-briefs",
   "pin-down-page-audit",
   "rep-engine-adhoc-check",
+  "rep-crisis-stress-test",
+  "rep-draft-response",
 ];
 
 export interface ChatSkillManifestEntry {
@@ -59,6 +68,18 @@ export const CHAT_SKILL_MANIFEST: Record<ChatSkillId, ChatSkillManifestEntry> = 
     name: "AI Engine Spot-Check",
     description:
       "Asks the client's configured AI engines a live, one-off question right now — about the client themselves, or about a named competitor already tracked in their identity graph. A live snapshot, not part of the scheduled AI Engine Watch panel — nothing gets written to the client's monitoring history.",
+  },
+  "rep-crisis-stress-test": {
+    id: "rep-crisis-stress-test",
+    name: "Crisis Threshold Stress-Test",
+    description:
+      "Scores a hypothetical finding through the exact same severity model the real Crisis Response skill uses, and reports whether it would cross this client's threshold — without declaring a real incident or notifying anyone. Lets an operator tune a client's threshold before a real crisis, not just react during one.",
+  },
+  "rep-draft-response": {
+    id: "rep-draft-response",
+    name: "Draft a Response",
+    description:
+      "Drafts a suggested public response to a flagged Trustpilot/Reddit/X finding (or an AI-engine answer), in the operator's own brand voice when one's on file. Does not post anywhere — the draft is for a human to review, edit, and post themselves.",
   },
 };
 

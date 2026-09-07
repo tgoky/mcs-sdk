@@ -17,7 +17,7 @@ import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
-type ContributingFinding = { source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "anomaly"; excerpt: string; flagReason: string | null };
+export type ContributingFinding = { source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "anomaly"; excerpt: string; flagReason: string | null };
 type ScoredFinding = ContributingFinding & {
   reach: number;
   sentiment: number;
@@ -147,7 +147,7 @@ function clampAxisScore(value: unknown): number {
  * classification step now, not in a fuzzy "does this feel like a
  * pattern" holistic score.
  */
-async function scoreFindings(operatorName: string, findings: ContributingFinding[], runId: string): Promise<SeverityAssessment> {
+export async function scoreFindings(operatorName: string, findings: ContributingFinding[], runId: string): Promise<SeverityAssessment> {
   const numbered = findings
     .map((f, i) => `[${i}] Source: ${f.source}\n${f.excerpt}${f.flagReason ? `\nWhy flagged: ${f.flagReason}` : ""}`)
     .join("\n\n");

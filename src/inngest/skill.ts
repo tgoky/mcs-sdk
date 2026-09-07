@@ -54,7 +54,21 @@ export const executeSkillRun = inngest.createFunction(
     },
   },
   async ({ event, step }) => {
-    const { runId, engagementId, skillName, auditType, manualOverride, voiceExtractionDomain, pageAuditUrl, engineCheckSubject, engineCheckQuestion } = event.data;
+    const {
+      runId,
+      engagementId,
+      skillName,
+      auditType,
+      manualOverride,
+      voiceExtractionDomain,
+      pageAuditUrl,
+      engineCheckSubject,
+      engineCheckQuestion,
+      hypotheticalFindingText,
+      hypotheticalFindingSource,
+      findingText,
+      findingPlatform,
+    } = event.data;
 
     const tenantRaw = await step.run("load-tenant", async () => {
       const [row] = await db
@@ -115,7 +129,17 @@ export const executeSkillRun = inngest.createFunction(
         throw new Error(`${definition.name} has no direct executor — it only runs from its own event handlers.`);
       }
 
-      await definition.execute(tenant, runId, step, { auditType, voiceExtractionDomain, pageAuditUrl, engineCheckSubject, engineCheckQuestion });
+      await definition.execute(tenant, runId, step, {
+        auditType,
+        voiceExtractionDomain,
+        pageAuditUrl,
+        engineCheckSubject,
+        engineCheckQuestion,
+        hypotheticalFindingText,
+        hypotheticalFindingSource,
+        findingText,
+        findingPlatform,
+      });
     } catch (err: unknown) {
       await failRun(runId, err).catch(() => {});
       throw err;

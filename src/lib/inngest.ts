@@ -39,6 +39,15 @@ export type SkillRunExecuteData = {
   // secret state, same as the two fields above.
   engineCheckSubject?: string;
   engineCheckQuestion?: string;
+  // Same category, for rep-crisis-stress-test — a hypothetical (never
+  // real) finding to score against the threshold, and which source type
+  // to frame it as for the scoring model.
+  hypotheticalFindingText?: string;
+  hypotheticalFindingSource?: string;
+  // Same category, for rep-draft-response — the real finding text to
+  // draft a suggested reply to, and which platform it came from.
+  findingText?: string;
+  findingPlatform?: string;
 };
 
 
