@@ -44,13 +44,23 @@ async function fetchRedditMentions(searchTerms: string[]): Promise<RawMention[]>
   const apiKey = resolveRedditApiKey();
   if (!apiKey) return [];
 
-  const perTermResults = await Promise.all(
-    searchTerms.map((term) =>
-      Promise.all([searchEndpoint("/api/reddit/search", term, apiKey), searchEndpoint("/api/reddit/search/comments", term, apiKey)])
-    )
-  );
+  // FIX (2026-09-07): this used to also call "/api/reddit/search/comments"
+  // in parallel with the real "/api/reddit/search" call. That path isn't a
+  // real endpoint — the actual redditapis.com reference docs (obtained and
+  // checked directly, not inferred) list every Listings & Search endpoint
+  // exhaustively, and there is no global comment-search-by-keyword among
+  // them; the closest real thing is a per-subreddit STREAM of newest
+  // comments (GET /api/reddit/sub/:name/comments), which searches nothing
+  // and needs a subreddit name this function never has. Both calls were
+  // wrapped in one Promise.all, so a non-2xx from the comments call (the
+  // most likely outcome for a route that isn't real) threw and failed this
+  // ENTIRE function — meaning rep-reddit-watch likely never successfully
+  // completed a single run against live data, not just "never checked
+  // comments." Posts-only now, which is the one endpoint actually
+  // confirmed to exist and behave as this file's field-parsing assumes.
+  const perTermResults = await Promise.all(searchTerms.map((term) => searchEndpoint("/api/reddit/search", term, apiKey)));
 
-  const combined = perTermResults.flat(2);
+  const combined = perTermResults.flat();
   // The same post/comment can match more than one search term (e.g. both
   // the operator name and an entity name) — dedup by Reddit's own item id
   // before this goes anywhere near insertion or scoring, so a genuinely
@@ -63,10 +73,23 @@ async function fetchRedditMentions(searchTerms: string[]): Promise<RawMention[]>
   });
 }
 
-async function searchEndpoint(path: string, searchTerm: string, apiKey: string): Promise<RawMention[]> {
+async function searchEndpoint(path: string, searchTerm: string, apiKey: string, timeframe?: string): Promise<RawMention[]> {
   const url = new URL(REDDIT_API_BASE + path);
   url.searchParams.set("q", searchTerm);
-  url.searchParams.set("sort", "new");
+  // Real, documented technique for reaching further back than the
+  // regular watch's recency-sorted window — confirmed against the actual
+  // /api/reddit/search reference docs, not inferred: sort=top/
+  // controversial are "the axes that reliably reach older posts," and a
+  // given t (timeframe) value is its own separate listing on this
+  // endpoint specifically ("we forward it on every sort"), meant to be
+  // combined across values to widen coverage rather than assumed to
+  // exhaust a subreddit's full history in one call.
+  if (timeframe) {
+    url.searchParams.set("sort", "top");
+    url.searchParams.set("t", timeframe);
+  } else {
+    url.searchParams.set("sort", "new");
+  }
   url.searchParams.set("limit", String(RESULTS_LIMIT));
   // Their docs are explicit that nsfw defaults to excluded — "Omitted or
   // false excludes them" — which for a reputation monitor is a real
@@ -84,37 +107,26 @@ async function searchEndpoint(path: string, searchTerm: string, apiKey: string):
   }
 
   const body = await res.json();
-  // Posts search responds { posts: [...] } per their documented example;
-  // comment search follows the same top-level shape with its own key.
-  // Checked defensively for whichever key is actually populated rather
-  // than assuming one, since this is the one part of their response
-  // shape not shown verbatim in a copy-paste example for the comments
-  // variant specifically.
-  const items: unknown[] = Array.isArray(body?.posts)
-    ? body.posts
-    : Array.isArray(body?.comments)
-      ? body.comments
-      : Array.isArray(body?.results)
-        ? body.results
-        : [];
+  // FIX (2026-09-07): confirmed against the real /api/reddit/search
+  // reference docs — the response shape is exactly { posts: [...], after }
+  // and nothing else; there's no "comments" or "results" key on this
+  // endpoint (those were speculative fallbacks written before the real
+  // docs were available, kept "just in case," which is exactly the kind
+  // of unverified hedge this codebase's own conventions are usually
+  // careful to avoid — removed now that there's a real answer).
+  const items: unknown[] = Array.isArray(body?.posts) ? body.posts : [];
   return items.map(normalizeMention).filter((m): m is RawMention => m !== null);
 }
 
-/** Field names confirmed from redditapis.com's own documented example —
- * title/text, author, upvotes, permalink — plus `id`, which their own
- * FAQ confirms exists on every post/comment specifically for dedup
- * ("Dedupe on the item id Reddit returns for every post and comment").
- *
- * publishedAt is the one field their docs never show in a response
- * example at all — the closest hint is sort_type's own option list
- * ("re-sort the filtered page by score, num_comments, or created"),
- * which implies the real field is named `created`, not `createdAt`.
- * Checked defensively for both that and Reddit's own upstream
- * convention (`created_utc`, in case this proxy passes it through
- * unrenamed) rather than betting on one guess — same "unverified field,
- * check plausible variants" pattern as the posts/comments/results key
- * check above. Worth confirming for real once a live key is in and a
- * response can be inspected directly. */
+/** FIX (2026-09-07): field names now fully confirmed against the real
+ * /api/reddit/search (and /api/reddit/posts, same shape) response
+ * example — id, permalink, text (self posts) / title (link posts,
+ * fallback), subreddit, author, created (ISO string), created_utc (unix
+ * epoch seconds). No `createdAt` field exists on the real response —
+ * that was a guess in the original, unverified version of this function;
+ * kept in the fallback chain below only because it's a harmless no-op
+ * (undefined, falls through to the real `created` field), not because
+ * it's real. */
 function normalizeMention(raw: unknown): RawMention | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -126,7 +138,7 @@ function normalizeMention(raw: unknown): RawMention | null {
 
   if (!externalMentionId || !permalink || !text || !subreddit) return null;
 
-  const rawCreated = r.createdAt ?? r.created ?? r.created_utc;
+  const rawCreated = r.created ?? r.created_utc;
   const publishedAt =
     typeof rawCreated === "string"
       ? rawCreated
@@ -351,6 +363,89 @@ export async function runRepRedditWatch(tenant: any, runId: string, step: StepTo
       detail: `${result.newCount} new mention(s)${result.flaggedCount > 0 ? `, ${result.flaggedCount} flagged` : ""}.`,
     });
     summary.whatWorked.push(`Found ${result.newCount} new mention(s) since last check.`);
+    if (result.flaggedCount > 0) summary.decisionsMade.push(`${result.flaggedCount} mention(s) flagged for review.`);
+
+    await finishRun(runId, { summary });
+  } catch (err) {
+    await failRun(runId, err, { summary }).catch(() => {});
+    throw err;
+  }
+}
+
+const VALID_REDDIT_TIMEFRAMES = ["hour", "day", "week", "month", "year", "all"];
+
+/**
+ * Teammates chat's "widen the Reddit scan beyond the daily watch" action
+ * — rep-reddit-deep-scan in chat-skill-registry.ts. Coarser than the
+ * Trustpilot/X deep scans on purpose: /api/reddit/search has no exact
+ * "since this date" parameter the way Outscraper's cutoff or X's since:
+ * operator does — the real, documented mechanism here is combining
+ * distinct t (timeframe) values with sort=top, each one a genuinely
+ * separate listing per their own docs, not a single call reaching
+ * further back. Only queries /api/reddit/search — deliberately NOT
+ * /api/reddit/search/comments, which isn't in the reference docs that
+ * were actually verified for this build (see this file's own header) and
+ * isn't safe to build on until that's confirmed for real.
+ */
+export async function runRepRedditDeepScan(
+  tenant: { engagementId: string },
+  runId: string,
+  step: StepTools | undefined,
+  ctx?: { deepScanTimeframe?: string }
+): Promise<void> {
+  const summary = emptySummary();
+  const engagementId: string = tenant.engagementId;
+
+  try {
+    const timeframe = ctx?.deepScanTimeframe?.trim().toLowerCase();
+    if (!timeframe || !VALID_REDDIT_TIMEFRAMES.includes(timeframe)) {
+      throw new Error(`A timeframe is required — one of: ${VALID_REDDIT_TIMEFRAMES.join(", ")}.`);
+    }
+
+    const graph = await (step ? step.run("load-identity-graph", () => loadIdentityGraph(engagementId)) : loadIdentityGraph(engagementId));
+
+    if (!graph) {
+      throw new Error("Reputation Manager's Identity Setup hasn't been completed for this client yet.");
+    }
+    if (!resolveRedditApiKey()) {
+      throw new Error("REDDITAPIS_API_KEY not configured.");
+    }
+
+    const apiKey = resolveRedditApiKey()!;
+    const searchTerms = [graph.operatorName, ...graph.entities.filter((e) => e.highPriority).map((e) => e.name)];
+
+    await logStep(runId, { phase: "reddit_deep_scan", status: "running", detail: `Widening Reddit search (t=${timeframe}, sort=top) for: ${searchTerms.join(", ")}.` });
+
+    const fetchWide = async () => {
+      const perTermResults = await Promise.all(searchTerms.map((term) => searchEndpoint("/api/reddit/search", term, apiKey, timeframe)));
+      const combined = perTermResults.flat();
+      const seen = new Set<string>();
+      return combined.filter((m) => {
+        if (seen.has(m.externalMentionId)) return false;
+        seen.add(m.externalMentionId);
+        return true;
+      });
+    };
+
+    const fetched = await (step ? step.run("fetch-mentions-wide", fetchWide) : fetchWide());
+
+    if (fetched.length === 0) {
+      await logStep(runId, { phase: "reddit_deep_scan", status: "success", detail: "No mentions found in that window." });
+      summary.whatWorked.push(`Widened the Reddit scan to t=${timeframe} — no mentions found.`);
+      await finishRun(runId, { summary });
+      return;
+    }
+
+    const result = await (step
+      ? step.run("process-new-mentions", () => processNewMentions(engagementId, graph.operatorName, fetched, runId))
+      : processNewMentions(engagementId, graph.operatorName, fetched, runId));
+
+    await logStep(runId, {
+      phase: "reddit_deep_scan",
+      status: "success",
+      detail: `${result.newCount} new mention(s)${result.flaggedCount > 0 ? `, ${result.flaggedCount} flagged` : ""} found widening to t=${timeframe}.`,
+    });
+    summary.whatWorked.push(`Widened the Reddit scan to t=${timeframe} (sort=top) — found ${result.newCount} new mention(s) beyond what the regular recency-sorted watch already had on file.`);
     if (result.flaggedCount > 0) summary.decisionsMade.push(`${result.flaggedCount} mention(s) flagged for review.`);
 
     await finishRun(runId, { summary });
