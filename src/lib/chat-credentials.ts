@@ -52,6 +52,20 @@ export async function hasBookingCredential(engagementId: string, workspaceId: st
 }
 
 export async function checkCredentialAvailability(workspaceId: string, engagementId: string, provider: string) {
+  // Security audit fix (post-Phase-9): credentialsRefs has no workspaceId
+  // column of its own, so the existing-credential check below was
+  // engagementId-scoped only — an authenticated user could pass another
+  // workspace's engagementId and learn whether that client already has a
+  // given provider linked. linkReusableCredential (below) already
+  // verifies ownership this same way before it writes; this read path
+  // needs the identical check before it can safely tell anyone anything.
+  const [engagement] = await db
+    .select({ engagementId: engagements.engagementId })
+    .from(engagements)
+    .where(and(eq(engagements.engagementId, engagementId), eq(engagements.workspaceId, workspaceId)))
+    .limit(1);
+  if (!engagement) return { alreadyLinked: false as const, reusable: null };
+
   const [existing] = await db
     .select({ id: credentialsRefs.id })
     .from(credentialsRefs)

@@ -45,14 +45,23 @@ export type WorkerConfigFieldKind = "derivable" | "ask" | "secret";
 /**
  * A verified, cross-product client fact from src/lib/client-profile.ts —
  * the actual thing a "derivable" field derives from, not just a
- * description saying so. This is the piece that makes "derivable" mean
- * something a future worker can rely on generically: declare
- * `derivableFrom: "primaryDomain"` and the enablement flow calls
- * getPrimaryDomainForEngagement, full stop — no per-worker bespoke
- * lookup code, and no field can claim to be derivable without naming a
- * real function that backs it. Grows only alongside client-profile.ts
- * itself; adding a value here with nothing backing it in that module is
- * exactly the unverified-claim problem this type exists to prevent.
+ * description saying so: no field can claim to be derivable without
+ * naming a real function in that module that backs it.
+ *
+ * Audit note (post-Phase-9): the resolver function exists and is
+ * correct (client-profile.ts's getPrimaryDomainForEngagement /
+ * resolveClientProfileFact), but no UI surface actually calls it yet —
+ * neither pin-down's own wizard, rep-onboarding's IdentityGraphForm, nor
+ * enable-worker-modal.tsx's chat/lighter-form paths read an
+ * already-known primaryDomain before asking for one. So today
+ * "derivable" is an accurate classification of the *fact* (this really
+ * is knowable from another worker's data) but not yet a working
+ * pre-fill — a real client on their second worker still gets asked for
+ * a domain the first worker already collected. Fixing the resolver
+ * itself won't fix this; wiring a caller into one of those surfaces
+ * will. Grows only alongside client-profile.ts itself; adding a value
+ * here with nothing backing it in that module is exactly the
+ * unverified-claim problem this type exists to prevent.
  */
 export type ClientProfileFact = "primaryDomain" | "buyerName";
 

@@ -95,7 +95,14 @@ export function WorkersPanel({
 }) {
   const router = useRouter();
   const [states, setStates] = useState<Record<string, boolean>>(initialStates);
-  const [updatingWorker, setUpdatingWorker] = useState<string | null>(null);
+  // UX-audit fix: was a single `string | null`, so toggling worker B
+  // while worker A's request was still in flight overwrote A's busy
+  // state with B's — whichever request's `finally` resolved first then
+  // cleared busy for BOTH, letting the still-in-flight one be clicked
+  // again mid-request. A Set tracks each worker's own busy state
+  // independently, the same way multiple concurrent toggles actually
+  // behave.
+  const [updatingWorkers, setUpdatingWorkers] = useState<Set<string>>(new Set());
   const [, startTransition] = useTransition();
 
   function toggleEndpoint(workerId: WorkerId): string {
@@ -109,7 +116,7 @@ export function WorkersPanel({
     const previousState = states[workerId];
 
     setStates((prev) => ({ ...prev, [workerId]: nextState }));
-    setUpdatingWorker(workerId);
+    setUpdatingWorkers((prev) => new Set(prev).add(workerId));
 
     startTransition(async () => {
       try {
@@ -127,7 +134,11 @@ export function WorkersPanel({
       } catch {
         setStates((prev) => ({ ...prev, [workerId]: previousState }));
       } finally {
-        setUpdatingWorker(null);
+        setUpdatingWorkers((prev) => {
+          const next = new Set(prev);
+          next.delete(workerId);
+          return next;
+        });
       }
     });
   }
@@ -140,7 +151,13 @@ export function WorkersPanel({
     handleToggle(workerId);
   }
 
-  const activeCount = workerIds.filter((id) => states[id]).length;
+  // Same `?? true` default as each card's own isEnabled below — both
+  // getEngagementSkillStates and getRepEngagementSkillStates always
+  // populate every id they're asked about, so this fallback shouldn't
+  // matter today, but a header count that could silently disagree with
+  // the cards it's counting is exactly the kind of drift worth not
+  // risking for a one-line difference.
+  const activeCount = workerIds.filter((id) => states[id] ?? true).length;
 
   return (
     <div className="w-full space-y-3 font-sans">
@@ -168,7 +185,7 @@ export function WorkersPanel({
         {workerIds.map((workerId) => {
           const worker = WORKER_REGISTRY[workerId];
           const isEnabled = states[workerId] ?? true;
-          const isBusy = updatingWorker === workerId;
+          const isBusy = updatingWorkers.has(workerId);
           const workerRuns = runsByWorker[workerId] ?? [];
           const status = deriveModuleStatus(workerRuns, isEnabled, isPaused);
           const latestRun = workerRuns[0] ?? null;

@@ -202,6 +202,7 @@ export async function enrollProspectInPileOn(opts: {
       await exitWinBackSequence(stack.email_platform, await resolveCredential(opts.engagementId, stack.email_platform), opts.prospectEmail, {
         location_id: stack.booking_platform_meta?.location_id,
         recovery_workflow_id: stack.recovery_workflow_id,
+        recovery_automation_id: stack.recovery_automation_id,
         activecampaign_base_url: stack.activecampaign_base_url,
       });
       await db

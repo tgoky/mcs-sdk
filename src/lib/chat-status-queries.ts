@@ -14,7 +14,32 @@ import { bookingRoster, skillRuns, winBackEnrollments, engagements, auditRunsLog
 import { and, eq, gte, lte, desc } from "drizzle-orm";
 import { getBenchmarkLines } from "@/features/leak-map/server/leak-map-benchmarks";
 
-export async function getTodaysCalls(engagementId: string) {
+/**
+ * Security audit fix (post-Phase-9): every function below used to take
+ * only an `engagementId` sourced straight from the chat model's tool-call
+ * input, with no check that the id actually belonged to the requesting
+ * user's workspace — the same shape of gap chat-skill-trigger.ts's
+ * triggerChatSkillForEngagement already closes for every mutating tool.
+ * A user could get the model to echo back another workspace's
+ * engagementId (or supply one directly) and read that client's booking
+ * roster, run history/error messages, or active win-back prospects. Every
+ * function here now takes `workspaceId` and verifies ownership first —
+ * same "Client not found"-shaped denial regardless of whether the id is
+ * bogus or just not this workspace's, so a failed lookup doesn't itself
+ * leak which case it was.
+ */
+async function verifyEngagementInWorkspace(engagementId: string, workspaceId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ engagementId: engagements.engagementId })
+    .from(engagements)
+    .where(and(eq(engagements.engagementId, engagementId), eq(engagements.workspaceId, workspaceId)))
+    .limit(1);
+  return Boolean(row);
+}
+
+export async function getTodaysCalls(engagementId: string, workspaceId: string) {
+  if (!(await verifyEngagementInWorkspace(engagementId, workspaceId))) return [];
+
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date();
@@ -34,7 +59,9 @@ export async function getTodaysCalls(engagementId: string) {
   return rows;
 }
 
-export async function getRecentCancellations(engagementId: string, sinceDays = 7) {
+export async function getRecentCancellations(engagementId: string, workspaceId: string, sinceDays = 7) {
+  if (!(await verifyEngagementInWorkspace(engagementId, workspaceId))) return [];
+
   const since = new Date();
   since.setDate(since.getDate() - sinceDays);
 
@@ -53,7 +80,9 @@ export async function getRecentCancellations(engagementId: string, sinceDays = 7
   return rows;
 }
 
-export async function getRunHistory(engagementId: string, skillName?: string) {
+export async function getRunHistory(engagementId: string, workspaceId: string, skillName?: string) {
+  if (!(await verifyEngagementInWorkspace(engagementId, workspaceId))) return [];
+
   const rows = await db
     .select({
       skillName: skillRuns.skillName,
@@ -87,8 +116,12 @@ export async function getRunHistory(engagementId: string, skillName?: string) {
  * something this function — or any real extension of Leak Map's actual
  * pipeline — can honestly claim to do.
  */
-export async function getLeakMapBenchmarkComparison(engagementId: string): Promise<{ lines: string[]; auditedAt: Date } | { error: string }> {
-  const [engagement] = await db.select({ offerDetails: engagements.offerDetails }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+export async function getLeakMapBenchmarkComparison(engagementId: string, workspaceId: string): Promise<{ lines: string[]; auditedAt: Date } | { error: string }> {
+  const [engagement] = await db
+    .select({ offerDetails: engagements.offerDetails })
+    .from(engagements)
+    .where(and(eq(engagements.engagementId, engagementId), eq(engagements.workspaceId, workspaceId)))
+    .limit(1);
   if (!engagement) return { error: "Client not found." };
 
   const [latestAudit] = await db
@@ -118,7 +151,9 @@ export async function getLeakMapBenchmarkComparison(engagementId: string): Promi
   return { lines, auditedAt: latestAudit.createdAt };
 }
 
-export async function getActiveRecoveries(engagementId: string) {
+export async function getActiveRecoveries(engagementId: string, workspaceId: string) {
+  if (!(await verifyEngagementInWorkspace(engagementId, workspaceId))) return [];
+
   const rows = await db
     .select({
       prospectName: winBackEnrollments.prospectName,

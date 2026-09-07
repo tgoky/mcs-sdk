@@ -270,7 +270,7 @@ export async function getWorkerAnalyticsDetail(
       .where(and(eq(skillRuns.skillName, workerId), inArray(skillRuns.engagementId, engagementIds)))
       .orderBy(desc(skillRuns.startedAt))
       .limit(RECENT_RUNS_LIMIT),
-    worker.productId === "reputation-manager" ? getRepSignalSummary(engagementIds) : Promise.resolve(null),
+    worker.productId === "reputation-manager" ? getRepSignalSummary(engagementIds, since) : Promise.resolve(null),
   ]);
 
   const activeClientIds = new Set(runs.map((r) => r.engagementId));
@@ -307,20 +307,27 @@ export async function getWorkerAnalyticsDetail(
   };
 }
 
-async function getRepSignalSummary(engagementIds: string[]): Promise<RepSignalSummary> {
+// Perf-audit fix: the old standalone RM analytics page this rollup came
+// from queried every signal ever recorded, with no window — tolerable
+// when it was one page nothing linked to, not once this same rollup
+// renders on every RM worker's own analytics page (6 destinations
+// instead of 1). Windowed to the same DETAIL_WINDOW_DAYS every other
+// query in this file already uses, so a long-running client's full
+// history stops loading into memory on every page view.
+async function getRepSignalSummary(engagementIds: string[], since: Date): Promise<RepSignalSummary> {
   const [findings, reviews, mentions] = await Promise.all([
     db
       .select({ sentiment: repEngineFindings.sentiment, flagged: repEngineFindings.flagged })
       .from(repEngineFindings)
-      .where(inArray(repEngineFindings.engagementId, engagementIds)),
+      .where(and(inArray(repEngineFindings.engagementId, engagementIds), gte(repEngineFindings.runAt, since))),
     db
       .select({ rating: repTrustpilotReviews.rating, sentiment: repTrustpilotReviews.sentiment, flagged: repTrustpilotReviews.flagged })
       .from(repTrustpilotReviews)
-      .where(inArray(repTrustpilotReviews.engagementId, engagementIds)),
+      .where(and(inArray(repTrustpilotReviews.engagementId, engagementIds), gte(repTrustpilotReviews.createdAt, since))),
     db
       .select({ sentiment: repRedditMentions.sentiment, flagged: repRedditMentions.flagged })
       .from(repRedditMentions)
-      .where(inArray(repRedditMentions.engagementId, engagementIds)),
+      .where(and(inArray(repRedditMentions.engagementId, engagementIds), gte(repRedditMentions.createdAt, since))),
   ]);
 
   const allSignals = [...findings, ...reviews, ...mentions];

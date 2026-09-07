@@ -66,12 +66,18 @@ export async function getBuyerNameForEngagement(engagementId: string): Promise<s
 }
 
 /**
- * The single entry point Phase 5's enablement flow (chat or form) calls
- * for any worker config field tagged `derivableFrom` in worker-registry.ts
- * — one switch here instead of every caller needing to know which
- * function backs which fact name. Adding a new ClientProfileFact means
- * adding one case here and the getter it calls; nothing else in this
- * module's callers needs to change.
+ * Intended as the single entry point Phase 5's enablement flow (chat or
+ * form) calls for any worker config field tagged `derivableFrom` in
+ * worker-registry.ts — one switch here instead of every caller needing
+ * to know which function backs which fact name. Adding a new
+ * ClientProfileFact means adding one case here and the getter it calls;
+ * nothing else in this module's callers needs to change.
+ *
+ * Audit note (post-Phase-9): this function is correct but currently has
+ * zero real callers — grepping src/app and src/components turns up
+ * nothing. No UI surface pre-fills a "derivable" field from an
+ * already-known client fact yet; see worker-registry.ts's
+ * ClientProfileFact doc for the concrete gap this leaves.
  */
 export async function resolveClientProfileFact(engagementId: string, fact: ClientProfileFact): Promise<string | null> {
   switch (fact) {

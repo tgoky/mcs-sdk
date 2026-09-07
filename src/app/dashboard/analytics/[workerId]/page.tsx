@@ -105,7 +105,7 @@ export default async function WorkerAnalyticsPage({ params }: { params: Promise<
       {detail.repSignals && (
         <div className="mt-6 space-y-3">
           <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Reputation Manager signals (every enrolled client)
+            Reputation Manager signals (every enrolled client, last {detail.windowDays}d)
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatCard label="AI engine checks" value={detail.repSignals.engineChecks} />

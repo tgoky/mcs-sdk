@@ -31,18 +31,31 @@ export default async function DashboardPage() {
 
   const { thisWeekStart, lastWeekStart, lastWeekEnd } = getWeekWindows();
 
+  // Phase 9's worker-overview/primary-engagement lookups don't depend on
+  // anything the big query block below produces, so they're kicked off
+  // as siblings of it in one outer Promise.all instead of only starting
+  // once that whole block resolves — a perf-audit fix: the first version
+  // of this ran them strictly after, adding a fully serial extra round
+  // trip to every dashboard load for no reason. getEnabledWorkerIdsForEngagement
+  // is the one piece that genuinely can't start until primaryEngagementId
+  // is known, so it stays a short second await after this resolves.
   const [
-    userEngagements,
-    totalRunsResult,
-    thisWeekResult,
-    lastWeekResult,
-    runningCountResult,
-    recentRunsRaw,
-    queueItems,
-    completedThisWeekBySkillRaw,
-    recentCompletionsRaw,
-    unseenCount, // CHANGED: new 10th slot — MUST stay positionally aligned with the 10th query below
+    [
+      userEngagements,
+      totalRunsResult,
+      thisWeekResult,
+      lastWeekResult,
+      runningCountResult,
+      recentRunsRaw,
+      queueItems,
+      completedThisWeekBySkillRaw,
+      recentCompletionsRaw,
+      unseenCount, // CHANGED: new 10th slot — MUST stay positionally aligned with the 10th query below
+    ],
+    primaryEngagementId,
+    workerOverview,
   ] = await Promise.all([
+    Promise.all([
     db
       .select()
       .from(engagements)
@@ -166,18 +179,12 @@ export default async function DashboardPage() {
 
     // CHANGED: new 10th query — pairs with `unseenCount` above.
    getUnseenCompletedExecutionCount(whopUserId, workspaceId),
-  ]);
-
-  // Phase 9 — kept as its own Promise.all rather than folded into the one
-  // above: that array's slots are positionally destructured and the
-  // unseenCount comment above already warns against disturbing the
-  // order, so new, unrelated data gets its own block instead of adding
-  // fragility to an existing one.
-  const primaryEngagementId = await getPrimaryEngagementIdForWorkspace(workspaceId);
-  const [enabledWorkerIds, workerOverview] = await Promise.all([
-    primaryEngagementId ? getEnabledWorkerIdsForEngagement(primaryEngagementId) : Promise.resolve([]),
+    ]),
+    getPrimaryEngagementIdForWorkspace(workspaceId),
     getWorkspaceWorkerOverview(whopUserId, workspaceId),
   ]);
+
+  const enabledWorkerIds = primaryEngagementId ? await getEnabledWorkerIdsForEngagement(primaryEngagementId) : [];
   const activeWorkerStats = workerOverview.workers.filter((w) => enabledWorkerIds.includes(w.workerId));
 
   const completedThisWeek = Number(thisWeekResult[0]?.count ?? 0);

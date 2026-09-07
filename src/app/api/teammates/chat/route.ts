@@ -589,7 +589,7 @@ export async function POST(request: Request) {
       } else if (block.name === "get_todays_calls") {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
         if (engagementId) {
-          const rows = await getTodaysCalls(engagementId);
+          const rows = await getTodaysCalls(engagementId, activeWorkspace.workspaceId);
           ok = true;
           message2 =
             rows.length === 0
@@ -601,7 +601,7 @@ export async function POST(request: Request) {
       } else if (block.name === "get_recent_cancellations") {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
         if (engagementId) {
-          const rows = await getRecentCancellations(engagementId);
+          const rows = await getRecentCancellations(engagementId, activeWorkspace.workspaceId);
           ok = true;
           message2 =
             rows.length === 0
@@ -614,7 +614,7 @@ export async function POST(request: Request) {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
         const skillNameFilter = typeof block.input.skillName === "string" ? block.input.skillName : undefined;
         if (engagementId) {
-          const rows = await getRunHistory(engagementId, skillNameFilter);
+          const rows = await getRunHistory(engagementId, activeWorkspace.workspaceId, skillNameFilter);
           ok = true;
           message2 =
             rows.length === 0
@@ -628,7 +628,7 @@ export async function POST(request: Request) {
       } else if (block.name === "get_active_recoveries") {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
         if (engagementId) {
-          const rows = await getActiveRecoveries(engagementId);
+          const rows = await getActiveRecoveries(engagementId, activeWorkspace.workspaceId);
           ok = true;
           message2 =
             rows.length === 0
@@ -640,7 +640,7 @@ export async function POST(request: Request) {
       } else if (block.name === "compare_leak_map_benchmarks") {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
         if (engagementId) {
-          const result = await getLeakMapBenchmarkComparison(engagementId);
+          const result = await getLeakMapBenchmarkComparison(engagementId, activeWorkspace.workspaceId);
           ok = !("error" in result);
           message2 = "error" in result ? result.error : result.lines.join(" ");
         } else {

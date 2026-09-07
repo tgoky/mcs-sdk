@@ -264,10 +264,29 @@ async function main() {
 
     console.log(EXECUTE ? "EXECUTING — this will write to the database.\n" : "DRY RUN — nothing will be written. Pass --execute to apply.\n");
 
+    // Audit fix: this used to be one bare loop with no try/catch — one
+    // workspace throwing (e.g. a unique-constraint hit while duplicating
+    // a credential row) propagated straight to main().catch and exited
+    // the whole run, silently abandoning every workspace still queued
+    // behind it, with no summary telling the operator how many were left
+    // untouched. Worse: the log write happened only after the loop
+    // finished, so a mid-run failure meant even the workspaces that DID
+    // succeed before the crash had no audit/rollback log written for
+    // them at all. Now every workspace's outcome is tracked
+    // independently, the log is written for whatever succeeded
+    // regardless of what came after it, and the run ends with an
+    // explicit processed/failed count instead of a bare stack trace.
     const allLogEntries: MutationLogEntry[] = [];
+    const failedWorkspaceIds: { workspaceId: string; error: string }[] = [];
     for (const workspaceId of targetWorkspaceIds) {
-      const entries = await planAndMaybeExecuteForWorkspace(workspaceId);
-      allLogEntries.push(...entries);
+      try {
+        const entries = await planAndMaybeExecuteForWorkspace(workspaceId);
+        allLogEntries.push(...entries);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`Workspace ${workspaceId} failed — continuing with the remaining workspaces: ${message}`);
+        failedWorkspaceIds.push({ workspaceId, error: message });
+      }
     }
 
     if (EXECUTE && allLogEntries.length > 0) {
@@ -278,6 +297,16 @@ async function main() {
       console.log(`\nWrote rollback/audit log to ${logPath} — keep this until you've verified every moved client works correctly.`);
     } else if (!EXECUTE) {
       console.log("\nDry run complete. Re-run with --execute once you've reviewed the plan above.");
+    }
+
+    const succeededCount = targetWorkspaceIds.length - failedWorkspaceIds.length;
+    console.log(`\n${succeededCount}/${targetWorkspaceIds.length} workspace(s) processed successfully.`);
+    if (failedWorkspaceIds.length > 0) {
+      console.error(`${failedWorkspaceIds.length} workspace(s) FAILED and were skipped — re-run this script (safe: already-split workspaces are a no-op) once the underlying issue is fixed:`);
+      for (const { workspaceId, error } of failedWorkspaceIds) {
+        console.error(`  - ${workspaceId}: ${error}`);
+      }
+      process.exitCode = 1;
     }
   } finally {
     await client.end();
