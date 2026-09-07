@@ -124,6 +124,12 @@ const EDITABLE_SMS_PLATFORMS = ["twilio", "ghl_sms", "hubspot_sms", "none"] as c
 
 const EDITABLE_AD_DATA_PLATFORMS = ["hyros", "native_crm", "google_sheets", "none"] as const;
 
+// Added for Phase 6 — same real-field allowlist discipline as the 5
+// platform-choice arrays above, for the 3 newly-editable enum fields.
+const EDITABLE_SMS_A2P_STATUSES = ["not_started", "brand_registered", "campaign_approved"] as const;
+const EDITABLE_SMS_FOOTER_VARIANTS = ["standard", "custom"] as const;
+const EDITABLE_BRIEF_DESTINATIONS = ["slack", "crm_note", "calendar_event"] as const;
+
 const EDITABLE_WEBHOOK_MODES = ["webhook", "polling", "none"] as const;
 
 const EDITABLE_CONVERSATION_INTELLIGENCE_PROVIDERS = ["recall_ai", "none"] as const;
@@ -146,6 +152,23 @@ const EDITABLE_FLAT_STRING_FIELDS = [
   "target_workflow_id",
   "activecampaign_base_url",
   "hubspot_portal_id",
+  // Added for Phase 6 — confirmed real fields the big new-engagement
+  // wizard collects with NO other post-creation write path anywhere in
+  // the app (traced each one to its only read-site before adding): a
+  // client created via minimal-create (or one who skipped these in the
+  // wizard) had no way to ever set them. slack_webhook_url is the most
+  // consequential — a cross-skill notification target (Leak Map, Crisis
+  // Response, alert-monitor.ts all read it), not Pin-Down-specific, so it
+  // belongs here rather than in any one bridge page.
+  "slack_webhook_url",
+  "long_term_nurture_list_id",
+  "sms_a2p_10dlc_status",
+  "sms_compliance_footer_variant",
+  "sms_compliance_footer_custom",
+  "ad_data_cohort_id",
+  "publish_domain",
+  "booking_standing_link",
+  "brief_landing_destination",
 ] as const;
 
 /**
@@ -309,6 +332,27 @@ export async function PATCH(
       !EDITABLE_AD_DATA_PLATFORMS.includes(incoming.ad_data_platform)
     ) {
       return NextResponse.json({ error: `Invalid ad_data_platform: ${incoming.ad_data_platform}` }, { status: 400 });
+    }
+    if (
+      incoming.sms_a2p_10dlc_status !== undefined &&
+      incoming.sms_a2p_10dlc_status !== null &&
+      !EDITABLE_SMS_A2P_STATUSES.includes(incoming.sms_a2p_10dlc_status)
+    ) {
+      return NextResponse.json({ error: `Invalid sms_a2p_10dlc_status: ${incoming.sms_a2p_10dlc_status}` }, { status: 400 });
+    }
+    if (
+      incoming.sms_compliance_footer_variant !== undefined &&
+      incoming.sms_compliance_footer_variant !== null &&
+      !EDITABLE_SMS_FOOTER_VARIANTS.includes(incoming.sms_compliance_footer_variant)
+    ) {
+      return NextResponse.json({ error: `Invalid sms_compliance_footer_variant: ${incoming.sms_compliance_footer_variant}` }, { status: 400 });
+    }
+    if (
+      incoming.brief_landing_destination !== undefined &&
+      incoming.brief_landing_destination !== null &&
+      !EDITABLE_BRIEF_DESTINATIONS.includes(incoming.brief_landing_destination)
+    ) {
+      return NextResponse.json({ error: `Invalid brief_landing_destination: ${incoming.brief_landing_destination}` }, { status: 400 });
     }
     if (
       incoming.webhook_receiver_mode !== undefined &&

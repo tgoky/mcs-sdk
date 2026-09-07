@@ -1,407 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { STEPS, DEFAULT_FORM } from "./constants";
-import { clearDraft, deleteServerDraft } from "./draft-storage";
-import { useDraftPersistence } from "./use-draft-persistence";
-import { useEmailIntegrations } from "./use-email-integrations";
-import { useSmartPrefill } from "./use-smart-prefill";
-import { getValidationErrors, isCurrentStepValid } from "./validation";
-import { buildEngagementPayload } from "./submit-payload";
-import { StepIndicator } from "./form-fields";
-import { OfferStep } from "./steps/offer-step";
-import { StackStep } from "./steps/stack-step";
-import { CredentialsStep } from "./steps/credentials-step";
-import { VoiceStep } from "./steps/voice-step";
-import { ConfirmStep } from "./steps/confirm-step";
-import { LaunchStep } from "./steps/launch-step";
-import type { FormData, Step, Testimonial } from "./types";
+// src/app/dashboard/engagements/new/page.tsx
+//
+// Phase 6 — replaces the old multi-step wizard (offer/stack/credentials/
+// confirm/launch) with the same minimal, name-only creation Teammates
+// chat's create_client tool already uses. Real setup — Pin-Down, Identity
+// Setup, or both — happens on the client's own Library/Workers page
+// afterward, exactly like it already does for a chat-created client; this
+// page no longer front-loads any of it. See create-minimal-engagement.ts
+// and worker-registry.ts's own Phase 5 work (every worker's real config
+// fields are now individually reachable from there, either through a
+// worker's own setup page or the dual-mode enable flow) for why deferring
+// this is safe rather than a regression.
+//
+// The old wizard's step components/helpers (steps/, credential-field.tsx,
+// draft-storage.ts, use-draft-persistence.ts, use-email-integrations.ts,
+// use-smart-prefill.ts, validation.ts, constants.ts, submit-payload.ts,
+// types.ts) are left in place, unrouted, rather than deleted in this same
+// pass — form-fields.tsx specifically is still a real, load-bearing
+// dependency (identity-graph-form.tsx imports InputField/TextAreaView
+// from it), and the rest weren't exhaustively traced for zero remaining
+// references before this page stopped routing to them. Dead code, not
+// verified-safe-to-delete code — a distinct, smaller follow-up.
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, Loader2 } from "lucide-react";
+import { InputField } from "./form-fields";
 
 export default function NewEngagementPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [step, setStep] = useState<Step>("offer");
-  const [form, setForm] = useState<FormData>(DEFAULT_FORM);
+  const [buyerName, setBuyerName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [readyToLaunch, setReadyToLaunch] = useState<{ engagementId: string; buyerName: string } | null>(null);
-  const [composioBanner, setComposioBanner] = useState<{ kind: "ok" | "error"; message: string } | null>(null);
-
-  const { showRestoredBanner, setShowRestoredBanner, discardDraft } = useDraftPersistence(
-    form,
-    step,
-    setForm,
-    setStep
-  );
-
-  // Arriving here from an already-created client (the Products panel's
-  // "Set up Showtime" link, once that's wired up) means form.engagementId
-  // must end up as THAT client's id, not a freshly generated one —
-  // otherwise submit-payload.ts's `form.engagementId || generateEngagementId(...)`
-  // creates a second, orphaned row instead of finishing the one that
-  // already exists.
-  //
-  // Deliberately no dependency array, and deliberately returns the SAME
-  // object reference when nothing needs to change. useDraftPersistence's
-  // own mount effect above can restore a draft asynchronously (its
-  // server-draft fallback is awaited), so a normal mount-only effect here
-  // could run before, after, or get clobbered by that restoration
-  // depending on timing — a real race, not a hypothetical one. Running on
-  // every render and only ever bailing out via reference equality (React's
-  // documented bail-out for a functional update that returns the same
-  // object it received) means this keeps re-asserting the prefill until
-  // it sticks, then becomes a genuine no-op forever after — correct
-  // regardless of which order the two effects actually resolve in.
-  useEffect(() => {
-    const prefillEngagementId = searchParams.get("engagementId");
-    if (!prefillEngagementId) return;
-    const prefillBuyerName = searchParams.get("buyerName");
-    // Deferred via queueMicrotask, matching the Composio-callback effect
-    // above — react-hooks/set-state-in-effect flags a setState call
-    // synchronous with the effect body itself, not one deferred into a
-    // microtask.
-    queueMicrotask(() => {
-      setForm((f) =>
-        f.engagementId === prefillEngagementId && (!prefillBuyerName || f.buyerName === prefillBuyerName)
-          ? f
-          : { ...f, engagementId: prefillEngagementId, buyerName: prefillBuyerName ?? f.buyerName }
-      );
-    });
-  });
-
-  const emailIntegrations = useEmailIntegrations(form, setForm);
-  const smartPrefill = useSmartPrefill(setForm);
-
-  // Landed back here after a Composio "Connect" (see credential-field.tsx)
-  // — /api/composio/callback appends composio_connected=<provider> or
-  // composio_error=<message> to this page's URL. Runs once on mount only:
-  // this only ever matters right after that specific redirect, and the
-  // URL cleanup below removes the params before any re-render could
-  // re-trigger it anyway.
-  useEffect(() => {
-    const connected = searchParams.get("composio_connected");
-    const composioError = searchParams.get("composio_error");
-    if (!connected && !composioError) return;
-
-    if (composioError) {
-      // Deferred, not called directly here: a setState call synchronous
-      // with the effect body itself is what react-hooks/set-state-in-effect
-      // flags — the async branch just below already avoids this the same
-      // way, since its setState calls only ever run inside the IIFE's
-      // callback, never at the effect's top level.
-      queueMicrotask(() => setComposioBanner({ kind: "error", message: composioError }));
-    }
-
-    if (connected) {
-      (async () => {
-        try {
-          const res = await fetch(`/api/credential-vault?provider=${encodeURIComponent(connected)}`);
-          if (res.ok) {
-            const data = await res.json();
-            const items: { id: string; createdAt: string }[] = data.items ?? [];
-            if (items.length > 0) {
-              const newest = [...items].sort(
-                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-              )[0];
-              // Functional update: whichever slot(s) currently point at
-              // this provider get the freshly-connected credential
-              // selected automatically, so returning from Composio drops
-              // the buyer straight into "reuse saved" with it pre-picked
-              // instead of an extra manual dropdown step. Reads `f` fresh
-              // rather than the `form` closure captured at mount, since
-              // the draft-restore effect (useDraftPersistence) may not
-              // have finished hydrating yet by the time this resolves.
-              setForm((f) => {
-                const next = { ...f };
-                let changed = false;
-                if (connected === "ghl_calendar") {
-                  if (f.bookingPlatform === "ghl_calendar" || f.emailPlatform === "ghl" || f.smsPlatform === "ghl_sms") {
-                    next.ghlCredentialVaultId = newest.id;
-                    changed = true;
-                  }
-                } else {
-                  if (f.bookingPlatform === connected) {
-                    next.bookingCredentialVaultId = newest.id;
-                    changed = true;
-                  }
-                  if (f.emailPlatform === connected) {
-                    next.emailCredentialVaultId = newest.id;
-                    changed = true;
-                  }
-                }
-                return changed ? next : f;
-              });
-            }
-          }
-          setComposioBanner({ kind: "ok", message: `${connected} connected.` });
-        } catch {
-          setComposioBanner({
-            kind: "error",
-            message: `${connected} connected, but couldn't auto-select it here — pick it from "Reuse saved" instead.`,
-          });
-        }
-      })();
-    }
-
-    const url = new URL(window.location.href);
-    url.searchParams.delete("composio_connected");
-    url.searchParams.delete("composio_error");
-    router.replace(`${url.pathname}${url.search}`, { scroll: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function set(field: keyof FormData, value: string | boolean) {
-    setForm((f) => ({ ...f, [field]: value }));
-  }
-
-  function addTestimonial() {
-    setForm((f) => ({
-      ...f,
-      testimonials: [
-        ...f.testimonials,
-        { name: "", role: "", company: "", quote: "" },
-      ],
-    }));
-  }
-
-  function updateTestimonial(index: number, field: keyof Testimonial, value: string) {
-    setForm((f) => ({
-      ...f,
-      testimonials: f.testimonials.map((t, i) => (i === index ? { ...t, [field]: value } : t)),
-    }));
-  }
-
-  function removeTestimonial(index: number) {
-    setForm((f) => ({
-      ...f,
-      testimonials: f.testimonials.filter((_, i) => i !== index),
-    }));
-  }
 
   async function submit() {
+    const trimmed = buyerName.trim();
+    if (!trimmed) return;
     setSubmitting(true);
     setError(null);
-
-    // ── Pre-flight validation gate ──
-    const validationErrors = getValidationErrors(form);
-    if (validationErrors.length > 0) {
-      setError(`Cannot finish setup yet — ${validationErrors.length} requirement(s) missing. Scroll up to see the checklist.`);
-      setSubmitting(false);
-      return;
-    }
-
-    const payload = buildEngagementPayload(form);
-
     try {
-      const res = await fetch("/api/engagements/setup", {
+      const res = await fetch("/api/engagements/minimal-create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ buyerName: trimmed }),
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error ?? "Setup failed. Check the fields and try again.");
-        setSubmitting(false);
-        return;
-      }
-
-      clearDraft();
-      deleteServerDraft();
-      setReadyToLaunch({ engagementId: data.engagementId, buyerName: form.buyerName });
-      setSubmitting(false);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Unknown error";
-      setError(
-        message === "Failed to fetch"
-          ? "Couldn't reach the server. Check your connection and try again — nothing was set up yet."
-          : message
-      );
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error ?? "Could not create client.");
+      router.push(`/dashboard/engagements/${body.engagementId}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create client.");
       setSubmitting(false);
     }
-  }
-
-  const allValidationErrors = getValidationErrors(form);
-
-  if (readyToLaunch) {
-    return (
-      <LaunchStep
-        engagementId={readyToLaunch.engagementId}
-        buyerName={readyToLaunch.buyerName}
-        onBack={() => setReadyToLaunch(null)}
-      />
-    );
   }
 
   return (
-    <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
-      {/* --- HYPER-MICRO TIGHT DOT GRID (exact match from app/dashboard/page.tsx) --- */}
-      <div 
-        className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" 
-        aria-hidden="true"
-      />
-
-      <div className="relative z-10 space-y-6 w-full max-w-none px-1">
-        {/* Header */}
-        <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
-          <h1 className="text-lg font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-            Set Up a New Client
-          </h1>
-          <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-            A one-time setup. Connect their booking calendar and email tool, and teach the system their brand voice — saving takes you straight into picking which skills to turn on.
+    <div className="flex items-center justify-center min-h-[70vh] px-4 font-sans antialiased">
+      <div className="w-full max-w-md space-y-5">
+        <div className="space-y-1.5 text-center">
+          <h1 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">Create a client</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
+            Just a name for now — you&apos;ll pick which workers to set up (Pin-Down, Identity Setup, or both) on their own page right after.
           </p>
         </div>
 
-        <StepIndicator steps={STEPS} current={step} />
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-5 space-y-4 shadow-sm">
+          <InputField
+            label="Client name"
+            required
+            value={buyerName}
+            onChange={setBuyerName}
+            placeholder="Acme Roofing Co."
+            helpText="The person or business you're running this for."
+          />
 
-        {composioBanner && (
-          <div
-            className={`rounded-lg p-3 flex items-center justify-between gap-3 text-xs shadow-xs border ${
-              composioBanner.kind === "ok"
-                ? "border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400"
-                : "border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400"
-            }`}
-          >
-            <span>{composioBanner.message}</span>
-            <button
-              type="button"
-              onClick={() => setComposioBanner(null)}
-              className="shrink-0 opacity-70 hover:opacity-100 cursor-pointer font-mono"
-            >
-              [ Dismiss ]
-            </button>
-          </div>
-        )}
-
-        {showRestoredBanner && (
-          <div
-            className="rounded-lg p-3 flex items-center justify-between gap-3 text-xs shadow-xs"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-          >
-            <span style={{ color: "var(--text-muted)" }}>
-              Restored your in-progress setup from before the last refresh. API keys were not saved and need to be re-entered.
-            </span>
-            <div className="flex items-center gap-2 shrink-0 font-mono">
-              <button
-                type="button"
-                onClick={() => setShowRestoredBanner(false)}
-                className="px-2 py-1 rounded-sm hover:opacity-80 cursor-pointer"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                [ Keep Draft ]
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  discardDraft();
-                  smartPrefill.resetPrefill();
-                  emailIntegrations.resetIntegrations();
-                }}
-                className="px-2 py-1 rounded-sm border bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer font-bold"
-              >
-                [ Dismiss & Clear All ]
-              </button>
+          {error && (
+            <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">
+              {error}
             </div>
-          </div>
-        )}
-
-        <div className="bg-transparent space-y-6 pt-2">
-          {step === "offer" && (
-            <OfferStep
-              form={form}
-              set={set}
-              prefillDomain={smartPrefill.prefillDomain}
-              setPrefillDomain={smartPrefill.setPrefillDomain}
-              prefillLoading={smartPrefill.prefillLoading}
-              prefillError={smartPrefill.prefillError}
-              prefillNotes={smartPrefill.prefillNotes}
-              runSmartPrefill={smartPrefill.runSmartPrefill}
-            />
           )}
 
-          {step === "stack" && <StackStep form={form} set={set} />}
-
-          {step === "credentials" && (
-            <CredentialsStep
-              form={form}
-              set={set}
-              bookingOptions={emailIntegrations.bookingOptions}
-              fetchingBookingOptions={emailIntegrations.fetchingBookingOptions}
-              bookingOptionsError={emailIntegrations.bookingOptionsError}
-              klaviyoLists={emailIntegrations.klaviyoLists}
-              fetchingLists={emailIntegrations.fetchingLists}
-              listsFetchError={emailIntegrations.listsFetchError}
-              klaviyoMissingKeyMessage={emailIntegrations.klaviyoMissingKeyMessage}
-              acLists={emailIntegrations.acLists}
-              fetchingAcLists={emailIntegrations.fetchingAcLists}
-              acListsError={emailIntegrations.acListsError}
-              ghlLocations={emailIntegrations.ghlLocations}
-              fetchingGhlLocations={emailIntegrations.fetchingGhlLocations}
-              ghlLocationsError={emailIntegrations.ghlLocationsError}
-              ghlWorkflows={emailIntegrations.ghlWorkflows}
-              fetchingGhlWorkflows={emailIntegrations.fetchingGhlWorkflows}
-              ghlWorkflowsError={emailIntegrations.ghlWorkflowsError}
-            />
-          )}
-
-          {step === "voice" && (
-            <VoiceStep
-              form={form}
-              set={set}
-              addTestimonial={addTestimonial}
-              updateTestimonial={updateTestimonial}
-              removeTestimonial={removeTestimonial}
-            />
-          )}
-
-          {step === "confirm" && (
-            <ConfirmStep
-              form={form}
-              allValidationErrors={allValidationErrors}
-              setStep={setStep}
-              error={error}
-            />
-          )}
-        </div>
-
-        {/* Navigation footer buttons */}
-        <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
           <button
             type="button"
-            onClick={() => {
-              const idx = STEPS.findIndex((s) => s.id === step);
-              if (idx > 0) setStep(STEPS[idx - 1].id);
-            }}
-            disabled={step === "offer"}
-            className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
+            onClick={submit}
+            disabled={submitting || !buyerName.trim()}
+            className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-zinc-900 dark:bg-white px-4 py-2.5 text-sm font-bold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity cursor-pointer"
           >
-            Back
+            {submitting ? <Loader2 size={15} className="animate-spin" /> : <ArrowRight size={15} />}
+            Create client
           </button>
-
-          {step !== "confirm" ? (
-            <button
-              type="button"
-              onClick={() => {
-                const idx = STEPS.findIndex((s) => s.id === step);
-                if (idx < STEPS.length - 1) setStep(STEPS[idx + 1].id);
-              }}
-              disabled={!isCurrentStepValid(form, step)}
-              className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
-            >
-              Next
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={submit}
-              disabled={submitting || allValidationErrors.length > 0}
-              className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
-            >
-              {submitting ? "Saving..." : "Save Setup"}
-            </button>
-          )}
         </div>
       </div>
     </div>

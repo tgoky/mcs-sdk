@@ -113,6 +113,9 @@ export function QueueFixDrawer({
               bookingPlatform={stack?.booking_platform ?? null}
               emailPlatform={stack?.email_platform ?? null}
               conversationIntelligenceProvider={stack?.conversation_intelligence_provider ?? null}
+              hostingPlatform={stack?.hosting_platform ?? null}
+              smsPlatform={stack?.sms_platform ?? null}
+              adDataPlatform={stack?.ad_data_platform ?? null}
               vaultLinksByProvider={vaultLinksByProvider}
               embedded
               onRequestClose={handleSuccess}

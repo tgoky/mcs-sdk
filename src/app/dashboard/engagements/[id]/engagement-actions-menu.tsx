@@ -56,7 +56,17 @@ export function EngagementActionsMenu({
   const [stackHighlightSection, setStackHighlightSection] = useState<string | null>(null);
 
   const conversationIntelligenceProvider = initialStack?.conversation_intelligence_provider ?? null;
-  const hasCredentialsForm = Boolean(bookingPlatform || emailPlatform || conversationIntelligenceProvider === "recall_ai");
+  const hostingPlatform = initialStack?.hosting_platform ?? null;
+  const smsPlatform = initialStack?.sms_platform ?? null;
+  const adDataPlatform = initialStack?.ad_data_platform ?? null;
+  const hasCredentialsForm = Boolean(
+    bookingPlatform ||
+      emailPlatform ||
+      conversationIntelligenceProvider === "recall_ai" ||
+      hostingPlatform ||
+      (smsPlatform && smsPlatform !== "none") ||
+      (adDataPlatform && adDataPlatform !== "none")
+  );
 
   function openStackSettings(highlightSection?: string) {
     setStackHighlightSection(highlightSection ?? null);
@@ -166,6 +176,9 @@ export function EngagementActionsMenu({
             bookingPlatform={bookingPlatform}
             emailPlatform={emailPlatform}
             conversationIntelligenceProvider={conversationIntelligenceProvider}
+            hostingPlatform={hostingPlatform}
+            smsPlatform={smsPlatform}
+            adDataPlatform={adDataPlatform}
             vaultLinksByProvider={vaultLinksByProvider}
             embedded
             onRequestClose={() => setActiveModal(null)}

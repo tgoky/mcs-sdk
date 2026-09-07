@@ -347,6 +347,14 @@ export function EditStackSettings({
   // actually read to decide this client's local hour for nightly briefs,
   // credential-health checks, the lost-deal sweep, and weekly metrics.
   const [timezone, setTimezone] = useState(initialStack?.timezone ?? "UTC");
+
+  // Phase 6 addition — real fields with no other edit path anywhere in
+  // the app before this (only ever settable during the big new-engagement
+  // wizard). briefLandingDestination defaults to "slack" matching
+  // brief-service.ts's own read-side default when unset.
+  const [briefLandingDestination, setBriefLandingDestination] = useState(initialStack?.brief_landing_destination ?? "slack");
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState(initialStack?.slack_webhook_url ?? "");
+
   const otherTimezones = useMemo(
     () => allTimezones().filter((tz) => !COMMON_TIMEZONES.some((c) => c.value === tz)),
     []
@@ -439,6 +447,8 @@ export function EditStackSettings({
             ...(conversationIntelligenceProvider ? { conversation_intelligence_provider: conversationIntelligenceProvider } : {}),
             ...(effectiveWebhookMode ? { webhook_receiver_mode: effectiveWebhookMode } : {}),
             ...(timezone ? { timezone } : {}),
+            ...(briefLandingDestination ? { brief_landing_destination: briefLandingDestination } : {}),
+            ...(slackWebhookUrl.trim() ? { slack_webhook_url: slackWebhookUrl.trim() } : {}),
             ...(Object.keys(conversationIntelligenceMetaPayload).length > 0
               ? { conversation_intelligence_meta: conversationIntelligenceMetaPayload }
               : {}),
@@ -532,6 +542,44 @@ export function EditStackSettings({
               this client — each runs at this client&apos;s local hour, not the server&apos;s.
             </p>
           </label>
+        </div>
+
+        {/* Notifications */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <GroupHeading>Notifications</GroupHeading>
+          <div />
+          <label className="space-y-1 block">
+            <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">
+              Brief landing destination
+            </span>
+            <select
+              value={briefLandingDestination}
+              onChange={(e) => { setBriefLandingDestination(e.target.value as typeof briefLandingDestination); setSaved(false); }}
+              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
+            >
+              <option value="slack">Slack message</option>
+              <option value="crm_note">Note in your CRM</option>
+              <option value="calendar_event">Calendar event</option>
+            </select>
+          </label>
+          {briefLandingDestination === "slack" && (
+            <label className="space-y-1 block">
+              <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">
+                Slack webhook URL
+              </span>
+              <input
+                type="text"
+                value={slackWebhookUrl}
+                onChange={(e) => { setSlackWebhookUrl(e.target.value); setSaved(false); }}
+                placeholder="https://hooks.slack.com/services/..."
+                className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
+              />
+            </label>
+          )}
+          <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed sm:col-span-2">
+            Also where Leak Map and Crisis Response deliver alerts, not just Call Brief — one webhook, shared across
+            whatever&apos;s enabled for this client.
+          </p>
         </div>
 
         {/* Booking */}

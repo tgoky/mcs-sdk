@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { KeyRound, Link2, Check } from "lucide-react";
-import { bookingPlatformLabel, emailPlatformLabel, conversationIntelligenceProviderLabel } from "@/lib/copy";
+import { bookingPlatformLabel, emailPlatformLabel, conversationIntelligenceProviderLabel, hostingPlatformLabel, smsPlatformLabel, adDataPlatformLabel } from "@/lib/copy";
 
 interface VaultCredential {
   id: string;
@@ -254,6 +254,9 @@ export function UpdateCredentialsForm({
   bookingPlatform,
   emailPlatform,
   conversationIntelligenceProvider,
+  hostingPlatform,
+  smsPlatform,
+  adDataPlatform,
   vaultLinksByProvider,
   embedded = false,
   onRequestClose,
@@ -262,6 +265,14 @@ export function UpdateCredentialsForm({
   bookingPlatform?: string | null;
   emailPlatform?: string | null;
   conversationIntelligenceProvider?: string | null;
+  // Phase 6 addition — hosting/sms/ad-data platform choice previously had
+  // no credential UI anywhere post-creation (only settable during the big
+  // new-engagement wizard). "none" is a real, valid sms_platform/
+  // ad_data_platform value (not connected), so those two are only shown
+  // when set to something else.
+  hostingPlatform?: string | null;
+  smsPlatform?: string | null;
+  adDataPlatform?: string | null;
   vaultLinksByProvider?: Record<string, string | null>;
   embedded?: boolean;
   onRequestClose?: () => void;
@@ -269,7 +280,9 @@ export function UpdateCredentialsForm({
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(() => searchParams.get("fixCredential") === "1" || embedded);
   const hasRecall = conversationIntelligenceProvider === "recall_ai";
-  if (!bookingPlatform && !emailPlatform && !hasRecall) return null;
+  const hasSms = !!smsPlatform && smsPlatform !== "none";
+  const hasAdData = !!adDataPlatform && adDataPlatform !== "none";
+  if (!bookingPlatform && !emailPlatform && !hasRecall && !hostingPlatform && !hasSms && !hasAdData) return null;
 
   if (!open) {
     if (embedded) return null;
@@ -326,6 +339,36 @@ export function UpdateCredentialsForm({
             provider="recall_ai"
             label={`${conversationIntelligenceProviderLabel("recall_ai")} key`}
             currentlyLinkedVaultId={vaultLinksByProvider?.["recall_ai"]}
+            embedded={embedded}
+            onRequestClose={onRequestClose}
+          />
+        )}
+        {hostingPlatform && (
+          <CredentialRow
+            engagementId={engagementId}
+            provider={hostingPlatform}
+            label={`${hostingPlatformLabel(hostingPlatform)} key`}
+            currentlyLinkedVaultId={vaultLinksByProvider?.[hostingPlatform]}
+            embedded={embedded}
+            onRequestClose={onRequestClose}
+          />
+        )}
+        {hasSms && (
+          <CredentialRow
+            engagementId={engagementId}
+            provider={smsPlatform!}
+            label={`${smsPlatformLabel(smsPlatform)} key`}
+            currentlyLinkedVaultId={vaultLinksByProvider?.[smsPlatform!]}
+            embedded={embedded}
+            onRequestClose={onRequestClose}
+          />
+        )}
+        {hasAdData && (
+          <CredentialRow
+            engagementId={engagementId}
+            provider={adDataPlatform!}
+            label={`${adDataPlatformLabel(adDataPlatform)} key`}
+            currentlyLinkedVaultId={vaultLinksByProvider?.[adDataPlatform!]}
             embedded={embedded}
             onRequestClose={onRequestClose}
           />
