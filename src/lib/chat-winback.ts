@@ -28,6 +28,7 @@ import type { EngagementStack } from "@/models/schema";
 import crypto from "crypto";
 
 type EnrollResult = { ok: true; enrollmentId: string } | { ok: false; error: string };
+type PreviewResult = { ok: true; actions: string[] } | { ok: false; error: string };
 
 function missingMetaFor(platform: string, stack: Partial<EngagementStack>): string | null {
   if (platform === "klaviyo" && !stack.recovery_list_id) return "recovery_list_id isn't configured for Klaviyo yet — set that up on the client's page first.";
@@ -38,6 +39,62 @@ function missingMetaFor(platform: string, stack: Partial<EngagementStack>): stri
     return "GoHighLevel win-back needs a location id and recovery_workflow_id configured on the client's page first.";
   }
   return null;
+}
+
+/**
+ * Read-only mirror of enrollProspectInWinBack's own validation chain —
+ * runs the exact same checks (email platform connected, SMTP declined,
+ * per-platform meta present, no existing active enrollment) without ever
+ * calling enrollInWinBackSequence or writing a row. Unlike Pile-On's
+ * preview/enroll pair (chat-pile-on.ts), there's no force override here:
+ * an existing active enrollment for this exact prospect is a genuine
+ * "they're already in this cadence" state, not a soft/probabilistic
+ * duplicate signal — enrolling again would mean two live recovery
+ * cadences messaging the same person, not a one-time re-check worth
+ * overriding.
+ */
+export async function previewManualWinBackEnrollment(opts: {
+  engagementId: string;
+  workspaceId: string;
+  prospectEmail: string;
+}): Promise<PreviewResult> {
+  const [engagement] = await db
+    .select({ stack: engagements.stack })
+    .from(engagements)
+    .where(and(eq(engagements.engagementId, opts.engagementId), eq(engagements.workspaceId, opts.workspaceId)))
+    .limit(1);
+  if (!engagement) return { ok: false, error: "Client not found." };
+
+  const stack = (engagement.stack as Partial<EngagementStack> | null) ?? {};
+  if (!stack.email_platform || !stack.email_platform_credentials_ref) {
+    return { ok: false, error: "No email platform connected for this client yet — connect one before trying a win-back." };
+  }
+
+  if (stack.email_platform === "smtp") {
+    return {
+      ok: false,
+      error:
+        "Direct-send (SMTP) win-back runs as a durable background sequence that isn't wired up for manual enrollment yet — only Klaviyo/HubSpot/ActiveCampaign/GoHighLevel can be triggered this way right now.",
+    };
+  }
+
+  const metaError = missingMetaFor(stack.email_platform, stack);
+  if (metaError) return { ok: false, error: metaError };
+
+  const [existingActive] = await db
+    .select({ id: winBackEnrollments.id })
+    .from(winBackEnrollments)
+    .where(
+      and(
+        eq(winBackEnrollments.engagementId, opts.engagementId),
+        eq(winBackEnrollments.prospectEmail, opts.prospectEmail),
+        eq(winBackEnrollments.status, "active")
+      )
+    )
+    .limit(1);
+  if (existingActive) return { ok: false, error: `${opts.prospectEmail} is already in an active recovery cadence — no need to enroll again.` };
+
+  return { ok: true, actions: [`Would enroll ${opts.prospectEmail} in ${stack.email_platform}'s win-back recovery cadence.`] };
 }
 
 export async function enrollProspectInWinBack(opts: {

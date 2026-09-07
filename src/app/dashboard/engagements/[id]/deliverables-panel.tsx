@@ -19,6 +19,7 @@ import {
   Camera,
   Shirt
 } from "lucide-react";
+import { RunPinDownPieceButton } from "./run-pin-down-piece-button";
 
 const PILLAR_LABELS: Record<string, string> = {
   common_questions: "Common Questions Brief",
@@ -347,6 +348,17 @@ export function DeliverablesPanel({
                 </p>
               </div>
             )}
+
+            <div className={isAiExtracted ? "pt-3 border-t border-zinc-200 dark:border-zinc-800" : ""}>
+              <RunPinDownPieceButton
+                engagementId={engagementId}
+                piece="voice"
+                inputLabel={isAiExtracted ? "Re-run extraction from a domain" : "Website domain"}
+                inputPlaceholder="example.com"
+                defaultValue={discoveryPrefill?.domain ?? ""}
+                buttonLabel={isAiExtracted ? "Re-run" : "Run extraction"}
+              />
+            </div>
 
             {discoveryPrefill && (
               <div className="space-y-2">
@@ -704,6 +716,34 @@ export function DeliverablesPanel({
                   ))}
                 </ul>
               </div>
+            </div>
+          </DeliverableRow>
+        )}
+
+        {/* EXISTING PAGE AUDIT — EMPTY STATE (no audit run yet) */}
+        {!pinDownPageAudit && (
+          <DeliverableRow
+            id="page_audit_empty"
+            isOpen={openRowId === "page_audit_empty"}
+            onToggle={() => toggleRow("page_audit_empty")}
+            icon={FileText}
+            squircleClass="bg-zinc-300 text-zinc-950 dark:bg-zinc-800 dark:text-zinc-200"
+            title="Existing Confirmation Page Audit"
+            subtitle="Not run yet"
+          >
+            <div className="space-y-3 pt-1 text-xs">
+              <p className="text-zinc-600 dark:text-zinc-400">
+                Reviews an existing confirmation page against what a well-built one should include (hero video, what-to-expect, breakout content,
+                social proof, reschedule path) and notes concrete gaps. Doesn&apos;t build or deploy a new page — only audits one that already exists.
+              </p>
+              <RunPinDownPieceButton
+                engagementId={engagementId}
+                piece="page_audit"
+                inputLabel="Confirmation page URL"
+                inputPlaceholder="https://example.com/booked"
+                defaultValue={discoveryPrefill?.existingConfirmationPageUrl ?? ""}
+                buttonLabel="Run audit"
+              />
             </div>
           </DeliverableRow>
         )}

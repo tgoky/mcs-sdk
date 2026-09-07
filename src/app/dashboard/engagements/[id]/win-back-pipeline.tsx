@@ -15,9 +15,10 @@ import {
   Copy, 
   Check, 
   Clock, 
-  RefreshCw, 
+  RefreshCw,
   CalendarDays,
-  Link2
+  Link2,
+  UserPlus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dateKey } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
@@ -26,6 +27,7 @@ import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import { formatDiaryDateTime } from "@/lib/format-datetime";
 import { exitReasonLabel } from "@/lib/copy";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { WinBackManualEnrollModal } from "./win-back-manual-enroll-modal";
 import type { WinBackPipelineItem, WinBackEnrollmentStatus } from "@/app/api/engagements/[id]/win-back-pipeline/route";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
@@ -82,6 +84,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
   const [filterText, setFilterText] = useState("");
   const [copiedLink, setCopiedLink] = useState(false);
   const [showRunActivity, setShowRunActivity] = useState(false);
+  const [showManualEnroll, setShowManualEnroll] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -279,6 +282,16 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
             className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowManualEnroll(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            title="Manually enroll a prospect who cancelled outside a connected webhook"
+          >
+            <UserPlus size={13} />
+            <span className="hidden sm:inline">Manually enroll</span>
           </button>
         </div>
       </div>
@@ -589,6 +602,14 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
           )}
         </div>
       </div>
+
+      {showManualEnroll && (
+        <WinBackManualEnrollModal
+          engagementId={engagementId}
+          onClose={() => setShowManualEnroll(false)}
+          onEnrolled={load}
+        />
+      )}
     </div>
   );
 }
