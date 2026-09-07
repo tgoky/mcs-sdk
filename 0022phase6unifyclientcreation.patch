@@ -1,0 +1,978 @@
+From 998edb0f14d60a7a97c6075e4b6d269286a3a820 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 7 Sep 2026 14:06:09 +0000
+Subject: [PATCH] feat: unify client creation into one entry point (Phase 6)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Replaces the two separate "new client" wizards with one minimal,
+name-only creation flow — real per-worker setup (Pin-Down, Identity
+Setup, or both) happens on the client's own page afterward, same as an
+engagement created through Teammates chat already works.
+
+- New POST /api/engagements/minimal-create, calling the same
+  createMinimalEngagement chat's create_client tool already uses.
+- /dashboard/engagements/new replaced with a single client-name field
+  (was a 5-step Showtime-only wizard: offer/stack/credentials/confirm/
+  launch).
+- /dashboard/reputation-manager/new replaced with a redirect to the
+  unified page (verified zero field gap: same IdentityGraphForm/
+  saveRepIdentityGraphIntake as bridges/rep-onboarding).
+- engagements/page.tsx's two product-conditional links simplified to
+  the one unified URL.
+
+Closed the real field gaps found in the old Showtime wizard before
+retiring it, so nothing is lost by deferring setup off the create step:
+- slack_webhook_url was writable only via engagement setup — added to
+  the PATCH allowlist and to EditStackSettings' new Notifications
+  section (blocking: Leak Map/Crisis Response alert delivery had no
+  other UI).
+- hosting/SMS/ad-data platform credentials had no UI anywhere outside
+  the old wizard — added to UpdateCredentialsForm and both its callers
+  (blocking: those fields would've become permanently unreachable).
+- 8 more fields (target/recovery list & workflow ids, activecampaign
+  base url, hubspot portal id, long-term nurture list id, sms a2p/
+  compliance-footer fields, ad data cohort id, publish domain, booking
+  standing link, brief landing destination) added to the PATCH
+  allowlist with matching enum validation where applicable.
+
+The old wizard's step components (steps/, draft-storage.ts,
+use-draft-persistence.ts, etc.) are left in place, unrouted rather than
+deleted — form-fields.tsx in the same directory is still a real
+dependency of identity-graph-form.tsx, and the rest weren't
+exhaustively traced for zero remaining references. Follow-up cleanup,
+not done here.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01RyH3xjJh5mTzvTxG4Rpbpi
+---
+ src/app/api/engagements/[id]/route.ts         |  44 ++
+ .../api/engagements/minimal-create/route.ts   |  42 ++
+ .../engagements/[id]/edit-stack-settings.tsx  |  48 ++
+ .../[id]/engagement-actions-menu.tsx          |  15 +-
+ .../[id]/update-credentials-form.tsx          |  47 +-
+ src/app/dashboard/engagements/new/page.tsx    | 437 +++---------------
+ src/app/dashboard/engagements/page.tsx        |   4 +-
+ .../dashboard/reputation-manager/new/page.tsx |  84 +---
+ src/components/queue-fix-drawer.tsx           |   3 +
+ 9 files changed, 277 insertions(+), 447 deletions(-)
+ create mode 100644 src/app/api/engagements/minimal-create/route.ts
+
+diff --git a/src/app/api/engagements/[id]/route.ts b/src/app/api/engagements/[id]/route.ts
+index f89638c..b2e1a83 100644
+--- a/src/app/api/engagements/[id]/route.ts
++++ b/src/app/api/engagements/[id]/route.ts
+@@ -124,6 +124,12 @@ const EDITABLE_SMS_PLATFORMS = ["twilio", "ghl_sms", "hubspot_sms", "none"] as c
+ 
+ const EDITABLE_AD_DATA_PLATFORMS = ["hyros", "native_crm", "google_sheets", "none"] as const;
+ 
++// Added for Phase 6 — same real-field allowlist discipline as the 5
++// platform-choice arrays above, for the 3 newly-editable enum fields.
++const EDITABLE_SMS_A2P_STATUSES = ["not_started", "brand_registered", "campaign_approved"] as const;
++const EDITABLE_SMS_FOOTER_VARIANTS = ["standard", "custom"] as const;
++const EDITABLE_BRIEF_DESTINATIONS = ["slack", "crm_note", "calendar_event"] as const;
++
+ const EDITABLE_WEBHOOK_MODES = ["webhook", "polling", "none"] as const;
+ 
+ const EDITABLE_CONVERSATION_INTELLIGENCE_PROVIDERS = ["recall_ai", "none"] as const;
+@@ -146,6 +152,23 @@ const EDITABLE_FLAT_STRING_FIELDS = [
+   "target_workflow_id",
+   "activecampaign_base_url",
+   "hubspot_portal_id",
++  // Added for Phase 6 — confirmed real fields the big new-engagement
++  // wizard collects with NO other post-creation write path anywhere in
++  // the app (traced each one to its only read-site before adding): a
++  // client created via minimal-create (or one who skipped these in the
++  // wizard) had no way to ever set them. slack_webhook_url is the most
++  // consequential — a cross-skill notification target (Leak Map, Crisis
++  // Response, alert-monitor.ts all read it), not Pin-Down-specific, so it
++  // belongs here rather than in any one bridge page.
++  "slack_webhook_url",
++  "long_term_nurture_list_id",
++  "sms_a2p_10dlc_status",
++  "sms_compliance_footer_variant",
++  "sms_compliance_footer_custom",
++  "ad_data_cohort_id",
++  "publish_domain",
++  "booking_standing_link",
++  "brief_landing_destination",
+ ] as const;
+ 
+ /**
+@@ -310,6 +333,27 @@ export async function PATCH(
+     ) {
+       return NextResponse.json({ error: `Invalid ad_data_platform: ${incoming.ad_data_platform}` }, { status: 400 });
+     }
++    if (
++      incoming.sms_a2p_10dlc_status !== undefined &&
++      incoming.sms_a2p_10dlc_status !== null &&
++      !EDITABLE_SMS_A2P_STATUSES.includes(incoming.sms_a2p_10dlc_status)
++    ) {
++      return NextResponse.json({ error: `Invalid sms_a2p_10dlc_status: ${incoming.sms_a2p_10dlc_status}` }, { status: 400 });
++    }
++    if (
++      incoming.sms_compliance_footer_variant !== undefined &&
++      incoming.sms_compliance_footer_variant !== null &&
++      !EDITABLE_SMS_FOOTER_VARIANTS.includes(incoming.sms_compliance_footer_variant)
++    ) {
++      return NextResponse.json({ error: `Invalid sms_compliance_footer_variant: ${incoming.sms_compliance_footer_variant}` }, { status: 400 });
++    }
++    if (
++      incoming.brief_landing_destination !== undefined &&
++      incoming.brief_landing_destination !== null &&
++      !EDITABLE_BRIEF_DESTINATIONS.includes(incoming.brief_landing_destination)
++    ) {
++      return NextResponse.json({ error: `Invalid brief_landing_destination: ${incoming.brief_landing_destination}` }, { status: 400 });
++    }
+     if (
+       incoming.webhook_receiver_mode !== undefined &&
+       incoming.webhook_receiver_mode !== null &&
+diff --git a/src/app/api/engagements/minimal-create/route.ts b/src/app/api/engagements/minimal-create/route.ts
+new file mode 100644
+index 0000000..e2aed08
+--- /dev/null
++++ b/src/app/api/engagements/minimal-create/route.ts
+@@ -0,0 +1,42 @@
++// src/app/api/engagements/minimal-create/route.ts
++//
++// Phase 6 — the one "create a client" entry point, replacing the two
++// separate wizards (/dashboard/engagements/new's multi-step Showtime flow
++// and /dashboard/reputation-manager/new's identity-graph flow). Calls the
++// exact same createMinimalEngagement Teammates chat's create_client tool
++// already uses — not a second, drifting implementation of "insert a bare
++// engagement row." Name only, product-agnostic: which workers actually
++// get set up afterward (Pin-Down, Identity Setup, both, neither yet) is a
++// decision made on the engagement's own Library page, not at creation
++// time — same real behavior a chat-created client already has, now the
++// same for one created through this page too.
++
++import { NextResponse } from "next/server";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { createMinimalEngagement } from "@/lib/create-minimal-engagement";
++
++export const runtime = "nodejs";
++
++export async function POST(req: Request) {
++  try {
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++
++    const body = await req.json().catch(() => ({}));
++    const buyerName = typeof body?.buyerName === "string" ? body.buyerName.trim() : "";
++    if (!buyerName) {
++      return NextResponse.json({ error: "A client name is required." }, { status: 400 });
++    }
++
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++    const { engagementId } = await createMinimalEngagement({ whopUserId: session.whopUserId, workspaceId: activeWorkspace.workspaceId, buyerName });
++
++    return NextResponse.json({ engagementId });
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : String(error);
++    return NextResponse.json({ error: message }, { status: 500 });
++  }
++}
+diff --git a/src/app/dashboard/engagements/[id]/edit-stack-settings.tsx b/src/app/dashboard/engagements/[id]/edit-stack-settings.tsx
+index b47bd21..08f1dc0 100644
+--- a/src/app/dashboard/engagements/[id]/edit-stack-settings.tsx
++++ b/src/app/dashboard/engagements/[id]/edit-stack-settings.tsx
+@@ -347,6 +347,14 @@ export function EditStackSettings({
+   // actually read to decide this client's local hour for nightly briefs,
+   // credential-health checks, the lost-deal sweep, and weekly metrics.
+   const [timezone, setTimezone] = useState(initialStack?.timezone ?? "UTC");
++
++  // Phase 6 addition — real fields with no other edit path anywhere in
++  // the app before this (only ever settable during the big new-engagement
++  // wizard). briefLandingDestination defaults to "slack" matching
++  // brief-service.ts's own read-side default when unset.
++  const [briefLandingDestination, setBriefLandingDestination] = useState(initialStack?.brief_landing_destination ?? "slack");
++  const [slackWebhookUrl, setSlackWebhookUrl] = useState(initialStack?.slack_webhook_url ?? "");
++
+   const otherTimezones = useMemo(
+     () => allTimezones().filter((tz) => !COMMON_TIMEZONES.some((c) => c.value === tz)),
+     []
+@@ -439,6 +447,8 @@ export function EditStackSettings({
+             ...(conversationIntelligenceProvider ? { conversation_intelligence_provider: conversationIntelligenceProvider } : {}),
+             ...(effectiveWebhookMode ? { webhook_receiver_mode: effectiveWebhookMode } : {}),
+             ...(timezone ? { timezone } : {}),
++            ...(briefLandingDestination ? { brief_landing_destination: briefLandingDestination } : {}),
++            ...(slackWebhookUrl.trim() ? { slack_webhook_url: slackWebhookUrl.trim() } : {}),
+             ...(Object.keys(conversationIntelligenceMetaPayload).length > 0
+               ? { conversation_intelligence_meta: conversationIntelligenceMetaPayload }
+               : {}),
+@@ -534,6 +544,44 @@ export function EditStackSettings({
+           </label>
+         </div>
+ 
++        {/* Notifications */}
++        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
++          <GroupHeading>Notifications</GroupHeading>
++          <div />
++          <label className="space-y-1 block">
++            <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">
++              Brief landing destination
++            </span>
++            <select
++              value={briefLandingDestination}
++              onChange={(e) => { setBriefLandingDestination(e.target.value as typeof briefLandingDestination); setSaved(false); }}
++              className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
++            >
++              <option value="slack">Slack message</option>
++              <option value="crm_note">Note in your CRM</option>
++              <option value="calendar_event">Calendar event</option>
++            </select>
++          </label>
++          {briefLandingDestination === "slack" && (
++            <label className="space-y-1 block">
++              <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">
++                Slack webhook URL
++              </span>
++              <input
++                type="text"
++                value={slackWebhookUrl}
++                onChange={(e) => { setSlackWebhookUrl(e.target.value); setSaved(false); }}
++                placeholder="https://hooks.slack.com/services/..."
++                className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
++              />
++            </label>
++          )}
++          <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed sm:col-span-2">
++            Also where Leak Map and Crisis Response deliver alerts, not just Call Brief — one webhook, shared across
++            whatever&apos;s enabled for this client.
++          </p>
++        </div>
++
+         {/* Booking */}
+         <div
+           ref={bookingSectionRef}
+diff --git a/src/app/dashboard/engagements/[id]/engagement-actions-menu.tsx b/src/app/dashboard/engagements/[id]/engagement-actions-menu.tsx
+index e56568d..a40ecc5 100644
+--- a/src/app/dashboard/engagements/[id]/engagement-actions-menu.tsx
++++ b/src/app/dashboard/engagements/[id]/engagement-actions-menu.tsx
+@@ -56,7 +56,17 @@ export function EngagementActionsMenu({
+   const [stackHighlightSection, setStackHighlightSection] = useState<string | null>(null);
+ 
+   const conversationIntelligenceProvider = initialStack?.conversation_intelligence_provider ?? null;
+-  const hasCredentialsForm = Boolean(bookingPlatform || emailPlatform || conversationIntelligenceProvider === "recall_ai");
++  const hostingPlatform = initialStack?.hosting_platform ?? null;
++  const smsPlatform = initialStack?.sms_platform ?? null;
++  const adDataPlatform = initialStack?.ad_data_platform ?? null;
++  const hasCredentialsForm = Boolean(
++    bookingPlatform ||
++      emailPlatform ||
++      conversationIntelligenceProvider === "recall_ai" ||
++      hostingPlatform ||
++      (smsPlatform && smsPlatform !== "none") ||
++      (adDataPlatform && adDataPlatform !== "none")
++  );
+ 
+   function openStackSettings(highlightSection?: string) {
+     setStackHighlightSection(highlightSection ?? null);
+@@ -166,6 +176,9 @@ export function EngagementActionsMenu({
+             bookingPlatform={bookingPlatform}
+             emailPlatform={emailPlatform}
+             conversationIntelligenceProvider={conversationIntelligenceProvider}
++            hostingPlatform={hostingPlatform}
++            smsPlatform={smsPlatform}
++            adDataPlatform={adDataPlatform}
+             vaultLinksByProvider={vaultLinksByProvider}
+             embedded
+             onRequestClose={() => setActiveModal(null)}
+diff --git a/src/app/dashboard/engagements/[id]/update-credentials-form.tsx b/src/app/dashboard/engagements/[id]/update-credentials-form.tsx
+index 7c8fc91..4f19905 100644
+--- a/src/app/dashboard/engagements/[id]/update-credentials-form.tsx
++++ b/src/app/dashboard/engagements/[id]/update-credentials-form.tsx
+@@ -3,7 +3,7 @@
+ import { useEffect, useState } from "react";
+ import { useRouter, useSearchParams } from "next/navigation";
+ import { KeyRound, Link2, Check } from "lucide-react";
+-import { bookingPlatformLabel, emailPlatformLabel, conversationIntelligenceProviderLabel } from "@/lib/copy";
++import { bookingPlatformLabel, emailPlatformLabel, conversationIntelligenceProviderLabel, hostingPlatformLabel, smsPlatformLabel, adDataPlatformLabel } from "@/lib/copy";
+ 
+ interface VaultCredential {
+   id: string;
+@@ -254,6 +254,9 @@ export function UpdateCredentialsForm({
+   bookingPlatform,
+   emailPlatform,
+   conversationIntelligenceProvider,
++  hostingPlatform,
++  smsPlatform,
++  adDataPlatform,
+   vaultLinksByProvider,
+   embedded = false,
+   onRequestClose,
+@@ -262,6 +265,14 @@ export function UpdateCredentialsForm({
+   bookingPlatform?: string | null;
+   emailPlatform?: string | null;
+   conversationIntelligenceProvider?: string | null;
++  // Phase 6 addition — hosting/sms/ad-data platform choice previously had
++  // no credential UI anywhere post-creation (only settable during the big
++  // new-engagement wizard). "none" is a real, valid sms_platform/
++  // ad_data_platform value (not connected), so those two are only shown
++  // when set to something else.
++  hostingPlatform?: string | null;
++  smsPlatform?: string | null;
++  adDataPlatform?: string | null;
+   vaultLinksByProvider?: Record<string, string | null>;
+   embedded?: boolean;
+   onRequestClose?: () => void;
+@@ -269,7 +280,9 @@ export function UpdateCredentialsForm({
+   const searchParams = useSearchParams();
+   const [open, setOpen] = useState(() => searchParams.get("fixCredential") === "1" || embedded);
+   const hasRecall = conversationIntelligenceProvider === "recall_ai";
+-  if (!bookingPlatform && !emailPlatform && !hasRecall) return null;
++  const hasSms = !!smsPlatform && smsPlatform !== "none";
++  const hasAdData = !!adDataPlatform && adDataPlatform !== "none";
++  if (!bookingPlatform && !emailPlatform && !hasRecall && !hostingPlatform && !hasSms && !hasAdData) return null;
+ 
+   if (!open) {
+     if (embedded) return null;
+@@ -330,6 +343,36 @@ export function UpdateCredentialsForm({
+             onRequestClose={onRequestClose}
+           />
+         )}
++        {hostingPlatform && (
++          <CredentialRow
++            engagementId={engagementId}
++            provider={hostingPlatform}
++            label={`${hostingPlatformLabel(hostingPlatform)} key`}
++            currentlyLinkedVaultId={vaultLinksByProvider?.[hostingPlatform]}
++            embedded={embedded}
++            onRequestClose={onRequestClose}
++          />
++        )}
++        {hasSms && (
++          <CredentialRow
++            engagementId={engagementId}
++            provider={smsPlatform!}
++            label={`${smsPlatformLabel(smsPlatform)} key`}
++            currentlyLinkedVaultId={vaultLinksByProvider?.[smsPlatform!]}
++            embedded={embedded}
++            onRequestClose={onRequestClose}
++          />
++        )}
++        {hasAdData && (
++          <CredentialRow
++            engagementId={engagementId}
++            provider={adDataPlatform!}
++            label={`${adDataPlatformLabel(adDataPlatform)} key`}
++            currentlyLinkedVaultId={vaultLinksByProvider?.[adDataPlatform!]}
++            embedded={embedded}
++            onRequestClose={onRequestClose}
++          />
++        )}
+       </div>
+     </div>
+   );
+diff --git a/src/app/dashboard/engagements/new/page.tsx b/src/app/dashboard/engagements/new/page.tsx
+index d202cd8..f1866e6 100644
+--- a/src/app/dashboard/engagements/new/page.tsx
++++ b/src/app/dashboard/engagements/new/page.tsx
+@@ -1,409 +1,96 @@
+ "use client";
+ 
+-import { useEffect, useState } from "react";
+-import { useRouter, useSearchParams } from "next/navigation";
+-import { STEPS, DEFAULT_FORM } from "./constants";
+-import { clearDraft, deleteServerDraft } from "./draft-storage";
+-import { useDraftPersistence } from "./use-draft-persistence";
+-import { useEmailIntegrations } from "./use-email-integrations";
+-import { useSmartPrefill } from "./use-smart-prefill";
+-import { getValidationErrors, isCurrentStepValid } from "./validation";
+-import { buildEngagementPayload } from "./submit-payload";
+-import { StepIndicator } from "./form-fields";
+-import { OfferStep } from "./steps/offer-step";
+-import { StackStep } from "./steps/stack-step";
+-import { CredentialsStep } from "./steps/credentials-step";
+-import { VoiceStep } from "./steps/voice-step";
+-import { ConfirmStep } from "./steps/confirm-step";
+-import { LaunchStep } from "./steps/launch-step";
+-import type { FormData, Step, Testimonial } from "./types";
++// src/app/dashboard/engagements/new/page.tsx
++//
++// Phase 6 — replaces the old multi-step wizard (offer/stack/credentials/
++// confirm/launch) with the same minimal, name-only creation Teammates
++// chat's create_client tool already uses. Real setup — Pin-Down, Identity
++// Setup, or both — happens on the client's own Library/Workers page
++// afterward, exactly like it already does for a chat-created client; this
++// page no longer front-loads any of it. See create-minimal-engagement.ts
++// and worker-registry.ts's own Phase 5 work (every worker's real config
++// fields are now individually reachable from there, either through a
++// worker's own setup page or the dual-mode enable flow) for why deferring
++// this is safe rather than a regression.
++//
++// The old wizard's step components/helpers (steps/, credential-field.tsx,
++// draft-storage.ts, use-draft-persistence.ts, use-email-integrations.ts,
++// use-smart-prefill.ts, validation.ts, constants.ts, submit-payload.ts,
++// types.ts) are left in place, unrouted, rather than deleted in this same
++// pass — form-fields.tsx specifically is still a real, load-bearing
++// dependency (identity-graph-form.tsx imports InputField/TextAreaView
++// from it), and the rest weren't exhaustively traced for zero remaining
++// references before this page stopped routing to them. Dead code, not
++// verified-safe-to-delete code — a distinct, smaller follow-up.
++
++import { useState } from "react";
++import { useRouter } from "next/navigation";
++import { ArrowRight, Loader2 } from "lucide-react";
++import { InputField } from "./form-fields";
+ 
+ export default function NewEngagementPage() {
+   const router = useRouter();
+-  const searchParams = useSearchParams();
+-  const [step, setStep] = useState<Step>("offer");
+-  const [form, setForm] = useState<FormData>(DEFAULT_FORM);
++  const [buyerName, setBuyerName] = useState("");
+   const [submitting, setSubmitting] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+-  const [readyToLaunch, setReadyToLaunch] = useState<{ engagementId: string; buyerName: string } | null>(null);
+-  const [composioBanner, setComposioBanner] = useState<{ kind: "ok" | "error"; message: string } | null>(null);
+-
+-  const { showRestoredBanner, setShowRestoredBanner, discardDraft } = useDraftPersistence(
+-    form,
+-    step,
+-    setForm,
+-    setStep
+-  );
+-
+-  // Arriving here from an already-created client (the Products panel's
+-  // "Set up Showtime" link, once that's wired up) means form.engagementId
+-  // must end up as THAT client's id, not a freshly generated one —
+-  // otherwise submit-payload.ts's `form.engagementId || generateEngagementId(...)`
+-  // creates a second, orphaned row instead of finishing the one that
+-  // already exists.
+-  //
+-  // Deliberately no dependency array, and deliberately returns the SAME
+-  // object reference when nothing needs to change. useDraftPersistence's
+-  // own mount effect above can restore a draft asynchronously (its
+-  // server-draft fallback is awaited), so a normal mount-only effect here
+-  // could run before, after, or get clobbered by that restoration
+-  // depending on timing — a real race, not a hypothetical one. Running on
+-  // every render and only ever bailing out via reference equality (React's
+-  // documented bail-out for a functional update that returns the same
+-  // object it received) means this keeps re-asserting the prefill until
+-  // it sticks, then becomes a genuine no-op forever after — correct
+-  // regardless of which order the two effects actually resolve in.
+-  useEffect(() => {
+-    const prefillEngagementId = searchParams.get("engagementId");
+-    if (!prefillEngagementId) return;
+-    const prefillBuyerName = searchParams.get("buyerName");
+-    // Deferred via queueMicrotask, matching the Composio-callback effect
+-    // above — react-hooks/set-state-in-effect flags a setState call
+-    // synchronous with the effect body itself, not one deferred into a
+-    // microtask.
+-    queueMicrotask(() => {
+-      setForm((f) =>
+-        f.engagementId === prefillEngagementId && (!prefillBuyerName || f.buyerName === prefillBuyerName)
+-          ? f
+-          : { ...f, engagementId: prefillEngagementId, buyerName: prefillBuyerName ?? f.buyerName }
+-      );
+-    });
+-  });
+-
+-  const emailIntegrations = useEmailIntegrations(form, setForm);
+-  const smartPrefill = useSmartPrefill(setForm);
+-
+-  // Landed back here after a Composio "Connect" (see credential-field.tsx)
+-  // — /api/composio/callback appends composio_connected=<provider> or
+-  // composio_error=<message> to this page's URL. Runs once on mount only:
+-  // this only ever matters right after that specific redirect, and the
+-  // URL cleanup below removes the params before any re-render could
+-  // re-trigger it anyway.
+-  useEffect(() => {
+-    const connected = searchParams.get("composio_connected");
+-    const composioError = searchParams.get("composio_error");
+-    if (!connected && !composioError) return;
+-
+-    if (composioError) {
+-      // Deferred, not called directly here: a setState call synchronous
+-      // with the effect body itself is what react-hooks/set-state-in-effect
+-      // flags — the async branch just below already avoids this the same
+-      // way, since its setState calls only ever run inside the IIFE's
+-      // callback, never at the effect's top level.
+-      queueMicrotask(() => setComposioBanner({ kind: "error", message: composioError }));
+-    }
+-
+-    if (connected) {
+-      (async () => {
+-        try {
+-          const res = await fetch(`/api/credential-vault?provider=${encodeURIComponent(connected)}`);
+-          if (res.ok) {
+-            const data = await res.json();
+-            const items: { id: string; createdAt: string }[] = data.items ?? [];
+-            if (items.length > 0) {
+-              const newest = [...items].sort(
+-                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+-              )[0];
+-              // Functional update: whichever slot(s) currently point at
+-              // this provider get the freshly-connected credential
+-              // selected automatically, so returning from Composio drops
+-              // the buyer straight into "reuse saved" with it pre-picked
+-              // instead of an extra manual dropdown step. Reads `f` fresh
+-              // rather than the `form` closure captured at mount, since
+-              // the draft-restore effect (useDraftPersistence) may not
+-              // have finished hydrating yet by the time this resolves.
+-              setForm((f) => {
+-                const next = { ...f };
+-                let changed = false;
+-                if (connected === "ghl_calendar") {
+-                  if (f.bookingPlatform === "ghl_calendar" || f.emailPlatform === "ghl" || f.smsPlatform === "ghl_sms") {
+-                    next.ghlCredentialVaultId = newest.id;
+-                    changed = true;
+-                  }
+-                } else {
+-                  if (f.bookingPlatform === connected) {
+-                    next.bookingCredentialVaultId = newest.id;
+-                    changed = true;
+-                  }
+-                  if (f.emailPlatform === connected) {
+-                    next.emailCredentialVaultId = newest.id;
+-                    changed = true;
+-                  }
+-                }
+-                return changed ? next : f;
+-              });
+-            }
+-          }
+-          setComposioBanner({ kind: "ok", message: `${connected} connected.` });
+-        } catch {
+-          setComposioBanner({
+-            kind: "error",
+-            message: `${connected} connected, but couldn't auto-select it here — pick it from "Reuse saved" instead.`,
+-          });
+-        }
+-      })();
+-    }
+-
+-    const url = new URL(window.location.href);
+-    url.searchParams.delete("composio_connected");
+-    url.searchParams.delete("composio_error");
+-    router.replace(`${url.pathname}${url.search}`, { scroll: false });
+-    // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, []);
+-
+-  function set(field: keyof FormData, value: string | boolean) {
+-    setForm((f) => ({ ...f, [field]: value }));
+-  }
+-
+-  function addTestimonial() {
+-    setForm((f) => ({
+-      ...f,
+-      testimonials: [
+-        ...f.testimonials,
+-        { name: "", role: "", company: "", quote: "" },
+-      ],
+-    }));
+-  }
+-
+-  function updateTestimonial(index: number, field: keyof Testimonial, value: string) {
+-    setForm((f) => ({
+-      ...f,
+-      testimonials: f.testimonials.map((t, i) => (i === index ? { ...t, [field]: value } : t)),
+-    }));
+-  }
+-
+-  function removeTestimonial(index: number) {
+-    setForm((f) => ({
+-      ...f,
+-      testimonials: f.testimonials.filter((_, i) => i !== index),
+-    }));
+-  }
+ 
+   async function submit() {
++    const trimmed = buyerName.trim();
++    if (!trimmed) return;
+     setSubmitting(true);
+     setError(null);
+-
+-    // ── Pre-flight validation gate ──
+-    const validationErrors = getValidationErrors(form);
+-    if (validationErrors.length > 0) {
+-      setError(`Cannot finish setup yet — ${validationErrors.length} requirement(s) missing. Scroll up to see the checklist.`);
+-      setSubmitting(false);
+-      return;
+-    }
+-
+-    const payload = buildEngagementPayload(form);
+-
+     try {
+-      const res = await fetch("/api/engagements/setup", {
++      const res = await fetch("/api/engagements/minimal-create", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify(payload),
++        body: JSON.stringify({ buyerName: trimmed }),
+       });
+-
+-      const data = await res.json();
+-
+-      if (!res.ok) {
+-        setError(data.error ?? "Setup failed. Check the fields and try again.");
+-        setSubmitting(false);
+-        return;
+-      }
+-
+-      clearDraft();
+-      deleteServerDraft();
+-      setReadyToLaunch({ engagementId: data.engagementId, buyerName: form.buyerName });
+-      setSubmitting(false);
+-    } catch (e: unknown) {
+-      const message = e instanceof Error ? e.message : "Unknown error";
+-      setError(
+-        message === "Failed to fetch"
+-          ? "Couldn't reach the server. Check your connection and try again — nothing was set up yet."
+-          : message
+-      );
++      const body = await res.json();
++      if (!res.ok) throw new Error(body?.error ?? "Could not create client.");
++      router.push(`/dashboard/engagements/${body.engagementId}`);
++    } catch (e) {
++      setError(e instanceof Error ? e.message : "Could not create client.");
+       setSubmitting(false);
+     }
+   }
+ 
+-  const allValidationErrors = getValidationErrors(form);
+-
+-  if (readyToLaunch) {
+-    return (
+-      <LaunchStep
+-        engagementId={readyToLaunch.engagementId}
+-        buyerName={readyToLaunch.buyerName}
+-        onBack={() => setReadyToLaunch(null)}
+-      />
+-    );
+-  }
+-
+   return (
+-    <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
+-      {/* --- HYPER-MICRO TIGHT DOT GRID (exact match from app/dashboard/page.tsx) --- */}
+-      <div 
+-        className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" 
+-        aria-hidden="true"
+-      />
+-
+-      <div className="relative z-10 space-y-6 w-full max-w-none px-1">
+-        {/* Header */}
+-        <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
+-          <h1 className="text-lg font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
+-            Set Up a New Client
+-          </h1>
+-          <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
+-            A one-time setup. Connect their booking calendar and email tool, and teach the system their brand voice — saving takes you straight into picking which skills to turn on.
++    <div className="flex items-center justify-center min-h-[70vh] px-4 font-sans antialiased">
++      <div className="w-full max-w-md space-y-5">
++        <div className="space-y-1.5 text-center">
++          <h1 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">Create a client</h1>
++          <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
++            Just a name for now — you&apos;ll pick which workers to set up (Pin-Down, Identity Setup, or both) on their own page right after.
+           </p>
+         </div>
+ 
+-        <StepIndicator steps={STEPS} current={step} />
+-
+-        {composioBanner && (
+-          <div
+-            className={`rounded-lg p-3 flex items-center justify-between gap-3 text-xs shadow-xs border ${
+-              composioBanner.kind === "ok"
+-                ? "border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400"
+-                : "border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400"
+-            }`}
+-          >
+-            <span>{composioBanner.message}</span>
+-            <button
+-              type="button"
+-              onClick={() => setComposioBanner(null)}
+-              className="shrink-0 opacity-70 hover:opacity-100 cursor-pointer font-mono"
+-            >
+-              [ Dismiss ]
+-            </button>
+-          </div>
+-        )}
+-
+-        {showRestoredBanner && (
+-          <div
+-            className="rounded-lg p-3 flex items-center justify-between gap-3 text-xs shadow-xs"
+-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+-          >
+-            <span style={{ color: "var(--text-muted)" }}>
+-              Restored your in-progress setup from before the last refresh. API keys were not saved and need to be re-entered.
+-            </span>
+-            <div className="flex items-center gap-2 shrink-0 font-mono">
+-              <button
+-                type="button"
+-                onClick={() => setShowRestoredBanner(false)}
+-                className="px-2 py-1 rounded-sm hover:opacity-80 cursor-pointer"
+-                style={{ color: "var(--text-secondary)" }}
+-              >
+-                [ Keep Draft ]
+-              </button>
+-              <button
+-                type="button"
+-                onClick={() => {
+-                  discardDraft();
+-                  smartPrefill.resetPrefill();
+-                  emailIntegrations.resetIntegrations();
+-                }}
+-                className="px-2 py-1 rounded-sm border bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer font-bold"
+-              >
+-                [ Dismiss & Clear All ]
+-              </button>
++        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-5 space-y-4 shadow-sm">
++          <InputField
++            label="Client name"
++            required
++            value={buyerName}
++            onChange={setBuyerName}
++            placeholder="Acme Roofing Co."
++            helpText="The person or business you're running this for."
++          />
++
++          {error && (
++            <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">
++              {error}
+             </div>
+-          </div>
+-        )}
+-
+-        <div className="bg-transparent space-y-6 pt-2">
+-          {step === "offer" && (
+-            <OfferStep
+-              form={form}
+-              set={set}
+-              prefillDomain={smartPrefill.prefillDomain}
+-              setPrefillDomain={smartPrefill.setPrefillDomain}
+-              prefillLoading={smartPrefill.prefillLoading}
+-              prefillError={smartPrefill.prefillError}
+-              prefillNotes={smartPrefill.prefillNotes}
+-              runSmartPrefill={smartPrefill.runSmartPrefill}
+-            />
+-          )}
+-
+-          {step === "stack" && <StackStep form={form} set={set} />}
+-
+-          {step === "credentials" && (
+-            <CredentialsStep
+-              form={form}
+-              set={set}
+-              bookingOptions={emailIntegrations.bookingOptions}
+-              fetchingBookingOptions={emailIntegrations.fetchingBookingOptions}
+-              bookingOptionsError={emailIntegrations.bookingOptionsError}
+-              klaviyoLists={emailIntegrations.klaviyoLists}
+-              fetchingLists={emailIntegrations.fetchingLists}
+-              listsFetchError={emailIntegrations.listsFetchError}
+-              klaviyoMissingKeyMessage={emailIntegrations.klaviyoMissingKeyMessage}
+-              acLists={emailIntegrations.acLists}
+-              fetchingAcLists={emailIntegrations.fetchingAcLists}
+-              acListsError={emailIntegrations.acListsError}
+-              ghlLocations={emailIntegrations.ghlLocations}
+-              fetchingGhlLocations={emailIntegrations.fetchingGhlLocations}
+-              ghlLocationsError={emailIntegrations.ghlLocationsError}
+-              ghlWorkflows={emailIntegrations.ghlWorkflows}
+-              fetchingGhlWorkflows={emailIntegrations.fetchingGhlWorkflows}
+-              ghlWorkflowsError={emailIntegrations.ghlWorkflowsError}
+-            />
+-          )}
+-
+-          {step === "voice" && (
+-            <VoiceStep
+-              form={form}
+-              set={set}
+-              addTestimonial={addTestimonial}
+-              updateTestimonial={updateTestimonial}
+-              removeTestimonial={removeTestimonial}
+-            />
+           )}
+ 
+-          {step === "confirm" && (
+-            <ConfirmStep
+-              form={form}
+-              allValidationErrors={allValidationErrors}
+-              setStep={setStep}
+-              error={error}
+-            />
+-          )}
+-        </div>
+-
+-        {/* Navigation footer buttons */}
+-        <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
+           <button
+             type="button"
+-            onClick={() => {
+-              const idx = STEPS.findIndex((s) => s.id === step);
+-              if (idx > 0) setStep(STEPS[idx - 1].id);
+-            }}
+-            disabled={step === "offer"}
+-            className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shadow-xs"
++            onClick={submit}
++            disabled={submitting || !buyerName.trim()}
++            className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-zinc-900 dark:bg-white px-4 py-2.5 text-sm font-bold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity cursor-pointer"
+           >
+-            Back
++            {submitting ? <Loader2 size={15} className="animate-spin" /> : <ArrowRight size={15} />}
++            Create client
+           </button>
+-
+-          {step !== "confirm" ? (
+-            <button
+-              type="button"
+-              onClick={() => {
+-                const idx = STEPS.findIndex((s) => s.id === step);
+-                if (idx < STEPS.length - 1) setStep(STEPS[idx + 1].id);
+-              }}
+-              disabled={!isCurrentStepValid(form, step)}
+-              className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+-            >
+-              Next
+-            </button>
+-          ) : (
+-            <button
+-              type="button"
+-              onClick={submit}
+-              disabled={submitting || allValidationErrors.length > 0}
+-              className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+-            >
+-              {submitting ? "Saving..." : "Save Setup"}
+-            </button>
+-          )}
+         </div>
+       </div>
+     </div>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/src/app/dashboard/engagements/page.tsx b/src/app/dashboard/engagements/page.tsx
+index f4f42b4..fc23ed4 100644
+--- a/src/app/dashboard/engagements/page.tsx
++++ b/src/app/dashboard/engagements/page.tsx
+@@ -123,7 +123,7 @@ export default async function EngagementsPage({
+         </div>
+ 
+         <Link
+-          href={scopedProduct === "reputation-manager" ? "/dashboard/reputation-manager/new" : "/dashboard/engagements/new"}
++          href="/dashboard/engagements/new"
+           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-lg shadow-xs hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.98] transition-all shrink-0"
+         >
+           <Plus size={14} strokeWidth={2.5} />
+@@ -138,7 +138,7 @@ export default async function EngagementsPage({
+             No active client engagements found in this workspace.
+           </p>
+           <Link
+-            href={scopedProduct === "reputation-manager" ? "/dashboard/reputation-manager/new" : "/dashboard/engagements/new"}
++            href="/dashboard/engagements/new"
+             className="text-xs font-semibold text-amber-500 hover:underline transition-colors"
+           >
+             Add your first client
+diff --git a/src/app/dashboard/reputation-manager/new/page.tsx b/src/app/dashboard/reputation-manager/new/page.tsx
+index 713b77d..d3d2304 100644
+--- a/src/app/dashboard/reputation-manager/new/page.tsx
++++ b/src/app/dashboard/reputation-manager/new/page.tsx
+@@ -1,70 +1,20 @@
+-"use client";
++// src/app/dashboard/reputation-manager/new/page.tsx
++//
++// Phase 6 — this used to be Reputation Manager's own separate "new
++// client" wizard (the full IdentityGraphForm, submitting straight to
++// POST /api/reputation-manager/new). Verified zero field gap against
++// bridges/rep-onboarding (same IdentityGraphForm component, same
++// saveRepIdentityGraphIntake save function) before replacing this with a
++// redirect — nothing here was doing anything bridges/rep-onboarding
++// doesn't already do for a client created through the one unified
++// entry point (/dashboard/engagements/new) instead.
++//
++// A permanent redirect, not a deleted route — anything with this URL
++// bookmarked or linked (engagements/page.tsx's old product-scoped link,
++// external references) still lands somewhere real.
++
++import { redirect } from "next/navigation";
+ 
+-import { useState } from "react";
+-import { useRouter } from "next/navigation";
+-import {
+-  IdentityGraphForm,
+-  EMPTY_IDENTITY_GRAPH_FORM,
+-  toIntakePayload,
+-  type IdentityGraphFormState,
+-} from "@/features/reputation-manager/identity-graph-form";
+-
+-/**
+- * Reputation Manager's own front door for a brand-new client — no
+- * quick-add pre-step, no existing engagement id. Submitting this form
+- * creates the client and its identity graph in one motion, same "each
+- * product is fully self-sufficient" shape Showtime's own wizard has
+- * always had.
+- */
+ export default function ReputationManagerNewPage() {
+-  const router = useRouter();
+-  const [form, setForm] = useState<IdentityGraphFormState>(EMPTY_IDENTITY_GRAPH_FORM);
+-  const [saving, setSaving] = useState(false);
+-  const [saveError, setSaveError] = useState<string | null>(null);
+-
+-  async function handleSubmit() {
+-    setSaving(true);
+-    setSaveError(null);
+-    try {
+-      const res = await fetch("/api/reputation-manager/new", {
+-        method: "POST",
+-        headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify(toIntakePayload(form)),
+-      });
+-      const data = await res.json();
+-      if (!res.ok) throw new Error(data.error ?? "Failed to create client");
+-      router.push(`/dashboard/reputation-manager`);
+-    } catch (e) {
+-      setSaveError(e instanceof Error ? e.message : "Failed to create client");
+-      setSaving(false);
+-    }
+-  }
+-
+-  return (
+-    <div className="relative min-h-screen w-full text-zinc-600 dark:text-zinc-400 font-sans tracking-tight antialiased select-none px-1 transition-colors duration-200 overflow-hidden pb-10">
+-      <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
+-
+-      <div className="relative z-10 space-y-6 w-full max-w-3xl">
+-        <div className="pb-3 border-b border-zinc-200/80 dark:border-zinc-800/80">
+-          <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">New Reputation Manager client</h1>
+-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+-            Already have this client set up somewhere else? Add Reputation Manager from their own page instead — this is for starting fresh.
+-          </p>
+-        </div>
+-
+-        <IdentityGraphForm form={form} onChange={setForm} />
+-
+-        {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
+-
+-        <button
+-          type="button"
+-          onClick={handleSubmit}
+-          disabled={saving || !form.operatorName.trim() || !form.soleAuthorityName.trim()}
+-          className="px-4 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer border bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed"
+-        >
+-          {saving ? "Creating…" : "Create client"}
+-        </button>
+-      </div>
+-    </div>
+-  );
++  redirect("/dashboard/engagements/new");
+ }
+diff --git a/src/components/queue-fix-drawer.tsx b/src/components/queue-fix-drawer.tsx
+index 30b4ff9..f9cb5b6 100644
+--- a/src/components/queue-fix-drawer.tsx
++++ b/src/components/queue-fix-drawer.tsx
+@@ -113,6 +113,9 @@ export function QueueFixDrawer({
+               bookingPlatform={stack?.booking_platform ?? null}
+               emailPlatform={stack?.email_platform ?? null}
+               conversationIntelligenceProvider={stack?.conversation_intelligence_provider ?? null}
++              hostingPlatform={stack?.hosting_platform ?? null}
++              smsPlatform={stack?.sms_platform ?? null}
++              adDataPlatform={stack?.ad_data_platform ?? null}
+               vaultLinksByProvider={vaultLinksByProvider}
+               embedded
+               onRequestClose={handleSuccess}
+-- 
+2.43.0
+

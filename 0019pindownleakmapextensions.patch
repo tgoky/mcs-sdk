@@ -1,0 +1,619 @@
+From ea3fba37544cd744552753eeb52e65259873a91f Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 7 Sep 2026 11:29:03 +0000
+Subject: [PATCH] feat: Pin-Down alternate-angle scripts, competitor page
+ audit, Leak Map benchmark-on-demand
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Verified all 4 previously-deferred "outside the box" Showtime ideas
+against real code before building — 3 confirmed genuinely buildable, 1
+confirmed NOT (kept declined, not built):
+
+1. Pin-Down alternate-angle script regeneration: buildScriptPack already
+   has a real, pre-modeled 3-way hero approach axis (research_assistance/
+   urgency/faq, selectHeroApproach) — added approachOverride so an
+   operator can force a specific one instead of the auto-picked one.
+   Deliberately NOT a free-text "more aggressive" tone knob — there's no
+   such parameter in the real prompt to hang that on.
+
+2. Pin-Down competitor page audit: auditExistingConfirmationPage took
+   exactly one URL. Added an optional second (competitor) URL, fetched
+   the same way as the primary and folded into the same audit prompt as
+   direct comparison context — degrades to the existing single-page audit
+   if the competitor fetch fails, never fails the whole audit over it.
+
+3. Leak Map benchmark-on-demand: getBenchmarkLines already exists as a
+   plain, k-anonymized DB read the real audit pipeline calls internally.
+   Exposed it standalone (compare_leak_map_benchmarks, an instant
+   read-only chat tool, no dispatch/no LLM call) against a client's most
+   recent already-computed audit metrics — no new audit run required.
+
+4. Single-URL/page Leak Map audit: confirmed NOT buildable as described.
+   AuditEngine.runAuditPipeline pulls account-wide booking/CRM metrics
+   over a time window; there's no URL parameter anywhere in it, and
+   there's no honest way to bolt one on without building an entirely
+   different tool. Left alone.
+
+All 3 wired through the full chat-skill path (event schema, dispatcher,
+trigger functions, tool schemas, handler branches, system prompt) with
+graceful degradation, not hard failures, when the optional inputs are
+omitted.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01RyH3xjJh5mTzvTxG4Rpbpi
+---
+ src/app/api/teammates/chat/route.ts           | 48 ++++++++++++++---
+ .../engagements/[id]/deliverables-panel.tsx   | 14 +++++
+ .../pin-down/server/discovery-prefill.ts      | 24 +++++++--
+ .../pin-down/server/page-audit-only.ts        | 11 ++--
+ .../pin-down/server/script-builder.ts         | 21 +++++++-
+ .../pin-down/server/script-pack-only.ts       | 10 +++-
+ src/inngest/skill.ts                          |  4 ++
+ src/lib/chat-skill-registry.ts                |  4 +-
+ src/lib/chat-skill-trigger.ts                 | 23 ++++++---
+ src/lib/chat-status-queries.ts                | 51 ++++++++++++++++++-
+ src/lib/inngest.ts                            | 11 ++++
+ src/models/schema.ts                          |  5 ++
+ 12 files changed, 202 insertions(+), 24 deletions(-)
+
+diff --git a/src/app/api/teammates/chat/route.ts b/src/app/api/teammates/chat/route.ts
+index 1f485fb..1b38633 100644
+--- a/src/app/api/teammates/chat/route.ts
++++ b/src/app/api/teammates/chat/route.ts
+@@ -11,7 +11,7 @@ import { createMinimalEngagement } from "@/lib/create-minimal-engagement";
+ import { createMinimalRepEngagement } from "@/lib/create-minimal-rep-engagement";
+ import { getRepEnrolledEngagementIds } from "@/lib/rep-engagements";
+ import { checkCredentialAvailability, linkReusableCredential, getComposioConnectLink, hasBookingCredential } from "@/lib/chat-credentials";
+-import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries } from "@/lib/chat-status-queries";
++import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries, getLeakMapBenchmarkComparison } from "@/lib/chat-status-queries";
+ import { enrollProspectInWinBack } from "@/lib/chat-winback";
+ import { previewManualPileOnEnrollment, enrollProspectInPileOn } from "@/lib/chat-pile-on";
+ import { triggerVoiceExtractionForEngagement, triggerScriptPackForEngagement, triggerAdCreativeBriefsForEngagement, triggerPageAuditForEngagement, triggerEngineAdhocCheckForEngagement, triggerCrisisStressTestForEngagement, triggerDraftResponseForEngagement, triggerTwitterDeepScanForEngagement, triggerTrustpilotDeepScanForEngagement, triggerRedditDeepScanForEngagement } from "@/lib/chat-skill-trigger";
+@@ -189,6 +189,16 @@ const TOOLS = [
+       required: ["engagementId"],
+     },
+   },
++  {
++    name: "compare_leak_map_benchmarks",
++    description:
++      "Compares a client's most recent Leak Map audit metrics against anonymized cross-client benchmarks for their same bucket (traffic temperature + price range + vertical) — read-only, no new audit run, no LLM call. Reuses the client's existing audit metrics, not a fresh scan. Only works if the client has run Leak Map at least once and has enough same-bucket peers on file (k-anonymity floor); the tool will say plainly if either is missing rather than fabricating a comparison.",
++    input_schema: {
++      type: "object",
++      properties: { engagementId: { type: "string", description: "The client to check." } },
++      required: ["engagementId"],
++    },
++  },
+   {
+     name: "enroll_in_winback",
+     description:
+@@ -250,7 +260,15 @@ const TOOLS = [
+       "Generates a hero confirmation-page video script plus breakout scripts for each top call question, in the background — the same script pack Show Rate Setup generates, standalone. Uses whatever brand voice, offer details, and call questions are already on the client — none of that needs asking for first, it'll just produce a more generic result if some of it isn't set. This takes a while, dispatches and returns immediately with a runId. Tell the user it's running.",
+     input_schema: {
+       type: "object",
+-      properties: { engagementId: { type: "string", description: "The client to generate scripts for." } },
++      properties: {
++        engagementId: { type: "string", description: "The client to generate scripts for." },
++        approach: {
++          type: "string",
++          enum: ["research_assistance", "urgency", "faq"],
++          description:
++            "Optional — forces the hero video's framing instead of letting it auto-pick from the offer's price/traffic temperature. research_assistance = lower-anxiety working-session framing for cold, complex/high-price offers. urgency = confident, decisive framing for warm/hot high-price offers. faq = standard friendly warm-lead framing. Only set this when the user explicitly asks for a different angle/approach on an already-generated script pack — there is no free-text tone override, only these 3 real options.",
++        },
++      },
+       required: ["engagementId"],
+     },
+   },
+@@ -267,12 +285,13 @@ const TOOLS = [
+   {
+     name: "audit_confirmation_page",
+     description:
+-      "Audits an existing confirmation page URL against what a well-built one should include (hero video, what-to-expect section, breakout content, social proof, reschedule path) and notes concrete gaps, in the background — the same audit Show Rate Setup runs. Does NOT build or deploy a new page — say so plainly if asked for that, it's a bigger, separate action not wired up here. Dispatches and returns immediately with a runId.",
++      "Audits an existing confirmation page URL against what a well-built one should include (hero video, what-to-expect section, breakout content, social proof, reschedule path) and notes concrete gaps, in the background — the same audit Show Rate Setup runs. Does NOT build or deploy a new page — say so plainly if asked for that, it's a bigger, separate action not wired up here. Optionally also fetches a second URL (typically a competitor's confirmation page) and compares directly against it. Dispatches and returns immediately with a runId.",
+     input_schema: {
+       type: "object",
+       properties: {
+         engagementId: { type: "string", description: "The client whose page this is." },
+         pageUrl: { type: "string", description: "The URL of the existing confirmation page to audit." },
++        competitorPageUrl: { type: "string", description: "Optional — a competitor's confirmation page URL to fetch and compare against directly. Only include this if the user actually gave a specific competitor URL to compare against." },
+       },
+       required: ["engagementId", "pageUrl"],
+     },
+@@ -371,7 +390,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
+       ? clients.map((c) => `- ${c.buyer} (engagementId: ${c.engagementId}${c.repEnrolled ? ", Reputation Manager" : ""})`).join("\n")
+       : "(no clients yet)";
+   return [
+-    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries — for any client, without triggering anything.",
++    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries, how a client's Leak Map metrics compare to similar clients — for any client, without triggering anything.",
+     "",
+     "Clients (a client tagged \"Reputation Manager\" is enrolled in that product; everyone else is Showtime-only unless just created and not yet set up):",
+     clientList,
+@@ -384,7 +403,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
+     "- For booking or email platform setup: always call check_credential first, never assume whether one already exists or is reusable. If it finds a reusable saved credential, ask before calling use_saved_credential — don't link it without confirming. If none exists and the platform is Composio-managed (Calendly/GoHighLevel Calendar for booking; HubSpot/Klaviyo/Mailchimp/GoHighLevel for email), call connect_credential and tell the user to click the link — it's a real redirect, not something you can finish for them. For anything else (Cal.com, OnceHub, ActiveCampaign, ConvertKit, direct SMTP), or if they'd rather type a key directly, tell them to paste it on the client's own page instead — you can't collect a raw credential value in chat, only real links or saved-credential reuse. Always pass the correct field (\"booking\" or \"email\") matching which platform you're setting up.",
+     "- Never ask the user to paste an API key or secret directly in this chat, under any circumstances, even if they offer to.",
+     "- If a message arrives saying a platform was just connected, that means the user completed a connect_credential link and came back — call check_credential for that client/provider (it should now show a reusable credential) and then use_saved_credential to finish linking it, using whichever client was being set up earlier in the conversation.",
+-    "- For status questions — what's on today, who cancelled, how did a run go, who's in an active recovery — use get_todays_calls / get_recent_cancellations / get_run_history / get_active_recoveries. These never change anything, so use them freely whenever the user is asking about current state rather than asking you to do something.",
++    "- For status questions — what's on today, who cancelled, how did a run go, who's in an active recovery, how a client's Leak Map metrics compare to similar clients — use get_todays_calls / get_recent_cancellations / get_run_history / get_active_recoveries / compare_leak_map_benchmarks. These never change anything, so use them freely whenever the user is asking about current state rather than asking you to do something.",
+     "- After a tool call, tell the user plainly what happened, including any error a tool returned (e.g. the skill being disabled for that client).",
+     "- For enroll_in_winback: needs a working email-platform credential on the client already, plus the platform's recovery list/workflow configured — if the tool reports something's missing, tell the user plainly what and point them to the client's page, don't retry blindly.",
+     "- For enroll_in_pile_on: ALWAYS call preview_pile_on_enrollment first and show the user its output before ever calling enroll_in_pile_on — never call enroll_in_pile_on in the same turn as the user's first request without a preview shown first. It only enrolls email, never SMS or an ad-data cohort sync (say so plainly if asked — deliberately not replicated for manual enrollment, see the tool's own description for why). If the preview or the real call reports an existing booking on file for that email, tell the user plainly and only pass force:true after they explicitly confirm they want to proceed anyway — never set force on your own judgment.",
+@@ -394,6 +413,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
+     "- For draft_response: this is for a REAL finding the user gives you (a real review, a real mention) — the draft never gets posted anywhere automatically, always tell the user to review and post it themselves. Don't fabricate specific facts, offers, or promises in how you relay the draft.",
+     "- For check_ai_engines: omit subject to ask about the client themselves; to ask about a competitor, use the exact name from their tracked competitors list (shown on their Identity Setup) — never guess or paraphrase a competitor name that hasn't been confirmed as tracked, ask the user to confirm the exact name instead. This is a live spot-check, separate from the scheduled AI Engine Watch panel — nothing gets saved to the client's monitoring history, so don't present it as if it updates their ongoing findings.",
+     "- extract_brand_voice, generate_video_scripts, generate_ad_briefs, and audit_confirmation_page all run in the background and take a while — always tell the user it's running and won't finish instantly, and offer to check status with get_run_history if they ask later. None of these run the full Show Rate Setup wizard end to end (no booking webhook wiring, no new page deployment) — each does exactly the one piece it's named for, using whatever the client already has on file (brand voice, offer details, call questions) and degrading to a more generic result if some of that isn't set yet, never failing outright for missing optional context. If asked to build or deploy a new confirmation page (not audit an existing one), say plainly that's not wired up — audit_confirmation_page only reviews a page that already exists.",
++    "- generate_video_scripts' approach param: only set it when the user explicitly asks to regenerate with a different angle/framing — never set it on a first-time script generation, and never invent a description beyond the 3 real options (research_assistance/urgency/faq) listed in the tool's own schema. audit_confirmation_page's competitorPageUrl: only set it when the user gives an actual competitor URL to compare against — never guess or reuse a URL from earlier in the conversation for a different purpose.",
+     "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, preview or enroll someone in Pile-On (preview_pile_on_enrollment, enroll_in_pile_on — email only, see that rule above), run Show Rate Setup's four individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), deep-scan X/Twitter back to a date (twitter_deep_scan), deep-scan Trustpilot back to a date (trustpilot_deep_scan), widen a Reddit scan to an older timeframe (reddit_deep_scan), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, Pile-On's SMS or ad-data cohort sync specifically (not replicated for manual enrollment, only the real booking webhook does those), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves on their regular cadence, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, twitter_deep_scan, trustpilot_deep_scan, reddit_deep_scan, and enroll_in_pile_on are separate, narrower, manually-triggered actions, not a way to fire the scheduled skills themselves.",
+     "- Keep replies short and direct.",
+   ].join("\n");
+@@ -601,6 +621,15 @@ export async function POST(request: Request) {
+         } else {
+           message2 = "Missing engagementId.";
+         }
++      } else if (block.name === "compare_leak_map_benchmarks") {
++        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
++        if (engagementId) {
++          const result = await getLeakMapBenchmarkComparison(engagementId);
++          ok = !("error" in result);
++          message2 = "error" in result ? result.error : result.lines.join(" ");
++        } else {
++          message2 = "Missing engagementId.";
++        }
+       } else if (block.name === "enroll_in_winback") {
+         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+         const prospectEmail = typeof block.input.prospectEmail === "string" ? block.input.prospectEmail.trim() : "";
+@@ -661,8 +690,12 @@ export async function POST(request: Request) {
+         }
+       } else if (block.name === "generate_video_scripts") {
+         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
++        const approach =
++          block.input.approach === "research_assistance" || block.input.approach === "urgency" || block.input.approach === "faq"
++            ? block.input.approach
++            : undefined;
+         if (engagementId) {
+-          const result = await triggerScriptPackForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId);
++          const result = await triggerScriptPackForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, approach);
+           ok = result.ok;
+           message2 = result.ok ? result.message : result.error;
+           if (result.ok) {
+@@ -690,8 +723,9 @@ export async function POST(request: Request) {
+       } else if (block.name === "audit_confirmation_page") {
+         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+         const pageUrl = typeof block.input.pageUrl === "string" ? block.input.pageUrl : "";
++        const competitorPageUrl = typeof block.input.competitorPageUrl === "string" ? block.input.competitorPageUrl : undefined;
+         if (engagementId && pageUrl) {
+-          const result = await triggerPageAuditForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, pageUrl);
++          const result = await triggerPageAuditForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, pageUrl, competitorPageUrl);
+           ok = result.ok;
+           message2 = result.ok ? result.message : result.error;
+           if (result.ok) {
+diff --git a/src/app/dashboard/engagements/[id]/deliverables-panel.tsx b/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
+index 10ca9f2..35dc0eb 100644
+--- a/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
+@@ -133,6 +133,7 @@ type PinDownPageAudit = {
+   existingPageStrengths: string[];
+   existingPageWeaknesses: string[];
+   v1Improvements: string[];
++  competitorComparison?: { url: string; notes: string[] } | null;
+ } | null;
+ 
+ export type ConversationIntelligenceState = {
+@@ -717,6 +718,19 @@ export function DeliverablesPanel({
+                 </ul>
+               </div>
+             </div>
++
++            {pinDownPageAudit.competitorComparison && pinDownPageAudit.competitorComparison.notes.length > 0 && (
++              <div className="space-y-1.5 p-3 mt-3 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-xs">
++                <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
++                  Vs. {pinDownPageAudit.competitorComparison.url}
++                </span>
++                <ul className="space-y-1">
++                  {pinDownPageAudit.competitorComparison.notes.map((n, i) => (
++                    <li key={i} className="text-zinc-700 dark:text-zinc-300">⇄ {n}</li>
++                  ))}
++                </ul>
++              </div>
++            )}
+           </DeliverableRow>
+         )}
+ 
+diff --git a/src/features/pin-down/server/discovery-prefill.ts b/src/features/pin-down/server/discovery-prefill.ts
+index 6aaa367..029931e 100644
+--- a/src/features/pin-down/server/discovery-prefill.ts
++++ b/src/features/pin-down/server/discovery-prefill.ts
+@@ -271,6 +271,7 @@ export interface PageAuditResult {
+   existingPageStrengths: string[];
+   existingPageWeaknesses: string[];
+   v1Improvements: string[];
++  competitorComparison?: { url: string; notes: string[] } | null;
+ }
+ 
+ function stripHtmlForAudit(html: string): string {
+@@ -286,7 +287,8 @@ function stripHtmlForAudit(html: string): string {
+ 
+ export async function auditExistingConfirmationPage(
+   url: string,
+-  context: { buyer: string; offerDetails?: any; brandVoiceProfile?: any }
++  context: { buyer: string; offerDetails?: any; brandVoiceProfile?: any },
++  competitorUrl?: string
+ ): Promise<PageAuditResult> {
+   const html = await fetchRaw(url, 8000);
+   const now = new Date().toISOString();
+@@ -303,6 +305,13 @@ export async function auditExistingConfirmationPage(
+ 
+   const text = stripHtmlForAudit(html);
+ 
++  // Competitor comparison is genuinely optional and best-effort — a
++  // failed/empty competitor fetch degrades to no comparison section
++  // rather than failing the whole audit, same as this function's own
++  // existing "couldn't fetch" fallback above does for the primary URL.
++  const competitorHtml = competitorUrl ? await fetchRaw(competitorUrl, 8000) : null;
++  const competitorText = competitorHtml ? stripHtmlForAudit(competitorHtml) : null;
++
+   const system = `You are auditing an existing post-booking confirmation page for
+  ${context.buyer} against what a well-built confirmation page should
+ include: a hero video/intro setting expectations, a clear "what to expect
+@@ -315,14 +324,21 @@ Target brand voice: ${JSON.stringify(context.brandVoiceProfile ?? {})}
+ 
+ Page content (text-extracted):
+  ${text}
++${
++  competitorText
++    ? `\nA competitor's confirmation page at ${competitorUrl} (text-extracted) — compare against it specifically, calling out what it does that this page doesn't and vice versa:\n ${competitorText}\n`
++    : ""
++}
+ 
+ Return ONLY a JSON object:
+ {
+   "existingPageStrengths": ["specific things this page already does well"],
+   "existingPageWeaknesses": ["specific gaps or issues, e.g. no video, vague CTA, no reschedule path"],
+-  "v1Improvements": ["specific, concrete improvements the new Pin-Down page should make over this one"]
++  "v1Improvements": ["specific, concrete improvements the new Pin-Down page should make over this one"]${
++    competitorText ? ',\n  "competitorComparisonNotes": ["specific, concrete comparisons against the competitor page — what they do better, what this page does better"]' : ""
++  }
+ }
+-Be specific and concrete — no generic filler like "could be more engaging." Never fabricate content that isn't actually on the page.`;
++Be specific and concrete — no generic filler like "could be more engaging." Never fabricate content that isn't actually on either page.`;
+ 
+   const result = await callClaudeWithRetry({
+     model: MODEL.SYNTHESIS,
+@@ -341,6 +357,8 @@ Be specific and concrete — no generic filler like "could be more engaging." Ne
+       existingPageStrengths: parsed.existingPageStrengths ?? [],
+       existingPageWeaknesses: parsed.existingPageWeaknesses ?? [],
+       v1Improvements: parsed.v1Improvements ?? [],
++      competitorComparison:
++        competitorText && competitorUrl ? { url: competitorUrl, notes: parsed.competitorComparisonNotes ?? [] } : undefined,
+     };
+   } catch {
+     return {
+diff --git a/src/features/pin-down/server/page-audit-only.ts b/src/features/pin-down/server/page-audit-only.ts
+index 3ff7235..cd2d651 100644
+--- a/src/features/pin-down/server/page-audit-only.ts
++++ b/src/features/pin-down/server/page-audit-only.ts
+@@ -21,7 +21,7 @@ export async function runPageAuditOnly(
+   tenant: { engagementId: string; buyer: string; offerDetails?: unknown; brandVoiceProfile?: unknown },
+   runId: string,
+   step: StepTools | undefined,
+-  ctx?: { pageAuditUrl?: string }
++  ctx?: { pageAuditUrl?: string; competitorPageUrl?: string }
+ ): Promise<void> {
+   const summary = emptySummary();
+   const run = step ? <T,>(id: string, fn: () => Promise<T>) => step.run(id, fn) : <T,>(_id: string, fn: () => Promise<T>) => fn();
+@@ -29,10 +29,11 @@ export async function runPageAuditOnly(
+   try {
+     const url = ctx?.pageAuditUrl?.trim();
+     if (!url) throw new Error("No confirmation page URL was provided to audit.");
++    const competitorUrl = ctx?.competitorPageUrl?.trim() || undefined;
+ 
+     await logStep(runId, { phase: "existing_page_audit", status: "running", label: url });
+     const audit = await run("existing-page-audit", () =>
+-      auditExistingConfirmationPage(url, { buyer: tenant.buyer, offerDetails: tenant.offerDetails, brandVoiceProfile: tenant.brandVoiceProfile })
++      auditExistingConfirmationPage(url, { buyer: tenant.buyer, offerDetails: tenant.offerDetails, brandVoiceProfile: tenant.brandVoiceProfile }, competitorUrl)
+     );
+ 
+     await run("persist", async () => {
+@@ -44,7 +45,11 @@ export async function runPageAuditOnly(
+       status: "success",
+       detail: `${audit.existingPageStrengths.length} strengths, ${audit.existingPageWeaknesses.length} weaknesses noted`,
+     });
+-    summary.whatWasAttempted.push(`Audited ${tenant.buyer}'s confirmation page at ${url} — ${audit.existingPageWeaknesses.length} gap(s) identified.`);
++    summary.whatWasAttempted.push(
++      `Audited ${tenant.buyer}'s confirmation page at ${url} — ${audit.existingPageWeaknesses.length} gap(s) identified.${
++        audit.competitorComparison ? ` Compared against ${audit.competitorComparison.url}.` : competitorUrl ? " Competitor URL couldn't be fetched — audit ran without the comparison." : ""
++      }`
++    );
+     await finishRun(runId, { summary });
+   } catch (err) {
+     await logStep(runId, { phase: "existing_page_audit", status: "failed", detail: err instanceof Error ? err.message : String(err) });
+diff --git a/src/features/pin-down/server/script-builder.ts b/src/features/pin-down/server/script-builder.ts
+index b53c35e..52ca44a 100644
+--- a/src/features/pin-down/server/script-builder.ts
++++ b/src/features/pin-down/server/script-builder.ts
+@@ -18,6 +18,13 @@ export interface ScriptBuilderInput {
+   };
+   /** Pin-Down recovery gap 4 — drives buildRecordingChecklist below. Defaults to "founder_on_camera" when omitted, since that's the OG SKILL.md's most common case. */
+   castingChoice?: CastingChoice;
++  /** Teammates chat's "regenerate with a different angle" action
++   * (pin-down-scripts, chat-skill-registry.ts) — forces the hero script's
++   * approach instead of letting selectHeroApproach auto-pick one from the
++   * offer's price/traffic_temperature. One of the 3 real, already-modeled
++   * approaches below (see APPROACH_BRIEF) — not a free-text tone/angle
++   * string, since there's no such knob in the actual prompt this feeds. */
++  approachOverride?: "research_assistance" | "urgency" | "faq";
+ }
+ 
+ export interface HeroScript {
+@@ -95,6 +102,16 @@ const APPROACH_BRIEF: Record<string, string> = {
+   faq: "Standard warm-lead confirmation tone — friendly, clear, sets expectations for what happens on the call.",
+ };
+ 
++// Same target lengths selectHeroApproach's own return values use per
++// approach — extracted so an explicit approachOverride can look one up
++// without re-deriving it from an offer that override is deliberately
++// bypassing.
++const APPROACH_TARGET_LENGTH_SECONDS: Record<"research_assistance" | "urgency" | "faq", number> = {
++  research_assistance: 150,
++  urgency: 75,
++  faq: 105,
++};
++
+ /**
+  * Picks 3 to 5 breakout topics from the buyer's actual top call questions,
+  * falling back to generic-but-honest placeholders when fewer than 3
+@@ -180,7 +197,9 @@ function buildRecordingChecklist(
+ }
+ 
+ export async function buildScriptPack(input: ScriptBuilderInput, runId?: string): Promise<ScriptPack> {
+-  const { approach, targetLengthSeconds } = selectHeroApproach(input.offerDetails);
++  const autoSelected = selectHeroApproach(input.offerDetails);
++  const approach = input.approachOverride ?? autoSelected.approach;
++  const targetLengthSeconds = input.approachOverride ? APPROACH_TARGET_LENGTH_SECONDS[input.approachOverride] : autoSelected.targetLengthSeconds;
+   const host = input.prospectMeets ?? "our team";
+   const breakoutTopics = selectBreakoutTopics(input.topCallQuestions ?? []);
+   const testimonials = (input.existingProof?.testimonials ?? []).filter((t) => t.name && t.role && t.quote);
+diff --git a/src/features/pin-down/server/script-pack-only.ts b/src/features/pin-down/server/script-pack-only.ts
+index a734398..e73015e 100644
+--- a/src/features/pin-down/server/script-pack-only.ts
++++ b/src/features/pin-down/server/script-pack-only.ts
+@@ -34,7 +34,8 @@ export async function runScriptPackOnly(
+     castingChoice?: CastingChoice | null;
+   },
+   runId: string,
+-  step: StepTools | undefined
++  step: StepTools | undefined,
++  ctx?: { approachOverride?: "research_assistance" | "urgency" | "faq" }
+ ): Promise<void> {
+   const summary = emptySummary();
+   const run = step ? <T,>(id: string, fn: () => Promise<T>) => step.run(id, fn) : <T,>(_id: string, fn: () => Promise<T>) => fn();
+@@ -51,6 +52,7 @@ export async function runScriptPackOnly(
+           prospectMeets: tenant.prospectMeets ?? undefined,
+           existingProof: tenant.existingProof ?? undefined,
+           castingChoice: tenant.castingChoice ?? undefined,
++          approachOverride: ctx?.approachOverride,
+         },
+         runId
+       )
+@@ -72,7 +74,11 @@ export async function runScriptPackOnly(
+     });
+ 
+     await logStep(runId, { phase: "script_pack", status: "success", detail: `Hero + ${scriptPack.breakoutScripts.length} breakout scripts generated` });
+-    summary.whatWasAttempted.push(`Generated a hero video script (${scriptPack.heroScript.chapters.length} chapters) and ${scriptPack.breakoutScripts.length} breakout scripts for ${tenant.buyer}.`);
++    summary.whatWasAttempted.push(
++      `Generated a hero video script (${scriptPack.heroScript.chapters.length} chapters) and ${scriptPack.breakoutScripts.length} breakout scripts for ${tenant.buyer}.${
++        ctx?.approachOverride ? ` Forced approach: ${ctx.approachOverride}.` : ""
++      }`
++    );
+     await finishRun(runId, { summary });
+   } catch (err) {
+     await logStep(runId, { phase: "script_pack", status: "failed", detail: err instanceof Error ? err.message : String(err) });
+diff --git a/src/inngest/skill.ts b/src/inngest/skill.ts
+index 8919817..599c442 100644
+--- a/src/inngest/skill.ts
++++ b/src/inngest/skill.ts
+@@ -70,6 +70,8 @@ export const executeSkillRun = inngest.createFunction(
+       findingPlatform,
+       deepScanSinceDate,
+       deepScanTimeframe,
++      scriptApproachOverride,
++      competitorPageUrl,
+     } = event.data;
+ 
+     const tenantRaw = await step.run("load-tenant", async () => {
+@@ -143,6 +145,8 @@ export const executeSkillRun = inngest.createFunction(
+         findingPlatform,
+         deepScanSinceDate,
+         deepScanTimeframe,
++        scriptApproachOverride,
++        competitorPageUrl,
+       });
+     } catch (err: unknown) {
+       await failRun(runId, err).catch(() => {});
+diff --git a/src/lib/chat-skill-registry.ts b/src/lib/chat-skill-registry.ts
+index 7fa3c26..83b8b25 100644
+--- a/src/lib/chat-skill-registry.ts
++++ b/src/lib/chat-skill-registry.ts
+@@ -31,6 +31,8 @@ export interface ChatSkillContext {
+   findingPlatform?: string;
+   deepScanSinceDate?: string;
+   deepScanTimeframe?: string;
++  scriptApproachOverride?: "research_assistance" | "urgency" | "faq";
++  competitorPageUrl?: string;
+ }
+ 
+ export interface ChatSkillDefinition extends ChatSkillManifestEntry {
+@@ -49,7 +51,7 @@ export const CHAT_SKILL_REGISTRY: Record<ChatSkillId, ChatSkillDefinition> = {
+   },
+   "pin-down-scripts": {
+     ...CHAT_SKILL_MANIFEST["pin-down-scripts"],
+-    execute: (tenant, runId, step) => runScriptPackOnly(tenant, runId, step),
++    execute: (tenant, runId, step, ctx) => runScriptPackOnly(tenant, runId, step, { approachOverride: ctx?.scriptApproachOverride }),
+   },
+   "pin-down-ad-briefs": {
+     ...CHAT_SKILL_MANIFEST["pin-down-ad-briefs"],
+diff --git a/src/lib/chat-skill-trigger.ts b/src/lib/chat-skill-trigger.ts
+index ebd7cbf..7aacafd 100644
+--- a/src/lib/chat-skill-trigger.ts
++++ b/src/lib/chat-skill-trigger.ts
+@@ -92,14 +92,21 @@ export async function triggerVoiceExtractionForEngagement(
+   );
+ }
+ 
+-export async function triggerScriptPackForEngagement(whopUserId: string, workspaceId: string, engagementId: string): Promise<TriggerChatSkillResult> {
++export async function triggerScriptPackForEngagement(
++  whopUserId: string,
++  workspaceId: string,
++  engagementId: string,
++  approachOverride?: "research_assistance" | "urgency" | "faq"
++): Promise<TriggerChatSkillResult> {
+   return triggerChatSkillForEngagement(
+     whopUserId,
+     workspaceId,
+     engagementId,
+     "pin-down-scripts",
+-    {},
+-    "Generating the hero and breakout video scripts. This can take a minute — check back or ask for the status.",
++    { scriptApproachOverride: approachOverride },
++    approachOverride
++      ? `Regenerating the hero and breakout video scripts with a ${approachOverride} approach. This can take a minute — check back or ask for the status.`
++      : "Generating the hero and breakout video scripts. This can take a minute — check back or ask for the status.",
+     "script_pack"
+   );
+ }
+@@ -248,17 +255,21 @@ export async function triggerPageAuditForEngagement(
+   whopUserId: string,
+   workspaceId: string,
+   engagementId: string,
+-  pageUrl: string
++  pageUrl: string,
++  competitorPageUrl?: string
+ ): Promise<TriggerChatSkillResult> {
+   const cleanUrl = pageUrl.trim();
+   if (!cleanUrl) return { ok: false, error: "No page URL was provided." };
++  const cleanCompetitorUrl = competitorPageUrl?.trim() || undefined;
+   return triggerChatSkillForEngagement(
+     whopUserId,
+     workspaceId,
+     engagementId,
+     "pin-down-page-audit",
+-    { pageAuditUrl: cleanUrl },
+-    `Auditing the confirmation page at ${cleanUrl}. This can take a minute — check back or ask for the status.`,
++    { pageAuditUrl: cleanUrl, competitorPageUrl: cleanCompetitorUrl },
++    cleanCompetitorUrl
++      ? `Auditing the confirmation page at ${cleanUrl} against ${cleanCompetitorUrl}. This can take a minute — check back or ask for the status.`
++      : `Auditing the confirmation page at ${cleanUrl}. This can take a minute — check back or ask for the status.`,
+     "existing_page_audit",
+     cleanUrl
+   );
+diff --git a/src/lib/chat-status-queries.ts b/src/lib/chat-status-queries.ts
+index 1a3b612..681dde5 100644
+--- a/src/lib/chat-status-queries.ts
++++ b/src/lib/chat-status-queries.ts
+@@ -10,8 +10,9 @@
+ // first, and worth keeping that way going forward.
+ 
+ import { db } from "@/lib/db";
+-import { bookingRoster, skillRuns, winBackEnrollments } from "@/models/schema";
++import { bookingRoster, skillRuns, winBackEnrollments, engagements, auditRunsLog } from "@/models/schema";
+ import { and, eq, gte, lte, desc } from "drizzle-orm";
++import { getBenchmarkLines } from "@/features/leak-map/server/leak-map-benchmarks";
+ 
+ export async function getTodaysCalls(engagementId: string) {
+   const startOfDay = new Date();
+@@ -69,6 +70,54 @@ export async function getRunHistory(engagementId: string, skillName?: string) {
+   return rows;
+ }
+ 
++/**
++ * Leak Map benchmark comparison, on demand. Deliberately NOT a fresh
++ * audit or a new LLM call — getBenchmarkLines (leak-map-benchmarks.ts) is
++ * a plain, k-anonymized DB read against metricsBenchmark, already the
++ * exact function the real weekly/monthly audit calls to add benchmark
++ * lines to its own report. This just re-runs that same read against the
++ * client's most recent audit's own metrics, standalone, so a benchmark
++ * check doesn't require waiting for (or forcing) a new audit run.
++ *
++ * Verified NOT to extend to a single-URL/page audit — audit-engine.ts's
++ * whole pipeline (AuditEngine.runAuditPipeline) pulls account-wide
++ * booking/CRM metrics over a lookback window, not page content; there is
++ * no parameter anywhere in it for a specific URL. That's a structurally
++ * different kind of tool (more like Pin-Down's page audit) and isn't
++ * something this function — or any real extension of Leak Map's actual
++ * pipeline — can honestly claim to do.
++ */
++export async function getLeakMapBenchmarkComparison(engagementId: string): Promise<{ lines: string[]; auditedAt: Date } | { error: string }> {
++  const [engagement] = await db.select({ offerDetails: engagements.offerDetails }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
++  if (!engagement) return { error: "Client not found." };
++
++  const [latestAudit] = await db
++    .select({ topIssues: auditRunsLog.topIssues, createdAt: auditRunsLog.createdAt })
++    .from(auditRunsLog)
++    .where(eq(auditRunsLog.engagementId, engagementId))
++    .orderBy(desc(auditRunsLog.createdAt))
++    .limit(1);
++  // auditRunsLog.topIssues is untyped jsonb at the schema level (same
++  // looseness computeAndPersistBenchmarks's own `row.top_issues` cast
++  // already works around) — TopIssue is this column's real, documented
++  // shape (see _shared/types.ts's AuditRow), just not encoded in the
++  // column definition itself.
++  const topIssues = latestAudit?.topIssues as Array<{ name: string; current: number; insufficientData?: boolean }> | null | undefined;
++  if (!topIssues || topIssues.length === 0) {
++    return { error: "No Leak Map audit on file yet for this client — run Leak Map at least once first, then benchmarks can compare against it." };
++  }
++
++  const metrics = topIssues.map((issue) => ({ name: issue.name, current: issue.current, insufficientData: issue.insufficientData ?? false }));
++  const lines = await getBenchmarkLines(engagement.offerDetails, metrics);
++  if (lines.length === 0) {
++    return {
++      error:
++        "No benchmark data available for this client's bucket yet (needs traffic_temperature + price + vertical all set, and at least 20 other engagements in the same bucket) — nothing to compare against right now.",
++    };
++  }
++  return { lines, auditedAt: latestAudit.createdAt };
++}
++
+ export async function getActiveRecoveries(engagementId: string) {
+   const rows = await db
+     .select({
+diff --git a/src/lib/inngest.ts b/src/lib/inngest.ts
+index 47a1ac2..8ad3e09 100644
+--- a/src/lib/inngest.ts
++++ b/src/lib/inngest.ts
+@@ -56,6 +56,17 @@ export type SkillRunExecuteData = {
+   // widen the search into (hour/day/week/month/year/all), since Reddit
+   // search has no exact date-cutoff parameter the other two have.
+   deepScanTimeframe?: string;
++  // Same category, for pin-down-scripts — forces the hero script's
++  // approach/framing (see selectHeroApproach in script-builder.ts) instead
++  // of letting it auto-select off the offer's price/traffic_temperature.
++  // Real, pre-modeled options only — not a free-text tone string, since
++  // buildScriptPack has no such knob.
++  scriptApproachOverride?: "research_assistance" | "urgency" | "faq";
++  // Same category, for pin-down-page-audit — a second URL (typically a
++  // competitor's confirmation page) fetched and included in the audit
++  // prompt as comparison context. Optional: omitting it is the existing
++  // single-page audit, unchanged.
++  competitorPageUrl?: string;
+ };
+ 
+ 
+diff --git a/src/models/schema.ts b/src/models/schema.ts
+index a004831..404fcbe 100644
+--- a/src/models/schema.ts
++++ b/src/models/schema.ts
+@@ -766,6 +766,11 @@ export const engagements = pgTable("engagements", {
+     existingPageStrengths: string[];
+     existingPageWeaknesses: string[];
+     v1Improvements: string[];
++    // Teammates chat's "audit against a competitor" action
++    // (pin-down-page-audit + competitorPageUrl, discovery-prefill.ts) —
++    // present only when a second URL was actually supplied and fetched
++    // successfully. Omitted (not a placeholder) otherwise.
++    competitorComparison?: { url: string; notes: string[] } | null;
+   }>(),
+ 
+   // ── Pin-Down recovery gap 2: site + brand-resource crawl for voice ────
+-- 
+2.43.0
+

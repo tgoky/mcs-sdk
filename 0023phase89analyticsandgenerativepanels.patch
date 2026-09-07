@@ -1,0 +1,915 @@
+From 6155096d474c6cdb1d3363faa3ea773c26c1b718 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 7 Sep 2026 14:20:21 +0000
+Subject: [PATCH] feat: Phase 8 analytics unification + Phase 9 generative
+ dashboard panels
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+## Phase 8 — one per-worker analytics view over skillRuns
+
+New src/lib/worker-analytics.ts generalizes package-overview.ts's
+per-skill rollup (Showtime-only, keyed off SKILL_IDS) to the full
+unified worker registry across both products:
+- getWorkspaceWorkerOverview(whopUserId, workspaceId): one row per
+  worker in WORKER_IDS, workspace-scoped (not just whopUserId, unlike
+  package-overview.ts — the point of this whole effort is that
+  workspaceId is now the real client boundary).
+- getWorkerAnalyticsDetail(whopUserId, workspaceId, workerId): the
+  per-worker drill-down package-overview.ts never needed — recent runs,
+  success rate, needs-attention streak, all scoped to one workerId.
+
+New /dashboard/analytics/[workerId] page — the literal "one per-worker
+view parameterized by workerId" the roadmap named for this phase.
+worker-card.tsx's Analytics button now points every worker (either
+product) at this one destination shape, replacing the old
+PRODUCT_ANALYTICS_HREF lookup that sent Showtime workers to one page
+and Reputation Manager workers to a completely different one.
+
+/dashboard/reputation-manager/analytics — the standalone RM analytics
+page (4 stat cards + sentiment bar over rep_engine_findings/
+rep_trustpilot_reviews/rep_reddit_mentions, no skillRuns data at all) —
+is now a redirect into /dashboard/analytics/rep-onboarding. Nothing
+lost: that exact same rollup (getWorkerAnalyticsDetail's repSignals)
+now renders on every RM worker's own analytics page instead of one
+page nothing else in the app linked to.
+
+Deliberately left untouched: Showtime's existing /dashboard/analytics
+overview (win-back funnel, show-rate calibration, Pile-On mix,
+cross-client benchmark, booking-sync distribution) — a real, working,
+1000+-line page with legitimate Showtime-specific depth, not divergent
+duplicate query logic to retire. Folding it into the unified registry
+is a distinct, larger follow-up, not risked in this pass.
+
+## Phase 9 — generative dashboard panels
+
+New ActiveWorkersPanel on the main dashboard: one card per worker
+actually enabled for the workspace's client (via Phase 3's
+getEnabledWorkerIdsForEngagement), each showing its weekly run count,
+success rate, and a needs-attention flag — sourced from Phase 8's
+getWorkspaceWorkerOverview so the two phases share one query instead
+of the dashboard adding its own. Needs-attention workers sort first.
+Nothing new to navigate to: each card links to the worker's own
+Phase 8 analytics page and its existing configure/bridges page.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01RyH3xjJh5mTzvTxG4Rpbpi
+---
+ src/app/dashboard/active-workers-panel.tsx    | 120 +++++++
+ .../dashboard/analytics/[workerId]/page.tsx   | 151 ++++++++
+ src/app/dashboard/page.tsx                    |  22 +-
+ .../reputation-manager/analytics/page.tsx     | 123 ++-----
+ src/components/library/worker-card.tsx        |  11 +-
+ src/lib/worker-analytics.ts                   | 339 ++++++++++++++++++
+ 6 files changed, 658 insertions(+), 108 deletions(-)
+ create mode 100644 src/app/dashboard/active-workers-panel.tsx
+ create mode 100644 src/app/dashboard/analytics/[workerId]/page.tsx
+ create mode 100644 src/lib/worker-analytics.ts
+
+diff --git a/src/app/dashboard/active-workers-panel.tsx b/src/app/dashboard/active-workers-panel.tsx
+new file mode 100644
+index 0000000..ae91417
+--- /dev/null
++++ b/src/app/dashboard/active-workers-panel.tsx
+@@ -0,0 +1,120 @@
++// src/app/dashboard/active-workers-panel.tsx
++//
++// Phase 9 — generative dashboard panels. Once "enabled" is uniform data
++// (Phase 3's engagementSkills join, read here through
++// getEnabledWorkerIdsForEngagement) instead of a product-specific
++// boolean, the dashboard can render a card per enabled worker without
++// knowing anything about which product it belongs to — the same
++// registry-driven-card precedent worker-card.tsx already established for
++// the Library, just repurposed here for "what's this client doing right
++// now" instead of "enable/configure this." Nothing new to navigate to:
++// every link below points at a page that already exists (the worker's
++// own Phase 8 analytics page, or its bridges/skill config page) — the
++// workspace just visibly grows with what's turned on.
++
++import Link from "next/link";
++import { AlertTriangle } from "lucide-react";
++import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
++import type { WorkerOverviewStat } from "@/lib/worker-analytics";
++
++const PRODUCT_LABELS = { showtime: "Showtime", "reputation-manager": "Reputation Manager" } as const;
++const PRODUCT_ACCENT = {
++  showtime: "border-amber-200 dark:border-amber-900/70",
++  "reputation-manager": "border-indigo-200 dark:border-indigo-900/70",
++} as const;
++
++export function ActiveWorkersPanel({
++  stats,
++  engagementId,
++}: {
++  stats: WorkerOverviewStat[];
++  engagementId: string | null;
++}) {
++  if (stats.length === 0) return null;
++
++  // Needs-attention workers surface first — the whole point of a
++  // generative panel is that something worth a glance floats up on its
++  // own, not that a reader has to scan every card to find it.
++  const sorted = [...stats].sort((a, b) => {
++    if (a.needsAttention !== b.needsAttention) return b.needsAttention - a.needsAttention;
++    return b.runsInWindow - a.runsInWindow;
++  });
++
++  return (
++    <div className="pt-2">
++      <div className="flex items-center justify-between mb-3">
++        <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
++          Active workers
++        </p>
++        <Link
++          href="/dashboard/library"
++          className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 transition-colors"
++        >
++          Manage in Library
++        </Link>
++      </div>
++      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
++        {sorted.map((stat) => {
++          const worker = WORKER_REGISTRY[stat.workerId as WorkerId];
++          const configureHref =
++            worker.hasHingesPanel && engagementId
++              ? `/dashboard/engagements/${engagementId}/bridges/${worker.id}`
++              : engagementId
++                ? `/dashboard/engagements/${engagementId}`
++                : null;
++
++          return (
++            <div
++              key={stat.workerId}
++              className={`rounded-xl border ${PRODUCT_ACCENT[stat.productId]} bg-white dark:bg-zinc-900/60 p-3.5 flex flex-col gap-2`}
++            >
++              <div className="flex items-start justify-between gap-2">
++                <div className="min-w-0">
++                  <p className="text-sm font-bold text-zinc-900 dark:text-white truncate">{worker.name}</p>
++                  <p className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500 uppercase tracking-wide">
++                    {PRODUCT_LABELS[stat.productId]}
++                  </p>
++                </div>
++                {stat.needsAttention > 0 && (
++                  <span
++                    title="Failing on the most recent run"
++                    className="shrink-0 inline-flex items-center gap-1 rounded-md bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:text-rose-300"
++                  >
++                    <AlertTriangle className="w-3 h-3" />
++                    Attention
++                  </span>
++                )}
++              </div>
++
++              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
++                {stat.runsInWindow > 0
++                  ? `${stat.runsInWindow} run${stat.runsInWindow === 1 ? "" : "s"} this week${stat.successRate !== null ? ` · ${stat.successRate}% success` : ""}`
++                  : "No runs this week"}
++              </p>
++
++              <div className="pt-1 flex items-center gap-2 text-xs font-semibold">
++                <Link
++                  href={`/dashboard/analytics/${stat.workerId}`}
++                  className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 transition-colors"
++                >
++                  Analytics
++                </Link>
++                {configureHref && (
++                  <>
++                    <span className="text-zinc-300 dark:text-zinc-700">&middot;</span>
++                    <Link
++                      href={configureHref}
++                      className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 transition-colors"
++                    >
++                      Configure
++                    </Link>
++                  </>
++                )}
++              </div>
++            </div>
++          );
++        })}
++      </div>
++    </div>
++  );
++}
+diff --git a/src/app/dashboard/analytics/[workerId]/page.tsx b/src/app/dashboard/analytics/[workerId]/page.tsx
+new file mode 100644
+index 0000000..c99350d
+--- /dev/null
++++ b/src/app/dashboard/analytics/[workerId]/page.tsx
+@@ -0,0 +1,151 @@
++// src/app/dashboard/analytics/[workerId]/page.tsx
++//
++// Phase 8 — the "one per-worker view parameterized by workerId over
++// skillRuns" this app's roadmap named as Phase 8, replacing the old
++// per-product routing (worker-card.tsx used to send every Showtime
++// worker's Analytics button to /dashboard/analytics and every
++// Reputation Manager worker's to a separate, hand-built page with no
++// skillRuns data at all) with one destination shape for any worker in
++// the unified registry, regardless of product.
++//
++// For a Reputation Manager worker, the three watch skills' own signal
++// tables (rep_engine_findings, rep_trustpilot_reviews, rep_reddit_mentions)
++// are folded in below the generic run stats — the exact same rollup the
++// old standalone /dashboard/reputation-manager/analytics page rendered,
++// now reachable from every RM worker's own page instead of one page
++// nothing else in the app linked to directly.
++
++import { notFound } from "next/navigation";
++import Link from "next/link";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { isWorkerId } from "@/lib/worker-registry";
++import { getWorkerAnalyticsDetail } from "@/lib/worker-analytics";
++
++export const dynamic = "force-dynamic";
++export const revalidate = 0;
++
++const PRODUCT_LABELS = { showtime: "Showtime", "reputation-manager": "Reputation Manager" } as const;
++
++const STATUS_STYLES: Record<string, string> = {
++  success: "text-emerald-600 dark:text-emerald-400",
++  failed: "text-rose-600 dark:text-rose-400",
++  timed_out: "text-rose-600 dark:text-rose-400",
++  running: "text-amber-600 dark:text-amber-400",
++};
++
++function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
++  return (
++    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-900/60">
++      <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{label}</p>
++      <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1">{value}</p>
++      {sub && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{sub}</p>}
++    </div>
++  );
++}
++
++function SentimentBar({ positive, neutral, negative }: { positive: number; neutral: number; negative: number }) {
++  const total = positive + neutral + negative;
++  if (total === 0) {
++    return <p className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">No scored signals yet.</p>;
++  }
++  const pct = (n: number) => `${((n / total) * 100).toFixed(0)}%`;
++  return (
++    <div className="space-y-2">
++      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
++        <div className="bg-emerald-400 dark:bg-emerald-500" style={{ width: pct(positive) }} />
++        <div className="bg-zinc-300 dark:bg-zinc-600" style={{ width: pct(neutral) }} />
++        <div className="bg-rose-400 dark:bg-rose-500" style={{ width: pct(negative) }} />
++      </div>
++      <div className="flex items-center gap-4 text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
++        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400 dark:bg-emerald-500" />Positive {positive}</span>
++        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-zinc-300 dark:bg-zinc-600" />Neutral {neutral}</span>
++        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-400 dark:bg-rose-500" />Negative {negative}</span>
++      </div>
++    </div>
++  );
++}
++
++export default async function WorkerAnalyticsPage({ params }: { params: Promise<{ workerId: string }> }) {
++  const { workerId } = await params;
++  if (!isWorkerId(workerId)) notFound();
++
++  const session = await getSession();
++  const whopUserId = session.whopUserId!;
++  const activeWorkspace = await getActiveWorkspace(whopUserId);
++
++  const detail = await getWorkerAnalyticsDetail(whopUserId, activeWorkspace.workspaceId, workerId);
++
++  return (
++    <div className="flex flex-col h-full w-full mx-auto tracking-tight antialiased font-sans px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
++      <div className="shrink-0 flex flex-col space-y-0.5 border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
++        <div className="flex items-center gap-1.5">
++          <Link href="/dashboard/analytics" className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">
++            Analytics
++          </Link>
++          <span className="text-xs text-zinc-300 dark:text-zinc-700">/</span>
++          <h1 className="text-base font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">{detail.worker.name}</h1>
++        </div>
++        <p className="text-xs text-zinc-500 dark:text-zinc-400">
++          {PRODUCT_LABELS[detail.worker.productId]} &middot; {detail.worker.description}
++        </p>
++      </div>
++
++      <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
++        <StatCard label={`Runs (last ${detail.windowDays}d)`} value={detail.runsInWindow} />
++        <StatCard label="Success rate" value={detail.successRate !== null ? `${detail.successRate}%` : "—"} />
++        <StatCard label="Active clients" value={detail.activeClients} />
++        <StatCard
++          label="Needs attention"
++          value={detail.needsAttention}
++          sub={detail.needsAttention > 0 ? "failing on most recent run" : undefined}
++        />
++      </div>
++
++      {detail.repSignals && (
++        <div className="mt-6 space-y-3">
++          <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
++            Reputation Manager signals (every enrolled client)
++          </p>
++          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
++            <StatCard label="AI engine checks" value={detail.repSignals.engineChecks} />
++            <StatCard
++              label="Trustpilot reviews"
++              value={detail.repSignals.trustpilotReviews}
++              sub={detail.repSignals.trustpilotAvgRating ? `avg rating ${detail.repSignals.trustpilotAvgRating}` : undefined}
++            />
++            <StatCard label="Reddit mentions" value={detail.repSignals.redditMentions} />
++            <StatCard label="Flagged signals" value={detail.repSignals.flaggedSignals} />
++          </div>
++          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-900/60">
++            <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">Sentiment across every signal</p>
++            <SentimentBar {...detail.repSignals.sentiment} />
++          </div>
++        </div>
++      )}
++
++      <div className="mt-6">
++        <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">
++          Recent runs (last {detail.windowDays}d)
++        </p>
++        {detail.recentRuns.length === 0 ? (
++          <p className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">No runs recorded in this window.</p>
++        ) : (
++          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-100 dark:divide-zinc-800 bg-white dark:bg-zinc-900/60 overflow-hidden">
++            {detail.recentRuns.map((run) => (
++              <Link
++                key={run.id}
++                href={`/dashboard/runs/${run.id}`}
++                className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
++              >
++                <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate">{run.buyerName}</span>
++                <span className={`font-mono shrink-0 ${STATUS_STYLES[run.status] ?? "text-zinc-500"}`}>{run.status}</span>
++                <span className="text-zinc-400 dark:text-zinc-500 font-mono shrink-0">{new Date(run.startedAt).toLocaleString()}</span>
++              </Link>
++            ))}
++          </div>
++        )}
++      </div>
++    </div>
++  );
++}
+diff --git a/src/app/dashboard/page.tsx b/src/app/dashboard/page.tsx
+index 1435845..8d40897 100644
+--- a/src/app/dashboard/page.tsx
++++ b/src/app/dashboard/page.tsx
+@@ -5,15 +5,18 @@ import { skillRuns, engagements } from "@/models/schema";
+ import { getSession } from "@/lib/session";
+ import { getQueueItems } from "@/lib/queue";
+ import { eq, desc, sql, and, isNull, gte, lt } from "drizzle-orm";
+-import { getActiveWorkspace } from "@/lib/workspace";
++import { getActiveWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
+ import { getUnseenCompletedExecutionCount } from "@/lib/run-log"; // CHANGED: new import
+ import { LiveExecutionFeed } from "./live-execution-feed";
+ import { UnreadExecutionsPill } from "./unread-executions-pill"; // CHANGED: new import
+ import { latestStepLabel } from "@/lib/run-display";
+ import { QueuePanel } from "./queue-panel";
+ import { OverviewStatsPanel } from "./overview-stats-panel";
++import { ActiveWorkersPanel } from "./active-workers-panel"; // Phase 9: generative worker cards
+ import { DASHBOARD_COPY as copy } from "@/lib/copy";
+ import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
++import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
++import { getWorkspaceWorkerOverview } from "@/lib/worker-analytics";
+ import Link from "next/link";
+ import { Calendar } from "lucide-react";
+ 
+@@ -165,6 +168,18 @@ export default async function DashboardPage() {
+    getUnseenCompletedExecutionCount(whopUserId, workspaceId),
+   ]);
+ 
++  // Phase 9 — kept as its own Promise.all rather than folded into the one
++  // above: that array's slots are positionally destructured and the
++  // unseenCount comment above already warns against disturbing the
++  // order, so new, unrelated data gets its own block instead of adding
++  // fragility to an existing one.
++  const primaryEngagementId = await getPrimaryEngagementIdForWorkspace(workspaceId);
++  const [enabledWorkerIds, workerOverview] = await Promise.all([
++    primaryEngagementId ? getEnabledWorkerIdsForEngagement(primaryEngagementId) : Promise.resolve([]),
++    getWorkspaceWorkerOverview(whopUserId, workspaceId),
++  ]);
++  const activeWorkerStats = workerOverview.workers.filter((w) => enabledWorkerIds.includes(w.workerId));
++
+   const completedThisWeek = Number(thisWeekResult[0]?.count ?? 0);
+   const completedLastWeek = Number(lastWeekResult[0]?.count ?? 0);
+   const completedAllTime = Number(totalRunsResult[0]?.count ?? 0);
+@@ -257,6 +272,11 @@ export default async function DashboardPage() {
+           queueItems={queueItems}
+         />
+ 
++        {/* Active workers — Phase 9 generative panel, one card per worker
++            actually enabled for this workspace's client, nothing to
++            navigate to that doesn't already exist. */}
++        <ActiveWorkersPanel stats={activeWorkerStats} engagementId={primaryEngagementId} />
++
+         {/* Queue */}
+         <div className="pt-2">
+           <QueuePanel initialItems={queueItems} clients={clients} title="Queue" viewAllHref="/dashboard/queue" />
+diff --git a/src/app/dashboard/reputation-manager/analytics/page.tsx b/src/app/dashboard/reputation-manager/analytics/page.tsx
+index d851c1f..e6052cf 100644
+--- a/src/app/dashboard/reputation-manager/analytics/page.tsx
++++ b/src/app/dashboard/reputation-manager/analytics/page.tsx
+@@ -1,104 +1,25 @@
+-import { db } from "@/lib/db";
+-import { repEngineFindings, repTrustpilotReviews, repRedditMentions } from "@/models/schema";
+-import { inArray } from "drizzle-orm";
+-import { getSession } from "@/lib/session";
+-import { getActiveWorkspace, isPackageInstalledInWorkspace } from "@/lib/workspace";
+-import { getRepEnrolledEngagementIds } from "@/lib/rep-engagements";
+-import { redirect } from "next/navigation";
+-
+-export const dynamic = "force-dynamic";
+-export const revalidate = 0;
+-
+-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+-  return (
+-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-900/60">
+-      <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{label}</p>
+-      <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1">{value}</p>
+-      {sub && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{sub}</p>}
+-    </div>
+-  );
+-}
+-
+-function SentimentBar({ positive, neutral, negative }: { positive: number; neutral: number; negative: number }) {
+-  const total = positive + neutral + negative;
+-  if (total === 0) {
+-    return <p className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">No scored signals yet.</p>;
+-  }
+-  const pct = (n: number) => `${((n / total) * 100).toFixed(0)}%`;
+-  return (
+-    <div className="space-y-2">
+-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+-        <div className="bg-emerald-400 dark:bg-emerald-500" style={{ width: pct(positive) }} />
+-        <div className="bg-zinc-300 dark:bg-zinc-600" style={{ width: pct(neutral) }} />
+-        <div className="bg-rose-400 dark:bg-rose-500" style={{ width: pct(negative) }} />
+-      </div>
+-      <div className="flex items-center gap-4 text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
+-        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400 dark:bg-emerald-500" />Positive {positive}</span>
+-        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-zinc-300 dark:bg-zinc-600" />Neutral {neutral}</span>
+-        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-400 dark:bg-rose-500" />Negative {negative}</span>
+-      </div>
+-    </div>
+-  );
+-}
++// src/app/dashboard/reputation-manager/analytics/page.tsx
++//
++// Phase 8 — this used to be Reputation Manager's own separate analytics
++// page: 4 stat cards (AI engine checks, Trustpilot reviews, Reddit
++// mentions, flagged signals) plus a sentiment bar, rolled up across
++// rep_engine_findings/rep_trustpilot_reviews/rep_reddit_mentions for
++// every RM-enrolled client — but with zero skillRuns data, unlike
++// Showtime's /dashboard/analytics. That exact same rollup now renders on
++// every Reputation Manager worker's own analytics page (see
++// getWorkerAnalyticsDetail's repSignals in worker-analytics.ts) — nothing
++// here was doing anything the new /dashboard/analytics/[workerId] page
++// doesn't already do, with the added benefit of also showing skillRuns
++// history, which this page never had.
++//
++// A permanent redirect, not a deleted route — worker-card.tsx's old
++// PRODUCT_ANALYTICS_HREF lookup and any bookmarked/external link to this
++// URL still land somewhere real. rep-onboarding is the anchor worker
++// every Reputation Manager client has (see Phase 6's identity-graph-form
++// verification), so it's the one every RM analytics link redirects into.
+ 
+-/**
+- * Reputation Manager's Analytics rail destination. Deliberately not a
+- * clone of Showtime's /dashboard/analytics (win-back cadences, booking
+- * sync, leak-map — none of that applies here) — this rolls up the three
+- * watch skills' own tables (rep_engine_findings, rep_trustpilot_reviews,
+- * rep_reddit_mentions) across every RM-enrolled client in the workspace,
+- * the only cross-client aggregate view RM has right now. Scoped
+- * deliberately small: rep-crisis-response and the watch skills are early
+- * in their build-out, so this reports what's actually been recorded
+- * rather than projecting trends that would be mostly empty series.
+- */
+-export default async function ReputationManagerAnalyticsPage() {
+-  const session = await getSession();
+-  const whopUserId = session.whopUserId!;
+-  const activeWorkspace = await getActiveWorkspace(whopUserId);
+-  if (!(await isPackageInstalledInWorkspace(activeWorkspace.workspaceId, "reputation-manager"))) {
+-    redirect("/dashboard/library");
+-  }
+-
+-  const engagementIds = await getRepEnrolledEngagementIds(whopUserId, activeWorkspace.workspaceId);
+-
+-  const [findings, reviews, mentions] = engagementIds.length
+-    ? await Promise.all([
+-        db.select({ sentiment: repEngineFindings.sentiment, flagged: repEngineFindings.flagged }).from(repEngineFindings).where(inArray(repEngineFindings.engagementId, engagementIds)),
+-        db.select({ rating: repTrustpilotReviews.rating, sentiment: repTrustpilotReviews.sentiment, flagged: repTrustpilotReviews.flagged }).from(repTrustpilotReviews).where(inArray(repTrustpilotReviews.engagementId, engagementIds)),
+-        db.select({ sentiment: repRedditMentions.sentiment, flagged: repRedditMentions.flagged }).from(repRedditMentions).where(inArray(repRedditMentions.engagementId, engagementIds)),
+-      ])
+-    : [[], [], []];
+-
+-  const allSignals = [...findings, ...reviews, ...mentions];
+-  const sentimentCounts = {
+-    positive: allSignals.filter((s) => s.sentiment === "positive").length,
+-    neutral: allSignals.filter((s) => s.sentiment === "neutral").length,
+-    negative: allSignals.filter((s) => s.sentiment === "negative").length,
+-  };
+-  const flaggedCount = allSignals.filter((s) => s.flagged).length;
+-  const avgRating = reviews.length ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1) : "—";
+-
+-  return (
+-    <div className="flex flex-col h-full w-full mx-auto tracking-tight antialiased font-sans px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
+-      <div className="shrink-0 flex flex-col space-y-0.5 border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
+-        <h1 className="text-base font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">Analytics</h1>
+-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+-          Every signal recorded across AI-engine checks, Trustpilot, and Reddit for Reputation Manager clients in {activeWorkspace.name}.
+-        </p>
+-      </div>
+-
+-      <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+-        <StatCard label="AI engine checks" value={findings.length} />
+-        <StatCard label="Trustpilot reviews" value={reviews.length} sub={reviews.length ? `avg rating ${avgRating}` : undefined} />
+-        <StatCard label="Reddit mentions" value={mentions.length} />
+-        <StatCard label="Flagged signals" value={flaggedCount} />
+-      </div>
++import { redirect } from "next/navigation";
+ 
+-      <div className="mt-6 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-900/60">
+-        <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">Sentiment across every signal</p>
+-        <SentimentBar {...sentimentCounts} />
+-      </div>
+-    </div>
+-  );
++export default function ReputationManagerAnalyticsPage() {
++  redirect("/dashboard/analytics/rep-onboarding");
+ }
+diff --git a/src/components/library/worker-card.tsx b/src/components/library/worker-card.tsx
+index 9093526..79b5f03 100644
+--- a/src/components/library/worker-card.tsx
++++ b/src/components/library/worker-card.tsx
+@@ -12,11 +12,6 @@ const PRODUCT_LABELS: Record<WorkerDefinition["productId"], string> = {
+   "reputation-manager": "Reputation Manager",
+ };
+ 
+-const PRODUCT_ANALYTICS_HREF: Record<WorkerDefinition["productId"], string> = {
+-  showtime: "/dashboard/analytics",
+-  "reputation-manager": "/dashboard/reputation-manager/analytics",
+-};
+-
+ const PRODUCT_ACCENT: Record<WorkerDefinition["productId"], string> = {
+   showtime: "border-amber-200 dark:border-amber-900/70",
+   "reputation-manager": "border-indigo-200 dark:border-indigo-900/70",
+@@ -55,7 +50,11 @@ export function WorkerCard({
+   const needsLighterForm = worker.id === "pile-on";
+   const bridgeHref = engagementId ? `/dashboard/engagements/${engagementId}/bridges/${worker.id}` : null;
+   const configureHref = worker.hasHingesPanel && engagementId ? `/dashboard/engagements/${engagementId}/bridges/${worker.id}` : engagementId ? `/dashboard/engagements/${engagementId}` : null;
+-  const analyticsHref = PRODUCT_ANALYTICS_HREF[worker.productId];
++  // Phase 8 — one destination shape for every worker's analytics,
++  // regardless of product, instead of the old per-product lookup table
++  // that routed Showtime and Reputation Manager workers to two
++  // completely different pages.
++  const analyticsHref = `/dashboard/analytics/${worker.id}`;
+ 
+   async function enable() {
+     if (!engagementId) return;
+diff --git a/src/lib/worker-analytics.ts b/src/lib/worker-analytics.ts
+new file mode 100644
+index 0000000..cc1ea71
+--- /dev/null
++++ b/src/lib/worker-analytics.ts
+@@ -0,0 +1,339 @@
++// src/lib/worker-analytics.ts
++//
++// Phase 8 — generalizes package-overview.ts's per-skill rollup (Showtime-
++// only, keyed off SKILL_IDS) to the full unified worker registry, across
++// both products, and adds the per-worker drill-down package-overview.ts
++// never needed: one workerId's own recent-run history and trend. Backs
++// the new /dashboard/analytics/[workerId] page — the "one per-worker view
++// parameterized by workerId over skillRuns" this app's own roadmap named
++// as Phase 8, replacing worker-card.tsx's old per-product analytics
++// routing (every Showtime worker to one page, every Reputation Manager
++// worker to a different one) with one destination shape for every worker.
++//
++// Deliberately workspace-scoped (whopUserId + workspaceId), not just
++// whopUserId like package-overview.ts — the point of the surrounding
++// "one workspace = one client" work is that workspaceId is now the real
++// client boundary, so a new file gets that right from the start rather
++// than repeating package-overview.ts's older, looser scope.
++
++import { db } from "@/lib/db";
++import {
++  engagements,
++  engagementSkills,
++  skillRuns,
++  repEngineFindings,
++  repTrustpilotReviews,
++  repRedditMentions,
++} from "@/models/schema";
++import { and, eq, gte, inArray, isNull, desc } from "drizzle-orm";
++import { WORKER_IDS, WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
++
++const OVERVIEW_WINDOW_DAYS = 7;
++const DETAIL_WINDOW_DAYS = 30;
++const RECENT_RUNS_LIMIT = 20;
++const FAILURE_STATUSES = new Set(["failed", "timed_out"]);
++
++/** Kept out of the query function bodies — react-hooks/purity flags a bare
++ * Date.now()/new Date() call inside a component, and getWorkspaceWorkerOverview
++ * is called from one, same as package-overview.ts's own daysAgo. */
++function daysAgo(days: number): Date {
++  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
++}
++
++export interface WorkerOverviewStat {
++  workerId: WorkerId;
++  name: string;
++  productId: "showtime" | "reputation-manager";
++  activeClients: number;
++  runsInWindow: number;
++  successRate: number | null;
++  needsAttention: number;
++  disabledClients: number;
++}
++
++export interface WorkspaceWorkerOverview {
++  totalClients: number;
++  workers: WorkerOverviewStat[];
++  windowDays: number;
++}
++
++/** Every worker in the unified registry, one row each, over a short
++ * recent window — the workspace-wide table the new analytics overview
++ * and the dashboard's generative worker cards both read from, so neither
++ * duplicates this query. */
++export async function getWorkspaceWorkerOverview(
++  whopUserId: string,
++  workspaceId: string
++): Promise<WorkspaceWorkerOverview> {
++  const since = daysAgo(OVERVIEW_WINDOW_DAYS);
++
++  const allEngagements = await db
++    .select({ engagementId: engagements.engagementId })
++    .from(engagements)
++    .where(
++      and(
++        eq(engagements.whopUserId, whopUserId),
++        eq(engagements.workspaceId, workspaceId),
++        isNull(engagements.deletedAt)
++      )
++    );
++
++  const totalClients = allEngagements.length;
++  if (totalClients === 0) {
++    return {
++      totalClients: 0,
++      windowDays: OVERVIEW_WINDOW_DAYS,
++      workers: WORKER_IDS.map((id) => ({
++        workerId: id,
++        name: WORKER_REGISTRY[id].name,
++        productId: WORKER_REGISTRY[id].productId,
++        activeClients: 0,
++        runsInWindow: 0,
++        successRate: null,
++        needsAttention: 0,
++        disabledClients: 0,
++      })),
++    };
++  }
++
++  const engagementIds = allEngagements.map((e) => e.engagementId);
++
++  const [runs, skillOverrides] = await Promise.all([
++    db
++      .select({
++        engagementId: skillRuns.engagementId,
++        skillName: skillRuns.skillName,
++        status: skillRuns.status,
++        startedAt: skillRuns.startedAt,
++      })
++      .from(skillRuns)
++      .where(and(gte(skillRuns.startedAt, since), inArray(skillRuns.engagementId, engagementIds))),
++    db
++      .select({ engagementId: engagementSkills.engagementId, skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
++      .from(engagementSkills)
++      .where(inArray(engagementSkills.engagementId, engagementIds)),
++  ]);
++
++  const disabledByWorker = new Map<WorkerId, number>();
++  for (const id of WORKER_IDS) disabledByWorker.set(id, 0);
++  for (const row of skillOverrides) {
++    if (row.enabled) continue;
++    if (!(WORKER_IDS as string[]).includes(row.skillId)) continue;
++    const id = row.skillId as WorkerId;
++    disabledByWorker.set(id, (disabledByWorker.get(id) ?? 0) + 1);
++  }
++
++  const perWorker = new Map<
++    WorkerId,
++    { clients: Set<string>; total: number; success: number; failingClients: Set<string> }
++  >();
++  for (const id of WORKER_IDS) perWorker.set(id, { clients: new Set(), total: 0, success: 0, failingClients: new Set() });
++
++  // Most-recent-first per (engagement, worker) so a failure streak can be
++  // read off the front of each group without a second query — same
++  // approach as package-overview.ts.
++  const runsByPair = new Map<string, typeof runs>();
++  for (const run of runs) {
++    if (!(WORKER_IDS as string[]).includes(run.skillName)) continue;
++    const key = `${run.engagementId}:${run.skillName}`;
++    const list = runsByPair.get(key);
++    if (list) list.push(run);
++    else runsByPair.set(key, [run]);
++  }
++  for (const list of runsByPair.values()) {
++    list.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
++  }
++
++  for (const [key, list] of runsByPair) {
++    const [engagementId, skillName] = key.split(":");
++    const workerId = skillName as WorkerId;
++    const bucket = perWorker.get(workerId);
++    if (!bucket) continue;
++    bucket.clients.add(engagementId);
++    bucket.total += list.length;
++    for (const run of list) {
++      if (run.status === "success") bucket.success++;
++    }
++    if (FAILURE_STATUSES.has(list[0].status)) bucket.failingClients.add(engagementId);
++  }
++
++  const workers: WorkerOverviewStat[] = WORKER_IDS.map((id) => {
++    const bucket = perWorker.get(id)!;
++    return {
++      workerId: id,
++      name: WORKER_REGISTRY[id].name,
++      productId: WORKER_REGISTRY[id].productId,
++      activeClients: bucket.clients.size,
++      runsInWindow: bucket.total,
++      successRate: bucket.total > 0 ? Math.round((bucket.success / bucket.total) * 100) : null,
++      needsAttention: bucket.failingClients.size,
++      disabledClients: disabledByWorker.get(id) ?? 0,
++    };
++  });
++
++  return { totalClients, workers, windowDays: OVERVIEW_WINDOW_DAYS };
++}
++
++export interface WorkerRunRow {
++  id: string;
++  engagementId: string;
++  buyerName: string;
++  status: string;
++  startedAt: string;
++  completedAt: string | null;
++}
++
++/** Reputation Manager's three watch skills' own tables (rep_engine_findings,
++ * rep_trustpilot_reviews, rep_reddit_mentions) aren't per-skill in any
++ * meaningful sense — the old standalone RM analytics page rolled them up
++ * across every RM-enrolled client regardless of which specific skill
++ * produced them, and this does the same, attached to every RM worker's
++ * own page rather than living on one page nothing else linked to. */
++export interface RepSignalSummary {
++  engineChecks: number;
++  trustpilotReviews: number;
++  trustpilotAvgRating: string | null;
++  redditMentions: number;
++  flaggedSignals: number;
++  sentiment: { positive: number; neutral: number; negative: number };
++}
++
++export interface WorkerAnalyticsDetail {
++  worker: { id: WorkerId; name: string; description: string; productId: "showtime" | "reputation-manager" };
++  windowDays: number;
++  runsInWindow: number;
++  successRate: number | null;
++  activeClients: number;
++  needsAttention: number;
++  recentRuns: WorkerRunRow[];
++  repSignals: RepSignalSummary | null;
++}
++
++export async function getWorkerAnalyticsDetail(
++  whopUserId: string,
++  workspaceId: string,
++  workerId: WorkerId
++): Promise<WorkerAnalyticsDetail> {
++  const worker = WORKER_REGISTRY[workerId];
++  const since = daysAgo(DETAIL_WINDOW_DAYS);
++
++  const allEngagements = await db
++    .select({ engagementId: engagements.engagementId })
++    .from(engagements)
++    .where(
++      and(
++        eq(engagements.whopUserId, whopUserId),
++        eq(engagements.workspaceId, workspaceId),
++        isNull(engagements.deletedAt)
++      )
++    );
++  const engagementIds = allEngagements.map((e) => e.engagementId);
++
++  const emptyRepSignals: RepSignalSummary = {
++    engineChecks: 0,
++    trustpilotReviews: 0,
++    trustpilotAvgRating: null,
++    redditMentions: 0,
++    flaggedSignals: 0,
++    sentiment: { positive: 0, neutral: 0, negative: 0 },
++  };
++
++  if (engagementIds.length === 0) {
++    return {
++      worker: { id: worker.id, name: worker.name, description: worker.description, productId: worker.productId },
++      windowDays: DETAIL_WINDOW_DAYS,
++      runsInWindow: 0,
++      successRate: null,
++      activeClients: 0,
++      needsAttention: 0,
++      recentRuns: [],
++      repSignals: worker.productId === "reputation-manager" ? emptyRepSignals : null,
++    };
++  }
++
++  const [runs, recentRunsRaw, repSignals] = await Promise.all([
++    db
++      .select({ engagementId: skillRuns.engagementId, status: skillRuns.status, startedAt: skillRuns.startedAt })
++      .from(skillRuns)
++      .where(and(eq(skillRuns.skillName, workerId), gte(skillRuns.startedAt, since), inArray(skillRuns.engagementId, engagementIds))),
++    db
++      .select({
++        id: skillRuns.id,
++        engagementId: skillRuns.engagementId,
++        buyerName: engagements.buyer,
++        status: skillRuns.status,
++        startedAt: skillRuns.startedAt,
++        completedAt: skillRuns.completedAt,
++      })
++      .from(skillRuns)
++      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
++      .where(and(eq(skillRuns.skillName, workerId), inArray(skillRuns.engagementId, engagementIds)))
++      .orderBy(desc(skillRuns.startedAt))
++      .limit(RECENT_RUNS_LIMIT),
++    worker.productId === "reputation-manager" ? getRepSignalSummary(engagementIds) : Promise.resolve(null),
++  ]);
++
++  const activeClientIds = new Set(runs.map((r) => r.engagementId));
++  const successCount = runs.filter((r) => r.status === "success").length;
++
++  const byEngagement = new Map<string, typeof runs>();
++  for (const run of runs) {
++    const list = byEngagement.get(run.engagementId);
++    if (list) list.push(run);
++    else byEngagement.set(run.engagementId, [run]);
++  }
++  let needsAttention = 0;
++  for (const list of byEngagement.values()) {
++    list.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
++    if (FAILURE_STATUSES.has(list[0].status)) needsAttention++;
++  }
++
++  return {
++    worker: { id: worker.id, name: worker.name, description: worker.description, productId: worker.productId },
++    windowDays: DETAIL_WINDOW_DAYS,
++    runsInWindow: runs.length,
++    successRate: runs.length > 0 ? Math.round((successCount / runs.length) * 100) : null,
++    activeClients: activeClientIds.size,
++    needsAttention,
++    recentRuns: recentRunsRaw.map((r) => ({
++      id: r.id,
++      engagementId: r.engagementId,
++      buyerName: r.buyerName,
++      status: r.status,
++      startedAt: r.startedAt.toISOString(),
++      completedAt: r.completedAt ? r.completedAt.toISOString() : null,
++    })),
++    repSignals,
++  };
++}
++
++async function getRepSignalSummary(engagementIds: string[]): Promise<RepSignalSummary> {
++  const [findings, reviews, mentions] = await Promise.all([
++    db
++      .select({ sentiment: repEngineFindings.sentiment, flagged: repEngineFindings.flagged })
++      .from(repEngineFindings)
++      .where(inArray(repEngineFindings.engagementId, engagementIds)),
++    db
++      .select({ rating: repTrustpilotReviews.rating, sentiment: repTrustpilotReviews.sentiment, flagged: repTrustpilotReviews.flagged })
++      .from(repTrustpilotReviews)
++      .where(inArray(repTrustpilotReviews.engagementId, engagementIds)),
++    db
++      .select({ sentiment: repRedditMentions.sentiment, flagged: repRedditMentions.flagged })
++      .from(repRedditMentions)
++      .where(inArray(repRedditMentions.engagementId, engagementIds)),
++  ]);
++
++  const allSignals = [...findings, ...reviews, ...mentions];
++  return {
++    engineChecks: findings.length,
++    trustpilotReviews: reviews.length,
++    trustpilotAvgRating: reviews.length ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1) : null,
++    redditMentions: mentions.length,
++    flaggedSignals: allSignals.filter((s) => s.flagged).length,
++    sentiment: {
++      positive: allSignals.filter((s) => s.sentiment === "positive").length,
++      neutral: allSignals.filter((s) => s.sentiment === "neutral").length,
++      negative: allSignals.filter((s) => s.sentiment === "negative").length,
++    },
++  };
++}
+-- 
+2.43.0
+

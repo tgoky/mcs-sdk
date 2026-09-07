@@ -1,0 +1,950 @@
+From bdf385d44748457148e7a8f4ad9355229ba5cc71 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 7 Sep 2026 11:17:21 +0000
+Subject: [PATCH] feat: per-engagement Reputation Manager findings page
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Closes the bigger RM gap flagged this session: the 6 chat-only adhoc
+actions (live AI-engine spot-check, crisis threshold stress-test,
+draft-response, and Twitter/Trustpilot/Reddit deep scans) had no natural
+UI home because no page anywhere showed one client's actual findings —
+those existed only per-run (/dashboard/runs/[id]) or aggregated across
+the whole workspace (/dashboard/reputation-manager). This adds that page:
+/dashboard/engagements/[id]/skills/reputation-manager, linked from each
+RM worker card on WorkersPanel ("Findings", mirroring Showtime's
+"Pipeline" link).
+
+New /api/engagements/[id]/rep-findings route reads the client's most
+recent rows across all 5 RM ingestion tables (engine findings, Trustpilot
+reviews, Reddit/Twitter mentions, incidents) — the first route to scope
+any of them to one engagement rather than one run or the whole workspace.
+A new /rep-findings/trigger route dispatches all 6 adhoc actions through
+the exact same chat-skill-trigger.ts functions Teammates chat already
+uses, including a per-finding "Draft a response" button wired to the real
+finding text.
+
+Also fixes a real bug found while building this: the run-detail page's
+SkillView switch had no case for any of the 6 adhoc skill names, so
+clicking "View run" on one of them rendered PinDownView — Showtime
+script/brief/page-audit deliverables that are always null for an RM run.
+Added skillRuns.summary to the detail route's select (it was queried but
+never selected) and a generic AdhocRunSummaryView for these 6 skills,
+which is all their real output actually is.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01RyH3xjJh5mTzvTxG4Rpbpi
+---
+ .../engagements/[id]/rep-findings/route.ts    |  65 +++
+ .../[id]/rep-findings/trigger/route.ts        |  80 ++++
+ src/app/api/skill-runs/[id]/detail/route.ts   |   1 +
+ .../engagements/[id]/rep-findings-panel.tsx   | 424 ++++++++++++++++++
+ .../[id]/skills/reputation-manager/page.tsx   |  80 ++++
+ .../engagements/[id]/workers-panel.tsx        |  22 +
+ src/app/dashboard/runs/[id]/_shared/types.ts  |  24 +-
+ src/app/dashboard/runs/[id]/page.tsx          |  12 +
+ .../[id]/views/adhoc-run-summary-view.tsx     |  82 ++++
+ 9 files changed, 788 insertions(+), 2 deletions(-)
+ create mode 100644 src/app/api/engagements/[id]/rep-findings/route.ts
+ create mode 100644 src/app/api/engagements/[id]/rep-findings/trigger/route.ts
+ create mode 100644 src/app/dashboard/engagements/[id]/rep-findings-panel.tsx
+ create mode 100644 src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx
+ create mode 100644 src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx
+
+diff --git a/src/app/api/engagements/[id]/rep-findings/route.ts b/src/app/api/engagements/[id]/rep-findings/route.ts
+new file mode 100644
+index 0000000..283bf14
+--- /dev/null
++++ b/src/app/api/engagements/[id]/rep-findings/route.ts
+@@ -0,0 +1,65 @@
++// src/app/api/engagements/[id]/rep-findings/route.ts
++//
++// The per-engagement RM findings page's data source — the missing piece
++// flagged this session: RM's ingestion tables (rep_engine_findings,
++// rep_trustpilot_reviews, rep_reddit_mentions, rep_twitter_mentions,
++// rep_incidents) previously had no route scoping them to one client. The
++// only existing readers were the run-detail page (one run's own
++// time-window slice) and the two workspace-wide reputation-manager/ pages
++// — nothing showed one client's actual history in one place.
++//
++// Read-only, most-recent-N per table (LIMIT, not a time window) — this is
++// meant to answer "what does this client's reputation actually look like
++// right now," not reconstruct a specific run's slice the way the
++// run-detail route's window-scoped queries do.
++
++import { NextResponse } from "next/server";
++import { db } from "@/lib/db";
++import { engagements, repEngineFindings, repTrustpilotReviews, repRedditMentions, repTwitterMentions, repIncidents } from "@/models/schema";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { and, eq, desc } from "drizzle-orm";
++
++export const runtime = "nodejs";
++export const revalidate = 0;
++
++const ROW_LIMIT = 50;
++
++export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
++  try {
++    const { id: engagementId } = await params;
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const [tenant] = await db
++      .select({ engagementId: engagements.engagementId })
++      .from(engagements)
++      .where(
++        and(
++          eq(engagements.engagementId, engagementId),
++          eq(engagements.whopUserId, session.whopUserId),
++          eq(engagements.workspaceId, activeWorkspace.workspaceId)
++        )
++      )
++      .limit(1);
++    if (!tenant) {
++      return NextResponse.json({ error: "Client not found." }, { status: 404 });
++    }
++
++    const [engineFindings, trustpilotReviews, redditMentions, twitterMentions, incidents] = await Promise.all([
++      db.select().from(repEngineFindings).where(eq(repEngineFindings.engagementId, engagementId)).orderBy(desc(repEngineFindings.runAt)).limit(ROW_LIMIT),
++      db.select().from(repTrustpilotReviews).where(eq(repTrustpilotReviews.engagementId, engagementId)).orderBy(desc(repTrustpilotReviews.createdAt)).limit(ROW_LIMIT),
++      db.select().from(repRedditMentions).where(eq(repRedditMentions.engagementId, engagementId)).orderBy(desc(repRedditMentions.createdAt)).limit(ROW_LIMIT),
++      db.select().from(repTwitterMentions).where(eq(repTwitterMentions.engagementId, engagementId)).orderBy(desc(repTwitterMentions.createdAt)).limit(ROW_LIMIT),
++      db.select().from(repIncidents).where(eq(repIncidents.engagementId, engagementId)).orderBy(desc(repIncidents.declaredAt)).limit(ROW_LIMIT),
++    ]);
++
++    return NextResponse.json({ engineFindings, trustpilotReviews, redditMentions, twitterMentions, incidents });
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : String(error);
++    return NextResponse.json({ error: message }, { status: 500 });
++  }
++}
+diff --git a/src/app/api/engagements/[id]/rep-findings/trigger/route.ts b/src/app/api/engagements/[id]/rep-findings/trigger/route.ts
+new file mode 100644
+index 0000000..1264353
+--- /dev/null
++++ b/src/app/api/engagements/[id]/rep-findings/trigger/route.ts
+@@ -0,0 +1,80 @@
++// src/app/api/engagements/[id]/rep-findings/trigger/route.ts
++//
++// Dashboard UI counterpart to Teammates chat's 6 adhoc RM actions — same
++// trigger functions chat-skill-trigger.ts already exports and chat
++// already calls, so behavior can't drift between the two surfaces. One
++// route with an `action` discriminant rather than 6 separate route files,
++// matching pin-down/run-piece/route.ts's own precedent for the same
++// reason (a handful of thin, single-purpose dispatches to already-proven
++// functions, not enough distinct logic per action to earn its own file).
++
++import { NextResponse } from "next/server";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import {
++  triggerEngineAdhocCheckForEngagement,
++  triggerCrisisStressTestForEngagement,
++  triggerDraftResponseForEngagement,
++  triggerTwitterDeepScanForEngagement,
++  triggerTrustpilotDeepScanForEngagement,
++  triggerRedditDeepScanForEngagement,
++} from "@/lib/chat-skill-trigger";
++
++export const runtime = "nodejs";
++
++export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
++  try {
++    const { id: engagementId } = await params;
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const body = await req.json().catch(() => ({}));
++    const action = body?.action;
++    const str = (v: unknown) => (typeof v === "string" ? v : undefined);
++
++    const result = await (async () => {
++      switch (action) {
++        case "check_ai_engines":
++          return triggerEngineAdhocCheckForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, str(body?.subject), str(body?.question));
++        case "check_crisis_threshold": {
++          const text = str(body?.hypotheticalFindingText);
++          if (!text) return { ok: false as const, error: "hypotheticalFindingText is required" };
++          return triggerCrisisStressTestForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, text, str(body?.hypotheticalFindingSource));
++        }
++        case "draft_response": {
++          const text = str(body?.findingText);
++          if (!text) return { ok: false as const, error: "findingText is required" };
++          return triggerDraftResponseForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, text, str(body?.findingPlatform));
++        }
++        case "twitter_deep_scan": {
++          const date = str(body?.deepScanSinceDate);
++          if (!date) return { ok: false as const, error: "deepScanSinceDate is required" };
++          return triggerTwitterDeepScanForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, date);
++        }
++        case "trustpilot_deep_scan": {
++          const date = str(body?.deepScanSinceDate);
++          if (!date) return { ok: false as const, error: "deepScanSinceDate is required" };
++          return triggerTrustpilotDeepScanForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, date);
++        }
++        case "reddit_deep_scan": {
++          const timeframe = str(body?.deepScanTimeframe);
++          if (!timeframe) return { ok: false as const, error: "deepScanTimeframe is required" };
++          return triggerRedditDeepScanForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, timeframe);
++        }
++        default:
++          return { ok: false as const, error: `Unknown action: ${action}` };
++      }
++    })();
++
++    if (!result.ok) {
++      return NextResponse.json({ error: result.error }, { status: 400 });
++    }
++    return NextResponse.json({ runId: result.runId, message: result.message });
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : String(error);
++    return NextResponse.json({ error: message }, { status: 500 });
++  }
++}
+diff --git a/src/app/api/skill-runs/[id]/detail/route.ts b/src/app/api/skill-runs/[id]/detail/route.ts
+index 21267d1..0a76600 100644
+--- a/src/app/api/skill-runs/[id]/detail/route.ts
++++ b/src/app/api/skill-runs/[id]/detail/route.ts
+@@ -55,6 +55,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
+         pinDownPageAudit: engagements.pinDownPageAudit,
+         winBackSequenceAssetMap: engagements.winBackSequenceAssetMap,
+         winBackCounts: engagements.winBackCounts,
++        summary: skillRuns.summary,
+       })
+       .from(skillRuns)
+       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+diff --git a/src/app/dashboard/engagements/[id]/rep-findings-panel.tsx b/src/app/dashboard/engagements/[id]/rep-findings-panel.tsx
+new file mode 100644
+index 0000000..bd14da1
+--- /dev/null
++++ b/src/app/dashboard/engagements/[id]/rep-findings-panel.tsx
+@@ -0,0 +1,424 @@
++"use client";
++
++// src/app/dashboard/engagements/[id]/rep-findings-panel.tsx
++//
++// The per-engagement Reputation Manager findings page — the bigger gap
++// flagged this session: the 6 chat-only adhoc RM actions (live AI-engine
++// spot-check, crisis threshold stress-test, draft-response, and 3 deep
++// scans) had buttons nowhere to live, because there was no page anywhere
++// showing one client's actual Trustpilot reviews, Reddit/Twitter mentions,
++// AI-engine findings, or crisis incidents — those existed only per-run
++// (/dashboard/runs/[id]) or aggregated across the whole workspace
++// (/dashboard/reputation-manager). This is that page's body: one client's
++// real history, each section rendered right next to the action that adds
++// to it.
++//
++// Every trigger here calls the same chat-skill-trigger.ts functions
++// Teammates chat already uses (via /api/engagements/[id]/rep-findings/
++// trigger) — no new business logic, just a second way to reach code
++// already shipped and verified this session. Same "dispatch, show a
++// runId, link to the run" pattern as trigger-skill-button.tsx and
++// run-pin-down-piece-button.tsx; the run link now renders correctly too
++// (see adhoc-run-summary-view.tsx — these 6 skill names used to fall
++// through to the wrong Pin-Down view).
++
++import { useCallback, useEffect, useState, type ReactNode } from "react";
++import { Radar, Star, MessageSquare, AtSign, ShieldAlert, Loader2, ArrowRight, RefreshCw, PenLine } from "lucide-react";
++import { SentimentPill, FlaggedPill } from "@/app/dashboard/runs/[id]/_shared/sentiment-pill";
++import { EmptyState } from "@/app/dashboard/runs/[id]/_shared/empty-state";
++
++type EngineFinding = { id: string; engineId: string; promptText: string; responseText: string; sentiment: string; flagged: boolean; flagReason: string | null; runAt: string };
++type TrustpilotReview = { id: string; reviewerName: string | null; rating: number; reviewText: string; sentiment: string; flagged: boolean; flagReason: string | null; createdAt: string };
++type RedditMention = { id: string; subreddit: string; author: string | null; permalink: string; mentionText: string; sentiment: string; flagged: boolean; flagReason: string | null; createdAt: string };
++type TwitterMention = { id: string; author: string | null; permalink: string; mentionText: string; sentiment: string; flagged: boolean; flagReason: string | null; createdAt: string };
++type Incident = { id: string; severityScore: number; summary: string; status: string; declaredAt: string };
++
++type FindingsData = {
++  engineFindings: EngineFinding[];
++  trustpilotReviews: TrustpilotReview[];
++  redditMentions: RedditMention[];
++  twitterMentions: TwitterMention[];
++  incidents: Incident[];
++};
++
++type TriggerResult = { runId?: string; message?: string; error?: string } | null;
++
++function RunResultBanner({ result }: { result: TriggerResult }) {
++  if (!result) return null;
++  return (
++    <p className={`text-[11px] font-mono font-semibold flex items-center justify-between gap-2 ${result.error ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
++      <span>{result.error ?? result.message}</span>
++      {result.runId && (
++        <a href={`/dashboard/runs/${result.runId}`} className="underline underline-offset-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white font-bold shrink-0">
++          View run →
++        </a>
++      )}
++    </p>
++  );
++}
++
++function SectionCard({ icon: Icon, iconClass, title, count, children }: { icon: React.ElementType; iconClass: string; title: string; count: number; children: ReactNode }) {
++  return (
++    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-3">
++      <div className="flex items-center justify-between">
++        <div className="flex items-center gap-2.5">
++          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${iconClass}`}>
++            <Icon size={16} />
++          </div>
++          <h3 className="text-sm font-bold text-zinc-900 dark:text-white">{title}</h3>
++        </div>
++        <span className="text-[11px] font-mono text-zinc-500">{count} on file</span>
++      </div>
++      {children}
++    </div>
++  );
++}
++
++function useTrigger(engagementId: string) {
++  const [state, setState] = useState<"idle" | "running">("idle");
++  const [result, setResult] = useState<TriggerResult>(null);
++
++  async function fire(payload: Record<string, unknown>) {
++    setState("running");
++    setResult(null);
++    try {
++      const res = await fetch(`/api/engagements/${engagementId}/rep-findings/trigger`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify(payload),
++      });
++      const body = await res.json();
++      setResult(res.ok ? { runId: body.runId, message: body.message } : { error: body.error ?? "Failed to start." });
++    } catch (e) {
++      setResult({ error: e instanceof Error ? e.message : "Failed to start." });
++    } finally {
++      setState("idle");
++    }
++  }
++
++  return { state, result, fire };
++}
++
++function DraftResponseButton({ engagementId, findingText, findingPlatform }: { engagementId: string; findingText: string; findingPlatform: string }) {
++  const { state, result, fire } = useTrigger(engagementId);
++  const [open, setOpen] = useState(false);
++
++  if (!open) {
++    return (
++      <button
++        type="button"
++        onClick={() => setOpen(true)}
++        className="flex items-center gap-1 text-[10.5px] font-mono font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
++      >
++        <PenLine size={11} /> Draft a response
++      </button>
++    );
++  }
++
++  return (
++    <div className="space-y-1.5 pt-1">
++      {!result && (
++        <button
++          type="button"
++          onClick={() => fire({ action: "draft_response", findingText, findingPlatform })}
++          disabled={state === "running"}
++          className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-2.5 py-1 text-[10.5px] font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
++        >
++          {state === "running" ? <Loader2 size={11} className="animate-spin" /> : <PenLine size={11} />}
++          Confirm — draft a response to this
++        </button>
++      )}
++      <RunResultBanner result={result} />
++    </div>
++  );
++}
++
++export function RepFindingsPanel({ engagementId }: { engagementId: string }) {
++  const [data, setData] = useState<FindingsData | null>(null);
++  const [loading, setLoading] = useState(true);
++  const [error, setError] = useState<string | null>(null);
++
++  const load = useCallback(async () => {
++    setLoading(true);
++    setError(null);
++    try {
++      const res = await fetch(`/api/engagements/${engagementId}/rep-findings`);
++      const body = await res.json();
++      if (!res.ok) throw new Error(body?.error ?? "Failed to load findings.");
++      setData(body);
++    } catch (e) {
++      setError(e instanceof Error ? e.message : "Failed to load findings.");
++    } finally {
++      setLoading(false);
++    }
++  }, [engagementId]);
++
++  useEffect(() => {
++    load();
++  }, [load]);
++
++  const engineTrigger = useTrigger(engagementId);
++  const [engineSubject, setEngineSubject] = useState("");
++  const [engineQuestion, setEngineQuestion] = useState("");
++
++  const twitterTrigger = useTrigger(engagementId);
++  const [twitterSince, setTwitterSince] = useState("");
++
++  const trustpilotTrigger = useTrigger(engagementId);
++  const [trustpilotSince, setTrustpilotSince] = useState("");
++
++  const redditTrigger = useTrigger(engagementId);
++  const [redditTimeframe, setRedditTimeframe] = useState("week");
++
++  const crisisTrigger = useTrigger(engagementId);
++  const [crisisText, setCrisisText] = useState("");
++  const [crisisSource, setCrisisSource] = useState("trustpilot");
++
++  if (loading) {
++    return <p className="text-xs text-zinc-500 font-mono py-8 text-center">Loading findings…</p>;
++  }
++
++  if (error || !data) {
++    return <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">{error}</div>;
++  }
++
++  return (
++    <div className="space-y-4 font-sans antialiased">
++      <div className="flex justify-end">
++        <button
++          type="button"
++          onClick={load}
++          className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
++        >
++          <RefreshCw size={13} />
++        </button>
++      </div>
++
++      {/* AI ENGINE FINDINGS */}
++      <SectionCard icon={Radar} iconClass="bg-violet-200 text-violet-950 dark:bg-violet-900/60 dark:text-violet-200" title="AI Engine Findings" count={data.engineFindings.length}>
++        <div className="flex flex-wrap items-end gap-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
++          <div className="space-y-1">
++            <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Subject (optional — competitor)</label>
++            <input value={engineSubject} onChange={(e) => setEngineSubject(e.target.value)} placeholder="Client themselves if blank" className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs w-56" />
++          </div>
++          <div className="space-y-1 flex-1 min-w-[180px]">
++            <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Question (optional)</label>
++            <input value={engineQuestion} onChange={(e) => setEngineQuestion(e.target.value)} placeholder="Default: general reputation check" className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs w-full" />
++          </div>
++          <button
++            type="button"
++            onClick={() => engineTrigger.fire({ action: "check_ai_engines", subject: engineSubject.trim() || undefined, question: engineQuestion.trim() || undefined })}
++            disabled={engineTrigger.state === "running"}
++            className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
++          >
++            {engineTrigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
++            Ask now
++          </button>
++        </div>
++        <RunResultBanner result={engineTrigger.result} />
++
++        {data.engineFindings.length === 0 ? (
++          <EmptyState icon={Radar} title="No AI engine findings yet" description="Runs once Identity Setup is complete, on schedule — or ask a live question above." />
++        ) : (
++          <div className="space-y-2">
++            {data.engineFindings.map((f) => (
++              <div key={f.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 space-y-1">
++                <div className="flex items-center justify-between gap-2">
++                  <span className="text-[11px] font-mono font-bold uppercase text-zinc-600 dark:text-zinc-400">{f.engineId}</span>
++                  <div className="flex items-center gap-2">
++                    <FlaggedPill flagged={f.flagged} reason={f.flagReason} />
++                    <SentimentPill sentiment={f.sentiment} />
++                  </div>
++                </div>
++                <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{f.promptText}</p>
++                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed line-clamp-3">{f.responseText}</p>
++                <DraftResponseButton engagementId={engagementId} findingText={f.responseText} findingPlatform="engine_panel" />
++              </div>
++            ))}
++          </div>
++        )}
++      </SectionCard>
++
++      {/* TRUSTPILOT */}
++      <SectionCard icon={Star} iconClass="bg-emerald-200 text-emerald-950 dark:bg-emerald-900/60 dark:text-emerald-200" title="Trustpilot Reviews" count={data.trustpilotReviews.length}>
++        <div className="flex flex-wrap items-end gap-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
++          <div className="space-y-1">
++            <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Scan back to</label>
++            <input type="date" value={trustpilotSince} onChange={(e) => setTrustpilotSince(e.target.value)} className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs" />
++          </div>
++          <button
++            type="button"
++            onClick={() => trustpilotTrigger.fire({ action: "trustpilot_deep_scan", deepScanSinceDate: trustpilotSince })}
++            disabled={trustpilotTrigger.state === "running" || !trustpilotSince}
++            className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
++          >
++            {trustpilotTrigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
++            Deep scan
++          </button>
++        </div>
++        <RunResultBanner result={trustpilotTrigger.result} />
++
++        {data.trustpilotReviews.length === 0 ? (
++          <EmptyState icon={Star} title="No Trustpilot reviews yet" description="Runs daily on schedule once a domain is set — or scan further back above." />
++        ) : (
++          <div className="space-y-2">
++            {data.trustpilotReviews.map((r) => (
++              <div key={r.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 space-y-1">
++                <div className="flex items-center justify-between gap-2">
++                  <span className="text-[11px] font-mono font-bold text-zinc-600 dark:text-zinc-400">{r.reviewerName ?? "Anonymous"} — {r.rating}/5</span>
++                  <div className="flex items-center gap-2">
++                    <FlaggedPill flagged={r.flagged} reason={r.flagReason} />
++                    <SentimentPill sentiment={r.sentiment} />
++                  </div>
++                </div>
++                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed line-clamp-3">{r.reviewText}</p>
++                <DraftResponseButton engagementId={engagementId} findingText={r.reviewText} findingPlatform="trustpilot" />
++              </div>
++            ))}
++          </div>
++        )}
++      </SectionCard>
++
++      {/* REDDIT */}
++      <SectionCard icon={MessageSquare} iconClass="bg-orange-200 text-orange-950 dark:bg-orange-900/60 dark:text-orange-200" title="Reddit Mentions" count={data.redditMentions.length}>
++        <div className="flex flex-wrap items-end gap-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
++          <div className="space-y-1">
++            <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Widen to timeframe</label>
++            <select value={redditTimeframe} onChange={(e) => setRedditTimeframe(e.target.value)} className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs">
++              {["hour", "day", "week", "month", "year", "all"].map((t) => (
++                <option key={t} value={t}>{t}</option>
++              ))}
++            </select>
++          </div>
++          <button
++            type="button"
++            onClick={() => redditTrigger.fire({ action: "reddit_deep_scan", deepScanTimeframe: redditTimeframe })}
++            disabled={redditTrigger.state === "running"}
++            className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
++          >
++            {redditTrigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
++            Widen scan
++          </button>
++        </div>
++        <RunResultBanner result={redditTrigger.result} />
++
++        {data.redditMentions.length === 0 ? (
++          <EmptyState icon={MessageSquare} title="No Reddit mentions yet" description="Runs daily on schedule — or widen the scan above to reach further back." />
++        ) : (
++          <div className="space-y-2">
++            {data.redditMentions.map((m) => (
++              <div key={m.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 space-y-1">
++                <div className="flex items-center justify-between gap-2">
++                  <span className="text-[11px] font-mono font-bold text-zinc-600 dark:text-zinc-400">r/{m.subreddit} — {m.author ? `u/${m.author}` : "unknown"}</span>
++                  <div className="flex items-center gap-2">
++                    <FlaggedPill flagged={m.flagged} reason={m.flagReason} />
++                    <SentimentPill sentiment={m.sentiment} />
++                  </div>
++                </div>
++                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed line-clamp-3">{m.mentionText}</p>
++                <div className="flex items-center gap-3">
++                  <a href={m.permalink} target="_blank" rel="noreferrer" className="text-[10.5px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2">
++                    View on Reddit
++                  </a>
++                  <DraftResponseButton engagementId={engagementId} findingText={m.mentionText} findingPlatform="reddit" />
++                </div>
++              </div>
++            ))}
++          </div>
++        )}
++      </SectionCard>
++
++      {/* TWITTER/X */}
++      <SectionCard icon={AtSign} iconClass="bg-sky-200 text-sky-950 dark:bg-sky-900/60 dark:text-sky-200" title="X / Twitter Mentions" count={data.twitterMentions.length}>
++        <div className="flex flex-wrap items-end gap-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
++          <div className="space-y-1">
++            <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Scan back to</label>
++            <input type="date" value={twitterSince} onChange={(e) => setTwitterSince(e.target.value)} className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs" />
++          </div>
++          <button
++            type="button"
++            onClick={() => twitterTrigger.fire({ action: "twitter_deep_scan", deepScanSinceDate: twitterSince })}
++            disabled={twitterTrigger.state === "running" || !twitterSince}
++            className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
++          >
++            {twitterTrigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
++            Deep scan
++          </button>
++        </div>
++        <RunResultBanner result={twitterTrigger.result} />
++
++        {data.twitterMentions.length === 0 ? (
++          <EmptyState icon={AtSign} title="No X/Twitter mentions yet" description="Runs daily on schedule — or scan further back above." />
++        ) : (
++          <div className="space-y-2">
++            {data.twitterMentions.map((m) => (
++              <div key={m.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 space-y-1">
++                <div className="flex items-center justify-between gap-2">
++                  <span className="text-[11px] font-mono font-bold text-zinc-600 dark:text-zinc-400">{m.author ? `@${m.author}` : "unknown"}</span>
++                  <div className="flex items-center gap-2">
++                    <FlaggedPill flagged={m.flagged} reason={m.flagReason} />
++                    <SentimentPill sentiment={m.sentiment} />
++                  </div>
++                </div>
++                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed line-clamp-3">{m.mentionText}</p>
++                <div className="flex items-center gap-3">
++                  <a href={m.permalink} target="_blank" rel="noreferrer" className="text-[10.5px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2">
++                    View on X
++                  </a>
++                  <DraftResponseButton engagementId={engagementId} findingText={m.mentionText} findingPlatform="twitter" />
++                </div>
++              </div>
++            ))}
++          </div>
++        )}
++      </SectionCard>
++
++      {/* CRISIS INCIDENTS */}
++      <SectionCard icon={ShieldAlert} iconClass="bg-rose-200 text-rose-950 dark:bg-rose-900/60 dark:text-rose-200" title="Crisis Incidents" count={data.incidents.length}>
++        <div className="space-y-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
++          <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Test a hypothetical finding against this client&apos;s threshold</label>
++          <div className="flex flex-wrap items-end gap-2">
++            <input
++              value={crisisText}
++              onChange={(e) => setCrisisText(e.target.value)}
++              placeholder="Made-up finding — e.g. a hypothetical bad review"
++              className="flex-1 min-w-[200px] rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs"
++            />
++            <select value={crisisSource} onChange={(e) => setCrisisSource(e.target.value)} className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs">
++              {["trustpilot", "reddit", "twitter", "engine_panel"].map((s) => (
++                <option key={s} value={s}>{s}</option>
++              ))}
++            </select>
++            <button
++              type="button"
++              onClick={() => crisisTrigger.fire({ action: "check_crisis_threshold", hypotheticalFindingText: crisisText, hypotheticalFindingSource: crisisSource })}
++              disabled={crisisTrigger.state === "running" || !crisisText.trim()}
++              className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
++            >
++              {crisisTrigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
++              Test threshold
++            </button>
++          </div>
++          <p className="text-[10.5px] text-zinc-500">Hypothetical only — never declares a real incident or notifies anyone.</p>
++        </div>
++        <RunResultBanner result={crisisTrigger.result} />
++
++        {data.incidents.length === 0 ? (
++          <EmptyState icon={ShieldAlert} title="No incidents declared" description="Crisis Response runs daily on schedule, reading across the other watch skills' flagged findings." />
++        ) : (
++          <div className="space-y-2">
++            {data.incidents.map((inc) => (
++              <div key={inc.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 space-y-1">
++                <div className="flex items-center justify-between gap-2">
++                  <span className="text-[11px] font-mono font-bold text-rose-600 dark:text-rose-400">Severity {inc.severityScore}/100</span>
++                  <span className="text-[10.5px] font-mono text-zinc-500">{inc.status}</span>
++                </div>
++                <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">{inc.summary}</p>
++              </div>
++            ))}
++          </div>
++        )}
++      </SectionCard>
++    </div>
++  );
++}
+diff --git a/src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx b/src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx
+new file mode 100644
+index 0000000..b317d85
+--- /dev/null
++++ b/src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx
+@@ -0,0 +1,80 @@
++// src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx
++//
++// The per-engagement RM findings page — see rep-findings-panel.tsx's own
++// header for why this exists. Mirrors skills/pile-on/page.tsx's shell
++// exactly (back link, breadcrumb, title) since that's this app's
++// established shape for a client-scoped skill page; the only real
++// difference is this one covers five RM skills' worth of history, not one
++// Showtime skill's pipeline.
++
++import { db } from "@/lib/db";
++import { engagements } from "@/models/schema";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { and, eq } from "drizzle-orm";
++import { notFound } from "next/navigation";
++import Link from "next/link";
++import { ChevronLeft } from "lucide-react";
++import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
++import { RepFindingsPanel } from "../../rep-findings-panel";
++
++export const revalidate = 0;
++
++export default async function ReputationManagerFindingsPage({
++  params,
++  searchParams,
++}: {
++  params: Promise<{ id: string }>;
++  searchParams: Promise<{ from?: string }>;
++}) {
++  const { id } = await params;
++  const { from } = await searchParams;
++  const session = await getSession();
++  const activeWorkspace = await getActiveWorkspace(session?.whopUserId ?? "");
++
++  const [engagement] = await db
++    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
++    .from(engagements)
++    .where(
++      and(
++        eq(engagements.engagementId, id),
++        eq(engagements.whopUserId, session?.whopUserId ?? ""),
++        eq(engagements.workspaceId, activeWorkspace.workspaceId)
++      )
++    )
++    .limit(1);
++
++  if (!engagement) notFound();
++
++  const isFromModule = from && from.startsWith("/dashboard/modules");
++  const backHref = isFromModule ? from : `/dashboard/engagements/${id}`;
++  const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
++
++  return (
++    <div className="space-y-4 font-sans antialiased">
++      <SetBreadcrumbLabel label={`${engagement.buyer} · Reputation Manager`} />
++
++      <div className="flex items-center gap-3">
++        <Link
++          href={backHref}
++          className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
++          aria-label={backLabel}
++          title={backLabel}
++        >
++          <ChevronLeft className="w-4 h-4" />
++        </Link>
++
++        <div>
++          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
++            Reputation Manager — {engagement.buyer}
++          </h1>
++          <p className="text-xs text-zinc-500 mt-0.5">
++            Every finding, review, and mention on file for this client — AI engines, Trustpilot, Reddit, X, and any declared incidents.
++          </p>
++        </div>
++      </div>
++
++      <RepFindingsPanel engagementId={id} />
++    </div>
++  );
++}
+diff --git a/src/app/dashboard/engagements/[id]/workers-panel.tsx b/src/app/dashboard/engagements/[id]/workers-panel.tsx
+index b5b09ef..a651163 100644
+--- a/src/app/dashboard/engagements/[id]/workers-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/workers-panel.tsx
+@@ -43,6 +43,18 @@ export interface ModuleRunDTO {
+ 
+ const SKILLS_WITH_PAGE: WorkerId[] = ["pre-call-read", "pile-on", "win-back", "leak-map"];
+ 
++// All 5 RM workers share ONE findings page (skills/reputation-manager) —
++// unlike Showtime's per-worker pages above, there's no separate "pipeline"
++// per RM skill, just one client-scoped view across all of them (findings,
++// reviews, mentions, incidents). See rep-findings-panel.tsx's own header.
++const REP_SKILLS_WITH_FINDINGS_PAGE: WorkerId[] = [
++  "rep-engine-panel",
++  "rep-trustpilot-watch",
++  "rep-reddit-watch",
++  "rep-twitter-watch",
++  "rep-crisis-response",
++];
++
+ function deriveModuleStatus(runs: ModuleRunDTO[], isEnabled: boolean, isPaused: boolean): ModuleStatus | "disabled" {
+   if (!isEnabled) return "disabled";
+   if (isPaused) {
+@@ -263,6 +275,16 @@ export function WorkersPanel({
+                       <ExternalLink size={11} />
+                     </Link>
+                   )}
++
++                  {REP_SKILLS_WITH_FINDINGS_PAGE.includes(workerId) && (
++                    <Link
++                      href={`/dashboard/engagements/${engagementId}/skills/reputation-manager`}
++                      className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors ml-auto"
++                    >
++                      <span>Findings</span>
++                      <ExternalLink size={11} />
++                    </Link>
++                  )}
+                 </div>
+ 
+                 <TriggerSkillButton engagementId={engagementId} skillName={workerId} label={`Run ${worker.name}`} />
+diff --git a/src/app/dashboard/runs/[id]/_shared/types.ts b/src/app/dashboard/runs/[id]/_shared/types.ts
+index f2b1187..1826160 100644
+--- a/src/app/dashboard/runs/[id]/_shared/types.ts
++++ b/src/app/dashboard/runs/[id]/_shared/types.ts
+@@ -1,4 +1,4 @@
+-import type { EngagementStack } from "@/models/schema";
++import type { EngagementStack, RunSummary } from "@/models/schema";
+ 
+ export interface BrandVoiceProfile {
+   source_path: "ai_extracted" | "default";
+@@ -89,6 +89,13 @@ export interface RunDetailBase {
+     sms: Array<{ id: string; offsetDays: number; body: string }>;
+   } | null;
+   winBackCounts: { recovery_count: number; lost_count: number } | null;
++  // Only populated by the detail route for the 6 chat-only adhoc RM
++  // skills (rep-engine-adhoc-check, rep-crisis-stress-test,
++  // rep-draft-response, rep-twitter/trustpilot/reddit-deep-scan) — see
++  // AdhocRunSummaryView. Selected unconditionally for every skill (cheap,
++  // one jsonb column) rather than threading a second per-skill case
++  // through the route just to add one field to six of them.
++  summary: RunSummary | null;
+ }
+ 
+ export interface BriefedCall {
+@@ -322,6 +329,18 @@ export type RepRedditWatchDetail = { run: RunDetailBase; mentions: RepRedditMent
+ export type RepTwitterWatchDetail = { run: RunDetailBase; mentions: RepTwitterMentionRow[] };
+ export type RepCrisisResponseDetail = { run: RunDetailBase; incident: RepIncidentRow | null };
+ 
++// The 6 chat-only adhoc actions built this session (rep-engine-adhoc-check,
++// rep-crisis-stress-test, rep-draft-response, rep-twitter-deep-scan,
++// rep-trustpilot-deep-scan, rep-reddit-deep-scan) never had a matching case
++// in the detail route's switch or this file's SkillView switch — they fell
++// through to `default: <PinDownView>`, which renders Showtime deliverables
++// (scripts/briefs/page-audit) that are always null for these runs. None of
++// them write to a dedicated ingestion table the way the 5 scheduled skills
++// do (see this file's own header on why those 5 use a time-window scope) —
++// their entire real output is the run's own summary, so that's all this
++// type carries.
++export type AdhocRunDetail = { run: RunDetailBase };
++
+ export type RunDetailPayload =
+   | PreCallReadDetail
+   | PileOnDetail
+@@ -333,4 +352,5 @@ export type RunDetailPayload =
+   | RepTrustpilotWatchDetail
+   | RepRedditWatchDetail
+   | RepTwitterWatchDetail
+-  | RepCrisisResponseDetail;
++  | RepCrisisResponseDetail
++  | AdhocRunDetail;
+diff --git a/src/app/dashboard/runs/[id]/page.tsx b/src/app/dashboard/runs/[id]/page.tsx
+index 34862e0..2093682 100644
+--- a/src/app/dashboard/runs/[id]/page.tsx
++++ b/src/app/dashboard/runs/[id]/page.tsx
+@@ -32,6 +32,7 @@ import { RepTrustpilotWatchView } from "./views/rep-trustpilot-watch-view";
+ import { RepRedditWatchView } from "./views/rep-reddit-watch-view";
+ import { RepTwitterWatchView } from "./views/rep-twitter-watch-view";
+ import { RepCrisisResponseView } from "./views/rep-crisis-response-view";
++import { AdhocRunSummaryView } from "./views/adhoc-run-summary-view";
+ import { runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
+ import { anySkillDisplayName } from "@/lib/any-skill";
+ import { formatDiaryDateTime, formatReadableDuration } from "@/lib/format-datetime";
+@@ -131,6 +132,17 @@ function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayloa
+       return "mentions" in detail ? <RepTwitterWatchView detail={detail as RepTwitterWatchDetail} /> : null;
+     case "rep-crisis-response":
+       return "incident" in detail ? <RepCrisisResponseView detail={detail} /> : null;
++    // The 6 chat-only adhoc RM actions — see adhoc-run-summary-view.tsx's
++    // own header for why these fall to a generic summary view rather than
++    // their own dedicated one (they write to no dedicated table; their
++    // entire real output is the run's own summary).
++    case "rep-engine-adhoc-check":
++    case "rep-crisis-stress-test":
++    case "rep-draft-response":
++    case "rep-twitter-deep-scan":
++    case "rep-trustpilot-deep-scan":
++    case "rep-reddit-deep-scan":
++      return <AdhocRunSummaryView detail={detail} />;
+     case "pin-down":
+     default:
+       return <PinDownView detail={detail} />;
+diff --git a/src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx b/src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx
+new file mode 100644
+index 0000000..e53c741
+--- /dev/null
++++ b/src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx
+@@ -0,0 +1,82 @@
++"use client";
++
++// src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx
++//
++// Fallback view for the 6 chat-only adhoc RM actions (rep-engine-adhoc-
++// check, rep-crisis-stress-test, rep-draft-response, rep-twitter-deep-
++// scan, rep-trustpilot-deep-scan, rep-reddit-deep-scan) — before this,
++// SkillView's switch had no case for any of them, so they fell to
++// `default: <PinDownView>`, which renders Showtime script/brief/page-audit
++// deliverables that are always null for an RM run. None of these 6 write
++// to a dedicated ingestion table (they're ephemeral spot-checks or, for
++// the 3 deep-scans, they insert into the SAME tables the regular watch
++// skills do — no separate view needed since that data already shows up
++// wherever the regular watch findings are shown). Their real output is
++// entirely in the run's own summary (whatWorked/whatFailed/openItems/
++// decisionsMade), so that's all this renders.
++
++import { CheckCircle2, XCircle, Circle, ListChecks } from "lucide-react";
++import { EmptyState } from "../_shared/empty-state";
++import type { AdhocRunDetail } from "../_shared/types";
++
++function SummarySection({ icon: Icon, label, items, tone }: { icon: React.ElementType; label: string; items: string[]; tone: "success" | "danger" | "neutral" | "info" }) {
++  if (items.length === 0) return null;
++  const toneClass =
++    tone === "success"
++      ? "text-emerald-600 dark:text-emerald-400"
++      : tone === "danger"
++      ? "text-rose-600 dark:text-rose-400"
++      : tone === "info"
++      ? "text-sky-600 dark:text-sky-400"
++      : "text-zinc-500 dark:text-zinc-400";
++  return (
++    <div className="space-y-2">
++      <span className={`flex items-center gap-1.5 text-[10.5px] font-mono font-bold uppercase tracking-wider ${toneClass}`}>
++        <Icon size={13} /> {label}
++      </span>
++      <ul className="space-y-1.5 pl-1">
++        {items.map((item, i) => (
++          <li key={i} className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
++            {item}
++          </li>
++        ))}
++      </ul>
++    </div>
++  );
++}
++
++export function AdhocRunSummaryView({ detail }: { detail: AdhocRunDetail }) {
++  const { summary } = detail.run;
++
++  if (!summary) {
++    return (
++      <EmptyState
++        icon={ListChecks}
++        title="No summary recorded for this run"
++        description="This run either hasn't finished yet or failed before it could record what happened."
++      />
++    );
++  }
++
++  const hasAnything =
++    summary.whatWorked.length > 0 || summary.whatFailed.length > 0 || summary.openItems.length > 0 || summary.decisionsMade.length > 0;
++
++  if (!hasAnything) {
++    return (
++      <EmptyState
++        icon={ListChecks}
++        title="Nothing recorded for this run"
++        description="The run completed without producing any summary detail."
++      />
++    );
++  }
++
++  return (
++    <div className="flex flex-col gap-4 font-sans antialiased rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">
++      <SummarySection icon={CheckCircle2} label="What worked" items={summary.whatWorked} tone="success" />
++      <SummarySection icon={XCircle} label="What failed" items={summary.whatFailed} tone="danger" />
++      <SummarySection icon={Circle} label="Decisions made" items={summary.decisionsMade} tone="info" />
++      <SummarySection icon={ListChecks} label="Open items" items={summary.openItems} tone="neutral" />
++    </div>
++  );
++}
+-- 
+2.43.0
+

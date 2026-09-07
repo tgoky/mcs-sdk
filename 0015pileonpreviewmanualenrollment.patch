@@ -1,0 +1,368 @@
+From d0563a71dc95b44c429a08a79b4c9a74f929bf59 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 7 Sep 2026 10:42:56 +0000
+Subject: [PATCH] feat: Pile-On preview and manual enrollment via chat
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Same discipline as chat-winback.ts's enrollProspectInWinBack: a
+deliberately separate, simpler path from the production webhook handler
+(handleInboundBookingEvent), not a wrapper around it. SMS enrollment and
+the ad-data cohort sync are NOT replicated — SMS is timed against a real
+call time this manual path doesn't have (faking one risks texting a
+prospect about a call that isn't real), and the cohort sync touches real
+ad-spend attribution behind its own approval gate keyed to a real booking
+payload. Both are correctness reasons, not "not built yet."
+
+What IS replicated: the actual ESP pre-call enrollment, plus win-back-exit
+handling for a prospect currently in an active recovery cadence — skipping
+that would be a real bug (they'd get both pre-call and recovery messages),
+not a scope choice.
+
+Adds a real, best-effort duplicate-booking check against booking_roster
+(refuses unless force:true) and requires the chat layer to always show
+preview_pile_on_enrollment's output before calling enroll_in_pile_on.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01RyH3xjJh5mTzvTxG4Rpbpi
+---
+ src/app/api/teammates/chat/route.ts |  62 +++++++-
+ src/lib/chat-pile-on.ts             | 218 ++++++++++++++++++++++++++++
+ 2 files changed, 278 insertions(+), 2 deletions(-)
+ create mode 100644 src/lib/chat-pile-on.ts
+
+diff --git a/src/app/api/teammates/chat/route.ts b/src/app/api/teammates/chat/route.ts
+index 91153f8..1f485fb 100644
+--- a/src/app/api/teammates/chat/route.ts
++++ b/src/app/api/teammates/chat/route.ts
+@@ -13,6 +13,7 @@ import { getRepEnrolledEngagementIds } from "@/lib/rep-engagements";
+ import { checkCredentialAvailability, linkReusableCredential, getComposioConnectLink, hasBookingCredential } from "@/lib/chat-credentials";
+ import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries } from "@/lib/chat-status-queries";
+ import { enrollProspectInWinBack } from "@/lib/chat-winback";
++import { previewManualPileOnEnrollment, enrollProspectInPileOn } from "@/lib/chat-pile-on";
+ import { triggerVoiceExtractionForEngagement, triggerScriptPackForEngagement, triggerAdCreativeBriefsForEngagement, triggerPageAuditForEngagement, triggerEngineAdhocCheckForEngagement, triggerCrisisStressTestForEngagement, triggerDraftResponseForEngagement, triggerTwitterDeepScanForEngagement, triggerTrustpilotDeepScanForEngagement, triggerRedditDeepScanForEngagement } from "@/lib/chat-skill-trigger";
+ import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS } from "@/lib/copy";
+ 
+@@ -202,6 +203,34 @@ const TOOLS = [
+       required: ["engagementId", "prospectEmail"],
+     },
+   },
++  {
++    name: "preview_pile_on_enrollment",
++    description:
++      "Read-only — shows exactly what enroll_in_pile_on would do for a specific prospect, without doing any of it: no email sent, no writes. Always call this before enroll_in_pile_on and show the user what it says; never call enroll_in_pile_on without a preview shown to the user first in this conversation.",
++    input_schema: {
++      type: "object",
++      properties: {
++        engagementId: { type: "string", description: "The client this prospect belongs to." },
++        prospectEmail: { type: "string", description: "The prospect's email address." },
++      },
++      required: ["engagementId", "prospectEmail"],
++    },
++  },
++  {
++    name: "enroll_in_pile_on",
++    description:
++      "Manually enrolls one specific prospect into the client's Pile-On pre-call follow-up sequence right now — a real action on their actual email platform (klaviyo, hubspot, activecampaign, ghl, mailchimp, or convertkit). Deliberately narrower than a real booking webhook: never enrolls SMS (timed against a real call time this path doesn't have) and never syncs an ad-data cohort (touches real ad spend, gated separately) — email enrollment only, plus exiting an active win-back cadence for the same prospect if one exists. If the prospect already has a booking on file, this refuses unless force is set — only set force after the user has explicitly confirmed they want to proceed anyway, never on your own judgment.",
++    input_schema: {
++      type: "object",
++      properties: {
++        engagementId: { type: "string", description: "The client this prospect belongs to." },
++        prospectEmail: { type: "string", description: "The prospect's email address." },
++        prospectName: { type: "string", description: "Optional — the prospect's name, if known." },
++        force: { type: "boolean", description: "Only true if the user explicitly confirmed enrolling despite an existing booking already on file for this email." },
++      },
++      required: ["engagementId", "prospectEmail"],
++    },
++  },
+   {
+     name: "extract_brand_voice",
+     description:
+@@ -342,7 +371,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
+       ? clients.map((c) => `- ${c.buyer} (engagementId: ${c.engagementId}${c.repEnrolled ? ", Reputation Manager" : ""})`).join("\n")
+       : "(no clients yet)";
+   return [
+-    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries — for any client, without triggering anything.",
++    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries — for any client, without triggering anything.",
+     "",
+     "Clients (a client tagged \"Reputation Manager\" is enrolled in that product; everyone else is Showtime-only unless just created and not yet set up):",
+     clientList,
+@@ -358,13 +387,14 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
+     "- For status questions — what's on today, who cancelled, how did a run go, who's in an active recovery — use get_todays_calls / get_recent_cancellations / get_run_history / get_active_recoveries. These never change anything, so use them freely whenever the user is asking about current state rather than asking you to do something.",
+     "- After a tool call, tell the user plainly what happened, including any error a tool returned (e.g. the skill being disabled for that client).",
+     "- For enroll_in_winback: needs a working email-platform credential on the client already, plus the platform's recovery list/workflow configured — if the tool reports something's missing, tell the user plainly what and point them to the client's page, don't retry blindly.",
++    "- For enroll_in_pile_on: ALWAYS call preview_pile_on_enrollment first and show the user its output before ever calling enroll_in_pile_on — never call enroll_in_pile_on in the same turn as the user's first request without a preview shown first. It only enrolls email, never SMS or an ad-data cohort sync (say so plainly if asked — deliberately not replicated for manual enrollment, see the tool's own description for why). If the preview or the real call reports an existing booking on file for that email, tell the user plainly and only pass force:true after they explicitly confirm they want to proceed anyway — never set force on your own judgment.",
+     "- For check_crisis_threshold: the finding must be explicitly hypothetical — if the user describes something that actually happened, don't use this tool, tell them the real watch skills (or draft_response) are what handle real findings. Never presents as declaring a real incident; always make clear in your reply that nothing was actually triggered, this only tested the threshold.",
+     "- For twitter_deep_scan and trustpilot_deep_scan: deepScanSinceDate must be a real past date the user gives you, not something you pick. Both add real results to the client's actual monitoring history, the same as the regular scheduled watch — never present either as a preview or a dry run.",
+     "- For reddit_deep_scan: Reddit's own search has no exact date cutoff the way Trustpilot/X do, only a timeframe bucket (hour/day/week/month/year/all) — never ask the user for a specific date for this one, ask which bucket to widen into instead, and if they give you a date, translate it to the closest bucket yourself rather than pushing back. Adds real results to the client's actual monitoring history, same as the regular scheduled watch.",
+     "- For draft_response: this is for a REAL finding the user gives you (a real review, a real mention) — the draft never gets posted anywhere automatically, always tell the user to review and post it themselves. Don't fabricate specific facts, offers, or promises in how you relay the draft.",
+     "- For check_ai_engines: omit subject to ask about the client themselves; to ask about a competitor, use the exact name from their tracked competitors list (shown on their Identity Setup) — never guess or paraphrase a competitor name that hasn't been confirmed as tracked, ask the user to confirm the exact name instead. This is a live spot-check, separate from the scheduled AI Engine Watch panel — nothing gets saved to the client's monitoring history, so don't present it as if it updates their ongoing findings.",
+     "- extract_brand_voice, generate_video_scripts, generate_ad_briefs, and audit_confirmation_page all run in the background and take a while — always tell the user it's running and won't finish instantly, and offer to check status with get_run_history if they ask later. None of these run the full Show Rate Setup wizard end to end (no booking webhook wiring, no new page deployment) — each does exactly the one piece it's named for, using whatever the client already has on file (brand voice, offer details, call questions) and degrading to a more generic result if some of that isn't set yet, never failing outright for missing optional context. If asked to build or deploy a new confirmation page (not audit an existing one), say plainly that's not wired up — audit_confirmation_page only reviews a page that already exists.",
+-    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, run Show Rate Setup's four individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), deep-scan X/Twitter back to a date (twitter_deep_scan), deep-scan Trustpilot back to a date (trustpilot_deep_scan), widen a Reddit scan to an older timeframe (reddit_deep_scan), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, anything Pre-Call Sequence/Pile-On related (that's webhook-only, see the client's own page — including a preview or manual enrollment, neither is wired up), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves on their regular cadence, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, twitter_deep_scan, trustpilot_deep_scan, and reddit_deep_scan are separate, narrower, manually-triggered actions, not a way to fire the scheduled skills themselves.",
++    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, preview or enroll someone in Pile-On (preview_pile_on_enrollment, enroll_in_pile_on — email only, see that rule above), run Show Rate Setup's four individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), deep-scan X/Twitter back to a date (twitter_deep_scan), deep-scan Trustpilot back to a date (trustpilot_deep_scan), widen a Reddit scan to an older timeframe (reddit_deep_scan), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, Pile-On's SMS or ad-data cohort sync specifically (not replicated for manual enrollment, only the real booking webhook does those), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves on their regular cadence, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, twitter_deep_scan, trustpilot_deep_scan, reddit_deep_scan, and enroll_in_pile_on are separate, narrower, manually-triggered actions, not a way to fire the scheduled skills themselves.",
+     "- Keep replies short and direct.",
+   ].join("\n");
+ }
+@@ -586,6 +616,34 @@ export async function POST(request: Request) {
+         } else {
+           message2 = "Missing engagementId or prospectEmail.";
+         }
++      } else if (block.name === "preview_pile_on_enrollment") {
++        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
++        const prospectEmail = typeof block.input.prospectEmail === "string" ? block.input.prospectEmail.trim() : "";
++        if (engagementId && prospectEmail) {
++          const result = await previewManualPileOnEnrollment({ engagementId, workspaceId: activeWorkspace.workspaceId, prospectEmail });
++          ok = result.ok;
++          message2 = result.ok ? [...result.actions, ...result.warnings].join(" ") : result.error;
++        } else {
++          message2 = "Missing engagementId or prospectEmail.";
++        }
++      } else if (block.name === "enroll_in_pile_on") {
++        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
++        const prospectEmail = typeof block.input.prospectEmail === "string" ? block.input.prospectEmail.trim() : "";
++        const prospectName = typeof block.input.prospectName === "string" ? block.input.prospectName : undefined;
++        const force = block.input.force === true;
++        if (engagementId && prospectEmail) {
++          const result = await enrollProspectInPileOn({ engagementId, workspaceId: activeWorkspace.workspaceId, prospectEmail, prospectName, force });
++          ok = result.ok;
++          message2 = result.ok
++            ? `Enrolled ${prospectEmail} in the Pile-On pre-call sequence.${result.rebookedFromWinBack ? " Also exited them from their active win-back cadence." : ""}`
++            : result.error;
++          if (result.ok) {
++            const buyer = clients.find((c) => c.engagementId === engagementId)?.buyer;
++            links.push({ label: buyer ? `${buyer}'s page` : "Client page", href: `/dashboard/engagements/${engagementId}` });
++          }
++        } else {
++          message2 = "Missing engagementId or prospectEmail.";
++        }
+       } else if (block.name === "extract_brand_voice") {
+         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+         const domain = typeof block.input.domain === "string" ? block.input.domain : "";
+diff --git a/src/lib/chat-pile-on.ts b/src/lib/chat-pile-on.ts
+new file mode 100644
+index 0000000..e00c6a8
+--- /dev/null
++++ b/src/lib/chat-pile-on.ts
+@@ -0,0 +1,218 @@
++// src/lib/chat-pile-on.ts
++//
++// "Enroll this person in Pile-On" — manually running the pre-call
++// follow-up enrollment for one specific prospect, right now, rather than
++// waiting for a real booking webhook to do it. Same shape and the same
++// discipline as chat-winback.ts's enrollProspectInWinBack: a deliberately
++// separate, simpler path from the production caller
++// (pile-on/enrollment-service.ts's handleInboundBookingEvent), not a
++// wrapper around the whole webhook handler.
++//
++// Two things that handler does are deliberately NOT replicated here, same
++// as chat-winback.ts declines SMTP outright rather than faking a lesser
++// version of it:
++//
++//   - SMS enrollment. Pile-On's SMS sequence is timed relative to a real
++//     call time (see pileOnSmsSequenceStart's callTime field) — a manual
++//     chat enrollment has no real booking behind it, so there's no honest
++//     callTime to schedule against. Guessing one risks texting a prospect
++//     about a call that doesn't exist at the stated time. Not a "not built
++//     yet" gap — replicating it here would be actively wrong.
++//   - Ad-data cohort sync. Touches real ad-spend attribution on the
++//     buyer's ad platform and is gated behind approval-gate.ts keyed to a
++//     real booking payload this path doesn't have. Its own dedicated pass,
++//     not a shortcut bolted onto this one.
++//
++// What IS replicated, because leaving it out would be a correctness bug
++// rather than a scope choice: the win-back-exit handling. If this prospect
++// is currently in an active win-back cadence, enrolling them in Pile-On
++// means they're back — so that cadence is exited the same way a real
++// rebooking webhook would exit it. Skip that and a manually-enrolled
++// rebooker keeps getting recovery messages alongside their new pre-call
++// ones.
++//
++// Field-mapping (target_list_id, location_id, target_workflow_id,
++// activecampaign_base_url / recovery_workflow_id) copied exactly from
++// enrollment-service.ts's own real calls, not re-derived — same source of
++// truth, not a second one.
++//
++// previewManualPileOnEnrollment is read-only — no network calls, no
++// writes — and describes exactly what enrollProspectInPileOn would do,
++// not a superset of it. A preview that promises more than the real action
++// performs is worse than no preview at all.
++
++import { db } from "@/lib/db";
++import { engagements, winBackEnrollments, bookingRoster } from "@/models/schema";
++import { and, eq, desc } from "drizzle-orm";
++import { resolveCredential } from "@/lib/credentials";
++import { enrollInPreCallSequence, exitWinBackSequence } from "@/lib/platforms/email";
++import type { EngagementStack } from "@/models/schema";
++
++type PreviewResult = { ok: true; actions: string[]; warnings: string[] } | { ok: false; error: string };
++type EnrollResult = { ok: true; rebookedFromWinBack: boolean } | { ok: false; error: string };
++
++const SUPPORTED_PILE_ON_PLATFORMS = ["klaviyo", "hubspot", "activecampaign", "ghl", "mailchimp", "convertkit"];
++
++async function loadEngagement(engagementId: string, workspaceId: string) {
++  const [row] = await db
++    .select({ engagementId: engagements.engagementId, stack: engagements.stack })
++    .from(engagements)
++    .where(and(eq(engagements.engagementId, engagementId), eq(engagements.workspaceId, workspaceId)))
++    .limit(1);
++  return row ?? null;
++}
++
++/** Mirrors — doesn't re-derive — exactly the per-platform meta checks
++ * enrollInPreCallSequence (platforms/email.ts) itself throws on. Preview
++ * has to know this ahead of a real call since it never makes one; kept as
++ * a direct mirror (same fields, same platforms) rather than a shared
++ * helper so a change to the real function's requirements is a visible
++ * diff here too, not a silent drift. */
++function missingPileOnMetaFor(platform: string, stack: Partial<EngagementStack>): string | null {
++  if (platform === "klaviyo" && !stack.target_list_id) return "target_list_id isn't configured for Klaviyo yet — set that up on the client's page first.";
++  if (platform === "activecampaign" && (!stack.target_list_id || !stack.activecampaign_base_url)) {
++    return "ActiveCampaign pile-on needs target_list_id and activecampaign_base_url configured on the client's page first.";
++  }
++  if (platform === "ghl" && (!stack.booking_platform_meta?.location_id || !stack.target_workflow_id)) {
++    return "GoHighLevel pile-on needs a location id and target_workflow_id configured on the client's page first.";
++  }
++  if (platform === "mailchimp" && !stack.target_list_id) return "target_list_id (audience ID) isn't configured for Mailchimp yet — set that up on the client's page first.";
++  if (platform === "convertkit" && !stack.target_list_id) return "target_list_id (form ID) isn't configured for ConvertKit yet — set that up on the client's page first.";
++  return null;
++}
++
++async function findExistingBooking(engagementId: string, prospectEmail: string) {
++  const [row] = await db
++    .select({ id: bookingRoster.id, status: bookingRoster.status, callTime: bookingRoster.callTime })
++    .from(bookingRoster)
++    .where(and(eq(bookingRoster.engagementId, engagementId), eq(bookingRoster.prospectEmail, prospectEmail)))
++    .orderBy(desc(bookingRoster.createdAt))
++    .limit(1);
++  return row ?? null;
++}
++
++async function findActiveWinBack(engagementId: string, prospectEmail: string) {
++  const [row] = await db
++    .select({ id: winBackEnrollments.id })
++    .from(winBackEnrollments)
++    .where(and(eq(winBackEnrollments.engagementId, engagementId), eq(winBackEnrollments.prospectEmail, prospectEmail), eq(winBackEnrollments.status, "active")))
++    .limit(1);
++  return row ?? null;
++}
++
++export async function previewManualPileOnEnrollment(opts: {
++  engagementId: string;
++  workspaceId: string;
++  prospectEmail: string;
++}): Promise<PreviewResult> {
++  const engagement = await loadEngagement(opts.engagementId, opts.workspaceId);
++  if (!engagement) return { ok: false, error: "Client not found." };
++
++  const stack = (engagement.stack as Partial<EngagementStack> | null) ?? {};
++  if (!stack.email_platform || !stack.email_platform_credentials_ref) {
++    return { ok: false, error: "No email platform connected for this client yet — connect one before trying a pile-on enrollment." };
++  }
++  if (!SUPPORTED_PILE_ON_PLATFORMS.includes(stack.email_platform)) {
++    return {
++      ok: false,
++      error:
++        stack.email_platform === "smtp"
++          ? "SMTP has no Pile-On pre-call content to send yet — this direct-send platform only supports the Win-Back cadence, not Pile-On."
++          : `${stack.email_platform} isn't a supported Pile-On platform.`,
++    };
++  }
++
++  const metaError = missingPileOnMetaFor(stack.email_platform, stack);
++  if (metaError) return { ok: false, error: metaError };
++
++  const actions: string[] = [`Would enroll ${opts.prospectEmail} in ${stack.email_platform}'s pre-call follow-up sequence.`];
++  const warnings: string[] = [];
++
++  const existingBooking = await findExistingBooking(opts.engagementId, opts.prospectEmail);
++  if (existingBooking) {
++    warnings.push(
++      `A booking already exists on file for this email (status: ${existingBooking.status}, call time ${existingBooking.callTime.toISOString()}) — enrolling again may be a duplicate. Real enrollment will require force to proceed.`
++    );
++  }
++
++  const activeWinBack = await findActiveWinBack(opts.engagementId, opts.prospectEmail);
++  if (activeWinBack) {
++    actions.push("Would also exit them from their currently active win-back recovery cadence (they're coming back).");
++  }
++
++  actions.push("Would NOT enroll in SMS or sync an ad-data cohort — those aren't replicated for manual enrollment (see this file's own header for why).");
++
++  return { ok: true, actions, warnings };
++}
++
++export async function enrollProspectInPileOn(opts: {
++  engagementId: string;
++  workspaceId: string;
++  prospectEmail: string;
++  prospectName?: string;
++  force?: boolean;
++}): Promise<EnrollResult> {
++  const engagement = await loadEngagement(opts.engagementId, opts.workspaceId);
++  if (!engagement) return { ok: false, error: "Client not found." };
++
++  const stack = (engagement.stack as Partial<EngagementStack> | null) ?? {};
++  if (!stack.email_platform || !stack.email_platform_credentials_ref) {
++    return { ok: false, error: "No email platform connected for this client yet — connect one before trying a pile-on enrollment." };
++  }
++
++  const existingBooking = await findExistingBooking(opts.engagementId, opts.prospectEmail);
++  if (existingBooking && !opts.force) {
++    return {
++      ok: false,
++      error: `${opts.prospectEmail} already has a booking on file (status: ${existingBooking.status}) — this may be a duplicate enrollment. Confirm again to proceed anyway.`,
++    };
++  }
++
++  const prospectName = opts.prospectName?.trim() || opts.prospectEmail;
++
++  try {
++    const apiKey = await resolveCredential(opts.engagementId, stack.email_platform);
++    await enrollInPreCallSequence(stack.email_platform, apiKey, opts.prospectEmail, prospectName, {
++      target_list_id: stack.target_list_id,
++      location_id: stack.booking_platform_meta?.location_id,
++      target_workflow_id: stack.target_workflow_id,
++      activecampaign_base_url: stack.activecampaign_base_url,
++    });
++  } catch (e: unknown) {
++    return { ok: false, error: e instanceof Error ? e.message : String(e) };
++  }
++
++  // Win-back-exit handling — see this file's header for why this is
++  // replicated (a correctness fix, not a feature) while SMS/ad-cohort
++  // aren't. Never lets a failure here undo the enrollment that already
++  // succeeded above, matching handleInboundBookingEvent's own
++  // "never let this block pile-on's success" precedent.
++  // Status "rebooked" (not "manual_override" — that's a different,
++  // already-established status meaning an operator stopped the cadence
++  // WITHOUT a rebooking, see /api/win-back/enrollments/[id]/stop/route.ts
++  // and win-back-view.tsx's distinct rendering for it). This prospect
++  // genuinely is coming back via Pile-On, so it's the same real-rebooking
++  // outcome the webhook path records — exitWinBackSequence's default
++  // reason ("rebooked") is left as-is to match, same as
++  // enrollment-service.ts's own real call does.
++  let rebookedFromWinBack = false;
++  const activeWinBack = await findActiveWinBack(opts.engagementId, opts.prospectEmail);
++  if (activeWinBack) {
++    try {
++      await exitWinBackSequence(stack.email_platform, await resolveCredential(opts.engagementId, stack.email_platform), opts.prospectEmail, {
++        location_id: stack.booking_platform_meta?.location_id,
++        recovery_workflow_id: stack.recovery_workflow_id,
++        activecampaign_base_url: stack.activecampaign_base_url,
++      });
++      await db
++        .update(winBackEnrollments)
++        .set({ status: "rebooked", exitReason: "rebooked", exitedAt: new Date() })
++        .where(eq(winBackEnrollments.id, activeWinBack.id));
++      rebookedFromWinBack = true;
++    } catch (e: unknown) {
++      console.error("[chat-pile-on] win-back exit signal failed (non-fatal):", e instanceof Error ? e.message : String(e));
++    }
++  }
++
++  return { ok: true, rebookedFromWinBack };
++}
+-- 
+2.43.0
+

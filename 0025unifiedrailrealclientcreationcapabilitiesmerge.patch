@@ -1,0 +1,1896 @@
+From 53155b0e244630415702e08c6e836b0983552710 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 7 Sep 2026 15:07:22 +0000
+Subject: [PATCH] =?UTF-8?q?feat:=20finish=20one-workspace-one-client=20?=
+ =?UTF-8?q?=E2=80=94=20unified=20rail,=20real=20client=20creation,=20merge?=
+ =?UTF-8?q?d=20Capabilities?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Direct response to real, correct feedback: none of this was actually
+done despite prior phases claiming the architecture was unified. The
+rail simplification was described during planning as the intended end
+state and never flagged as unbuilt; Phase 6 replaced the two client-
+creation wizards with one, but left the underlying "a workspace can
+hold zero or many clients" data model and its full UI shell (a roster
+page, an Add Client action) completely intact; and this same session's
+own Phase 9 built a second, redundant "what's enabled for this client"
+surface without checking the sidebar's existing Capabilities grid did
+that exact job already — the precise "different menu for the same
+thing" complaint this whole restructure exists to fix.
+
+## Primary rail + secondary sidebar: one shape, not two
+
+primary-nav.ts / primary-rail.tsx: removed the two product badges
+(Showtime amber, Reputation Manager indigo) and PRODUCT_RAIL_CHILDREN
+(the contextual Engagements/Analytics/Meetings-or-Incidents icon set
+each badge injected) entirely. The rail is now Work / Library /
+Analytics, identical for every client regardless of which workers
+they're running. mobile-nav-pill.tsx's accordion mirrored the same
+per-product structure and got the same fix, so mobile and desktop
+navigation can't drift into two different shapes again.
+
+secondary-sidebar.tsx / dashboard/layout.tsx / shell-layout.tsx: the
+secondary sidebar used to hold SIX variants (work, settings,
+showtime, reputationManager, reportsShowtime, reportsReputationManager)
+chosen by which product a route belonged to — collapsed to two (work,
+settings). showtime-sidebar.tsx, reputation-manager-sidebar.tsx, and
+reports/reports-sidebar-section.tsx are now unrouted (left in place,
+not deleted, same as Phase 6's wizard-file precedent) — their entire
+reason to exist was a per-product secondary nav and a multi-client
+"which client's report" picker, both gone once there's exactly one
+client and one Work sidebar covering every worker across both products.
+
+## One workspace = one client, actually enforced by the creation flow
+
+POST /api/workspaces (backing /home/new) now calls
+createMinimalEngagement in the same request that creates the
+workspace — a workspace can no longer exist without its one client.
+/home/new's copy changed from "set up your workspace" to "set up a new
+client" to match what it actually does now.
+
+/dashboard/engagements/new and /dashboard/reputation-manager/new (the
+old per-workspace "add another client" and RM-specific creation
+flows) now redirect to /home/new — creating a new client means
+creating a new workspace, there's no more "add a second client to
+this one" action to route to. primary-rail.tsx's profile popover lost
+its "New client" link for the same reason — it was a literal duplicate
+of "New workspace" right next to it.
+
+/dashboard/engagements (the client roster + "Add your first client"
+empty state) now redirects straight to the one client's own detail
+page. work-sidebar.tsx's "Clients" nav link (plural, pointing at that
+roster) is now "Client Profile," pointing directly at that same page.
+dashboard/page.tsx's "Manage Your Clients" shortcut tile got the same
+fix — direct link, singular copy. delete-client-section.tsx no longer
+sends a just-deleted client to the now-redirecting roster route.
+
+## Active Workers merged into Capabilities, not left as a duplicate
+
+The dashboard-home "Active Workers" panel (this session's own Phase 9
+work) is deleted outright — work-sidebar.tsx's Capabilities grid
+already reads the same getEnabledWorkerIdsForEngagement data to answer
+the identical "what's enabled for this client" question. Its
+needs-attention signal (getWorkspaceWorkerOverview, also Phase 9) now
+renders as a small indicator dot on the relevant Capabilities tile
+instead of duplicating the whole surface.
+
+## Verified clean
+
+tsc: only the 5 pre-existing baseline errors (test files, unrelated).
+eslint: clean on every touched file; the one pre-existing error in
+mobile-nav-pill.tsx (set-state-in-effect on an untouched line) confirmed
+via git-stash comparison to predate this change. Full production build
+passes.
+
+## Explicitly not done in this pass — real, flagged follow-ups
+
+- /dashboard/modules/[skill]: still renders a per-skill roster of every
+  client that has that worker — the same multi-client shape this whole
+  pass removed everywhere else, just not here yet. This is what
+  Capabilities' tiles and worker-card.tsx's Configure button both link
+  into, so it's the next real piece: rebuilding it into one worker's
+  hub page (this client's config + analytics + run history) instead of
+  a roster.
+- /dashboard/reports and its two per-product ReportsSidebarSection
+  variants: same root problem (a client picker for a workspace that
+  only ever has one client), not touched this pass.
+- Deleting a client does not delete or otherwise handle the now
+  client-less workspace left behind — a real, separate decision this
+  pass doesn't make on the user's behalf.
+- Teammates chat's create_client tool is now logically unreachable in
+  normal use (every workspace already has its client from creation) but
+  wasn't removed from the tool list or system prompt — untouched,
+  pending a decision on whether it should be.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01RyH3xjJh5mTzvTxG4Rpbpi
+---
+ src/app/api/workspaces/route.ts               |  16 ++
+ src/app/dashboard/active-workers-panel.tsx    | 120 ---------
+ .../[id]/delete-client-section.tsx            |   8 +-
+ src/app/dashboard/engagements/new/page.tsx    |  99 +-------
+ src/app/dashboard/engagements/page.tsx        | 185 ++------------
+ src/app/dashboard/layout.tsx                  |  46 +---
+ src/app/dashboard/page.tsx                    |  28 +--
+ .../dashboard/reputation-manager/new/page.tsx |  13 +-
+ src/app/dashboard/work-sidebar.tsx            |  38 ++-
+ src/app/home/new/page.tsx                     |  15 +-
+ src/components/mobile-nav-pill.tsx            | 178 ++-----------
+ src/components/primary-rail.tsx               | 235 +-----------------
+ src/components/secondary-sidebar.tsx          | 130 ++--------
+ src/components/shell-layout.tsx               |  20 +-
+ src/components/skills-nav-list.tsx            |  16 +-
+ src/lib/copy.ts                               |   4 +-
+ src/lib/primary-nav.ts                        |  92 ++-----
+ 17 files changed, 211 insertions(+), 1032 deletions(-)
+ delete mode 100644 src/app/dashboard/active-workers-panel.tsx
+
+diff --git a/src/app/api/workspaces/route.ts b/src/app/api/workspaces/route.ts
+index fe25496..eca4cf2 100644
+--- a/src/app/api/workspaces/route.ts
++++ b/src/app/api/workspaces/route.ts
+@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
+ import { cookies } from "next/headers";
+ import { getSession } from "@/lib/session";
+ import { createWorkspace, ACTIVE_WORKSPACE_COOKIE } from "@/lib/workspace";
++import { createMinimalEngagement } from "@/lib/create-minimal-engagement";
+ 
+ export const runtime = "nodejs";
+ 
+@@ -9,6 +10,15 @@ export const runtime = "nodejs";
+  * Plain HTML form POST from /home/new — deliberately not a fetch()/JSON
+  * client action, so creating a workspace has no client-side state or
+  * useEffect involved at all, just a form submit and a redirect either way.
++ *
++ * One workspace = one client, so creating a workspace now creates that
++ * client in the same request — the same `name` field does double duty as
++ * both the workspace's name and the client's buyer name, since under this
++ * model they're the same real-world thing. This is the fix for a
++ * workspace that used to be born empty, requiring a separate "add a
++ * client" step afterward (the exact multi-client-per-workspace shape the
++ * rest of this restructure exists to remove) — a workspace can no longer
++ * exist without its one client from the moment it's created.
+  */
+ export async function POST(request: Request) {
+   const session = await getSession();
+@@ -26,6 +36,12 @@ export async function POST(request: Request) {
+     redirect(`/home/new?error=${encodeURIComponent(result.error)}`);
+   }
+ 
++  await createMinimalEngagement({
++    whopUserId: session.whopUserId,
++    workspaceId: result.workspace.workspaceId,
++    buyerName: result.workspace.name,
++  });
++
+   const cookieStore = await cookies();
+   cookieStore.set(ACTIVE_WORKSPACE_COOKIE, result.workspace.workspaceId, {
+     httpOnly: true,
+diff --git a/src/app/dashboard/active-workers-panel.tsx b/src/app/dashboard/active-workers-panel.tsx
+deleted file mode 100644
+index ae91417..0000000
+--- a/src/app/dashboard/active-workers-panel.tsx
++++ /dev/null
+@@ -1,120 +0,0 @@
+-// src/app/dashboard/active-workers-panel.tsx
+-//
+-// Phase 9 — generative dashboard panels. Once "enabled" is uniform data
+-// (Phase 3's engagementSkills join, read here through
+-// getEnabledWorkerIdsForEngagement) instead of a product-specific
+-// boolean, the dashboard can render a card per enabled worker without
+-// knowing anything about which product it belongs to — the same
+-// registry-driven-card precedent worker-card.tsx already established for
+-// the Library, just repurposed here for "what's this client doing right
+-// now" instead of "enable/configure this." Nothing new to navigate to:
+-// every link below points at a page that already exists (the worker's
+-// own Phase 8 analytics page, or its bridges/skill config page) — the
+-// workspace just visibly grows with what's turned on.
+-
+-import Link from "next/link";
+-import { AlertTriangle } from "lucide-react";
+-import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
+-import type { WorkerOverviewStat } from "@/lib/worker-analytics";
+-
+-const PRODUCT_LABELS = { showtime: "Showtime", "reputation-manager": "Reputation Manager" } as const;
+-const PRODUCT_ACCENT = {
+-  showtime: "border-amber-200 dark:border-amber-900/70",
+-  "reputation-manager": "border-indigo-200 dark:border-indigo-900/70",
+-} as const;
+-
+-export function ActiveWorkersPanel({
+-  stats,
+-  engagementId,
+-}: {
+-  stats: WorkerOverviewStat[];
+-  engagementId: string | null;
+-}) {
+-  if (stats.length === 0) return null;
+-
+-  // Needs-attention workers surface first — the whole point of a
+-  // generative panel is that something worth a glance floats up on its
+-  // own, not that a reader has to scan every card to find it.
+-  const sorted = [...stats].sort((a, b) => {
+-    if (a.needsAttention !== b.needsAttention) return b.needsAttention - a.needsAttention;
+-    return b.runsInWindow - a.runsInWindow;
+-  });
+-
+-  return (
+-    <div className="pt-2">
+-      <div className="flex items-center justify-between mb-3">
+-        <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
+-          Active workers
+-        </p>
+-        <Link
+-          href="/dashboard/library"
+-          className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 transition-colors"
+-        >
+-          Manage in Library
+-        </Link>
+-      </div>
+-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+-        {sorted.map((stat) => {
+-          const worker = WORKER_REGISTRY[stat.workerId as WorkerId];
+-          const configureHref =
+-            worker.hasHingesPanel && engagementId
+-              ? `/dashboard/engagements/${engagementId}/bridges/${worker.id}`
+-              : engagementId
+-                ? `/dashboard/engagements/${engagementId}`
+-                : null;
+-
+-          return (
+-            <div
+-              key={stat.workerId}
+-              className={`rounded-xl border ${PRODUCT_ACCENT[stat.productId]} bg-white dark:bg-zinc-900/60 p-3.5 flex flex-col gap-2`}
+-            >
+-              <div className="flex items-start justify-between gap-2">
+-                <div className="min-w-0">
+-                  <p className="text-sm font-bold text-zinc-900 dark:text-white truncate">{worker.name}</p>
+-                  <p className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500 uppercase tracking-wide">
+-                    {PRODUCT_LABELS[stat.productId]}
+-                  </p>
+-                </div>
+-                {stat.needsAttention > 0 && (
+-                  <span
+-                    title="Failing on the most recent run"
+-                    className="shrink-0 inline-flex items-center gap-1 rounded-md bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:text-rose-300"
+-                  >
+-                    <AlertTriangle className="w-3 h-3" />
+-                    Attention
+-                  </span>
+-                )}
+-              </div>
+-
+-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+-                {stat.runsInWindow > 0
+-                  ? `${stat.runsInWindow} run${stat.runsInWindow === 1 ? "" : "s"} this week${stat.successRate !== null ? ` · ${stat.successRate}% success` : ""}`
+-                  : "No runs this week"}
+-              </p>
+-
+-              <div className="pt-1 flex items-center gap-2 text-xs font-semibold">
+-                <Link
+-                  href={`/dashboard/analytics/${stat.workerId}`}
+-                  className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 transition-colors"
+-                >
+-                  Analytics
+-                </Link>
+-                {configureHref && (
+-                  <>
+-                    <span className="text-zinc-300 dark:text-zinc-700">&middot;</span>
+-                    <Link
+-                      href={configureHref}
+-                      className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 transition-colors"
+-                    >
+-                      Configure
+-                    </Link>
+-                  </>
+-                )}
+-              </div>
+-            </div>
+-          );
+-        })}
+-      </div>
+-    </div>
+-  );
+-}
+diff --git a/src/app/dashboard/engagements/[id]/delete-client-section.tsx b/src/app/dashboard/engagements/[id]/delete-client-section.tsx
+index 8ed0afc..1c9816a 100644
+--- a/src/app/dashboard/engagements/[id]/delete-client-section.tsx
++++ b/src/app/dashboard/engagements/[id]/delete-client-section.tsx
+@@ -67,7 +67,13 @@ export function DeleteClientSection({
+       });
+       const data = await res.json();
+       if (res.ok) {
+-        router.push("/dashboard/engagements");
++        // Since-audit fix: this used to go to the (now-redirecting)
++        // roster route — one hop straight to Work instead. Deleting the
++        // workspace's one client doesn't delete the workspace itself;
++        // that's a real, separate decision this pass doesn't make for
++        // the user, so the workspace is left behind, client-less, until
++        // they choose what to do with it.
++        router.push("/dashboard");
+         router.refresh();
+       } else {
+         setError(data.error ?? "Failed to delete.");
+diff --git a/src/app/dashboard/engagements/new/page.tsx b/src/app/dashboard/engagements/new/page.tsx
+index f1866e6..4988bf9 100644
+--- a/src/app/dashboard/engagements/new/page.tsx
++++ b/src/app/dashboard/engagements/new/page.tsx
+@@ -1,96 +1,17 @@
+-"use client";
+-
+ // src/app/dashboard/engagements/new/page.tsx
+ //
+-// Phase 6 — replaces the old multi-step wizard (offer/stack/credentials/
+-// confirm/launch) with the same minimal, name-only creation Teammates
+-// chat's create_client tool already uses. Real setup — Pin-Down, Identity
+-// Setup, or both — happens on the client's own Library/Workers page
+-// afterward, exactly like it already does for a chat-created client; this
+-// page no longer front-loads any of it. See create-minimal-engagement.ts
+-// and worker-registry.ts's own Phase 5 work (every worker's real config
+-// fields are now individually reachable from there, either through a
+-// worker's own setup page or the dual-mode enable flow) for why deferring
+-// this is safe rather than a regression.
++// One workspace = one client now — a workspace is never client-less
++// (POST /api/workspaces creates the client in the same request as the
++// workspace itself, see that route's own comment), so there is no more
++// "add a second client to this workspace" action to route to. Creating
++// a NEW client now means creating a NEW workspace, which is exactly
++// what /home/new already does.
+ //
+-// The old wizard's step components/helpers (steps/, credential-field.tsx,
+-// draft-storage.ts, use-draft-persistence.ts, use-email-integrations.ts,
+-// use-smart-prefill.ts, validation.ts, constants.ts, submit-payload.ts,
+-// types.ts) are left in place, unrouted, rather than deleted in this same
+-// pass — form-fields.tsx specifically is still a real, load-bearing
+-// dependency (identity-graph-form.tsx imports InputField/TextAreaView
+-// from it), and the rest weren't exhaustively traced for zero remaining
+-// references before this page stopped routing to them. Dead code, not
+-// verified-safe-to-delete code — a distinct, smaller follow-up.
++// A permanent redirect, not a deleted route — anything bookmarked or
++// linked to this URL still lands somewhere real.
+ 
+-import { useState } from "react";
+-import { useRouter } from "next/navigation";
+-import { ArrowRight, Loader2 } from "lucide-react";
+-import { InputField } from "./form-fields";
++import { redirect } from "next/navigation";
+ 
+ export default function NewEngagementPage() {
+-  const router = useRouter();
+-  const [buyerName, setBuyerName] = useState("");
+-  const [submitting, setSubmitting] = useState(false);
+-  const [error, setError] = useState<string | null>(null);
+-
+-  async function submit() {
+-    const trimmed = buyerName.trim();
+-    if (!trimmed) return;
+-    setSubmitting(true);
+-    setError(null);
+-    try {
+-      const res = await fetch("/api/engagements/minimal-create", {
+-        method: "POST",
+-        headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({ buyerName: trimmed }),
+-      });
+-      const body = await res.json();
+-      if (!res.ok) throw new Error(body?.error ?? "Could not create client.");
+-      router.push(`/dashboard/engagements/${body.engagementId}`);
+-    } catch (e) {
+-      setError(e instanceof Error ? e.message : "Could not create client.");
+-      setSubmitting(false);
+-    }
+-  }
+-
+-  return (
+-    <div className="flex items-center justify-center min-h-[70vh] px-4 font-sans antialiased">
+-      <div className="w-full max-w-md space-y-5">
+-        <div className="space-y-1.5 text-center">
+-          <h1 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">Create a client</h1>
+-          <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
+-            Just a name for now — you&apos;ll pick which workers to set up (Pin-Down, Identity Setup, or both) on their own page right after.
+-          </p>
+-        </div>
+-
+-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-5 space-y-4 shadow-sm">
+-          <InputField
+-            label="Client name"
+-            required
+-            value={buyerName}
+-            onChange={setBuyerName}
+-            placeholder="Acme Roofing Co."
+-            helpText="The person or business you're running this for."
+-          />
+-
+-          {error && (
+-            <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">
+-              {error}
+-            </div>
+-          )}
+-
+-          <button
+-            type="button"
+-            onClick={submit}
+-            disabled={submitting || !buyerName.trim()}
+-            className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-zinc-900 dark:bg-white px-4 py-2.5 text-sm font-bold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity cursor-pointer"
+-          >
+-            {submitting ? <Loader2 size={15} className="animate-spin" /> : <ArrowRight size={15} />}
+-            Create client
+-          </button>
+-        </div>
+-      </div>
+-    </div>
+-  );
++  redirect("/home/new");
+ }
+diff --git a/src/app/dashboard/engagements/page.tsx b/src/app/dashboard/engagements/page.tsx
+index fc23ed4..334a192 100644
+--- a/src/app/dashboard/engagements/page.tsx
++++ b/src/app/dashboard/engagements/page.tsx
+@@ -1,168 +1,33 @@
+-import { db } from "@/lib/db";
+-import { engagements, skillRuns } from "@/models/schema";
++// src/app/dashboard/engagements/page.tsx
++//
++// Since-audit fix: this used to be a roster — every client in the
++// workspace, one row per client, with an "Add Client" button. One
++// workspace = one client now (enforced from creation, see
++// POST /api/workspaces), so a roster of "every client in the workspace"
++// only ever has one row — the multi-client-per-workspace UI shell
++// (the list, the empty state, "Add your first client") is exactly the
++// leftover the rest of this restructure exists to remove, still
++// standing here through every phase of it until now.
++//
++// Redirects straight to that one client's own detail page instead —
++// the real destination this route's only remaining job ever was.
++
++import { redirect } from "next/navigation";
+ import { getSession } from "@/lib/session";
+-import { eq, desc, inArray, isNull, isNotNull, and } from "drizzle-orm";
+-import Link from "next/link";
+-import { Plus } from "lucide-react";
+-import { getActiveWorkspace } from "@/lib/workspace";
+-import { isProductId, type ProductId } from "@/lib/product-catalog";
+-import { getRepEnrolledEngagementIds } from "@/lib/rep-engagements";
+-import { ClientRosterTable } from "./client-roster-table";
++import { getActiveWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
+ 
+ export const revalidate = 0;
+ 
+-/**
+- * Product scoping, driven by the same `?product=` param Queue/Executions
+- * already use. Every row here lives in the shared `engagements` table —
+- * there's no separate per-product client list — so "is this client on
+- * product X" comes from a signal that product's own onboarding already
+- * writes, not a new membership table:
+- *  - Showtime: /api/engagements/setup always sets `stack` (it rejects the
+- *    request without booking_platform + email_platform) the same request
+- *    that creates the row, so `stack` is never null for a Showtime client.
+- *  - Reputation Manager: onboarding always writes a rep_identity_graphs
+- *    row for the engagement (see /dashboard/reputation-manager/page.tsx,
+- *    which uses the same join).
+- * No `product` param means the combined roster — every client in the
+- * workspace regardless of which product(s) it's enrolled in — which is
+- * what Work's "Clients" link points at.
+- */
+-export default async function EngagementsPage({
+-  searchParams,
+-}: {
+-  searchParams: Promise<{ product?: string }>;
+-}) {
++export default async function EngagementsPage() {
+   const session = await getSession();
+   const whopUserId = session.whopUserId!;
+   const activeWorkspace = await getActiveWorkspace(whopUserId);
+-  const { product } = await searchParams;
+-  const scopedProduct: ProductId | null = isProductId(product) ? product : null;
+-
+-  const baseFilter = and(
+-    eq(engagements.whopUserId, whopUserId),
+-    eq(engagements.workspaceId, activeWorkspace.workspaceId),
+-    isNull(engagements.deletedAt)
+-  );
+-
+-  let userEngagements;
+-  if (scopedProduct === "showtime") {
+-    userEngagements = await db
+-      .select()
+-      .from(engagements)
+-      .where(and(baseFilter, isNotNull(engagements.stack)));
+-  } else if (scopedProduct === "reputation-manager") {
+-    const repEngagementIds = await getRepEnrolledEngagementIds(whopUserId, activeWorkspace.workspaceId);
+-    userEngagements = repEngagementIds.length
+-      ? await db
+-          .select()
+-          .from(engagements)
+-          .where(and(baseFilter, inArray(engagements.engagementId, repEngagementIds)))
+-      : [];
+-  } else {
+-    userEngagements = await db.select().from(engagements).where(baseFilter);
+-  }
+-
+-  const targetEngagementIds = userEngagements.map((e) => e.engagementId);
+-
+-  const allRuns =
+-    targetEngagementIds.length > 0
+-      ? await db
+-          .select({
+-            engagementId: skillRuns.engagementId,
+-            skillName: skillRuns.skillName,
+-            status: skillRuns.status,
+-            completedAt: skillRuns.completedAt,
+-            startedAt: skillRuns.startedAt,
+-          })
+-          .from(skillRuns)
+-          .where(inArray(skillRuns.engagementId, targetEngagementIds))
+-          .orderBy(desc(skillRuns.startedAt))
+-      : [];
+-
+-  // Fix: this list had no ORDER BY at all — row order was whatever
+-  // Postgres happened to return, which drifts as rows get updated
+-  // (a rename or tag-color change rewrites the row) and isn't the same
+-  // thing as "most active client at the top" a reader would reasonably
+-  // expect from a client portfolio. allRuns is already ordered by
+-  // startedAt desc, so each engagement's first appearance in it is that
+-  // engagement's most recent run — used as the primary sort key, with
+-  // engagements that have no runs yet falling back to createdAt desc
+-  // (newest client first) rather than being scattered arbitrarily.
+-  const mostRecentRunAt = new Map<string, Date>();
+-  for (const run of allRuns) {
+-    if (!mostRecentRunAt.has(run.engagementId)) {
+-      mostRecentRunAt.set(run.engagementId, run.startedAt);
+-    }
+-  }
+-  const sortedEngagements = [...userEngagements].sort((a, b) => {
+-    const aActivity = mostRecentRunAt.get(a.engagementId);
+-    const bActivity = mostRecentRunAt.get(b.engagementId);
+-    if (aActivity && bActivity) return bActivity.getTime() - aActivity.getTime();
+-    if (aActivity && !bActivity) return -1; // any client with real activity outranks one with none
+-    if (bActivity && !aActivity) return 1;
+-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+-  });
+-
+-  return (
+-    <div className="flex flex-col h-full w-full mx-auto tracking-tight antialiased font-sans px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
+-      {/* Asana Header Bar */}
+-      <div className="shrink-0 flex flex-col space-y-3 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
+-        <div className="space-y-0.5">
+-          <h1 className="text-base font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+-            {scopedProduct === "showtime"
+-              ? "Showtime Clients"
+-              : scopedProduct === "reputation-manager"
+-                ? "Reputation Manager Clients"
+-                : "Client Portfolio"}
+-          </h1>
+-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+-            {scopedProduct
+-              ? `Clients enrolled in ${scopedProduct === "showtime" ? "Showtime" : "Reputation Manager"} in ${activeWorkspace.name}, most recently active first.`
+-              : `Every client across all installed products in ${activeWorkspace.name}, most recently active first.`}
+-          </p>
+-        </div>
+-
+-        <Link
+-          href="/dashboard/engagements/new"
+-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-lg shadow-xs hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.98] transition-all shrink-0"
+-        >
+-          <Plus size={14} strokeWidth={2.5} />
+-          <span>Add Client</span>
+-        </Link>
+-      </div>
+-
+-      {/* Empty State */}
+-      {userEngagements.length === 0 ? (
+-        <div className="h-40 border border-dashed border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-transparent rounded-xl flex flex-col items-center justify-center space-y-2 transition-colors mt-4">
+-          <p className="text-xs font-normal text-zinc-400 dark:text-zinc-500 font-mono">
+-            No active client engagements found in this workspace.
+-          </p>
+-          <Link
+-            href="/dashboard/engagements/new"
+-            className="text-xs font-semibold text-amber-500 hover:underline transition-colors"
+-          >
+-            Add your first client
+-          </Link>
+-        </div>
+-      ) : (
+-        /* Asana Dense Table View Wrapper — fills the rest of the main
+-           content pane and scrolls internally so the header above stays
+-           put, instead of the roster trailing off and needing the whole
+-           page to scroll to reach clients further down the list. */
+-        <div className="flex-1 min-h-0 flex flex-col w-full mt-4">
+-          {/* Table Header Labels */}
+-          <div className="shrink-0 hidden md:flex items-center justify-between px-3 text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 pb-1">
+-            <span className="w-52">Client Name</span>
+-            <span className="flex-1 px-4">Connected Stack</span>
+-            <span className="w-44 text-center">Module Telemetry</span>
+-            <span className="w-24 text-right">Created</span>
+-          </div>
+-
+-          <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-0.5">
+-            <ClientRosterTable engagements={sortedEngagements} runs={allRuns} />
+-          </div>
+-        </div>
+-      )}
+-    </div>
+-  );
++  const engagementId = await getPrimaryEngagementIdForWorkspace(activeWorkspace.workspaceId);
++
++  // Shouldn't happen under the current creation flow (a workspace is
++  // never born without its one client), but an older workspace that
++  // predates that guarantee, or one whose client was deleted, has
++  // nothing to redirect into — Work is the safe fallback rather than a
++  // dead end for a route people may still have bookmarked.
++  redirect(engagementId ? `/dashboard/engagements/${engagementId}` : "/dashboard");
+ }
+diff --git a/src/app/dashboard/layout.tsx b/src/app/dashboard/layout.tsx
+index a01e740..fa755e0 100644
+--- a/src/app/dashboard/layout.tsx
++++ b/src/app/dashboard/layout.tsx
+@@ -5,10 +5,7 @@ import { ShellLayout } from "@/components/shell-layout";
+ import { BreadcrumbProvider } from "@/components/breadcrumbs/breadcrumb-context";
+ import { BookingToast } from "./booking-toast";
+ import { WorkSidebar, WorkSidebarSkeleton } from "./work-sidebar";
+-import { ReputationManagerSidebar } from "./reputation-manager-sidebar";
+-import { ShowtimeSidebar } from "./showtime-sidebar";
+-import { ReportsSidebarSection, ReportsSidebarSectionSkeleton } from "./reports/reports-sidebar-section";
+-import { getActiveWorkspace, getInstalledPackagesByWorkspace, listWorkspaces } from "@/lib/workspace";
++import { getActiveWorkspace, listWorkspaces } from "@/lib/workspace";
+ import { MobileNavPill } from "@/components/mobile-nav-pill";
+ 
+ export const dynamic = "force-dynamic";
+@@ -41,59 +38,36 @@ export default async function DashboardLayout({
+     getActiveWorkspace(whopUserId),
+     listWorkspaces(whopUserId),
+   ]);
+-  const installedPackageIds = (await getInstalledPackagesByWorkspace([activeWorkspace.workspaceId])).get(activeWorkspace.workspaceId) ?? [];
+ 
+   return (
+     <BreadcrumbProvider>
+       {/* Real-time booking toast listener */}
+       <BookingToast />
+ 
+-      {/* 3-Region Asana Layout Shell. Every section's sidebar is fetched
+-          here and handed down as its own Suspense-wrapped slot — only the
+-          one SecondarySidebar actually renders for the current route (see
+-          its own file comment), but keeping all queries independent
+-          means switching sections never waits on a different section's
+-          DB round trip. Strategy and Skills used
+-          to be here too; Strategy's primary-rail entry was already
+-          commented out (dead), and Skills' SKILL STATUS panel was
+-          deleted per the 2026-08-07 handoff's Observation 8 — see
+-          secondary-sidebar.tsx's file comment. Reports is product-scoped
+-          via `?product=` like Queue/Executions/Clients (see
+-          secondary-sidebar.tsx's isProductScopedRoot), but unlike those
+-          two it does NOT reuse the full product sidebar — it gets its
+-          own trimmed Home/Clients/Reports nav plus a client picker
+-          underneath, rendered once per product here so switching between
+-          them never waits on the other's query (see
+-          reports-sidebar-section.tsx). */}
++      {/* 3-Region Asana Layout Shell. One Work sidebar, generic across
++          every worker in the unified registry regardless of product (its
++          own Capabilities grid already spans both) — this used to also
++          carry a separate ShowtimeSidebar/ReputationManagerSidebar pair
++          plus two more Reports variants with their own client pickers,
++          the same "different menu depending on product context" problem
++          the worker-registry restructure exists to remove, still standing
++          here through every phase of it until now. */}
+       <ShellLayout
+         displayName={displayName}
+         userEmail={userEmail}
+         workspaces={workspaceList}
+         activeWorkspaceId={activeWorkspace.workspaceId}
+-        installedPackageIds={installedPackageIds}
+         work={
+           <Suspense fallback={<WorkSidebarSkeleton />}>
+             <WorkSidebar whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} />
+           </Suspense>
+         }
+-        showtime={<ShowtimeSidebar />}
+-        reputationManager={<ReputationManagerSidebar />}
+-        reportsShowtime={
+-          <Suspense fallback={<ReportsSidebarSectionSkeleton />}>
+-            <ReportsSidebarSection whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} product="showtime" />
+-          </Suspense>
+-        }
+-        reportsReputationManager={
+-          <Suspense fallback={<ReportsSidebarSectionSkeleton />}>
+-            <ReportsSidebarSection whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} product="reputation-manager" />
+-          </Suspense>
+-        }
+       >
+         {children}
+       </ShellLayout>
+ 
+       {/* Floating Mobile Nav Pill & Accordion Navigation */}
+-      <MobileNavPill installedPackageIds={installedPackageIds} />
++      <MobileNavPill />
+     </BreadcrumbProvider>
+   );
+ }
+diff --git a/src/app/dashboard/page.tsx b/src/app/dashboard/page.tsx
+index 87434ee..96607de 100644
+--- a/src/app/dashboard/page.tsx
++++ b/src/app/dashboard/page.tsx
+@@ -12,11 +12,8 @@ import { UnreadExecutionsPill } from "./unread-executions-pill"; // CHANGED: new
+ import { latestStepLabel } from "@/lib/run-display";
+ import { QueuePanel } from "./queue-panel";
+ import { OverviewStatsPanel } from "./overview-stats-panel";
+-import { ActiveWorkersPanel } from "./active-workers-panel"; // Phase 9: generative worker cards
+ import { DASHBOARD_COPY as copy } from "@/lib/copy";
+ import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
+-import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
+-import { getWorkspaceWorkerOverview } from "@/lib/worker-analytics";
+ import Link from "next/link";
+ import { Calendar } from "lucide-react";
+ 
+@@ -31,14 +28,9 @@ export default async function DashboardPage() {
+ 
+   const { thisWeekStart, lastWeekStart, lastWeekEnd } = getWeekWindows();
+ 
+-  // Phase 9's worker-overview/primary-engagement lookups don't depend on
+-  // anything the big query block below produces, so they're kicked off
+-  // as siblings of it in one outer Promise.all instead of only starting
+-  // once that whole block resolves — a perf-audit fix: the first version
+-  // of this ran them strictly after, adding a fully serial extra round
+-  // trip to every dashboard load for no reason. getEnabledWorkerIdsForEngagement
+-  // is the one piece that genuinely can't start until primaryEngagementId
+-  // is known, so it stays a short second await after this resolves.
++  // primaryEngagementId doesn't depend on anything the big query block
++  // below produces, so it's kicked off as a sibling of it in one outer
++  // Promise.all instead of only starting once that whole block resolves.
+   const [
+     [
+       userEngagements,
+@@ -53,7 +45,6 @@ export default async function DashboardPage() {
+       unseenCount, // CHANGED: new 10th slot — MUST stay positionally aligned with the 10th query below
+     ],
+     primaryEngagementId,
+-    workerOverview,
+   ] = await Promise.all([
+     Promise.all([
+     db
+@@ -181,12 +172,8 @@ export default async function DashboardPage() {
+    getUnseenCompletedExecutionCount(whopUserId, workspaceId),
+     ]),
+     getPrimaryEngagementIdForWorkspace(workspaceId),
+-    getWorkspaceWorkerOverview(whopUserId, workspaceId),
+   ]);
+ 
+-  const enabledWorkerIds = primaryEngagementId ? await getEnabledWorkerIdsForEngagement(primaryEngagementId) : [];
+-  const activeWorkerStats = workerOverview.workers.filter((w) => enabledWorkerIds.includes(w.workerId));
+-
+   const completedThisWeek = Number(thisWeekResult[0]?.count ?? 0);
+   const completedLastWeek = Number(lastWeekResult[0]?.count ?? 0);
+   const completedAllTime = Number(totalRunsResult[0]?.count ?? 0);
+@@ -279,11 +266,6 @@ export default async function DashboardPage() {
+           queueItems={queueItems}
+         />
+ 
+-        {/* Active workers — Phase 9 generative panel, one card per worker
+-            actually enabled for this workspace's client, nothing to
+-            navigate to that doesn't already exist. */}
+-        <ActiveWorkersPanel stats={activeWorkerStats} engagementId={primaryEngagementId} />
+-
+         {/* Queue */}
+         <div className="pt-2">
+           <QueuePanel initialItems={queueItems} clients={clients} title="Queue" viewAllHref="/dashboard/queue" />
+@@ -317,10 +299,10 @@ export default async function DashboardPage() {
+         </div>
+ 
+         {/* Shortcuts */}
+-        {userEngagements.length > 0 && (
++        {primaryEngagementId && (
+           <div className="grid gap-4 sm:grid-cols-2 pt-4 border-t border-zinc-200 dark:border-zinc-900">
+             <Link
+-              href="/dashboard/engagements"
++              href={`/dashboard/engagements/${primaryEngagementId}`}
+               className="group block p-4 rounded-lg bg-zinc-100/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-900/60 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/20 transition-all shadow-xs"
+             >
+               <p className="text-sm font-medium text-zinc-700 dark:text-zinc-400 group-hover:text-zinc-900 group-hover:dark:text-zinc-100 transition-colors">
+diff --git a/src/app/dashboard/reputation-manager/new/page.tsx b/src/app/dashboard/reputation-manager/new/page.tsx
+index d3d2304..20a8d86 100644
+--- a/src/app/dashboard/reputation-manager/new/page.tsx
++++ b/src/app/dashboard/reputation-manager/new/page.tsx
+@@ -7,14 +7,19 @@
+ // saveRepIdentityGraphIntake save function) before replacing this with a
+ // redirect — nothing here was doing anything bridges/rep-onboarding
+ // doesn't already do for a client created through the one unified
+-// entry point (/dashboard/engagements/new) instead.
++// entry point instead.
++//
++// Since-audit update: with one workspace = one client, "create a new
++// client" means "create a new workspace" (/home/new), not a step inside
++// an existing one — pointed straight there instead of relaying through
++// the now also-redirecting /dashboard/engagements/new, to avoid a
++// double redirect.
+ //
+ // A permanent redirect, not a deleted route — anything with this URL
+-// bookmarked or linked (engagements/page.tsx's old product-scoped link,
+-// external references) still lands somewhere real.
++// bookmarked or linked still lands somewhere real.
+ 
+ import { redirect } from "next/navigation";
+ 
+ export default function ReputationManagerNewPage() {
+-  redirect("/dashboard/engagements/new");
++  redirect("/home/new");
+ }
+diff --git a/src/app/dashboard/work-sidebar.tsx b/src/app/dashboard/work-sidebar.tsx
+index 3131c67..3c9d19b 100644
+--- a/src/app/dashboard/work-sidebar.tsx
++++ b/src/app/dashboard/work-sidebar.tsx
+@@ -15,11 +15,12 @@ import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
+ import { SkillsNavList } from "@/components/skills-nav-list";
+ import { getInstalledPackagesByWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
+ import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
++import { getWorkspaceWorkerOverview } from "@/lib/worker-analytics";
+ import type { ProductId } from "@/lib/product-catalog";
+ import type { WorkerId } from "@/lib/worker-registry";
+ 
+ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: string; workspaceId: string }) {
+-  const [queueCount, runningCountResult, unseenCompletedCount, installedPackageMap, primaryEngagementId] = await Promise.all([
++  const [queueCount, runningCountResult, unseenCompletedCount, installedPackageMap, primaryEngagementId, workerOverview] = await Promise.all([
+     getQueueActionableCount(whopUserId, workspaceId),
+ 
+     db
+@@ -39,9 +40,16 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
+     getInstalledPackagesByWorkspace([workspaceId]),
+ 
+     getPrimaryEngagementIdForWorkspace(workspaceId),
++
++    // Since-audit merge: this used to be a separate "Active Workers" panel
++    // on the dashboard home, duplicating this exact grid's job (a second
++    // surface answering "what's enabled for this client," the same
++    // problem this whole restructure exists to remove). Its weekly-runs/
++    // needs-attention stat now folds into these same tiles instead.
++    getWorkspaceWorkerOverview(whopUserId, workspaceId),
+   ]).catch((err) => {
+     console.error("[WorkSidebar] query failed:", err);
+-    return [0, [{ count: 0 }], 0, new Map<string, string[]>(), null] as const;
++    return [0, [{ count: 0 }], 0, new Map<string, string[]>(), null, { totalClients: 0, workers: [], windowDays: 7 }] as const;
+   });
+   const installedProductIds = (installedPackageMap.get(workspaceId) ?? []).filter(
+     (id): id is ProductId => id === "showtime" || id === "reputation-manager"
+@@ -59,6 +67,9 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
+         return [];
+       })
+     : [];
++  const needsAttentionWorkerIds = new Set(
++    workerOverview.workers.filter((w) => w.needsAttention > 0).map((w) => w.workerId)
++  );
+ 
+   // Fix (2026-08-25): was "Notification" → /dashboard/inbox with an
+   // unread-count badge. Replaced per direct request with Reports — the
+@@ -67,13 +78,19 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
+   // FYI/alert items also still surface in Queue below via getQueueItems'
+   // notification source, so nothing that used to only live in the inbox
+   // becomes unreachable.
++  //
++  // Since-audit fix: this used to say "Clients" (plural) and point at
++  // /dashboard/engagements, a roster — one workspace is one client now,
++  // so there's nothing to list. Points straight at this workspace's one
++  // client's own page instead, and only renders if that client exists
++  // (should always be true post-creation, but this sidebar is fetched
++  // independently of that guarantee holding for every workspace already
++  // in the database).
+   const group1Links: NavLinkItem[] = [
+     { href: "/dashboard", label: "Home", icon: <Home className="w-4 h-4" /> },
+-    // Every client in the workspace, regardless of which product(s) it's
+-    // enrolled in — the combined view Showtime's and Reputation Manager's
+-    // own (product-scoped) Clients links don't show. Same route as
+-    // theirs, just without a `product` param — see engagements/page.tsx.
+-    { href: "/dashboard/engagements", label: "Clients", icon: <Building2 className="w-4 h-4" /> },
++    ...(primaryEngagementId
++      ? [{ href: `/dashboard/engagements/${primaryEngagementId}`, label: "Client Profile", icon: <Building2 className="w-4 h-4" /> }]
++      : []),
+     { href: "/dashboard/reports", label: "Reports", icon: <FileText className="w-4 h-4" /> },
+   ];
+ 
+@@ -109,7 +126,12 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
+           <span>Capabilities</span>
+         </div>
+ 
+-        <SkillsNavList productIds={installedProductIds} layout="grid" enabledWorkerIds={enabledWorkerIds} />
++        <SkillsNavList
++          productIds={installedProductIds}
++          layout="grid"
++          enabledWorkerIds={enabledWorkerIds}
++          needsAttentionWorkerIds={needsAttentionWorkerIds}
++        />
+       </div>
+     </div>
+   );
+diff --git a/src/app/home/new/page.tsx b/src/app/home/new/page.tsx
+index 7110dce..a23d425 100644
+--- a/src/app/home/new/page.tsx
++++ b/src/app/home/new/page.tsx
+@@ -82,13 +82,13 @@ export default function NewWorkspacePage({
+ 
+         <div className="mb-8 space-y-1.5">
+           <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+-            New workspace
++            New client
+           </p>
+           <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+-            Set up your workspace
++            Set up a new client
+           </h1>
+           <p className="text-sm text-zinc-500 dark:text-zinc-400">
+-            Independent clients and data from your other workspaces — pick what to install now, add more from the Library any time.
++            One workspace per client, fully separate from your others — pick which workers to run for them now, enable more from the Library any time.
+           </p>
+         </div>
+ 
+@@ -106,7 +106,7 @@ export default function NewWorkspacePage({
+         >
+           <div className="space-y-2">
+             <label htmlFor="name" className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+-              Workspace name
++              Client name
+             </label>
+             <input
+               id="name"
+@@ -115,9 +115,12 @@ export default function NewWorkspacePage({
+               required
+               disabled={isSubmitting}
+               maxLength={80}
+-              placeholder="e.g. Acme Sales Team"
++              placeholder="e.g. Acme Roofing Co."
+               className="w-full rounded-xl border border-zinc-200 bg-white/80 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:placeholder:text-zinc-600 transition-all duration-200"
+             />
++            <p className="text-xs text-zinc-400 dark:text-zinc-500">
++              The person or business you&apos;re running this for.
++            </p>
+           </div>
+ 
+           <div className="space-y-2.5">
+@@ -201,7 +204,7 @@ export default function NewWorkspacePage({
+                   <span>Creating...</span>
+                 </div>
+               ) : (
+-                "Create workspace"
++                "Create client"
+               )}
+             </Button>
+             <Link
+diff --git a/src/components/mobile-nav-pill.tsx b/src/components/mobile-nav-pill.tsx
+index e049225..bb8b21d 100644
+--- a/src/components/mobile-nav-pill.tsx
++++ b/src/components/mobile-nav-pill.tsx
+@@ -3,19 +3,9 @@
+ 
+ import { useState, useEffect } from "react";
+ import Link from "next/link";
+-import { usePathname, useSearchParams } from "next/navigation";
+-import { Search, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
+-import { PRIMARY_NAV_SECTIONS, PRODUCT_NAV_SECTIONS, PRODUCT_RAIL_CHILDREN, SETTINGS_NAV } from "@/lib/primary-nav";
+-
+-/** Same query-string-aware matching as primary-rail.tsx's isRailItemActive — a sub-item's href can carry its own `?product=`, which a plain pathname compare can't see. */
+-function isNavHrefActive(href: string, pathname: string, searchParams: URLSearchParams): boolean {
+-  const [itemPath, itemQuery] = href.split("?");
+-  const pathMatches = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+-  if (!pathMatches) return false;
+-  if (!itemQuery) return true;
+-  const wantedProduct = new URLSearchParams(itemQuery).get("product");
+-  return wantedProduct === null || searchParams.get("product") === wantedProduct;
+-}
++import { usePathname } from "next/navigation";
++import { Search, Menu, X } from "lucide-react";
++import { PRIMARY_NAV_SECTIONS, SETTINGS_NAV } from "@/lib/primary-nav";
+ 
+ // Fix: this file used to hardcode its own NAVIGATION_SECTIONS — a second,
+ // independently-authored guess at the app's structure that didn't match
+@@ -24,13 +14,15 @@ function isNavHrefActive(href: string, pathname: string, searchParams: URLSearch
+ // pointing at five routes that don't exist). Now reads the same
+ // PRIMARY_NAV_SECTIONS the desktop rail reads, so "the tabs should at
+ // least align" holds by construction instead of by remembering to update
+-// two files in sync.
++// two files in sync. The old per-product accordion section (Showtime/
++// Reputation Manager, each expanding into its own Engagements/Analytics/
++// Meetings-or-Incidents sub-list) is gone along with the desktop rail's
++// two product badges it mirrored — this is a flat list now, same shape
++// on mobile as on desktop.
+ 
+-export function MobileNavPill({ installedPackageIds = [] }: { installedPackageIds?: string[] }) {
++export function MobileNavPill() {
+   const pathname = usePathname();
+-  const searchParams = useSearchParams();
+   const [isMenuOpen, setIsMenuOpen] = useState(false);
+-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+ 
+   useEffect(() => {
+     setIsMenuOpen(false);
+@@ -47,13 +39,6 @@ export function MobileNavPill({ installedPackageIds = [] }: { installedPackageId
+     };
+   }, [isMenuOpen]);
+ 
+-  const toggleSection = (title: string) => {
+-    setExpandedSections((prev) => ({
+-      ...prev,
+-      [title]: !prev[title],
+-    }));
+-  };
+-
+   const triggerGlobalSearch = () => {
+     // GlobalSearch (components/global-search.tsx) listens for this event
+     // unconditionally, regardless of viewport — see the useEffect there.
+@@ -111,148 +96,31 @@ export function MobileNavPill({ installedPackageIds = [] }: { installedPackageId
+           <div className="flex-1 divide-y divide-zinc-200 dark:divide-zinc-900 pb-24">
+             {PRIMARY_NAV_SECTIONS.map((section) => {
+               const Icon = section.icon;
+-              const hasSubItems = Boolean(section.children && section.children.length > 0);
+-              const isExpanded = Boolean(expandedSections[section.title]);
+               const isDirectActive = pathname === section.href;
+ 
+-              if (!hasSubItems) {
+-                return (
+-                  <Link
+-                    key={section.title}
+-                    href={section.href}
+-                    className={`flex items-center gap-3.5 px-5 py-4 text-base transition-colors ${
+-                      isDirectActive
+-                        ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white"
+-                        : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 hover:text-zinc-900 dark:hover:text-white font-medium"
+-                    }`}
+-                  >
+-                    <Icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
+-                    <span>{section.title}</span>
+-                  </Link>
+-                );
+-              }
+-
+               return (
+-                <div key={section.title} className="flex flex-col">
+-                  {/* Parent Item */}
+-                  <button
+-                    onClick={() => toggleSection(section.title)}
+-                    className={`w-full flex items-center justify-between px-5 py-4 text-base font-medium transition-colors cursor-pointer ${
+-                      isExpanded
+-                        ? "bg-zinc-100 dark:bg-zinc-900/40 text-zinc-900 dark:text-white"
+-                        : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50"
+-                    }`}
+-                  >
+-                    <div className="flex items-center gap-3.5">
+-                      <Icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
+-                      <span>{section.title}</span>
+-                    </div>
+-                    {isExpanded ? (
+-                      <ChevronDown className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+-                    ) : (
+-                      <ChevronRight className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+-                    )}
+-                  </button>
+-
+-                  {/* Sub-item Edge-to-Edge Nested List */}
+-                  {isExpanded && section.children && (
+-                    <div className="bg-zinc-50 dark:bg-zinc-900/30 divide-y divide-zinc-200 dark:divide-zinc-900/60 border-t border-zinc-200 dark:border-zinc-900">
+-                      {section.children.map((subItem) => {
+-                        const isSubActive = pathname === subItem.href;
+-                        return (
+-                          <Link
+-                            key={subItem.href}
+-                            href={subItem.href}
+-                            className={`flex items-center justify-between pl-12 pr-5 py-3.5 text-sm transition-colors ${
+-                              isSubActive
+-                                ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white"
+-                                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900/20 font-medium"
+-                            }`}
+-                          >
+-                            <span>{subItem.label}</span>
+-                          </Link>
+-                        );
+-                      })}
+-                    </div>
+-                  )}
+-                </div>
+-              );
+-            })}
+-
+-            {PRODUCT_NAV_SECTIONS.filter((section) => installedPackageIds.includes(section.productId)).map((section) => {
+-              const Icon = section.icon;
+-              const children = PRODUCT_RAIL_CHILDREN[section.productId];
+-              // A product is "active" (and its own icons — Engagements/
+-              // Analytics/Meetings-or-Incidents — worth showing) once the
+-              // current route resolves into that product's own space,
+-              // mirroring primary-rail.tsx's activeSectionHref bucketing.
+-              const engagementsScopedToShowtime =
+-                pathname === "/dashboard/engagements"
+-                  ? searchParams.get("product") === "showtime"
+-                  : pathname.startsWith("/dashboard/engagements/");
+-              const isActive = pathname === section.href ||
+-                (section.productId === "showtime" && (engagementsScopedToShowtime || pathname.startsWith("/dashboard/analytics") || pathname.startsWith("/dashboard/meetings") || pathname.startsWith("/dashboard/modules") || pathname.startsWith("/dashboard/reports"))) ||
+-                (section.productId === "reputation-manager" && pathname.startsWith("/dashboard/reputation-manager"));
+-              const isExpanded = Boolean(expandedSections[section.title]) || isActive;
+-
+-              return (
+-                <div key={section.productId} className="flex flex-col">
+-                  <div
+-                    className={`w-full flex items-center justify-between px-5 py-4 text-base transition-colors ${
+-                      isActive
+-                        ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white"
+-                        : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 font-medium"
+-                    }`}
+-                  >
+-                    <Link href={section.href} className="flex items-center gap-3.5 flex-1">
+-                      <Icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
+-                      <span>{section.title}</span>
+-                    </Link>
+-                    <button
+-                      type="button"
+-                      onClick={() => toggleSection(section.title)}
+-                      aria-label={isExpanded ? `Collapse ${section.title}` : `Expand ${section.title}`}
+-                      className="p-1.5 -m-1.5 cursor-pointer"
+-                    >
+-                      {isExpanded ? (
+-                        <ChevronDown className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+-                      ) : (
+-                        <ChevronRight className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+-                      )}
+-                    </button>
+-                  </div>
+-
+-                  {isExpanded && (
+-                    <div className="bg-zinc-50 dark:bg-zinc-900/30 divide-y divide-zinc-200 dark:divide-zinc-900/60 border-t border-zinc-200 dark:border-zinc-900">
+-                      {children.map((child) => {
+-                        const isChildActive = isNavHrefActive(child.href, pathname, searchParams);
+-                        return (
+-                          <Link
+-                            key={child.href}
+-                            href={child.href}
+-                            className={`flex items-center justify-between pl-12 pr-5 py-3.5 text-sm transition-colors ${
+-                              isChildActive
+-                                ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white"
+-                                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900/20 font-medium"
+-                            }`}
+-                          >
+-                            <span>{child.title}</span>
+-                          </Link>
+-                        );
+-                      })}
+-                    </div>
+-                  )}
+-                </div>
++                <Link
++                  key={section.title}
++                  href={section.href}
++                  className={`flex items-center gap-3.5 px-5 py-4 text-base transition-colors ${
++                    isDirectActive
++                      ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white"
++                      : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 hover:text-zinc-900 dark:hover:text-white font-medium"
++                  }`}
++                >
++                  <Icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
++                  <span>{section.title}</span>
++                </Link>
+               );
+             })}
+ 
+             {/* Fix: Settings used to sit inline in the same flat list as
+-                Work/Engagements/Analytics — desktop only ever reaches it
++                Work/Library/Analytics — desktop only ever reaches it
+                 through the avatar popover, never as a rail icon, so
+                 giving it equal top-level billing here was one more point
+                 of mismatch. Kept reachable (mobile has no popover to
+                 tuck it into) but visually set apart the way the rail's
+-                bottom section is set apart from its main 5 tabs. */}
++                bottom section is set apart from its main tabs. */}
+             <Link
+               href={SETTINGS_NAV.href}
+               className={`flex items-center gap-3.5 px-5 py-4 text-base transition-colors ${
+diff --git a/src/components/primary-rail.tsx b/src/components/primary-rail.tsx
+index 4d27842..73e8c09 100644
+--- a/src/components/primary-rail.tsx
++++ b/src/components/primary-rail.tsx
+@@ -2,7 +2,7 @@
+ 
+ import { useState } from "react";
+ import Link from "next/link";
+-import { usePathname, useSearchParams } from "next/navigation";
++import { usePathname } from "next/navigation";
+ import {
+   LogOut,
+   User,
+@@ -14,192 +14,40 @@ import {
+   Plus,
+   UserPlus,
+   Loader2,
+-  type LucideIcon,
+ } from "lucide-react";
+ import { ThemeToggle } from "@/components/theme-toggle";
+ import type { Workspace } from "@/lib/workspace";
+-import { PRIMARY_NAV_SECTIONS, PRODUCT_NAV_SECTIONS, PRODUCT_RAIL_CHILDREN } from "@/lib/primary-nav";
+-import type { ProductId } from "@/lib/product-catalog";
+-import { isRepSkillId } from "@/lib/rep-skill-manifest";
++import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
+ 
+ interface PrimaryRailProps {
+   displayName: string;
+   userEmail: string;
+   workspaces: Workspace[];
+   activeWorkspaceId: string;
+-  installedPackageIds: string[];
+ }
+ 
+-const RAIL_SECTIONS = PRIMARY_NAV_SECTIONS;
+-const WORK_SECTION = PRIMARY_NAV_SECTIONS.find((s) => s.href === "/dashboard")!;
+-const LIBRARY_SECTION = PRIMARY_NAV_SECTIONS.find((s) => s.href === "/dashboard/library")!;
+-
+ /**
+- * A rail item's own active state, independent of activeSectionHref's
+- * bucketing (which only needs to know "which whole section is active" to
+- * pick a secondary sidebar). Once a product context can contribute
+- * several of its own icons at once (Engagements/Analytics/Meetings-or-
+- * Incidents), each needs to tell whether IT specifically is the current
+- * page — including the ones whose href carries its own `?product=`
+- * query string, which a plain pathname comparison can't see.
++ * A rail item's own active state. Plain prefix matching is enough now —
++ * there's no more per-product `?product=` query variant of a rail item to
++ * disambiguate (that machinery, and the two product badges it existed
++ * for, is gone).
+  */
+-function isRailItemActive(href: string, pathname: string, searchParams: URLSearchParams): boolean {
+-  const [itemPath, itemQuery] = href.split("?");
+-  if (itemPath === "/dashboard") return pathname === "/dashboard";
+-  const pathMatches = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+-  if (!pathMatches) return false;
+-  if (!itemQuery) return true;
+-  const wantedProduct = new URLSearchParams(itemQuery).get("product");
+-  return wantedProduct === null || searchParams.get("product") === wantedProduct;
++function isRailItemActive(href: string, pathname: string): boolean {
++  if (href === "/dashboard") return pathname === "/dashboard";
++  return pathname === href || pathname.startsWith(`${href}/`);
+ }
+ 
+ const NAV_ICON_MAP: Record<string, string> = {
+-  "/dashboard/engagements": "/images/engagement.png",
+   "/dashboard/analytics": "/images/analytic.png",
+   "/dashboard/library": "/images/lib.png",
+-  "/dashboard/meetings": "/images/meeting.png",
+ };
+ 
+-const PRODUCT_BADGE_COLORS = {
+-  amber: {
+-    activeBg: "bg-amber-400 dark:bg-amber-500",
+-    inactiveBg: "bg-amber-100 dark:bg-amber-950/60 hover:bg-amber-200/80 dark:hover:bg-amber-900/50",
+-    activeIcon: "text-zinc-950 fill-white",
+-    inactiveIcon: "text-amber-700 dark:text-amber-400 fill-amber-200/70 dark:fill-amber-900/60",
+-  },
+-  indigo: {
+-    activeBg: "bg-indigo-400 dark:bg-indigo-500",
+-    inactiveBg: "bg-indigo-100 dark:bg-indigo-950/60 hover:bg-indigo-200/80 dark:hover:bg-indigo-900/50",
+-    activeIcon: "text-zinc-950 fill-white",
+-    inactiveIcon: "text-indigo-700 dark:text-indigo-400 fill-indigo-200/70 dark:fill-indigo-900/60",
+-  },
+-} as const;
+-
+-function SquishyProductBadge({
+-  active,
+-  icon: Icon,
+-  iconSrc,
+-  color,
+-}: {
+-  active: boolean;
+-  icon?: LucideIcon;
+-  iconSrc?: string;
+-  color: keyof typeof PRODUCT_BADGE_COLORS;
+-}) {
+-  const c = PRODUCT_BADGE_COLORS[color];
+-  return (
+-    <div
+-      className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 select-none overflow-hidden ${
+-        active ? `${c.activeBg} shadow-xs` : c.inactiveBg
+-      }`}
+-    >
+-      {iconSrc ? (
+-        <img src={iconSrc} alt="" className="w-5 h-5 object-contain" />
+-      ) : Icon ? (
+-        <Icon
+-          className={`w-4 h-4 stroke-[2.3px] transition-colors ${active ? c.activeIcon : c.inactiveIcon}`}
+-          strokeLinecap="round"
+-          strokeLinejoin="round"
+-        />
+-      ) : null}
+-    </div>
+-  );
+-}
+-
+-// Routes that mean something different per product depending on a
+-// `?product=` param, rather than owning a whole route prefix outright —
+-// same shared surface (Queue, Executions, Reports, and the Engagements/
+-// Clients roster), scoped by query string instead of by path. Only the
+-// roster's own list route (exact match) is scoped this way; its detail/
+-// new sub-pages (/dashboard/engagements/[id], /dashboard/engagements/new)
+-// still fall through to the prefix-based Showtime bucket below.
+-//
+-// Bug fix: /dashboard/reports used to be hardcoded to the Showtime bucket
+-// further down (a leftover from before Reports carried `?product=` at
+-// all), so opening Reputation Manager's own Reports link lit up
+-// Showtime's rail icon instead of Reputation Manager's. Joining this list
+-// means it's resolved the same way as Queue/Executions/Clients — by the
+-// `?product=` param — before that hardcoded fallback is ever reached.
+-const PRODUCT_SCOPED_ROOTS = ["/dashboard/queue", "/dashboard/runs", "/dashboard/engagements", "/dashboard/reports"];
+-
+-function activeSectionHref(pathname: string, productParam: string | null, fromParam: string | null): string {
+-  if (PRODUCT_SCOPED_ROOTS.includes(pathname) && productParam === "reputation-manager") {
+-    return "/dashboard/reputation-manager";
+-  }
+-  if (PRODUCT_SCOPED_ROOTS.includes(pathname) && productParam === "showtime") {
+-    return "/dashboard/showtime";
+-  }
+-
+-  // /dashboard/modules/[skill] serves BOTH catalogs (see modules/[skill]/
+-  // page.tsx) — which rail icon lights up depends on which catalog the
+-  // skill segment belongs to, not just the shared path prefix. Bug fix:
+-  // this used to bucket every /dashboard/modules/* path under Showtime
+-  // unconditionally, which was invisible before Reputation Manager's
+-  // module hub was reachable at all and became a real, visible wrong
+-  // highlight (Showtime lighting up while looking at an RM module) the
+-  // moment it was.
+-  if (pathname.startsWith("/dashboard/modules/")) {
+-    const skillSegment = pathname.slice("/dashboard/modules/".length);
+-    return isRepSkillId(skillSegment) ? "/dashboard/reputation-manager" : "/dashboard/showtime";
+-  }
+-
+-  // /dashboard/engagements/[id] is one shared detail page for both
+-  // products (its WorkersPanel shows both Showtime's and RM's workers
+-  // together, plus RM's own RepAuditLogPanel) — there's no
+-  // single right answer from the path alone. `from` carries where the
+-  // visit actually came from (ModuleClientRoster's hrefFor sets it);
+-  // trust it when it points at an RM module, default to Showtime
+-  // otherwise — the same default this bucket always used before RM
+-  // linked into this page at all.
+-  if (pathname.startsWith("/dashboard/engagements/")) {
+-    if (fromParam?.startsWith("/dashboard/modules/")) {
+-      const skillSegment = fromParam.slice("/dashboard/modules/".length);
+-      if (isRepSkillId(skillSegment)) return "/dashboard/reputation-manager";
+-    }
+-    return "/dashboard/showtime";
+-  }
+-
+-  if (
+-    pathname === "/dashboard/showtime" ||
+-    pathname.startsWith("/dashboard/analytics") ||
+-    pathname.startsWith("/dashboard/meetings")
+-  ) return "/dashboard/showtime";
+-
+-  const allSections = [...RAIL_SECTIONS, ...PRODUCT_NAV_SECTIONS];
+-  const nonRootMatches = allSections.filter(
+-    (s) => s.href !== "/dashboard" && (pathname === s.href || pathname.startsWith(`${s.href}/`))
+-  );
+-
+-  if (nonRootMatches.length > 0) {
+-    return nonRootMatches.sort((a, b) => b.href.length - a.href.length)[0].href;
+-  }
+-
+-  return "/dashboard";
+-}
+-
+-export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, installedPackageIds }: PrimaryRailProps) {
++export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId }: PrimaryRailProps) {
+   const [popoverOpen, setPopoverOpen] = useState(false);
+   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
+   const pathname = usePathname();
+-  const searchParams = useSearchParams();
+-  const activeHref = activeSectionHref(pathname, searchParams.get("product"), searchParams.get("from"));
+-  const productSections = PRODUCT_NAV_SECTIONS.filter((section) => installedPackageIds.includes(section.productId));
+   const initials = displayName.slice(0, 2).toUpperCase();
+-
+-  // Which product's own icons (Engagements/Analytics/Meetings-or-
+-  // Incidents) join Work/Library in the rail right now — derived from
+-  // the same bucket activeSectionHref already resolves pathname+product
+-  // into, so this stays in sync with which secondary sidebar is showing
+-  // without a second, separately-maintained notion of "current context."
+-  const activeProductId: ProductId | null =
+-    activeHref === "/dashboard/showtime"
+-      ? "showtime"
+-      : activeHref === "/dashboard/reputation-manager"
+-        ? "reputation-manager"
+-        : null;
+-  const contextualChildren =
+-    activeProductId && installedPackageIds.includes(activeProductId) ? PRODUCT_RAIL_CHILDREN[activeProductId] : [];
+-  const topNavItems = [WORK_SECTION, ...contextualChildren, LIBRARY_SECTION];
++  const topNavItems = PRIMARY_NAV_SECTIONS;
+ 
+   return (
+     <aside className="w-[76px] bg-background border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1.5 shrink-0 select-none z-20 transition-colors duration-200">
+@@ -207,7 +55,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+       <div className="flex flex-col items-center gap-1.5 w-full">
+         <nav className="flex flex-col items-center gap-1.5 w-full">
+           {topNavItems.map((section) => {
+-            const isActive = isRailItemActive(section.href, pathname, searchParams);
++            const isActive = isRailItemActive(section.href, pathname);
+             const Icon = section.icon;
+             const customIconSrc = NAV_ICON_MAP[section.href.split("?")[0]];
+ 
+@@ -256,56 +104,6 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+           })}
+         </nav>
+ 
+-        <div className="-mx-1.5 w-[76px] border-t border-zinc-200 dark:border-zinc-800/80 my-2 shrink-0" />
+-
+-        <nav className="flex flex-col items-center gap-1.5 w-full">
+-          {productSections.map((product) => {
+-            const isActive = product.href === activeHref;
+-            return (
+-              <Link
+-                key={product.href}
+-                href={product.href}
+-                title={product.title}
+-                aria-current={isActive ? "page" : undefined}
+-                className={
+-                  "group relative w-full h-[58px] flex flex-col items-center justify-center p-1 rounded-xl transition-all duration-300 overflow-hidden " +
+-                  (isActive
+-                    ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
+-                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
+-                }
+-              >
+-                {/* Product Badge - Zooms and centers on hover/active */}
+-                <div
+-                  className={
+-                    "transition-all duration-300 ease-out transform flex items-center justify-center " +
+-                    (isActive
+-                      ? "scale-[1.3] translate-y-[3px]"
+-                      : "scale-100 group-hover:scale-[1.3] group-hover:translate-y-[3px]")
+-                  }
+-                >
+-                  <SquishyProductBadge
+-                    active={isActive}
+-                    icon={product.icon}
+-                    iconSrc={product.iconSrc}
+-                    color={product.color}
+-                  />
+-                </div>
+-
+-                {/* Product Title Text - Collapses and fades out */}
+-                <span
+-                  className={
+-                    "text-[9.5px] font-medium leading-none text-center truncate max-w-full px-0.5 transition-all duration-300 ease-out origin-bottom " +
+-                    (isActive
+-                      ? "max-h-0 opacity-0 scale-75 mt-0 pointer-events-none"
+-                      : "max-h-4 opacity-100 scale-100 mt-1.5 group-hover:max-h-0 group-hover:opacity-0 group-hover:scale-75 group-hover:mt-0 group-hover:pointer-events-none")
+-                  }
+-                >
+-                  {product.title}
+-                </span>
+-              </Link>
+-            );
+-          })}
+-        </nav>
+       </div>
+ 
+       {/* Bottom Section */}
+@@ -458,15 +256,6 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+                         <span>Admin console</span>
+                       </Link>
+ 
+-                      <Link
+-                        href="/dashboard/engagements/new"
+-                        onClick={() => setPopoverOpen(false)}
+-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
+-                      >
+-                        <Plus className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
+-                        <span>New client</span>
+-                      </Link>
+-
+                       <Link
+                         href="/dashboard/settings"
+                         onClick={() => setPopoverOpen(false)}
+diff --git a/src/components/secondary-sidebar.tsx b/src/components/secondary-sidebar.tsx
+index 9a0f12e..cc2d1f0 100644
+--- a/src/components/secondary-sidebar.tsx
++++ b/src/components/secondary-sidebar.tsx
+@@ -1,90 +1,43 @@
+ "use client";
+ 
+ import { ReactNode } from "react";
+-import { usePathname, useSearchParams } from "next/navigation";
+-import { isRepSkillId } from "@/lib/rep-skill-manifest";
++import { usePathname } from "next/navigation";
+ 
+ interface SecondarySidebarProps {
+   work: ReactNode;
+   settings: ReactNode;
+-  reputationManager: ReactNode;
+-  showtime: ReactNode;
+-  reportsReputationManager: ReactNode;
+-  reportsShowtime: ReactNode;
+ }
+ 
+-type SectionKey = "reputation-manager" | "showtime" | "settings" | "work";
++type SectionKey = "settings" | "work";
+ 
+-// /dashboard/modules and /dashboard/engagements are deliberately NOT in
+-// this static table — both are shared across products (see
+-// activeSection's own handling below) and a blanket prefix->showtime
+-// mapping for either was a real, previously-invisible bug: this file
+-// duplicates primary-rail.tsx's activeSectionHref (same concept, two
+-// unsynced implementations — worth unifying at some point, not done
+-// here to keep this fix minimal) and had the identical hardcoded
+-// "every /dashboard/modules/* path is Showtime" rule, which only ever
+-// mattered once Reputation Manager's module hub became reachable.
+-const SECTION_PREFIXES: Array<{ key: SectionKey; prefix: string }> = [
+-  { key: "reputation-manager", prefix: "/dashboard/reputation-manager" },
+-  { key: "showtime", prefix: "/dashboard/showtime" },
+-  { key: "showtime", prefix: "/dashboard/meetings" },
+-  { key: "showtime", prefix: "/dashboard/analytics" },
+-  { key: "settings", prefix: "/dashboard/settings" },
+-];
+-
+-function activeSection(pathname: string, fromParam: string | null): SectionKey {
+-  // /dashboard/modules/[skill] serves both catalogs — which section
+-  // shows depends on which catalog the skill segment belongs to.
+-  if (pathname.startsWith("/dashboard/modules/")) {
+-    const skillSegment = pathname.slice("/dashboard/modules/".length);
+-    return isRepSkillId(skillSegment) ? "reputation-manager" : "showtime";
+-  }
+-
+-  // /dashboard/engagements/[id] is one shared detail page for both
+-  // products — there's no single right answer from the path alone.
+-  // `from` carries where the visit actually came from (set by
+-  // ModuleClientRoster's hrefFor); trust it when it points at an RM
+-  // module, default to Showtime otherwise (the original assumption,
+-  // correct for a bare/bookmarked engagement link since every engagement
+-  // is a Showtime client by construction — see rep-engagements.ts).
+-  if (pathname.startsWith("/dashboard/engagements/")) {
+-    if (fromParam?.startsWith("/dashboard/modules/")) {
+-      const skillSegment = fromParam.slice("/dashboard/modules/".length);
+-      if (isRepSkillId(skillSegment)) return "reputation-manager";
+-    }
+-    return "showtime";
+-  }
+-  if (pathname === "/dashboard/engagements") return "showtime";
+-
+-  const match = SECTION_PREFIXES.filter(
+-    (s) => pathname === s.prefix || pathname.startsWith(`${s.prefix}/`)
+-  ).sort((a, b) => b.prefix.length - a.prefix.length)[0];
+-  return match?.key ?? "work";
++/**
++ * Two slots, not the six this used to have (work/settings/reputationManager/
++ * showtime/reportsReputationManager/reportsShowtime). Those extra four
++ * existed to swap in an entirely different sidebar depending on which
++ * product's "context" a route belonged to — the exact "different menu for
++ * the same client" problem the whole worker-registry restructure set out
++ * to remove, still standing here untouched through every phase of it.
++ * WorkSidebar already covers every worker across both products via its own
++ * Capabilities grid, so once nothing routes into a product-specific
++ * variant anymore, there's nothing left for those four slots to hold.
++ */
++function activeSection(pathname: string): SectionKey {
++  return pathname.startsWith("/dashboard/settings") ? "settings" : "work";
+ }
+ 
+ const SECTION_LABELS: Record<SectionKey, string> = {
+   work: "Work",
+-  showtime: "Showtime",
+-  "reputation-manager": "Reputation Manager",
+   settings: "Settings",
+ };
+ 
+-export function SecondarySidebar({
+-  work,
+-  settings,
+-  reputationManager,
+-  showtime,
+-  reportsReputationManager,
+-  reportsShowtime,
+-}: SecondarySidebarProps) {
++export function SecondarySidebar({ work, settings }: SecondarySidebarProps) {
+   const pathname = usePathname();
+-  const searchParams = useSearchParams();
+ 
+   // Library is intentionally a single-page marketplace. Teammates is
+   // intentionally a self-contained two-pane layout of its own (thread
+   // rail + chat, see teammates-workspace.tsx) — the generic Work sidebar
+-  // (Home/Clients/Reports/Queue/Executions/Capabilities) was showing up
+-  // to its left for no reason, wasting width and duplicating the "list of
++  // (Home/Reports/Queue/Executions/Capabilities) was showing up to its
++  // left for no reason, wasting width and duplicating the "list of
+   // things" role its own thread rail already plays. Hiding this column
+   // for both routes lets their own content use the full width instead.
+   if (
+@@ -96,49 +49,8 @@ export function SecondarySidebar({
+     return null;
+   }
+ 
+-  const scopedProduct = searchParams.get("product");
+-  // Mirrors primary-rail.tsx's PRODUCT_SCOPED_ROOTS — these routes are
+-  // shared across products and scoped by `?product=` rather than owning
+-  // their own path or section. Reports joined this list rather than
+-  // getting its own dedicated section: a standalone "reports" section
+-  // used to fully replace whichever product's Home/Clients/Reports/
+-  // Queue/Executions nav was showing with a bare, cross-product client
+-  // list — every other shared route (Queue, Executions, Clients) keeps
+-  // the current product's own sidebar and only swaps the page content,
+-  // so Reports needed to follow the same rule instead of being the odd
+-  // one out.
+-  const isProductScopedRoot =
+-    pathname === "/dashboard/queue" ||
+-    pathname === "/dashboard/runs" ||
+-    pathname === "/dashboard/engagements" ||
+-    pathname === "/dashboard/reports";
+-  const section: SectionKey =
+-    isProductScopedRoot && scopedProduct === "reputation-manager"
+-      ? "reputation-manager"
+-      : isProductScopedRoot && scopedProduct === "showtime"
+-        ? "showtime"
+-        : isProductScopedRoot
+-          ? "work"
+-          : activeSection(pathname, searchParams.get("from"));
+-
+-  const content: Record<SectionKey, ReactNode> = {
+-    work,
+-    showtime,
+-    "reputation-manager": reputationManager,
+-    settings,
+-  };
+-
+-  // /dashboard/reports gets a trimmed Home/Clients/Reports nav plus the
+-  // client picker directly underneath, not the full product sidebar
+-  // Queue/Executions/Clients share — see reports-sidebar-section.tsx's
+-  // own file comment for why reusing that whole component was wrong.
+-  const isReportsRoute = pathname === "/dashboard/reports";
+-  const rendered =
+-    isReportsRoute && section === "reputation-manager"
+-      ? reportsReputationManager
+-      : isReportsRoute && section === "showtime"
+-        ? reportsShowtime
+-        : content[section];
++  const section = activeSection(pathname);
++  const content: Record<SectionKey, ReactNode> = { work, settings };
+ 
+   return (
+     <aside className="w-60 bg-[#f8f7fa] dark:bg-sidebar border-r border-zinc-200/80 dark:border-sidebar-border flex flex-col shrink-0 select-none py-3 px-2 overflow-y-auto font-sans antialiased text-zinc-700 dark:text-zinc-300">
+@@ -146,7 +58,7 @@ export function SecondarySidebar({
+       <div className="px-3 pt-1 pb-2 text-[14px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+         {SECTION_LABELS[section]}
+       </div>
+-      <div className="flex-1">{rendered}</div>
++      <div className="flex-1">{content[section]}</div>
+     </aside>
+   );
+ }
+diff --git a/src/components/shell-layout.tsx b/src/components/shell-layout.tsx
+index f127ed7..2baa180 100644
+--- a/src/components/shell-layout.tsx
++++ b/src/components/shell-layout.tsx
+@@ -20,11 +20,6 @@ export function ShellLayout({
+   activeWorkspaceId,
+   work,
+   settings,
+-  reputationManager,
+-  showtime,
+-  reportsReputationManager,
+-  reportsShowtime,
+-  installedPackageIds,
+ }: {
+   children: ReactNode;
+   displayName: string;
+@@ -33,11 +28,6 @@ export function ShellLayout({
+   activeWorkspaceId: string;
+   work: ReactNode;
+   settings?: ReactNode;
+-  reputationManager: ReactNode;
+-  showtime: ReactNode;
+-  reportsReputationManager: ReactNode;
+-  reportsShowtime: ReactNode;
+-  installedPackageIds: string[];
+ }) {
+   const [sidebarOpen, setSidebarOpen] = useState(true);
+ 
+@@ -87,7 +77,6 @@ export function ShellLayout({
+             userEmail={userEmail}
+             workspaces={workspaces}
+             activeWorkspaceId={activeWorkspaceId}
+-            installedPackageIds={installedPackageIds}
+           />
+         </div>
+ 
+@@ -95,14 +84,7 @@ export function ShellLayout({
+             entirely based on which primary-rail section is active */}
+         {sidebarOpen && (
+           <div className="hidden md:flex">
+-            <SecondarySidebar
+-              work={work}
+-              settings={settings ?? <SettingsSidebar />}
+-              reputationManager={reputationManager}
+-              showtime={showtime}
+-              reportsReputationManager={reportsReputationManager}
+-              reportsShowtime={reportsShowtime}
+-            />
++            <SecondarySidebar work={work} settings={settings ?? <SettingsSidebar />} />
+           </div>
+         )}
+ 
+diff --git a/src/components/skills-nav-list.tsx b/src/components/skills-nav-list.tsx
+index b7c7e93..b1de938 100644
+--- a/src/components/skills-nav-list.tsx
++++ b/src/components/skills-nav-list.tsx
+@@ -54,7 +54,7 @@ function buildEntries(productIds: ProductId[]): SkillEntry[] {
+  * — an icon alone at any size reads as "some skill," so the label stays
+  * directly underneath every tile rather than becoming a hover-only detail.
+  */
+-function SkillsGrid({ entries }: { entries: SkillEntry[] }) {
++function SkillsGrid({ entries, needsAttentionWorkerIds }: { entries: SkillEntry[]; needsAttentionWorkerIds?: Set<string> }) {
+   const pathname = usePathname();
+ 
+   if (entries.length === 0) {
+@@ -72,17 +72,22 @@ function SkillsGrid({ entries }: { entries: SkillEntry[] }) {
+     <div className="grid grid-cols-4 gap-1.5">
+       {entries.map((entry) => {
+         const active = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
++        const needsAttention = needsAttentionWorkerIds?.has(entry.skillId) ?? false;
+         return (
+           <Link
+             key={entry.href}
+             href={entry.href}
+             aria-current={active ? "page" : undefined}
+-            className={`flex flex-col items-center gap-1 rounded-[8px] px-1 py-1.5 text-center transition-colors ${
++            title={needsAttention ? `${entry.label} — failing on its most recent run` : entry.label}
++            className={`relative flex flex-col items-center gap-1 rounded-[8px] px-1 py-1.5 text-center transition-colors ${
+               active
+                 ? "bg-white dark:bg-zinc-700 shadow-xs border border-zinc-200/60 dark:border-transparent"
+                 : "border border-transparent hover:bg-[#f0edf6] dark:hover:bg-zinc-800/60"
+             }`}
+           >
++            {needsAttention && (
++              <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-rose-500 dark:bg-rose-400" aria-hidden="true" />
++            )}
+             {entry.isRep ? (
+               <RepSkillBadge skill={entry.skillId as RepSkillId} size={22} />
+             ) : (
+@@ -118,6 +123,7 @@ export function SkillsNavList({
+   productIds = ["showtime"],
+   layout = "list",
+   enabledWorkerIds,
++  needsAttentionWorkerIds,
+ }: {
+   productIds?: ProductId[];
+   layout?: "list" | "grid";
+@@ -130,6 +136,10 @@ export function SkillsNavList({
+    * be a full skill directory, not a quick-access shortlist.
+    */
+   enabledWorkerIds?: WorkerId[];
++  /** Grid layout only — a small dot on any tile whose worker is failing on
++   * its most recent run (from getWorkspaceWorkerOverview), folded in from
++   * the dashboard-home "Active Workers" panel this grid absorbed. */
++  needsAttentionWorkerIds?: Set<string>;
+ }) {
+   const allEntries = buildEntries(productIds);
+   const entries = enabledWorkerIds
+@@ -137,7 +147,7 @@ export function SkillsNavList({
+     : allEntries;
+ 
+   if (layout === "grid") {
+-    return <SkillsGrid entries={entries} />;
++    return <SkillsGrid entries={entries} needsAttentionWorkerIds={needsAttentionWorkerIds} />;
+   }
+ 
+   const links: NavLinkItem[] = entries.map((entry) => ({
+diff --git a/src/lib/copy.ts b/src/lib/copy.ts
+index 69d0beb..e3a37d1 100644
+--- a/src/lib/copy.ts
++++ b/src/lib/copy.ts
+@@ -570,8 +570,8 @@ export const DASHBOARD_COPY = {
+   },
+   shortcuts: {
+     manageEngagements: {
+-      title: "Manage Your Clients",
+-      description: "View and update each client's account and settings.",
++      title: "Client Profile",
++      description: "This client's full account, workers, and run history.",
+     },
+     manageCredentials: {
+       title: "Manage Credentials",
+diff --git a/src/lib/primary-nav.ts b/src/lib/primary-nav.ts
+index 3c41c66..7df0038 100644
+--- a/src/lib/primary-nav.ts
++++ b/src/lib/primary-nav.ts
+@@ -1,87 +1,31 @@
+-// Canonical top-level navigation. Work is the cross-product hallway; product
+-// sections own their product-specific secondary navigation.
+-import {
+-  AlertTriangle,
+-  BarChart3,
+-  BookOpen,
+-  Building2,
+-  CalendarClock,
+-  LayoutGrid,
+-  MonitorPlay,
+-  Settings,
+-  ShieldCheck,
+-  type LucideIcon,
+-} from "lucide-react";
+-import type { ProductId } from "@/lib/product-catalog";
++// Canonical top-level navigation. One workspace is one client running
++// some subset of the unified worker registry — there is no more "which
++// product context am I in," so this is one flat rail, identical for
++// every client regardless of which workers they have enabled. This
++// replaces the old per-product rail (a Showtime badge and a Reputation
++// Manager badge, each contributing its own Engagements/Analytics/
++// Meetings-or-Incidents icons depending on which one you'd last clicked)
++// that survived every phase of the worker-registry restructure
++// untouched — the badges and PRODUCT_RAIL_CHILDREN below were the single
++// most visible leftover of the old "different menu per product" model.
++import { BarChart3, BookOpen, LayoutGrid, Settings, type LucideIcon } from "lucide-react";
+ 
+ export interface PrimaryNavSection {
+   title: string;
+   href: string;
+   icon: LucideIcon;
+-  /** Kept optional for the mobile accordion's shared rendering path. Product
+-   * navigation currently owns its links in the secondary sidebar. */
+-  children?: { label: string; href: string; icon: LucideIcon }[];
+ }
+ 
+-export interface ProductNavSection extends PrimaryNavSection {
+-  productId: ProductId;
+-  iconSrc: string;
+-  color: "amber" | "indigo";
+-}
+-
+-/** Destinations that are useful regardless of which products are installed. */
++/** The whole rail. Work is this client's home; Library is every worker
++ * (enabled or not) for this client; Analytics is the unified,
++ * registry-driven overview (Phase 8) with drill-in to any worker's own
++ * page. No per-product variants — a client running only Showtime
++ * workers and a client running only Reputation Manager workers see the
++ * exact same four items. */
+ export const PRIMARY_NAV_SECTIONS: PrimaryNavSection[] = [
+   { title: "Work", href: "/dashboard", icon: LayoutGrid },
+   { title: "Library", href: "/dashboard/library", icon: BookOpen },
+-];
+-
+-/** Product destinations only render once that product is installed in the
+- * active workspace. This is intentionally distinct from the global rail. */
+-export const PRODUCT_NAV_SECTIONS: ProductNavSection[] = [
+-  {
+-    productId: "showtime",
+-    title: "Showtime",
+-    href: "/dashboard/showtime",
+-    icon: MonitorPlay,
+-    iconSrc: "/images/showtime.png",
+-    color: "amber",
+-  },
+-  {
+-    productId: "reputation-manager",
+-    title: "Reputation Manager",
+-    href: "/dashboard/reputation-manager",
+-    icon: ShieldCheck,
+-    iconSrc: "/images/repm.png",
+-    color: "indigo",
+-  },
++  { title: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+ ];
+ 
+ export const SETTINGS_NAV = { label: "Settings", href: "/dashboard/settings", icon: Settings };
+-
+-export interface ProductRailChild {
+-  title: string;
+-  href: string;
+-  icon: LucideIcon;
+-}
+-
+-/**
+- * The primary-rail icons a product contributes ON TOP OF Work/Library
+- * while that product is the active context — the blueprint's original
+- * flat Work/Engagements/Analytics/Library/Meetings rail (see d106e89's
+- * primary-nav.ts), just re-scoped per product instead of being one
+- * global list. Meetings has no Reputation Manager equivalent (nothing in
+- * that product is call-based), so it's replaced with Incidents — backed
+- * by the real rep_incidents table, not a placeholder.
+- */
+-export const PRODUCT_RAIL_CHILDREN: Record<ProductId, ProductRailChild[]> = {
+-  showtime: [
+-    { title: "Engagements", href: "/dashboard/engagements?product=showtime", icon: Building2 },
+-    { title: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+-    { title: "Meetings", href: "/dashboard/meetings", icon: CalendarClock },
+-  ],
+-  "reputation-manager": [
+-    { title: "Engagements", href: "/dashboard/engagements?product=reputation-manager", icon: Building2 },
+-    { title: "Incidents", href: "/dashboard/reputation-manager/incidents", icon: AlertTriangle },
+-    { title: "Analytics", href: "/dashboard/reputation-manager/analytics", icon: BarChart3 },
+-  ],
+-};
+-- 
+2.43.0
+

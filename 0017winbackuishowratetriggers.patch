@@ -1,0 +1,713 @@
+From b5523ec780148cace3e4439bb924bc3c241add94 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 7 Sep 2026 11:06:04 +0000
+Subject: [PATCH] feat: Win-Back manual enrollment UI, brand voice and page
+ audit standalone triggers
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Closes the two remaining Showtime UI gaps confirmed by scanning the actual
+dashboard structure (not assumed): Win-Back had no way to manually enroll
+a new prospect anywhere (the pipeline toolbar had search+refresh only, the
+API route was GET-only, and the generic WorkersPanel Run button explicitly
+refuses win-back/pile-on since they're webhook-only) — same shape gap as
+Pile-On before that fix. Brand voice extraction and confirmation page
+audit had ZERO UI trigger anywhere, gated or not — chat was the only way
+to run either at all.
+
+Win-Back: same preview-then-confirm two-step modal as Pile-On's, added to
+win-back-pipeline.tsx's toolbar, backed by a new
+previewManualWinBackEnrollment (chat-winback.ts) that mirrors
+enrollProspectInWinBack's own validation chain read-only. Deliberately NO
+force override, unlike Pile-On — an existing active enrollment for the
+same prospect is a genuine "already in this cadence" state, not a soft
+duplicate signal, so enrolling again would mean two live cadences
+messaging the same person.
+
+Brand voice / page audit: a shared RunPinDownPieceButton (domain or URL
+input + trigger) added directly into DeliverablesPanel — brand voice's
+existing fallback-state row, and a new empty-state row for page audit
+(previously the whole row didn't render until one existed). Both post to
+a new /api/engagements/[id]/pin-down/run-piece route that calls the exact
+same triggerVoiceExtractionForEngagement / triggerPageAuditForEngagement
+functions Teammates chat already uses — zero new business logic, just a
+second way to reach code already shipped and verified this session.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01RyH3xjJh5mTzvTxG4Rpbpi
+---
+ .../[id]/pin-down/run-piece/route.ts          |  59 ++++++
+ .../win-back-pipeline/manual-enroll/route.ts  |  73 +++++++
+ .../engagements/[id]/deliverables-panel.tsx   |  40 ++++
+ .../[id]/run-pin-down-piece-button.tsx        | 106 ++++++++++
+ .../[id]/win-back-manual-enroll-modal.tsx     | 190 ++++++++++++++++++
+ .../engagements/[id]/win-back-pipeline.tsx    |  25 ++-
+ src/lib/chat-winback.ts                       |  57 ++++++
+ 7 files changed, 548 insertions(+), 2 deletions(-)
+ create mode 100644 src/app/api/engagements/[id]/pin-down/run-piece/route.ts
+ create mode 100644 src/app/api/engagements/[id]/win-back-pipeline/manual-enroll/route.ts
+ create mode 100644 src/app/dashboard/engagements/[id]/run-pin-down-piece-button.tsx
+ create mode 100644 src/app/dashboard/engagements/[id]/win-back-manual-enroll-modal.tsx
+
+diff --git a/src/app/api/engagements/[id]/pin-down/run-piece/route.ts b/src/app/api/engagements/[id]/pin-down/run-piece/route.ts
+new file mode 100644
+index 0000000..45dd4b6
+--- /dev/null
++++ b/src/app/api/engagements/[id]/pin-down/run-piece/route.ts
+@@ -0,0 +1,59 @@
++// src/app/api/engagements/[id]/pin-down/run-piece/route.ts
++//
++// Dashboard UI counterpart to two of Teammates chat's standalone Show Rate
++// Setup pieces — extract_brand_voice and audit_confirmation_page
++// (src/app/api/teammates/chat/route.ts). Neither had ANY UI trigger before
++// this route: DeliverablesPanel only ever displayed their results, and
++// client-details-drawer.tsx's "Regenerate" buttons only cover scripts/ad
++// briefs, and only once one already exists. This reuses the exact same
++// trigger functions chat already calls (triggerVoiceExtractionForEngagement,
++// triggerPageAuditForEngagement in chat-skill-trigger.ts) rather than a
++// second implementation — same dispatch, same run tracking, same behavior
++// regardless of which surface triggered it.
++//
++// Both dispatch a background run and return a runId immediately (real web
++// crawling / an LLM audit — too slow for a synchronous request), same
++// reasoning as the chat tools' own "dispatches and returns immediately"
++// description.
++
++import { NextResponse } from "next/server";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { triggerVoiceExtractionForEngagement, triggerPageAuditForEngagement } from "@/lib/chat-skill-trigger";
++
++export const runtime = "nodejs";
++
++export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
++  try {
++    const { id: engagementId } = await params;
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const body = await req.json().catch(() => ({}));
++    const piece = body?.piece;
++
++    if (piece === "voice") {
++      const domain = typeof body?.domain === "string" ? body.domain.trim() : "";
++      if (!domain) return NextResponse.json({ error: "domain is required" }, { status: 400 });
++      const result = await triggerVoiceExtractionForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, domain);
++      if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
++      return NextResponse.json({ runId: result.runId, message: result.message });
++    }
++
++    if (piece === "page_audit") {
++      const pageUrl = typeof body?.pageUrl === "string" ? body.pageUrl.trim() : "";
++      if (!pageUrl) return NextResponse.json({ error: "pageUrl is required" }, { status: 400 });
++      const result = await triggerPageAuditForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, pageUrl);
++      if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
++      return NextResponse.json({ runId: result.runId, message: result.message });
++    }
++
++    return NextResponse.json({ error: 'piece must be "voice" or "page_audit"' }, { status: 400 });
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : String(error);
++    return NextResponse.json({ error: message }, { status: 500 });
++  }
++}
+diff --git a/src/app/api/engagements/[id]/win-back-pipeline/manual-enroll/route.ts b/src/app/api/engagements/[id]/win-back-pipeline/manual-enroll/route.ts
+new file mode 100644
+index 0000000..0ff45b9
+--- /dev/null
++++ b/src/app/api/engagements/[id]/win-back-pipeline/manual-enroll/route.ts
+@@ -0,0 +1,73 @@
++// src/app/api/engagements/[id]/win-back-pipeline/manual-enroll/route.ts
++//
++// Dashboard UI counterpart to Teammates chat's enroll_in_winback tool —
++// same underlying functions (previewManualWinBackEnrollment,
++// enrollProspectInWinBack in chat-winback.ts), so behavior can't drift
++// between the two surfaces. Mirrors
++// pile-on-pipeline/manual-enroll/route.ts's shape exactly (GET = preview,
++// POST = the real enrollment) for the same reason that split exists there.
++//
++// No `force` field, unlike Pile-On's route — see
++// previewManualWinBackEnrollment's own comment for why an existing active
++// enrollment is a hard stop here, not an overridable warning.
++
++import { NextResponse } from "next/server";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { previewManualWinBackEnrollment, enrollProspectInWinBack } from "@/lib/chat-winback";
++
++export const runtime = "nodejs";
++
++export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
++  try {
++    const { id: engagementId } = await params;
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const { searchParams } = new URL(req.url);
++    const prospectEmail = searchParams.get("prospectEmail")?.trim() ?? "";
++    if (!prospectEmail) {
++      return NextResponse.json({ error: "prospectEmail is required" }, { status: 400 });
++    }
++
++    const result = await previewManualWinBackEnrollment({ engagementId, workspaceId: activeWorkspace.workspaceId, prospectEmail });
++    if (!result.ok) {
++      return NextResponse.json({ error: result.error }, { status: 400 });
++    }
++    return NextResponse.json({ actions: result.actions });
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : String(error);
++    return NextResponse.json({ error: message }, { status: 500 });
++  }
++}
++
++export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
++  try {
++    const { id: engagementId } = await params;
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const body = await req.json().catch(() => ({}));
++    const prospectEmail = typeof body?.prospectEmail === "string" ? body.prospectEmail.trim() : "";
++    const prospectName = typeof body?.prospectName === "string" ? body.prospectName.trim() || undefined : undefined;
++
++    if (!prospectEmail) {
++      return NextResponse.json({ error: "prospectEmail is required" }, { status: 400 });
++    }
++
++    const result = await enrollProspectInWinBack({ engagementId, workspaceId: activeWorkspace.workspaceId, prospectEmail, prospectName });
++    if (!result.ok) {
++      return NextResponse.json({ error: result.error }, { status: 400 });
++    }
++    return NextResponse.json({ success: true, enrollmentId: result.enrollmentId });
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : String(error);
++    return NextResponse.json({ error: message }, { status: 500 });
++  }
++}
+diff --git a/src/app/dashboard/engagements/[id]/deliverables-panel.tsx b/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
+index 23adf35..10ca9f2 100644
+--- a/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
+@@ -19,6 +19,7 @@ import {
+   Camera,
+   Shirt
+ } from "lucide-react";
++import { RunPinDownPieceButton } from "./run-pin-down-piece-button";
+ 
+ const PILLAR_LABELS: Record<string, string> = {
+   common_questions: "Common Questions Brief",
+@@ -348,6 +349,17 @@ export function DeliverablesPanel({
+               </div>
+             )}
+ 
++            <div className={isAiExtracted ? "pt-3 border-t border-zinc-200 dark:border-zinc-800" : ""}>
++              <RunPinDownPieceButton
++                engagementId={engagementId}
++                piece="voice"
++                inputLabel={isAiExtracted ? "Re-run extraction from a domain" : "Website domain"}
++                inputPlaceholder="example.com"
++                defaultValue={discoveryPrefill?.domain ?? ""}
++                buttonLabel={isAiExtracted ? "Re-run" : "Run extraction"}
++              />
++            </div>
++
+             {discoveryPrefill && (
+               <div className="space-y-2">
+                 <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
+@@ -708,6 +720,34 @@ export function DeliverablesPanel({
+           </DeliverableRow>
+         )}
+ 
++        {/* EXISTING PAGE AUDIT — EMPTY STATE (no audit run yet) */}
++        {!pinDownPageAudit && (
++          <DeliverableRow
++            id="page_audit_empty"
++            isOpen={openRowId === "page_audit_empty"}
++            onToggle={() => toggleRow("page_audit_empty")}
++            icon={FileText}
++            squircleClass="bg-zinc-300 text-zinc-950 dark:bg-zinc-800 dark:text-zinc-200"
++            title="Existing Confirmation Page Audit"
++            subtitle="Not run yet"
++          >
++            <div className="space-y-3 pt-1 text-xs">
++              <p className="text-zinc-600 dark:text-zinc-400">
++                Reviews an existing confirmation page against what a well-built one should include (hero video, what-to-expect, breakout content,
++                social proof, reschedule path) and notes concrete gaps. Doesn&apos;t build or deploy a new page — only audits one that already exists.
++              </p>
++              <RunPinDownPieceButton
++                engagementId={engagementId}
++                piece="page_audit"
++                inputLabel="Confirmation page URL"
++                inputPlaceholder="https://example.com/booked"
++                defaultValue={discoveryPrefill?.existingConfirmationPageUrl ?? ""}
++                buttonLabel="Run audit"
++              />
++            </div>
++          </DeliverableRow>
++        )}
++
+       </div>
+     </div>
+   );
+diff --git a/src/app/dashboard/engagements/[id]/run-pin-down-piece-button.tsx b/src/app/dashboard/engagements/[id]/run-pin-down-piece-button.tsx
+new file mode 100644
+index 0000000..8882aa0
+--- /dev/null
++++ b/src/app/dashboard/engagements/[id]/run-pin-down-piece-button.tsx
+@@ -0,0 +1,106 @@
++"use client";
++
++// src/app/dashboard/engagements/[id]/run-pin-down-piece-button.tsx
++//
++// One input + trigger button, same state machine as trigger-skill-button.tsx
++// (idle/running/done/error, link to the run page on success) — that
++// component has no input field, and brand voice extraction / page audit
++// both need exactly one (a domain, a page URL) before they can dispatch.
++// Posts to /api/engagements/[id]/pin-down/run-piece, which calls the same
++// trigger functions Teammates chat already uses for these two pieces.
++
++import { useState } from "react";
++import { useRouter } from "next/navigation";
++import { Loader2, ArrowRight } from "lucide-react";
++
++export function RunPinDownPieceButton({
++  engagementId,
++  piece,
++  inputLabel,
++  inputPlaceholder,
++  defaultValue = "",
++  buttonLabel,
++}: {
++  engagementId: string;
++  piece: "voice" | "page_audit";
++  inputLabel: string;
++  inputPlaceholder: string;
++  defaultValue?: string;
++  buttonLabel: string;
++}) {
++  const router = useRouter();
++  const [value, setValue] = useState(defaultValue);
++  const [state, setState] = useState<"idle" | "running" | "done" | "error">("idle");
++  const [message, setMessage] = useState<string | null>(null);
++  const [runId, setRunId] = useState<string | null>(null);
++
++  async function trigger() {
++    const trimmed = value.trim();
++    if (!trimmed) return;
++    setState("running");
++    setMessage(null);
++    setRunId(null);
++    try {
++      const res = await fetch(`/api/engagements/${engagementId}/pin-down/run-piece`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify(piece === "voice" ? { piece, domain: trimmed } : { piece, pageUrl: trimmed }),
++      });
++      const data = await res.json();
++      if (res.ok) {
++        setState("done");
++        setMessage(data.message ?? "Running — check back shortly.");
++        if (data.runId) setRunId(data.runId);
++        router.refresh();
++      } else {
++        setState("error");
++        setMessage(data.error ?? "Failed to start.");
++      }
++    } catch (e) {
++      setState("error");
++      setMessage(e instanceof Error ? e.message : "Failed to start.");
++    }
++  }
++
++  return (
++    <div className="space-y-2 w-full">
++      <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">{inputLabel}</label>
++      <div className="flex items-center gap-2">
++        <input
++          value={value}
++          onChange={(e) => setValue(e.target.value)}
++          placeholder={inputPlaceholder}
++          disabled={state === "running"}
++          className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
++        />
++        <button
++          type="button"
++          onClick={trigger}
++          disabled={state === "running" || !value.trim()}
++          className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
++        >
++          {state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
++          {buttonLabel}
++        </button>
++      </div>
++
++      {message && (
++        <p
++          className={`text-[11px] font-mono font-semibold px-1 py-0.5 rounded-sm flex items-center justify-between ${
++            state === "error" ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
++          }`}
++        >
++          <span>{message}</span>
++          {runId && (
++            <a
++              href={`/dashboard/runs/${runId}`}
++              className="underline underline-offset-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 font-bold ml-auto transition-colors"
++            >
++              View run →
++            </a>
++          )}
++        </p>
++      )}
++    </div>
++  );
++}
+diff --git a/src/app/dashboard/engagements/[id]/win-back-manual-enroll-modal.tsx b/src/app/dashboard/engagements/[id]/win-back-manual-enroll-modal.tsx
+new file mode 100644
+index 0000000..9f61c8f
+--- /dev/null
++++ b/src/app/dashboard/engagements/[id]/win-back-manual-enroll-modal.tsx
+@@ -0,0 +1,190 @@
++"use client";
++
++// src/app/dashboard/engagements/[id]/win-back-manual-enroll-modal.tsx
++//
++// Same two-step preview-then-confirm shape as pile-on-manual-enroll-modal.tsx
++// — see that file's header for the general reasoning. One real difference:
++// no force override here. An existing active win-back enrollment for this
++// exact prospect is a hard stop (see previewManualWinBackEnrollment's own
++// comment in chat-winback.ts) — enrolling again would mean two live
++// recovery cadences messaging the same person, not something a checkbox
++// should be able to wave through.
++
++import { useState } from "react";
++import { Mail, User, Loader2, CheckCircle2, X as XIcon, ArrowRight } from "lucide-react";
++import { Modal } from "@/components/modal";
++
++type Step = "input" | "previewing" | "previewed" | "submitting" | "done";
++
++export function WinBackManualEnrollModal({
++  engagementId,
++  onClose,
++  onEnrolled,
++}: {
++  engagementId: string;
++  onClose: () => void;
++  onEnrolled: () => void;
++}) {
++  const [step, setStep] = useState<Step>("input");
++  const [prospectEmail, setProspectEmail] = useState("");
++  const [prospectName, setProspectName] = useState("");
++  const [previewActions, setPreviewActions] = useState<string[]>([]);
++  const [error, setError] = useState<string | null>(null);
++  const [successMessage, setSuccessMessage] = useState<string | null>(null);
++
++  const emailValid = /\S+@\S+\.\S+/.test(prospectEmail.trim());
++
++  function resetToInput() {
++    setStep("input");
++    setPreviewActions([]);
++    setError(null);
++  }
++
++  async function runPreview() {
++    setError(null);
++    setStep("previewing");
++    try {
++      const res = await fetch(`/api/engagements/${engagementId}/win-back-pipeline/manual-enroll?prospectEmail=${encodeURIComponent(prospectEmail.trim())}`);
++      const body = await res.json();
++      if (!res.ok) throw new Error(body?.error ?? "Preview failed.");
++      setPreviewActions(body.actions ?? []);
++      setStep("previewed");
++    } catch (e) {
++      setError(e instanceof Error ? e.message : "Preview failed.");
++      setStep("input");
++    }
++  }
++
++  async function confirmEnroll() {
++    setError(null);
++    setStep("submitting");
++    try {
++      const res = await fetch(`/api/engagements/${engagementId}/win-back-pipeline/manual-enroll`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ prospectEmail: prospectEmail.trim(), prospectName: prospectName.trim() || undefined }),
++      });
++      const body = await res.json();
++      if (!res.ok) throw new Error(body?.error ?? "Enrollment failed.");
++      setSuccessMessage(`Enrolled ${prospectEmail.trim()} in the win-back recovery cadence.`);
++      setStep("done");
++      onEnrolled();
++    } catch (e) {
++      setError(e instanceof Error ? e.message : "Enrollment failed.");
++      setStep("previewed");
++    }
++  }
++
++  return (
++    <Modal title="Manually enroll in Win-Back" icon={Mail} onClose={onClose}>
++      <div className="space-y-4 font-sans">
++        {step === "done" ? (
++          <div className="space-y-3 py-2 text-center">
++            <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
++            <p className="text-sm font-semibold text-zinc-900 dark:text-white">{successMessage}</p>
++            <button
++              type="button"
++              onClick={onClose}
++              className="mt-2 rounded-lg bg-zinc-900 dark:bg-white px-4 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 cursor-pointer"
++            >
++              Done
++            </button>
++          </div>
++        ) : (
++          <>
++            <p className="text-xs text-zinc-500 dark:text-zinc-400">
++              For a prospect who cancelled or no-showed outside a connected booking webhook, or whose recovery webhook failed. Adds them to the
++              client&apos;s actual configured recovery list/workflow — a real action, not a simulation.
++            </p>
++
++            <div className="space-y-2">
++              <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 block">Prospect email</label>
++              <div className="relative">
++                <Mail size={13} className="absolute left-2.5 top-2.5 text-zinc-400" />
++                <input
++                  value={prospectEmail}
++                  onChange={(e) => {
++                    setProspectEmail(e.target.value);
++                    if (step !== "input") resetToInput();
++                  }}
++                  placeholder="jane@prospect.com"
++                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
++                  disabled={step === "previewing" || step === "submitting"}
++                />
++              </div>
++
++              <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 block pt-1">Prospect name (optional)</label>
++              <div className="relative">
++                <User size={13} className="absolute left-2.5 top-2.5 text-zinc-400" />
++                <input
++                  value={prospectName}
++                  onChange={(e) => {
++                    setProspectName(e.target.value);
++                    if (step === "previewed") resetToInput();
++                  }}
++                  placeholder="Jane Doe"
++                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
++                  disabled={step === "previewing" || step === "submitting"}
++                />
++              </div>
++            </div>
++
++            {error && (
++              <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 flex items-start gap-2">
++                <XIcon size={13} className="mt-0.5 shrink-0" />
++                <span>{error}</span>
++              </div>
++            )}
++
++            {(step === "previewed" || step === "submitting") && previewActions.length > 0 && (
++              <div className="space-y-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3">
++                <p className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">This is what would happen — nothing has been sent yet</p>
++                <ul className="space-y-1.5">
++                  {previewActions.map((a, i) => (
++                    <li key={i} className="flex items-start gap-2 text-xs text-zinc-700 dark:text-zinc-300">
++                      <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-emerald-500" />
++                      <span>{a}</span>
++                    </li>
++                  ))}
++                </ul>
++              </div>
++            )}
++
++            <div className="flex items-center justify-end gap-2 pt-1">
++              <button
++                type="button"
++                onClick={onClose}
++                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
++                disabled={step === "previewing" || step === "submitting"}
++              >
++                Cancel
++              </button>
++
++              {step === "previewed" || step === "submitting" ? (
++                <button
++                  type="button"
++                  onClick={confirmEnroll}
++                  disabled={step === "submitting"}
++                  className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
++                >
++                  {step === "submitting" ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
++                  Confirm enrollment
++                </button>
++              ) : (
++                <button
++                  type="button"
++                  onClick={runPreview}
++                  disabled={!emailValid || step === "previewing"}
++                  className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
++                >
++                  {step === "previewing" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
++                  Preview
++                </button>
++              )}
++            </div>
++          </>
++        )}
++      </div>
++    </Modal>
++  );
++}
+diff --git a/src/app/dashboard/engagements/[id]/win-back-pipeline.tsx b/src/app/dashboard/engagements/[id]/win-back-pipeline.tsx
+index 0f80057..6ffeba6 100644
+--- a/src/app/dashboard/engagements/[id]/win-back-pipeline.tsx
++++ b/src/app/dashboard/engagements/[id]/win-back-pipeline.tsx
+@@ -15,9 +15,10 @@ import {
+   Copy, 
+   Check, 
+   Clock, 
+-  RefreshCw, 
++  RefreshCw,
+   CalendarDays,
+-  Link2
++  Link2,
++  UserPlus
+ } from "lucide-react";
+ import { cn } from "@/lib/utils";
+ import { dateKey } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
+@@ -26,6 +27,7 @@ import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
+ import { formatDiaryDateTime } from "@/lib/format-datetime";
+ import { exitReasonLabel } from "@/lib/copy";
+ import { SquishySkillBadge } from "@/components/squishy-skill-badge";
++import { WinBackManualEnrollModal } from "./win-back-manual-enroll-modal";
+ import type { WinBackPipelineItem, WinBackEnrollmentStatus } from "@/app/api/engagements/[id]/win-back-pipeline/route";
+ 
+ type Tone = "success" | "warning" | "danger" | "info" | "neutral";
+@@ -82,6 +84,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
+   const [filterText, setFilterText] = useState("");
+   const [copiedLink, setCopiedLink] = useState(false);
+   const [showRunActivity, setShowRunActivity] = useState(false);
++  const [showManualEnroll, setShowManualEnroll] = useState(false);
+ 
+   const year = currentDate.getFullYear();
+   const month = currentDate.getMonth();
+@@ -280,6 +283,16 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
+           >
+             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
+           </button>
++
++          <button
++            type="button"
++            onClick={() => setShowManualEnroll(true)}
++            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
++            title="Manually enroll a prospect who cancelled outside a connected webhook"
++          >
++            <UserPlus size={13} />
++            <span className="hidden sm:inline">Manually enroll</span>
++          </button>
+         </div>
+       </div>
+ 
+@@ -589,6 +602,14 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
+           )}
+         </div>
+       </div>
++
++      {showManualEnroll && (
++        <WinBackManualEnrollModal
++          engagementId={engagementId}
++          onClose={() => setShowManualEnroll(false)}
++          onEnrolled={load}
++        />
++      )}
+     </div>
+   );
+ }
+\ No newline at end of file
+diff --git a/src/lib/chat-winback.ts b/src/lib/chat-winback.ts
+index ca59f5b..291c0b9 100644
+--- a/src/lib/chat-winback.ts
++++ b/src/lib/chat-winback.ts
+@@ -28,6 +28,7 @@ import type { EngagementStack } from "@/models/schema";
+ import crypto from "crypto";
+ 
+ type EnrollResult = { ok: true; enrollmentId: string } | { ok: false; error: string };
++type PreviewResult = { ok: true; actions: string[] } | { ok: false; error: string };
+ 
+ function missingMetaFor(platform: string, stack: Partial<EngagementStack>): string | null {
+   if (platform === "klaviyo" && !stack.recovery_list_id) return "recovery_list_id isn't configured for Klaviyo yet — set that up on the client's page first.";
+@@ -40,6 +41,62 @@ function missingMetaFor(platform: string, stack: Partial<EngagementStack>): stri
+   return null;
+ }
+ 
++/**
++ * Read-only mirror of enrollProspectInWinBack's own validation chain —
++ * runs the exact same checks (email platform connected, SMTP declined,
++ * per-platform meta present, no existing active enrollment) without ever
++ * calling enrollInWinBackSequence or writing a row. Unlike Pile-On's
++ * preview/enroll pair (chat-pile-on.ts), there's no force override here:
++ * an existing active enrollment for this exact prospect is a genuine
++ * "they're already in this cadence" state, not a soft/probabilistic
++ * duplicate signal — enrolling again would mean two live recovery
++ * cadences messaging the same person, not a one-time re-check worth
++ * overriding.
++ */
++export async function previewManualWinBackEnrollment(opts: {
++  engagementId: string;
++  workspaceId: string;
++  prospectEmail: string;
++}): Promise<PreviewResult> {
++  const [engagement] = await db
++    .select({ stack: engagements.stack })
++    .from(engagements)
++    .where(and(eq(engagements.engagementId, opts.engagementId), eq(engagements.workspaceId, opts.workspaceId)))
++    .limit(1);
++  if (!engagement) return { ok: false, error: "Client not found." };
++
++  const stack = (engagement.stack as Partial<EngagementStack> | null) ?? {};
++  if (!stack.email_platform || !stack.email_platform_credentials_ref) {
++    return { ok: false, error: "No email platform connected for this client yet — connect one before trying a win-back." };
++  }
++
++  if (stack.email_platform === "smtp") {
++    return {
++      ok: false,
++      error:
++        "Direct-send (SMTP) win-back runs as a durable background sequence that isn't wired up for manual enrollment yet — only Klaviyo/HubSpot/ActiveCampaign/GoHighLevel can be triggered this way right now.",
++    };
++  }
++
++  const metaError = missingMetaFor(stack.email_platform, stack);
++  if (metaError) return { ok: false, error: metaError };
++
++  const [existingActive] = await db
++    .select({ id: winBackEnrollments.id })
++    .from(winBackEnrollments)
++    .where(
++      and(
++        eq(winBackEnrollments.engagementId, opts.engagementId),
++        eq(winBackEnrollments.prospectEmail, opts.prospectEmail),
++        eq(winBackEnrollments.status, "active")
++      )
++    )
++    .limit(1);
++  if (existingActive) return { ok: false, error: `${opts.prospectEmail} is already in an active recovery cadence — no need to enroll again.` };
++
++  return { ok: true, actions: [`Would enroll ${opts.prospectEmail} in ${stack.email_platform}'s win-back recovery cadence.`] };
++}
++
+ export async function enrollProspectInWinBack(opts: {
+   engagementId: string;
+   workspaceId: string;
+-- 
+2.43.0
+

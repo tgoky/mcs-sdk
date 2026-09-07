@@ -1,0 +1,660 @@
+From 3ab30fbd5bf0603a3b3f50424e374563b613302f Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 7 Sep 2026 13:47:21 +0000
+Subject: [PATCH] =?UTF-8?q?feat:=20dual-mode=20Pile-On=20enable=20UX=20?=
+ =?UTF-8?q?=E2=80=94=20chat=20and=20quick-form=20as=20real,=20remembered?=
+ =?UTF-8?q?=20choices?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Extends Phase 5's lighter-form fallback per explicit follow-up feedback:
+users should get a genuine choice between chat and a compact grouped-row
+form, be able to set a remembered default, and never get redirected off
+the page to use chat.
+
+EnablePileOnModal now has two tabs instead of one form:
+- Quick setup: the same 2 fields, redesigned as horizontal label+control
+  rows instead of a stacked form.
+- Ask Teammates: the real Teammates chat, embedded inline via
+  TeammatesChat's own size="compact" mode — no redirect to
+  /dashboard/teammates. Pre-seeded with a message naming the actual
+  client so the user never has to explain who or what.
+
+Whichever tab is actually used to finish enabling is remembered
+(browser-local) and opens by default next time.
+
+Real gap found and fixed to make the chat tab actually work, not just
+look like it does: Teammates chat had no tool at all for "enable a
+worker" — every existing tool was narrower (enroll a prospect, run a
+piece standalone, etc.). Added enable_pile_on, backed by a new shared
+function (enablePileOnForEngagement in lib/enable-pile-on.ts) that both
+the chat tool and the Quick-setup tab's new enable-with-config route call
+— one function behind both surfaces, so they can't produce different
+results. Also threaded buyerName through Library's server page down to
+the modal, so the chat pre-seed reads naturally instead of "this client."
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01RyH3xjJh5mTzvTxG4Rpbpi
+---
+ .../pile-on/enable-with-config/route.ts       |  37 +++
+ src/app/api/teammates/chat/route.ts           |  35 ++-
+ src/app/dashboard/library/page.tsx            |  17 +-
+ .../library/enable-worker-modal.tsx           | 255 +++++++++++-------
+ .../library/library-marketplace-client.tsx    |   4 +-
+ src/components/library/worker-card.tsx        |   3 +
+ src/lib/enable-pile-on.ts                     |  83 ++++++
+ 7 files changed, 329 insertions(+), 105 deletions(-)
+ create mode 100644 src/app/api/engagements/[id]/workers/pile-on/enable-with-config/route.ts
+ create mode 100644 src/lib/enable-pile-on.ts
+
+diff --git a/src/app/api/engagements/[id]/workers/pile-on/enable-with-config/route.ts b/src/app/api/engagements/[id]/workers/pile-on/enable-with-config/route.ts
+new file mode 100644
+index 0000000..4a21092
+--- /dev/null
++++ b/src/app/api/engagements/[id]/workers/pile-on/enable-with-config/route.ts
+@@ -0,0 +1,37 @@
++// src/app/api/engagements/[id]/workers/pile-on/enable-with-config/route.ts
++//
++// EnablePileOnModal's "Quick setup" tab posts here instead of the two-step
++// PATCH-then-enable dance — one call, backed by the same
++// enablePileOnForEngagement function Teammates chat's enable_pile_on tool
++// calls, so the two surfaces can't produce different results.
++
++import { NextResponse } from "next/server";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { enablePileOnForEngagement } from "@/lib/enable-pile-on";
++
++export const runtime = "nodejs";
++
++export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
++  try {
++    const { id: engagementId } = await params;
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const body = await req.json().catch(() => ({}));
++    const smsPlatform = typeof body?.smsPlatform === "string" ? body.smsPlatform : undefined;
++    const adDataPlatform = typeof body?.adDataPlatform === "string" ? body.adDataPlatform : undefined;
++
++    const result = await enablePileOnForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, { smsPlatform, adDataPlatform });
++    if (!result.ok) {
++      return NextResponse.json({ error: result.error }, { status: 400 });
++    }
++    return NextResponse.json({ ok: true });
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : String(error);
++    return NextResponse.json({ error: message }, { status: 500 });
++  }
++}
+diff --git a/src/app/api/teammates/chat/route.ts b/src/app/api/teammates/chat/route.ts
+index 1b38633..d0b3f2e 100644
+--- a/src/app/api/teammates/chat/route.ts
++++ b/src/app/api/teammates/chat/route.ts
+@@ -14,6 +14,7 @@ import { checkCredentialAvailability, linkReusableCredential, getComposioConnect
+ import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries, getLeakMapBenchmarkComparison } from "@/lib/chat-status-queries";
+ import { enrollProspectInWinBack } from "@/lib/chat-winback";
+ import { previewManualPileOnEnrollment, enrollProspectInPileOn } from "@/lib/chat-pile-on";
++import { enablePileOnForEngagement } from "@/lib/enable-pile-on";
+ import { triggerVoiceExtractionForEngagement, triggerScriptPackForEngagement, triggerAdCreativeBriefsForEngagement, triggerPageAuditForEngagement, triggerEngineAdhocCheckForEngagement, triggerCrisisStressTestForEngagement, triggerDraftResponseForEngagement, triggerTwitterDeepScanForEngagement, triggerTrustpilotDeepScanForEngagement, triggerRedditDeepScanForEngagement } from "@/lib/chat-skill-trigger";
+ import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS } from "@/lib/copy";
+ 
+@@ -213,6 +214,20 @@ const TOOLS = [
+       required: ["engagementId", "prospectEmail"],
+     },
+   },
++  {
++    name: "enable_pile_on",
++    description:
++      "Turns the Pile-On worker on for a client — a real action (installs Showtime into the workspace if needed, flips the worker on). Optionally sets the SMS follow-up platform and/or ad-data cohort sync platform at the same time; omit either (or pass \"none\") to leave it off, same as enabling from the Library without answering them — nothing is required beyond the client.",
++    input_schema: {
++      type: "object",
++      properties: {
++        engagementId: { type: "string", description: "The client to enable Pile-On for." },
++        smsPlatform: { type: "string", enum: ["none", "twilio", "ghl_sms", "hubspot_sms"], description: "Optional — which platform sends the SMS follow-up sequence." },
++        adDataPlatform: { type: "string", enum: ["none", "hyros", "google_sheets", "native_crm"], description: "Optional — which platform receives the ad-spend attribution cohort sync." },
++      },
++      required: ["engagementId"],
++    },
++  },
+   {
+     name: "preview_pile_on_enrollment",
+     description:
+@@ -390,7 +405,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
+       ? clients.map((c) => `- ${c.buyer} (engagementId: ${c.engagementId}${c.repEnrolled ? ", Reputation Manager" : ""})`).join("\n")
+       : "(no clients yet)";
+   return [
+-    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries, how a client's Leak Map metrics compare to similar clients — for any client, without triggering anything.",
++    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, turn the Pile-On worker on for a client (optionally with its SMS/ad-data platform), run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries, how a client's Leak Map metrics compare to similar clients — for any client, without triggering anything.",
+     "",
+     "Clients (a client tagged \"Reputation Manager\" is enrolled in that product; everyone else is Showtime-only unless just created and not yet set up):",
+     clientList,
+@@ -407,6 +422,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
+     "- After a tool call, tell the user plainly what happened, including any error a tool returned (e.g. the skill being disabled for that client).",
+     "- For enroll_in_winback: needs a working email-platform credential on the client already, plus the platform's recovery list/workflow configured — if the tool reports something's missing, tell the user plainly what and point them to the client's page, don't retry blindly.",
+     "- For enroll_in_pile_on: ALWAYS call preview_pile_on_enrollment first and show the user its output before ever calling enroll_in_pile_on — never call enroll_in_pile_on in the same turn as the user's first request without a preview shown first. It only enrolls email, never SMS or an ad-data cohort sync (say so plainly if asked — deliberately not replicated for manual enrollment, see the tool's own description for why). If the preview or the real call reports an existing booking on file for that email, tell the user plainly and only pass force:true after they explicitly confirm they want to proceed anyway — never set force on your own judgment.",
++    "- For enable_pile_on: this is a DIFFERENT action from enroll_in_pile_on — enable_pile_on turns the worker itself on for a client (once), enroll_in_pile_on enrolls one specific prospect (repeatable). Don't confuse them. smsPlatform/adDataPlatform are both optional — if the user doesn't mention them, enable with neither set rather than asking a checklist of questions; only ask if they bring up SMS or ad-data tracking themselves.",
+     "- For check_crisis_threshold: the finding must be explicitly hypothetical — if the user describes something that actually happened, don't use this tool, tell them the real watch skills (or draft_response) are what handle real findings. Never presents as declaring a real incident; always make clear in your reply that nothing was actually triggered, this only tested the threshold.",
+     "- For twitter_deep_scan and trustpilot_deep_scan: deepScanSinceDate must be a real past date the user gives you, not something you pick. Both add real results to the client's actual monitoring history, the same as the regular scheduled watch — never present either as a preview or a dry run.",
+     "- For reddit_deep_scan: Reddit's own search has no exact date cutoff the way Trustpilot/X do, only a timeframe bucket (hour/day/week/month/year/all) — never ask the user for a specific date for this one, ask which bucket to widen into instead, and if they give you a date, translate it to the closest bucket yourself rather than pushing back. Adds real results to the client's actual monitoring history, same as the regular scheduled watch.",
+@@ -414,7 +430,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
+     "- For check_ai_engines: omit subject to ask about the client themselves; to ask about a competitor, use the exact name from their tracked competitors list (shown on their Identity Setup) — never guess or paraphrase a competitor name that hasn't been confirmed as tracked, ask the user to confirm the exact name instead. This is a live spot-check, separate from the scheduled AI Engine Watch panel — nothing gets saved to the client's monitoring history, so don't present it as if it updates their ongoing findings.",
+     "- extract_brand_voice, generate_video_scripts, generate_ad_briefs, and audit_confirmation_page all run in the background and take a while — always tell the user it's running and won't finish instantly, and offer to check status with get_run_history if they ask later. None of these run the full Show Rate Setup wizard end to end (no booking webhook wiring, no new page deployment) — each does exactly the one piece it's named for, using whatever the client already has on file (brand voice, offer details, call questions) and degrading to a more generic result if some of that isn't set yet, never failing outright for missing optional context. If asked to build or deploy a new confirmation page (not audit an existing one), say plainly that's not wired up — audit_confirmation_page only reviews a page that already exists.",
+     "- generate_video_scripts' approach param: only set it when the user explicitly asks to regenerate with a different angle/framing — never set it on a first-time script generation, and never invent a description beyond the 3 real options (research_assistance/urgency/faq) listed in the tool's own schema. audit_confirmation_page's competitorPageUrl: only set it when the user gives an actual competitor URL to compare against — never guess or reuse a URL from earlier in the conversation for a different purpose.",
+-    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, preview or enroll someone in Pile-On (preview_pile_on_enrollment, enroll_in_pile_on — email only, see that rule above), run Show Rate Setup's four individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), deep-scan X/Twitter back to a date (twitter_deep_scan), deep-scan Trustpilot back to a date (trustpilot_deep_scan), widen a Reddit scan to an older timeframe (reddit_deep_scan), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, Pile-On's SMS or ad-data cohort sync specifically (not replicated for manual enrollment, only the real booking webhook does those), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves on their regular cadence, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, twitter_deep_scan, trustpilot_deep_scan, reddit_deep_scan, and enroll_in_pile_on are separate, narrower, manually-triggered actions, not a way to fire the scheduled skills themselves.",
++    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, turn Pile-On on for a client (enable_pile_on), preview or enroll someone in Pile-On (preview_pile_on_enrollment, enroll_in_pile_on — email only, see that rule above), run Show Rate Setup's four individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), deep-scan X/Twitter back to a date (twitter_deep_scan), deep-scan Trustpilot back to a date (trustpilot_deep_scan), widen a Reddit scan to an older timeframe (reddit_deep_scan), compare a client's Leak Map metrics to benchmarks (compare_leak_map_benchmarks), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, Pile-On's SMS or ad-data cohort sync during MANUAL PROSPECT ENROLLMENT specifically (enroll_in_pile_on only does email — enable_pile_on can set the platform CHOICE when turning the worker on, that's a different thing), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves on their regular cadence, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, twitter_deep_scan, trustpilot_deep_scan, reddit_deep_scan, enable_pile_on, and enroll_in_pile_on are separate, narrower, manually-triggered actions, not a way to fire the scheduled skills themselves.",
+     "- Keep replies short and direct.",
+   ].join("\n");
+ }
+@@ -645,6 +661,21 @@ export async function POST(request: Request) {
+         } else {
+           message2 = "Missing engagementId or prospectEmail.";
+         }
++      } else if (block.name === "enable_pile_on") {
++        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
++        const smsPlatform = typeof block.input.smsPlatform === "string" ? block.input.smsPlatform : undefined;
++        const adDataPlatform = typeof block.input.adDataPlatform === "string" ? block.input.adDataPlatform : undefined;
++        if (engagementId) {
++          const result = await enablePileOnForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, { smsPlatform, adDataPlatform });
++          ok = result.ok;
++          message2 = result.ok ? "Pile-On is now enabled for this client." : result.error;
++          if (result.ok) {
++            const buyer = clients.find((c) => c.engagementId === engagementId)?.buyer;
++            links.push({ label: buyer ? `${buyer}'s page` : "Client page", href: `/dashboard/engagements/${engagementId}` });
++          }
++        } else {
++          message2 = "Missing engagementId.";
++        }
+       } else if (block.name === "preview_pile_on_enrollment") {
+         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+         const prospectEmail = typeof block.input.prospectEmail === "string" ? block.input.prospectEmail.trim() : "";
+diff --git a/src/app/dashboard/library/page.tsx b/src/app/dashboard/library/page.tsx
+index e11c194..5f1db08 100644
+--- a/src/app/dashboard/library/page.tsx
++++ b/src/app/dashboard/library/page.tsx
+@@ -2,6 +2,9 @@ import { getSession } from "@/lib/session";
+ import { LibraryMarketplaceClient } from "@/components/library/library-marketplace-client";
+ import { getActiveWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
+ import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
++import { db } from "@/lib/db";
++import { engagements } from "@/models/schema";
++import { eq } from "drizzle-orm";
+ 
+ export const dynamic = "force-dynamic";
+ export const revalidate = 0;
+@@ -11,7 +14,17 @@ export default async function LibraryPage() {
+   const whopUserId = session.whopUserId!;
+   const workspace = await getActiveWorkspace(whopUserId);
+   const engagementId = await getPrimaryEngagementIdForWorkspace(workspace.workspaceId);
+-  const enabledWorkerIds = engagementId ? await getEnabledWorkerIdsForEngagement(engagementId) : [];
++  const [enabledWorkerIds, buyerName] = await Promise.all([
++    engagementId ? getEnabledWorkerIdsForEngagement(engagementId) : Promise.resolve([]),
++    engagementId
++      ? db
++          .select({ buyer: engagements.buyer })
++          .from(engagements)
++          .where(eq(engagements.engagementId, engagementId))
++          .limit(1)
++          .then((r) => r[0]?.buyer ?? null)
++      : Promise.resolve(null),
++  ]);
+ 
+-  return <LibraryMarketplaceClient engagementId={engagementId} enabledWorkerIds={enabledWorkerIds} />;
++  return <LibraryMarketplaceClient engagementId={engagementId} enabledWorkerIds={enabledWorkerIds} buyerName={buyerName} />;
+ }
+diff --git a/src/components/library/enable-worker-modal.tsx b/src/components/library/enable-worker-modal.tsx
+index 3d7bc37..a70cf71 100644
+--- a/src/components/library/enable-worker-modal.tsx
++++ b/src/components/library/enable-worker-modal.tsx
+@@ -3,81 +3,100 @@
+ // src/components/library/enable-worker-modal.tsx
+ //
+ // Phase 5's "lighter form, grouped rows, not a long form" fallback for
+-// enabling a worker without chat. Scoped deliberately narrow, not a
+-// generic modal driven blindly off worker-registry.ts's configFields:
+-// most workers with real "ask" fields already have a genuine home for
+-// them — pre-call-read/leak-map/win-back all have hasHingesPanel: true,
+-// a real dedicated setup page reachable via "Configure" once enabled.
+-// pile-on is the one worker with real ask-kind fields (see
+-// worker-registry.ts's own "pile-on" entry) and NO hinges panel at all —
+-// clicking Enable for it today does a blind toggle, leaving smsPlatform/
+-// adDataPlatform silently defaulted rather than asked.
++// enabling a worker without chat — now genuinely paired with chat, not
++// instead of it. Two tabs, not one path forced on the user:
+ //
+-// Only asks the two fields safely persistable through the existing,
+-// deliberately-scoped PATCH /api/engagements/[id] route (see that
+-// route's own header comment — it explicitly allowlists sms_platform and
+-// ad_data_platform, not an arbitrary stack merge). pile-on's other
+-// classified ask fields (smsA2p10dlcStatus, smsComplianceFooterVariant,
+-// existingPileOnSequenceFlagged) aren't in that allowlist and don't get
+-// asked here — they're real, but a 30-second enable flow isn't the place
+-// to also collect SMS compliance registration details; Edit Stack
+-// Settings and Pin-Down's own setup screen already own those. "Skip for
+-// now" leaves the platform choices at "none" (today's actual default
+-// behavior), never blocking enabling on answering them.
++//   - "Quick setup": horizontal label+control rows (not a stacked form)
++//     for the fields safely persistable through the existing, narrowly-
++//     scoped PATCH /api/engagements/[id] route.
++//   - "Ask Teammates": the actual Teammates chat, embedded inline via
++//     TeammatesChat's own size="compact" mode — not a redirect to
++//     /dashboard/teammates. Pre-seeded with a message naming this client
++//     so the user never has to explain who or what; the assistant calls
++//     the exact same enable_pile_on tool (chat-skill wiring in
++//     teammates/chat/route.ts) that ultimately calls the same
++//     enablePileOnForEngagement function Quick-setup's own submit does —
++//     one shared function behind both tabs, so they can't diverge.
+ //
+-// Generalizing this into a registry-driven form for every worker is a
+-// real future step, once a second worker needs the same treatment —
+-// same "generalize once a real second example exists" bar this codebase
+-// applies everywhere else, not before.
++// Whichever tab the user actually finishes through is remembered
++// (browser-local — this is a per-viewer UX nicety, not data worth a
++// schema migration) and opens by default next time, on ANY worker's
++// modal, not just this one — same idea skill-driven apps use for
++// "always open my last view."
++//
++// Scoped to pile-on specifically for the same reason its predecessor
++// was — see this file's own prior header, now folded into this one: it's
++// the one worker with real ask-kind fields and no hinges panel to answer
++// them in. Generalizing the tab mechanism itself to other workers is
++// straightforward once a second one needs it; only the Quick-setup tab's
++// field list is pile-on-specific today.
+ 
+ import { useState } from "react";
+-import { Loader2, ArrowRight } from "lucide-react";
++import { Loader2, ArrowRight, Settings2, MessageCircle } from "lucide-react";
+ import { Modal } from "@/components/modal";
+ import { SMS_PLATFORM_LABELS, AD_DATA_PLATFORM_LABELS } from "@/lib/copy";
++import { TeammatesChat } from "@/app/dashboard/teammates/teammates-chat";
+ 
+ const SMS_OPTIONS = ["none", "twilio", "ghl_sms", "hubspot_sms"];
+ const AD_DATA_OPTIONS = ["none", "hyros", "google_sheets", "native_crm"];
+ 
++const MODE_STORAGE_KEY = "mcs-enable-worker-mode";
++
++function readStoredMode(): "form" | "chat" {
++  if (typeof window === "undefined") return "form";
++  try {
++    return window.localStorage.getItem(MODE_STORAGE_KEY) === "chat" ? "chat" : "form";
++  } catch {
++    return "form";
++  }
++}
++
++function writeStoredMode(mode: "form" | "chat") {
++  try {
++    window.localStorage.setItem(MODE_STORAGE_KEY, mode);
++  } catch {
++    // best-effort
++  }
++}
++
+ export function EnablePileOnModal({
+   engagementId,
++  buyerName,
+   onClose,
+   onEnabled,
+ }: {
+   engagementId: string;
++  buyerName?: string;
+   onClose: () => void;
+   onEnabled: () => void;
+ }) {
++  // Lazy initializer, not an effect + setState — safe here because this
++  // component only ever mounts client-side, after a click flips
++  // showEnableModal true in WorkerCard (never during SSR), so there's no
++  // hydration value to match against.
++  const [mode, setMode] = useState<"form" | "chat">(() => readStoredMode());
+   const [smsPlatform, setSmsPlatform] = useState("none");
+   const [adDataPlatform, setAdDataPlatform] = useState("none");
+   const [pending, setPending] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+ 
+-  async function submit(skip: boolean) {
++  function selectMode(next: "form" | "chat") {
++    setMode(next);
++    writeStoredMode(next);
++  }
++
++  async function submitForm(skip: boolean) {
+     setPending(true);
+     setError(null);
+     try {
+-      if (!skip && (smsPlatform !== "none" || adDataPlatform !== "none")) {
+-        const patchRes = await fetch(`/api/engagements/${engagementId}`, {
+-          method: "PATCH",
+-          headers: { "Content-Type": "application/json" },
+-          body: JSON.stringify({
+-            stack: {
+-              ...(smsPlatform !== "none" ? { sms_platform: smsPlatform } : {}),
+-              ...(adDataPlatform !== "none" ? { ad_data_platform: adDataPlatform } : {}),
+-            },
+-          }),
+-        });
+-        if (!patchRes.ok) {
+-          const body = await patchRes.json().catch(() => ({}));
+-          throw new Error(body?.error ?? "Failed to save the platform choice.");
+-        }
+-      }
+-
+-      const enableRes = await fetch(`/api/engagements/${engagementId}/workers/pile-on/enable`, { method: "POST" });
+-      if (!enableRes.ok) {
+-        const body = await enableRes.json().catch(() => ({}));
+-        throw new Error(body?.error ?? "Could not enable Pile-On.");
+-      }
++      const res = await fetch(`/api/engagements/${engagementId}/workers/pile-on/enable-with-config`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify(skip ? {} : { smsPlatform, adDataPlatform }),
++      });
++      const body = await res.json().catch(() => ({}));
++      if (!res.ok) throw new Error(body?.error ?? "Could not enable Pile-On.");
++      writeStoredMode("form");
+       onEnabled();
+     } catch (e) {
+       setError(e instanceof Error ? e.message : "Something went wrong.");
+@@ -87,68 +106,104 @@ export function EnablePileOnModal({
+   }
+ 
+   return (
+-    <Modal title="Enable Pile-On" onClose={onClose}>
++    <Modal title="Enable Pile-On" onClose={onClose} maxWidthClass="max-w-xl">
+       <div className="space-y-4 font-sans">
+-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+-          Two quick choices, both optional — skip either and it defaults to off, same as enabling without this. Finer setup (SMS compliance
+-          registration, ad-cohort account details) continues from Edit Stack Settings after enabling.
+-        </p>
+-
+-        <div className="space-y-1.5">
+-          <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 block">SMS follow-ups</label>
+-          <select
+-            value={smsPlatform}
+-            onChange={(e) => setSmsPlatform(e.target.value)}
+-            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-200"
+-          >
+-            {SMS_OPTIONS.map((v) => (
+-              <option key={v} value={v}>
+-                {SMS_PLATFORM_LABELS[v]}
+-              </option>
+-            ))}
+-          </select>
+-        </div>
+-
+-        <div className="space-y-1.5">
+-          <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 block">Ad-data cohort sync</label>
+-          <select
+-            value={adDataPlatform}
+-            onChange={(e) => setAdDataPlatform(e.target.value)}
+-            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-200"
+-          >
+-            {AD_DATA_OPTIONS.map((v) => (
+-              <option key={v} value={v}>
+-                {AD_DATA_PLATFORM_LABELS[v]}
+-              </option>
+-            ))}
+-          </select>
+-        </div>
+-
+-        {error && (
+-          <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">
+-            {error}
+-          </div>
+-        )}
+-
+-        <div className="flex items-center justify-end gap-2 pt-1">
++        <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs w-fit">
+           <button
+             type="button"
+-            onClick={() => submit(true)}
+-            disabled={pending}
+-            className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40"
++            onClick={() => selectMode("form")}
++            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
++              mode === "form" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
++            }`}
+           >
+-            Skip for now
++            <Settings2 size={13} /> Quick setup
+           </button>
+           <button
+             type="button"
+-            onClick={() => submit(false)}
+-            disabled={pending}
+-            className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
++            onClick={() => selectMode("chat")}
++            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
++              mode === "chat" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
++            }`}
+           >
+-            {pending ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+-            Enable Pile-On
++            <MessageCircle size={13} /> Ask Teammates
+           </button>
+         </div>
++
++        {mode === "form" ? (
++          <div className="space-y-4">
++            <p className="text-xs text-zinc-500 dark:text-zinc-400">
++              Two quick choices, both optional — skip either and it defaults to off. Finer setup (SMS compliance registration, ad-cohort account
++              details) continues from Edit Stack Settings after enabling.
++            </p>
++
++            <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2">
++              <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">SMS follow-ups</label>
++              <select
++                value={smsPlatform}
++                onChange={(e) => setSmsPlatform(e.target.value)}
++                className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1 text-xs text-zinc-900 dark:text-zinc-200"
++              >
++                {SMS_OPTIONS.map((v) => (
++                  <option key={v} value={v}>
++                    {SMS_PLATFORM_LABELS[v]}
++                  </option>
++                ))}
++              </select>
++            </div>
++
++            <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2">
++              <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">Ad-data cohort sync</label>
++              <select
++                value={adDataPlatform}
++                onChange={(e) => setAdDataPlatform(e.target.value)}
++                className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1 text-xs text-zinc-900 dark:text-zinc-200"
++              >
++                {AD_DATA_OPTIONS.map((v) => (
++                  <option key={v} value={v}>
++                    {AD_DATA_PLATFORM_LABELS[v]}
++                  </option>
++                ))}
++              </select>
++            </div>
++
++            {error && (
++              <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">
++                {error}
++              </div>
++            )}
++
++            <div className="flex items-center justify-end gap-2 pt-1">
++              <button
++                type="button"
++                onClick={() => submitForm(true)}
++                disabled={pending}
++                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40"
++              >
++                Skip for now
++              </button>
++              <button
++                type="button"
++                onClick={() => submitForm(false)}
++                disabled={pending}
++                className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
++              >
++                {pending ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
++                Enable Pile-On
++              </button>
++            </div>
++          </div>
++        ) : (
++          <div className="h-[420px] rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
++            <TeammatesChat
++              size="compact"
++              initialThreadId={null}
++              initialPendingMessage={`Enable Pile-On for ${buyerName ?? "this client"} (engagementId: ${engagementId})`}
++              onThreadEvent={() => {
++                writeStoredMode("chat");
++              }}
++            />
++          </div>
++        )}
+       </div>
+     </Modal>
+   );
+diff --git a/src/components/library/library-marketplace-client.tsx b/src/components/library/library-marketplace-client.tsx
+index e8d17c7..c3f0892 100644
+--- a/src/components/library/library-marketplace-client.tsx
++++ b/src/components/library/library-marketplace-client.tsx
+@@ -18,9 +18,11 @@ import { WorkerCard } from "@/components/library/worker-card";
+ export function LibraryMarketplaceClient({
+   engagementId,
+   enabledWorkerIds,
++  buyerName,
+ }: {
+   engagementId: string | null;
+   enabledWorkerIds: string[];
++  buyerName?: string | null;
+ }) {
+   const [searchQuery, setSearchQuery] = useState("");
+   const [productFilter, setProductFilter] = useState<ProductId | "all">("all");
+@@ -114,7 +116,7 @@ export function LibraryMarketplaceClient({
+ 
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
+           {sorted.map((worker) => (
+-            <WorkerCard key={worker.id} worker={worker} enabled={enabledSet.has(worker.id)} engagementId={engagementId} />
++            <WorkerCard key={worker.id} worker={worker} enabled={enabledSet.has(worker.id)} engagementId={engagementId} buyerName={buyerName} />
+           ))}
+         </div>
+       </div>
+diff --git a/src/components/library/worker-card.tsx b/src/components/library/worker-card.tsx
+index 0bd6f75..9093526 100644
+--- a/src/components/library/worker-card.tsx
++++ b/src/components/library/worker-card.tsx
+@@ -35,10 +35,12 @@ export function WorkerCard({
+   worker,
+   enabled,
+   engagementId,
++  buyerName,
+ }: {
+   worker: WorkerDefinition;
+   enabled: boolean;
+   engagementId: string | null;
++  buyerName?: string | null;
+ }) {
+   const router = useRouter();
+   const [pending, setPending] = useState(false);
+@@ -136,6 +138,7 @@ export function WorkerCard({
+       {showEnableModal && engagementId && (
+         <EnablePileOnModal
+           engagementId={engagementId}
++          buyerName={buyerName ?? undefined}
+           onClose={() => setShowEnableModal(false)}
+           onEnabled={() => {
+             setShowEnableModal(false);
+diff --git a/src/lib/enable-pile-on.ts b/src/lib/enable-pile-on.ts
+new file mode 100644
+index 0000000..b95754c
+--- /dev/null
++++ b/src/lib/enable-pile-on.ts
+@@ -0,0 +1,83 @@
++// src/lib/enable-pile-on.ts
++//
++// "Enable the Pile-On worker for this client" — a different action from
++// chat-pile-on.ts's enrollProspectInPileOn (that's enrolling one
++// prospect; this is turning the worker itself on). Shared by both real
++// surfaces that can do it: the Library's EnablePileOnModal (via the
++// enable-with-config API route) and Teammates chat's enable_pile_on tool
++// — one function, so answering "SMS platform: twilio" means the exact
++// same thing regardless of which surface asked the question.
++//
++// Mirrors /api/engagements/[id]/workers/[workerId]/enable/route.ts's own
++// steps (install the product silently if needed, flip the worker on) plus
++// the two config fields the enable modal already asks for — smsPlatform/
++// adDataPlatform, both real WorkerConfigField["ask"] entries on pile-on
++// (see worker-registry.ts) and both already in the deliberately-scoped
++// PATCH /api/engagements/[id] route's own field allowlist, so writing
++// them directly here (same fields, same values) carries no more risk
++// than that route already accepts from a human typing into a select.
++
++import { db } from "@/lib/db";
++import { engagements } from "@/models/schema";
++import type { EngagementStack } from "@/models/schema";
++import { and, eq } from "drizzle-orm";
++import { getActiveWorkspace, installPackageInWorkspace } from "@/lib/workspace";
++import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
++
++export type EnablePileOnResult = { ok: true } | { ok: false; error: string };
++
++const VALID_SMS_PLATFORMS = ["twilio", "ghl_sms", "hubspot_sms", "none"];
++const VALID_AD_DATA_PLATFORMS = ["hyros", "native_crm", "google_sheets", "none"];
++
++export async function enablePileOnForEngagement(
++  whopUserId: string,
++  workspaceId: string,
++  engagementId: string,
++  opts?: { smsPlatform?: string; adDataPlatform?: string }
++): Promise<EnablePileOnResult> {
++  if (opts?.smsPlatform && !VALID_SMS_PLATFORMS.includes(opts.smsPlatform)) {
++    return { ok: false, error: `smsPlatform must be one of: ${VALID_SMS_PLATFORMS.join(", ")}.` };
++  }
++  if (opts?.adDataPlatform && !VALID_AD_DATA_PLATFORMS.includes(opts.adDataPlatform)) {
++    return { ok: false, error: `adDataPlatform must be one of: ${VALID_AD_DATA_PLATFORMS.join(", ")}.` };
++  }
++
++  const [row] = await db
++    .select({ engagementId: engagements.engagementId, stack: engagements.stack })
++    .from(engagements)
++    .where(and(eq(engagements.engagementId, engagementId), eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId)))
++    .limit(1);
++  if (!row) return { ok: false, error: "Client not found." };
++
++  const installResult = await installPackageInWorkspace(whopUserId, workspaceId, "showtime");
++  if ("error" in installResult) return { ok: false, error: installResult.error };
++
++  const currentStack = (row.stack as EngagementStack | null) ?? ({} as EngagementStack);
++  if (
++    (opts?.smsPlatform && opts.smsPlatform !== "none") ||
++    (opts?.adDataPlatform && opts.adDataPlatform !== "none")
++  ) {
++    await db
++      .update(engagements)
++      .set({
++        stack: {
++          ...currentStack,
++          ...(opts?.smsPlatform && opts.smsPlatform !== "none" ? { sms_platform: opts.smsPlatform as EngagementStack["sms_platform"] } : {}),
++          ...(opts?.adDataPlatform && opts.adDataPlatform !== "none" ? { ad_data_platform: opts.adDataPlatform as EngagementStack["ad_data_platform"] } : {}),
++        },
++        updatedAt: new Date(),
++      })
++      .where(eq(engagements.engagementId, engagementId));
++  }
++
++  await setSkillEnabledForEngagement(engagementId, "pile-on", true);
++
++  return { ok: true };
++}
++
++/** Thin wrapper matching getActiveWorkspace's own resolution, for callers
++ * (chat) that only have whopUserId, not a pre-resolved workspaceId. */
++export async function enablePileOnForEngagementByUser(whopUserId: string, engagementId: string, opts?: { smsPlatform?: string; adDataPlatform?: string }): Promise<EnablePileOnResult> {
++  const activeWorkspace = await getActiveWorkspace(whopUserId);
++  return enablePileOnForEngagement(whopUserId, activeWorkspace.workspaceId, engagementId, opts);
++}
+-- 
+2.43.0
+
