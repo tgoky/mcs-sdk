@@ -24,7 +24,8 @@ export type ChatSkillId =
   | "pin-down-page-audit"
   | "rep-engine-adhoc-check"
   | "rep-crisis-stress-test"
-  | "rep-draft-response";
+  | "rep-draft-response"
+  | "rep-twitter-deep-scan";
 
 export const CHAT_SKILL_IDS: ChatSkillId[] = [
   "pin-down-voice",
@@ -34,6 +35,7 @@ export const CHAT_SKILL_IDS: ChatSkillId[] = [
   "rep-engine-adhoc-check",
   "rep-crisis-stress-test",
   "rep-draft-response",
+  "rep-twitter-deep-scan",
 ];
 
 export interface ChatSkillManifestEntry {
@@ -80,6 +82,12 @@ export const CHAT_SKILL_MANIFEST: Record<ChatSkillId, ChatSkillManifestEntry> = 
     name: "Draft a Response",
     description:
       "Drafts a suggested public response to a flagged Trustpilot/Reddit/X finding (or an AI-engine answer), in the operator's own brand voice when one's on file. Does not post anywhere — the draft is for a human to review, edit, and post themselves.",
+  },
+  "rep-twitter-deep-scan": {
+    id: "rep-twitter-deep-scan",
+    name: "X/Twitter Deep Scan",
+    description:
+      "Scans X/Twitter back to a specific date, further than the regular daily watch's recent-only window — using X's own since: search operator, not a guess. Real mentions found this way get added to the client's real monitoring history, same as the regular watch.",
   },
 };
 

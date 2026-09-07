@@ -176,6 +176,28 @@ export async function triggerDraftResponseForEngagement(
   );
 }
 
+export async function triggerTwitterDeepScanForEngagement(
+  whopUserId: string,
+  workspaceId: string,
+  engagementId: string,
+  deepScanSinceDate: string
+): Promise<TriggerChatSkillResult> {
+  const cleanDate = deepScanSinceDate.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+    return { ok: false, error: 'The date to scan back to must be in YYYY-MM-DD format (e.g. "2025-01-01").' };
+  }
+  return triggerChatSkillForEngagement(
+    whopUserId,
+    workspaceId,
+    engagementId,
+    "rep-twitter-deep-scan",
+    { deepScanSinceDate: cleanDate },
+    `Scanning X back to ${cleanDate}. This can take a moment — check back or ask for the status.`,
+    "twitter_deep_scan",
+    cleanDate
+  );
+}
+
 export async function triggerPageAuditForEngagement(
   whopUserId: string,
   workspaceId: string,

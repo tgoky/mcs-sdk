@@ -6,6 +6,7 @@ import { runPageAuditOnly } from "@/features/pin-down/server/page-audit-only";
 import { runRepEngineAdhocCheck } from "@/features/reputation-manager/server/engine-adhoc-check";
 import { runCrisisStressTest } from "@/features/reputation-manager/server/crisis-stress-test";
 import { runDraftResponse } from "@/features/reputation-manager/server/draft-response";
+import { runRepTwitterDeepScan } from "@/features/reputation-manager/server/twitter-watch-service";
 import { CHAT_SKILL_IDS, CHAT_SKILL_MANIFEST, isChatSkillId, type ChatSkillId, type ChatSkillManifestEntry } from "@/lib/chat-skill-manifest";
 
 export { CHAT_SKILL_IDS, isChatSkillId };
@@ -26,6 +27,7 @@ export interface ChatSkillContext {
   hypotheticalFindingSource?: string;
   findingText?: string;
   findingPlatform?: string;
+  deepScanSinceDate?: string;
 }
 
 export interface ChatSkillDefinition extends ChatSkillManifestEntry {
@@ -65,5 +67,9 @@ export const CHAT_SKILL_REGISTRY: Record<ChatSkillId, ChatSkillDefinition> = {
   "rep-draft-response": {
     ...CHAT_SKILL_MANIFEST["rep-draft-response"],
     execute: (tenant, runId, step, ctx) => runDraftResponse(tenant, runId, step, ctx),
+  },
+  "rep-twitter-deep-scan": {
+    ...CHAT_SKILL_MANIFEST["rep-twitter-deep-scan"],
+    execute: (tenant, runId, step, ctx) => runRepTwitterDeepScan(tenant, runId, step, ctx),
   },
 };

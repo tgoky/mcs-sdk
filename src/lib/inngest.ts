@@ -48,6 +48,9 @@ export type SkillRunExecuteData = {
   // draft a suggested reply to, and which platform it came from.
   findingText?: string;
   findingPlatform?: string;
+  // Same category, for rep-twitter-deep-scan — how far back (YYYY-MM-DD)
+  // to scan using X's own since: search operator.
+  deepScanSinceDate?: string;
 };
 
 

@@ -336,6 +336,89 @@ export async function runRepTwitterWatch(tenant: any, runId: string, step: StepT
   }
 }
 
+/**
+ * Teammates chat's "scan further back than the daily watch" action —
+ * rep-twitter-deep-scan in chat-skill-registry.ts. Not a new endpoint or
+ * a guessed parameter: `since:` is a real, already-verified Advanced
+ * Search operator (see this file's own header comment, confirmed
+ * against docs.twitterapis.com before runRepTwitterWatch was ever
+ * written) — this just appends it to the same search terms the regular
+ * watch already builds, then reuses fetchTwitterMentions and
+ * processNewMentions completely unchanged. Real mentions found this way
+ * get inserted into repTwitterMentions exactly like the regular watch's
+ * finds do — this is the client's own history being backfilled deeper,
+ * not a competitor/ephemeral check, so persisting is the correct
+ * behavior here (contrast rep-engine-adhoc-check, which deliberately
+ * never persists).
+ *
+ * Deliberately Twitter-only: Trustpilot's and Reddit's own fetch
+ * functions have no equivalent verified date-bounded search operator on
+ * file — building the same thing for those two without being able to
+ * verify their real API docs would be exactly the unverified-claim
+ * problem this codebase's own comments are consistently careful to
+ * avoid.
+ */
+export async function runRepTwitterDeepScan(
+  tenant: { engagementId: string },
+  runId: string,
+  step: StepTools | undefined,
+  ctx?: { deepScanSinceDate?: string }
+): Promise<void> {
+  const summary = emptySummary();
+  const engagementId: string = tenant.engagementId;
+
+  try {
+    const sinceDate = ctx?.deepScanSinceDate?.trim();
+    if (!sinceDate || !/^\d{4}-\d{2}-\d{2}$/.test(sinceDate)) {
+      throw new Error('A date to scan back to is required, in YYYY-MM-DD format (e.g. "2025-01-01").');
+    }
+    if (new Date(sinceDate).getTime() > Date.now()) {
+      throw new Error("The date to scan back to can't be in the future.");
+    }
+
+    const graph = await (step ? step.run("load-identity-graph", () => loadIdentityGraph(engagementId)) : loadIdentityGraph(engagementId));
+
+    if (!graph) {
+      throw new Error("Reputation Manager's Identity Setup hasn't been completed for this client yet.");
+    }
+    if (!resolveTwitterApiKey()) {
+      throw new Error("TWITTERAPIS_API_KEY not configured.");
+    }
+
+    const handle = graph.operatorHandles?.x?.replace(/^@/, "");
+    const baseTerms = [graph.operatorName, ...graph.entities.filter((e) => e.highPriority).map((e) => e.name), ...(handle ? [`@${handle}`] : [])];
+    const searchTerms = baseTerms.map((term) => `${term} since:${sinceDate}`);
+
+    await logStep(runId, { phase: "twitter_deep_scan", status: "running", detail: `Scanning X back to ${sinceDate} for: ${baseTerms.join(", ")}.` });
+
+    const fetched = await (step ? step.run("fetch-mentions", () => fetchTwitterMentions(searchTerms)) : fetchTwitterMentions(searchTerms));
+
+    if (fetched.length === 0) {
+      await logStep(runId, { phase: "twitter_deep_scan", status: "success", detail: "No mentions found in that window." });
+      summary.whatWorked.push(`Scanned X back to ${sinceDate} — no mentions found.`);
+      await finishRun(runId, { summary });
+      return;
+    }
+
+    const result = await (step
+      ? step.run("process-new-mentions", () => processNewMentions(engagementId, graph.operatorName, fetched, runId))
+      : processNewMentions(engagementId, graph.operatorName, fetched, runId));
+
+    await logStep(runId, {
+      phase: "twitter_deep_scan",
+      status: "success",
+      detail: `${result.newCount} new mention(s)${result.flaggedCount > 0 ? `, ${result.flaggedCount} flagged` : ""} found scanning back to ${sinceDate}.`,
+    });
+    summary.whatWorked.push(`Scanned X back to ${sinceDate} — found ${result.newCount} new mention(s) beyond what the regular watch already had on file.`);
+    if (result.flaggedCount > 0) summary.decisionsMade.push(`${result.flaggedCount} mention(s) flagged for review.`);
+
+    await finishRun(runId, { summary });
+  } catch (err) {
+    await failRun(runId, err, { summary }).catch(() => {});
+    throw err;
+  }
+}
+
 async function loadIdentityGraph(engagementId: string) {
   const [row] = await db.select().from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1);
   return row ?? null;
