@@ -76,15 +76,29 @@ export interface WorkerDefinition {
   runOnSetup: boolean;
   hasHingesPanel: boolean;
   /**
-   * Deliberately incomplete today. Filling this in correctly means tracing
-   * each skill's actual required inputs back to their real field on
-   * EngagementStack or repIdentityGraphs — the same kind of trace
-   * skill-manifest.ts's own header describes doing for display names — not
-   * something to guess at per-skill in one pass. rep-onboarding is filled
-   * in below as a verified worked example (traced against
-   * repIdentityGraphs' real columns in schema.ts); every other worker's
-   * array stays empty until it gets the same treatment. An empty array
-   * means "not yet classified," not "this worker needs no configuration."
+   * Every worker is now traced (Phase 5) — each field below is grounded
+   * in a real server-side read of EngagementStack/repIdentityGraphs, not
+   * guessed. An empty array here means one of two verified states, never
+   * "not yet classified": either the worker genuinely needs nothing
+   * beyond another already-classified worker's fields (the 5 Reputation
+   * Manager watch/response skills below all resolve entirely to
+   * rep-onboarding's repIdentityGraphs, confirmed by tracing each one's
+   * actual DB reads and credential resolution — see each entry's own
+   * comment), or its config lives entirely in fields already listed under
+   * a different worker it reuses (pile-on/win-back reuse pin-down's
+   * booking/email platform choice and credential the same way). A field
+   * that's real and collected somewhere in the app but has no UI path to
+   * set it yet is still listed as "ask," flagged unbuilt in its own
+   * description — same honesty standard pin-down's own topCallQuestions
+   * entry already established, not silently omitted.
+   *
+   * One deliberate omission convention, established by pin-down's own
+   * original entry and kept consistent everywhere below: a platform
+   * CHOICE (e.g. sms_platform, ad_data_platform) is one "ask"/"secret"
+   * pair even though picking it branches into its own mechanical
+   * sub-fields (a Twilio SID, a Hyros account ID) — those sub-fields
+   * aren't separate client facts worth their own entry, they're
+   * downstream mechanics of an already-classified decision.
    */
   configFields: WorkerConfigField[];
 }
@@ -207,6 +221,274 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       description: "A style preference, not derivable.",
     },
   ],
+  // Traced against brief-service.ts's real reads (gatherEngagementContext,
+  // executeNightlyBriefingCycle, processSingleBriefCall) and Pre-Call
+  // Read's own hinges panel (bridges/pre-call-read/page.tsx). Booking
+  // platform/credential are reused from pin-down (this skill fails fast
+  // onto that same row, "Run Pin-Down first") — not repeated here.
+  "pre-call-read": [
+    {
+      key: "briefLandingDestination",
+      label: "Where briefs land",
+      kind: "ask",
+      description: "Real operator choice of delivery destination for finished briefs — not derivable.",
+    },
+    {
+      key: "slackWebhookUrl",
+      label: "Slack webhook URL",
+      kind: "ask",
+      description: "Where briefs post if Slack is the landing destination — a real per-workspace URL only the operator has, entered as a plain field matching this codebase's existing convention for it.",
+    },
+    {
+      key: "briefTriggerType",
+      label: "Nightly vs. dynamic briefing",
+      kind: "ask",
+      description: "A real operational cadence preference, not derivable.",
+    },
+    {
+      key: "videoEngagementPlatform",
+      label: "Video engagement tracking",
+      kind: "ask",
+      description: "Optional platform choice (Wistia/YouTube) for hero-video watch-time signals — a real preference, not derivable.",
+    },
+    {
+      key: "videoEngagementCredential",
+      label: "Video engagement credential",
+      kind: "secret",
+      description: "Routes to the credential path — confirmed via storeCredential in the pre-call-read bridge route, never a plain field.",
+    },
+    {
+      key: "prospectResearchSourcesUsed",
+      label: "Prospect research sources",
+      kind: "ask",
+      description: "Real BYOK opt-in list (Apollo/PDL) — which external enrichment sources to use, a preference not a lookup.",
+    },
+    {
+      key: "apolloCredential",
+      label: "Apollo credential",
+      kind: "secret",
+      description: "Routes to the credential path, gated on prospectResearchSourcesUsed including apollo.",
+    },
+    {
+      key: "pdlCredential",
+      label: "People Data Labs credential",
+      kind: "secret",
+      description: "Routes to the credential path, gated on prospectResearchSourcesUsed including pdl.",
+    },
+    {
+      key: "conversationIntelligenceProvider",
+      label: "Call intelligence provider",
+      kind: "ask",
+      description: "Real opt-in choice (currently Recall.ai) — set in the generic Edit Stack Settings drawer rather than this skill's own hinges panel, an inconsistency worth normalizing in a later pass, not fixed here.",
+    },
+    {
+      key: "conversationIntelligenceCredential",
+      label: "Call intelligence credential",
+      kind: "secret",
+      description: "Routes to the credential path per its own drawer copy ('entered separately under Update credentials').",
+    },
+    {
+      key: "recallRegion",
+      label: "Recall.ai workspace region",
+      kind: "ask",
+      description: "Must match the operator's actual Recall.ai account region — a real fact only they know, not derivable.",
+    },
+    {
+      key: "recallBotName",
+      label: "Recall bot display name",
+      kind: "ask",
+      description: "Cosmetic preference, optional.",
+    },
+    {
+      key: "recallWebhookSigningSecret",
+      label: "Recall webhook signing secret",
+      kind: "secret",
+      description:
+        "A real secret (verifies inbound Recall webhooks) — currently entered via a password-typed field but stored directly in the stack jsonb rather than routed through the actual credential vault. Classified as secret because that's what it is, not because today's storage matches that classification; worth a real fix separate from this pass.",
+    },
+    {
+      key: "personMatchConfidenceThreshold",
+      label: "Person-match confidence threshold",
+      kind: "ask",
+      description: "Real risk-tolerance knob gating whether a brief sends (Rule 14) — currently hardcoded to 70 with no UI anywhere to change it. Ask, not derivable, flagged unbuilt rather than silently defaulted.",
+    },
+    {
+      key: "briefLeadTimeHours",
+      label: "Brief lead time",
+      kind: "ask",
+      description: "How far ahead of a call a brief should send — currently hardcoded to 12 hours with no UI setter. Ask, flagged unbuilt.",
+    },
+    {
+      key: "showRateScoringEnabled",
+      label: "Show-rate scoring",
+      kind: "ask",
+      description: "Real opt-in boolean, read by the roster route but with no UI path to enable it yet. Ask, flagged unbuilt.",
+    },
+    {
+      key: "slackSigningSecret",
+      label: "Slack app signing secret",
+      kind: "secret",
+      description: "Needed to verify the Slack interactions webhook once the Slack landing-destination button is real — no UI setter exists yet anywhere. Secret, flagged unbuilt.",
+    },
+  ],
+  // Traced against audit-engine.ts's real reads. No credential of its own —
+  // confirmed at the resolveCredential level: it reads the exact same
+  // booking/email rows pin-down's onboarding already wrote. Its real "ask"
+  // surface is split across its own hinges panel and, for two fields,
+  // pin-down's own setup screen (which explicitly collects them "on behalf
+  // of ... Leak Map" — see that page's own comment).
+  "leak-map": [
+    {
+      key: "auditOutputFormat",
+      label: "Report delivery format",
+      kind: "ask",
+      description: "Real delivery-format choice (Slack/email/both) — not derivable.",
+    },
+    {
+      key: "leakMapReportEmail",
+      label: "Report email address",
+      kind: "ask",
+      description: "Only needed when the email format is chosen — a real address only the operator has.",
+    },
+    {
+      key: "weeklySummarySchedule",
+      label: "Weekly summary schedule",
+      kind: "ask",
+      description: "Real per-client day/hour/timezone cadence preference.",
+    },
+    {
+      key: "monthlyDeepDiveSchedule",
+      label: "Monthly deep-dive schedule",
+      kind: "ask",
+      description: "Same reasoning as the weekly schedule — a real cadence preference.",
+    },
+    {
+      key: "timezone",
+      label: "Client timezone",
+      kind: "ask",
+      description: "Needed to anchor the schedules above correctly — a real fact, not derivable from a domain.",
+    },
+    {
+      key: "existingAuditFlagged",
+      label: "Existing funnel data on file",
+      kind: "ask",
+      description: "Collected on pin-down's own setup screen on Leak Map's behalf, per that page's own comment — whether the operator already has funnel-audit data worth referencing.",
+    },
+    {
+      key: "notificationPackSelections",
+      label: "Alert opt-ins",
+      kind: "ask",
+      description: "Curated alert selections, also collected on pin-down's setup screen — a real preference, not a default to assume.",
+    },
+    {
+      key: "sampleSizeMinimum",
+      label: "Minimum sample size for a metric to be trusted",
+      kind: "ask",
+      description: "Real statistical-floor preference gating which deltas count as signal — currently hardcoded to 5 with no UI setter. Ask, flagged unbuilt.",
+    },
+  ],
+  // Traced against enrollment-service.ts's handleInboundBookingEvent
+  // (eventKind === "created" branch). No hinges panel — every field below
+  // is collected in the main setup wizard's stack-step/credentials-step
+  // (at initial setup, not only later) and editable afterward in Edit
+  // Stack Settings. Booking/email platform + credential, and the
+  // email-platform-choice's own mechanical sub-fields (target_list_id,
+  // target_workflow_id, activecampaign_base_url), are reused from
+  // pin-down's classification — not repeated as separate entries here,
+  // same convention as pin-down's own hostingPlatform sub-fields.
+  "pile-on": [
+    {
+      key: "smsPlatform",
+      label: "SMS platform",
+      kind: "ask",
+      description: "Real platform choice (none/Twilio/GHL SMS/HubSpot SMS) for the pre-call text sequence — not derivable.",
+    },
+    {
+      key: "smsPlatformCredential",
+      label: "SMS platform credential",
+      kind: "secret",
+      description: "Routes to the credential path — a genuinely new provider (Twilio auth token / HubSpot key) distinct from the booking/email credentials, confirmed via CredentialField in the setup wizard.",
+    },
+    {
+      key: "smsA2p10dlcStatus",
+      label: "A2P 10DLC registration status",
+      kind: "ask",
+      description: "Real US SMS compliance-registration status only the Twilio account holder knows — sends are refused until this is 'Campaign approved,' per the setup screen's own copy.",
+    },
+    {
+      key: "smsComplianceFooterVariant",
+      label: "SMS compliance footer",
+      kind: "ask",
+      description: "Real compliance-copy choice (standard vs. custom opt-out language) — not derivable.",
+    },
+    {
+      key: "adDataPlatform",
+      label: "Ad-data cohort platform",
+      kind: "ask",
+      description: "Real platform choice (none/Hyros/Sheets/native CRM tag) for syncing booked leads into ad-spend attribution — not derivable.",
+    },
+    {
+      key: "adDataPlatformCredential",
+      label: "Ad-data platform credential",
+      kind: "secret",
+      description: "Routes to the credential path — a new provider (Hyros account / Google Sheets token) distinct from booking/email, unless native_crm is chosen (no separate credential needed).",
+    },
+    {
+      key: "existingPileOnSequenceFlagged",
+      label: "Existing pre-call sequence on file",
+      kind: "ask",
+      description: "Collected on pin-down's own setup screen on Pile-On's behalf — whether the operator already has a pre-call sequence worth referencing.",
+    },
+  ],
+  // Traced against enrollProspectInWinBack (chat-winback.ts), the
+  // eventKind === "cancelled" branch of handleInboundBookingEvent, and
+  // recovery-service.ts/lost-deal-sweep.ts. Email platform + credential,
+  // and the email-platform-choice's mechanical sub-fields
+  // (recovery_list_id, recovery_workflow_id, recovery_automation_id,
+  // long_term_nurture_list_id), are reused from pin-down — not repeated.
+  // Two real fields (recovery_window_days, daily_send_tolerance) have no
+  // UI setter anywhere and stay at their code defaults — listed as ask,
+  // flagged unbuilt, not silently assumed. Fields the system writes itself
+  // as operational state (webhook subscription ids, export ownership) are
+  // deliberately excluded — not config an operator sets.
+  "win-back": [
+    {
+      key: "rescheduleMode",
+      label: "Reschedule link mode",
+      kind: "ask",
+      description: "Real workflow choice — fresh_link only works for Calendly/Cal.com, time_slots is the platform-agnostic fallback. Not derivable.",
+    },
+    {
+      key: "recoveredFromNoShowTaggingEnabled",
+      label: "Tag recovered no-shows",
+      kind: "ask",
+      description: "Real judgment call (default true) on whether a rebook after a no-show gets CRM-tagged — a sane default, not something to silently assume without asking.",
+    },
+    {
+      key: "inboundReplyMode",
+      label: "Inbound reply handling",
+      kind: "ask",
+      description: "Real choice (none/forwarding/native) — native is restricted to HubSpot per the setup screen's own copy.",
+    },
+    {
+      key: "hubspotPortalId",
+      label: "HubSpot portal ID",
+      kind: "ask",
+      description: "Only needed for native inbound-reply mode on HubSpot — a real per-client fact found in the operator's own HubSpot admin, not derivable from anything on file.",
+    },
+    {
+      key: "recoveryWindowDays",
+      label: "Recovery cadence length",
+      kind: "ask",
+      description: "Real per-client cadence-length preference — currently hardcoded to 30 days with no UI setter anywhere. Ask, flagged unbuilt.",
+    },
+    {
+      key: "dailySendTolerance",
+      label: "Daily send tolerance",
+      kind: "ask",
+      description: "Real per-client rate-limiting preference — currently hardcoded to 2 with no UI setter anywhere. Ask, flagged unbuilt.",
+    },
+  ],
 };
 
 const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
@@ -255,7 +537,44 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
       kind: "ask",
       description: "A subjective risk-tolerance call — has a sane default, only needs asking if they want to tune it.",
     },
+    // The 3 fields below were confirmed missing from this list (Phase 5's
+    // own verification pass) despite being real, currently-collected
+    // repIdentityGraphs columns (identity-graph-form.tsx) that other
+    // workers genuinely depend on — rep-engine-panel reads
+    // seedPanelPrompts/activeEngines directly, rep-reddit-watch/
+    // rep-twitter-watch read entities. Their "needs nothing beyond
+    // rep-onboarding" verdict below is only true with these included.
+    {
+      key: "entities",
+      label: "Tracked entities / sub-brands",
+      kind: "ask",
+      description: "Which companies, brands, products, or publications this operator is publicly associated with — a real judgment call, not inferable from a domain.",
+    },
+    {
+      key: "seedPanelPrompts",
+      label: "Seed AI-engine prompts",
+      kind: "ask",
+      description: "The 5-8 starting prompts the AI Engine Watch panel checks — real content only the operator can specify. Plausibly AI-suggestible from the operator name/domain in a future pass, but not built — honestly ask for now, same reasoning as pin-down's topCallQuestions entry.",
+    },
+    {
+      key: "activeEngines",
+      label: "Which AI engines to check",
+      kind: "ask",
+      description: "Real preference narrowing the panel to specific engines — not derivable.",
+    },
   ],
+  // The 5 workers below were traced (Phase 5) and confirmed to need
+  // NOTHING beyond rep-onboarding's repIdentityGraphs fields above — every
+  // API key each one uses (OUTSCRAPER_API_KEY, REDDITAPIS_API_KEY,
+  // TWITTERAPIS_API_KEY, OPENROUTER_API_KEY, the REP_ENGINE_MODEL_* env
+  // vars) is a global platform credential, not a per-client secret. This
+  // is a verified "needs nothing new" state, not "not yet classified" —
+  // see WorkerDefinition.configFields's own doc comment.
+  "rep-engine-panel": [],
+  "rep-trustpilot-watch": [],
+  "rep-reddit-watch": [],
+  "rep-twitter-watch": [],
+  "rep-crisis-response": [],
 };
 
 function buildRegistry(): Record<WorkerId, WorkerDefinition> {

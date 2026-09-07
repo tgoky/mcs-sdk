@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Settings, BarChart3 } from "lucide-react";
 import type { WorkerDefinition } from "@/lib/worker-registry";
+import { EnablePileOnModal } from "./enable-worker-modal";
 
 const PRODUCT_LABELS: Record<WorkerDefinition["productId"], string> = {
   showtime: "Showtime",
@@ -42,8 +43,14 @@ export function WorkerCard({
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showEnableModal, setShowEnableModal] = useState(false);
 
   const needsOwnSetup = worker.runOnSetup;
+  // pile-on is the one worker with real "ask" config fields and no hinges
+  // panel to answer them in — see enable-worker-modal.tsx's own header
+  // for why this is scoped to pile-on specifically, not driven generically
+  // off configFields.
+  const needsLighterForm = worker.id === "pile-on";
   const bridgeHref = engagementId ? `/dashboard/engagements/${engagementId}/bridges/${worker.id}` : null;
   const configureHref = worker.hasHingesPanel && engagementId ? `/dashboard/engagements/${engagementId}/bridges/${worker.id}` : engagementId ? `/dashboard/engagements/${engagementId}` : null;
   const analyticsHref = PRODUCT_ANALYTICS_HREF[worker.productId];
@@ -115,7 +122,7 @@ export function WorkerCard({
         ) : (
           <button
             type="button"
-            onClick={enable}
+            onClick={() => (needsLighterForm ? setShowEnableModal(true) : enable())}
             disabled={pending || !engagementId}
             title={!engagementId ? "Create a client first" : undefined}
             className="inline-flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3.5 py-2 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer"
@@ -125,6 +132,17 @@ export function WorkerCard({
         )}
       </div>
       {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+
+      {showEnableModal && engagementId && (
+        <EnablePileOnModal
+          engagementId={engagementId}
+          onClose={() => setShowEnableModal(false)}
+          onEnabled={() => {
+            setShowEnableModal(false);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
