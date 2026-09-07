@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   LogOut,
   User,
@@ -14,192 +14,40 @@ import {
   Plus,
   UserPlus,
   Loader2,
-  type LucideIcon,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
-import { PRIMARY_NAV_SECTIONS, PRODUCT_NAV_SECTIONS, PRODUCT_RAIL_CHILDREN } from "@/lib/primary-nav";
-import type { ProductId } from "@/lib/product-catalog";
-import { isRepSkillId } from "@/lib/rep-skill-manifest";
+import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
 
 interface PrimaryRailProps {
   displayName: string;
   userEmail: string;
   workspaces: Workspace[];
   activeWorkspaceId: string;
-  installedPackageIds: string[];
 }
 
-const RAIL_SECTIONS = PRIMARY_NAV_SECTIONS;
-const WORK_SECTION = PRIMARY_NAV_SECTIONS.find((s) => s.href === "/dashboard")!;
-const LIBRARY_SECTION = PRIMARY_NAV_SECTIONS.find((s) => s.href === "/dashboard/library")!;
-
 /**
- * A rail item's own active state, independent of activeSectionHref's
- * bucketing (which only needs to know "which whole section is active" to
- * pick a secondary sidebar). Once a product context can contribute
- * several of its own icons at once (Engagements/Analytics/Meetings-or-
- * Incidents), each needs to tell whether IT specifically is the current
- * page — including the ones whose href carries its own `?product=`
- * query string, which a plain pathname comparison can't see.
+ * A rail item's own active state. Plain prefix matching is enough now —
+ * there's no more per-product `?product=` query variant of a rail item to
+ * disambiguate (that machinery, and the two product badges it existed
+ * for, is gone).
  */
-function isRailItemActive(href: string, pathname: string, searchParams: URLSearchParams): boolean {
-  const [itemPath, itemQuery] = href.split("?");
-  if (itemPath === "/dashboard") return pathname === "/dashboard";
-  const pathMatches = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
-  if (!pathMatches) return false;
-  if (!itemQuery) return true;
-  const wantedProduct = new URLSearchParams(itemQuery).get("product");
-  return wantedProduct === null || searchParams.get("product") === wantedProduct;
+function isRailItemActive(href: string, pathname: string): boolean {
+  if (href === "/dashboard") return pathname === "/dashboard";
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 const NAV_ICON_MAP: Record<string, string> = {
-  "/dashboard/engagements": "/images/engagement.png",
   "/dashboard/analytics": "/images/analytic.png",
   "/dashboard/library": "/images/lib.png",
-  "/dashboard/meetings": "/images/meeting.png",
 };
 
-const PRODUCT_BADGE_COLORS = {
-  amber: {
-    activeBg: "bg-amber-400 dark:bg-amber-500",
-    inactiveBg: "bg-amber-100 dark:bg-amber-950/60 hover:bg-amber-200/80 dark:hover:bg-amber-900/50",
-    activeIcon: "text-zinc-950 fill-white",
-    inactiveIcon: "text-amber-700 dark:text-amber-400 fill-amber-200/70 dark:fill-amber-900/60",
-  },
-  indigo: {
-    activeBg: "bg-indigo-400 dark:bg-indigo-500",
-    inactiveBg: "bg-indigo-100 dark:bg-indigo-950/60 hover:bg-indigo-200/80 dark:hover:bg-indigo-900/50",
-    activeIcon: "text-zinc-950 fill-white",
-    inactiveIcon: "text-indigo-700 dark:text-indigo-400 fill-indigo-200/70 dark:fill-indigo-900/60",
-  },
-} as const;
-
-function SquishyProductBadge({
-  active,
-  icon: Icon,
-  iconSrc,
-  color,
-}: {
-  active: boolean;
-  icon?: LucideIcon;
-  iconSrc?: string;
-  color: keyof typeof PRODUCT_BADGE_COLORS;
-}) {
-  const c = PRODUCT_BADGE_COLORS[color];
-  return (
-    <div
-      className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 select-none overflow-hidden ${
-        active ? `${c.activeBg} shadow-xs` : c.inactiveBg
-      }`}
-    >
-      {iconSrc ? (
-        <img src={iconSrc} alt="" className="w-5 h-5 object-contain" />
-      ) : Icon ? (
-        <Icon
-          className={`w-4 h-4 stroke-[2.3px] transition-colors ${active ? c.activeIcon : c.inactiveIcon}`}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ) : null}
-    </div>
-  );
-}
-
-// Routes that mean something different per product depending on a
-// `?product=` param, rather than owning a whole route prefix outright —
-// same shared surface (Queue, Executions, Reports, and the Engagements/
-// Clients roster), scoped by query string instead of by path. Only the
-// roster's own list route (exact match) is scoped this way; its detail/
-// new sub-pages (/dashboard/engagements/[id], /dashboard/engagements/new)
-// still fall through to the prefix-based Showtime bucket below.
-//
-// Bug fix: /dashboard/reports used to be hardcoded to the Showtime bucket
-// further down (a leftover from before Reports carried `?product=` at
-// all), so opening Reputation Manager's own Reports link lit up
-// Showtime's rail icon instead of Reputation Manager's. Joining this list
-// means it's resolved the same way as Queue/Executions/Clients — by the
-// `?product=` param — before that hardcoded fallback is ever reached.
-const PRODUCT_SCOPED_ROOTS = ["/dashboard/queue", "/dashboard/runs", "/dashboard/engagements", "/dashboard/reports"];
-
-function activeSectionHref(pathname: string, productParam: string | null, fromParam: string | null): string {
-  if (PRODUCT_SCOPED_ROOTS.includes(pathname) && productParam === "reputation-manager") {
-    return "/dashboard/reputation-manager";
-  }
-  if (PRODUCT_SCOPED_ROOTS.includes(pathname) && productParam === "showtime") {
-    return "/dashboard/showtime";
-  }
-
-  // /dashboard/modules/[skill] serves BOTH catalogs (see modules/[skill]/
-  // page.tsx) — which rail icon lights up depends on which catalog the
-  // skill segment belongs to, not just the shared path prefix. Bug fix:
-  // this used to bucket every /dashboard/modules/* path under Showtime
-  // unconditionally, which was invisible before Reputation Manager's
-  // module hub was reachable at all and became a real, visible wrong
-  // highlight (Showtime lighting up while looking at an RM module) the
-  // moment it was.
-  if (pathname.startsWith("/dashboard/modules/")) {
-    const skillSegment = pathname.slice("/dashboard/modules/".length);
-    return isRepSkillId(skillSegment) ? "/dashboard/reputation-manager" : "/dashboard/showtime";
-  }
-
-  // /dashboard/engagements/[id] is one shared detail page for both
-  // products (its WorkersPanel shows both Showtime's and RM's workers
-  // together, plus RM's own RepAuditLogPanel) — there's no
-  // single right answer from the path alone. `from` carries where the
-  // visit actually came from (ModuleClientRoster's hrefFor sets it);
-  // trust it when it points at an RM module, default to Showtime
-  // otherwise — the same default this bucket always used before RM
-  // linked into this page at all.
-  if (pathname.startsWith("/dashboard/engagements/")) {
-    if (fromParam?.startsWith("/dashboard/modules/")) {
-      const skillSegment = fromParam.slice("/dashboard/modules/".length);
-      if (isRepSkillId(skillSegment)) return "/dashboard/reputation-manager";
-    }
-    return "/dashboard/showtime";
-  }
-
-  if (
-    pathname === "/dashboard/showtime" ||
-    pathname.startsWith("/dashboard/analytics") ||
-    pathname.startsWith("/dashboard/meetings")
-  ) return "/dashboard/showtime";
-
-  const allSections = [...RAIL_SECTIONS, ...PRODUCT_NAV_SECTIONS];
-  const nonRootMatches = allSections.filter(
-    (s) => s.href !== "/dashboard" && (pathname === s.href || pathname.startsWith(`${s.href}/`))
-  );
-
-  if (nonRootMatches.length > 0) {
-    return nonRootMatches.sort((a, b) => b.href.length - a.href.length)[0].href;
-  }
-
-  return "/dashboard";
-}
-
-export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, installedPackageIds }: PrimaryRailProps) {
+export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const activeHref = activeSectionHref(pathname, searchParams.get("product"), searchParams.get("from"));
-  const productSections = PRODUCT_NAV_SECTIONS.filter((section) => installedPackageIds.includes(section.productId));
   const initials = displayName.slice(0, 2).toUpperCase();
-
-  // Which product's own icons (Engagements/Analytics/Meetings-or-
-  // Incidents) join Work/Library in the rail right now — derived from
-  // the same bucket activeSectionHref already resolves pathname+product
-  // into, so this stays in sync with which secondary sidebar is showing
-  // without a second, separately-maintained notion of "current context."
-  const activeProductId: ProductId | null =
-    activeHref === "/dashboard/showtime"
-      ? "showtime"
-      : activeHref === "/dashboard/reputation-manager"
-        ? "reputation-manager"
-        : null;
-  const contextualChildren =
-    activeProductId && installedPackageIds.includes(activeProductId) ? PRODUCT_RAIL_CHILDREN[activeProductId] : [];
-  const topNavItems = [WORK_SECTION, ...contextualChildren, LIBRARY_SECTION];
+  const topNavItems = PRIMARY_NAV_SECTIONS;
 
   return (
     <aside className="w-[76px] bg-background border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1.5 shrink-0 select-none z-20 transition-colors duration-200">
@@ -207,7 +55,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
       <div className="flex flex-col items-center gap-1.5 w-full">
         <nav className="flex flex-col items-center gap-1.5 w-full">
           {topNavItems.map((section) => {
-            const isActive = isRailItemActive(section.href, pathname, searchParams);
+            const isActive = isRailItemActive(section.href, pathname);
             const Icon = section.icon;
             const customIconSrc = NAV_ICON_MAP[section.href.split("?")[0]];
 
@@ -256,56 +104,6 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
           })}
         </nav>
 
-        <div className="-mx-1.5 w-[76px] border-t border-zinc-200 dark:border-zinc-800/80 my-2 shrink-0" />
-
-        <nav className="flex flex-col items-center gap-1.5 w-full">
-          {productSections.map((product) => {
-            const isActive = product.href === activeHref;
-            return (
-              <Link
-                key={product.href}
-                href={product.href}
-                title={product.title}
-                aria-current={isActive ? "page" : undefined}
-                className={
-                  "group relative w-full h-[58px] flex flex-col items-center justify-center p-1 rounded-xl transition-all duration-300 overflow-hidden " +
-                  (isActive
-                    ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
-                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
-                }
-              >
-                {/* Product Badge - Zooms and centers on hover/active */}
-                <div
-                  className={
-                    "transition-all duration-300 ease-out transform flex items-center justify-center " +
-                    (isActive
-                      ? "scale-[1.3] translate-y-[3px]"
-                      : "scale-100 group-hover:scale-[1.3] group-hover:translate-y-[3px]")
-                  }
-                >
-                  <SquishyProductBadge
-                    active={isActive}
-                    icon={product.icon}
-                    iconSrc={product.iconSrc}
-                    color={product.color}
-                  />
-                </div>
-
-                {/* Product Title Text - Collapses and fades out */}
-                <span
-                  className={
-                    "text-[9.5px] font-medium leading-none text-center truncate max-w-full px-0.5 transition-all duration-300 ease-out origin-bottom " +
-                    (isActive
-                      ? "max-h-0 opacity-0 scale-75 mt-0 pointer-events-none"
-                      : "max-h-4 opacity-100 scale-100 mt-1.5 group-hover:max-h-0 group-hover:opacity-0 group-hover:scale-75 group-hover:mt-0 group-hover:pointer-events-none")
-                  }
-                >
-                  {product.title}
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
       </div>
 
       {/* Bottom Section */}
@@ -456,15 +254,6 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                       >
                         <Sliders className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
                         <span>Admin console</span>
-                      </Link>
-
-                      <Link
-                        href="/dashboard/engagements/new"
-                        onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
-                      >
-                        <Plus className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>New client</span>
                       </Link>
 
                       <Link

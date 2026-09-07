@@ -82,13 +82,13 @@ export default function NewWorkspacePage({
 
         <div className="mb-8 space-y-1.5">
           <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            New workspace
+            New client
           </p>
           <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-            Set up your workspace
+            Set up a new client
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Independent clients and data from your other workspaces — pick what to install now, add more from the Library any time.
+            One workspace per client, fully separate from your others — pick which workers to run for them now, enable more from the Library any time.
           </p>
         </div>
 
@@ -106,7 +106,7 @@ export default function NewWorkspacePage({
         >
           <div className="space-y-2">
             <label htmlFor="name" className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-              Workspace name
+              Client name
             </label>
             <input
               id="name"
@@ -115,9 +115,12 @@ export default function NewWorkspacePage({
               required
               disabled={isSubmitting}
               maxLength={80}
-              placeholder="e.g. Acme Sales Team"
+              placeholder="e.g. Acme Roofing Co."
               className="w-full rounded-xl border border-zinc-200 bg-white/80 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:placeholder:text-zinc-600 transition-all duration-200"
             />
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              The person or business you&apos;re running this for.
+            </p>
           </div>
 
           <div className="space-y-2.5">
@@ -201,7 +204,7 @@ export default function NewWorkspacePage({
                   <span>Creating...</span>
                 </div>
               ) : (
-                "Create workspace"
+                "Create client"
               )}
             </Button>
             <Link

@@ -1,87 +1,31 @@
-// Canonical top-level navigation. Work is the cross-product hallway; product
-// sections own their product-specific secondary navigation.
-import {
-  AlertTriangle,
-  BarChart3,
-  BookOpen,
-  Building2,
-  CalendarClock,
-  LayoutGrid,
-  MonitorPlay,
-  Settings,
-  ShieldCheck,
-  type LucideIcon,
-} from "lucide-react";
-import type { ProductId } from "@/lib/product-catalog";
+// Canonical top-level navigation. One workspace is one client running
+// some subset of the unified worker registry — there is no more "which
+// product context am I in," so this is one flat rail, identical for
+// every client regardless of which workers they have enabled. This
+// replaces the old per-product rail (a Showtime badge and a Reputation
+// Manager badge, each contributing its own Engagements/Analytics/
+// Meetings-or-Incidents icons depending on which one you'd last clicked)
+// that survived every phase of the worker-registry restructure
+// untouched — the badges and PRODUCT_RAIL_CHILDREN below were the single
+// most visible leftover of the old "different menu per product" model.
+import { BarChart3, BookOpen, LayoutGrid, Settings, type LucideIcon } from "lucide-react";
 
 export interface PrimaryNavSection {
   title: string;
   href: string;
   icon: LucideIcon;
-  /** Kept optional for the mobile accordion's shared rendering path. Product
-   * navigation currently owns its links in the secondary sidebar. */
-  children?: { label: string; href: string; icon: LucideIcon }[];
 }
 
-export interface ProductNavSection extends PrimaryNavSection {
-  productId: ProductId;
-  iconSrc: string;
-  color: "amber" | "indigo";
-}
-
-/** Destinations that are useful regardless of which products are installed. */
+/** The whole rail. Work is this client's home; Library is every worker
+ * (enabled or not) for this client; Analytics is the unified,
+ * registry-driven overview (Phase 8) with drill-in to any worker's own
+ * page. No per-product variants — a client running only Showtime
+ * workers and a client running only Reputation Manager workers see the
+ * exact same four items. */
 export const PRIMARY_NAV_SECTIONS: PrimaryNavSection[] = [
   { title: "Work", href: "/dashboard", icon: LayoutGrid },
   { title: "Library", href: "/dashboard/library", icon: BookOpen },
-];
-
-/** Product destinations only render once that product is installed in the
- * active workspace. This is intentionally distinct from the global rail. */
-export const PRODUCT_NAV_SECTIONS: ProductNavSection[] = [
-  {
-    productId: "showtime",
-    title: "Showtime",
-    href: "/dashboard/showtime",
-    icon: MonitorPlay,
-    iconSrc: "/images/showtime.png",
-    color: "amber",
-  },
-  {
-    productId: "reputation-manager",
-    title: "Reputation Manager",
-    href: "/dashboard/reputation-manager",
-    icon: ShieldCheck,
-    iconSrc: "/images/repm.png",
-    color: "indigo",
-  },
+  { title: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
 ];
 
 export const SETTINGS_NAV = { label: "Settings", href: "/dashboard/settings", icon: Settings };
-
-export interface ProductRailChild {
-  title: string;
-  href: string;
-  icon: LucideIcon;
-}
-
-/**
- * The primary-rail icons a product contributes ON TOP OF Work/Library
- * while that product is the active context — the blueprint's original
- * flat Work/Engagements/Analytics/Library/Meetings rail (see d106e89's
- * primary-nav.ts), just re-scoped per product instead of being one
- * global list. Meetings has no Reputation Manager equivalent (nothing in
- * that product is call-based), so it's replaced with Incidents — backed
- * by the real rep_incidents table, not a placeholder.
- */
-export const PRODUCT_RAIL_CHILDREN: Record<ProductId, ProductRailChild[]> = {
-  showtime: [
-    { title: "Engagements", href: "/dashboard/engagements?product=showtime", icon: Building2 },
-    { title: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
-    { title: "Meetings", href: "/dashboard/meetings", icon: CalendarClock },
-  ],
-  "reputation-manager": [
-    { title: "Engagements", href: "/dashboard/engagements?product=reputation-manager", icon: Building2 },
-    { title: "Incidents", href: "/dashboard/reputation-manager/incidents", icon: AlertTriangle },
-    { title: "Analytics", href: "/dashboard/reputation-manager/analytics", icon: BarChart3 },
-  ],
-};

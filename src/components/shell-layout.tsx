@@ -20,11 +20,6 @@ export function ShellLayout({
   activeWorkspaceId,
   work,
   settings,
-  reputationManager,
-  showtime,
-  reportsReputationManager,
-  reportsShowtime,
-  installedPackageIds,
 }: {
   children: ReactNode;
   displayName: string;
@@ -33,11 +28,6 @@ export function ShellLayout({
   activeWorkspaceId: string;
   work: ReactNode;
   settings?: ReactNode;
-  reputationManager: ReactNode;
-  showtime: ReactNode;
-  reportsReputationManager: ReactNode;
-  reportsShowtime: ReactNode;
-  installedPackageIds: string[];
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -87,7 +77,6 @@ export function ShellLayout({
             userEmail={userEmail}
             workspaces={workspaces}
             activeWorkspaceId={activeWorkspaceId}
-            installedPackageIds={installedPackageIds}
           />
         </div>
 
@@ -95,14 +84,7 @@ export function ShellLayout({
             entirely based on which primary-rail section is active */}
         {sidebarOpen && (
           <div className="hidden md:flex">
-            <SecondarySidebar
-              work={work}
-              settings={settings ?? <SettingsSidebar />}
-              reputationManager={reputationManager}
-              showtime={showtime}
-              reportsReputationManager={reportsReputationManager}
-              reportsShowtime={reportsShowtime}
-            />
+            <SecondarySidebar work={work} settings={settings ?? <SettingsSidebar />} />
           </div>
         )}
 

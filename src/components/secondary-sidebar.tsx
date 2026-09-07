@@ -1,90 +1,43 @@
 "use client";
 
 import { ReactNode } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
-import { isRepSkillId } from "@/lib/rep-skill-manifest";
+import { usePathname } from "next/navigation";
 
 interface SecondarySidebarProps {
   work: ReactNode;
   settings: ReactNode;
-  reputationManager: ReactNode;
-  showtime: ReactNode;
-  reportsReputationManager: ReactNode;
-  reportsShowtime: ReactNode;
 }
 
-type SectionKey = "reputation-manager" | "showtime" | "settings" | "work";
+type SectionKey = "settings" | "work";
 
-// /dashboard/modules and /dashboard/engagements are deliberately NOT in
-// this static table — both are shared across products (see
-// activeSection's own handling below) and a blanket prefix->showtime
-// mapping for either was a real, previously-invisible bug: this file
-// duplicates primary-rail.tsx's activeSectionHref (same concept, two
-// unsynced implementations — worth unifying at some point, not done
-// here to keep this fix minimal) and had the identical hardcoded
-// "every /dashboard/modules/* path is Showtime" rule, which only ever
-// mattered once Reputation Manager's module hub became reachable.
-const SECTION_PREFIXES: Array<{ key: SectionKey; prefix: string }> = [
-  { key: "reputation-manager", prefix: "/dashboard/reputation-manager" },
-  { key: "showtime", prefix: "/dashboard/showtime" },
-  { key: "showtime", prefix: "/dashboard/meetings" },
-  { key: "showtime", prefix: "/dashboard/analytics" },
-  { key: "settings", prefix: "/dashboard/settings" },
-];
-
-function activeSection(pathname: string, fromParam: string | null): SectionKey {
-  // /dashboard/modules/[skill] serves both catalogs — which section
-  // shows depends on which catalog the skill segment belongs to.
-  if (pathname.startsWith("/dashboard/modules/")) {
-    const skillSegment = pathname.slice("/dashboard/modules/".length);
-    return isRepSkillId(skillSegment) ? "reputation-manager" : "showtime";
-  }
-
-  // /dashboard/engagements/[id] is one shared detail page for both
-  // products — there's no single right answer from the path alone.
-  // `from` carries where the visit actually came from (set by
-  // ModuleClientRoster's hrefFor); trust it when it points at an RM
-  // module, default to Showtime otherwise (the original assumption,
-  // correct for a bare/bookmarked engagement link since every engagement
-  // is a Showtime client by construction — see rep-engagements.ts).
-  if (pathname.startsWith("/dashboard/engagements/")) {
-    if (fromParam?.startsWith("/dashboard/modules/")) {
-      const skillSegment = fromParam.slice("/dashboard/modules/".length);
-      if (isRepSkillId(skillSegment)) return "reputation-manager";
-    }
-    return "showtime";
-  }
-  if (pathname === "/dashboard/engagements") return "showtime";
-
-  const match = SECTION_PREFIXES.filter(
-    (s) => pathname === s.prefix || pathname.startsWith(`${s.prefix}/`)
-  ).sort((a, b) => b.prefix.length - a.prefix.length)[0];
-  return match?.key ?? "work";
+/**
+ * Two slots, not the six this used to have (work/settings/reputationManager/
+ * showtime/reportsReputationManager/reportsShowtime). Those extra four
+ * existed to swap in an entirely different sidebar depending on which
+ * product's "context" a route belonged to — the exact "different menu for
+ * the same client" problem the whole worker-registry restructure set out
+ * to remove, still standing here untouched through every phase of it.
+ * WorkSidebar already covers every worker across both products via its own
+ * Capabilities grid, so once nothing routes into a product-specific
+ * variant anymore, there's nothing left for those four slots to hold.
+ */
+function activeSection(pathname: string): SectionKey {
+  return pathname.startsWith("/dashboard/settings") ? "settings" : "work";
 }
 
 const SECTION_LABELS: Record<SectionKey, string> = {
   work: "Work",
-  showtime: "Showtime",
-  "reputation-manager": "Reputation Manager",
   settings: "Settings",
 };
 
-export function SecondarySidebar({
-  work,
-  settings,
-  reputationManager,
-  showtime,
-  reportsReputationManager,
-  reportsShowtime,
-}: SecondarySidebarProps) {
+export function SecondarySidebar({ work, settings }: SecondarySidebarProps) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   // Library is intentionally a single-page marketplace. Teammates is
   // intentionally a self-contained two-pane layout of its own (thread
   // rail + chat, see teammates-workspace.tsx) — the generic Work sidebar
-  // (Home/Clients/Reports/Queue/Executions/Capabilities) was showing up
-  // to its left for no reason, wasting width and duplicating the "list of
+  // (Home/Reports/Queue/Executions/Capabilities) was showing up to its
+  // left for no reason, wasting width and duplicating the "list of
   // things" role its own thread rail already plays. Hiding this column
   // for both routes lets their own content use the full width instead.
   if (
@@ -96,49 +49,8 @@ export function SecondarySidebar({
     return null;
   }
 
-  const scopedProduct = searchParams.get("product");
-  // Mirrors primary-rail.tsx's PRODUCT_SCOPED_ROOTS — these routes are
-  // shared across products and scoped by `?product=` rather than owning
-  // their own path or section. Reports joined this list rather than
-  // getting its own dedicated section: a standalone "reports" section
-  // used to fully replace whichever product's Home/Clients/Reports/
-  // Queue/Executions nav was showing with a bare, cross-product client
-  // list — every other shared route (Queue, Executions, Clients) keeps
-  // the current product's own sidebar and only swaps the page content,
-  // so Reports needed to follow the same rule instead of being the odd
-  // one out.
-  const isProductScopedRoot =
-    pathname === "/dashboard/queue" ||
-    pathname === "/dashboard/runs" ||
-    pathname === "/dashboard/engagements" ||
-    pathname === "/dashboard/reports";
-  const section: SectionKey =
-    isProductScopedRoot && scopedProduct === "reputation-manager"
-      ? "reputation-manager"
-      : isProductScopedRoot && scopedProduct === "showtime"
-        ? "showtime"
-        : isProductScopedRoot
-          ? "work"
-          : activeSection(pathname, searchParams.get("from"));
-
-  const content: Record<SectionKey, ReactNode> = {
-    work,
-    showtime,
-    "reputation-manager": reputationManager,
-    settings,
-  };
-
-  // /dashboard/reports gets a trimmed Home/Clients/Reports nav plus the
-  // client picker directly underneath, not the full product sidebar
-  // Queue/Executions/Clients share — see reports-sidebar-section.tsx's
-  // own file comment for why reusing that whole component was wrong.
-  const isReportsRoute = pathname === "/dashboard/reports";
-  const rendered =
-    isReportsRoute && section === "reputation-manager"
-      ? reportsReputationManager
-      : isReportsRoute && section === "showtime"
-        ? reportsShowtime
-        : content[section];
+  const section = activeSection(pathname);
+  const content: Record<SectionKey, ReactNode> = { work, settings };
 
   return (
     <aside className="w-60 bg-[#f8f7fa] dark:bg-sidebar border-r border-zinc-200/80 dark:border-sidebar-border flex flex-col shrink-0 select-none py-3 px-2 overflow-y-auto font-sans antialiased text-zinc-700 dark:text-zinc-300">
@@ -146,7 +58,7 @@ export function SecondarySidebar({
       <div className="px-3 pt-1 pb-2 text-[14px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
         {SECTION_LABELS[section]}
       </div>
-      <div className="flex-1">{rendered}</div>
+      <div className="flex-1">{content[section]}</div>
     </aside>
   );
 }

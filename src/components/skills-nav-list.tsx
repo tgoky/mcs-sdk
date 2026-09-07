@@ -54,7 +54,7 @@ function buildEntries(productIds: ProductId[]): SkillEntry[] {
  * — an icon alone at any size reads as "some skill," so the label stays
  * directly underneath every tile rather than becoming a hover-only detail.
  */
-function SkillsGrid({ entries }: { entries: SkillEntry[] }) {
+function SkillsGrid({ entries, needsAttentionWorkerIds }: { entries: SkillEntry[]; needsAttentionWorkerIds?: Set<string> }) {
   const pathname = usePathname();
 
   if (entries.length === 0) {
@@ -72,17 +72,22 @@ function SkillsGrid({ entries }: { entries: SkillEntry[] }) {
     <div className="grid grid-cols-4 gap-1.5">
       {entries.map((entry) => {
         const active = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
+        const needsAttention = needsAttentionWorkerIds?.has(entry.skillId) ?? false;
         return (
           <Link
             key={entry.href}
             href={entry.href}
             aria-current={active ? "page" : undefined}
-            className={`flex flex-col items-center gap-1 rounded-[8px] px-1 py-1.5 text-center transition-colors ${
+            title={needsAttention ? `${entry.label} — failing on its most recent run` : entry.label}
+            className={`relative flex flex-col items-center gap-1 rounded-[8px] px-1 py-1.5 text-center transition-colors ${
               active
                 ? "bg-white dark:bg-zinc-700 shadow-xs border border-zinc-200/60 dark:border-transparent"
                 : "border border-transparent hover:bg-[#f0edf6] dark:hover:bg-zinc-800/60"
             }`}
           >
+            {needsAttention && (
+              <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-rose-500 dark:bg-rose-400" aria-hidden="true" />
+            )}
             {entry.isRep ? (
               <RepSkillBadge skill={entry.skillId as RepSkillId} size={22} />
             ) : (
@@ -118,6 +123,7 @@ export function SkillsNavList({
   productIds = ["showtime"],
   layout = "list",
   enabledWorkerIds,
+  needsAttentionWorkerIds,
 }: {
   productIds?: ProductId[];
   layout?: "list" | "grid";
@@ -130,6 +136,10 @@ export function SkillsNavList({
    * be a full skill directory, not a quick-access shortlist.
    */
   enabledWorkerIds?: WorkerId[];
+  /** Grid layout only — a small dot on any tile whose worker is failing on
+   * its most recent run (from getWorkspaceWorkerOverview), folded in from
+   * the dashboard-home "Active Workers" panel this grid absorbed. */
+  needsAttentionWorkerIds?: Set<string>;
 }) {
   const allEntries = buildEntries(productIds);
   const entries = enabledWorkerIds
@@ -137,7 +147,7 @@ export function SkillsNavList({
     : allEntries;
 
   if (layout === "grid") {
-    return <SkillsGrid entries={entries} />;
+    return <SkillsGrid entries={entries} needsAttentionWorkerIds={needsAttentionWorkerIds} />;
   }
 
   const links: NavLinkItem[] = entries.map((entry) => ({

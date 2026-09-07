@@ -5,10 +5,7 @@ import { ShellLayout } from "@/components/shell-layout";
 import { BreadcrumbProvider } from "@/components/breadcrumbs/breadcrumb-context";
 import { BookingToast } from "./booking-toast";
 import { WorkSidebar, WorkSidebarSkeleton } from "./work-sidebar";
-import { ReputationManagerSidebar } from "./reputation-manager-sidebar";
-import { ShowtimeSidebar } from "./showtime-sidebar";
-import { ReportsSidebarSection, ReportsSidebarSectionSkeleton } from "./reports/reports-sidebar-section";
-import { getActiveWorkspace, getInstalledPackagesByWorkspace, listWorkspaces } from "@/lib/workspace";
+import { getActiveWorkspace, listWorkspaces } from "@/lib/workspace";
 import { MobileNavPill } from "@/components/mobile-nav-pill";
 
 export const dynamic = "force-dynamic";
@@ -41,51 +38,28 @@ export default async function DashboardLayout({
     getActiveWorkspace(whopUserId),
     listWorkspaces(whopUserId),
   ]);
-  const installedPackageIds = (await getInstalledPackagesByWorkspace([activeWorkspace.workspaceId])).get(activeWorkspace.workspaceId) ?? [];
 
   return (
     <BreadcrumbProvider>
       {/* Real-time booking toast listener */}
       <BookingToast />
 
-      {/* 3-Region Asana Layout Shell. Every section's sidebar is fetched
-          here and handed down as its own Suspense-wrapped slot — only the
-          one SecondarySidebar actually renders for the current route (see
-          its own file comment), but keeping all queries independent
-          means switching sections never waits on a different section's
-          DB round trip. Strategy and Skills used
-          to be here too; Strategy's primary-rail entry was already
-          commented out (dead), and Skills' SKILL STATUS panel was
-          deleted per the 2026-08-07 handoff's Observation 8 — see
-          secondary-sidebar.tsx's file comment. Reports is product-scoped
-          via `?product=` like Queue/Executions/Clients (see
-          secondary-sidebar.tsx's isProductScopedRoot), but unlike those
-          two it does NOT reuse the full product sidebar — it gets its
-          own trimmed Home/Clients/Reports nav plus a client picker
-          underneath, rendered once per product here so switching between
-          them never waits on the other's query (see
-          reports-sidebar-section.tsx). */}
+      {/* 3-Region Asana Layout Shell. One Work sidebar, generic across
+          every worker in the unified registry regardless of product (its
+          own Capabilities grid already spans both) — this used to also
+          carry a separate ShowtimeSidebar/ReputationManagerSidebar pair
+          plus two more Reports variants with their own client pickers,
+          the same "different menu depending on product context" problem
+          the worker-registry restructure exists to remove, still standing
+          here through every phase of it until now. */}
       <ShellLayout
         displayName={displayName}
         userEmail={userEmail}
         workspaces={workspaceList}
         activeWorkspaceId={activeWorkspace.workspaceId}
-        installedPackageIds={installedPackageIds}
         work={
           <Suspense fallback={<WorkSidebarSkeleton />}>
             <WorkSidebar whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} />
-          </Suspense>
-        }
-        showtime={<ShowtimeSidebar />}
-        reputationManager={<ReputationManagerSidebar />}
-        reportsShowtime={
-          <Suspense fallback={<ReportsSidebarSectionSkeleton />}>
-            <ReportsSidebarSection whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} product="showtime" />
-          </Suspense>
-        }
-        reportsReputationManager={
-          <Suspense fallback={<ReportsSidebarSectionSkeleton />}>
-            <ReportsSidebarSection whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} product="reputation-manager" />
           </Suspense>
         }
       >
@@ -93,7 +67,7 @@ export default async function DashboardLayout({
       </ShellLayout>
 
       {/* Floating Mobile Nav Pill & Accordion Navigation */}
-      <MobileNavPill installedPackageIds={installedPackageIds} />
+      <MobileNavPill />
     </BreadcrumbProvider>
   );
 }

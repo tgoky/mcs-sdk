@@ -67,7 +67,13 @@ export function DeleteClientSection({
       });
       const data = await res.json();
       if (res.ok) {
-        router.push("/dashboard/engagements");
+        // Since-audit fix: this used to go to the (now-redirecting)
+        // roster route — one hop straight to Work instead. Deleting the
+        // workspace's one client doesn't delete the workspace itself;
+        // that's a real, separate decision this pass doesn't make for
+        // the user, so the workspace is left behind, client-less, until
+        // they choose what to do with it.
+        router.push("/dashboard");
         router.refresh();
       } else {
         setError(data.error ?? "Failed to delete.");

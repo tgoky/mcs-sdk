@@ -12,11 +12,8 @@ import { UnreadExecutionsPill } from "./unread-executions-pill"; // CHANGED: new
 import { latestStepLabel } from "@/lib/run-display";
 import { QueuePanel } from "./queue-panel";
 import { OverviewStatsPanel } from "./overview-stats-panel";
-import { ActiveWorkersPanel } from "./active-workers-panel"; // Phase 9: generative worker cards
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
-import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
-import { getWorkspaceWorkerOverview } from "@/lib/worker-analytics";
 import Link from "next/link";
 import { Calendar } from "lucide-react";
 
@@ -31,14 +28,9 @@ export default async function DashboardPage() {
 
   const { thisWeekStart, lastWeekStart, lastWeekEnd } = getWeekWindows();
 
-  // Phase 9's worker-overview/primary-engagement lookups don't depend on
-  // anything the big query block below produces, so they're kicked off
-  // as siblings of it in one outer Promise.all instead of only starting
-  // once that whole block resolves — a perf-audit fix: the first version
-  // of this ran them strictly after, adding a fully serial extra round
-  // trip to every dashboard load for no reason. getEnabledWorkerIdsForEngagement
-  // is the one piece that genuinely can't start until primaryEngagementId
-  // is known, so it stays a short second await after this resolves.
+  // primaryEngagementId doesn't depend on anything the big query block
+  // below produces, so it's kicked off as a sibling of it in one outer
+  // Promise.all instead of only starting once that whole block resolves.
   const [
     [
       userEngagements,
@@ -53,7 +45,6 @@ export default async function DashboardPage() {
       unseenCount, // CHANGED: new 10th slot — MUST stay positionally aligned with the 10th query below
     ],
     primaryEngagementId,
-    workerOverview,
   ] = await Promise.all([
     Promise.all([
     db
@@ -181,11 +172,7 @@ export default async function DashboardPage() {
    getUnseenCompletedExecutionCount(whopUserId, workspaceId),
     ]),
     getPrimaryEngagementIdForWorkspace(workspaceId),
-    getWorkspaceWorkerOverview(whopUserId, workspaceId),
   ]);
-
-  const enabledWorkerIds = primaryEngagementId ? await getEnabledWorkerIdsForEngagement(primaryEngagementId) : [];
-  const activeWorkerStats = workerOverview.workers.filter((w) => enabledWorkerIds.includes(w.workerId));
 
   const completedThisWeek = Number(thisWeekResult[0]?.count ?? 0);
   const completedLastWeek = Number(lastWeekResult[0]?.count ?? 0);
@@ -279,11 +266,6 @@ export default async function DashboardPage() {
           queueItems={queueItems}
         />
 
-        {/* Active workers — Phase 9 generative panel, one card per worker
-            actually enabled for this workspace's client, nothing to
-            navigate to that doesn't already exist. */}
-        <ActiveWorkersPanel stats={activeWorkerStats} engagementId={primaryEngagementId} />
-
         {/* Queue */}
         <div className="pt-2">
           <QueuePanel initialItems={queueItems} clients={clients} title="Queue" viewAllHref="/dashboard/queue" />
@@ -317,10 +299,10 @@ export default async function DashboardPage() {
         </div>
 
         {/* Shortcuts */}
-        {userEngagements.length > 0 && (
+        {primaryEngagementId && (
           <div className="grid gap-4 sm:grid-cols-2 pt-4 border-t border-zinc-200 dark:border-zinc-900">
             <Link
-              href="/dashboard/engagements"
+              href={`/dashboard/engagements/${primaryEngagementId}`}
               className="group block p-4 rounded-lg bg-zinc-100/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-900/60 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/20 transition-all shadow-xs"
             >
               <p className="text-sm font-medium text-zinc-700 dark:text-zinc-400 group-hover:text-zinc-900 group-hover:dark:text-zinc-100 transition-colors">

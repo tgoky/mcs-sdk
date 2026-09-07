@@ -570,8 +570,8 @@ export const DASHBOARD_COPY = {
   },
   shortcuts: {
     manageEngagements: {
-      title: "Manage Your Clients",
-      description: "View and update each client's account and settings.",
+      title: "Client Profile",
+      description: "This client's full account, workers, and run history.",
     },
     manageCredentials: {
       title: "Manage Credentials",

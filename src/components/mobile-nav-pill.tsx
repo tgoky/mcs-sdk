@@ -3,19 +3,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { Search, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
-import { PRIMARY_NAV_SECTIONS, PRODUCT_NAV_SECTIONS, PRODUCT_RAIL_CHILDREN, SETTINGS_NAV } from "@/lib/primary-nav";
-
-/** Same query-string-aware matching as primary-rail.tsx's isRailItemActive — a sub-item's href can carry its own `?product=`, which a plain pathname compare can't see. */
-function isNavHrefActive(href: string, pathname: string, searchParams: URLSearchParams): boolean {
-  const [itemPath, itemQuery] = href.split("?");
-  const pathMatches = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
-  if (!pathMatches) return false;
-  if (!itemQuery) return true;
-  const wantedProduct = new URLSearchParams(itemQuery).get("product");
-  return wantedProduct === null || searchParams.get("product") === wantedProduct;
-}
+import { usePathname } from "next/navigation";
+import { Search, Menu, X } from "lucide-react";
+import { PRIMARY_NAV_SECTIONS, SETTINGS_NAV } from "@/lib/primary-nav";
 
 // Fix: this file used to hardcode its own NAVIGATION_SECTIONS — a second,
 // independently-authored guess at the app's structure that didn't match
@@ -24,13 +14,15 @@ function isNavHrefActive(href: string, pathname: string, searchParams: URLSearch
 // pointing at five routes that don't exist). Now reads the same
 // PRIMARY_NAV_SECTIONS the desktop rail reads, so "the tabs should at
 // least align" holds by construction instead of by remembering to update
-// two files in sync.
+// two files in sync. The old per-product accordion section (Showtime/
+// Reputation Manager, each expanding into its own Engagements/Analytics/
+// Meetings-or-Incidents sub-list) is gone along with the desktop rail's
+// two product badges it mirrored — this is a flat list now, same shape
+// on mobile as on desktop.
 
-export function MobileNavPill({ installedPackageIds = [] }: { installedPackageIds?: string[] }) {
+export function MobileNavPill() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setIsMenuOpen(false);
@@ -46,13 +38,6 @@ export function MobileNavPill({ installedPackageIds = [] }: { installedPackageId
       document.body.style.overflow = "unset";
     };
   }, [isMenuOpen]);
-
-  const toggleSection = (title: string) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [title]: !prev[title],
-    }));
-  };
 
   const triggerGlobalSearch = () => {
     // GlobalSearch (components/global-search.tsx) listens for this event
@@ -111,148 +96,31 @@ export function MobileNavPill({ installedPackageIds = [] }: { installedPackageId
           <div className="flex-1 divide-y divide-zinc-200 dark:divide-zinc-900 pb-24">
             {PRIMARY_NAV_SECTIONS.map((section) => {
               const Icon = section.icon;
-              const hasSubItems = Boolean(section.children && section.children.length > 0);
-              const isExpanded = Boolean(expandedSections[section.title]);
               const isDirectActive = pathname === section.href;
 
-              if (!hasSubItems) {
-                return (
-                  <Link
-                    key={section.title}
-                    href={section.href}
-                    className={`flex items-center gap-3.5 px-5 py-4 text-base transition-colors ${
-                      isDirectActive
-                        ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white"
-                        : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 hover:text-zinc-900 dark:hover:text-white font-medium"
-                    }`}
-                  >
-                    <Icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
-                    <span>{section.title}</span>
-                  </Link>
-                );
-              }
-
               return (
-                <div key={section.title} className="flex flex-col">
-                  {/* Parent Item */}
-                  <button
-                    onClick={() => toggleSection(section.title)}
-                    className={`w-full flex items-center justify-between px-5 py-4 text-base font-medium transition-colors cursor-pointer ${
-                      isExpanded
-                        ? "bg-zinc-100 dark:bg-zinc-900/40 text-zinc-900 dark:text-white"
-                        : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3.5">
-                      <Icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
-                      <span>{section.title}</span>
-                    </div>
-                    {isExpanded ? (
-                      <ChevronDown className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
-                    )}
-                  </button>
-
-                  {/* Sub-item Edge-to-Edge Nested List */}
-                  {isExpanded && section.children && (
-                    <div className="bg-zinc-50 dark:bg-zinc-900/30 divide-y divide-zinc-200 dark:divide-zinc-900/60 border-t border-zinc-200 dark:border-zinc-900">
-                      {section.children.map((subItem) => {
-                        const isSubActive = pathname === subItem.href;
-                        return (
-                          <Link
-                            key={subItem.href}
-                            href={subItem.href}
-                            className={`flex items-center justify-between pl-12 pr-5 py-3.5 text-sm transition-colors ${
-                              isSubActive
-                                ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white"
-                                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900/20 font-medium"
-                            }`}
-                          >
-                            <span>{subItem.label}</span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {PRODUCT_NAV_SECTIONS.filter((section) => installedPackageIds.includes(section.productId)).map((section) => {
-              const Icon = section.icon;
-              const children = PRODUCT_RAIL_CHILDREN[section.productId];
-              // A product is "active" (and its own icons — Engagements/
-              // Analytics/Meetings-or-Incidents — worth showing) once the
-              // current route resolves into that product's own space,
-              // mirroring primary-rail.tsx's activeSectionHref bucketing.
-              const engagementsScopedToShowtime =
-                pathname === "/dashboard/engagements"
-                  ? searchParams.get("product") === "showtime"
-                  : pathname.startsWith("/dashboard/engagements/");
-              const isActive = pathname === section.href ||
-                (section.productId === "showtime" && (engagementsScopedToShowtime || pathname.startsWith("/dashboard/analytics") || pathname.startsWith("/dashboard/meetings") || pathname.startsWith("/dashboard/modules") || pathname.startsWith("/dashboard/reports"))) ||
-                (section.productId === "reputation-manager" && pathname.startsWith("/dashboard/reputation-manager"));
-              const isExpanded = Boolean(expandedSections[section.title]) || isActive;
-
-              return (
-                <div key={section.productId} className="flex flex-col">
-                  <div
-                    className={`w-full flex items-center justify-between px-5 py-4 text-base transition-colors ${
-                      isActive
-                        ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white"
-                        : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 font-medium"
-                    }`}
-                  >
-                    <Link href={section.href} className="flex items-center gap-3.5 flex-1">
-                      <Icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
-                      <span>{section.title}</span>
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => toggleSection(section.title)}
-                      aria-label={isExpanded ? `Collapse ${section.title}` : `Expand ${section.title}`}
-                      className="p-1.5 -m-1.5 cursor-pointer"
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
-                      )}
-                    </button>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="bg-zinc-50 dark:bg-zinc-900/30 divide-y divide-zinc-200 dark:divide-zinc-900/60 border-t border-zinc-200 dark:border-zinc-900">
-                      {children.map((child) => {
-                        const isChildActive = isNavHrefActive(child.href, pathname, searchParams);
-                        return (
-                          <Link
-                            key={child.href}
-                            href={child.href}
-                            className={`flex items-center justify-between pl-12 pr-5 py-3.5 text-sm transition-colors ${
-                              isChildActive
-                                ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white"
-                                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900/20 font-medium"
-                            }`}
-                          >
-                            <span>{child.title}</span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <Link
+                  key={section.title}
+                  href={section.href}
+                  className={`flex items-center gap-3.5 px-5 py-4 text-base transition-colors ${
+                    isDirectActive
+                      ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white"
+                      : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 hover:text-zinc-900 dark:hover:text-white font-medium"
+                  }`}
+                >
+                  <Icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
+                  <span>{section.title}</span>
+                </Link>
               );
             })}
 
             {/* Fix: Settings used to sit inline in the same flat list as
-                Work/Engagements/Analytics — desktop only ever reaches it
+                Work/Library/Analytics — desktop only ever reaches it
                 through the avatar popover, never as a rail icon, so
                 giving it equal top-level billing here was one more point
                 of mismatch. Kept reachable (mobile has no popover to
                 tuck it into) but visually set apart the way the rail's
-                bottom section is set apart from its main 5 tabs. */}
+                bottom section is set apart from its main tabs. */}
             <Link
               href={SETTINGS_NAV.href}
               className={`flex items-center gap-3.5 px-5 py-4 text-base transition-colors ${
