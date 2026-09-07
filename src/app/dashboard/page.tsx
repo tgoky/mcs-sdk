@@ -5,15 +5,18 @@ import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getQueueItems } from "@/lib/queue";
 import { eq, desc, sql, and, isNull, gte, lt } from "drizzle-orm";
-import { getActiveWorkspace } from "@/lib/workspace";
+import { getActiveWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
 import { getUnseenCompletedExecutionCount } from "@/lib/run-log"; // CHANGED: new import
 import { LiveExecutionFeed } from "./live-execution-feed";
 import { UnreadExecutionsPill } from "./unread-executions-pill"; // CHANGED: new import
 import { latestStepLabel } from "@/lib/run-display";
 import { QueuePanel } from "./queue-panel";
 import { OverviewStatsPanel } from "./overview-stats-panel";
+import { ActiveWorkersPanel } from "./active-workers-panel"; // Phase 9: generative worker cards
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
+import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
+import { getWorkspaceWorkerOverview } from "@/lib/worker-analytics";
 import Link from "next/link";
 import { Calendar } from "lucide-react";
 
@@ -165,6 +168,18 @@ export default async function DashboardPage() {
    getUnseenCompletedExecutionCount(whopUserId, workspaceId),
   ]);
 
+  // Phase 9 — kept as its own Promise.all rather than folded into the one
+  // above: that array's slots are positionally destructured and the
+  // unseenCount comment above already warns against disturbing the
+  // order, so new, unrelated data gets its own block instead of adding
+  // fragility to an existing one.
+  const primaryEngagementId = await getPrimaryEngagementIdForWorkspace(workspaceId);
+  const [enabledWorkerIds, workerOverview] = await Promise.all([
+    primaryEngagementId ? getEnabledWorkerIdsForEngagement(primaryEngagementId) : Promise.resolve([]),
+    getWorkspaceWorkerOverview(whopUserId, workspaceId),
+  ]);
+  const activeWorkerStats = workerOverview.workers.filter((w) => enabledWorkerIds.includes(w.workerId));
+
   const completedThisWeek = Number(thisWeekResult[0]?.count ?? 0);
   const completedLastWeek = Number(lastWeekResult[0]?.count ?? 0);
   const completedAllTime = Number(totalRunsResult[0]?.count ?? 0);
@@ -256,6 +271,11 @@ export default async function DashboardPage() {
           issuesBreakdown={issues.breakdown ?? null}
           queueItems={queueItems}
         />
+
+        {/* Active workers — Phase 9 generative panel, one card per worker
+            actually enabled for this workspace's client, nothing to
+            navigate to that doesn't already exist. */}
+        <ActiveWorkersPanel stats={activeWorkerStats} engagementId={primaryEngagementId} />
 
         {/* Queue */}
         <div className="pt-2">

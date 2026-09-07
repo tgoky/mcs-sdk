@@ -12,11 +12,6 @@ const PRODUCT_LABELS: Record<WorkerDefinition["productId"], string> = {
   "reputation-manager": "Reputation Manager",
 };
 
-const PRODUCT_ANALYTICS_HREF: Record<WorkerDefinition["productId"], string> = {
-  showtime: "/dashboard/analytics",
-  "reputation-manager": "/dashboard/reputation-manager/analytics",
-};
-
 const PRODUCT_ACCENT: Record<WorkerDefinition["productId"], string> = {
   showtime: "border-amber-200 dark:border-amber-900/70",
   "reputation-manager": "border-indigo-200 dark:border-indigo-900/70",
@@ -55,7 +50,11 @@ export function WorkerCard({
   const needsLighterForm = worker.id === "pile-on";
   const bridgeHref = engagementId ? `/dashboard/engagements/${engagementId}/bridges/${worker.id}` : null;
   const configureHref = worker.hasHingesPanel && engagementId ? `/dashboard/engagements/${engagementId}/bridges/${worker.id}` : engagementId ? `/dashboard/engagements/${engagementId}` : null;
-  const analyticsHref = PRODUCT_ANALYTICS_HREF[worker.productId];
+  // Phase 8 — one destination shape for every worker's analytics,
+  // regardless of product, instead of the old per-product lookup table
+  // that routed Showtime and Reputation Manager workers to two
+  // completely different pages.
+  const analyticsHref = `/dashboard/analytics/${worker.id}`;
 
   async function enable() {
     if (!engagementId) return;
