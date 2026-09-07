@@ -6,9 +6,11 @@
  * up — a different vendor's API shape isn't swappable via an env var, it
  * needs a different fetch function. This is built specifically against
  * redditapis.com's real, documented API (api.redditapis.com, confirmed
- * directly from their docs — base URL, auth header, both the post-search
- * and comment-search endpoints, and their own FAQ's dedupe guidance,
- * which is exactly the onConflictDoNothing pattern already in
+ * directly from their docs — base URL, auth header, the real
+ * /api/reddit/search endpoint (see reddit-watch-service.ts's own header
+ * for the now-removed, non-real /search/comments path an earlier version
+ * of this integration incorrectly called too), and their own FAQ's dedupe
+ * guidance, which is exactly the onConflictDoNothing pattern already in
  * reddit-watch-service.ts) — not a guess, and not pretending to support
  * a vendor it wasn't actually verified against.
  *

@@ -23,19 +23,21 @@ const RESULTS_LIMIT = 100;
 const REDDIT_API_BASE = "https://api.redditapis.com";
 
 /**
- * redditapis.com's search endpoints — verified directly against their
- * own docs (docs.redditapis.com, www.redditapis.com/reddit-search-api,
- * www.redditapis.com/reddit-monitoring-api), not inferred:
+ * redditapis.com's search endpoint — verified directly against their own
+ * reference docs (not inferred):
  *
  *   GET https://api.redditapis.com/api/reddit/search?q=&sort=new&limit=
- *   GET https://api.redditapis.com/api/reddit/search/comments?q=&sort=new&limit=
  *   Header: Authorization: Bearer <key>
  *
- * Both endpoints are queried per search term — their own monitoring-API
- * page is explicit that "most conversations that matter happen in the
- * comments," and a post-only search misses a mention buried in a reply
- * thread. Multiple terms (operator name plus high-priority entity names
- * — see runRepRedditWatch) are queried in parallel and deduped by
+ * Posts only. An earlier version of this also called
+ * "/api/reddit/search/comments" in parallel per search term — that path
+ * isn't in the actual reference docs (every real Listings & Search
+ * endpoint is listed there exhaustively, and there's no global
+ * comment-search-by-keyword among them), so it near-certainly errored on
+ * every call, and because both calls shared one Promise.all, that
+ * silently failed the entire watch, every run (see fetchRedditMentions's
+ * own comment). Multiple terms (operator name plus high-priority entity
+ * names — see runRepRedditWatch) are queried in parallel and deduped by
  * Reddit's own item id, since a business is often better known by a
  * brand/entity name than the operator's own name, and the same mention
  * could otherwise match more than one term.
