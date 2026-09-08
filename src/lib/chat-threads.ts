@@ -104,6 +104,35 @@ export async function getOwnedThread(threadId: string, workspaceId: string) {
   return thread ?? null;
 }
 
+// User-driven rename, distinct from deriveThreadTitle's auto-generated
+// first-message title — once someone renames a thread, that name is
+// theirs to keep, not something a later message should silently
+// overwrite. Same ownership shape as getOwnedThread's WHERE clause: the
+// update itself is the ownership check, not a separate read first.
+export async function renameThread(threadId: string, workspaceId: string, title: string): Promise<boolean> {
+  const trimmed = title.trim().slice(0, TITLE_MAX_LENGTH);
+  if (!trimmed) return false;
+  await db
+    .update(chatThreads)
+    .set({ title: trimmed })
+    .where(and(eq(chatThreads.id, threadId), eq(chatThreads.workspaceId, workspaceId)));
+  return true;
+}
+
+// Hard delete, not a deletedAt flag — chat_threads has no such column
+// (unlike engagements) and nothing in this app reads a "deleted" thread
+// back, so a soft-delete convention would only add dead rows. chat_messages
+// has no ON DELETE CASCADE on its thread_id FK, so its rows for this
+// thread are removed first or the second delete would fail on the
+// foreign key constraint.
+export async function deleteThread(threadId: string, workspaceId: string): Promise<boolean> {
+  const owned = await getOwnedThread(threadId, workspaceId);
+  if (!owned) return false;
+  await db.delete(chatMessages).where(eq(chatMessages.threadId, threadId));
+  await db.delete(chatThreads).where(eq(chatThreads.id, threadId));
+  return true;
+}
+
 export async function appendMessage(opts: {
   threadId: string;
   role: "user" | "assistant";

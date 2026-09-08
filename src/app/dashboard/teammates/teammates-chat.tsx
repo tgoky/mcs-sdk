@@ -8,8 +8,8 @@ import {
   ArrowUpRight,
   X,
   AtSign,
-  ChevronRight,
-  Sparkles,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { PrefillLoader } from "@/components/prefill-loader";
 import { AnySkillBadge } from "@/components/any-skill-badge";
@@ -148,16 +148,23 @@ function FormattedMessage({ content, mentionPillTextSize }: { content: string; m
 export function TeammatesChat({
   initialThreadId,
   onThreadEvent,
+  onRenamed,
   initialPendingMessage,
   size = "compact",
 }: {
   initialThreadId?: string | null;
   onThreadEvent?: (thread: { id: string; title: string }) => void;
+  /** Notifies a parent that owns its own thread list (teammates-workspace.tsx)
+   * that this thread's title changed via the header edit here — a plain
+   * state update on the parent's side, not a second PATCH; this
+   * component already made the one real request. */
+  onRenamed?: (id: string, title: string) => void;
   initialPendingMessage?: string;
   size?: "compact" | "full";
 } = {}) {
   const isFull = size === "full";
   const textSize = isFull ? "text-sm" : "text-xs";
+  const labelSize = isFull ? "text-xs" : "text-[10px]";
   const emptyTitleSize = isFull ? "text-base" : "text-xs";
   const emptySubSize = isFull ? "text-sm" : "text-[11px]";
   const emptyMaxWidth = isFull ? "max-w-[360px]" : "max-w-[240px]";
@@ -194,6 +201,8 @@ export function TeammatesChat({
   // copy), not a placeholder — the honest default before any thread
   // exists to have its own title yet.
   const [threadTitle, setThreadTitle] = useState<string | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -329,25 +338,69 @@ export function TeammatesChat({
 
   const headerName = threadTitle ?? "Workers";
 
+  function startEditingTitle() {
+    if (!threadId) return; // nothing persisted yet to rename
+    setTitleDraft(headerName);
+    setIsEditingTitle(true);
+  }
+
+  async function commitTitleEdit() {
+    setIsEditingTitle(false);
+    const nextTitle = titleDraft.trim();
+    if (!threadId || !nextTitle || nextTitle === threadTitle) return;
+    setThreadTitle(nextTitle);
+    onRenamed?.(threadId, nextTitle);
+    try {
+      await fetch(`/api/teammates/threads/${threadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: nextTitle }),
+      });
+    } catch {
+      // Best-effort — the header already shows the new title; a failed
+      // PATCH just means a future reload reverts it, same as any other
+      // optimistic update in this file.
+    }
+  }
+
   return (
     <div className="flex flex-col h-full text-zinc-900 dark:text-zinc-100 min-h-0">
       {/* Conversation header — centered avatar + name pill, same shape a
           person-to-person chat header uses. There's no real photo for an
-          AI assistant, so the avatar is a plain gradient + icon rather
-          than a fabricated portrait; the name is this thread's own real
-          title (or "Workers" before one exists), never invented. */}
-      <div className="flex flex-col items-center gap-1.5 shrink-0 pt-4 pb-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
-        <div
-          className={`${isFull ? "w-14 h-14" : "w-10 h-10"} rounded-full bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center text-white shadow-sm`}
-        >
-          <Sparkles size={isFull ? 22 : 16} className="fill-white/30" />
-        </div>
-        <div
-          className={`flex items-center gap-1 px-3 py-1 rounded-full bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-zinc-100 ${isFull ? "text-sm" : "text-xs"}`}
-        >
-          <span className="truncate max-w-[220px]">{headerName}</span>
-          <ChevronRight size={isFull ? 14 : 12} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
-        </div>
+          this thread's own real title (or "Workers" before one exists,
+          never invented), no icon, no separate background — just the
+          name, so it doesn't cost the page its own visual "area." */}
+      <div className={`flex items-center justify-center shrink-0 px-3 ${isFull ? "py-1.5" : "py-1"}`}>
+        {isEditingTitle ? (
+          <div className="flex items-center gap-1 w-full max-w-xs">
+            <input
+              autoFocus
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitTitleEdit();
+                if (e.key === "Escape") setIsEditingTitle(false);
+              }}
+              onBlur={commitTitleEdit}
+              className={`min-w-0 flex-1 text-center rounded-md bg-transparent border border-zinc-300 dark:border-zinc-700 px-2 py-0.5 font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-none ${isFull ? "text-sm" : "text-xs"}`}
+            />
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={commitTitleEdit} className="p-1 text-emerald-600 cursor-pointer">
+              <Check size={13} />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={startEditingTitle}
+            title={threadId ? "Click to rename" : undefined}
+            className={`group flex items-center gap-1.5 font-semibold text-zinc-700 dark:text-zinc-300 truncate max-w-[280px] ${
+              threadId ? "cursor-pointer hover:text-zinc-900 dark:hover:text-white" : "cursor-default"
+            } ${isFull ? "text-sm" : "text-xs"}`}
+          >
+            <span className="truncate">{headerName}</span>
+            {threadId && <Pencil size={11} className="text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />}
+          </button>
+        )}
       </div>
 
       {/* Message Stream */}
@@ -385,11 +438,14 @@ export function TeammatesChat({
                     isUser ? "items-end" : "items-start"
                   }`}
                 >
+                <div className={`flex items-center gap-1.5 px-1 font-medium text-zinc-500 dark:text-zinc-400 ${labelSize}`}>
+                  {isUser ? <span>You</span> : <span>Worker</span>}
+                </div>
                 <div
                   className={`${bubbleMaxWidth} rounded-2xl ${bubblePadding} ${textSize} transition-colors ${
                     isUser
-                      ? "bg-zinc-800 dark:bg-zinc-700 text-white rounded-br-md"
-                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-bl-md"
+                      ? "bg-zinc-800 dark:bg-zinc-700 text-white rounded-br-[4px]"
+                      : "bg-[#f8f7fa] dark:bg-sidebar border border-black/5 dark:border-white/10 text-zinc-900 dark:text-zinc-100 rounded-bl-[4px]"
                   }`}
                 >
                   <FormattedMessage content={m.content} mentionPillTextSize={isFull ? "text-xs" : "text-[11px]"} />
@@ -448,13 +504,13 @@ export function TeammatesChat({
       <div className={`relative shrink-0 ${composerPadding}`}>
         <div className={composerColumn}>
           {showMentions && (
-            <div className="absolute bottom-full left-2 mb-2 w-52 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-lg overflow-hidden z-50">
+            <div className="absolute bottom-full left-2 mb-2 w-52 rounded-2xl bg-[#f8f7fa] dark:bg-sidebar backdrop-blur-md border border-black/5 dark:border-white/10 shadow-lg overflow-hidden z-50">
               {filteredMentions.map((s) => (
                 <button
                   key={s.token}
                   type="button"
                   onClick={() => addSkillTag(s.token)}
-                  className={`flex items-center gap-2 w-full text-left px-3 py-2 font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer ${dropdownItemTextSize}`}
+                  className={`flex items-center gap-2 w-full text-left px-3 py-2 font-medium hover:bg-black/5 dark:hover:bg-white/[0.07] text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer ${dropdownItemTextSize}`}
                 >
                   <AnySkillBadge skill={s.token} size={16} />
                   <span>@{s.token}</span>
@@ -463,8 +519,11 @@ export function TeammatesChat({
             </div>
           )}
 
-          {/* Message input pill */}
-          <div className={`flex flex-col gap-2 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 ${inputCardPadding} shadow-sm focus-within:border-zinc-300 dark:focus-within:border-zinc-700 transition-colors duration-200`}>
+          {/* Message input pill — the same frosted-glass surface the
+              "Enabled Skills" tiles use in the secondary sidebar
+              (bg-[#f8f7fa]/bg-sidebar + backdrop-blur + a faint border),
+              not plain gray and not a saturated color. */}
+          <div className={`flex flex-col gap-2 rounded-2xl bg-[#f8f7fa] dark:bg-sidebar backdrop-blur-md border border-black/5 dark:border-white/10 ${inputCardPadding} shadow-sm focus-within:border-black/10 dark:focus-within:border-white/20 transition-colors duration-200`}>
             <div className="flex flex-wrap items-center gap-1.5 min-h-[28px]">
               {taggedSkills.map((token) => {
                 const skill = MENTIONABLE_SKILLS.find((s) => s.token === token);
@@ -472,7 +531,7 @@ export function TeammatesChat({
                 return (
                   <span
                     key={token}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium border ${tagPillTextSize} ${skill.pillStyle} shrink-0`}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/10 text-zinc-700 dark:text-zinc-200 ${tagPillTextSize} shrink-0`}
                   >
                     <AnySkillBadge skill={skill.token} size={14} />
                     <span>{skill.label}</span>
@@ -511,6 +570,7 @@ export function TeammatesChat({
                 align="left"
                 items={dropdownItems}
                 onSelect={(key) => addSkillTag(key)}
+                triggerClassName="text-zinc-500 dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white"
               />
               <button
                 type="button"

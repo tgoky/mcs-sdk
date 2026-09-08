@@ -8,15 +8,17 @@
 // dashboard/library/showtime/page.tsx): a screenshot gallery, a "how a
 // client moves through it" step flow, then every skill listed vertically
 // underneath each other (not a card grid) — while keeping everything
-// built since then: real Install/Uninstall at the Worker level, the
-// Status/Categories filter sidebar, and Configure expanding inline
-// exactly where you clicked it (an accordion under that skill's own row)
-// instead of swapping the whole page or navigating to another one.
+// built since then: real Install/Uninstall at the Worker level, and the
+// Status/Categories filter sidebar. Configure swaps the filter+list
+// section for that skill's form in the exact same slot — the same
+// in-place-swap pattern OverviewStatsPanel's Tasks Completed tile uses on
+// the dashboard — instead of an accordion under one row or a navigation
+// to another page.
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ChevronDown, ChevronRight, Search, Download, Trash2, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronDown, ChevronRight, Search, Download, Trash2, Loader2, X } from "lucide-react";
 import { WORKER_CATEGORY_LIST, type WorkerCategory, type WorkerDefinition, type WorkerId } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import { SKILL_PLAYBOOKS } from "@/lib/skill-playbooks";
@@ -223,6 +225,29 @@ export function ProductDetailClient({
         </div>
       )}
 
+      {/* Same in-place swap OverviewStatsPanel's Tasks Completed tile
+          uses on the dashboard: clicking Configure replaces this whole
+          section with that skill's form, in the exact same slot — not an
+          accordion appended under one row while the rest of the list
+          stays on screen, and not a navigation to another page. Close
+          brings back the filter sidebar + list exactly as it was. */}
+      {expandedWorker && engagementId ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-zinc-900 dark:text-white">
+              Configure {workers.find((w) => w.id === expandedWorker)?.name}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setExpandedWorker(null)}
+              className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" /> Close
+            </button>
+          </div>
+          {renderConfigForm(workers.find((w) => w.id === expandedWorker)!)}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         <div className="lg:col-span-3 space-y-5 text-xs text-zinc-700 dark:text-zinc-400">
           <div className="space-y-2.5 pb-4 border-b border-zinc-200 dark:border-zinc-800">
@@ -332,47 +357,28 @@ export function ProductDetailClient({
             </div>
           ) : (
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80">
-              {filteredWorkers.map((worker, i) => {
-                const isConfiguring = expandedWorker === worker.id;
-                return (
-                  <div key={worker.id}>
-                    <WorkerCard
-                      variant="row"
-                      index={i + 1}
-                      worker={worker}
-                      enabled={enabledSet.has(worker.id)}
-                      engagementId={engagementId}
-                      buyerName={buyerName}
-                      stats={statsById.get(worker.id)}
-                      isConfiguring={isConfiguring}
-                      playbook={SKILL_PLAYBOOKS[worker.id]}
-                      onToggleConfigure={
-                        worker.hasHingesPanel && engagementId
-                          ? () => setExpandedWorker(isConfiguring ? null : worker.id)
-                          : undefined
-                      }
-                    />
-                    {/* Accordion, not a page-wide swap — Configure opens the
-                        form right under the skill you clicked it on, every
-                        other skill in this list stays visible. */}
-                    <div
-                      className="grid overflow-hidden"
-                      style={{
-                        gridTemplateRows: isConfiguring ? "1fr" : "0fr",
-                        transition: "grid-template-rows 280ms ease-in-out",
-                      }}
-                    >
-                      <div className="overflow-hidden">
-                        <div className="pb-5 pl-[3rem]">{isConfiguring && renderConfigForm(worker)}</div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {filteredWorkers.map((worker, i) => (
+                <WorkerCard
+                  key={worker.id}
+                  variant="row"
+                  index={i + 1}
+                  worker={worker}
+                  enabled={enabledSet.has(worker.id)}
+                  engagementId={engagementId}
+                  buyerName={buyerName}
+                  stats={statsById.get(worker.id)}
+                  isConfiguring={false}
+                  playbook={SKILL_PLAYBOOKS[worker.id]}
+                  onToggleConfigure={
+                    worker.hasHingesPanel && engagementId ? () => setExpandedWorker(worker.id) : undefined
+                  }
+                />
+              ))}
             </div>
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

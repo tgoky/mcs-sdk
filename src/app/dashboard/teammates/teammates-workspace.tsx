@@ -148,10 +148,45 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
     // No setEpoch here — see file comment above.
   }
 
+  // Optimistic — the rail's own row already shows the new title instantly;
+  // a failed PATCH just leaves the old title on a refresh, no rollback UI
+  // needed for a same-workspace rename nobody else is racing to change.
+  async function renameThread(id: string, title: string) {
+    setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, title } : t)));
+    await fetch(`/api/teammates/threads/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    }).catch(() => {});
+  }
+
+  async function deleteThread(id: string) {
+    setThreads((prev) => prev.filter((t) => t.id !== id));
+    if (selected === id) {
+      setSelected(null);
+      setEpoch((e) => e + 1);
+    }
+    await fetch(`/api/teammates/threads/${id}`, { method: "DELETE" }).catch(() => {});
+  }
+
+  // TeammatesChat's own header rename already makes the PATCH itself
+  // (it owns threadId at the moment of the edit) — this just keeps the
+  // rail's row in sync with that, no second request.
+  function handleRenamed(id: string, title: string) {
+    setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, title } : t)));
+  }
+
   return (
     <div ref={containerRef} className="relative flex h-full min-h-0">
       <div style={{ width: railWidth }} className="h-full min-h-0 shrink-0">
-        <TeammatesThreadRail threads={threads} selectedId={selected} onSelect={selectThread} onNewChat={startNewChat} />
+        <TeammatesThreadRail
+          threads={threads}
+          selectedId={selected}
+          onSelect={selectThread}
+          onNewChat={startNewChat}
+          onRename={renameThread}
+          onDelete={deleteThread}
+        />
       </div>
 
       {/* The "single vertical line" divider — draggable, no boxed panels
@@ -167,6 +202,7 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
           key={epoch}
           initialThreadId={selected}
           onThreadEvent={handleThreadEvent}
+          onRenamed={handleRenamed}
           initialPendingMessage={epoch === 0 ? pendingMessage : undefined}
           size="full"
         />
