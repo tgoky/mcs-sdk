@@ -148,108 +148,106 @@ function InstalledSkillsList({
     </div>
   );
 
-  if (visible.length === 0) {
-    return (
-      <div className="space-y-1">
-        {header}
-        {!collapsed && (
-          <Link
-            href="/dashboard/library"
-            className="block rounded-[10px] border border-dashed border-zinc-300 dark:border-zinc-700 px-3 py-3 text-center text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors"
-          >
-            No skills installed yet — visit the Library to turn one on.
-          </Link>
-        )}
-      </div>
-    );
-  }
-
-  if (collapsed) {
-    return <div className="space-y-1">{header}</div>;
-  }
-
+  // CSS-only accordion: a 0fr/1fr grid-template-rows transition animates
+  // height from 0 to content-height without knowing that height ahead of
+  // time — the content always stays mounted (inside overflow-hidden), only
+  // its allotted row height animates, which is what actually makes
+  // collapsing feel smooth instead of an instant show/hide.
   return (
     <div className="space-y-1">
       {header}
-      <div className="grid grid-cols-2 gap-1.5 px-0.5">
-        {visible.map((entry) => {
-          const worker = WORKER_REGISTRY[entry.skillId];
-          const needsAttention = needsAttentionWorkerIds?.has(entry.skillId) ?? false;
-          const busy = busyIds.has(entry.skillId);
-          const viewHref = engagementId ? workerPrimaryHref(entry.skillId, engagementId) : null;
-          const configureHref =
-            worker.hasHingesPanel && engagementId
-              ? `/dashboard/engagements/${engagementId}/bridges/${entry.skillId}?from=${encodeURIComponent(pathname)}`
-              : null;
-
-          return (
-            <div
-              key={entry.skillId}
-              className="group flex flex-col items-center gap-1 rounded-xl px-1.5 py-2 text-center hover:bg-[#f0edf6] dark:hover:bg-zinc-800/60 transition-colors"
+      <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}>
+        <div className="overflow-hidden">
+          {visible.length === 0 ? (
+            <Link
+              href="/dashboard/library"
+              className="block rounded-[10px] border border-dashed border-zinc-300 dark:border-zinc-700 px-3 py-3 text-center text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors"
             >
-              <div className="relative">
-                {entry.isRep ? (
-                  <RepSkillBadge skill={entry.skillId as RepSkillId} size={22} />
-                ) : (
-                  <SquishySkillBadge skill={entry.skillId} size={22} />
-                )}
-                {needsAttention && (
-                  <span
-                    title={`${entry.label} — failing on its most recent run`}
-                    className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-zinc-950"
-                  />
-                )}
-              </div>
+              No skills installed yet — visit the Library to turn one on.
+            </Link>
+          ) : (
+            <div className="grid grid-cols-3 gap-1.5 px-0.5 pt-0.5">
+              {visible.map((entry) => {
+                const worker = WORKER_REGISTRY[entry.skillId];
+                const needsAttention = needsAttentionWorkerIds?.has(entry.skillId) ?? false;
+                const busy = busyIds.has(entry.skillId);
+                const viewHref = engagementId ? workerPrimaryHref(entry.skillId, engagementId) : null;
+                const configureHref =
+                  worker.hasHingesPanel && engagementId
+                    ? `/dashboard/engagements/${engagementId}/bridges/${entry.skillId}?from=${encodeURIComponent(pathname)}`
+                    : null;
 
-              {viewHref ? (
-                <Link
-                  href={viewHref}
-                  title={entry.label}
-                  className="w-full truncate text-[11px] font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                >
-                  {entry.label}
-                </Link>
-              ) : (
-                <span className="w-full truncate text-[11px] font-medium text-zinc-700 dark:text-zinc-300">{entry.label}</span>
-              )}
-
-              <div className="flex items-center justify-center gap-2 pt-0.5">
-                {configureHref ? (
-                  <Link
-                    href={configureHref}
-                    title={`Configure ${entry.label}`}
-                    className="p-0.5 rounded text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                return (
+                  <div
+                    key={entry.skillId}
+                    className="group flex flex-col items-center gap-1 rounded-2xl px-1 py-1.5 text-center bg-white/5 dark:bg-white/[0.04] backdrop-blur-md border border-black/5 dark:border-white/10 hover:bg-white/10 dark:hover:bg-white/[0.07] transition-colors"
                   >
-                    <Settings2 size={12} />
-                  </Link>
-                ) : (
-                  <span className="w-3" aria-hidden="true" />
-                )}
+                    <div className="flex items-center justify-center gap-1">
+                      <div className="relative shrink-0">
+                        {entry.isRep ? (
+                          <RepSkillBadge skill={entry.skillId as RepSkillId} size={18} />
+                        ) : (
+                          <SquishySkillBadge skill={entry.skillId} size={18} />
+                        )}
+                        {needsAttention && (
+                          <span
+                            title={`${entry.label} — failing on its most recent run`}
+                            className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-rose-500 ring-2 ring-white dark:ring-zinc-950"
+                          />
+                        )}
+                      </div>
 
-                <button
-                  type="button"
-                  onClick={() => !busy && disable(entry.skillId)}
-                  disabled={busy || !engagementId}
-                  aria-label={`Turn off ${entry.label}`}
-                  aria-pressed={true}
-                  className={`relative inline-flex h-3.5 w-6 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 focus:outline-none bg-amber-400 dark:bg-amber-500 shadow-[0_0_6px_rgba(251,191,36,0.3)] ${
-                    busy ? "opacity-50" : ""
-                  }`}
-                >
-                  {busy ? (
-                    <Loader2 size={10} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin text-white" />
-                  ) : (
-                    <span className="inline-block h-2.5 w-2.5 translate-x-[11px] transform rounded-full bg-white shadow-xs transition-transform duration-200" />
-                  )}
-                </button>
-              </div>
+                      {configureHref ? (
+                        <Link
+                          href={configureHref}
+                          title={`Configure ${entry.label}`}
+                          className="p-0.5 rounded text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors shrink-0"
+                        >
+                          <Settings2 size={11} />
+                        </Link>
+                      ) : (
+                        <span className="w-3 shrink-0" aria-hidden="true" />
+                      )}
 
-              {errorId === entry.skillId && (
-                <p className="text-[9px] leading-tight text-rose-600 dark:text-rose-400">Couldn&apos;t turn off</p>
-              )}
+                      <button
+                        type="button"
+                        onClick={() => !busy && disable(entry.skillId)}
+                        disabled={busy || !engagementId}
+                        aria-label={`Turn off ${entry.label}`}
+                        aria-pressed={true}
+                        className={`relative inline-flex h-3 w-5 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 focus:outline-none bg-amber-400 dark:bg-amber-500 shadow-[0_0_6px_rgba(251,191,36,0.3)] ${
+                          busy ? "opacity-50" : ""
+                        }`}
+                      >
+                        {busy ? (
+                          <Loader2 size={8} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin text-white" />
+                        ) : (
+                          <span className="inline-block h-2 w-2 translate-x-[9px] transform rounded-full bg-white shadow-xs transition-transform duration-200" />
+                        )}
+                      </button>
+                    </div>
+
+                    {viewHref ? (
+                      <Link
+                        href={viewHref}
+                        title={entry.label}
+                        className="w-full line-clamp-2 text-[10px] leading-tight font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                      >
+                        {entry.label}
+                      </Link>
+                    ) : (
+                      <span className="w-full line-clamp-2 text-[10px] leading-tight font-medium text-zinc-700 dark:text-zinc-300">{entry.label}</span>
+                    )}
+
+                    {errorId === entry.skillId && (
+                      <p className="text-[8.5px] leading-tight text-rose-600 dark:text-rose-400">Couldn&apos;t turn off</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          )}
+        </div>
       </div>
     </div>
   );
