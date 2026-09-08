@@ -568,6 +568,7 @@ export function TeammatesChat({
                 icon={AtSign}
                 triggerTitle="Tag skill"
                 align="left"
+                placement="top"
                 items={dropdownItems}
                 onSelect={(key) => addSkillTag(key)}
                 triggerClassName="text-zinc-500 dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white"

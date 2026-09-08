@@ -25,6 +25,11 @@ interface DropdownProps<T extends string> {
   icon?: LucideIcon;
   triggerTitle?: string;
   align?: "left" | "right";
+  /** Which side of the trigger the panel opens toward. Defaults to
+   * "bottom" (the original, only behavior) — pass "top" for a trigger
+   * that sits near the bottom of its scroll container (a composer bar,
+   * say), where a downward panel can render past the visible area. */
+  placement?: "top" | "bottom";
   panelClassName?: string;
   triggerClassName?: string;
   disabled?: boolean;
@@ -40,6 +45,7 @@ export function Dropdown<T extends string>({
   icon: TriggerIcon = Plus,
   triggerTitle,
   align = "left",
+  placement = "bottom",
   panelClassName,
   triggerClassName,
   disabled,
@@ -87,7 +93,8 @@ export function Dropdown<T extends string>({
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
             className={cn(
-              "absolute top-full z-50 mt-1 min-w-[200px] space-y-0.5 rounded-xl border border-zinc-800 bg-zinc-900 p-1 text-xs shadow-xl",
+              "absolute z-50 min-w-[200px] space-y-0.5 rounded-xl border border-zinc-800 bg-zinc-900 p-1 text-xs shadow-xl",
+              placement === "top" ? "bottom-full mb-1" : "top-full mt-1",
               align === "right" ? "right-0" : "left-0",
               panelClassName
             )}

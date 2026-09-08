@@ -67,11 +67,17 @@ export function TeammatesThreadRail({
       <button
         type="button"
         onClick={onNewChat}
-        className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60 shrink-0 mb-1"
+        className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60 shrink-0 mb-2"
       >
-        <Plus size={15} className="text-zinc-500 dark:text-zinc-400" />
-        <span>New conversation</span>
+        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-zinc-200/70 dark:bg-zinc-800 shrink-0">
+          <Plus size={14} className="text-zinc-600 dark:text-zinc-300" />
+        </span>
+        <span>New</span>
       </button>
+
+      {threads.length > 0 && (
+        <p className="px-2.5 pb-1.5 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">Recents</p>
+      )}
 
       <div className="relative flex-1 min-h-0 overflow-y-auto pb-2 flex flex-col gap-0.5">
         {indicator && (
