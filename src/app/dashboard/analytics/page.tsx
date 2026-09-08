@@ -12,15 +12,20 @@ import {
   conversationIntelligenceSessions,
   pileOnSendLog,
   metricsBenchmark,
+  repEngineFindings,
+  repTrustpilotReviews,
+  repRedditMentions,
+  repTwitterMentions,
+  repIncidents,
   type EngagementStack,
 } from "@/models/schema";
 import { and, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { SKILLS, SKILL_INFO, type SkillName } from "@/lib/copy";
 import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
 import { computeBucketKey } from "@/features/leak-map/server/leak-map-benchmarks";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
+import { WORKER_IDS, WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -117,7 +122,7 @@ function Section({
 
 function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-900/40 ${className}`}>
+    <div className={`rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent backdrop-blur-sm ${className}`}>
       {children}
     </div>
   );
@@ -138,9 +143,9 @@ function Bar({ value, max, className }: { value: number; max: number; className:
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-900/40 p-4">
+    <div className="rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent p-4">
       <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600">{label}</p>
-      <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100 mt-1">{value}</p>
+      <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100 mt-1 font-mono tabular-nums">{value}</p>
       {sub && <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-0.5">{sub}</p>}
     </div>
   );
@@ -393,6 +398,8 @@ export default async function AnalyticsPage() {
     .from(engagements)
     .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)));
 
+  const engagementIds = engagementRows.map((e) => e.engagementId);
+
   const [
     runRows,
     openPending,
@@ -406,6 +413,11 @@ export default async function AnalyticsPage() {
     auditWindow,
     pileOnWindow,
     revenueResults,
+    repEngineWindow,
+    repTrustpilotWindow,
+    repRedditWindow,
+    repTwitterWindow,
+    repIncidentWindow,
   ] = await Promise.all([
     db
       .select({ skillName: skillRuns.skillName, status: skillRuns.status, costInCents: skillRuns.costInCents, startedAt: skillRuns.startedAt, completedAt: skillRuns.completedAt })
@@ -491,16 +503,53 @@ export default async function AnalyticsPage() {
     // quarter, per engagement) rather than re-deriving the price-parsing
     // and rebooked-in-window logic a second time here.
     Promise.all(engagementRows.map((e) => computeWinBackRevenueAttribution(e.engagementId))),
+
+    // ── Reputation Manager signals, same LOOKBACK_DAYS window as every
+    // other slower-moving Showtime signal above. This page used to have
+    // zero RM data anywhere on it — an RM-only account saw a wall of
+    // Showtime-shaped empty states and nothing about what it actually runs.
+    engagementIds.length > 0
+      ? db
+          .select({ engineId: repEngineFindings.engineId, sentiment: repEngineFindings.sentiment, flagged: repEngineFindings.flagged, flagReason: repEngineFindings.flagReason, runAt: repEngineFindings.runAt })
+          .from(repEngineFindings)
+          .where(and(inArray(repEngineFindings.engagementId, engagementIds), gte(repEngineFindings.runAt, since90)))
+      : Promise.resolve([]),
+    engagementIds.length > 0
+      ? db
+          .select({ rating: repTrustpilotReviews.rating, sentiment: repTrustpilotReviews.sentiment, flagged: repTrustpilotReviews.flagged, flagReason: repTrustpilotReviews.flagReason, createdAt: repTrustpilotReviews.createdAt })
+          .from(repTrustpilotReviews)
+          .where(and(inArray(repTrustpilotReviews.engagementId, engagementIds), gte(repTrustpilotReviews.createdAt, since90)))
+      : Promise.resolve([]),
+    engagementIds.length > 0
+      ? db
+          .select({ subreddit: repRedditMentions.subreddit, sentiment: repRedditMentions.sentiment, flagged: repRedditMentions.flagged, flagReason: repRedditMentions.flagReason, createdAt: repRedditMentions.createdAt })
+          .from(repRedditMentions)
+          .where(and(inArray(repRedditMentions.engagementId, engagementIds), gte(repRedditMentions.createdAt, since90)))
+      : Promise.resolve([]),
+    engagementIds.length > 0
+      ? db
+          .select({ sentiment: repTwitterMentions.sentiment, flagged: repTwitterMentions.flagged, flagReason: repTwitterMentions.flagReason, createdAt: repTwitterMentions.createdAt })
+          .from(repTwitterMentions)
+          .where(and(inArray(repTwitterMentions.engagementId, engagementIds), gte(repTwitterMentions.createdAt, since90)))
+      : Promise.resolve([]),
+    engagementIds.length > 0
+      ? db
+          .select({ severityScore: repIncidents.severityScore, summary: repIncidents.summary, status: repIncidents.status, declaredAt: repIncidents.declaredAt, resolvedAt: repIncidents.resolvedAt })
+          .from(repIncidents)
+          .where(and(inArray(repIncidents.engagementId, engagementIds), gte(repIncidents.declaredAt, since90)))
+      : Promise.resolve([]),
   ]);
 
   // ── Skill comparison + top-line run stats (TREND_DAYS window) ─────────
-  const perSkill: Record<SkillName, { total: number; success: number; terminalFailure: number; costCents: number; durationsMs: number[] }> = {
-    "pin-down": { total: 0, success: 0, terminalFailure: 0, costCents: 0, durationsMs: [] },
-    "pile-on": { total: 0, success: 0, terminalFailure: 0, costCents: 0, durationsMs: [] },
-    "pre-call-read": { total: 0, success: 0, terminalFailure: 0, costCents: 0, durationsMs: [] },
-    "win-back": { total: 0, success: 0, terminalFailure: 0, costCents: 0, durationsMs: [] },
-    "leak-map": { total: 0, success: 0, terminalFailure: 0, costCents: 0, durationsMs: [] },
-  };
+  // Bug fix: this used to be keyed on SKILLS (Showtime's 5 only) — runRows
+  // itself has no product filter, so every Reputation Manager run was
+  // already being fetched and then silently discarded right here, the
+  // one section on this page most in need of being both products' table.
+  type SkillRunAgg = { total: number; success: number; terminalFailure: number; costCents: number; durationsMs: number[] };
+  const perSkill = WORKER_IDS.reduce((acc, id) => {
+    acc[id] = { total: 0, success: 0, terminalFailure: 0, costCents: 0, durationsMs: [] };
+    return acc;
+  }, {} as Record<WorkerId, SkillRunAgg>);
 
   let totalRuns = 0;
   let totalSuccess = 0;
@@ -522,8 +571,8 @@ export default async function AnalyticsPage() {
     if (isSuccess) totalSuccess++;
     if (isTerminalFailure) totalTerminalFailure++;
 
-    const skill = run.skillName as SkillName;
-    if (SKILLS.includes(skill)) {
+    const skill = run.skillName as WorkerId;
+    if ((WORKER_IDS as string[]).includes(skill)) {
       const s = perSkill[skill];
       s.total++;
       s.costCents += run.costInCents ?? 0;
@@ -729,6 +778,63 @@ export default async function AnalyticsPage() {
     else unsetCount++;
     if (needsWebhookSetupNudge(stack)) setupNeededCount++;
   }
+  // Whether Showtime has any real activity on this account at all — an
+  // RM-only account used to see 7 separate Showtime-shaped "no data yet"
+  // boxes instead of those sections just not being there.
+  const hasShowtimeData =
+    connectedCount > 0 ||
+    winBackWindow.length > 0 ||
+    showRateWindow.length > 0 ||
+    objectionsWindow.length > 0 ||
+    auditWindow.length > 0 ||
+    pileOnWindow.length > 0;
+
+  // ── Reputation Manager: sentiment mix, top flag reasons, Trustpilot
+  // rating spread, and open/declared incidents — this page's first RM
+  // section. Same LOOKBACK_DAYS window and "count it, rank it" approach
+  // Showtime's own objections/leaks sections already use, not a new
+  // visual language.
+  type RepSignalRow = { sentiment: string; flagged: boolean; flagReason: string | null };
+  const allRepSignals: RepSignalRow[] = [
+    ...repEngineWindow.map((r) => ({ sentiment: r.sentiment, flagged: r.flagged, flagReason: r.flagReason })),
+    ...repTrustpilotWindow.map((r) => ({ sentiment: r.sentiment, flagged: r.flagged, flagReason: r.flagReason })),
+    ...repRedditWindow.map((r) => ({ sentiment: r.sentiment, flagged: r.flagged, flagReason: r.flagReason })),
+    ...repTwitterWindow.map((r) => ({ sentiment: r.sentiment, flagged: r.flagged, flagReason: r.flagReason })),
+  ];
+  const repSignalTotal = allRepSignals.length;
+  const repSentimentCounts = {
+    positive: allRepSignals.filter((s) => s.sentiment === "positive").length,
+    neutral: allRepSignals.filter((s) => s.sentiment === "neutral").length,
+    negative: allRepSignals.filter((s) => s.sentiment === "negative").length,
+  };
+  const repFlaggedTotal = allRepSignals.filter((s) => s.flagged).length;
+
+  const repFlagReasonCounts = new Map<string, number>();
+  for (const s of allRepSignals) {
+    if (!s.flagged || !s.flagReason) continue;
+    const key = s.flagReason.trim();
+    if (!key) continue;
+    repFlagReasonCounts.set(key, (repFlagReasonCounts.get(key) ?? 0) + 1);
+  }
+  const topRepFlagReasons = [...repFlagReasonCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([label, count]) => ({ label, count }));
+
+  const trustpilotTotal = repTrustpilotWindow.length;
+  const trustpilotRatingCounts = [5, 4, 3, 2, 1].map((star) => ({
+    star,
+    count: repTrustpilotWindow.filter((r) => r.rating === star).length,
+  }));
+  const trustpilotAvgRating = trustpilotTotal > 0 ? repTrustpilotWindow.reduce((sum, r) => sum + r.rating, 0) / trustpilotTotal : null;
+
+  const openIncidents = repIncidentWindow.filter((i) => i.status !== "resolved");
+  const resolvedIncidents = repIncidentWindow.filter((i) => i.status === "resolved" && i.resolvedAt);
+  const incidentResolutionMs = resolvedIncidents.map((i) => i.resolvedAt!.getTime() - i.declaredAt.getTime());
+  const medianIncidentResolutionMs = median(incidentResolutionMs);
+  const topIncidentsBySeverity = [...repIncidentWindow].sort((a, b) => b.severityScore - a.severityScore).slice(0, 8);
+
+  const hasRepData = repSignalTotal > 0 || repIncidentWindow.length > 0;
 
   return (
     <div className="relative min-h-screen w-full transition-colors duration-200 overflow-hidden pb-10">
@@ -774,8 +880,8 @@ export default async function AnalyticsPage() {
           </Card>
         </Section>
 
-        {/* Cross-skill comparison */}
-        <Section title="Skill comparison" caption={`Last ${TREND_DAYS} days — volume share, success rate, and unit cost side by side`}>
+        {/* Cross-skill comparison — every worker across both products, busiest first */}
+        <Section title="Skill comparison" caption={`Last ${TREND_DAYS} days — every skill across every installed product, busiest first`}>
           <Card>
             <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-x-4 px-4 py-2 text-[10.5px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600 border-b border-zinc-200 dark:border-zinc-900">
               <span>Skill</span>
@@ -785,92 +891,109 @@ export default async function AnalyticsPage() {
               <span className="text-right">Avg duration</span>
             </div>
             <div className="divide-y divide-zinc-200 dark:divide-zinc-900">
-              {SKILLS.map((skill) => {
-                const s = perSkill[skill];
-                const resolved = s.success + s.terminalFailure;
-                const rate = pct(s.success, resolved);
-                const volumeSharePct = pct(s.total, totalRuns) ?? 0;
-                const avgCost = s.total > 0 ? s.costCents / s.total : 0;
-                const avgDurationMs = s.durationsMs.length > 0 ? s.durationsMs.reduce((a, b) => a + b, 0) / s.durationsMs.length : null;
-                return (
-                  <div key={skill} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-x-4 px-4 py-3 items-center">
-                    <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">{SKILL_INFO[skill].name}</span>
-                    <div className="space-y-1">
-                      <Bar value={s.total} max={maxSkillRuns} className="bg-ink" />
-                      <span className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600">{s.total} run{s.total !== 1 ? "s" : ""} ({volumeSharePct}%)</span>
+              {[...WORKER_IDS]
+                .sort((a, b) => perSkill[b].total - perSkill[a].total)
+                .map((skill) => {
+                  const s = perSkill[skill];
+                  const resolved = s.success + s.terminalFailure;
+                  const rate = pct(s.success, resolved);
+                  const volumeSharePct = pct(s.total, totalRuns) ?? 0;
+                  const avgCost = s.total > 0 ? s.costCents / s.total : 0;
+                  const avgDurationMs = s.durationsMs.length > 0 ? s.durationsMs.reduce((a, b) => a + b, 0) / s.durationsMs.length : null;
+                  return (
+                    <div key={skill} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-x-4 px-4 py-3 items-center">
+                      <span className="min-w-0 flex items-baseline gap-1.5">
+                        <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">{WORKER_REGISTRY[skill].name}</span>
+                        <span className="text-[9.5px] font-mono uppercase text-zinc-400 dark:text-zinc-600 shrink-0">
+                          {WORKER_REGISTRY[skill].productId === "reputation-manager" ? "RM" : "ST"}
+                        </span>
+                      </span>
+                      <div className="space-y-1">
+                        <Bar value={s.total} max={maxSkillRuns} className="bg-ink" />
+                        <span className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600">{s.total} run{s.total !== 1 ? "s" : ""} ({volumeSharePct}%)</span>
+                      </div>
+                      <div className="space-y-1">
+                        {resolved > 0 ? (
+                          <>
+                            <Bar value={s.success} max={resolved} className={s.terminalFailure > 0 ? "bg-rose-500" : "bg-emerald-500"} />
+                            <span className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600">{rate}% of {resolved}</span>
+                          </>
+                        ) : (
+                          <span className="text-[10.5px] font-mono text-zinc-300 dark:text-zinc-700">no resolved runs</span>
+                        )}
+                      </div>
+                      <span className="text-xs font-mono text-zinc-500 dark:text-zinc-500 text-right">{s.total > 0 ? fmtCents(avgCost) : "—"}</span>
+                      <span className="text-xs font-mono text-zinc-500 dark:text-zinc-500 text-right">{avgDurationMs !== null ? fmtDuration(avgDurationMs) : "—"}</span>
                     </div>
-                    <div className="space-y-1">
-                      {resolved > 0 ? (
-                        <>
-                          <Bar value={s.success} max={resolved} className={s.terminalFailure > 0 ? "bg-rose-500" : "bg-emerald-500"} />
-                          <span className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600">{rate}% of {resolved}</span>
-                        </>
-                      ) : (
-                        <span className="text-[10.5px] font-mono text-zinc-300 dark:text-zinc-700">no resolved runs</span>
-                      )}
-                    </div>
-                    <span className="text-xs font-mono text-zinc-500 dark:text-zinc-500 text-right">{s.total > 0 ? fmtCents(avgCost) : "—"}</span>
-                    <span className="text-xs font-mono text-zinc-500 dark:text-zinc-500 text-right">{avgDurationMs !== null ? fmtDuration(avgDurationMs) : "—"}</span>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </Card>
         </Section>
 
-        {/* Show-rate calibration */}
-        <Section
-          title="Show-rate prediction accuracy"
-          caption={`Predicted show probability vs. what actually happened, last ${LOOKBACK_DAYS} days — points near the dashed diagonal mean the score is well-calibrated`}
-        >
-          <Card className="p-4">
-            {calibrationBuckets.length < 2 ? (
-              <EmptyState>
-                Not enough calls with both a predicted score and a confirmed outcome yet to plot calibration. This fills in as brief outcomes get logged.
-              </EmptyState>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 items-center">
-                <div className="max-w-sm mx-auto md:mx-0">
-                  <CalibrationChart buckets={calibrationBuckets} />
-                </div>
-                <div className="grid grid-cols-3 md:grid-cols-1 gap-3">
-                  <StatCard label="Calls scored" value={String(usableScored.length)} />
-                  <StatCard label="Actual show rate" value={overallActualShowRate !== null ? `${overallActualShowRate}%` : "—"} />
-                  <StatCard label="Brier score" value={brierScore !== null ? brierScore.toFixed(3) : "—"} sub="0 = perfect, 0.25 ≈ a coin flip" />
-                </div>
-              </div>
-            )}
-          </Card>
-        </Section>
+        {/* Showtime-only sections below — hidden entirely for an account
+            with no real Showtime activity, instead of a wall of empty
+            Showtime-shaped boxes on what might be a pure-RM account. */}
+        {hasShowtimeData && (
+          <>
+            {/* Show-rate calibration */}
+            <Section
+              title="Show-rate prediction accuracy"
+              caption={`Predicted show probability vs. what actually happened, last ${LOOKBACK_DAYS} days — points near the dashed diagonal mean the score is well-calibrated`}
+            >
+              <Card className="p-4">
+                {calibrationBuckets.length < 2 ? (
+                  <EmptyState>
+                    Not enough calls with both a predicted score and a confirmed outcome yet to plot calibration. This fills in as brief outcomes get logged.
+                  </EmptyState>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 items-center">
+                    <div className="max-w-sm mx-auto md:mx-0">
+                      <CalibrationChart buckets={calibrationBuckets} />
+                    </div>
+                    <div className="grid grid-cols-3 md:grid-cols-1 gap-3">
+                      <StatCard label="Calls scored" value={String(usableScored.length)} />
+                      <StatCard label="Actual show rate" value={overallActualShowRate !== null ? `${overallActualShowRate}%` : "—"} />
+                      <StatCard label="Brier score" value={brierScore !== null ? brierScore.toFixed(3) : "—"} sub="0 = perfect, 0.25 ≈ a coin flip" />
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </Section>
 
-        {/* Win-Back recovery */}
-        <Section title="Win-back recovery" caption={`Enrollments opened in the last ${LOOKBACK_DAYS} days, by current status`}>
-          <Card className="p-4 space-y-4">
-            {winBackTotal === 0 ? (
-              <EmptyState>No win-back enrollments in the last {LOOKBACK_DAYS} days.</EmptyState>
-            ) : (
-              <>
-                <SegmentedBar
-                  total={winBackTotal}
-                  segments={[
-                    { label: "Rebooked", value: winBackCounts.rebooked, className: "bg-emerald-500" },
-                    { label: "Active", value: winBackCounts.active, className: "bg-zinc-300 dark:bg-zinc-700" },
-                    { label: "Lost", value: winBackCounts.lost, className: "bg-rose-500" },
-                    { label: "Reply exited", value: winBackCounts.reply_exited, className: "bg-amber-500" },
-                    { label: "Corrected", value: winBackCounts.corrected, className: "bg-zinc-400 dark:bg-zinc-600" },
-                  ]}
-                />
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
-                  <StatCard label="Recovery rate" value={recoveryRateOfResolved !== null ? `${recoveryRateOfResolved}%` : "—"} sub={`of ${winBackResolved} resolved (excludes still-active)`} />
-                  <StatCard label="Median time to rebook" value={medianRecoveryDays !== null ? `${Math.round(medianRecoveryDays)}d` : "—"} sub="enrollment to rebooking" />
-                  <StatCard label="Revenue attributed" value={revenueTotal > 0 ? fmtDollars(revenueTotal) : "—"} sub={revenuePeriodLabel} />
-                </div>
-              </>
-            )}
-          </Card>
-        </Section>
+            {/* Win-Back recovery */}
+            <Section title="Win-back recovery" caption={`Enrollments opened in the last ${LOOKBACK_DAYS} days, by current status`}>
+              <Card className="p-4 space-y-4">
+                {winBackTotal === 0 ? (
+                  <EmptyState>No win-back enrollments in the last {LOOKBACK_DAYS} days.</EmptyState>
+                ) : (
+                  <>
+                    <SegmentedBar
+                      total={winBackTotal}
+                      segments={[
+                        { label: "Rebooked", value: winBackCounts.rebooked, className: "bg-emerald-500" },
+                        { label: "Active", value: winBackCounts.active, className: "bg-zinc-300 dark:bg-zinc-700" },
+                        { label: "Lost", value: winBackCounts.lost, className: "bg-rose-500" },
+                        { label: "Reply exited", value: winBackCounts.reply_exited, className: "bg-amber-500" },
+                        { label: "Corrected", value: winBackCounts.corrected, className: "bg-zinc-400 dark:bg-zinc-600" },
+                      ]}
+                    />
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
+                      <StatCard label="Recovery rate" value={recoveryRateOfResolved !== null ? `${recoveryRateOfResolved}%` : "—"} sub={`of ${winBackResolved} resolved (excludes still-active)`} />
+                      <StatCard label="Median time to rebook" value={medianRecoveryDays !== null ? `${Math.round(medianRecoveryDays)}d` : "—"} sub="enrollment to rebooking" />
+                      <StatCard label="Revenue attributed" value={revenueTotal > 0 ? fmtDollars(revenueTotal) : "—"} sub={revenuePeriodLabel} />
+                    </div>
+                  </>
+                )}
+              </Card>
+            </Section>
+          </>
+        )}
 
-        {/* Resolution analytics */}
+        {/* Resolution analytics — cross-product (pending actions / human
+            blockers apply to either product's approval flows); the
+            outcome-source card is Showtime-specific and empty-states
+            honestly on its own for an RM-only account. */}
         <Section title="How outcomes get resolved" caption={`Last ${LOOKBACK_DAYS} days`}>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Card className="p-4 space-y-3">
@@ -932,92 +1055,176 @@ export default async function AnalyticsPage() {
           </div>
         </Section>
 
-        {/* Top objections */}
-        <Section title="Top objections detected" caption={`From Recall.ai call transcripts, last ${LOOKBACK_DAYS} days`}>
-          <Card>
-            {topObjections.length === 0 ? (
-              <EmptyState>No objections extracted from calls yet — this needs conversation intelligence sessions with a completed transcript.</EmptyState>
-            ) : (
-              <RankedList items={topObjections.map((o) => ({ label: o.display, count: o.count }))} unit="×" />
-            )}
-          </Card>
-        </Section>
+        {hasShowtimeData && (
+          <>
+            {/* Top objections */}
+            <Section title="Top objections detected" caption={`From Recall.ai call transcripts, last ${LOOKBACK_DAYS} days`}>
+              <Card>
+                {topObjections.length === 0 ? (
+                  <EmptyState>No objections extracted from calls yet — this needs conversation intelligence sessions with a completed transcript.</EmptyState>
+                ) : (
+                  <RankedList items={topObjections.map((o) => ({ label: o.display, count: o.count }))} unit="×" />
+                )}
+              </Card>
+            </Section>
 
-        {/* Recurring leaks */}
-        <Section title="Recurring funnel leaks" caption={`Issues flagged medium/high severity across ${auditRunCount} Funnel Audit run${auditRunCount !== 1 ? "s" : ""}, last ${LOOKBACK_DAYS} days`}>
-          <Card>
-            {topLeaks.length === 0 ? (
-              <EmptyState>No recurring medium/high-severity issues in this window.</EmptyState>
-            ) : (
-              <RankedList items={topLeaks} unit="×" />
-            )}
-          </Card>
-        </Section>
+            {/* Recurring leaks */}
+            <Section title="Recurring funnel leaks" caption={`Issues flagged medium/high severity across ${auditRunCount} Funnel Audit run${auditRunCount !== 1 ? "s" : ""}, last ${LOOKBACK_DAYS} days`}>
+              <Card>
+                {topLeaks.length === 0 ? (
+                  <EmptyState>No recurring medium/high-severity issues in this window.</EmptyState>
+                ) : (
+                  <RankedList items={topLeaks} unit="×" />
+                )}
+              </Card>
+            </Section>
 
-        {/* Pile-On delivery */}
-        <Section title="Pre-call sequence delivery" caption={`Email 1 personalization path, last ${LOOKBACK_DAYS} days`}>
-          <Card className="p-4 space-y-3">
-            {pileOnTotal === 0 ? (
-              <EmptyState>No Pre-Call Sequence sends in this window.</EmptyState>
-            ) : (
-              <>
-                <SegmentedBar
-                  total={pileOnTotal}
-                  segments={[
-                    { label: "AI-personalized", value: pileOnHybrid, className: "bg-emerald-500" },
-                    { label: "Template fallback", value: pileOnFallback, className: "bg-zinc-400 dark:bg-zinc-600" },
-                  ]}
-                />
-                <p className="text-xs text-zinc-400 dark:text-zinc-600">
-                  {pileOnErrors} send error{pileOnErrors !== 1 ? "s" : ""} ({pct(pileOnErrors, pileOnTotal) ?? 0}%) of {pileOnTotal} total sends
-                </p>
-              </>
-            )}
-          </Card>
-        </Section>
+            {/* Pile-On delivery */}
+            <Section title="Pre-call sequence delivery" caption={`Email 1 personalization path, last ${LOOKBACK_DAYS} days`}>
+              <Card className="p-4 space-y-3">
+                {pileOnTotal === 0 ? (
+                  <EmptyState>No Pre-Call Sequence sends in this window.</EmptyState>
+                ) : (
+                  <>
+                    <SegmentedBar
+                      total={pileOnTotal}
+                      segments={[
+                        { label: "AI-personalized", value: pileOnHybrid, className: "bg-emerald-500" },
+                        { label: "Template fallback", value: pileOnFallback, className: "bg-zinc-400 dark:bg-zinc-600" },
+                      ]}
+                    />
+                    <p className="text-xs text-zinc-400 dark:text-zinc-600">
+                      {pileOnErrors} send error{pileOnErrors !== 1 ? "s" : ""} ({pct(pileOnErrors, pileOnTotal) ?? 0}%) of {pileOnTotal} total sends
+                    </p>
+                  </>
+                )}
+              </Card>
+            </Section>
 
-        {/* Cross-client benchmark */}
-        <Section title="Cross-client benchmark" caption="This account's latest audit numbers against anonymized peers in the same offer bucket (min. 20 contributing engagements)">
-          <Card className="divide-y divide-zinc-200 dark:divide-zinc-900">
-            {topBenchmarkComparisons.length === 0 ? (
-              <EmptyState>
-                No benchmark available yet — either this account&apos;s offer bucket (traffic temperature + price + vertical) hasn&apos;t cleared the 20-tenant
-                anonymity floor, or no audit has run yet.
-              </EmptyState>
-            ) : (
-              topBenchmarkComparisons.map((c, i) => (
-                <div key={i} className="px-4 py-3">
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <div className="min-w-0">
-                      <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{c.metricName}</span>
-                      <span className="text-zinc-400 dark:text-zinc-600 ml-2 text-xs truncate">{c.buyer} · {c.bucketDisplay}</span>
+            {/* Cross-client benchmark */}
+            <Section title="Cross-client benchmark" caption="This account's latest audit numbers against anonymized peers in the same offer bucket (min. 20 contributing engagements)">
+              <Card className="divide-y divide-zinc-200 dark:divide-zinc-900">
+                {topBenchmarkComparisons.length === 0 ? (
+                  <EmptyState>
+                    No benchmark available yet — either this account&apos;s offer bucket (traffic temperature + price + vertical) hasn&apos;t cleared the 20-tenant
+                    anonymity floor, or no audit has run yet.
+                  </EmptyState>
+                ) : (
+                  topBenchmarkComparisons.map((c, i) => (
+                    <div key={i} className="px-4 py-3">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <div className="min-w-0">
+                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{c.metricName}</span>
+                          <span className="text-zinc-400 dark:text-zinc-600 ml-2 text-xs truncate">{c.buyer} · {c.bucketDisplay}</span>
+                        </div>
+                        <span className="font-mono text-xs text-zinc-500 dark:text-zinc-500 shrink-0">
+                          You: {c.current} · peer median: {c.p50} (n={c.sampleSize})
+                        </span>
+                      </div>
+                      <RangeBar current={c.current} p25={c.p25} p50={c.p50} p75={c.p75} p90={c.p90} />
                     </div>
-                    <span className="font-mono text-xs text-zinc-500 dark:text-zinc-500 shrink-0">
-                      You: {c.current} · peer median: {c.p50} (n={c.sampleSize})
-                    </span>
-                  </div>
-                  <RangeBar current={c.current} p25={c.p25} p50={c.p50} p75={c.p75} p90={c.p90} />
-                </div>
-              ))
-            )}
-          </Card>
-        </Section>
+                  ))
+                )}
+              </Card>
+            </Section>
 
-        {/* Booking sync distribution */}
-        <Section title="Booking sync">
-          <Card className="p-4">
-            {connectedCount === 0 ? (
-              <EmptyState>No booking platforms connected yet.</EmptyState>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <StatCard label="Direct webhook" value={String(webhookCount)} sub="instant sync" />
-                <StatCard label="Auto-polling" value={String(pollingCount)} sub="5-min checks" />
-                <StatCard label="Not configured" value={String(unsetCount)} sub="needs setup" />
-                <StatCard label="Setup needed" value={String(setupNeededCount)} sub="see Settings → Booking Sync" />
-              </div>
+            {/* Booking sync distribution */}
+            <Section title="Booking sync">
+              <Card className="p-4">
+                {connectedCount === 0 ? (
+                  <EmptyState>No booking platforms connected yet.</EmptyState>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <StatCard label="Direct webhook" value={String(webhookCount)} sub="instant sync" />
+                    <StatCard label="Auto-polling" value={String(pollingCount)} sub="5-min checks" />
+                    <StatCard label="Not configured" value={String(unsetCount)} sub="needs setup" />
+                    <StatCard label="Setup needed" value={String(setupNeededCount)} sub="see Settings → Booking Sync" />
+                  </div>
+                )}
+              </Card>
+            </Section>
+          </>
+        )}
+
+        {/* Reputation Manager sections — this page's first RM coverage.
+            Hidden entirely for an account with no RM activity at all,
+            same reasoning as hasShowtimeData above. */}
+        {hasRepData && (
+          <>
+            <Section title="Reputation signal mix" caption={`Every AI-engine, Trustpilot, Reddit, and X/Twitter signal scored, last ${LOOKBACK_DAYS} days`}>
+              <Card className="p-4 space-y-4">
+                {repSignalTotal === 0 ? (
+                  <EmptyState>No reputation signals scored in this window.</EmptyState>
+                ) : (
+                  <>
+                    <SegmentedBar
+                      total={repSignalTotal}
+                      segments={[
+                        { label: "Positive", value: repSentimentCounts.positive, className: "bg-emerald-500" },
+                        { label: "Neutral", value: repSentimentCounts.neutral, className: "bg-zinc-300 dark:bg-zinc-700" },
+                        { label: "Negative", value: repSentimentCounts.negative, className: "bg-rose-500" },
+                      ]}
+                    />
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
+                      <StatCard label="Signals scored" value={String(repSignalTotal)} sub={`last ${LOOKBACK_DAYS}d`} />
+                      <StatCard label="Flagged" value={String(repFlaggedTotal)} sub={`${pct(repFlaggedTotal, repSignalTotal) ?? 0}% of scored signals`} />
+                      <StatCard label="Trustpilot avg rating" value={trustpilotAvgRating !== null ? trustpilotAvgRating.toFixed(1) : "—"} sub={`${trustpilotTotal} review${trustpilotTotal !== 1 ? "s" : ""}`} />
+                    </div>
+                  </>
+                )}
+              </Card>
+            </Section>
+
+            <Section title="Top flag reasons" caption={`Why a signal got flagged, across every RM source, last ${LOOKBACK_DAYS} days`}>
+              <Card>
+                {topRepFlagReasons.length === 0 ? (
+                  <EmptyState>Nothing flagged in this window.</EmptyState>
+                ) : (
+                  <RankedList items={topRepFlagReasons} unit="×" />
+                )}
+              </Card>
+            </Section>
+
+            {trustpilotTotal > 0 && (
+              <Section title="Trustpilot rating spread" caption={`${trustpilotTotal} review${trustpilotTotal !== 1 ? "s" : ""}, last ${LOOKBACK_DAYS} days`}>
+                <Card className="p-4">
+                  <SegmentedBar
+                    total={trustpilotTotal}
+                    segments={trustpilotRatingCounts.map((r) => ({
+                      label: `${r.star}★`,
+                      value: r.count,
+                      className: r.star >= 4 ? "bg-emerald-500" : r.star === 3 ? "bg-amber-500" : "bg-rose-500",
+                    }))}
+                  />
+                </Card>
+              </Section>
             )}
-          </Card>
-        </Section>
+
+            <Section title="Crisis incidents" caption={`Declared in the last ${LOOKBACK_DAYS} days, ranked by severity`}>
+              <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-1 gap-3 lg:w-48">
+                  <StatCard label="Open" value={String(openIncidents.length)} />
+                  <StatCard label="Median time to resolve" value={medianIncidentResolutionMs !== null ? fmtDuration(medianIncidentResolutionMs) : "—"} />
+                </div>
+                <Card className="divide-y divide-zinc-200 dark:divide-zinc-900">
+                  {topIncidentsBySeverity.length === 0 ? (
+                    <EmptyState>No incidents declared in this window.</EmptyState>
+                  ) : (
+                    topIncidentsBySeverity.map((inc, i) => (
+                      <div key={i} className="px-4 py-3 space-y-1">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="font-mono text-xs font-bold text-rose-600 dark:text-rose-400 shrink-0">Severity {inc.severityScore}/100</span>
+                          <span className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600 shrink-0">{inc.status}</span>
+                        </div>
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed line-clamp-2">{inc.summary}</p>
+                      </div>
+                    ))
+                  )}
+                </Card>
+              </div>
+            </Section>
+          </>
+        )}
       </div>
     </div>
   );
