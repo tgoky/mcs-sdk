@@ -14,7 +14,7 @@ import { MasterRosterCalendar } from "./master-roster-calendar";
 import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
 import { RunRowActions } from "./run-row-actions";
-import { getEngagementSkillStates, getRepEngagementSkillStates } from "@/lib/engagement-skills";
+import { getEngagementSkillStates, getRepEngagementSkillStates, getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
 import { getRecentAuditEvents } from "@/features/reputation-manager/server/audit-log";
 import { getInstalledPackagesByWorkspace } from "@/lib/workspace";
 import { SKILL_IDS } from "@/lib/skill-manifest";
@@ -153,14 +153,30 @@ export default async function EngagementDetailPage({
         .limit(1)
     : [];
 
+  // Bug fix: this used to gate every RM worker behind repIdentityGraphRow
+  // alone, on the assumption nothing RM-side could be turned on before
+  // Identity Setup ran. False — the Library's own Install button (and its
+  // /api/engagements/[id]/workers/[workerId]/enable route) enables a
+  // worker directly, with no identity-graph requirement, so a client could
+  // have (say) AI Engine Watch genuinely enabled and running while this
+  // page still only showed Showtime's 5 — the skill was on, just invisible
+  // and unmanageable from its own client page. getEnabledWorkerIdsForEngagement
+  // is the same "is this worker actually on" check the Library and every
+  // other worker list in this app already trusts; RM skills show here
+  // whenever the identity graph exists (so all 5 are browsable/enable-able,
+  // same as before) OR at least one is already enabled (so an
+  // already-running one is never hidden).
+  const engagementEnabledWorkerIds = await getEnabledWorkerIdsForEngagement(id);
+  const hasAnyRepSkillEnabled = engagementEnabledWorkerIds.some((workerId) => (REP_SKILL_IDS as string[]).includes(workerId));
+  const showRepSkills = Boolean(repIdentityGraphRow) || hasAnyRepSkillEnabled;
+
   // WorkersPanel's membership: every Showtime worker unconditionally
   // (matching what SkillsPanel always rendered), plus every Reputation
-  // Manager worker once this client's identity graph exists (matching
-  // what RepSkillsPanel's own conditional render always required). Not a
+  // Manager worker whenever showRepSkills is true (above). Not a
   // "currently enabled" filter — a worker's card stays visible even when
   // toggled off, same as before, so there's still a way to turn it back
   // on from this page.
-  const workerIds: WorkerId[] = [...SKILL_IDS, ...(repIdentityGraphRow ? REP_SKILL_IDS : [])];
+  const workerIds: WorkerId[] = [...SKILL_IDS, ...(showRepSkills ? REP_SKILL_IDS : [])];
 
   const runsBySkill = Object.fromEntries(
     SKILLS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
@@ -168,13 +184,14 @@ export default async function EngagementDetailPage({
 
   const skillsWithRuns = SKILLS.filter((s) => runsBySkill[s].length > 0);
 
-  // Reputation Manager's Skills panel only means something once this
-  // client's identity graph exists (repIdentityGraphRow, computed above
-  // for the Products panel) — every other RM skill reads that graph, so
-  // there's nothing to toggle before then. `runs` already covers every
-  // skillRuns row for this engagement regardless of product (no
-  // skillName filter on that query), so no separate fetch is needed here.
-  const repSkillStates = repIdentityGraphRow ? await getRepEngagementSkillStates(id) : null;
+  // Matches workerIds' own gate above (showRepSkills), not repIdentityGraphRow
+  // alone — otherwise an RM skill enabled without an identity graph would
+  // show a card in workerIds with no toggle state to back it (defaulting
+  // to "off" and fighting the real, already-enabled state on every render).
+  // `runs` already covers every skillRuns row for this engagement
+  // regardless of product (no skillName filter on that query), so no
+  // separate fetch is needed here.
+  const repSkillStates = showRepSkills ? await getRepEngagementSkillStates(id) : null;
   const repRunsBySkill = Object.fromEntries(
     REP_SKILL_IDS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
   ) as Record<RepSkillId, typeof runs>;
@@ -381,8 +398,12 @@ export default async function EngagementDetailPage({
           </div>
         )}
 
-        {/* Master Roster Calendar */}
-        <MasterRosterCalendar engagementId={id} />
+        {/* Master Roster Calendar — bookings, calls, Pile-On/Win-Back/Leak-Map
+            activity are all Showtime concepts (Reputation Manager has no
+            "booked call" of its own); rendered unconditionally before, so
+            an RM-only client with zero Showtime skills saw a permanently
+            empty booking calendar with nothing relevant to show. */}
+        {installedProductIds.includes("showtime") && <MasterRosterCalendar engagementId={id} />}
 
         <DeliverablesPanel
           engagementId={id}

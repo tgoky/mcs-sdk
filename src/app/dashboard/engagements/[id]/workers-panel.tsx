@@ -222,7 +222,7 @@ export function WorkersPanel({
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {workerIds.map((workerId) => {
           const worker = WORKER_REGISTRY[workerId];
           const isEnabled = states[workerId] ?? true;
@@ -235,7 +235,7 @@ export function WorkersPanel({
           return (
             <div
               key={workerId}
-              className={`rounded-2xl border p-4 flex flex-col justify-between min-h-[220px] transition-all shadow-2xs ${
+              className={`rounded-xl border p-3 flex flex-col justify-between min-h-[168px] transition-all shadow-2xs ${
                 isPausedActive
                   ? "border-amber-300/70 dark:border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/[0.04] backdrop-blur-xs"
                   : isEnabled
@@ -243,19 +243,19 @@ export function WorkersPanel({
                     : "border-zinc-200/60 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-950/40 opacity-75"
               }`}
             >
-              <div className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <AnySkillBadge skill={workerId} size={36} enabled={isEnabled} paused={isPausedActive} />
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <AnySkillBadge skill={workerId} size={26} enabled={isEnabled} paused={isPausedActive} />
                     <div className="min-w-0 flex-1">
                       <span
-                        className={`text-sm font-bold tracking-tight truncate block ${
+                        className={`text-xs font-bold tracking-tight truncate block ${
                           isEnabled ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400 dark:text-zinc-500"
                         }`}
                       >
                         {worker.name}
                       </span>
-                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug line-clamp-2">{worker.description}</p>
+                      <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug line-clamp-1">{worker.description}</p>
                     </div>
                   </div>
 
@@ -264,53 +264,53 @@ export function WorkersPanel({
                     onClick={() => !isBusy && handleToggleClick(workerId)}
                     disabled={isBusy}
                     aria-label={`Toggle ${worker.name}`}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
+                    className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
                       isEnabled ? "bg-amber-400 border border-amber-500/30" : "bg-zinc-300 dark:bg-zinc-800 border border-zinc-400/30 dark:border-zinc-700/50"
                     } ${isBusy ? "opacity-50" : ""}`}
                   >
                     <span
-                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-md transition-transform duration-200 ease-in-out ${
-                        isEnabled ? "translate-x-[18px]" : "translate-x-[2px]"
+                      className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-md transition-transform duration-200 ease-in-out ${
+                        isEnabled ? "translate-x-[14px]" : "translate-x-[2px]"
                       }`}
                     />
                   </button>
                 </div>
 
-                <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-2.5 space-y-1.5">
+                <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-1.5 space-y-1">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-semibold">Status</span>
                     <StatusSwatch status={status} />
                   </div>
 
                   {isEnabled && latestRun ? (
-                    <div className="space-y-1 text-xs pt-1">
-                      <div className="flex items-center justify-between font-mono text-[11px]">
+                    <div className="space-y-0.5 text-xs">
+                      <div className="flex items-center justify-between font-mono text-[10.5px]">
                         <PhaseTag phase={latestRun.phase} status={latestRun.status} />
                         <Link
                           href={`/dashboard/runs/${latestRun.id}`}
                           className="text-[10px] font-mono font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors flex items-center gap-0.5"
                         >
-                          View run <ArrowRight className="w-2.5 h-2.5" />
+                          View <ArrowRight className="w-2.5 h-2.5" />
                         </Link>
                       </div>
                       {latestRun.status.toLowerCase() === "failed" && latestRun.errorMessage && (
-                        <p className="text-[11px] text-rose-600 dark:text-rose-400/90 leading-snug font-mono break-all line-clamp-2">{latestRun.errorMessage}</p>
+                        <p className="text-[10.5px] text-rose-600 dark:text-rose-400/90 leading-snug font-mono break-all line-clamp-1">{latestRun.errorMessage}</p>
                       )}
                       {isPausedActive && (
-                        <p className="text-[11px] text-amber-600 dark:text-amber-400 italic font-mono pt-0.5">Won&apos;t run again until this client is resumed.</p>
+                        <p className="text-[10.5px] text-amber-600 dark:text-amber-400 italic font-mono">Paused with the client.</p>
                       )}
                     </div>
                   ) : isPausedActive ? (
-                    <p className="text-[11px] text-amber-600 dark:text-amber-400 italic font-mono pt-1">No executions yet — paused while this client is on hold.</p>
+                    <p className="text-[10.5px] text-amber-600 dark:text-amber-400 italic font-mono">On hold — client paused.</p>
                   ) : isEnabled ? (
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic font-mono pt-1">No executions recorded yet.</p>
+                    <p className="text-[10.5px] text-zinc-400 dark:text-zinc-500 italic font-mono">No executions yet.</p>
                   ) : (
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic font-mono pt-1">Turned off for this client.</p>
+                    <p className="text-[10.5px] text-zinc-400 dark:text-zinc-500 italic font-mono">Turned off.</p>
                   )}
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/60 mt-3 space-y-2">
+              <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 mt-2 space-y-1.5">
                 <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
                   {worker.hasHingesPanel ? (
                     <button
