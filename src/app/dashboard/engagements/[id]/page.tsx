@@ -35,11 +35,11 @@ import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
 import { BookingSyncChip } from "@/components/booking-sync-chip";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import { getActiveWorkspace } from "@/lib/workspace";
-import { computeClientReportAllPeriods } from "@/features/reports/server/report-service";
-import { generateReportNote } from "@/features/reports/server/report-notes";
-import { ClientReportCard } from "@/components/client-report-card";
-import { computeRepClientReportAllPeriods } from "@/features/reputation-manager/server/rep-report-service";
-import { RepClientReportCard } from "@/components/rep-client-report-card";
+import type { ReportPeriod } from "@/features/reports/server/report-service";
+import { getReportBlocksForEngagement, attachTrends, type ReportBlockWithTrend } from "@/lib/worker-report-blocks";
+import { getPriorSnapshot } from "@/lib/client-metric-snapshots";
+import { startOfWeek } from "@/lib/dashboard-stats";
+import { DynamicClientReport } from "@/components/reports/dynamic-client-report";
 import {
   SKILLS,
   phaseLabel,
@@ -124,12 +124,6 @@ export default async function EngagementDetailPage({
 
   const runs = runsRaw.map((r) => ({ ...r, subjectLabel: latestStepLabel(r.steps) }));
 
-  const reportMetrics = await computeClientReportAllPeriods(id);
-  const [weekNote, monthNote] = await Promise.all([
-    generateReportNote(id, "week", reportMetrics.week),
-    generateReportNote(id, "month", reportMetrics.month),
-  ]);
-
   const stack = engagement.stack as Record<string, string> | null;
   const requireApproval = (engagement.stack as EngagementStack | null)?.require_approval_for_side_effects ?? false;
   const offerDetails = engagement.offerDetails as Record<string, string | boolean> | null;
@@ -165,6 +159,29 @@ export default async function EngagementDetailPage({
   // there's a way to turn it back on" fallback for anymore.
   const workerIds: WorkerId[] = await getEnabledWorkerIdsForEngagement(id);
 
+  // Same dynamic, per-worker block model dashboard/reports uses now —
+  // replaces the old separately-gated ClientReportCard/RepClientReportCard
+  // split below, which showed a real, correctly-zeroed Showtime card even
+  // for a client with no Showtime setup at all (gated on stack?.booking_platform
+  // only for its header language, not its existence).
+  const now = new Date();
+  const reportPeriodStart = (period: ReportPeriod): Date | null => {
+    if (period === "week") return startOfWeek(now);
+    if (period === "month") return new Date(now.getFullYear(), now.getMonth(), 1);
+    return null;
+  };
+  const [weekBlocks, monthBlocks, allTimeBlocks, priorWeekSnapshot] = await Promise.all([
+    getReportBlocksForEngagement(id, workerIds, { start: reportPeriodStart("week") }),
+    getReportBlocksForEngagement(id, workerIds, { start: reportPeriodStart("month") }),
+    getReportBlocksForEngagement(id, workerIds, { start: reportPeriodStart("all_time") }),
+    getPriorSnapshot(id, startOfWeek(now)),
+  ]);
+  const reportBlocksByPeriod: Record<ReportPeriod, ReportBlockWithTrend[]> = {
+    week: attachTrends(weekBlocks, priorWeekSnapshot?.blocks ?? null),
+    month: attachTrends(monthBlocks, null),
+    all_time: attachTrends(allTimeBlocks, null),
+  };
+
   const runsBySkill = Object.fromEntries(
     SKILLS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
   ) as Record<SkillName, typeof runs>;
@@ -182,7 +199,6 @@ export default async function EngagementDetailPage({
     REP_SKILL_IDS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
   ) as Record<RepSkillId, typeof runs>;
   const repAuditEvents = repIdentityGraphRow ? await getRecentAuditEvents(id, 20) : [];
-  const repReportMetrics = repIdentityGraphRow ? await computeRepClientReportAllPeriods(id) : null;
 
   const filteredRuns = activeSkillFilter
     ? runs.filter((r) => r.skillName === activeSkillFilter)
@@ -322,29 +338,12 @@ export default async function EngagementDetailPage({
           </div>
         </div>
 
-        {/* Merged Offer & Performance Report Card — Showtime clients only.
-            Used to render unconditionally for every engagement regardless
-            of whether Showtime was ever set up for it, so a pure-RM client
-            got a real card whose every stat (bookings, show rate, Win-Back
-            recovery) reads zero — the exact bug /dashboard/reports had for
-            the same reason, just on this page instead. Same setup signal
-            productSetupState("showtime") already uses just below. */}
-        {stack?.booking_platform && (
-          <ClientReportCard
-            buyerName={engagement.buyer}
-            metricsByPeriod={reportMetrics}
-            notesByPeriod={{ week: weekNote, month: monthNote }}
-            offerDetails={offerDetails}
-          />
-        )}
-
-        {repIdentityGraphRow && repReportMetrics && (
-          <RepClientReportCard
-            operatorName={repIdentityGraphRow.operatorName}
-            soleAuthorityName={repIdentityGraphRow.soleAuthorityName}
-            metricsByPeriod={repReportMetrics}
-          />
-        )}
+        {/* One merged report, whichever workers are actually enabled —
+            see worker-report-blocks.ts. Replaces the old separately-gated
+            ClientReportCard/RepClientReportCard split, which showed a
+            real, correctly-zeroed Showtime card even for a client with no
+            Showtime setup at all. */}
+        <DynamicClientReport offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} />
 
         <WorkersPanel
           engagementId={engagement.engagementId}

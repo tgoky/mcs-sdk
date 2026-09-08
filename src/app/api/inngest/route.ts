@@ -24,6 +24,8 @@ import {
   processLostDealEngagementCron,
   weeklyMetricsCron,
   processWeeklyMetricsEngagementCron,
+  weeklySnapshotCron,
+  processWeeklySnapshotEngagementCron,
   bookingPollCron,
   processBookingPollEngagementCron,
   docsLinksValidatorCron,
@@ -86,6 +88,12 @@ export const { GET, POST, PUT } = serve({
     // before this. See src/features/pile-on/server/weekly-metrics.ts.
     weeklyMetricsCron,
     processWeeklyMetricsEngagementCron,
+    // Reports' trend layer — writes one clientMetricSnapshots row per
+    // engagement per week so a report can show real week-over-week
+    // movement instead of three disconnected period tabs. See
+    // src/features/reports/server/weekly-snapshot.ts.
+    weeklySnapshotCron,
+    processWeeklySnapshotEngagementCron,
     // Polling fallback for booking platforms without live webhooks — see
     // src/features/pin-down/server/booking-poller.ts (Pin-Down recovery gap 5).
     bookingPollCron,

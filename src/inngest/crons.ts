@@ -26,7 +26,7 @@
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
 import crypto from "crypto";
-import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle, assumedNoShowSweepEngagement } from "@/lib/inngest";
+import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, weeklySnapshotEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle, assumedNoShowSweepEngagement } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements, skillRuns, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions, pendingActions } from "@/models/schema";
 import { startRun, closeStaleRun, notifyRunOutcome, failRun } from "@/lib/run-log";
@@ -34,6 +34,7 @@ import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-mon
 import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
 import { markElapsedEnrollmentsLost, processLostDealsForEngagement } from "@/features/win-back/server/lost-deal-sweep";
 import { findEngagementsForWeeklyReadout, processWeeklyMetricsForEngagement } from "@/features/pile-on/server/weekly-metrics";
+import { findEngagementsForWeeklySnapshot, processWeeklySnapshotForEngagement } from "@/features/reports/server/weekly-snapshot";
 import { findEngagementsDueForPoll, pollBookingsForEngagement } from "@/features/pin-down/server/booking-poller";
 import { validateAllPlatformDocsLinks } from "@/features/pin-down/server/docs-link-validator";
 import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/brief-service";
@@ -438,6 +439,40 @@ export const processWeeklyMetricsEngagementCron = inngest.createFunction(
   { id: "process-weekly-metrics-engagement", triggers: [weeklyMetricsEngagement], retries: 2 },
   async ({ event }) => {
     return processWeeklyMetricsForEngagement(event.data.engagementId);
+  }
+);
+
+/**
+ * Reports' trend layer (see weekly-snapshot.ts). Fires once, globally, at
+ * the start of each week — this writes internal data for later
+ * comparison, not something delivered to a human at a specific local
+ * time, so it doesn't need weeklyMetricsCron's per-engagement timezone
+ * gate. Same two-phase fan-out shape as every other cron in this file:
+ * cheap DB-only engagement list in one step, then one
+ * processWeeklySnapshotEngagementCron invocation per engagement so a
+ * single tenant's slower query set can't hold up everyone else's.
+ */
+export const weeklySnapshotCron = inngest.createFunction(
+  { id: "weekly-snapshot-cron", triggers: [{ cron: "TZ=UTC 5 0 * * 1" }], retries: 1 }, // Monday 00:05 UTC
+  async ({ step }) => {
+    const engagementIds = await step.run("find-engagements-for-weekly-snapshot", () => findEngagementsForWeeklySnapshot());
+
+    if (engagementIds.length > 0) {
+      await step.sendEvent(
+        "dispatch-weekly-snapshots",
+        engagementIds.map((engagementId) => weeklySnapshotEngagement.create({ engagementId }))
+      );
+    }
+
+    return { dispatched: engagementIds.length };
+  }
+);
+
+/** Fanned-out handler: one engagement's own snapshot write. */
+export const processWeeklySnapshotEngagementCron = inngest.createFunction(
+  { id: "process-weekly-snapshot-engagement", triggers: [weeklySnapshotEngagement], retries: 2 },
+  async ({ event }) => {
+    return processWeeklySnapshotForEngagement(event.data.engagementId);
   }
 );
 

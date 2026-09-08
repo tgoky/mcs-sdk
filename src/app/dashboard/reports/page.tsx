@@ -1,36 +1,40 @@
 // src/app/dashboard/reports/page.tsx
 //
-// Since-audit rebuild. Two real problems, both from before one workspace
-// meant one client:
+// Dynamic rebuild — replaces the old ClientReportCard/RepClientReportCard
+// split (two components each hand-shaped around one product's fixed
+// metric set, gated on unrelated flags, never both looked at together)
+// with one merged view: whichever workers are actually enabled for this
+// client each contribute their own real block (worker-report-blocks.ts),
+// rendered together. A newly-enabled skill — Showtime, Reputation
+// Manager, or a future third product — starts appearing here the first
+// week it has data, with nothing on this page to touch.
 //
-// 1. The exclusivity bug: `!repIdentityGraphRow && selected.bookingPlatform`
-//    gated Showtime's card off entirely whenever an RM identity graph
-//    existed — even for a client running both products, who'd only ever
-//    see the RM card. The engagement page's own report section (see
-//    engagements/[id]/page.tsx) already renders both cards independently
-//    when both apply; this page just hadn't matched that.
-// 2. `listReportableClients`/`?client=`/`?product=` existed to support a
-//    client picker — reports-sidebar-section.tsx's own "Client Reports"
-//    list — that's been unrouted since the secondary-sidebar collapse
-//    (one Work sidebar now, no more per-product variant). With no picker
-//    left anywhere to set `?client=`, this always silently fell through
-//    to clients[0] — which only ever "worked" because there's now
-//    genuinely one client to fall through to. Replaced with resolving
-//    that one client directly.
+// Trend ("+6pts vs last week") is real, not decorative: client_metric_
+// snapshots (schema.ts) persists one row per engagement per week via the
+// weeklySnapshotCron (src/inngest/crons.ts), so "This week" can compare
+// against an actual prior week instead of three disconnected tab
+// snapshots.
 
 import { db } from "@/lib/db";
-import { engagements, repIdentityGraphs } from "@/models/schema";
+import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
-import { computeClientReportAllPeriods } from "@/features/reports/server/report-service";
-import { generateReportNote } from "@/features/reports/server/report-notes";
-import { ClientReportCard } from "@/components/client-report-card";
-import { computeRepClientReportAllPeriods } from "@/features/reputation-manager/server/rep-report-service";
-import { RepClientReportCard } from "@/components/rep-client-report-card";
+import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
+import { getReportBlocksForEngagement, attachTrends, type ReportBlockWithTrend } from "@/lib/worker-report-blocks";
+import { getPriorSnapshot } from "@/lib/client-metric-snapshots";
+import { startOfWeek } from "@/lib/dashboard-stats";
+import type { ReportPeriod } from "@/features/reports/server/report-service";
+import { DynamicClientReport } from "@/components/reports/dynamic-client-report";
 import { FileText } from "lucide-react";
 
 export const revalidate = 0;
+
+function periodStart(period: ReportPeriod, reference: Date): Date | null {
+  if (period === "week") return startOfWeek(reference);
+  if (period === "month") return new Date(reference.getFullYear(), reference.getMonth(), 1);
+  return null;
+}
 
 export default async function ReportsPage() {
   const session = await getSession();
@@ -40,44 +44,44 @@ export default async function ReportsPage() {
 
   const [engagement] = engagementId
     ? await db
-        .select({ buyer: engagements.buyer, stack: engagements.stack, offerDetails: engagements.offerDetails })
+        .select({ buyer: engagements.buyer, offerDetails: engagements.offerDetails })
         .from(engagements)
         .where(eq(engagements.engagementId, engagementId))
         .limit(1)
     : [];
 
-  const [repIdentityGraphRow] = engagementId
-    ? await db
-        .select({ operatorName: repIdentityGraphs.operatorName, soleAuthorityName: repIdentityGraphs.soleAuthorityName })
-        .from(repIdentityGraphs)
-        .where(eq(repIdentityGraphs.engagementId, engagementId))
-        .limit(1)
-    : [];
+  const enabledWorkerIds = engagementId ? await getEnabledWorkerIdsForEngagement(engagementId) : [];
 
-  const bookingPlatform = (engagement?.stack as { booking_platform?: string } | null)?.booking_platform ?? null;
+  const now = new Date();
+  const periods: ReportPeriod[] = ["week", "month", "all_time"];
 
-  // Independent, not exclusive — a client running both products gets
-  // both cards, matching how the engagement page's own report section
-  // already renders them.
-  const showtimeMetrics = engagementId && bookingPlatform ? await computeClientReportAllPeriods(engagementId) : null;
-  const [weekNote, monthNote] = showtimeMetrics
+  const [weekBlocks, monthBlocks, allTimeBlocks, priorWeekSnapshot] = engagementId
     ? await Promise.all([
-        generateReportNote(engagementId!, "week", showtimeMetrics.week),
-        generateReportNote(engagementId!, "month", showtimeMetrics.month),
+        getReportBlocksForEngagement(engagementId, enabledWorkerIds, { start: periodStart("week", now) }),
+        getReportBlocksForEngagement(engagementId, enabledWorkerIds, { start: periodStart("month", now) }),
+        getReportBlocksForEngagement(engagementId, enabledWorkerIds, { start: periodStart("all_time", now) }),
+        getPriorSnapshot(engagementId, startOfWeek(now)),
       ])
-    : [null, null];
+    : [[], [], [], null];
 
-  const repMetrics = engagementId && repIdentityGraphRow ? await computeRepClientReportAllPeriods(engagementId) : null;
+  const blocksByPeriod: Record<ReportPeriod, ReportBlockWithTrend[]> = {
+    week: attachTrends(weekBlocks, priorWeekSnapshot?.blocks ?? null),
+    // Trend is only meaningful week-over-week against the real snapshot
+    // grain — month/all_time show the same real numbers, just without a
+    // fabricated delta next to them.
+    month: attachTrends(monthBlocks, null),
+    all_time: attachTrends(allTimeBlocks, null),
+  };
 
-  const hasAnyReport = Boolean(showtimeMetrics || repMetrics);
+  const hasAnyBlocks = periods.some((p) => blocksByPeriod[p].length > 0);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Reports</h1>
         <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-2xl">
-          How this client is doing — bookings and outreach, reputation signals, or both, depending on what&apos;s
-          enabled. Comparing across skills? See Analytics.
+          How this client is doing, across whatever&apos;s enabled — Showtime, Reputation Manager, or both. Comparing
+          across skills? See Analytics.
         </p>
       </div>
 
@@ -90,31 +94,18 @@ export default async function ReportsPage() {
         <div className="space-y-6">
           <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{engagement.buyer}</p>
 
-          {!hasAnyReport ? (
+          {!hasAnyBlocks ? (
             <div className="text-center py-8">
               <FileText className="w-6 h-6 text-zinc-300 dark:text-zinc-700 mx-auto mb-2" />
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                {engagement.buyer} isn&apos;t set up under Showtime or Reputation Manager yet — nothing to report.
+                {engagement.buyer} doesn&apos;t have any enabled skills reporting data yet.
               </p>
             </div>
           ) : (
-            <>
-              {showtimeMetrics && (
-                <ClientReportCard
-                  buyerName={engagement.buyer}
-                  metricsByPeriod={showtimeMetrics}
-                  notesByPeriod={{ week: weekNote, month: monthNote }}
-                  offerDetails={engagement.offerDetails as Record<string, string | boolean> | null}
-                />
-              )}
-              {repMetrics && repIdentityGraphRow && (
-                <RepClientReportCard
-                  operatorName={repIdentityGraphRow.operatorName}
-                  soleAuthorityName={repIdentityGraphRow.soleAuthorityName}
-                  metricsByPeriod={repMetrics}
-                />
-              )}
-            </>
+            <DynamicClientReport
+              offerDetails={engagement.offerDetails as Record<string, string | boolean> | null}
+              blocksByPeriod={blocksByPeriod}
+            />
           )}
         </div>
       )}

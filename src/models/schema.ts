@@ -1770,6 +1770,39 @@ export const clientReportNotes = pgTable(
   })
 );
 
+// One row per engagement per calendar week — the real trend layer Reports
+// and Analytics were missing entirely before this: every prior render
+// recomputed totals for whatever tab was open from raw event tables with
+// nothing persisted past "right now," so "This week / This month / All
+// time" were three disconnected snapshots, never a line you could watch
+// move. `blocks` holds whatever WorkerReportBlock[] worker-report-blocks.ts
+// resolved for this engagement's actually-enabled workers that week — not
+// a fixed Showtime-shaped column set, so a client running only Reputation
+// Manager (or a future third product) still gets a real row here, and a
+// newly-added skill's own block starts showing up in history the first
+// week it runs, with no migration needed.
+export const clientMetricSnapshots = pgTable(
+  "client_metric_snapshots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    // Monday 00:00 UTC of the snapshot week — same startOfWeek convention
+    // dashboard-stats.ts and report-service.ts already use, so a snapshot's
+    // week lines up with the "This week" tab's own window.
+    weekStart: timestamp("week_start").notNull(),
+    blocks: jsonb("blocks").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    engagementWeekUnique: uniqueIndex("client_metric_snapshots_engagement_week_uidx").on(
+      table.engagementId,
+      table.weekStart
+    ),
+  })
+);
+
 // ── Conversation Intelligence Sessions (recovery gap 24) ───────────────────
 // One row per Recall.ai bot dispatched to a call. See
 // src/lib/platforms/conversation-intelligence.ts. Deliberately scoped to

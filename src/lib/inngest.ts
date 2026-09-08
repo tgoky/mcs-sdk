@@ -145,6 +145,15 @@ export const weeklyMetricsEngagement = eventType("pile-on/weekly-metrics-engagem
   schema: staticSchema<WeeklyMetricsEngagementData>(),
 });
 
+// Reports' trend layer — see weekly-snapshot.ts. Fanned out the same
+// shape as weeklyMetricsEngagement above, one event per engagement.
+export type WeeklySnapshotEngagementData = {
+  engagementId: string;
+};
+export const weeklySnapshotEngagement = eventType("reports/weekly-snapshot-engagement", {
+  schema: staticSchema<WeeklySnapshotEngagementData>(),
+});
+
 // Pin-Down recovery gap 5 — polling fallback for booking platforms without
 // (or not configured for) webhooks. Same fan-out shape as the crons
 // above: bookingPollCron does a cheap DB-only scan for engagements due for
