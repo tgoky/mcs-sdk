@@ -25,6 +25,7 @@ export function ProductDetailClient({
   productId,
   name,
   description,
+  image,
   installed,
   workers,
   enabledWorkerIds,
@@ -35,6 +36,10 @@ export function ProductDetailClient({
   productId: string;
   name: string;
   description: string;
+  /** Real artwork from WORKSPACE_PRODUCTS (copy.ts) — same hero image the
+   * Library grid's ProductCard shows, carried onto this page's own header
+   * so the "app store" look is consistent one level deep too. */
+  image: string;
   installed: boolean;
   workers: WorkerDefinition[];
   enabledWorkerIds: string[];
@@ -105,6 +110,10 @@ export function ProductDetailClient({
         >
           <ChevronLeft className="w-4 h-4" />
         </Link>
+        {image && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={image} alt={name} className="w-12 h-12 shrink-0 object-contain" />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">{name}</h1>

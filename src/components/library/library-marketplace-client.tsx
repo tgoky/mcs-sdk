@@ -74,6 +74,7 @@ export function LibraryMarketplaceClient({
         id,
         name: meta?.name ?? id,
         description: meta?.description ?? "",
+        image: meta?.image ?? "",
         skillIds,
         isRep: id === "reputation-manager",
         installed: installedSet.has(id),
@@ -201,6 +202,7 @@ export function LibraryMarketplaceClient({
                     productId={p.id}
                     name={p.name}
                     description={p.description}
+                    image={p.image}
                     installed={p.installed}
                     skillIds={p.skillIds}
                     isRep={p.isRep}

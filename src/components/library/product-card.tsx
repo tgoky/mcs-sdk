@@ -16,7 +16,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Download, Trash2, ArrowUpRight, Loader2 } from "lucide-react";
-import type { WorkerId } from "@/lib/worker-registry";
+import { getWorkerDefinition, type WorkerId } from "@/lib/worker-registry";
+import { HOME_COPY } from "@/lib/copy";
 import { StatChip } from "@/components/library/stat-chip";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { RepSkillBadge } from "@/components/rep-skill-badge";
@@ -26,6 +27,7 @@ export function ProductCard({
   productId,
   name,
   description,
+  image,
   installed,
   skillIds,
   isRep,
@@ -36,6 +38,10 @@ export function ProductCard({
   productId: string;
   name: string;
   description: string;
+  /** Real artwork from WORKSPACE_PRODUCTS (copy.ts) — the app-store-style
+   * hero look the old Library had, brought back onto today's two-tier
+   * card without touching the Install/Enable machinery underneath it. */
+  image: string;
   installed: boolean;
   /** Every skill this worker bundles, for the "Inside" preview row. */
   skillIds: WorkerId[];
@@ -63,22 +69,33 @@ export function ProductCard({
     }
   }
 
+  const skillNames = skillIds.map((id) => getWorkerDefinition(id).name).join(", ");
+
   return (
     <div className="group relative flex flex-col justify-between rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-6 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
-      <Link href={`/dashboard/library/${productId}`} className="space-y-4 block">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-lg font-bold text-zinc-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
-                {name}
-              </h2>
-              {installed && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-md">
-                  <Download size={11} className="stroke-[2.5]" /> Installed
-                </span>
-              )}
+      <Link href={`/dashboard/library/${productId}`} className="space-y-5 block">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4 min-w-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={image}
+              alt={name}
+              className="w-16 h-16 shrink-0 object-contain group-hover:scale-105 transition-transform"
+            />
+            <div className="min-w-0 pt-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                  {name}
+                </h2>
+                {installed && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-md">
+                    <Download size={11} className="stroke-[2.5]" /> Installed
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 font-medium mt-0.5">By {HOME_COPY.footerNote}</p>
+              <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 leading-relaxed mt-1.5 max-w-md">{description}</p>
             </div>
-            <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 leading-relaxed mt-1.5 max-w-md">{description}</p>
           </div>
           <ArrowUpRight
             size={18}
@@ -96,8 +113,8 @@ export function ProductCard({
           />
         </div>
 
-        <div className="flex items-center gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800/80">
-          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 shrink-0">
+        <div className="flex items-start gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800/80">
+          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 shrink-0 pt-0.5">
             Inside
           </span>
           <div className="flex items-center -space-x-1.5 shrink-0">
@@ -113,6 +130,9 @@ export function ProductCard({
               )
             )}
           </div>
+          <span className="text-xs text-zinc-700 dark:text-zinc-300 ml-1 font-mono text-[11px] font-medium leading-snug">
+            {skillNames}
+          </span>
         </div>
       </Link>
 

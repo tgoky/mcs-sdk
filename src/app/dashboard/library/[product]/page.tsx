@@ -59,6 +59,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       productId={product}
       name={meta?.name ?? product}
       description={meta?.description ?? ""}
+      image={meta?.image ?? ""}
       installed={installed}
       workers={workers}
       enabledWorkerIds={enabledWorkerIds}

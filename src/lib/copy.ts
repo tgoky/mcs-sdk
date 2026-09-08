@@ -592,6 +592,10 @@ export interface WorkspaceProduct {
   description: string;
   href: string;
   status: WorkspaceStatus;
+  /** Real artwork in public/images — the app-store-style hero look the
+   * Library's ProductCard and per-Worker page header use, not a
+   * placeholder icon. */
+  image: string;
 }
 
 export const HOME_COPY = {
@@ -616,6 +620,7 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
       "Sales execution for your booked calls — client setup, follow-up sequences, call briefs, win-back, and funnel health, all in one place.",
     href: "/dashboard",
     status: "available",
+    image: "/images/showtime.png",
   },
   {
     id: "reputation-manager",
@@ -624,6 +629,7 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
       "Monitors what AI engines, Trustpilot, and Reddit say about your business, and pages you the moment something crosses into crisis territory.",
     href: "/dashboard/reputation-manager",
     status: "available",
+    image: "/images/repm.png",
   },
 ];
 
