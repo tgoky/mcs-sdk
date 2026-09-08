@@ -49,7 +49,7 @@ export const WORKER_CONTEXT_RESOLVERS: Partial<Record<WorkerId, WorkerContextRes
       .limit(1);
     if (!row) return null;
     const context: CompetitorContext = { competitors: row.competitors, soleAuthorityName: row.soleAuthorityName };
-    return context;
+    return context as unknown as Record<string, unknown>;
   },
 
   // Publishes whether this engagement currently has an open reputation
@@ -64,7 +64,7 @@ export const WORKER_CONTEXT_RESOLVERS: Partial<Record<WorkerId, WorkerContextRes
       .orderBy(desc(repIncidents.severityScore))
       .limit(1);
     const context: CrisisContext = { hasOpenIncident: Boolean(row), severityScore: row?.severityScore ?? null };
-    return context;
+    return context as unknown as Record<string, unknown>;
   },
 };
 

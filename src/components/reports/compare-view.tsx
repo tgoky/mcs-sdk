@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 
 interface ComparisonPoint {
@@ -75,20 +75,29 @@ export function CompareView({ engagementId }: { engagementId: string }) {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [fetched, setFetched] = useState(false);
 
-  useEffect(() => {
-    if (!expanded || fetched) return;
-    setLoading(true);
-    fetch(`/api/engagements/${engagementId}/compare-series?weeks=8`)
-      .then((res) => (res.ok ? res.json() : { series: [] }))
-      .then((data: { series: ComparisonSeries[] }) => {
-        const list = data.series ?? [];
-        setSeries(list);
-        setSelectedKeys(new Set(list.map(seriesKey)));
-        setFetched(true);
-      })
-      .catch(() => setFetched(true))
-      .finally(() => setLoading(false));
-  }, [expanded, fetched, engagementId]);
+  // Fetch is triggered from the click handler, not a useEffect keyed on
+  // `expanded` — that would call setLoading synchronously inside an
+  // effect body just to kick off the fetch, which is exactly the
+  // cascading-render pattern React's own effect guidance warns against.
+  // Expanding is a real user action, so starting the fetch there is both
+  // simpler and the correct place for it.
+  function handleToggle() {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && !fetched) {
+      setLoading(true);
+      fetch(`/api/engagements/${engagementId}/compare-series?weeks=8`)
+        .then((res) => (res.ok ? res.json() : { series: [] }))
+        .then((data: { series: ComparisonSeries[] }) => {
+          const list = data.series ?? [];
+          setSeries(list);
+          setSelectedKeys(new Set(list.map(seriesKey)));
+          setFetched(true);
+        })
+        .catch(() => setFetched(true))
+        .finally(() => setLoading(false));
+    }
+  }
 
   const visibleSeries = useMemo(() => series.filter((s) => selectedKeys.has(seriesKey(s))), [series, selectedKeys]);
 
@@ -105,7 +114,7 @@ export function CompareView({ engagementId }: { engagementId: string }) {
     <div className="pt-2">
       <button
         type="button"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={handleToggle}
         className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer transition-colors"
         style={{ color: "var(--text-muted)" }}
       >
