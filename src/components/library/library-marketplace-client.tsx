@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronLeft, Search, X } from "lucide-react";
 import { WORKER_IDS, WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import type { ProductId } from "@/lib/product-catalog";
+import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import { WorkerCard } from "@/components/library/worker-card";
 import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
 import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
@@ -21,29 +22,49 @@ import { useRouter } from "next/navigation";
  * every worker's Enable/Configure/Analytics actions act on that client,
  * since a workspace only ever holds one now.
  */
+type StatusFilter = "all" | "installed" | "not_installed";
+
 export function LibraryMarketplaceClient({
   engagementId,
   enabledWorkerIds,
   buyerName,
+  workerStats,
 }: {
   engagementId: string | null;
   enabledWorkerIds: string[];
   buyerName?: string | null;
+  /** Real per-skill workload (runs/7d, success rate, needs-attention) —
+   * see worker-analytics.ts's getWorkspaceWorkerOverview, the same rollup
+   * /dashboard/analytics/[workerId] uses. Optional only so a caller that
+   * hasn't fetched it yet doesn't hard-crash; the Library's own page
+   * always provides it. */
+  workerStats?: WorkerOverviewStat[];
 }) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [productFilter, setProductFilter] = useState<ProductId | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   // Same inline-Configure pattern as WorkersPanel — see that file's own
   // comment for why. The Library is exactly the other "see every skill at
   // once" page this was asked to cover.
   const [expandedWorker, setExpandedWorker] = useState<WorkerId | null>(null);
   const enabledSet = useMemo(() => new Set(enabledWorkerIds), [enabledWorkerIds]);
+  const statsById = useMemo(() => {
+    const map = new Map<WorkerId, WorkerOverviewStat>();
+    for (const s of workerStats ?? []) map.set(s.workerId, s);
+    return map;
+  }, [workerStats]);
 
   const workers = useMemo(() => WORKER_IDS.map((id) => WORKER_REGISTRY[id]), []);
 
   const sorted = useMemo(() => {
     return workers
       .filter((w) => productFilter === "all" || w.productId === productFilter)
+      .filter((w) => {
+        if (statusFilter === "installed") return enabledSet.has(w.id);
+        if (statusFilter === "not_installed") return !enabledSet.has(w.id);
+        return true;
+      })
       .filter((w) => !searchQuery.trim() || w.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
       .slice()
       .sort((a, b) => {
@@ -52,7 +73,7 @@ export function LibraryMarketplaceClient({
         if (aEnabled !== bEnabled) return aEnabled - bEnabled;
         return a.name.localeCompare(b.name);
       });
-  }, [workers, productFilter, searchQuery, enabledSet]);
+  }, [workers, productFilter, statusFilter, searchQuery, enabledSet]);
 
   const enabledCount = workers.filter((w) => enabledSet.has(w.id)).length;
 
@@ -134,22 +155,41 @@ export function LibraryMarketplaceClient({
           </div>
         ) : (
           <>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-2 text-xs font-semibold">
-                {(["all", "showtime", "reputation-manager"] as const).map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setProductFilter(id)}
-                    className={`px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
-                      productFilter === id
-                        ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
-                        : "border-border text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
-                    }`}
-                  >
-                    {id === "all" ? "All" : id === "showtime" ? "Showtime" : "Reputation Manager"}
-                  </button>
-                ))}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
+                <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-1 rounded-xl border border-border">
+                  {(["all", "installed", "not_installed"] as const).map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setStatusFilter(id)}
+                      className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                        statusFilter === id
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+                      }`}
+                    >
+                      {id === "all" ? "All" : id === "installed" ? "Installed" : "Not installed"}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {(["all", "showtime", "reputation-manager"] as const).map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setProductFilter(id)}
+                      className={`px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
+                        productFilter === id
+                          ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
+                          : "border-border text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+                      }`}
+                    >
+                      {id === "all" ? "All" : id === "showtime" ? "Showtime" : "Reputation Manager"}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="relative w-full sm:w-72">
@@ -164,21 +204,32 @@ export function LibraryMarketplaceClient({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
-              {sorted.map((worker) => (
-                <WorkerCard
-                  key={worker.id}
-                  worker={worker}
-                  enabled={enabledSet.has(worker.id)}
-                  engagementId={engagementId}
-                  buyerName={buyerName}
-                  isConfiguring={false}
-                  onToggleConfigure={
-                    worker.hasHingesPanel && engagementId ? () => setExpandedWorker(worker.id) : undefined
-                  }
-                />
-              ))}
-            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
+              {sorted.length} of {workers.length} skill{workers.length === 1 ? "" : "s"}
+            </p>
+
+            {sorted.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                No skills match these filters.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
+                {sorted.map((worker) => (
+                  <WorkerCard
+                    key={worker.id}
+                    worker={worker}
+                    enabled={enabledSet.has(worker.id)}
+                    engagementId={engagementId}
+                    buyerName={buyerName}
+                    stats={statsById.get(worker.id)}
+                    isConfiguring={false}
+                    onToggleConfigure={
+                      worker.hasHingesPanel && engagementId ? () => setExpandedWorker(worker.id) : undefined
+                    }
+                  />
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>

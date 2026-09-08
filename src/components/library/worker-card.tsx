@@ -3,8 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Settings, BarChart3, X } from "lucide-react";
+import { Settings, BarChart3, X, AlertTriangle } from "lucide-react";
 import type { WorkerDefinition } from "@/lib/worker-registry";
+import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import { EnablePileOnModal } from "./enable-worker-modal";
 
 const PRODUCT_LABELS: Record<WorkerDefinition["productId"], string> = {
@@ -31,6 +32,7 @@ export function WorkerCard({
   enabled,
   engagementId,
   buyerName,
+  stats,
   isConfiguring = false,
   onToggleConfigure,
 }: {
@@ -38,6 +40,12 @@ export function WorkerCard({
   enabled: boolean;
   engagementId: string | null;
   buyerName?: string | null;
+  /** Real workload for this skill — runs/7d, success rate, needs-attention
+   * — from worker-analytics.ts's getWorkspaceWorkerOverview. Undefined
+   * only if a caller hasn't fetched it; the Library page always does, so
+   * this is the "workload, what runs the most" a plain Install/Configure
+   * card had no way to answer. */
+  stats?: WorkerOverviewStat;
   /** Whether this card's Configure form is the one currently expanded
    * inline (see library-marketplace-client.tsx, which owns that state
    * across the whole grid and renders the actual form below it — a card
@@ -107,6 +115,30 @@ export function WorkerCard({
           )}
         </div>
         <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">{worker.description}</p>
+
+        {stats && (
+          <div className="flex items-center gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 text-[11px] font-mono">
+            <span className="text-zinc-600 dark:text-zinc-400">
+              <strong className="text-zinc-900 dark:text-zinc-100 tabular-nums">{stats.runsInWindow}</strong> runs/7d
+            </span>
+            <span
+              className={
+                stats.successRate === null
+                  ? "text-zinc-400 dark:text-zinc-600"
+                  : stats.successRate >= 80
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-orange-600 dark:text-orange-400"
+              }
+            >
+              {stats.successRate !== null ? `${stats.successRate}% success` : "No runs yet"}
+            </span>
+            {stats.needsAttention > 0 && (
+              <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-semibold">
+                <AlertTriangle size={11} /> {stats.needsAttention}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="pt-4 flex items-center gap-2">
