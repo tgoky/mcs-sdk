@@ -168,7 +168,7 @@ export function ProductDetailClient({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-transparent p-4">
         <div className="flex items-center gap-6">
           <StatChip label="Skills on" value={`${enabledCount}/${workers.length}`} />
           <StatChip label="Runs (7d)" value={String(runsInWindow)} />

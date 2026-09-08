@@ -121,16 +121,6 @@ function Bar({ value, max, className }: { value: number; max: number; className:
   );
 }
 
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent p-4">
-      <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600">{label}</p>
-      <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100 mt-1 font-mono tabular-nums">{value}</p>
-      {sub && <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
-
 /** Daily stacked-volume chart for the last N days, plain HTML/CSS (no SVG)
  * so it composes with the rest of the page's div-based bar language instead
  * of introducing a second, differently-behaved chart primitive. Each column
@@ -221,24 +211,12 @@ export default async function AnalyticsPage() {
   // recycled version of the infra-health numbers further down the page.
   const portfolioAccounts = await getPortfolioOutcomes(engagementRows.map((e) => ({ engagementId: e.engagementId, buyer: e.buyer })));
 
-  const [runRows, openPending, openBlockers, pendingWindow, blockersWindow, auditWindow, revenueResults] = await Promise.all([
+  const [runRows, pendingWindow, blockersWindow, auditWindow, revenueResults] = await Promise.all([
     db
       .select({ skillName: skillRuns.skillName, status: skillRuns.status, costInCents: skillRuns.costInCents, startedAt: skillRuns.startedAt, completedAt: skillRuns.completedAt })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
       .where(and(eq(engagements.whopUserId, whopUserId), gte(skillRuns.startedAt, since30), isNull(engagements.deletedAt))),
-
-    db
-      .select({ id: pendingActions.id })
-      .from(pendingActions)
-      .innerJoin(engagements, eq(pendingActions.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), eq(pendingActions.status, "pending"), isNull(engagements.deletedAt))),
-
-    db
-      .select({ id: humanBlockers.id })
-      .from(humanBlockers)
-      .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), eq(humanBlockers.status, "open"), isNull(engagements.deletedAt))),
 
     db
       .select({ actionType: pendingActions.actionType, status: pendingActions.status, createdAt: pendingActions.createdAt, decidedAt: pendingActions.decidedAt })
@@ -278,9 +256,6 @@ export default async function AnalyticsPage() {
   }, {} as Record<WorkerId, SkillRunAgg>);
 
   let totalRuns = 0;
-  let totalSuccess = 0;
-  let totalTerminalFailure = 0; // failed | timed_out | cancelled — excludes skipped/running from the rate denominator
-  let totalCostCents = 0;
 
   const dayBuckets = new Map<string, { success: number; failed: number; other: number }>();
   for (let i = TREND_DAYS - 1; i >= 0; i--) {
@@ -293,9 +268,6 @@ export default async function AnalyticsPage() {
     const isTerminalFailure = run.status === "failed" || run.status === "timed_out" || run.status === "cancelled";
 
     totalRuns++;
-    totalCostCents += run.costInCents ?? 0;
-    if (isSuccess) totalSuccess++;
-    if (isTerminalFailure) totalTerminalFailure++;
 
     const skill = run.skillName as WorkerId;
     if ((WORKER_IDS as string[]).includes(skill)) {
@@ -315,12 +287,6 @@ export default async function AnalyticsPage() {
     }
   }
 
-  // Rate denominator is resolved runs only (success + terminal failure) —
-  // a run still in flight or skipped for being paused/disabled isn't a
-  // pass or a fail yet, so counting it against the rate would just dilute
-  // the number toward whatever the skip/running share happens to be.
-  const resolvedRuns = totalSuccess + totalTerminalFailure;
-  const successRate = pct(totalSuccess, resolvedRuns);
   const maxSkillRuns = Math.max(1, ...Object.values(perSkill).map((s) => s.total));
 
   const dailyActivity = Array.from(dayBuckets.entries()).map(([key, v]) => ({
@@ -354,8 +320,6 @@ export default async function AnalyticsPage() {
     arr.push(b.resolvedAt.getTime() - b.createdAt.getTime());
     blockerTypeMedians.set(b.blockerType, arr);
   }
-
-  const overallMedianResolutionMs = median([...actionResolutionMs, ...blockerResolutionMs]);
 
   // Dropped: a headline "revenue recovered/attributed" figure used to be
   // shown here, sourced from computeWinBackRevenueAttribution — a
@@ -433,18 +397,6 @@ export default async function AnalyticsPage() {
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
             Last {TREND_DAYS} days of activity, and up to {LOOKBACK_DAYS} days of slower-moving signals, across every engagement on this account.
           </p>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <StatCard label="Total runs" value={String(totalRuns)} sub={`${engagementRows.length} engagement${engagementRows.length !== 1 ? "s" : ""}`} />
-          <StatCard label="Success rate" value={successRate !== null ? `${successRate}%` : "—"} sub={resolvedRuns > 0 ? `${totalSuccess}/${resolvedRuns} resolved runs` : "No resolved runs yet"} />
-          <StatCard label="Model spend" value={fmtCents(totalCostCents)} sub={`last ${TREND_DAYS}d, all skills`} />
-          <StatCard label="Queue open" value={String(openPending.length + openBlockers.length)} sub={`${decidedActions.length + resolvedBlockers.length} resolved in ${LOOKBACK_DAYS}d`} />
-          <StatCard
-            label="Median resolution time"
-            value={overallMedianResolutionMs !== null ? fmtDuration(overallMedianResolutionMs) : "—"}
-            sub={`across ${decidedActions.length + resolvedBlockers.length} decisions, ${LOOKBACK_DAYS}d`}
-          />
         </div>
 
         {/* Daily activity trend */}
