@@ -9,7 +9,6 @@ import {
   ListTodo,
   Activity,
   Building2,
-  ChevronDown,
 } from "lucide-react";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 import { SkillsNavList } from "@/components/skills-nav-list";
@@ -119,21 +118,15 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
 
       <div className="h-px bg-zinc-200/80 dark:bg-zinc-800/80 my-1 mx-1" />
 
-      {/* INSTALLED SKILLS SECTION */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-1.5 px-2 py-1.5 text-[13px] font-bold text-zinc-600 dark:text-zinc-300 tracking-tight">
-          <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
-          <span>Installed Skills</span>
-        </div>
-
-        <SkillsNavList
-          productIds={installedProductIds}
-          layout="grid"
-          enabledWorkerIds={enabledWorkerIds}
-          needsAttentionWorkerIds={needsAttentionWorkerIds}
-          engagementId={primaryEngagementId}
-        />
-      </div>
+      {/* INSTALLED SKILLS SECTION — owns its own header (collapse toggle +
+          shortcut into the Library), see skills-nav-list.tsx */}
+      <SkillsNavList
+        productIds={installedProductIds}
+        layout="grid"
+        enabledWorkerIds={enabledWorkerIds}
+        needsAttentionWorkerIds={needsAttentionWorkerIds}
+        engagementId={primaryEngagementId}
+      />
     </div>
   );
 }

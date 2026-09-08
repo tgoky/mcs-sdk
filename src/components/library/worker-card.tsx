@@ -59,7 +59,7 @@ export function WorkerCard({
   // for why this is scoped to pile-on specifically, not driven generically
   // off configFields.
   const needsLighterForm = worker.id === "pile-on";
-  const bridgeHref = engagementId ? `/dashboard/engagements/${engagementId}/bridges/${worker.id}` : null;
+  const bridgeHref = engagementId ? `/dashboard/engagements/${engagementId}/bridges/${worker.id}?from=/dashboard/library` : null;
   // UX fix: this used to always be a Link to the standalone bridges page
   // — Configure now expands the same form inline on this page instead
   // (see library-marketplace-client.tsx), matching the same "don't

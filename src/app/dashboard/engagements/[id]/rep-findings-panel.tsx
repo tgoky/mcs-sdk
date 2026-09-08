@@ -16,6 +16,12 @@
 // Every trigger here still calls the same chat-skill-trigger.ts functions
 // Teammates chat already uses (via /api/engagements/[id]/rep-findings/
 // trigger) — no new business logic, just the same actions in a cleaner shell.
+//
+// This is a continuous, mixed-source feed (reviews, mentions, engine pings
+// can land any number of times a day) rather than a handful of scheduled
+// runs — so unlike Leak Map's audit timeline, there's no calendar/"Today,
+// Yesterday" day-bucketing here: just one flat list, newest first, each
+// row carrying its own timestamp.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -33,7 +39,6 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { dateKey } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
 import { SentimentPill, FlaggedPill } from "@/app/dashboard/runs/[id]/_shared/sentiment-pill";
 import { EmptyState } from "@/app/dashboard/runs/[id]/_shared/empty-state";
 
@@ -147,21 +152,16 @@ function buildTimeline(data: FindingsData): TimelineEntry[] {
   return entries.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 }
 
-function formatDayHeader(dateStr: string) {
-  const todayKey = dateKey(new Date());
-  const yesterdayObj = new Date();
-  yesterdayObj.setDate(yesterdayObj.getDate() - 1);
-  const yesterdayKey = dateKey(yesterdayObj);
-
-  if (dateStr === todayKey) return "Today";
-  if (dateStr === yesterdayKey) return "Yesterday";
-
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
-function formatTimeBadge(isoString: string) {
-  return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+function formatEntryTime(isoString: string) {
+  const d = new Date(isoString);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: sameYear ? undefined : "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 type TriggerResult = { runId?: string; message?: string; error?: string } | null;
@@ -395,12 +395,6 @@ export function RepFindingsPanel({ engagementId }: { engagementId: string }) {
     return list;
   }, [timeline, sourceFilter, filterText]);
 
-  const grouped = useMemo(() => {
-    const groups: Record<string, TimelineEntry[]> = {};
-    for (const e of filtered) (groups[dateKey(e.at)] ??= []).push(e);
-    return Object.entries(groups).sort((a, b) => (a[0] < b[0] ? 1 : -1));
-  }, [filtered]);
-
   const selected = useMemo(() => {
     if (selectedKey) {
       const found = filtered.find((e) => entryKey(e) === selectedKey);
@@ -476,65 +470,56 @@ export function RepFindingsPanel({ engagementId }: { engagementId: string }) {
       {sourceFilter !== "all" && <SourceCheckBar engagementId={engagementId} source={sourceFilter} />}
 
       <div className="space-y-3">
-        {/* Timeline feed — full width, grouped by day */}
+        {/* Timeline feed — full width, flat and newest-first (a continuous
+            multi-source feed, not a handful of scheduled runs, so no
+            calendar-style day buckets — just a timestamp per row) */}
         <div className="overflow-hidden rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xs flex flex-col">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60">
             <span className="text-xs font-bold text-zinc-900 dark:text-white">Findings Timeline</span>
             <span className="text-[10.5px] font-mono text-zinc-500">{filtered.length} shown</span>
           </div>
 
-          {grouped.length === 0 ? (
+          {filtered.length === 0 ? (
             <EmptyState icon={Radar} title="No findings on file" description="Signals will appear here once a watch skill runs on schedule, or run a check above to check right now." />
           ) : (
-            <div className="divide-y divide-zinc-200/80 dark:divide-zinc-800/60 max-h-[420px] overflow-y-auto">
-              {grouped.map(([day, entries]) => (
-                <div key={day} className="space-y-0">
-                  <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/90 dark:bg-zinc-900/90 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
-                    <span>{formatDayHeader(day)}</span>
-                    <span>{entries.length} item{entries.length === 1 ? "" : "s"}</span>
-                  </div>
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800/40 max-h-[420px] overflow-y-auto">
+              {filtered.map((e) => {
+                const meta = SOURCE_META[e.kind];
+                const Icon = meta.icon;
+                const isSelected = selected && entryKey(selected) === entryKey(e);
+                const flag = entryFlagged(e);
+                const sentiment = entrySentiment(e);
 
-                  <div className="divide-y divide-zinc-100 dark:divide-zinc-800/40">
-                    {entries.map((e) => {
-                      const meta = SOURCE_META[e.kind];
-                      const Icon = meta.icon;
-                      const isSelected = selected && entryKey(selected) === entryKey(e);
-                      const flag = entryFlagged(e);
-                      const sentiment = entrySentiment(e);
+                return (
+                  <button
+                    key={entryKey(e)}
+                    type="button"
+                    onClick={() => setSelectedKey(entryKey(e))}
+                    className={cn(
+                      "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-0",
+                      isSelected ? "bg-zinc-100/80 dark:bg-zinc-800" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                    )}
+                  >
+                    <div className={cn("flex h-7 w-7 items-center justify-center rounded-lg shrink-0", meta.iconClass)}>
+                      <Icon size={14} />
+                    </div>
 
-                      return (
-                        <button
-                          key={entryKey(e)}
-                          type="button"
-                          onClick={() => setSelectedKey(entryKey(e))}
-                          className={cn(
-                            "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-0",
-                            isSelected ? "bg-zinc-100/80 dark:bg-zinc-800" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                          )}
-                        >
-                          <div className={cn("flex h-7 w-7 items-center justify-center rounded-lg shrink-0", meta.iconClass)}>
-                            <Icon size={14} />
-                          </div>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">{entryTitle(e)}</span>
+                        {flag?.flagged && <FlaggedPill flagged reason={flag.reason} />}
+                        {sentiment && <SentimentPill sentiment={sentiment} />}
+                      </div>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{entrySnippet(e)}</p>
+                    </div>
 
-                          <div className="min-w-0 flex-1 space-y-0.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">{entryTitle(e)}</span>
-                              {flag?.flagged && <FlaggedPill flagged reason={flag.reason} />}
-                              {sentiment && <SentimentPill sentiment={sentiment} />}
-                            </div>
-                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{entrySnippet(e)}</p>
-                          </div>
-
-                          <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-500 dark:text-zinc-400 shrink-0">
-                            <Clock size={9} />
-                            {formatTimeBadge(e.at)}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                    <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-500 dark:text-zinc-400 shrink-0">
+                      <Clock size={9} />
+                      {formatEntryTime(e.at)}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

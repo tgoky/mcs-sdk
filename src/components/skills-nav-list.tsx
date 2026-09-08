@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Loader2, Settings2, BarChart3 } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { ChevronDown, Loader2, Plus, Settings2 } from "lucide-react";
 import { SKILL_IDS, SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { REP_SKILL_IDS, REP_SKILL_MANIFEST, type RepSkillId } from "@/lib/rep-skill-manifest";
 import type { ProductId } from "@/lib/product-catalog";
@@ -64,11 +65,27 @@ function toggleEndpoint(engagementId: string, workerId: WorkerId): string {
  * first place; keeping that one job in one place is the whole point of
  * this pass).
  *
- * Configure and View are real navigations, not WorkersPanel's inline
- * expand — the sidebar is 240px wide, nowhere near enough room for any
- * of the five config forms (multi-column layouts, a template-picker
- * grid), so this doesn't try to force that pattern where it structurally
- * can't fit, same conclusion already reached before this rebuild.
+ * Configure is a real navigation, not WorkersPanel's inline expand — the
+ * sidebar is 240px wide, nowhere near enough room for any of the five
+ * config forms (multi-column layouts, a template-picker grid), so this
+ * doesn't try to force that pattern where it structurally can't fit, same
+ * conclusion already reached before this rebuild. It carries `from` (this
+ * sidebar renders on every dashboard page, not just the engagement one) so
+ * the bridge page's Back button returns here instead of always landing on
+ * the engagement page regardless of where the click actually came from.
+ *
+ * No separate "Analytics" action here — the row's own name link already
+ * goes to the right per-client destination for this skill (its own page,
+ * the shared RM findings page, or a run-history anchor on the engagement
+ * page — see workerPrimaryHref), so a second icon pointing at the
+ * cross-workspace aggregate page would just be a worse duplicate of the
+ * one click already sitting on the label.
+ *
+ * Owns its own section header (collapse toggle + a shortcut into the
+ * Library to enable another skill) rather than having WorkSidebar render
+ * a static one above it — the chevron was previously decorative with no
+ * click handler, and there was no way to get to the Library from here at
+ * all short of leaving via Home.
  */
 function InstalledSkillsList({
   entries,
@@ -79,6 +96,8 @@ function InstalledSkillsList({
   engagementId: string | null;
   needsAttentionWorkerIds?: Set<string>;
 }) {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
   const [removedIds, setRemovedIds] = useState<Set<WorkerId>>(new Set());
   const [busyIds, setBusyIds] = useState<Set<WorkerId>>(new Set());
   const [errorId, setErrorId] = useState<WorkerId | null>(null);
@@ -107,94 +126,131 @@ function InstalledSkillsList({
     }
   }
 
-  if (visible.length === 0) {
-    return (
+  const header = (
+    <div className="flex items-center gap-1.5 px-2 py-1.5">
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        aria-expanded={!collapsed}
+        className="flex flex-1 min-w-0 items-center gap-1.5 text-[13px] font-bold text-zinc-600 dark:text-zinc-300 tracking-tight cursor-pointer"
+      >
+        <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${collapsed ? "-rotate-90" : ""}`} />
+        <span>Installed Skills</span>
+      </button>
       <Link
         href="/dashboard/library"
-        className="block rounded-[10px] border border-dashed border-zinc-300 dark:border-zinc-700 px-3 py-3 text-center text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors"
+        title="Enable a new skill"
+        aria-label="Enable a new skill"
+        className="p-1 rounded text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors shrink-0"
       >
-        No skills installed yet — visit the Library to turn one on.
+        <Plus className="w-3.5 h-3.5" />
       </Link>
+    </div>
+  );
+
+  if (visible.length === 0) {
+    return (
+      <div className="space-y-1">
+        {header}
+        {!collapsed && (
+          <Link
+            href="/dashboard/library"
+            className="block rounded-[10px] border border-dashed border-zinc-300 dark:border-zinc-700 px-3 py-3 text-center text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors"
+          >
+            No skills installed yet — visit the Library to turn one on.
+          </Link>
+        )}
+      </div>
     );
   }
 
+  if (collapsed) {
+    return <div className="space-y-1">{header}</div>;
+  }
+
   return (
-    <div className="space-y-0.5">
-      {visible.map((entry) => {
-        const worker = WORKER_REGISTRY[entry.skillId];
-        const needsAttention = needsAttentionWorkerIds?.has(entry.skillId) ?? false;
-        const busy = busyIds.has(entry.skillId);
-        const viewHref = engagementId ? workerPrimaryHref(entry.skillId, engagementId) : null;
-        const configureHref =
-          worker.hasHingesPanel && engagementId ? `/dashboard/engagements/${engagementId}/bridges/${entry.skillId}` : null;
-        const analyticsHref = `/dashboard/analytics/${entry.skillId}`;
+    <div className="space-y-1">
+      {header}
+      <div className="grid grid-cols-2 gap-1.5 px-0.5">
+        {visible.map((entry) => {
+          const worker = WORKER_REGISTRY[entry.skillId];
+          const needsAttention = needsAttentionWorkerIds?.has(entry.skillId) ?? false;
+          const busy = busyIds.has(entry.skillId);
+          const viewHref = engagementId ? workerPrimaryHref(entry.skillId, engagementId) : null;
+          const configureHref =
+            worker.hasHingesPanel && engagementId
+              ? `/dashboard/engagements/${engagementId}/bridges/${entry.skillId}?from=${encodeURIComponent(pathname)}`
+              : null;
 
-        return (
-          <div
-            key={entry.skillId}
-            className="group flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-[#f0edf6] dark:hover:bg-zinc-800/60 transition-colors"
-          >
-            {entry.isRep ? (
-              <RepSkillBadge skill={entry.skillId as RepSkillId} size={18} />
-            ) : (
-              <SquishySkillBadge skill={entry.skillId} size={18} />
-            )}
-
-            {viewHref ? (
-              <Link
-                href={viewHref}
-                title={needsAttention ? `${entry.label} — failing on its most recent run` : entry.label}
-                className="min-w-0 flex-1 flex items-center gap-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors truncate"
-              >
-                <span className="truncate">{entry.label}</span>
-                {needsAttention && <AlertTriangle size={11} className="shrink-0 text-rose-500 dark:text-rose-400" />}
-              </Link>
-            ) : (
-              <span className="min-w-0 flex-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{entry.label}</span>
-            )}
-
-            <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-              {configureHref && (
-                <Link
-                  href={configureHref}
-                  title={`Configure ${entry.label}`}
-                  className="p-1 rounded text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-                >
-                  <Settings2 size={12} />
-                </Link>
-              )}
-              <Link
-                href={analyticsHref}
-                title={`${entry.label} analytics`}
-                className="p-1 rounded text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-              >
-                <BarChart3 size={12} />
-              </Link>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => !busy && disable(entry.skillId)}
-              disabled={busy || !engagementId}
-              aria-label={`Turn off ${entry.label}`}
-              aria-pressed={true}
-              className={`relative inline-flex h-3.5 w-6 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 focus:outline-none bg-amber-400 dark:bg-amber-500 shadow-[0_0_6px_rgba(251,191,36,0.3)] ${
-                busy ? "opacity-50" : ""
-              }`}
+          return (
+            <div
+              key={entry.skillId}
+              className="group flex flex-col items-center gap-1 rounded-xl px-1.5 py-2 text-center hover:bg-[#f0edf6] dark:hover:bg-zinc-800/60 transition-colors"
             >
-              {busy ? (
-                <Loader2 size={10} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin text-white" />
-              ) : (
-                <span className="inline-block h-2.5 w-2.5 translate-x-[11px] transform rounded-full bg-white shadow-xs transition-transform duration-200" />
-              )}
-            </button>
+              <div className="relative">
+                {entry.isRep ? (
+                  <RepSkillBadge skill={entry.skillId as RepSkillId} size={22} />
+                ) : (
+                  <SquishySkillBadge skill={entry.skillId} size={22} />
+                )}
+                {needsAttention && (
+                  <span
+                    title={`${entry.label} — failing on its most recent run`}
+                    className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-zinc-950"
+                  />
+                )}
+              </div>
 
-            {errorId === entry.skillId && (
-              <p className="w-full text-[10px] text-rose-600 dark:text-rose-400 pl-1">Couldn&apos;t turn off — try again.</p>
-            )}
-          </div>
-        );
-      })}
+              {viewHref ? (
+                <Link
+                  href={viewHref}
+                  title={entry.label}
+                  className="w-full truncate text-[11px] font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                >
+                  {entry.label}
+                </Link>
+              ) : (
+                <span className="w-full truncate text-[11px] font-medium text-zinc-700 dark:text-zinc-300">{entry.label}</span>
+              )}
+
+              <div className="flex items-center justify-center gap-2 pt-0.5">
+                {configureHref ? (
+                  <Link
+                    href={configureHref}
+                    title={`Configure ${entry.label}`}
+                    className="p-0.5 rounded text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                  >
+                    <Settings2 size={12} />
+                  </Link>
+                ) : (
+                  <span className="w-3" aria-hidden="true" />
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => !busy && disable(entry.skillId)}
+                  disabled={busy || !engagementId}
+                  aria-label={`Turn off ${entry.label}`}
+                  aria-pressed={true}
+                  className={`relative inline-flex h-3.5 w-6 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 focus:outline-none bg-amber-400 dark:bg-amber-500 shadow-[0_0_6px_rgba(251,191,36,0.3)] ${
+                    busy ? "opacity-50" : ""
+                  }`}
+                >
+                  {busy ? (
+                    <Loader2 size={10} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin text-white" />
+                  ) : (
+                    <span className="inline-block h-2.5 w-2.5 translate-x-[11px] transform rounded-full bg-white shadow-xs transition-transform duration-200" />
+                  )}
+                </button>
+              </div>
+
+              {errorId === entry.skillId && (
+                <p className="text-[9px] leading-tight text-rose-600 dark:text-rose-400">Couldn&apos;t turn off</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
