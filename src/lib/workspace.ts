@@ -6,6 +6,8 @@ import { db } from "@/lib/db";
 import { engagements, workspacePackages, workspaces } from "@/models/schema";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
 import { isValidTimezone, isValidLocale, DEFAULT_TIMEZONE, DEFAULT_LOCALE } from "@/lib/timezones";
+import { isProductId, skillIdsForProduct } from "@/lib/product-catalog";
+import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 
 export const ACTIVE_WORKSPACE_COOKIE = "active_workspace_id";
 
@@ -296,6 +298,53 @@ export async function installPackageInWorkspace(
     .onConflictDoNothing({ target: [workspacePackages.workspaceId, workspacePackages.packageId] });
 
   return { installed: true };
+}
+
+/**
+ * Uninstalls a product from a workspace the caller owns, and explicitly
+ * disables every one of that product's skills for the workspace's own
+ * engagement(s) — not just deleting the workspacePackages row.
+ *
+ * Necessary, not just tidy: getEnabledWorkerIdsForEngagement's "enabled"
+ * check for Showtime falls back to evidence (engagement.stack existing)
+ * when there's no explicit engagementSkills row, a signal that has
+ * nothing to do with workspacePackages and would keep reading as
+ * "enabled" — an uninstall that only removed the package row would look
+ * uninstalled in the Library while every one of its skills kept quietly
+ * running. An explicit disabled row always outranks that evidence
+ * fallback (see getEnabledWorkerIdsForEngagement's own filter order), so
+ * this is the one write that actually turns a product off everywhere at
+ * once, for both products, not just Reputation Manager's real
+ * repIdentityGraphs-backed check.
+ */
+export async function uninstallPackageInWorkspace(
+  whopUserId: string,
+  workspaceId: string,
+  packageId: string
+): Promise<{ uninstalled: true } | { error: string }> {
+  const workspace = await getOwnedWorkspace(whopUserId, workspaceId);
+  if (!workspace) return { error: "Workspace not found." };
+
+  if (!isProductId(packageId)) {
+    return { error: "That product isn't recognized." };
+  }
+
+  const workspaceEngagements = await db
+    .select({ engagementId: engagements.engagementId })
+    .from(engagements)
+    .where(and(eq(engagements.workspaceId, workspaceId), isNull(engagements.deletedAt)));
+
+  const skillIds = skillIdsForProduct(packageId);
+  await Promise.all([
+    db
+      .delete(workspacePackages)
+      .where(and(eq(workspacePackages.workspaceId, workspaceId), eq(workspacePackages.packageId, packageId))),
+    ...workspaceEngagements.flatMap((e) =>
+      skillIds.map((skillId) => setSkillEnabledForEngagement(e.engagementId, skillId, false))
+    ),
+  ]);
+
+  return { uninstalled: true };
 }
 
 /** Explicit entitlement check for product routes and mutations. */
