@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Unified Tools Platform",
+  title: "mudd 1.34",
   description: "Showtime Revenue Infrastructure Panel",
 };
 
