@@ -8,6 +8,8 @@ import {
   ArrowUpRight,
   X,
   AtSign,
+  ChevronRight,
+  Sparkles,
 } from "lucide-react";
 import { PrefillLoader } from "@/components/prefill-loader";
 import { AnySkillBadge } from "@/components/any-skill-badge";
@@ -18,6 +20,23 @@ interface ChatMessage {
   content: string;
   toolCalls?: { name: string; ok: boolean; message: string }[];
   links?: { label: string; href: string }[];
+  /** ISO timestamp — real, from the DB on reload (chat-threads.ts's
+   * loadThreadForDisplay) or stamped at the moment a live message is
+   * added (send/reply) below. Backs the date/time dividers between
+   * messages, so it's always a genuine time, never a placeholder. */
+  createdAt: string;
+}
+
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+/** "Jun 14, 2026 at 9:30 AM" — a divider between messages separated by a
+ * real gap, the same convention iMessage uses instead of stamping every
+ * bubble individually. */
+function formatDivider(iso: string): string {
+  const d = new Date(iso);
+  const datePart = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const timePart = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${datePart} at ${timePart}`;
 }
 
 const THREAD_STORAGE_KEY = "mcs-teammates-active-thread-id";
@@ -139,7 +158,6 @@ export function TeammatesChat({
 } = {}) {
   const isFull = size === "full";
   const textSize = isFull ? "text-sm" : "text-xs";
-  const labelSize = isFull ? "text-xs" : "text-[10px]";
   const emptyTitleSize = isFull ? "text-base" : "text-xs";
   const emptySubSize = isFull ? "text-sm" : "text-[11px]";
   const emptyMaxWidth = isFull ? "max-w-[360px]" : "max-w-[240px]";
@@ -156,7 +174,6 @@ export function TeammatesChat({
   const dropdownItemTextSize = isFull ? "text-sm" : "text-xs";
   const sendButtonSize = isFull ? "w-8 h-8" : "w-6 h-6";
   const sendIconSize = isFull ? 15 : 13;
-  const dotSize = isFull ? "w-2 h-2" : "w-1.5 h-1.5";
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -170,6 +187,13 @@ export function TeammatesChat({
   const [threadId, setThreadId] = useState<string | null>(() =>
     initialThreadId !== undefined ? initialThreadId : readStoredThreadId()
   );
+  // Real conversation name for the header below — the same title the
+  // rail shows (teammates-thread-rail.tsx), read from this thread's own
+  // record rather than invented. "Workers" is the assistant's own
+  // established name in this file (MENTIONABLE_SKILLS, the empty-state
+  // copy), not a placeholder — the honest default before any thread
+  // exists to have its own title yet.
+  const [threadTitle, setThreadTitle] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -198,6 +222,7 @@ export function TeammatesChat({
       })
       .then((data) => {
         if (!cancelled && data?.messages) setMessages(data.messages);
+        if (!cancelled && typeof data?.title === "string") setThreadTitle(data.title);
       })
       .catch(() => {
         if (!cancelled) setError("Couldn't reload the conversation.");
@@ -248,7 +273,7 @@ export function TeammatesChat({
       baseText,
     ].filter(Boolean).join(" ");
 
-    setMessages((prev) => [...prev, { role: "user", content: fullText }]);
+    setMessages((prev) => [...prev, { role: "user", content: fullText, createdAt: new Date().toISOString() }]);
     if (overrideText === undefined) {
       setInput("");
       setTaggedSkills([]);
@@ -276,6 +301,7 @@ export function TeammatesChat({
         writeStoredThreadId(data.threadId);
       }
       if (data.threadId && typeof data.title === "string") {
+        setThreadTitle(data.title);
         onThreadEvent?.({ id: data.threadId, title: data.title });
       }
 
@@ -286,6 +312,7 @@ export function TeammatesChat({
           content: data.reply ?? "",
           toolCalls: data.toolCalls ?? [],
           links: data.links ?? [],
+          createdAt: new Date().toISOString(),
         },
       ]);
     } catch {
@@ -300,8 +327,29 @@ export function TeammatesChat({
     label: s.label,
   }));
 
+  const headerName = threadTitle ?? "Workers";
+
   return (
     <div className="flex flex-col h-full text-zinc-900 dark:text-zinc-100 min-h-0">
+      {/* Conversation header — centered avatar + name pill, same shape a
+          person-to-person chat header uses. There's no real photo for an
+          AI assistant, so the avatar is a plain gradient + icon rather
+          than a fabricated portrait; the name is this thread's own real
+          title (or "Workers" before one exists), never invented. */}
+      <div className="flex flex-col items-center gap-1.5 shrink-0 pt-4 pb-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+        <div
+          className={`${isFull ? "w-14 h-14" : "w-10 h-10"} rounded-full bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center text-white shadow-sm`}
+        >
+          <Sparkles size={isFull ? 22 : 16} className="fill-white/30" />
+        </div>
+        <div
+          className={`flex items-center gap-1 px-3 py-1 rounded-full bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-zinc-100 ${isFull ? "text-sm" : "text-xs"}`}
+        >
+          <span className="truncate max-w-[220px]">{headerName}</span>
+          <ChevronRight size={isFull ? 14 : 12} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
+        </div>
+      </div>
+
       {/* Message Stream */}
       <div className={`flex-1 overflow-y-auto ${streamPadding} ${textSize}`}>
         <div className={`${streamColumn} min-h-full ${streamGap}`}>
@@ -325,32 +373,23 @@ export function TeammatesChat({
 
           {messages.map((m, i) => {
             const isUser = m.role === "user";
+            const prev = messages[i - 1];
+            const showDivider = i === 0 || (prev && new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() > ONE_HOUR_MS);
             return (
-              <div
-                key={i}
-                className={`flex flex-col space-y-1 ${
-                  isUser ? "items-end" : "items-start"
-                }`}
-              >
-                <div className={`flex items-center gap-1.5 px-1 font-medium text-zinc-500 dark:text-zinc-400 ${labelSize}`}>
-                  {!isUser ? (
-                    <>
-                      <span className={`${dotSize} rounded-full bg-zinc-400 dark:bg-zinc-500`} />
-                      <span>Worker</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>You</span>
-                      <span className={`${dotSize} rounded-full bg-zinc-600 dark:bg-zinc-400`} />
-                    </>
-                  )}
-                </div>
-
+              <div key={i} className="space-y-3">
+                {showDivider && (
+                  <p className="text-center text-[11px] font-semibold text-zinc-400 dark:text-zinc-600">{formatDivider(m.createdAt)}</p>
+                )}
                 <div
-                  className={`${bubbleMaxWidth} rounded-2xl ${bubblePadding} ${textSize} backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)] border transition-colors ${
+                  className={`flex flex-col space-y-1 ${
+                    isUser ? "items-end" : "items-start"
+                  }`}
+                >
+                <div
+                  className={`${bubbleMaxWidth} rounded-2xl ${bubblePadding} ${textSize} transition-colors ${
                     isUser
-                      ? "bg-zinc-900/90 dark:bg-zinc-800/80 text-zinc-100 border-white/10 dark:border-white/10"
-                      : "bg-white/50 dark:bg-zinc-900/40 text-zinc-900 dark:text-zinc-100 border-white/60 dark:border-white/10"
+                      ? "bg-zinc-800 dark:bg-zinc-700 text-white rounded-br-md"
+                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-bl-md"
                   }`}
                 >
                   <FormattedMessage content={m.content} mentionPillTextSize={isFull ? "text-xs" : "text-[11px]"} />
@@ -385,6 +424,7 @@ export function TeammatesChat({
                     </div>
                   )}
                 </div>
+                </div>
               </div>
             );
           })}
@@ -400,17 +440,21 @@ export function TeammatesChat({
         </div>
       </div>
 
-      {/* Floating Composer Container (No full-bleed line or shelf background) */}
+      {/* Composer — a plain bordered pill matching the app's other real
+          inputs (bg-white/bg-zinc-900, border-zinc-200/border-zinc-800),
+          not the dark-tinted glass box this used to be: that box stayed
+          the same dark translucent fill in light mode too, which read as
+          just wrong there instead of merely "a different theme." */}
       <div className={`relative shrink-0 ${composerPadding}`}>
         <div className={composerColumn}>
           {showMentions && (
-            <div className="absolute bottom-full left-2 mb-2 w-52 rounded-2xl bg-white/70 dark:bg-zinc-900/70 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] overflow-hidden z-50">
+            <div className="absolute bottom-full left-2 mb-2 w-52 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-lg overflow-hidden z-50">
               {filteredMentions.map((s) => (
                 <button
                   key={s.token}
                   type="button"
                   onClick={() => addSkillTag(s.token)}
-                  className={`flex items-center gap-2 w-full text-left px-3 py-2 font-medium hover:bg-white/50 dark:hover:bg-white/10 text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer ${dropdownItemTextSize}`}
+                  className={`flex items-center gap-2 w-full text-left px-3 py-2 font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer ${dropdownItemTextSize}`}
                 >
                   <AnySkillBadge skill={s.token} size={16} />
                   <span>@{s.token}</span>
@@ -419,8 +463,8 @@ export function TeammatesChat({
             </div>
           )}
 
-          {/* Unified Floating Input Box */}
-          <div className={`flex flex-col gap-2 rounded-2xl bg-zinc-900/40 dark:bg-zinc-900/60 backdrop-blur-xl border border-zinc-200/20 dark:border-zinc-800/80 ${inputCardPadding} shadow-lg focus-within:border-zinc-300/40 dark:focus-within:border-zinc-700 transition-all duration-200`}>
+          {/* Message input pill */}
+          <div className={`flex flex-col gap-2 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 ${inputCardPadding} shadow-sm focus-within:border-zinc-300 dark:focus-within:border-zinc-700 transition-colors duration-200`}>
             <div className="flex flex-wrap items-center gap-1.5 min-h-[28px]">
               {taggedSkills.map((token) => {
                 const skill = MENTIONABLE_SKILLS.find((s) => s.token === token);

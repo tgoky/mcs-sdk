@@ -165,5 +165,6 @@ export async function loadThreadForDisplay(threadId: string) {
     content: r.displayText ?? "",
     toolCalls: r.toolCalls ?? [],
     links: r.links ?? [],
+    createdAt: r.createdAt.toISOString(),
   }));
 }
