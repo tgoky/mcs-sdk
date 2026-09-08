@@ -91,10 +91,10 @@ export function WorkerCard({
     try {
       const response = await fetch(`/api/engagements/${engagementId}/workers/${worker.id}/enable`, { method: "POST" });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error ?? `Could not install ${worker.name}.`);
+      if (!response.ok) throw new Error(body.error ?? `Could not enable ${worker.name}.`);
       router.refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : `Could not install ${worker.name}.`);
+      setError(cause instanceof Error ? cause.message : `Could not enable ${worker.name}.`);
     } finally {
       setPending(false);
     }
@@ -110,7 +110,7 @@ export function WorkerCard({
           </div>
           {enabled && (
             <span className="shrink-0 rounded-md bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 uppercase">
-              Installed
+              Enabled
             </span>
           )}
         </div>
@@ -195,7 +195,7 @@ export function WorkerCard({
             title={!engagementId ? "Create a client first" : undefined}
             className="inline-flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3.5 py-2 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer"
           >
-            {pending ? "Installing…" : "Install"}
+            {pending ? "Enabling…" : "Enable"}
           </button>
         )}
       </div>

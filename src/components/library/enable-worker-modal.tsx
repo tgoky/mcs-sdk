@@ -95,7 +95,7 @@ export function EnablePileOnModal({
         body: JSON.stringify(skip ? {} : { smsPlatform, adDataPlatform }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error ?? "Could not install Pile-On.");
+      if (!res.ok) throw new Error(body?.error ?? "Could not enable Pile-On.");
       writeStoredMode("form");
       onEnabled();
     } catch (e) {
@@ -106,7 +106,7 @@ export function EnablePileOnModal({
   }
 
   return (
-    <Modal title="Install Pile-On" onClose={onClose} maxWidthClass="max-w-xl">
+    <Modal title="Enable Pile-On" onClose={onClose} maxWidthClass="max-w-xl">
       <div className="space-y-4 font-sans">
         <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs w-fit">
           <button
@@ -188,7 +188,7 @@ export function EnablePileOnModal({
                 className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
               >
                 {pending ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
-                Install Pile-On
+                Enable Pile-On
               </button>
             </div>
           </div>
@@ -197,7 +197,7 @@ export function EnablePileOnModal({
             <TeammatesChat
               size="compact"
               initialThreadId={null}
-              initialPendingMessage={`Install Pile-On for ${buyerName ?? "this client"} (engagementId: ${engagementId})`}
+              initialPendingMessage={`Enable Pile-On for ${buyerName ?? "this client"} (engagementId: ${engagementId})`}
               onThreadEvent={() => {
                 writeStoredMode("chat");
               }}

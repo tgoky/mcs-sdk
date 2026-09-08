@@ -1213,10 +1213,19 @@ export function QueuePanel({
 
   return (
     <div className="space-y-3 w-full font-sans antialiased text-zinc-800 dark:text-zinc-300 select-none">
-      {/* TOP ROW (NORTH): [ All | Clients ] Toggle on Left | Title on Right */}
+      {/* TOP ROW (NORTH): scope indicator on Left | Title on Right.
+          The All/Clients toggle only earns its place when this workspace
+          actually holds more than one client — a leftover legacy workspace
+          from before one-workspace-one-client, whose engagements got
+          bundled together by ensureLegacyWorkspace's backfill (see
+          workspace.ts). Every workspace created since then has exactly one
+          client, for whom an "All vs. Clients" switch has nothing to
+          switch between — that case gets the client's own identity chip
+          instead, so the space still says something instead of offering a
+          choice with one option. */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="w-full md:w-64 shrink-0">
-          {clients.length > 0 && (
+          {clients.length > 1 ? (
             <div role="tablist" className="grid grid-cols-2 p-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800 text-xs font-medium">
               <button
                 type="button"
@@ -1258,7 +1267,21 @@ export function QueuePanel({
                 Clients
               </button>
             </div>
-          )}
+          ) : clients.length === 1 ? (
+            <Link
+              href={`/dashboard/engagements/${clients[0].engagementId}`}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              title="Open client engagement"
+            >
+              <span className="truncate flex-1">{clients[0].buyer}</span>
+              {clients[0].pausedAt && (
+                <span className="shrink-0 text-[10px] font-mono font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                  Paused
+                </span>
+              )}
+              <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
+            </Link>
+          ) : null}
         </div>
 
         <div className="flex-1 flex items-center justify-between w-full min-w-0 pl-1">

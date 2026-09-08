@@ -573,12 +573,20 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
     refresh(controller.signal);
   }, [refresh]);
 
+  // A "filter by client" chip only means something once a workspace's
+  // runs actually span more than one client — a leftover legacy workspace
+  // from before one-workspace-one-client (see queue-panel.tsx's own note
+  // on ensureLegacyWorkspace's backfill). Every workspace created since
+  // then has exactly one client, so clientChipDefs resolves to 0 or 1
+  // chip there — a filter with nothing to choose between, not a real one.
+  const usefulClientChipDefs = clientChipDefs.length > 1 ? clientChipDefs : [];
+
   const chipDefs = useMemo(
     () =>
       lockedSkill
-        ? [...clientChipDefs, ...STATUS_ACCOUNT_CHIP_DEFS]
-        : [...MODULE_CHIP_DEFS, ...clientChipDefs, ...STATUS_ACCOUNT_CHIP_DEFS],
-    [lockedSkill, clientChipDefs]
+        ? [...usefulClientChipDefs, ...STATUS_ACCOUNT_CHIP_DEFS]
+        : [...MODULE_CHIP_DEFS, ...usefulClientChipDefs, ...STATUS_ACCOUNT_CHIP_DEFS],
+    [lockedSkill, usefulClientChipDefs]
   );
 
   const tabCounts = useMemo(() => {

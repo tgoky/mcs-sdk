@@ -23,7 +23,7 @@ export function RecentEngagementsSection({ recent }: { recent: RecentEngagement[
       <>
         <div className="my-3 border-t border-zinc-200/80 dark:border-sidebar-border" />
         <div className="px-2.5 pb-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 font-mono tracking-wider">
-         Installed Skills
+         Enabled Skills
         </div>
         <SkillsNavList />
       </>

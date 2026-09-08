@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ChevronLeft, Search } from "lucide-react";
+import { ChevronLeft, ChevronDown, ChevronRight, Search } from "lucide-react";
 import { PRODUCT_IDS, skillIdsForProduct } from "@/lib/product-catalog";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
 import type { WorkerId } from "@/lib/worker-registry";
@@ -41,6 +41,7 @@ export function LibraryMarketplaceClient({
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusSectionOpen, setStatusSectionOpen] = useState(true);
 
   const enabledSet = useMemo(() => new Set(enabledWorkerIds), [enabledWorkerIds]);
   const installedSet = useMemo(() => new Set(installedProductIds), [installedProductIds]);
@@ -135,58 +136,83 @@ export function LibraryMarketplaceClient({
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-1 rounded-xl border border-border text-xs font-semibold">
-            {(["all", "installed", "not_installed"] as const).map((id) => (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="lg:col-span-3 space-y-5 text-xs text-zinc-700 dark:text-zinc-400">
+            <div className="space-y-2.5 pb-4 border-b border-zinc-200 dark:border-zinc-800">
               <button
-                key={id}
                 type="button"
-                onClick={() => setStatusFilter(id)}
-                className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
-                  statusFilter === id
-                    ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs"
-                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
-                }`}
+                onClick={() => setStatusSectionOpen((v) => !v)}
+                className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer"
               >
-                {id === "all" ? "All" : id === "installed" ? "Installed" : "Not installed"}
+                <span>Status</span>
+                {statusSectionOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
               </button>
-            ))}
+              {statusSectionOpen && (
+                <div className="space-y-1.5 pt-1">
+                  {(
+                    [
+                      { id: "all", label: "All", count: products.length },
+                      { id: "installed", label: "Installed", count: installedCount },
+                      { id: "not_installed", label: "Not installed", count: products.length - installedCount },
+                    ] as const
+                  ).map((opt) => (
+                    <label
+                      key={opt.id}
+                      className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                    >
+                      <input
+                        type="radio"
+                        name="status"
+                        checked={statusFilter === opt.id}
+                        onChange={() => setStatusFilter(opt.id)}
+                        className="accent-zinc-900 dark:accent-white focus:ring-0 cursor-pointer"
+                      />
+                      <span>
+                        {opt.label} <span className="text-zinc-400 dark:text-zinc-600 font-mono">({opt.count})</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="relative w-full sm:w-72">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search workers…"
-              className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-amber-400 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400 shadow-sm"
-            />
+          <div className="lg:col-span-9 space-y-4">
+            <div className="relative w-full sm:w-72 sm:ml-auto">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search workers…"
+                className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-amber-400 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400 shadow-sm"
+              />
+            </div>
+
+            {filtered.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                No workers match these filters.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
+                {filtered.map((p) => (
+                  <ProductCard
+                    key={p.id}
+                    productId={p.id}
+                    name={p.name}
+                    description={p.description}
+                    installed={p.installed}
+                    skillIds={p.skillIds}
+                    isRep={p.isRep}
+                    enabledCount={p.enabledCount}
+                    runsInWindow={p.runsInWindow}
+                    successRate={p.successRate}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
-
-        {filtered.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-            No workers match these filters.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
-            {filtered.map((p) => (
-              <ProductCard
-                key={p.id}
-                productId={p.id}
-                name={p.name}
-                description={p.description}
-                installed={p.installed}
-                skillIds={p.skillIds}
-                isRep={p.isRep}
-                enabledCount={p.enabledCount}
-                runsInWindow={p.runsInWindow}
-                successRate={p.successRate}
-              />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

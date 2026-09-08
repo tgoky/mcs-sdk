@@ -77,11 +77,31 @@ export interface WorkerConfigField {
   derivableFrom?: ClientProfileFact;
 }
 
+/**
+ * A functional grouping shared across both products, for the Library's
+ * per-worker Skill grid to filter by once a worker's skill count grows
+ * past a glance-able handful (today: 5 Showtime, 6 Reputation Manager —
+ * "soon we will have 40+ skills" is the case this exists for, not today's
+ * count). Cross-product on purpose: "Monitoring" or "Setup" means the
+ * same thing whether the worker is Showtime or Reputation Manager, so a
+ * category isn't duplicated per product the way configFields are.
+ */
+export type WorkerCategory = "Setup" | "Monitoring" | "Outreach & Sequences" | "Analysis & Briefing" | "Crisis & Recovery";
+
+export const WORKER_CATEGORY_LIST: WorkerCategory[] = [
+  "Setup",
+  "Monitoring",
+  "Outreach & Sequences",
+  "Analysis & Briefing",
+  "Crisis & Recovery",
+];
+
 export interface WorkerDefinition {
   id: WorkerId;
   productId: ProductId;
   name: string;
   description: string;
+  category: WorkerCategory;
   runOnSetup: boolean;
   hasHingesPanel: boolean;
   /**
@@ -586,6 +606,25 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
   "rep-crisis-response": [],
 };
 
+// Single source of truth for category, kept out of skill-manifest.ts and
+// rep-skill-manifest.ts on purpose — those files stay each product's own
+// id/name/description authority (see this module's header), while
+// category is the one cross-product dimension, so it lives where the two
+// catalogs actually merge.
+const WORKER_CATEGORIES: Record<WorkerId, WorkerCategory> = {
+  "pin-down": "Setup",
+  "pile-on": "Outreach & Sequences",
+  "pre-call-read": "Analysis & Briefing",
+  "win-back": "Outreach & Sequences",
+  "leak-map": "Analysis & Briefing",
+  "rep-onboarding": "Setup",
+  "rep-engine-panel": "Monitoring",
+  "rep-trustpilot-watch": "Monitoring",
+  "rep-reddit-watch": "Monitoring",
+  "rep-twitter-watch": "Monitoring",
+  "rep-crisis-response": "Crisis & Recovery",
+};
+
 function buildRegistry(): Record<WorkerId, WorkerDefinition> {
   const registry = {} as Record<WorkerId, WorkerDefinition>;
 
@@ -596,6 +635,7 @@ function buildRegistry(): Record<WorkerId, WorkerDefinition> {
       productId: "showtime",
       name: entry.name,
       description: entry.description,
+      category: WORKER_CATEGORIES[id],
       runOnSetup: entry.runOnSetup,
       hasHingesPanel: entry.hasHingesPanel,
       configFields: SHOWTIME_CONFIG_FIELDS[id] ?? [],
@@ -609,6 +649,7 @@ function buildRegistry(): Record<WorkerId, WorkerDefinition> {
       productId: "reputation-manager",
       name: entry.name,
       description: entry.description,
+      category: WORKER_CATEGORIES[id],
       runOnSetup: entry.runOnSetup,
       hasHingesPanel: entry.hasHingesPanel,
       configFields: REP_CONFIG_FIELDS[id] ?? [],

@@ -135,7 +135,7 @@ function InstalledSkillsList({
         className="flex flex-1 min-w-0 items-center gap-1.5 text-[13px] font-bold text-zinc-600 dark:text-zinc-300 tracking-tight cursor-pointer"
       >
         <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${collapsed ? "-rotate-90" : ""}`} />
-        <span>Installed Skills</span>
+        <span>Enabled Skills</span>
       </button>
       <Link
         href="/dashboard/library"

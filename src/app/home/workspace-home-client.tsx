@@ -120,7 +120,7 @@ function WorkspaceCard({
         {hasShowtime && (
           <div className="pt-1">
             <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">
-              Installed Skills
+              Enabled Skills
             </p>
             <div className="flex items-center -space-x-1.5 overflow-hidden">
               {SKILL_IDS.map((skillId) => (
@@ -351,7 +351,7 @@ export function WorkspaceHomeClient({
             <thead>
               <tr className="border-b border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/40 text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
                 <th className="py-3 pl-4 pr-3">Workspace Name</th>
-                <th className="py-3 px-3">Package & Installed Skills</th>
+                <th className="py-3 px-3">Package & Enabled Skills</th>
                 <th className="py-3 px-3">Status</th>
                 <th className="py-3 px-3">Created</th>
                 <th className="py-3 pr-4 pl-3 text-right">Action</th>
