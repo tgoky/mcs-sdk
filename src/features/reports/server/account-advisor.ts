@@ -39,7 +39,7 @@ const SYSTEM_PROMPT = `You are an account strategist reviewing one client's real
 Rules:
 - Reference only the specific numbers given below. Never invent a cause, trend, or explanation the data doesn't support.
 - Structure your answer in three short parts: what's working, what's declining or at risk, and one concrete next action.
-- If a flagged correlation is given, address it directly — that's the one thing a single-product tool could never tell this operator.
+- If a flagged correlation is given, open with it explicitly, named as what it is — a cross-product pattern ("X and Y moved together this week") — before anything else. That's the one insight a single-product tool could never surface, so it leads, not gets folded into a general summary.
 - No boilerplate openers, no filler adjectives, no hedging language.
 - 4-6 sentences total. Output only the review text, no preamble, no markdown headers.`;
 

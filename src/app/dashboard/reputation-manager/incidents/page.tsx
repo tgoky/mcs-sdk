@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { AlertTriangle, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { engagements, repIncidents } from "@/models/schema";
 import { desc, eq, inArray } from "drizzle-orm";
@@ -7,20 +6,10 @@ import { getSession } from "@/lib/session";
 import { getActiveWorkspace, isPackageInstalledInWorkspace } from "@/lib/workspace";
 import { getRepEnrolledEngagementIds } from "@/lib/rep-engagements";
 import { redirect } from "next/navigation";
+import { IncidentRow } from "./incident-row";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-const STATUS_STYLES: Record<string, string> = {
-  open: "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-400",
-  acknowledged: "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-400",
-  resolved: "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-400",
-};
-
-/** "coordinated_review_bomb" -> "Coordinated review bomb" — signalClass is stored as the SIGNAL_CLASSES_FORCE_TRIGGER id verbatim (rep-thresholds.ts). */
-function signalClassLabel(signalClass: string): string {
-  return signalClass.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
-}
 
 /**
  * Reputation Manager's Meetings-equivalent primary-rail destination —
@@ -76,35 +65,7 @@ export default async function ReputationManagerIncidentsPage() {
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 mt-4 pr-0.5">
           {incidents.map((incident) => (
-            <Link
-              key={incident.id}
-              href={`/dashboard/engagements/${incident.engagementId}`}
-              className="flex items-start justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3.5 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors"
-            >
-              <div className="flex items-start gap-3 min-w-0">
-                <AlertTriangle className="w-4 h-4 mt-0.5 text-rose-500 dark:text-rose-400 shrink-0" />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">{incident.buyer}</p>
-                    <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">severity {incident.severityScore}</span>
-                    {incident.signalClass && (
-                      <span
-                        className="text-[10px] font-semibold uppercase rounded-md border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 px-1.5 py-0.5"
-                        title="Declared regardless of severity score because of this signal class"
-                      >
-                        Force-triggered · {signalClassLabel(incident.signalClass)}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 line-clamp-2">{incident.summary}</p>
-                </div>
-              </div>
-              <span
-                className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_STYLES[incident.status] ?? STATUS_STYLES.open}`}
-              >
-                {incident.status}
-              </span>
-            </Link>
+            <IncidentRow key={incident.id} incident={incident} />
           ))}
         </div>
       )}

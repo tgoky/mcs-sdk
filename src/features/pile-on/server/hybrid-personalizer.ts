@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { pileOnSendLog } from "@/models/schema";
 import { deliverPersonalizedIntro } from "@/lib/platforms/email";
 import { runHybridWithBudget } from "@/lib/hybrid-budget";
+import { getBlockingReasons } from "@/lib/worker-blocking-conditions";
 
 /**
  * Pile-On recovery gap 3 — hybrid first-email personalization. The
@@ -36,6 +37,19 @@ export async function runHybridPersonalization(
   offerDetails: any,
   runId?: string
 ): Promise<HybridPersonalizationResult> {
+  // Cross-worker blend: skip AI tone-generation while this client has an
+  // open reputation incident — see worker-blocking-conditions.ts. The
+  // templated booking confirmation has already gone out via
+  // enrollInPreCallSequence before this function ever runs, so nothing
+  // about the prospect's confirmation is held up; this only withholds the
+  // extra AI-personalized, tone-sensitive intro.
+  const blockingReasons = await getBlockingReasons(engagementId);
+  if (blockingReasons.length > 0) {
+    const reason = blockingReasons.map((r) => r.reason).join(" ");
+    await logSendOutcome(engagementId, bookingId, prospectEmail, "fallback", 0, undefined, reason, runId);
+    return { sentVia: "fallback", latencyMs: 0, error: reason };
+  }
+
   const result = await runHybridWithBudget({
     system: `You are the email rewriting engine for Pile-On.
 Voice parameters: ${JSON.stringify(brandVoiceProfile ?? {})}

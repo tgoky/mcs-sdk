@@ -1,4 +1,5 @@
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
+import { getCompetitorContext } from "@/lib/worker-context-registry";
 
 export interface AdCreativeBrief {
   id: string;
@@ -12,6 +13,11 @@ export interface AdCreativeBrief {
 
 export interface AdCreativeBriefsInput {
   buyer: string;
+  /** Same optional enrichment as ScriptBuilderInput's — see
+   * worker-context-registry.ts. Only consumed by the main 4-pillar
+   * generator below, not regenerateObjectionsBrief (objection-handling
+   * doesn't naturally need a competitor callout). */
+  engagementId?: string;
   brandVoiceProfile?: any;
   offerDetails?: { name: string; price: string; icp: string; traffic_temperature: string };
   topCallQuestions?: string[];
@@ -78,6 +84,9 @@ export async function buildAdCreativeBriefs(
   // NEEDS_PROOF_BRIEF above for what fills its slot instead.
   const pillarsToGenerate = hasProof ? PILLARS : PILLARS.filter((p) => p.id !== "success_proof");
 
+  const competitorContext = input.engagementId ? await getCompetitorContext(input.engagementId) : null;
+  const competitorNames = (competitorContext?.competitors ?? []).map((c) => c.name).filter(Boolean);
+
   const system = `You are an ad creative strategist writing CREATIVE BRIEFS (not finished ad
 scripts) for ${input.buyer}. A brief tells a copywriter/video editor what
 to make — a hook, an angle, talking points, a suggested visual format, and
@@ -87,7 +96,7 @@ Match the tone described in this brand voice profile as closely as
 possible: ${JSON.stringify(input.brandVoiceProfile ?? {})}
 
 Offer: ${JSON.stringify(input.offerDetails ?? {})}
-Top call questions on file: ${JSON.stringify(input.topCallQuestions ?? [])}
+${competitorNames.length > 0 ? `Known competitors this prospect may be comparing against: ${competitorNames.join(", ")} — when it strengthens a brief, differentiate against them by name rather than speaking only in generic terms. Never fabricate a specific claim about a competitor.\n` : ""}Top call questions on file: ${JSON.stringify(input.topCallQuestions ?? [])}
 Top objections on file: ${JSON.stringify(input.topObjections ?? [])}
 ${hasProof ? `Existing proof on file: ${JSON.stringify(input.existingProof?.testimonials ?? [])}` : ""}
 

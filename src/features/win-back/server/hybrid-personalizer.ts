@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { winBackSendLog } from "@/models/schema";
 import { deliverPersonalizedIntro } from "@/lib/platforms/email";
 import { runHybridWithBudget } from "@/lib/hybrid-budget";
+import { getBlockingReasons } from "@/lib/worker-blocking-conditions";
 
 /**
  * Win-Back recovery gap 5 — "same recipe as Pile-On gap 3, applied to
@@ -37,6 +38,19 @@ export async function runWinBackHybridPersonalization(
   offerDetails: any,
   runId?: string
 ): Promise<WinBackHybridResult> {
+  // Cross-worker blend — same reasoning as Pile-On's own hybrid-
+  // personalizer.ts: skip the AI-personalized "we missed you" opening
+  // while a reputation incident is open for this client, rather than
+  // sending automated warm-tone copy blind to a live crisis. The
+  // templated recovery email itself still goes out via
+  // enrollInWinBackSequence before this function runs.
+  const blockingReasons = await getBlockingReasons(engagementId);
+  if (blockingReasons.length > 0) {
+    const reason = blockingReasons.map((r) => r.reason).join(" ");
+    await logSendOutcome(engagementId, enrollmentId, prospectEmail, "fallback", 0, undefined, reason);
+    return { sentVia: "fallback", latencyMs: 0, error: reason };
+  }
+
   const result = await runHybridWithBudget({
     system: `You are the email rewriting engine for Win-Back.
 Voice parameters: ${JSON.stringify(brandVoiceProfile ?? {})}

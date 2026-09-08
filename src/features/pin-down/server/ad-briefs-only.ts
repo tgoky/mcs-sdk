@@ -39,6 +39,7 @@ export async function runAdCreativeBriefsOnly(
       buildAdCreativeBriefs(
         {
           buyer: tenant.buyer,
+          engagementId: tenant.engagementId,
           brandVoiceProfile: tenant.brandVoiceProfile,
           offerDetails: tenant.offerDetails ?? undefined,
           topCallQuestions: tenant.topCallQuestions ?? undefined,

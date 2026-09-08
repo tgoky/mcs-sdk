@@ -70,6 +70,7 @@ export async function POST(
 
     const { briefs } = await buildAdCreativeBriefs({
       buyer: row.buyer,
+      engagementId: id,
       brandVoiceProfile: row.brandVoiceProfile,
       offerDetails: row.offerDetails ?? undefined,
       topCallQuestions: row.topCallQuestions ?? undefined,

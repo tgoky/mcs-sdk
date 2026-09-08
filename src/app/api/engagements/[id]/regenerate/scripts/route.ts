@@ -75,6 +75,7 @@ export async function POST(
 
     const scriptPack = await buildScriptPack({
       buyer: row.buyer,
+      engagementId: id,
       brandVoiceProfile: row.brandVoiceProfile,
       offerDetails: row.offerDetails ?? undefined,
       topCallQuestions: row.topCallQuestions ?? undefined,

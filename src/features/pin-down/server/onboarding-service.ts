@@ -432,6 +432,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
         buildAdCreativeBriefs(
           {
             buyer: buyerName,
+            engagementId,
             brandVoiceProfile: voiceProfile,
             offerDetails,
             topCallQuestions,
@@ -464,6 +465,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
         buildScriptPack(
           {
             buyer: buyerName,
+            engagementId,
             brandVoiceProfile: voiceProfile,
             offerDetails,
             topCallQuestions,

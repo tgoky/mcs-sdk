@@ -1,9 +1,16 @@
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
+import { getCompetitorContext } from "@/lib/worker-context-registry";
 
 export type CastingChoice = "founder_on_camera" | "coach_on_camera" | "animation" | "other";
 
 export interface ScriptBuilderInput {
   buyer: string;
+  /** When given, Reputation Manager's own competitor list for this client
+   * (if Identity Setup has run) enriches the script prompt — see
+   * worker-context-registry.ts. Optional and additive: omitting it just
+   * means no competitor line gets added, same output as before this
+   * existed. */
+  engagementId?: string;
   brandVoiceProfile?: any;
   offerDetails?: {
     name: string;
@@ -204,6 +211,13 @@ export async function buildScriptPack(input: ScriptBuilderInput, runId?: string)
   const breakoutTopics = selectBreakoutTopics(input.topCallQuestions ?? []);
   const testimonials = (input.existingProof?.testimonials ?? []).filter((t) => t.name && t.role && t.quote);
 
+  // Competitor awareness a client already gave Reputation Manager (Identity
+  // Setup) doesn't have to be re-typed into a Showtime brief — see
+  // worker-context-registry.ts. Silently absent when RM isn't enrolled or
+  // hasn't listed any, same as an empty brandVoiceProfile today.
+  const competitorContext = input.engagementId ? await getCompetitorContext(input.engagementId) : null;
+  const competitorNames = (competitorContext?.competitors ?? []).map((c) => c.name).filter(Boolean);
+
   const system = `You are a direct-response video scriptwriter writing SCRIPTS (word-for-word,
 not just an outline) for a post-booking confirmation page, for ${input.buyer}.
 ${host} will be on camera.
@@ -212,7 +226,7 @@ Match the tone in this brand voice profile as closely as possible:
 ${JSON.stringify(input.brandVoiceProfile ?? {})}
 
 Offer: ${JSON.stringify(input.offerDetails ?? {})}
-Approach for the hero video: ${approach} — ${APPROACH_BRIEF[approach]}
+${competitorNames.length > 0 ? `Known competitors this prospect may be comparing against: ${competitorNames.join(", ")} — when it strengthens a point, differentiate against them by name rather than speaking only in generic terms. Never fabricate a specific claim about a competitor.\n` : ""}Approach for the hero video: ${approach} — ${APPROACH_BRIEF[approach]}
 Target hero length: ~${targetLengthSeconds} seconds (roughly ${Math.round(targetLengthSeconds / 6)}-${Math.round(
     (targetLengthSeconds * 1.3) / 6
   )} words at a natural talking pace).

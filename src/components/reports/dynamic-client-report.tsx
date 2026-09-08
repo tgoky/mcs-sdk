@@ -18,6 +18,7 @@ import type { ReportPeriod } from "@/features/reports/server/report-service";
 import type { ReportBlockWithTrend } from "@/lib/worker-report-blocks";
 import { computeCorrelationFlags } from "@/lib/report-correlation";
 import { WorkerReportBlockGrid } from "./worker-report-block-grid";
+import { CompareView } from "./compare-view";
 import { WORKER_REGISTRY, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
 
 const PERIOD_TABS: { key: ReportPeriod; label: string }[] = [
@@ -139,6 +140,8 @@ export function DynamicClientReport({
           ))}
         </div>
       )}
+
+      <CompareView engagementId={engagementId} />
     </div>
   );
 }

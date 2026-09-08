@@ -46,6 +46,7 @@ export async function runScriptPackOnly(
       buildScriptPack(
         {
           buyer: tenant.buyer,
+          engagementId: tenant.engagementId,
           brandVoiceProfile: tenant.brandVoiceProfile,
           offerDetails: tenant.offerDetails ?? undefined,
           topCallQuestions: tenant.topCallQuestions ?? undefined,

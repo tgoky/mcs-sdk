@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   TrendingDown,
@@ -11,6 +11,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
+import type { CorrelationFlag } from "@/lib/report-correlation";
 import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
 import { StatusPill, toneFromSeverity } from "../_shared/status-pill";
@@ -46,6 +47,28 @@ export function LeakMapView({
   const [mode, setMode] = useState<RunViewMode>("calendar");
   const [filterText, setFilterText] = useState("");
   const [copiedReport, setCopiedReport] = useState(false);
+  const [correlationFlags, setCorrelationFlags] = useState<CorrelationFlag[]>([]);
+
+  // Cross-worker blend, read-only: this week's Showtime/Reputation
+  // Manager correlation for this client, if any — same computation
+  // Reports/Analytics already run (report-correlation.ts), fetched here
+  // since this is a client component with no direct DB access. Best-
+  // effort: a failed fetch just means no callout, never an error state,
+  // since this is supplementary context, not this view's core content.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/engagements/${detail.run.engagementId}/correlation-flags`)
+      .then((res) => (res.ok ? res.json() : { flags: [] }))
+      .then((data) => {
+        if (!cancelled) setCorrelationFlags(data.flags ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setCorrelationFlags([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail.run.engagementId]);
 
   const issues = useMemo(() => {
     if (!audit?.topIssues) return [];
@@ -163,6 +186,21 @@ export function LeakMapView({
                   </div>
                 )}
               </div>
+
+              {/* Reputation-aware hypothesis — see report-correlation.ts.
+                  Only ever renders when a real Showtime outcome and a
+                  real RM risk signal both moved unfavorably this same
+                  week for this client. */}
+              {correlationFlags.length > 0 && (
+                <div className="flex flex-col gap-1.5 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/40 dark:bg-orange-950/10 p-3">
+                  {correlationFlags.map((flag, i) => (
+                    <p key={i} className="flex items-start gap-2 text-xs leading-relaxed text-orange-800 dark:text-orange-300">
+                      <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                      <span>{flag.message}</span>
+                    </p>
+                  ))}
+                </div>
+              )}
 
               {/* Issues + Data Gaps */}
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-3 items-start">
