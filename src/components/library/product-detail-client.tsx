@@ -3,18 +3,27 @@
 // src/components/library/product-detail-client.tsx
 //
 // One Worker's own page (Showtime, Reputation Manager) — where its Skills
-// actually get enabled and configured, same as WorkersPanel's inline
-// Configure pattern, plus the top-level Install/Uninstall control that
-// belongs to the Worker itself, not to any one Skill inside it.
+// actually get enabled and configured. Layout ported back from the
+// pre-two-tier Library page (commit afcb504's
+// dashboard/library/showtime/page.tsx): a screenshot gallery, a "how a
+// client moves through it" step flow, then every skill listed vertically
+// underneath each other (not a card grid) — while keeping everything
+// built since then: real Install/Uninstall at the Worker level, the
+// Status/Categories filter sidebar, and Configure expanding inline
+// exactly where you clicked it (an accordion under that skill's own row)
+// instead of swapping the whole page or navigating to another one.
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ChevronDown, ChevronRight, Search, Download, Trash2, Loader2, X } from "lucide-react";
+import { ChevronLeft, ChevronDown, ChevronRight, Search, Download, Trash2, Loader2 } from "lucide-react";
 import { WORKER_CATEGORY_LIST, type WorkerCategory, type WorkerDefinition, type WorkerId } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
+import { SKILL_PLAYBOOKS } from "@/lib/skill-playbooks";
 import { WorkerCard } from "@/components/library/worker-card";
 import { StatChip } from "@/components/library/stat-chip";
+import { MediaGallery } from "@/components/library/media-gallery";
+import { SkillSequence } from "@/components/library/skill-sequence";
 import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
 import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
 import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
@@ -66,9 +75,18 @@ export function ProductDetailClient({
   const rates = workers.map((w) => statsById.get(w.id)?.successRate).filter((r): r is number => r !== null && r !== undefined);
   const successRate = rates.length > 0 ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length) : null;
 
-  // Only the categories this worker's own skills actually use — a
-  // 5-skill worker showing every cross-product category (most of them
-  // empty) would be noise, not a filter.
+  // Gallery and sequence are an always-visible orientation for the whole
+  // worker — real screenshots only exist for Showtime's 5 skills today
+  // (see skill-playbooks.ts), so a worker with none just doesn't render
+  // a gallery rather than show broken tiles.
+  const galleryItems = useMemo(
+    () =>
+      workers
+        .filter((w) => SKILL_PLAYBOOKS[w.id]?.image)
+        .map((w) => ({ id: w.id, name: w.name, badge: SKILL_PLAYBOOKS[w.id]!.badge, image: SKILL_PLAYBOOKS[w.id]!.image })),
+    [workers]
+  );
+
   const categoriesInUse = useMemo(
     () => WORKER_CATEGORY_LIST.filter((cat) => workers.some((w) => w.category === cat)),
     [workers]
@@ -100,8 +118,28 @@ export function ProductDetailClient({
     }
   }
 
+  function renderConfigForm(worker: WorkerDefinition) {
+    if (!engagementId) return null;
+    const close = () => setExpandedWorker(null);
+    if (worker.id === "leak-map") return <LeakMapConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
+    if (worker.id === "pre-call-read") return <PreCallReadConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
+    if (worker.id === "win-back") return <WinBackConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
+    if (worker.id === "rep-onboarding") return <RepOnboardingConfigForm engagementId={engagementId} onCancel={close} />;
+    if (worker.id === "pin-down") {
+      return (
+        <PinDownConfigForm
+          engagementId={engagementId}
+          onCancel={close}
+          onSaved={(result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : close())}
+          cancelLabel="Close"
+        />
+      );
+    }
+    return null;
+  }
+
   return (
-    <div className="space-y-6 font-sans antialiased">
+    <div className="space-y-8 font-sans antialiased">
       <div className="flex items-start gap-3">
         <Link
           href="/dashboard/library"
@@ -167,164 +205,174 @@ export function ProductDetailClient({
         </div>
       )}
 
-      {/* Same in-place swap OverviewStatsPanel's Tasks/Issues tiles use —
-          Configure hides the skill grid and renders the form transparently
-          in its place instead of a separate block appended below it. */}
-      {expandedWorker && engagementId ? (
-        <div className="space-y-4">
-          <button
-            type="button"
-            onClick={() => setExpandedWorker(null)}
-            className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
-          >
-            <X className="w-3.5 h-3.5" /> Close — back to skills
-          </button>
-
-          {expandedWorker === "leak-map" && (
-            <LeakMapConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "pre-call-read" && (
-            <PreCallReadConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "win-back" && (
-            <WinBackConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "rep-onboarding" && (
-            <RepOnboardingConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} />
-          )}
-          {expandedWorker === "pin-down" && (
-            <PinDownConfigForm
-              engagementId={engagementId}
-              onCancel={() => setExpandedWorker(null)}
-              onSaved={(result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : setExpandedWorker(null))}
-              cancelLabel="Close"
-            />
-          )}
+      {galleryItems.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider font-mono">
+            Interface &amp; Workflow Previews ({galleryItems.length})
+          </h2>
+          <MediaGallery items={galleryItems} />
         </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-3 space-y-5 text-xs text-zinc-700 dark:text-zinc-400">
-            <div className="space-y-2.5 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+      )}
+
+      {workers.length > 1 && (
+        <div className="space-y-3">
+          <h2 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider font-mono">
+            How a client moves through it
+          </h2>
+          <SkillSequence workers={workers} statsById={statsById} />
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="lg:col-span-3 space-y-5 text-xs text-zinc-700 dark:text-zinc-400">
+          <div className="space-y-2.5 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => toggleSection("status")}
+              className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer"
+            >
+              <span>Status</span>
+              {openSections.status ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            </button>
+            {openSections.status && (
+              <div className="space-y-1.5 pt-1">
+                {(
+                  [
+                    { id: "all", label: "All", count: workers.length },
+                    { id: "enabled", label: "Enabled", count: enabledCount },
+                    { id: "not_enabled", label: "Not enabled", count: workers.length - enabledCount },
+                  ] as const
+                ).map((opt) => (
+                  <label
+                    key={opt.id}
+                    className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                  >
+                    <input
+                      type="radio"
+                      name="status"
+                      checked={statusFilter === opt.id}
+                      onChange={() => setStatusFilter(opt.id)}
+                      className="accent-zinc-900 dark:accent-white focus:ring-0 cursor-pointer"
+                    />
+                    <span>
+                      {opt.label} <span className="text-zinc-400 dark:text-zinc-600 font-mono">({opt.count})</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {categoriesInUse.length > 1 && (
+            <div className="space-y-2.5">
               <button
                 type="button"
-                onClick={() => toggleSection("status")}
+                onClick={() => toggleSection("category")}
                 className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer"
               >
-                <span>Status</span>
-                {openSections.status ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                <span>Categories</span>
+                {openSections.category ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
               </button>
-              {openSections.status && (
+              {openSections.category && (
                 <div className="space-y-1.5 pt-1">
-                  {(
-                    [
-                      { id: "all", label: "All", count: workers.length },
-                      { id: "enabled", label: "Enabled", count: enabledCount },
-                      { id: "not_enabled", label: "Not enabled", count: workers.length - enabledCount },
-                    ] as const
-                  ).map((opt) => (
+                  <label className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors">
+                    <input
+                      type="radio"
+                      name="category"
+                      checked={selectedCategory === "all"}
+                      onChange={() => setSelectedCategory("all")}
+                      className="accent-zinc-900 dark:accent-white focus:ring-0 cursor-pointer"
+                    />
+                    <span>All categories</span>
+                  </label>
+                  {categoriesInUse.map((cat) => (
                     <label
-                      key={opt.id}
+                      key={cat}
                       className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
                     >
                       <input
                         type="radio"
-                        name="status"
-                        checked={statusFilter === opt.id}
-                        onChange={() => setStatusFilter(opt.id)}
+                        name="category"
+                        checked={selectedCategory === cat}
+                        onChange={() => setSelectedCategory(cat)}
                         className="accent-zinc-900 dark:accent-white focus:ring-0 cursor-pointer"
                       />
-                      <span>
-                        {opt.label} <span className="text-zinc-400 dark:text-zinc-600 font-mono">({opt.count})</span>
-                      </span>
+                      <span>{cat}</span>
                     </label>
                   ))}
                 </div>
               )}
             </div>
-
-            {categoriesInUse.length > 1 && (
-              <div className="space-y-2.5">
-                <button
-                  type="button"
-                  onClick={() => toggleSection("category")}
-                  className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer"
-                >
-                  <span>Categories</span>
-                  {openSections.category ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                </button>
-                {openSections.category && (
-                  <div className="space-y-1.5 pt-1">
-                    <label className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors">
-                      <input
-                        type="radio"
-                        name="category"
-                        checked={selectedCategory === "all"}
-                        onChange={() => setSelectedCategory("all")}
-                        className="accent-zinc-900 dark:accent-white focus:ring-0 cursor-pointer"
-                      />
-                      <span>All categories</span>
-                    </label>
-                    {categoriesInUse.map((cat) => (
-                      <label
-                        key={cat}
-                        className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                      >
-                        <input
-                          type="radio"
-                          name="category"
-                          checked={selectedCategory === cat}
-                          onChange={() => setSelectedCategory(cat)}
-                          className="accent-zinc-900 dark:accent-white focus:ring-0 cursor-pointer"
-                        />
-                        <span>{cat}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="lg:col-span-9 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <p className="text-xs font-bold text-zinc-900 dark:text-white font-mono">
-                {filteredWorkers.length} {filteredWorkers.length === 1 ? "Skill" : "Skills"}
-              </p>
-              <div className="relative w-full sm:w-64">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search skills…"
-                  className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400"
-                />
-              </div>
-            </div>
-
-            {filteredWorkers.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                No skills match these filters.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 items-stretch">
-                {filteredWorkers.map((worker) => (
-                  <WorkerCard
-                    key={worker.id}
-                    worker={worker}
-                    enabled={enabledSet.has(worker.id)}
-                    engagementId={engagementId}
-                    buyerName={buyerName}
-                    stats={statsById.get(worker.id)}
-                    isConfiguring={false}
-                    onToggleConfigure={worker.hasHingesPanel && engagementId ? () => setExpandedWorker(worker.id) : undefined}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          )}
         </div>
-      )}
+
+        <div className="lg:col-span-9 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Skill Execution Guidelines</h2>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                {filteredWorkers.length} {filteredWorkers.length === 1 ? "skill" : "skills"}
+              </p>
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search skills…"
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400"
+              />
+            </div>
+          </div>
+
+          {filteredWorkers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+              No skills match these filters.
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80">
+              {filteredWorkers.map((worker, i) => {
+                const isConfiguring = expandedWorker === worker.id;
+                return (
+                  <div key={worker.id}>
+                    <WorkerCard
+                      variant="row"
+                      index={i + 1}
+                      worker={worker}
+                      enabled={enabledSet.has(worker.id)}
+                      engagementId={engagementId}
+                      buyerName={buyerName}
+                      stats={statsById.get(worker.id)}
+                      isConfiguring={isConfiguring}
+                      playbook={SKILL_PLAYBOOKS[worker.id]}
+                      onToggleConfigure={
+                        worker.hasHingesPanel && engagementId
+                          ? () => setExpandedWorker(isConfiguring ? null : worker.id)
+                          : undefined
+                      }
+                    />
+                    {/* Accordion, not a page-wide swap — Configure opens the
+                        form right under the skill you clicked it on, every
+                        other skill in this list stays visible. */}
+                    <div
+                      className="grid overflow-hidden"
+                      style={{
+                        gridTemplateRows: isConfiguring ? "1fr" : "0fr",
+                        transition: "grid-template-rows 280ms ease-in-out",
+                      }}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="pb-5 pl-[3rem]">{isConfiguring && renderConfigForm(worker)}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
