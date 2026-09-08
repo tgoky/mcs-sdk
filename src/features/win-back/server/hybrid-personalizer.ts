@@ -44,7 +44,17 @@ export async function runWinBackHybridPersonalization(
   // sending automated warm-tone copy blind to a live crisis. The
   // templated recovery email itself still goes out via
   // enrollInWinBackSequence before this function runs.
-  const blockingReasons = await getBlockingReasons(engagementId);
+  //
+  // Fails open: runHybridWithBudget below never throws (its own
+  // try/catch), which is why this function's caller has no try/catch of
+  // its own — a DB blip on this check must never crash the whole
+  // recovery enrollment for the sake of a tone check.
+  let blockingReasons: Awaited<ReturnType<typeof getBlockingReasons>> = [];
+  try {
+    blockingReasons = await getBlockingReasons(engagementId);
+  } catch (e: unknown) {
+    console.error("[win-back hybrid-personalizer] Blocking-conditions check failed, proceeding as unblocked:", e instanceof Error ? e.message : e);
+  }
   if (blockingReasons.length > 0) {
     const reason = blockingReasons.map((r) => r.reason).join(" ");
     await logSendOutcome(engagementId, enrollmentId, prospectEmail, "fallback", 0, undefined, reason);

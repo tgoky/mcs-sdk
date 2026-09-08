@@ -50,7 +50,17 @@ export async function getComparisonSeries(engagementId: string, weeksBack = 8): 
 
   const seriesByKey = new Map<string, ComparisonSeries>();
 
-  for (const snapshot of history) {
+  // The weekly snapshot cron (crons.ts) runs Monday 00:05 UTC and records
+  // a row keyed by startOfWeek(now) at that moment — the SAME Monday
+  // startOfWeek(new Date()) produces any time later this same week. Left
+  // unfiltered, a client viewed any day after that cron has already run
+  // this week would get two points for one real week: Monday's snapshot
+  // (stale the moment it's recorded) and the live fetch below (current).
+  // "This week" is always the live fetch, exactly once — history only
+  // ever covers weeks strictly before it.
+  const historicalOnly = history.filter((snapshot) => snapshot.weekStart.getTime() < weekStart.getTime());
+
+  for (const snapshot of historicalOnly) {
     for (const block of snapshot.blocks) {
       const key = `${block.workerId}:${block.label}`;
       const series = seriesByKey.get(key) ?? {

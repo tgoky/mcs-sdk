@@ -43,7 +43,18 @@ export async function runHybridPersonalization(
   // enrollInPreCallSequence before this function ever runs, so nothing
   // about the prospect's confirmation is held up; this only withholds the
   // extra AI-personalized, tone-sensitive intro.
-  const blockingReasons = await getBlockingReasons(engagementId);
+  //
+  // Fails open, deliberately: runHybridWithBudget below wraps its own
+  // body in try/catch and never throws, which is why the caller
+  // (enrollment-service.ts) has no try/catch around this function either
+  // — a DB blip on this check must never crash the whole booking
+  // enrollment (SMS, ad-cohort sync) for the sake of a tone check.
+  let blockingReasons: Awaited<ReturnType<typeof getBlockingReasons>> = [];
+  try {
+    blockingReasons = await getBlockingReasons(engagementId);
+  } catch (e: unknown) {
+    console.error("[hybrid-personalizer] Blocking-conditions check failed, proceeding as unblocked:", e instanceof Error ? e.message : e);
+  }
   if (blockingReasons.length > 0) {
     const reason = blockingReasons.map((r) => r.reason).join(" ");
     await logSendOutcome(engagementId, bookingId, prospectEmail, "fallback", 0, undefined, reason, runId);
