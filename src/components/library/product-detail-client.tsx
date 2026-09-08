@@ -9,11 +9,12 @@
 // client moves through it" step flow, then every skill listed vertically
 // underneath each other (not a card grid) — while keeping everything
 // built since then: real Install/Uninstall at the Worker level, and the
-// Status/Categories filter sidebar. Configure swaps the filter+list
-// section for that skill's form in the exact same slot — the same
-// in-place-swap pattern OverviewStatsPanel's Tasks Completed tile uses on
-// the dashboard — instead of an accordion under one row or a navigation
-// to another page.
+// Status/Categories filter sidebar. Configure swaps only the skill-list
+// card's own content for that skill's form, in the exact same slot —
+// same in-place-swap idea as OverviewStatsPanel's Tasks Completed tile,
+// scoped the same way that tile is scoped to itself. The filter sidebar,
+// gallery, and sequence above never move, so clicking Configure doesn't
+// reflow the whole page or read as a navigation.
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -225,29 +226,6 @@ export function ProductDetailClient({
         </div>
       )}
 
-      {/* Same in-place swap OverviewStatsPanel's Tasks Completed tile
-          uses on the dashboard: clicking Configure replaces this whole
-          section with that skill's form, in the exact same slot — not an
-          accordion appended under one row while the rest of the list
-          stays on screen, and not a navigation to another page. Close
-          brings back the filter sidebar + list exactly as it was. */}
-      {expandedWorker && engagementId ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-zinc-900 dark:text-white">
-              Configure {workers.find((w) => w.id === expandedWorker)?.name}
-            </h2>
-            <button
-              type="button"
-              onClick={() => setExpandedWorker(null)}
-              className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" /> Close
-            </button>
-          </div>
-          {renderConfigForm(workers.find((w) => w.id === expandedWorker)!)}
-        </div>
-      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         <div className="lg:col-span-3 space-y-5 text-xs text-zinc-700 dark:text-zinc-400">
           <div className="space-y-2.5 pb-4 border-b border-zinc-200 dark:border-zinc-800">
@@ -332,53 +310,80 @@ export function ProductDetailClient({
         </div>
 
         <div className="lg:col-span-9 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Skill Execution Guidelines</h2>
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                {filteredWorkers.length} {filteredWorkers.length === 1 ? "skill" : "skills"}
-              </p>
-            </div>
-            <div className="relative w-full sm:w-64">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search skills…"
-                className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400"
-              />
-            </div>
-          </div>
-
-          {filteredWorkers.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-              No skills match these filters.
-            </div>
+          {/* Configure swaps only this card's own content, in place — the
+              filter sidebar, gallery, and sequence above all stay exactly
+              where they are, so clicking Configure doesn't reflow the
+              whole page or feel like a navigation. Same in-place-swap
+              idea as OverviewStatsPanel's Tasks Completed tile, scoped to
+              this one card the way that tile is scoped to itself. */}
+          {expandedWorker && engagementId ? (
+            <>
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold text-zinc-900 dark:text-white">
+                  Configure {workers.find((w) => w.id === expandedWorker)?.name}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setExpandedWorker(null)}
+                  className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" /> Close
+                </button>
+              </div>
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-5">
+                {renderConfigForm(workers.find((w) => w.id === expandedWorker)!)}
+              </div>
+            </>
           ) : (
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80">
-              {filteredWorkers.map((worker, i) => (
-                <WorkerCard
-                  key={worker.id}
-                  variant="row"
-                  index={i + 1}
-                  worker={worker}
-                  enabled={enabledSet.has(worker.id)}
-                  engagementId={engagementId}
-                  buyerName={buyerName}
-                  stats={statsById.get(worker.id)}
-                  isConfiguring={false}
-                  playbook={SKILL_PLAYBOOKS[worker.id]}
-                  onToggleConfigure={
-                    worker.hasHingesPanel && engagementId ? () => setExpandedWorker(worker.id) : undefined
-                  }
-                />
-              ))}
-            </div>
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Skill Execution Guidelines</h2>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    {filteredWorkers.length} {filteredWorkers.length === 1 ? "skill" : "skills"}
+                  </p>
+                </div>
+                <div className="relative w-full sm:w-64">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search skills…"
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400"
+                  />
+                </div>
+              </div>
+
+              {filteredWorkers.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                  No skills match these filters.
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80">
+                  {filteredWorkers.map((worker, i) => (
+                    <WorkerCard
+                      key={worker.id}
+                      variant="row"
+                      index={i + 1}
+                      worker={worker}
+                      enabled={enabledSet.has(worker.id)}
+                      engagementId={engagementId}
+                      buyerName={buyerName}
+                      stats={statsById.get(worker.id)}
+                      isConfiguring={false}
+                      playbook={SKILL_PLAYBOOKS[worker.id]}
+                      onToggleConfigure={
+                        worker.hasHingesPanel && engagementId ? () => setExpandedWorker(worker.id) : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
-      )}
     </div>
   );
 }
