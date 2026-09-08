@@ -36,9 +36,20 @@ import { Loader2, ArrowRight, Settings2, MessageCircle } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { SMS_PLATFORM_LABELS, AD_DATA_PLATFORM_LABELS } from "@/lib/copy";
 import { TeammatesChat } from "@/app/dashboard/teammates/teammates-chat";
+import { Dropdown } from "@/components/ui/dropdown";
 
 const SMS_OPTIONS = ["none", "twilio", "ghl_sms", "hubspot_sms"];
 const AD_DATA_OPTIONS = ["none", "hyros", "google_sheets", "native_crm"];
+
+const SMS_DROPDOWN_ITEMS = SMS_OPTIONS.map((v) => ({ key: v, label: SMS_PLATFORM_LABELS[v] }));
+const AD_DATA_DROPDOWN_ITEMS = AD_DATA_OPTIONS.map((v) => ({ key: v, label: AD_DATA_PLATFORM_LABELS[v] }));
+
+// Matches this modal's own field styling (bg-white/bg-zinc-950,
+// border-zinc-200/border-zinc-800) rather than Dropdown's default, which
+// is hardcoded dark-only (border-zinc-800 bg-zinc-900/80) and would look
+// wrong sitting inside this modal's light-mode surface.
+const DROPDOWN_FIELD_CLASSES =
+  "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900";
 
 const MODE_STORAGE_KEY = "mcs-enable-worker-mode";
 
@@ -138,32 +149,24 @@ export function EnablePileOnModal({
 
             <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2">
               <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">SMS follow-ups</label>
-              <select
-                value={smsPlatform}
-                onChange={(e) => setSmsPlatform(e.target.value)}
-                className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1 text-xs text-zinc-900 dark:text-zinc-200"
-              >
-                {SMS_OPTIONS.map((v) => (
-                  <option key={v} value={v}>
-                    {SMS_PLATFORM_LABELS[v]}
-                  </option>
-                ))}
-              </select>
+              <Dropdown
+                items={SMS_DROPDOWN_ITEMS}
+                selectedKey={smsPlatform}
+                onSelect={setSmsPlatform}
+                align="right"
+                triggerClassName={DROPDOWN_FIELD_CLASSES}
+              />
             </div>
 
             <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2">
               <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">Ad-data cohort sync</label>
-              <select
-                value={adDataPlatform}
-                onChange={(e) => setAdDataPlatform(e.target.value)}
-                className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1 text-xs text-zinc-900 dark:text-zinc-200"
-              >
-                {AD_DATA_OPTIONS.map((v) => (
-                  <option key={v} value={v}>
-                    {AD_DATA_PLATFORM_LABELS[v]}
-                  </option>
-                ))}
-              </select>
+              <Dropdown
+                items={AD_DATA_DROPDOWN_ITEMS}
+                selectedKey={adDataPlatform}
+                onSelect={setAdDataPlatform}
+                align="right"
+                triggerClassName={DROPDOWN_FIELD_CLASSES}
+              />
             </div>
 
             {error && (
