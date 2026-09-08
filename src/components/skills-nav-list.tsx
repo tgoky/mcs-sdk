@@ -180,7 +180,7 @@ function InstalledSkillsList({
                 return (
                   <div
                     key={entry.skillId}
-                    className="group flex flex-col items-center gap-1 rounded-2xl px-1 py-1.5 text-center bg-white/5 dark:bg-white/[0.04] backdrop-blur-md border border-black/5 dark:border-white/10 hover:bg-white/10 dark:hover:bg-white/[0.07] transition-colors"
+                    className="group flex flex-col items-center gap-1 rounded-md px-1 py-1.5 text-center bg-white/5 dark:bg-white/[0.04] backdrop-blur-md border border-black/5 dark:border-white/10 hover:bg-white/10 dark:hover:bg-white/[0.07] transition-colors"
                   >
                     <div className="flex items-center justify-center gap-1">
                       <div className="relative shrink-0">

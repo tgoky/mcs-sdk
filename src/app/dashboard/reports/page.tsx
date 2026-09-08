@@ -40,7 +40,7 @@ export default async function ReportsPage() {
 
   const [engagement] = engagementId
     ? await db
-        .select({ buyer: engagements.buyer, stack: engagements.stack })
+        .select({ buyer: engagements.buyer, stack: engagements.stack, offerDetails: engagements.offerDetails })
         .from(engagements)
         .where(eq(engagements.engagementId, engagementId))
         .limit(1)
@@ -104,6 +104,7 @@ export default async function ReportsPage() {
                   buyerName={engagement.buyer}
                   metricsByPeriod={showtimeMetrics}
                   notesByPeriod={{ week: weekNote, month: monthNote }}
+                  offerDetails={engagement.offerDetails as Record<string, string | boolean> | null}
                 />
               )}
               {repMetrics && repIdentityGraphRow && (

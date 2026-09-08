@@ -25,14 +25,15 @@ import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-con
  * and a future product's workers show up here without a third
  * copy-pasted panel.
  *
- * Membership is exactly what SkillsPanel/RepSkillsPanel always rendered,
- * just merged: every Showtime worker (unconditional, matching today's
- * behavior) plus every Reputation Manager worker only when this client's
- * identity graph exists — passed in from the page, not decided here, so
- * this component stays a pure renderer over whatever list it's given. A
- * worker's card never disappears just because it's toggled off (matching
- * existing behavior) — there'd be no way to turn it back on from this
- * page if it did.
+ * Membership (workerIds, passed in from the page) is now a live status
+ * view — exactly this client's currently-enabled skills, across both
+ * products, not the full catalog for whichever product happens to apply.
+ * Enabling a single Reputation Manager skill used to bring all 5 RM cards
+ * along with it, read as broken ("I only enabled one"). A skill toggled
+ * off here does disappear on the next load — that's no longer a dead
+ * end: the Library's own per-Worker page (/dashboard/library/[product])
+ * is where you browse and re-enable any skill, installed or not, so this
+ * panel doesn't need its own "show everything just in case" fallback.
  */
 
 export interface ModuleRunDTO {
