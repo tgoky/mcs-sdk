@@ -245,6 +245,33 @@ export async function sendSmsForTenant(
   }
 }
 
+// ── Operator paging (platform-level, not per-tenant) ────────────────────
+
+/**
+ * Reputation Manager's crisis-paging SMS fallback (notify.ts channel 5) —
+ * a single transactional page to the OPERATOR's own verified number, sent
+ * from the platform's own Twilio account (REP_PAGING_TWILIO_* env vars),
+ * not the buyer's. This is deliberately NOT routed through
+ * sendSmsForTenant: that function's A2P 10DLC gate and STOP/HELP
+ * compliance footer exist because it sends bulk, prospect-facing marketing
+ * SMS at scale — a real US-carrier compliance requirement for that traffic
+ * shape. A single "your reputation monitor found something critical" page
+ * to the account owner's own number is transactional/operational
+ * messaging, not marketing, and doesn't carry that same requirement.
+ * Silently no-ops (throws, caught by notify.ts's own try/catch) if the
+ * platform hasn't configured paging — same graceful-degradation shape
+ * every other optional notify.ts channel has.
+ */
+export async function sendOperatorPageSms(toPhone: string, body: string): Promise<void> {
+  const accountSid = process.env.REP_PAGING_TWILIO_ACCOUNT_SID;
+  const authToken = process.env.REP_PAGING_TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.REP_PAGING_TWILIO_FROM_NUMBER;
+  if (!accountSid || !authToken || !fromNumber) {
+    throw new Error("Operator SMS paging isn't configured — set REP_PAGING_TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM_NUMBER.");
+  }
+  await new TwilioClient(accountSid, authToken, undefined, fromNumber).sendSms(toPhone, body);
+}
+
 /** Tag-based path — hubspot_sms only today. */
 export async function enrollSmsSequenceForTenant(
   smsPlatform: string,

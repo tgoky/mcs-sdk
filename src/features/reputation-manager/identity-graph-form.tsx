@@ -30,6 +30,7 @@ export type IdentityGraphFormState = {
   trustedSources: string; // newline-separated
   seedPanelPrompts: string; // newline-separated
   crisisThresholdOverride: string; // numeric string, "" means unset
+  operatorPagePhone: string; // "" means no SMS paging fallback configured
   // Always a concrete array in form state (checkbox-friendly) — the
   // null-means-"all engines, unrestricted" semantics (see
   // repIdentityGraphs.activeEngines) is handled at the toIntakePayload/
@@ -52,6 +53,7 @@ export const EMPTY_IDENTITY_GRAPH_FORM: IdentityGraphFormState = {
   trustedSources: "",
   seedPanelPrompts: "",
   crisisThresholdOverride: "",
+  operatorPagePhone: "",
   activeEngines: [...REP_ENGINE_IDS],
   entities: [],
   competitors: [],
@@ -97,6 +99,7 @@ export function toIntakePayload(form: IdentityGraphFormState) {
     trustedSources: splitLines(form.trustedSources),
     seedPanelPrompts: splitLines(form.seedPanelPrompts),
     crisisThresholdOverride: form.crisisThresholdOverride.trim() ? Number(form.crisisThresholdOverride.trim()) : null,
+    operatorPagePhone: form.operatorPagePhone.trim() || null,
     // All 5 checked means "no restriction" — send null, matching every
     // row's state before this field existed, rather than an explicit
     // list that happens to equal the full set.
@@ -125,6 +128,7 @@ export function fromSavedGraph(graph: {
   soleAuthorityName: string;
   crisisThresholdOverride: number | null;
   activeEngines: RepEngineId[] | null;
+  operatorPagePhone?: string | null;
 }): IdentityGraphFormState {
   return {
     operatorName: graph.operatorName,
@@ -136,6 +140,7 @@ export function fromSavedGraph(graph: {
     trustedSources: graph.trustedSources.join("\n"),
     seedPanelPrompts: graph.seedPanelPrompts.join("\n"),
     crisisThresholdOverride: graph.crisisThresholdOverride != null ? String(graph.crisisThresholdOverride) : "",
+    operatorPagePhone: graph.operatorPagePhone ?? "",
     activeEngines: graph.activeEngines ?? [...REP_ENGINE_IDS],
     entities: graph.entities,
     // collision_check-sourced entries are shown read-only lower in the
@@ -490,6 +495,12 @@ export function IdentityGraphForm({
           onChange={(v) => set("crisisThresholdOverride", v)}
           placeholder="Leave blank to use the shared default (80)"
           type="number"
+        />
+        <InputField
+          label="Crisis paging phone (SMS fallback)"
+          value={form.operatorPagePhone}
+          onChange={(v) => set("operatorPagePhone", v)}
+          placeholder="+1 555 555 5555 — leave blank to skip SMS paging"
         />
       </div>
     </div>

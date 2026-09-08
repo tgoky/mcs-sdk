@@ -30,11 +30,15 @@
 // anomaly-detection.ts is their consumer, computed and force-triggered
 // into crisis-response-service.ts alongside signal-class classification.
 //
-// STILL NOT ported: the full write_low_or_medium / write_high /
-// external_escalation routing tiers. Those gate a draft-for-approval
-// flow — nothing in this product drafts a response yet, so there's
-// nothing for those tiers to route. Added alongside whichever skill
-// first needs them, not speculatively here.
+// NOW ALSO ported (this file's third half, below resolveResponseTier):
+// the full write_low_or_medium / write_high / external_escalation routing
+// tiers. response-routing.ts is their consumer, called from
+// crisis-response-service.ts right after an incident is declared — each
+// contributing finding's already-computed compositeScore and signalClass
+// route it to tier 1 (auto-draft, one-click approve), tier 2 (auto-draft,
+// review-and-approve), tier 3 (no draft — page the operator with the
+// evidence and let them choose a posture first), or tier 4 (evidence
+// package, external handoff, no draft at all).
 
 export const REP_THRESHOLD_DEFAULTS = {
   /** Composite threat-score (0-100, produced downstream by whatever skill
@@ -46,13 +50,22 @@ export const REP_THRESHOLD_DEFAULTS = {
   /** Real-time push floor from thresholds.yml.template's
    * real_time_alert_gate — everything below this batches into a daily
    * digest instead of an immediate page, specifically to avoid alert
-   * fatigue in the first 30 days of a new engagement. */
+   * fatigue in the first 30 days of a new engagement. Consumer:
+   * crisis-response-service.ts's runRepCrisisResponse fires a lighter,
+   * non-incident "elevated activity" notification (severity "warning", no
+   * repIncidents row) when a batch's max compositeScore clears this floor
+   * but stays under crisisScoreFloor — everything below THIS floor gets no
+   * immediate push at all and only surfaces in digest.ts's next run. */
   realTimeAlertFloor: 75,
 
   /** Minimum minutes between an incident being detected and any public
    * response being allowed to go out, even with sole-authority approval —
    * the deliberate anti-hasty-response delay from crisis-triggers.yml.template's
-   * response_timing block. */
+   * response_timing block. Consumer: decidePendingAction (approval-gate.ts)
+   * refuses to approve a "rep_response_approval" pending action until this
+   * many minutes have passed since the related incident's declaredAt —
+   * the row stays "pending" (not failed) so the operator can just retry
+   * the approve once the window clears. */
   minMinutesBeforePublicResponse: 60,
 } as const;
 
@@ -166,3 +179,80 @@ export const ANOMALY_CLASSES = [
 ] as const;
 
 export type AnomalyClass = (typeof ANOMALY_CLASSES)[number];
+
+/**
+ * thresholds.yml.template's routing matrix (write_low_or_medium /
+ * write_high / external_escalation) — response-routing.ts is the
+ * consumer. A finding's compositeScore is already "severity axis average
+ * x10" (see scoreFindings in crisis-response-service.ts: three 1-10 axes
+ * weighted-summed to ~1-10, then x10 for a 0-100 reporting scale), so the
+ * spec's 1-10 severity_range boundaries map onto compositeScore by the
+ * same x10 factor: [1,4]->(0,40], [5,6]->(40,60], [7,10]->(60,100].
+ */
+export const RESPONSE_TIER_SCORE_BOUNDS = {
+  tier1Max: 40, // severity 1-4, compositeScore <= 40
+  tier2Max: 60, // severity 5-6, compositeScore 41-60; above is severity 7-10
+} as const;
+
+export type ResponseTier = "tier1_one_click" | "tier2_review" | "tier3_pause_and_instruct" | "tier4_external_escalation";
+
+/**
+ * The subset of SIGNAL_CLASSES_FORCE_TRIGGER whose real-world remedy
+ * fundamentally requires going outside this app — legal counsel or a
+ * platform's own trust & safety team, not a posture this product can draft
+ * to. Matches thresholds.yml.template's external_escalation example
+ * actions (cease-and-desist, court-order tracking = a legal/regulatory
+ * matter; account-compromise/formal-complaint = a personal-safety matter).
+ * The other four force-trigger classes (defamation, review-bomb,
+ * competitor disinfo, adversarial press) stay in-system at tier 3 —
+ * serious, but still something the sole authority can choose a public
+ * response posture to, which is what tier 3 is for.
+ */
+export const EXTERNAL_ESCALATION_SIGNAL_CLASSES: readonly SignalClass[] = ["regulatory_or_legal_action", "doxx_or_personal_safety"];
+
+/**
+ * Candidate response postures offered at tier 3 (pause_and_instruct) —
+ * thresholds.yml.template's own rationale: "the system refuses to write
+ * until you choose, because the choice itself is the load-bearing operator
+ * judgment." No draft exists until one of these is picked; response-
+ * routing.ts then drafts TO the chosen posture rather than guessing one.
+ */
+export const RESPONSE_POSTURES = [
+  { id: "acknowledge_private_resolution", label: "Acknowledge and invite a private resolution" },
+  { id: "factual_correction", label: "Non-defensive factual correction" },
+  { id: "monitor_only", label: "No public response — monitor only" },
+  { id: "escalate_externally", label: "Escalate externally instead of drafting" },
+] as const;
+
+export type ResponsePostureId = (typeof RESPONSE_POSTURES)[number]["id"];
+
+/**
+ * thresholds.yml.template's two-axis routing matrix, collapsed to the
+ * single lookup response-routing.ts needs: given one finding's already-
+ * computed compositeScore and (if any) its force-trigger signalClass,
+ * which of the four response tiers does it route to. Signal class wins
+ * over score when it's in EXTERNAL_ESCALATION_SIGNAL_CLASSES (a low-reach
+ * legal notice is still a legal notice); otherwise score alone decides.
+ */
+export function resolveResponseTier(compositeScore: number, signalClass: SignalClass | null): ResponseTier {
+  if (signalClass && EXTERNAL_ESCALATION_SIGNAL_CLASSES.includes(signalClass)) return "tier4_external_escalation";
+  if (compositeScore > RESPONSE_TIER_SCORE_BOUNDS.tier2Max) return "tier3_pause_and_instruct";
+  if (compositeScore > RESPONSE_TIER_SCORE_BOUNDS.tier1Max) return "tier2_review";
+  return "tier1_one_click";
+}
+
+/** Ranks tiers by severity so an incident with multiple contributing
+ * findings can report the single highest tier among them — same "worst
+ * finding sets the incident's posture" reasoning severityScore itself
+ * already uses (max across findings, not an average). */
+const RESPONSE_TIER_RANK: Record<ResponseTier, number> = {
+  tier1_one_click: 1,
+  tier2_review: 2,
+  tier3_pause_and_instruct: 3,
+  tier4_external_escalation: 4,
+};
+
+export function highestResponseTier(tiers: ResponseTier[]): ResponseTier | null {
+  if (tiers.length === 0) return null;
+  return tiers.reduce((max, t) => (RESPONSE_TIER_RANK[t] > RESPONSE_TIER_RANK[max] ? t : max));
+}

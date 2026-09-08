@@ -37,6 +37,9 @@ export default async function ReputationManagerIncidentsPage() {
           summary: repIncidents.summary,
           status: repIncidents.status,
           signalClass: repIncidents.signalClass,
+          responseTier: repIncidents.responseTier,
+          selectedPosture: repIncidents.selectedPosture,
+          evidencePackage: repIncidents.evidencePackage,
           declaredAt: repIncidents.declaredAt,
           buyer: engagements.buyer,
         })

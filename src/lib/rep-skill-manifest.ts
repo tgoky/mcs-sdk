@@ -26,7 +26,14 @@
 // with a real third product being the trigger to generalize further, not
 // a guess made now from a sample size of one.
 
-export type RepSkillId = "rep-onboarding" | "rep-engine-panel" | "rep-trustpilot-watch" | "rep-reddit-watch" | "rep-twitter-watch" | "rep-crisis-response";
+export type RepSkillId =
+  | "rep-onboarding"
+  | "rep-engine-panel"
+  | "rep-trustpilot-watch"
+  | "rep-reddit-watch"
+  | "rep-twitter-watch"
+  | "rep-crisis-response"
+  | "rep-digest";
 
 export const REP_SKILL_IDS: RepSkillId[] = [
   "rep-onboarding",
@@ -35,6 +42,7 @@ export const REP_SKILL_IDS: RepSkillId[] = [
   "rep-reddit-watch",
   "rep-twitter-watch",
   "rep-crisis-response",
+  "rep-digest",
 ];
 
 export interface RepSkillManifestEntry {
@@ -110,6 +118,14 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
     name: "Crisis Response",
     description:
       "Reads everything the other Reputation Manager skills flagged and pages the operator the moment the cumulative severity crosses this client's threshold. Never publishes anything on its own.",
+    runOnSetup: false,
+    hasHingesPanel: false,
+  },
+  "rep-digest": {
+    id: "rep-digest",
+    name: "Daily Digest",
+    description:
+      "Once a day, rolls up everything monitored since the last digest that never crossed the real-time-alert floor into one summary notification — so quiet activity is still reviewed, just not pushed the moment it happens.",
     runOnSetup: false,
     hasHingesPanel: false,
   },

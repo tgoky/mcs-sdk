@@ -604,6 +604,7 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
   "rep-reddit-watch": [],
   "rep-twitter-watch": [],
   "rep-crisis-response": [],
+  "rep-digest": [],
 };
 
 // Single source of truth for category, kept out of skill-manifest.ts and
@@ -623,6 +624,7 @@ const WORKER_CATEGORIES: Record<WorkerId, WorkerCategory> = {
   "rep-reddit-watch": "Monitoring",
   "rep-twitter-watch": "Monitoring",
   "rep-crisis-response": "Crisis & Recovery",
+  "rep-digest": "Monitoring",
 };
 
 function buildRegistry(): Record<WorkerId, WorkerDefinition> {

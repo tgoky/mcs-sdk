@@ -15,10 +15,10 @@ const TABS: Array<{ key: string; label: string; types: NotificationType[] | null
   {
     key: "alerts",
     label: "Alerts",
-    types: ["run_failed", "run_timed_out", "credential_invalid", "credential_check_error", "reputation_crisis_declared"],
+    types: ["run_failed", "run_timed_out", "credential_invalid", "credential_check_error", "reputation_crisis_declared", "reputation_elevated_activity"],
   },
   { key: "win-back", label: skillName("win-back"), types: ["lost_deal_swept"] },
-  { key: "insights", label: "Insights", types: ["weekly_metrics", "conversation_intelligence_objection_found"] },
+  { key: "insights", label: "Insights", types: ["weekly_metrics", "conversation_intelligence_objection_found", "reputation_daily_digest"] },
 ];
 
 function dayBucket(iso: string): string {

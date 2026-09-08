@@ -10,9 +10,13 @@ import {
   SEVERITY_AXIS_RUBRIC,
   SIGNAL_CLASSES_FORCE_TRIGGER,
   isForceTriggerSignalClass,
+  REP_THRESHOLD_DEFAULTS,
+  highestResponseTier,
   type SignalClass,
+  type ResponseTier,
 } from "@/features/reputation-manager/rep-thresholds";
 import { detectAnomalies, anomalyCooldownMs, type AnomalyResult } from "@/features/reputation-manager/server/anomaly-detection";
+import { loadRoutingContext, routeOneFinding } from "@/features/reputation-manager/server/response-routing";
 import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
@@ -234,8 +238,9 @@ async function declareIncident(params: {
   triggerReason: string;
   operatorName: string;
   soleAuthorityName: string;
+  operatorPagePhone: string | null;
 }): Promise<{ incidentId: string }> {
-  const { tenant, engagementId, runId, severityScore, summaryText, allFindings, declaredSignalClass, triggerReason, operatorName, soleAuthorityName } = params;
+  const { tenant, engagementId, runId, severityScore, summaryText, allFindings, declaredSignalClass, triggerReason, operatorName, soleAuthorityName, operatorPagePhone } = params;
 
   const [incident] = await db
     .insert(repIncidents)
@@ -259,6 +264,7 @@ async function declareIncident(params: {
       `${summaryText}\n\n${triggerReason} Severity: ${severityScore}/100. ` +
       `Sole authority on record: ${soleAuthorityName}. Nothing has been published — this is a notification only.`,
     slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
+    smsToPhone: operatorPagePhone ?? undefined,
   });
 
   return { incidentId: incident.id };
@@ -340,6 +346,29 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     const severityScore = anomalyForceTriggered ? Math.max(maxCompositeScore, floor) : maxCompositeScore;
 
     if (!forceTriggered && severityScore < floor) {
+      // Real-time-alert floor (thresholds.yml.template's real_time_alert_gate,
+      // REP_THRESHOLD_DEFAULTS.realTimeAlertFloor) — not severe enough for a
+      // declared incident, but severe enough that waiting for the next
+      // digest.ts run would be a real gap. A lighter, non-incident heads-up:
+      // no repIncidents row, no SMS (severity "warning" not "critical"), just
+      // in-app/Slack/email so the operator sees it today instead of tomorrow.
+      // Below this floor, nothing fires here — digest.ts's next run is where
+      // it surfaces, exactly as the spec intends.
+      if (severityScore >= REP_THRESHOLD_DEFAULTS.realTimeAlertFloor) {
+        await notifyUser({
+          whopUserId: tenant.whopUserId,
+          engagementId,
+          runId,
+          type: "reputation_elevated_activity",
+          severity: "warning",
+          title: `Elevated activity — ${graph.operatorName}`,
+          body:
+            `${contentSummary ?? "Flagged findings"} scored ${severityScore}/100 — below the ${floor} incident threshold, ` +
+            "but above the real-time-alert floor, so this isn't waiting for the next digest.",
+          slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
+        });
+      }
+
       await logStep(runId, {
         phase: "crisis_response",
         status: "success",
@@ -367,33 +396,80 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     // One step: insert the incident and notify — see declareIncident's
     // own comment for why both needed to move behind a single step.run
     // rather than running directly here.
+    const declareParams = {
+      tenant,
+      engagementId,
+      runId,
+      severityScore,
+      summaryText,
+      allFindings,
+      declaredSignalClass,
+      triggerReason,
+      operatorName: graph.operatorName,
+      soleAuthorityName: graph.soleAuthorityName,
+      operatorPagePhone: graph.operatorPagePhone,
+    };
+    // One step: insert the incident and notify — see declareIncident's
+    // own comment for why both needed to move behind a single step.run
+    // rather than running directly here.
     const { incidentId } = await (step
-      ? step.run("declare-incident", () =>
-          declareIncident({
-            tenant,
-            engagementId,
-            runId,
-            severityScore,
-            summaryText,
-            allFindings,
-            declaredSignalClass,
-            triggerReason,
-            operatorName: graph.operatorName,
-            soleAuthorityName: graph.soleAuthorityName,
-          })
-        )
-      : declareIncident({
-          tenant,
-          engagementId,
-          runId,
-          severityScore,
-          summaryText,
-          allFindings,
-          declaredSignalClass,
-          triggerReason,
-          operatorName: graph.operatorName,
-          soleAuthorityName: graph.soleAuthorityName,
-        }));
+      ? step.run("declare-incident", () => declareIncident(declareParams))
+      : declareIncident(declareParams));
+
+    // Routes every contributing finding to its response tier (auto-draft,
+    // pause-for-posture, or external escalation) — see response-routing.ts.
+    // One step per finding, not one step for the whole batch: a retry
+    // triggered by an LLM drafting hiccup on finding 3 of 5 must only
+    // re-run finding 3, not re-queue duplicate drafts/pending-actions for
+    // findings 1-2 that already succeeded — step.run's own memoization is
+    // what buys that per-finding idempotency, which a single big step
+    // wrapping a for-loop would not.
+    const routingContext = await (step ? step.run("load-routing-context", () => loadRoutingContext(engagementId)) : loadRoutingContext(engagementId));
+
+    const responseTiers: ResponseTier[] = [];
+    if (routingContext) {
+      const declaredAt = new Date();
+      for (let i = 0; i < allFindings.length; i++) {
+        const finding = allFindings[i];
+        const tier = await (step
+          ? step.run(`route-finding-${i}`, () =>
+              routeOneFinding({
+                tenant,
+                engagementId,
+                incidentId,
+                runId,
+                context: routingContext,
+                finding,
+                severityScore,
+                declaredSignalClass,
+                summary: summaryText,
+                allFindings,
+                declaredAt,
+              })
+            )
+          : routeOneFinding({
+              tenant,
+              engagementId,
+              incidentId,
+              runId,
+              context: routingContext,
+              finding,
+              severityScore,
+              declaredSignalClass,
+              summary: summaryText,
+              allFindings,
+              declaredAt,
+            }));
+        if (tier) responseTiers.push(tier);
+      }
+    }
+    const responseTier = highestResponseTier(responseTiers);
+
+    if (responseTier) {
+      await (step
+        ? step.run("persist-response-tier", () => db.update(repIncidents).set({ responseTier }).where(eq(repIncidents.id, incidentId)))
+        : db.update(repIncidents).set({ responseTier }).where(eq(repIncidents.id, incidentId)));
+    }
 
     await logStep(runId, {
       phase: "crisis_response",

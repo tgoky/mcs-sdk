@@ -2018,6 +2018,17 @@ export const repIdentityGraphs = pgTable(
     // worth tuning per client instead of centralizing.
     crisisThresholdOverride: integer("crisis_threshold_override"),
 
+    // Destination number for crisis-response's SMS paging fallback (see
+    // notify.ts's SMS channel / sendOperatorPageSms in lib/platforms/sms.ts).
+    // Null means "no SMS fallback configured" — paging still happens via
+    // in-app/Slack/email exactly as before, this only adds a channel.
+    // Lives here rather than on engagements.stack because it's a
+    // Reputation-Manager-specific paging concern edited on this same form,
+    // same reasoning crisisThresholdOverride's own comment gives for being
+    // the one per-engagement value worth its own column instead of a
+    // shared default.
+    operatorPagePhone: text("operator_page_phone"),
+
     // Set the first time runRepOnboarding's collision-detection web-search
     // pass actually runs, so re-saving this form from the hinges panel
     // doesn't re-trigger it on every edit — matches the source skill's
@@ -2254,8 +2265,32 @@ export const repIncidents = pgTable("rep_incidents", {
 
   // "open" (declared, operator notified) | "acknowledged" (operator has
   // seen it — set by a future dashboard action, nothing writes this yet)
-  // | "resolved" (set by a future dashboard action)
+  // | "resolved" (the Resolve action) | "external_escalation_pending"
+  // (tier4 — evidence package generated, handoff logged, waiting for the
+  // operator to bring the outcome back per response-routing.ts)
   status: text("status").notNull().default("open"),
+
+  // The response-routing tier this incident's most severe contributing
+  // finding resolved to (see response-routing.ts's resolveResponseTier) —
+  // "tier1_one_click" | "tier2_review" | "tier3_pause_and_instruct" |
+  // "tier4_external_escalation". Null on incidents declared before this
+  // column existed, or on the rare incident whose only contributing
+  // findings were anomaly-only (no per-finding severity to route from).
+  responseTier: text("response_tier"),
+
+  // Tier 3 only (pause_and_instruct): the response posture the sole
+  // authority chose after being paged with the evidence and posture
+  // options — see response-routing.ts's RESPONSE_POSTURES. Null until
+  // chosen; a draft is only ever generated after this is set, per the
+  // spec's "the choice itself is the load-bearing operator judgment."
+  selectedPosture: text("selected_posture"),
+
+  // Tier 4 only (external_escalation): the generated evidence package —
+  // incident summary, severity breakdown, every contributing finding's
+  // excerpt — handed to counsel/a platform trust & safety team outside
+  // this app. Generated once at escalation time, not regenerated later,
+  // so it stays an accurate record of what was actually handed off.
+  evidencePackage: text("evidence_package"),
 
   declaredAt: timestamp("declared_at").defaultNow().notNull(),
   resolvedAt: timestamp("resolved_at"),

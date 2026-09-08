@@ -271,3 +271,58 @@ export const repCrisisResponseCron = inngest.createFunction(
     return { dispatched: prepared.length };
   }
 );
+
+/**
+ * Dispatches rep-digest once daily, at the end of the day's monitoring
+ * cycle (18:00 UTC — well past crisis-response's 09:00, so a full day's
+ * detections are in before the rollup runs). Fixed UTC, not the OG spec's
+ * twice-daily per-timezone cadence — see digest.ts's own header for why
+ * once-daily matches this product's existing rep-* cron shape rather than
+ * inventing a new per-timezone mechanism for one skill. Same eligibility
+ * gate as every other rep-* cron (has a real identity graph).
+ */
+export const repDigestCron = inngest.createFunction(
+  { id: "rep-digest-cron", triggers: [{ cron: "TZ=UTC 0 18 * * *" }], retries: 1 }, // 18:00 UTC daily
+  async ({ step }) => {
+    const prepared = await step.run("prepare-digest-runs", async () => {
+      const rows = await db
+        .select({
+          engagementId: engagements.engagementId,
+          buyer: engagements.buyer,
+          pausedAt: engagements.pausedAt,
+          deletedAt: engagements.deletedAt,
+        })
+        .from(repIdentityGraphs)
+        .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
+        .where(isNull(engagements.deletedAt));
+
+      const disabled = await getDisabledEngagementIdsForSkill("rep-digest");
+
+      const out: { runId: string; engagementId: string }[] = [];
+      for (const row of rows) {
+        if (isEngagementPaused(row)) continue;
+        if (disabled.has(row.engagementId)) continue;
+
+        const runId = crypto.randomUUID();
+        await startRun({
+          id: runId,
+          engagementId: row.engagementId,
+          skillName: "rep-digest",
+          phase: "rep_digest",
+          label: row.buyer,
+        });
+        out.push({ runId, engagementId: row.engagementId });
+      }
+      return out;
+    });
+
+    if (prepared.length > 0) {
+      await step.sendEvent(
+        "dispatch-rep-digest-runs",
+        prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-digest" }))
+      );
+    }
+
+    return { dispatched: prepared.length };
+  }
+);

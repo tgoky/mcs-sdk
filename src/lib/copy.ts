@@ -343,6 +343,7 @@ export const ACTION_TYPE_LABELS: Record<string, string> = {
   cohort_membership_add: "Add prospect to cohort",
   cohort_membership_remove: "Remove prospect from cohort",
   confirmation_page_deploy: "Confirmation page ready — approve to publish",
+  rep_response_approval: "Reputation response draft — review before posting",
 };
 
 export const BLOCKER_TYPE_LABELS: Record<string, string> = {

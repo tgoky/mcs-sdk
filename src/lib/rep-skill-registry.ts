@@ -5,6 +5,7 @@ import { runRepTrustpilotWatch } from "@/features/reputation-manager/server/trus
 import { runRepRedditWatch } from "@/features/reputation-manager/server/reddit-watch-service";
 import { runRepTwitterWatch } from "@/features/reputation-manager/server/twitter-watch-service";
 import { runRepCrisisResponse } from "@/features/reputation-manager/server/crisis-response-service";
+import { runRepDigest } from "@/features/reputation-manager/server/digest";
 import {
   REP_SKILL_IDS,
   REP_SKILL_MANIFEST,
@@ -55,5 +56,9 @@ export const REP_SKILL_REGISTRY: Record<RepSkillId, RepSkillDefinition> = {
   "rep-crisis-response": {
     ...REP_SKILL_MANIFEST["rep-crisis-response"],
     execute: (tenant, runId, step) => runRepCrisisResponse(tenant, runId, step),
+  },
+  "rep-digest": {
+    ...REP_SKILL_MANIFEST["rep-digest"],
+    execute: (tenant, runId, step) => runRepDigest(tenant, runId, step),
   },
 };

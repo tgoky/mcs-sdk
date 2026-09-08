@@ -35,6 +35,13 @@ export type RepIntakeInput = {
   // engine runs," matching every row's behavior before this field
   // existed. See repIdentityGraphs.activeEngines' own comment.
   activeEngines?: RepEngineId[] | null;
+  // Destination for crisis-response's SMS paging fallback — see
+  // repIdentityGraphs.operatorPagePhone's own comment. Not in the OG
+  // skill's 10-question interview (that's the ntfy/Twilio paging skill's
+  // own concern in the local tool); added here since this hosted product's
+  // paging config lives on the same per-engagement identity row as the
+  // crisis threshold it's adjacent to.
+  operatorPagePhone?: string | null;
 };
 
 const MAX_LIST_LENGTH = 50; // generous ceiling against a malformed/scripted payload, not a real-world limit
@@ -163,6 +170,9 @@ export async function saveRepIdentityGraphIntake(
   ) {
     return { error: "Crisis threshold override must be a number between 1 and 100, or omitted to use the shared default." };
   }
+  if (input.operatorPagePhone != null && input.operatorPagePhone.trim() && !/^\+?[0-9\s\-().]{7,20}$/.test(input.operatorPagePhone.trim())) {
+    return { error: "Operator page phone doesn't look like a valid phone number." };
+  }
 
   const values = {
     engagementId,
@@ -180,6 +190,7 @@ export async function saveRepIdentityGraphIntake(
     soleAuthorityName: input.soleAuthorityName.trim(),
     crisisThresholdOverride: input.crisisThresholdOverride ?? null,
     activeEngines: input.activeEngines ?? null,
+    operatorPagePhone: input.operatorPagePhone?.trim() || null,
     updatedAt: new Date(),
   };
 
@@ -208,6 +219,7 @@ export async function saveRepIdentityGraphIntake(
         soleAuthorityName: values.soleAuthorityName,
         crisisThresholdOverride: values.crisisThresholdOverride,
         activeEngines: values.activeEngines,
+        operatorPagePhone: values.operatorPagePhone,
         updatedAt: values.updatedAt,
         // collisions intentionally omitted here — merged below in a
         // separate statement so a collision_check-sourced entry from a

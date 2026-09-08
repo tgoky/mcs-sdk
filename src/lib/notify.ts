@@ -56,6 +56,22 @@
 //      round is the message and the same runId/engagementId deep link
 //      every other channel already gets, not the full interactive parity.
 //
+//   5. SMS (2026-09-08) — Reputation Manager's crisis paging fallback, the
+//      spec's ntfy-push-plus-Twilio-SMS redundancy (counterclaim-paging's
+//      SKILL.md: "a crisis alert has two independent delivery paths").
+//      Platform-level Twilio (REP_PAGING_TWILIO_* env vars), not a
+//      per-tenant BYO account — same "platform provides the capability,
+//      the recipient just needs to be reachable" shape email's
+//      RESEND_API_KEY already uses, not Pile-On/Win-Back's per-tenant
+//      Twilio (that's prospect-facing marketing SMS with its own A2P
+//      10DLC compliance gate; this is a single transactional page to the
+//      operator's own number, a materially different send — see
+//      sendOperatorPageSms's own comment in lib/platforms/sms.ts for why
+//      it doesn't route through sendSmsForTenant's A2P gate). Opt-in via
+//      smsToPhone (repIdentityGraphs.operatorPagePhone) — silently no-ops
+//      without it, same graceful-degradation shape every optional channel
+//      here has. Gated to severity "critical" only.
+//
 // Every channel is isolated in its own try/catch. A Slack outage or a
 // missing/invalid Resend key must NEVER prevent the in-app row (the one
 // channel every tenant is guaranteed to have) from being written.
@@ -64,6 +80,7 @@ import { notifications, users } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { findOrCreateThreadForEvent, appendMessage } from "@/lib/chat-threads";
+import { sendOperatorPageSms } from "@/lib/platforms/sms";
 
 export type NotificationType =
   | "run_failed"
@@ -85,7 +102,18 @@ export type NotificationType =
   // problem. Confirmed both real consumers of this union (inbox/page.tsx
   // and human-blockers.ts) use array membership checks, not an
   // exhaustive switch, so this is safe to add.
-  | "reputation_crisis_declared";
+  | "reputation_crisis_declared"
+  // A batch's max compositeScore cleared REP_THRESHOLD_DEFAULTS.
+  // realTimeAlertFloor (75) but stayed under crisisScoreFloor (80) — not
+  // severe enough to declare an incident, but per thresholds.yml.template's
+  // real_time_alert_gate, still severe enough to warrant an immediate,
+  // lighter-weight heads-up rather than waiting for the next digest. See
+  // crisis-response-service.ts.
+  | "reputation_elevated_activity"
+  // digest.ts's rollup of everything that happened since the last digest
+  // run and never crossed realTimeAlertFloor — the spec's "everything else
+  // batches into the daily digest, which you review once daily."
+  | "reputation_daily_digest";
 
 export type NotificationSeverity = "info" | "warning" | "critical";
 
@@ -139,6 +167,16 @@ export interface NotifyOptions {
    * workspace context.
    */
   workspaceId?: string;
+  /**
+   * Operator's own phone number (repIdentityGraphs.operatorPagePhone) —
+   * enables the SMS paging fallback (see file header, channel 5). Same
+   * caller-fetches-it-and-passes-it-in convention slackWebhookUrl already
+   * uses, not a lookup this file does itself. Severity-gated to critical
+   * only — same reasoning chat is gated to warning/critical, just one
+   * notch stricter since an SMS is the single most interruptive channel
+   * this app has.
+   */
+  smsToPhone?: string;
 }
 
 export async function notifyUser(opts: NotifyOptions): Promise<void> {
@@ -266,6 +304,16 @@ export async function notifyUser(opts: NotifyOptions): Promise<void> {
       });
     } catch (e) {
       console.error("[notify] chat channel error:", e);
+    }
+  }
+
+  // ── 5. SMS (best-effort, only if smsToPhone + platform Twilio env vars
+  // are both present, AND severity is critical) ──────────────────────────
+  if (opts.smsToPhone && opts.severity === "critical") {
+    try {
+      await sendOperatorPageSms(opts.smsToPhone, `[${opts.severity.toUpperCase()}] ${opts.title}\n${opts.body}`);
+    } catch (e) {
+      console.error("[notify] SMS channel error:", e);
     }
   }
 }

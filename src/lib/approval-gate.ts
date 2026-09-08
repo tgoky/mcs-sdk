@@ -30,16 +30,25 @@
 // this codebase already applies to Inngest event payloads.
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { pendingActions, engagements, type EngagementStack } from "@/models/schema";
+import { pendingActions, engagements, repIncidents, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { notifyUser } from "@/lib/notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
+import { REP_THRESHOLD_DEFAULTS } from "@/features/reputation-manager/rep-thresholds";
 
 export type PendingActionType =
   | "webhook_enrollment"
   | "cohort_membership_add"
   | "cohort_membership_remove"
-  | "confirmation_page_deploy";
+  | "confirmation_page_deploy"
+  // Reputation Manager's response-routing tiers 1-3 (response-routing.ts) —
+  // always gated, never routed through isApprovalRequired's opt-in check,
+  // since there is no "auto-execute" mode for a drafted public response:
+  // this app has no API to post to Trustpilot/Reddit/X on the operator's
+  // behalf (see draft-response.ts's header), so every draft this queues is
+  // always headed for a human to review and paste manually. Queued
+  // directly via the exported queuePendingAction, not gateOrExecute.
+  | "rep_response_approval";
 
 export function isApprovalRequired(
   stack: EngagementStack | null | undefined,
@@ -50,10 +59,20 @@ export function isApprovalRequired(
   // Gate is on with no scoping list => gate every gateable action type.
   // Gate is on with a list => gate only the listed types.
   if (!scoped || scoped.length === 0) return true;
-  return scoped.includes(actionType);
+  // scoped's element type is the narrower, older set of gateable-by-opt-in
+  // action types (EngagementStack.require_approval_action_types) —
+  // rep_response_approval deliberately isn't in it (see PendingActionType's
+  // own comment: it's always gated, never opt-in), so it can never appear
+  // in scoped and this check is safely widened to a plain string compare.
+  return (scoped as readonly string[]).includes(actionType);
 }
 
-async function queuePendingAction(
+/** Exported so response-routing.ts can queue a rep_response_approval row
+ * directly — that action type is always gated (see PendingActionType's own
+ * comment), so it has no use for gateOrExecute's opt-in isApprovalRequired
+ * check and calls this entry point straight, exactly like the assumed-
+ * no-show sweep's forceGate path already does for webhook_enrollment. */
+export async function queuePendingAction(
   engagementId: string,
   actionType: PendingActionType,
   payload: Record<string, unknown>,
@@ -356,6 +375,21 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
       detail: deployResult.reason,
     });
   },
+
+  // Nothing to actually execute — this app has no API to post to
+  // Trustpilot/Reddit/X on the operator's behalf (see draft-response.ts's
+  // header), so "approved" here means "reviewed and cleared to post,"
+  // logged as the audit trail's approval event chained off the draft event
+  // response-routing.ts created. The operator still pastes the draft text
+  // (already visible on the pending-action row) wherever it needs to go.
+  rep_response_approval: async (engagementId, payload) => {
+    const { logAuditEvent } = await import("@/features/reputation-manager/server/audit-log");
+    await logAuditEvent(
+      engagementId,
+      { eventType: "approval", payload: { approver: "sole_authority", decision: "approved" } },
+      payload?.draftEventId ?? null
+    );
+  },
 };
 
 /**
@@ -390,6 +424,32 @@ export async function decidePendingAction(
       .set({ status: "rejected", decidedAt: new Date(), decidedBy })
       .where(eq(pendingActions.id, id));
     return { ok: true, status: "rejected" };
+  }
+
+  // Anti-hasty-response cooling-off period (thresholds.yml.template's
+  // response_timing block, ported as REP_THRESHOLD_DEFAULTS.
+  // minMinutesBeforePublicResponse) — a public response can't be approved
+  // until this many minutes have passed since the incident it responds to
+  // was declared, even with sole-authority approval. Checked here, before
+  // the row flips to "approved", so a too-early click leaves the row
+  // "pending" and simply retryable once the window clears, rather than
+  // landing in a dead execution_failed state.
+  if (decision === "approved" && action.actionType === "rep_response_approval") {
+    const incidentId = (action.payload as { incidentId?: string } | null)?.incidentId;
+    if (incidentId) {
+      const [incident] = await db.select({ declaredAt: repIncidents.declaredAt }).from(repIncidents).where(eq(repIncidents.id, incidentId)).limit(1);
+      if (incident) {
+        const minutesSinceDeclared = (Date.now() - incident.declaredAt.getTime()) / 60_000;
+        const required = REP_THRESHOLD_DEFAULTS.minMinutesBeforePublicResponse;
+        if (minutesSinceDeclared < required) {
+          const minutesLeft = Math.ceil(required - minutesSinceDeclared);
+          return {
+            ok: false,
+            error: `Anti-hasty-response cooling-off period active — wait ${minutesLeft} more minute${minutesLeft === 1 ? "" : "s"} before approving a public response to this incident.`,
+          };
+        }
+      }
+    }
   }
 
   // Approved — mark decided first (so a slow/failing executor can't leave

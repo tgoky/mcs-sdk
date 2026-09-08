@@ -67,6 +67,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           soleAuthorityName: graph.soleAuthorityName,
           crisisThresholdOverride: graph.crisisThresholdOverride,
           activeEngines: graph.activeEngines,
+          operatorPagePhone: graph.operatorPagePhone,
         }
       : null,
   });
@@ -126,6 +127,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       activeEngines: Array.isArray(body.activeEngines)
         ? body.activeEngines.filter((v: unknown): v is RepEngineId => typeof v === "string" && REP_ENGINE_IDS.includes(v as RepEngineId))
         : null,
+      operatorPagePhone: typeof body.operatorPagePhone === "string" ? body.operatorPagePhone : null,
     };
 
     // saveRepIdentityGraphIntake owns every actual validation rule (see

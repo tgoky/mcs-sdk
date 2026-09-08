@@ -1,6 +1,6 @@
 "use client";
 
-import { Fingerprint, Radar, Star, MessageCircle, AtSign, ShieldAlert } from "lucide-react";
+import { Fingerprint, Radar, Star, MessageCircle, AtSign, ShieldAlert, Newspaper } from "lucide-react";
 import type { RepSkillId } from "@/lib/rep-skill-manifest";
 
 /**
@@ -19,6 +19,7 @@ export const REP_SKILL_SQUISHY_CONFIG: Record<RepSkillId, { bgClass: string; ico
   "rep-reddit-watch": { bgClass: "bg-[#fdba74]", icon: MessageCircle }, // orange — mentions/threads
   "rep-twitter-watch": { bgClass: "bg-[#c4b5fd]", icon: AtSign }, // violet — X mentions
   "rep-crisis-response": { bgClass: "bg-[#fca5a5]", icon: ShieldAlert }, // red — crisis/incident
+  "rep-digest": { bgClass: "bg-[#e5e7eb]", icon: Newspaper }, // neutral gray — quiet rollup, not an alert color
 };
 
 export function RepSkillBadge({ skill, size = 20 }: { skill: RepSkillId; size?: number }) {
