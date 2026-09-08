@@ -12,11 +12,13 @@
 // specifically anymore.
 
 import { useState } from "react";
+import Link from "next/link";
 import { TriangleAlert } from "lucide-react";
 import type { ReportPeriod } from "@/features/reports/server/report-service";
 import type { ReportBlockWithTrend } from "@/lib/worker-report-blocks";
 import { computeCorrelationFlags } from "@/lib/report-correlation";
 import { WorkerReportBlockGrid } from "./worker-report-block-grid";
+import { WORKER_REGISTRY, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
 
 const PERIOD_TABS: { key: ReportPeriod; label: string }[] = [
   { key: "week", label: "This week" },
@@ -25,14 +27,22 @@ const PERIOD_TABS: { key: ReportPeriod; label: string }[] = [
 ];
 
 export function DynamicClientReport({
+  engagementId,
   offerDetails,
   blocksByPeriod,
+  enabledWorkerIds,
 }: {
+  engagementId: string;
   /** Real Showtime offer context when this client has one set up (pin-down)
    * — genuinely useful when present, simply absent for an RM-only client
    * rather than shown as an empty Showtime-shaped section. */
   offerDetails?: Record<string, string | boolean> | null;
   blocksByPeriod: Record<ReportPeriod, ReportBlockWithTrend[]>;
+  /** Every worker actually enabled for this client — used only to name
+   * the ones that contributed zero blocks in any period (leak-map, and
+   * anything else with genuinely nothing trend-able) so they read as
+   * "running, nothing numeric here" instead of looking identical to off. */
+  enabledWorkerIds: WorkerId[];
 }) {
   const [period, setPeriod] = useState<ReportPeriod>("week");
   const blocks = blocksByPeriod[period];
@@ -40,6 +50,14 @@ export function DynamicClientReport({
   // risk signal — only ever non-empty when both products are enabled and
   // both actually moved unfavorably this period. See report-correlation.ts.
   const correlationFlags = computeCorrelationFlags(blocks);
+
+  // A worker's resolver either always contributes a block or never does
+  // (worker-report-blocks.ts) — never conditionally based on the window —
+  // so checking every period's blocks, not just the active tab, correctly
+  // identifies "this skill just has nothing trend-able," not a fluke of
+  // whichever tab happens to be open.
+  const blockWorkerIds = new Set(Object.values(blocksByPeriod).flatMap((list) => list.map((b) => b.workerId)));
+  const silentWorkerIds = enabledWorkerIds.filter((id) => !blockWorkerIds.has(id));
 
   const offerName = String(offerDetails?.name ?? "").trim();
   const offerPrice = String(offerDetails?.price ?? "").trim();
@@ -107,6 +125,20 @@ export function DynamicClientReport({
       )}
 
       <WorkerReportBlockGrid blocks={blocks} />
+
+      {silentWorkerIds.length > 0 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+          {silentWorkerIds.map((id) => (
+            <Link
+              key={id}
+              href={workerPrimaryHref(id, engagementId)}
+              className="text-xs text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors underline decoration-dotted underline-offset-2"
+            >
+              {WORKER_REGISTRY[id].name} is running — see its full report
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

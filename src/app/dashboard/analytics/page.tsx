@@ -1,33 +1,15 @@
 import type { ReactNode } from "react";
 import { db } from "@/lib/db";
-import {
-  engagements,
-  skillRuns,
-  pendingActions,
-  humanBlockers,
-  winBackEnrollments,
-  auditRunsLog,
-  briefOutcomeLog,
-  showRateFeatures,
-  conversationIntelligenceSessions,
-  pileOnSendLog,
-  metricsBenchmark,
-  repEngineFindings,
-  repTrustpilotReviews,
-  repRedditMentions,
-  repTwitterMentions,
-  repIncidents,
-  type EngagementStack,
-} from "@/models/schema";
-import { and, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm";
+import { engagements, skillRuns, pendingActions, humanBlockers, auditRunsLog } from "@/models/schema";
+import { and, eq, gte, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
-import { computeBucketKey } from "@/features/leak-map/server/leak-map-benchmarks";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import { WORKER_IDS, WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { getPortfolioOutcomes } from "@/features/reports/server/portfolio-outcomes";
 import { PortfolioOutcomesSection } from "@/components/analytics/portfolio-outcomes-section";
+import { getCategorySignals, type CategoryFlaggedItem } from "@/features/reports/server/category-signals";
+import { CategorySignalsSection } from "@/components/analytics/category-signals-section";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -149,73 +131,6 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-/** A single horizontal stacked bar with a legend underneath — used for any
- * "what mix of outcomes happened" question (win-back status, resolution
- * source, pile-on delivery path). All-zero renders as an empty track
- * rather than a misleading full bar in one segment's color. */
-function SegmentedBar({
-  segments,
-  total,
-}: {
-  segments: { label: string; value: number; className: string }[];
-  total: number;
-}) {
-  return (
-    <div className="space-y-2.5">
-      <div className="h-2.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-900 overflow-hidden flex">
-        {total > 0 &&
-          segments
-            .filter((s) => s.value > 0)
-            .map((s, i) => (
-              <div key={i} className={s.className} style={{ width: `${(s.value / total) * 100}%` }} />
-            ))}
-      </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-        {segments.map((s, i) => (
-          <div key={i} className="flex items-center gap-1.5 text-xs">
-            <span className={`w-2 h-2 rounded-full shrink-0 ${s.className}`} />
-            <span className="text-zinc-500 dark:text-zinc-500">{s.label}</span>
-            <span className="font-mono font-medium text-zinc-700 dark:text-zinc-300">
-              {s.value}
-              {total > 0 && <span className="text-zinc-400 dark:text-zinc-600">{` (${Math.round((s.value / total) * 100)}%)`}</span>}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Ranked horizontal-bar leaderboard — top objections, recurring leaks,
- * anything that's fundamentally "count these strings and show the most
- * common ones." */
-function RankedList({
-  items,
-  unit = "",
-}: {
-  items: { label: string; count: number; detail?: string }[];
-  unit?: string;
-}) {
-  const max = Math.max(1, ...items.map((i) => i.count));
-  return (
-    <div className="divide-y divide-zinc-200 dark:divide-zinc-900">
-      {items.map((item, i) => (
-        <div key={i} className="px-4 py-2.5 space-y-1.5">
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-zinc-700 dark:text-zinc-300 truncate">{item.label}</span>
-            <span className="font-mono text-xs text-zinc-500 dark:text-zinc-500 shrink-0">
-              {item.count}
-              {unit}
-              {item.detail && <span className="ml-2 text-zinc-400 dark:text-zinc-600">{item.detail}</span>}
-            </span>
-          </div>
-          <Bar value={item.count} max={max} className="bg-ink" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** Daily stacked-volume chart for the last N days, plain HTML/CSS (no SVG)
  * so it composes with the rest of the page's div-based bar language instead
  * of introducing a second, differently-behaved chart primitive. Each column
@@ -276,109 +191,13 @@ function Legend({ swatch, label }: { swatch: string; label: string }) {
   );
 }
 
-/** Predicted-vs-actual calibration curve for show-rate scoring. This is the
- * one chart on the page that's a genuine X/Y plot rather than a bar, so it's
- * the one place raw SVG earns its keep. Uses the default (uniform) aspect
- * ratio behavior — width scales with the container, height follows the
- * viewBox proportionally — so points stay circular instead of stretching. */
-function CalibrationChart({
-  buckets,
-}: {
-  buckets: { predictedMid: number; actualRate: number; n: number }[];
-}) {
-  const W = 320;
-  const H = 260;
-  const pad = 32;
-  const plot = W - pad * 2;
-  const toX = (v: number) => pad + (v / 100) * plot;
-  const toY = (v: number) => H - pad - (v / 100) * plot;
-  const maxN = Math.max(1, ...buckets.map((b) => b.n));
-  const linePath = buckets.map((b, i) => `${i === 0 ? "M" : "L"}${toX(b.predictedMid).toFixed(1)},${toY(b.actualRate).toFixed(1)}`).join(" ");
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }} role="img" aria-label="Predicted vs actual show rate calibration chart">
-      {/* Axes */}
-      <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="currentColor" className="text-zinc-300 dark:text-zinc-700" strokeWidth={1} />
-      <line x1={pad} y1={pad} x2={pad} y2={H - pad} stroke="currentColor" className="text-zinc-300 dark:text-zinc-700" strokeWidth={1} />
-      {/* Perfect-calibration diagonal */}
-      <line
-        x1={toX(0)}
-        y1={toY(0)}
-        x2={toX(100)}
-        y2={toY(100)}
-        stroke="currentColor"
-        className="text-zinc-300 dark:text-zinc-700"
-        strokeWidth={1}
-        strokeDasharray="4 3"
-      />
-      {/* Observed line */}
-      {buckets.length > 1 && (
-        <path d={linePath} fill="none" stroke="currentColor" className="text-ink dark:text-ink-hover" strokeWidth={1.75} />
-      )}
-      {buckets.map((b, i) => (
-        <circle
-          key={i}
-          cx={toX(b.predictedMid)}
-          cy={toY(b.actualRate)}
-          r={3 + (b.n / maxN) * 4}
-          className="fill-ink dark:fill-ink-hover"
-        />
-      ))}
-      {/* Axis labels */}
-      <text x={pad} y={H - pad + 14} fontSize={9} className="fill-zinc-400 dark:fill-zinc-600" fontFamily="monospace">0%</text>
-      <text x={W - pad - 22} y={H - pad + 14} fontSize={9} className="fill-zinc-400 dark:fill-zinc-600" fontFamily="monospace">100%</text>
-      <text x={pad - 26} y={H - pad + 3} fontSize={9} className="fill-zinc-400 dark:fill-zinc-600" fontFamily="monospace">0%</text>
-      <text x={pad - 30} y={pad + 3} fontSize={9} className="fill-zinc-400 dark:fill-zinc-600" fontFamily="monospace">100%</text>
-    </svg>
-  );
-}
-
-/** Where this account's current value sits against cross-tenant p25/p50/p75/
- * p90 for the same offer bucket. Track spans [min(p25,current), max(p90,
- * current)] so an outlier account is still visible on its own chart instead
- * of clipping off the edge. */
-function RangeBar({
-  current,
-  p25,
-  p50,
-  p75,
-  p90,
-}: {
-  current: number;
-  p25: number;
-  p50: number;
-  p75: number;
-  p90: number;
-}) {
-  const lo = Math.min(p25, current);
-  const hi = Math.max(p90, current, lo + 0.001);
-  const at = (v: number) => `${Math.min(100, Math.max(0, ((v - lo) / (hi - lo)) * 100))}%`;
-
-  return (
-    <div className="relative h-6 mt-1">
-      <div className="absolute top-1/2 -translate-y-1/2 w-full h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-900" />
-      <div
-        className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-zinc-300 dark:bg-zinc-700"
-        style={{ left: at(p25), width: `calc(${at(p75)} - ${at(p25)})` }}
-        title="Typical range (p25-p75)"
-      />
-      <div className="absolute top-1/2 -translate-y-1/2 w-px h-3 bg-zinc-400 dark:bg-zinc-600" style={{ left: at(p50) }} title="Median (p50)" />
-      <div
-        className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-ink dark:bg-ink-hover ring-2 ring-white dark:ring-zinc-950"
-        style={{ left: `calc(${at(current)} - 5px)` }}
-        title="This account"
-      />
-    </div>
-  );
-}
 
 /**
  * Real numbers only — every figure here comes straight from skill_runs,
- * pending_actions, human_blockers, win_back_enrollments, audit_runs_log,
- * show_rate_features, conversation_intelligence_sessions, pile_on_send_log,
- * brief_outcome_log, and metrics_benchmark. Nothing is estimated or
- * simulated; anything without enough data yet says so instead of rendering
- * a placeholder chart.
+ * pending_actions, human_blockers, and audit_runs_log, plus whatever
+ * getPortfolioOutcomes reads for the portfolio and category-signal
+ * sections. Nothing is estimated or simulated; anything without enough
+ * data yet says so instead of rendering a placeholder chart.
  */
 export default async function AnalyticsPage() {
   const session = await getSession();
@@ -388,15 +207,13 @@ export default async function AnalyticsPage() {
   const since30 = daysAgo(TREND_DAYS);
   const since90 = daysAgo(LOOKBACK_DAYS);
 
-  // Engagement roster is needed up front — booking sync, the benchmark
-  // section, and the per-engagement revenue-attribution calls below all key
-  // off it.
+  // Engagement roster is needed up front — the per-engagement
+  // revenue-attribution calls below and the category-signal buyer
+  // lookup both key off it.
   const engagementRows = await db
-    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, stack: engagements.stack, offerDetails: engagements.offerDetails })
+    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
     .from(engagements)
     .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)));
-
-  const engagementIds = engagementRows.map((e) => e.engagementId);
 
   // Portfolio outcomes — independent of the operational query set below,
   // computed straight from the same engagement roster. See
@@ -404,25 +221,7 @@ export default async function AnalyticsPage() {
   // recycled version of the infra-health numbers further down the page.
   const portfolioAccounts = await getPortfolioOutcomes(engagementRows.map((e) => ({ engagementId: e.engagementId, buyer: e.buyer })));
 
-  const [
-    runRows,
-    openPending,
-    openBlockers,
-    pendingWindow,
-    blockersWindow,
-    briefOutcomeWindow,
-    winBackWindow,
-    showRateWindow,
-    objectionsWindow,
-    auditWindow,
-    pileOnWindow,
-    revenueResults,
-    repEngineWindow,
-    repTrustpilotWindow,
-    repRedditWindow,
-    repTwitterWindow,
-    repIncidentWindow,
-  ] = await Promise.all([
+  const [runRows, openPending, openBlockers, pendingWindow, blockersWindow, auditWindow, revenueResults] = await Promise.all([
     db
       .select({ skillName: skillRuns.skillName, status: skillRuns.status, costInCents: skillRuns.costInCents, startedAt: skillRuns.startedAt, completedAt: skillRuns.completedAt })
       .from(skillRuns)
@@ -453,95 +252,18 @@ export default async function AnalyticsPage() {
       .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
       .where(and(eq(engagements.whopUserId, whopUserId), gte(humanBlockers.createdAt, since90), isNull(engagements.deletedAt))),
 
-    db
-      .select({ outcome: briefOutcomeLog.outcome, source: briefOutcomeLog.source, loggedAt: briefOutcomeLog.loggedAt })
-      .from(briefOutcomeLog)
-      .innerJoin(engagements, eq(briefOutcomeLog.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), gte(briefOutcomeLog.loggedAt, since90), isNull(engagements.deletedAt))),
-
-    db
-      .select({ status: winBackEnrollments.status, enrolledAt: winBackEnrollments.enrolledAt, exitedAt: winBackEnrollments.exitedAt, lostAt: winBackEnrollments.lostAt })
-      .from(winBackEnrollments)
-      .innerJoin(engagements, eq(winBackEnrollments.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), gte(winBackEnrollments.enrolledAt, since90), isNull(engagements.deletedAt))),
-
-    db
-      .select({ predictedShowProbability: showRateFeatures.predictedShowProbability, actualOutcome: showRateFeatures.actualOutcome })
-      .from(showRateFeatures)
-      .innerJoin(engagements, eq(showRateFeatures.engagementId, engagements.engagementId))
-      .where(
-        and(
-          eq(engagements.whopUserId, whopUserId),
-          gte(showRateFeatures.createdAt, since90),
-          isNotNull(showRateFeatures.actualOutcome),
-          isNull(engagements.deletedAt)
-        )
-      ),
-
-    db
-      .select({ extractedObjections: conversationIntelligenceSessions.extractedObjections })
-      .from(conversationIntelligenceSessions)
-      .innerJoin(engagements, eq(conversationIntelligenceSessions.engagementId, engagements.engagementId))
-      .where(
-        and(
-          eq(engagements.whopUserId, whopUserId),
-          gte(conversationIntelligenceSessions.createdAt, since90),
-          isNotNull(conversationIntelligenceSessions.extractedObjections),
-          isNull(engagements.deletedAt)
-        )
-      ),
-
+    // Still fetched — Funnel Audit's own resolver never produces a
+    // trend-able block (worker-report-blocks.ts), so its "By category"
+    // signal below is built straight from this raw audit data instead.
     db
       .select({ engagementId: auditRunsLog.engagementId, topIssues: auditRunsLog.topIssues, createdAt: auditRunsLog.createdAt })
       .from(auditRunsLog)
       .innerJoin(engagements, eq(auditRunsLog.engagementId, engagements.engagementId))
       .where(and(eq(engagements.whopUserId, whopUserId), gte(auditRunsLog.createdAt, since90), isNull(engagements.deletedAt))),
 
-    db
-      .select({ sentVia: pileOnSendLog.sentVia, error: pileOnSendLog.error })
-      .from(pileOnSendLog)
-      .innerJoin(engagements, eq(pileOnSendLog.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), gte(pileOnSendLog.createdAt, since90), isNull(engagements.deletedAt))),
-
-    // Win-Back's own revenue-attribution module, reused as-is (current
-    // quarter, per engagement) rather than re-deriving the price-parsing
-    // and rebooked-in-window logic a second time here.
+    // Win-Back's own revenue-attribution module — deliberately left
+    // fetched-but-unused here, see the "Dropped" note below.
     Promise.all(engagementRows.map((e) => computeWinBackRevenueAttribution(e.engagementId))),
-
-    // ── Reputation Manager signals, same LOOKBACK_DAYS window as every
-    // other slower-moving Showtime signal above. This page used to have
-    // zero RM data anywhere on it — an RM-only account saw a wall of
-    // Showtime-shaped empty states and nothing about what it actually runs.
-    engagementIds.length > 0
-      ? db
-          .select({ engineId: repEngineFindings.engineId, sentiment: repEngineFindings.sentiment, flagged: repEngineFindings.flagged, flagReason: repEngineFindings.flagReason, runAt: repEngineFindings.runAt })
-          .from(repEngineFindings)
-          .where(and(inArray(repEngineFindings.engagementId, engagementIds), gte(repEngineFindings.runAt, since90)))
-      : Promise.resolve([]),
-    engagementIds.length > 0
-      ? db
-          .select({ rating: repTrustpilotReviews.rating, sentiment: repTrustpilotReviews.sentiment, flagged: repTrustpilotReviews.flagged, flagReason: repTrustpilotReviews.flagReason, createdAt: repTrustpilotReviews.createdAt })
-          .from(repTrustpilotReviews)
-          .where(and(inArray(repTrustpilotReviews.engagementId, engagementIds), gte(repTrustpilotReviews.createdAt, since90)))
-      : Promise.resolve([]),
-    engagementIds.length > 0
-      ? db
-          .select({ subreddit: repRedditMentions.subreddit, sentiment: repRedditMentions.sentiment, flagged: repRedditMentions.flagged, flagReason: repRedditMentions.flagReason, createdAt: repRedditMentions.createdAt })
-          .from(repRedditMentions)
-          .where(and(inArray(repRedditMentions.engagementId, engagementIds), gte(repRedditMentions.createdAt, since90)))
-      : Promise.resolve([]),
-    engagementIds.length > 0
-      ? db
-          .select({ sentiment: repTwitterMentions.sentiment, flagged: repTwitterMentions.flagged, flagReason: repTwitterMentions.flagReason, createdAt: repTwitterMentions.createdAt })
-          .from(repTwitterMentions)
-          .where(and(inArray(repTwitterMentions.engagementId, engagementIds), gte(repTwitterMentions.createdAt, since90)))
-      : Promise.resolve([]),
-    engagementIds.length > 0
-      ? db
-          .select({ severityScore: repIncidents.severityScore, summary: repIncidents.summary, status: repIncidents.status, declaredAt: repIncidents.declaredAt, resolvedAt: repIncidents.resolvedAt })
-          .from(repIncidents)
-          .where(and(inArray(repIncidents.engagementId, engagementIds), gte(repIncidents.declaredAt, since90)))
-      : Promise.resolve([]),
   ]);
 
   // ── Skill comparison + top-line run stats (TREND_DAYS window) ─────────
@@ -635,217 +357,48 @@ export default async function AnalyticsPage() {
 
   const overallMedianResolutionMs = median([...actionResolutionMs, ...blockerResolutionMs]);
 
-  // How outcomes actually get resolved — the 4-source split (dashboard /
-  // slack / recall_bot / auto_sweep) that queue-alerts work added.
-  const sourceCounts = { dashboard: 0, slack: 0, recall_bot: 0, auto_sweep: 0, other: 0 };
-  for (const row of briefOutcomeWindow) {
-    const src = row.source as keyof typeof sourceCounts | null;
-    if (src && src in sourceCounts && src !== "other") sourceCounts[src]++;
-    else sourceCounts.other++;
-  }
-  const outcomeTotal = briefOutcomeWindow.length;
-
-  // ── Win-Back recovery funnel ────────────────────────────────────────────
-  const winBackTotal = winBackWindow.length;
-  const winBackCounts = { active: 0, rebooked: 0, lost: 0, reply_exited: 0, corrected: 0, other: 0 };
-  const recoveryDaysList: number[] = [];
-  for (const row of winBackWindow) {
-    const s = row.status as keyof typeof winBackCounts;
-    if (s in winBackCounts) winBackCounts[s]++;
-    else winBackCounts.other++;
-    if (row.status === "rebooked" && row.exitedAt) {
-      recoveryDaysList.push((row.exitedAt.getTime() - row.enrolledAt.getTime()) / (24 * 60 * 60 * 1000));
-    }
-  }
-  const winBackResolved = winBackTotal - winBackCounts.active;
-  const recoveryRateOfResolved = pct(winBackCounts.rebooked, winBackResolved);
-  const medianRecoveryDays = median(recoveryDaysList);
-
   // Dropped: a headline "revenue recovered/attributed" figure used to be
-  // shown here and in the Win-Back section below, sourced from
-  // computeWinBackRevenueAttribution — a price-parsing heuristic against
-  // offer text, not a real transaction. This app has no billing/Stripe
-  // integration, so presenting that estimate as a confident dollar
-  // figure read as fabricated data. revenueResults is still fetched
-  // above (Win-Back's own module, left as-is rather than touching the
-  // large positional query destructure above) but is intentionally
-  // unused here now — Recovery rate and Rebooked count below are the
-  // real, defensible numbers.
+  // shown here, sourced from computeWinBackRevenueAttribution — a
+  // price-parsing heuristic against offer text, not a real transaction.
+  // This app has no billing/Stripe integration, so presenting that
+  // estimate as a confident dollar figure read as fabricated data.
+  // revenueResults is still fetched above (Win-Back's own module, left
+  // as-is rather than touching the query destructure) but is
+  // intentionally unused here now.
 
-  // ── Show-rate calibration ──────────────────────────────────────────────
-  const usableScored = showRateWindow.filter((r) => r.actualOutcome === "showed" || r.actualOutcome === "no_show");
-  const calibrationBuckets: { predictedMid: number; actualRate: number; n: number }[] = [];
-  let brierSum = 0;
-  for (let decile = 0; decile < 10; decile++) {
-    const lo = decile * 10;
-    const hi = lo + 10;
-    const inBucket = usableScored.filter((r) => (decile === 9 ? r.predictedShowProbability >= lo && r.predictedShowProbability <= 100 : r.predictedShowProbability >= lo && r.predictedShowProbability < hi));
-    if (inBucket.length < 3) continue; // same statistical-floor philosophy Leak Map already applies elsewhere in this app
-    const showedCount = inBucket.filter((r) => r.actualOutcome === "showed").length;
-    calibrationBuckets.push({ predictedMid: lo + 5, actualRate: (showedCount / inBucket.length) * 100, n: inBucket.length });
-  }
-  for (const r of usableScored) {
-    const actual = r.actualOutcome === "showed" ? 1 : 0;
-    const predicted = r.predictedShowProbability / 100;
-    brierSum += (predicted - actual) ** 2;
-  }
-  const brierScore = usableScored.length > 0 ? brierSum / usableScored.length : null;
-  const overallActualShowRate = pct(usableScored.filter((r) => r.actualOutcome === "showed").length, usableScored.length);
-
-  // ── Top objections detected on real calls ───────────────────────────────
-  const objectionCounts = new Map<string, { display: string; count: number }>();
-  for (const row of objectionsWindow) {
-    for (const raw of row.extractedObjections ?? []) {
-      const key = raw.trim().toLowerCase();
-      if (!key) continue;
-      const existing = objectionCounts.get(key);
-      if (existing) existing.count++;
-      else objectionCounts.set(key, { display: raw.trim(), count: 1 });
-    }
-  }
-  const topObjections = [...objectionCounts.values()].sort((a, b) => b.count - a.count).slice(0, 8);
-
-  // ── Recurring funnel leaks (Leak Map) ───────────────────────────────────
-  const leakCounts = new Map<string, { count: number; highCount: number }>();
+  // ── By-category signals ─────────────────────────────────────────────
+  // Replaces the old per-skill hardcoded Sections (show-rate calibration,
+  // win-back funnel, objections, funnel leaks, pile-on delivery,
+  // cross-client benchmark, booking sync, and the separately-merged RM
+  // signal sections) with one rollup bounded at the 5 fixed
+  // WorkerCategory values. Every worker's tone-based signal
+  // (win-back, pre-call-read, and all 5 RM skills) already flows through
+  // portfolioAccounts' atRiskBlocks — no new queries needed for those.
+  // Funnel Audit is the one exception: its resolver never produces a
+  // block at all (worker-report-blocks.ts), so its signal is built here
+  // from the same auditWindow rows the old "Recurring funnel leaks"
+  // section used to read.
+  const buyerById = new Map(engagementRows.map((e) => [e.engagementId, e.buyer]));
+  const latestAuditByEngagement = new Map<string, { createdAt: Date; highCount: number }>();
   for (const row of auditWindow) {
     const issues = (row.topIssues ?? []) as { name: string; severity: "high" | "medium" | "low" | "none" }[];
-    for (const issue of issues) {
-      if (issue.severity !== "high" && issue.severity !== "medium") continue;
-      const existing = leakCounts.get(issue.name) ?? { count: 0, highCount: 0 };
-      existing.count++;
-      if (issue.severity === "high") existing.highCount++;
-      leakCounts.set(issue.name, existing);
-    }
-  }
-  const auditRunCount = auditWindow.length;
-  const topLeaks = [...leakCounts.entries()]
-    .sort((a, b) => b[1].count - a[1].count)
-    .slice(0, 8)
-    .map(([name, v]) => ({ label: name, count: v.count, detail: v.highCount > 0 ? `${v.highCount} high-severity` : undefined }));
-
-  // ── Pile-On delivery mix ────────────────────────────────────────────────
-  const pileOnTotal = pileOnWindow.length;
-  const pileOnHybrid = pileOnWindow.filter((r) => r.sentVia === "hybrid").length;
-  const pileOnFallback = pileOnWindow.filter((r) => r.sentVia === "fallback").length;
-  const pileOnErrors = pileOnWindow.filter((r) => r.error !== null).length;
-
-  // ── Cross-client benchmark comparison ───────────────────────────────────
-  const engagementBuckets = engagementRows
-    .map((e) => ({ e, bucket: computeBucketKey(e.offerDetails ?? null) }))
-    .filter((x): x is { e: (typeof engagementRows)[number]; bucket: string } => x.bucket !== null);
-
-  // auditWindow isn't guaranteed to arrive in createdAt order per engagement
-  // after the join — re-derive "latest" explicitly rather than trusting
-  // insertion order.
-  const latestAuditRowByEngagement = new Map<string, { topIssues: { name: string; current: number }[]; createdAt: Date }>();
-  for (const row of auditWindow) {
-    const existing = latestAuditRowByEngagement.get(row.engagementId);
+    const highCount = issues.filter((i) => i.severity === "high").length;
+    const existing = latestAuditByEngagement.get(row.engagementId);
     if (!existing || row.createdAt > existing.createdAt) {
-      latestAuditRowByEngagement.set(row.engagementId, { topIssues: (row.topIssues ?? []) as { name: string; current: number }[], createdAt: row.createdAt });
+      latestAuditByEngagement.set(row.engagementId, { createdAt: row.createdAt, highCount });
     }
   }
+  const leakMapExtraFlags: CategoryFlaggedItem[] = [...latestAuditByEngagement.entries()]
+    .filter(([, v]) => v.highCount > 0)
+    .map(([engagementId, v]) => ({
+      engagementId,
+      buyer: buyerById.get(engagementId) ?? "Unknown",
+      workerId: "leak-map" as WorkerId,
+      label: "Funnel Audit",
+      displayValue: `${v.highCount} high-severity issue${v.highCount > 1 ? "s" : ""}`,
+    }));
 
-  const uniqueBuckets = [...new Set(engagementBuckets.map((x) => x.bucket))];
-  const benchmarkRows = uniqueBuckets.length > 0 ? await db.select().from(metricsBenchmark).where(inArray(metricsBenchmark.bucket, uniqueBuckets)) : [];
-
-  type BenchmarkComparison = { buyer: string; metricName: string; current: number; p25: number; p50: number; p75: number; p90: number; sampleSize: number; bucketDisplay: string };
-  const benchmarkComparisons: BenchmarkComparison[] = [];
-  for (const { e, bucket } of engagementBuckets) {
-    const latest = latestAuditRowByEngagement.get(e.engagementId);
-    if (!latest) continue;
-    for (const issue of latest.topIssues) {
-      const match = benchmarkRows.find((b) => b.bucket === bucket && b.metricName === issue.name);
-      if (!match) continue;
-      benchmarkComparisons.push({
-        buyer: e.buyer,
-        metricName: issue.name,
-        current: issue.current,
-        p25: parseFloat(match.p25),
-        p50: parseFloat(match.p50),
-        p75: parseFloat(match.p75),
-        p90: parseFloat(match.p90),
-        sampleSize: match.sampleSize,
-        bucketDisplay: bucket.split("|").join(" · "),
-      });
-    }
-  }
-  // Surface the biggest deviations from the peer median first — that's the
-  // actionable end of the list, not an alphabetical dump.
-  benchmarkComparisons.sort((a, b) => Math.abs(b.current - b.p50) / Math.max(1, b.p50) - Math.abs(a.current - a.p50) / Math.max(1, a.p50));
-  const topBenchmarkComparisons = benchmarkComparisons.slice(0, 8);
-
-  // ── Booking sync distribution (unchanged) ───────────────────────────────
-  let webhookCount = 0;
-  let pollingCount = 0;
-  let unsetCount = 0;
-  let setupNeededCount = 0;
-  let connectedCount = 0;
-  for (const row of engagementRows) {
-    const stack = row.stack as EngagementStack | null;
-    if (!stack?.booking_platform) continue;
-    connectedCount++;
-    if (stack.webhook_receiver_mode === "webhook") webhookCount++;
-    else if (stack.webhook_receiver_mode === "polling") pollingCount++;
-    else unsetCount++;
-    if (needsWebhookSetupNudge(stack)) setupNeededCount++;
-  }
-  // Whether Showtime has any real activity on this account at all — an
-  // RM-only account used to see 7 separate Showtime-shaped "no data yet"
-  // boxes instead of those sections just not being there.
-  const hasShowtimeData =
-    connectedCount > 0 ||
-    winBackWindow.length > 0 ||
-    showRateWindow.length > 0 ||
-    objectionsWindow.length > 0 ||
-    auditWindow.length > 0 ||
-    pileOnWindow.length > 0;
-
-  // ── Reputation Manager: sentiment mix, top flag reasons, Trustpilot
-  // rating spread, and open/declared incidents — this page's first RM
-  // section. Same LOOKBACK_DAYS window and "count it, rank it" approach
-  // Showtime's own objections/leaks sections already use, not a new
-  // visual language.
-  type RepSignalRow = { sentiment: string; flagged: boolean; flagReason: string | null };
-  const allRepSignals: RepSignalRow[] = [
-    ...repEngineWindow.map((r) => ({ sentiment: r.sentiment, flagged: r.flagged, flagReason: r.flagReason })),
-    ...repTrustpilotWindow.map((r) => ({ sentiment: r.sentiment, flagged: r.flagged, flagReason: r.flagReason })),
-    ...repRedditWindow.map((r) => ({ sentiment: r.sentiment, flagged: r.flagged, flagReason: r.flagReason })),
-    ...repTwitterWindow.map((r) => ({ sentiment: r.sentiment, flagged: r.flagged, flagReason: r.flagReason })),
-  ];
-  const repSignalTotal = allRepSignals.length;
-  const repSentimentCounts = {
-    positive: allRepSignals.filter((s) => s.sentiment === "positive").length,
-    neutral: allRepSignals.filter((s) => s.sentiment === "neutral").length,
-    negative: allRepSignals.filter((s) => s.sentiment === "negative").length,
-  };
-  const repFlaggedTotal = allRepSignals.filter((s) => s.flagged).length;
-
-  const repFlagReasonCounts = new Map<string, number>();
-  for (const s of allRepSignals) {
-    if (!s.flagged || !s.flagReason) continue;
-    const key = s.flagReason.trim();
-    if (!key) continue;
-    repFlagReasonCounts.set(key, (repFlagReasonCounts.get(key) ?? 0) + 1);
-  }
-  const topRepFlagReasons = [...repFlagReasonCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([label, count]) => ({ label, count }));
-
-  const trustpilotTotal = repTrustpilotWindow.length;
-  const trustpilotRatingCounts = [5, 4, 3, 2, 1].map((star) => ({
-    star,
-    count: repTrustpilotWindow.filter((r) => r.rating === star).length,
-  }));
-  const trustpilotAvgRating = trustpilotTotal > 0 ? repTrustpilotWindow.reduce((sum, r) => sum + r.rating, 0) / trustpilotTotal : null;
-
-  const openIncidents = repIncidentWindow.filter((i) => i.status !== "resolved");
-  const resolvedIncidents = repIncidentWindow.filter((i) => i.status === "resolved" && i.resolvedAt);
-  const incidentResolutionMs = resolvedIncidents.map((i) => i.resolvedAt!.getTime() - i.declaredAt.getTime());
-  const medianIncidentResolutionMs = median(incidentResolutionMs);
-  const topIncidentsBySeverity = [...repIncidentWindow].sort((a, b) => b.severityScore - a.severityScore).slice(0, 8);
-
-  const hasRepData = repSignalTotal > 0 || repIncidentWindow.length > 0;
+  const categorySignals = getCategorySignals(portfolioAccounts, leakMapExtraFlags);
 
   return (
     <div className="relative min-h-screen w-full transition-colors duration-200 overflow-hidden pb-10">
@@ -952,88 +505,18 @@ export default async function AnalyticsPage() {
           </Card>
         </Section>
 
-        {/* Showtime-only sections below — hidden entirely for an account
-            with no real Showtime activity, instead of a wall of empty
-            Showtime-shaped boxes on what might be a pure-RM account. */}
-        {hasShowtimeData && (
-          <>
-            {/* Show-rate calibration */}
-            <Section
-              title="Show-rate prediction accuracy"
-              caption={`Predicted show probability vs. what actually happened, last ${LOOKBACK_DAYS} days — points near the dashed diagonal mean the score is well-calibrated`}
-            >
-              <Card className="p-4">
-                {calibrationBuckets.length < 2 ? (
-                  <EmptyState>
-                    Not enough calls with both a predicted score and a confirmed outcome yet to plot calibration. This fills in as brief outcomes get logged.
-                  </EmptyState>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 items-center">
-                    <div className="max-w-sm mx-auto md:mx-0">
-                      <CalibrationChart buckets={calibrationBuckets} />
-                    </div>
-                    <div className="grid grid-cols-3 md:grid-cols-1 gap-3">
-                      <StatCard label="Calls scored" value={String(usableScored.length)} />
-                      <StatCard label="Actual show rate" value={overallActualShowRate !== null ? `${overallActualShowRate}%` : "—"} />
-                      <StatCard label="Brier score" value={brierScore !== null ? brierScore.toFixed(3) : "—"} sub="0 = perfect, 0.25 ≈ a coin flip" />
-                    </div>
-                  </div>
-                )}
-              </Card>
-            </Section>
+        {/* Per-skill deep dives (show-rate calibration, win-back funnel,
+            objections, funnel leaks, pile-on delivery, cross-client
+            benchmark, booking sync, and the old separately-merged RM
+            signal sections) used to live here as hand-written Sections —
+            replaced by CategorySignalsSection below, which is bounded at
+            the 5 fixed WorkerCategory values instead of growing by one
+            hardcoded block per worker. */}
 
-            {/* Win-Back recovery */}
-            <Section title="Win-back recovery" caption={`Enrollments opened in the last ${LOOKBACK_DAYS} days, by current status`}>
-              <Card className="p-4 space-y-4">
-                {winBackTotal === 0 ? (
-                  <EmptyState>No win-back enrollments in the last {LOOKBACK_DAYS} days.</EmptyState>
-                ) : (
-                  <>
-                    <SegmentedBar
-                      total={winBackTotal}
-                      segments={[
-                        { label: "Rebooked", value: winBackCounts.rebooked, className: "bg-emerald-500" },
-                        { label: "Active", value: winBackCounts.active, className: "bg-zinc-300 dark:bg-zinc-700" },
-                        { label: "Lost", value: winBackCounts.lost, className: "bg-rose-500" },
-                        { label: "Reply exited", value: winBackCounts.reply_exited, className: "bg-amber-500" },
-                        { label: "Corrected", value: winBackCounts.corrected, className: "bg-zinc-400 dark:bg-zinc-600" },
-                      ]}
-                    />
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
-                      <StatCard label="Recovery rate" value={recoveryRateOfResolved !== null ? `${recoveryRateOfResolved}%` : "—"} sub={`of ${winBackResolved} resolved (excludes still-active)`} />
-                      <StatCard label="Median time to rebook" value={medianRecoveryDays !== null ? `${Math.round(medianRecoveryDays)}d` : "—"} sub="enrollment to rebooking" />
-                      <StatCard label="Rebooked" value={String(winBackCounts.rebooked)} sub={`of ${winBackTotal} enrolled, ${LOOKBACK_DAYS}d`} />
-                    </div>
-                  </>
-                )}
-              </Card>
-            </Section>
-          </>
-        )}
-
-        {/* Resolution analytics — cross-product (pending actions / human
-            blockers apply to either product's approval flows); the
-            outcome-source card is Showtime-specific and empty-states
-            honestly on its own for an RM-only account. */}
+        {/* Cross-product — pending actions / human blockers apply to
+            either product's approval flows equally. */}
         <Section title="How outcomes get resolved" caption={`Last ${LOOKBACK_DAYS} days`}>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <Card className="p-4 space-y-3">
-              <p className="text-xs font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Call outcome source</p>
-              {outcomeTotal === 0 ? (
-                <EmptyState>No call outcomes logged yet.</EmptyState>
-              ) : (
-                <SegmentedBar
-                  total={outcomeTotal}
-                  segments={[
-                    { label: "Dashboard", value: sourceCounts.dashboard, className: "bg-ink dark:bg-ink-hover" },
-                    { label: "Slack", value: sourceCounts.slack, className: "bg-zinc-400 dark:bg-zinc-600" },
-                    { label: "Recall bot", value: sourceCounts.recall_bot, className: "bg-emerald-500" },
-                    { label: "Auto-sweep", value: sourceCounts.auto_sweep, className: "bg-amber-500" },
-                    ...(sourceCounts.other > 0 ? [{ label: "Other", value: sourceCounts.other, className: "bg-zinc-300 dark:bg-zinc-800" }] : []),
-                  ]}
-                />
-              )}
-            </Card>
+          <div className="grid grid-cols-1 gap-3">
             <Card className="p-4 space-y-3">
               <p className="text-xs font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Time to human decision</p>
               {decidedActions.length === 0 && resolvedBlockers.length === 0 ? (
@@ -1076,176 +559,7 @@ export default async function AnalyticsPage() {
           </div>
         </Section>
 
-        {hasShowtimeData && (
-          <>
-            {/* Top objections */}
-            <Section title="Top objections detected" caption={`From Recall.ai call transcripts, last ${LOOKBACK_DAYS} days`}>
-              <Card>
-                {topObjections.length === 0 ? (
-                  <EmptyState>No objections extracted from calls yet — this needs conversation intelligence sessions with a completed transcript.</EmptyState>
-                ) : (
-                  <RankedList items={topObjections.map((o) => ({ label: o.display, count: o.count }))} unit="×" />
-                )}
-              </Card>
-            </Section>
-
-            {/* Recurring leaks */}
-            <Section title="Recurring funnel leaks" caption={`Issues flagged medium/high severity across ${auditRunCount} Funnel Audit run${auditRunCount !== 1 ? "s" : ""}, last ${LOOKBACK_DAYS} days`}>
-              <Card>
-                {topLeaks.length === 0 ? (
-                  <EmptyState>No recurring medium/high-severity issues in this window.</EmptyState>
-                ) : (
-                  <RankedList items={topLeaks} unit="×" />
-                )}
-              </Card>
-            </Section>
-
-            {/* Pile-On delivery */}
-            <Section title="Pre-call sequence delivery" caption={`Email 1 personalization path, last ${LOOKBACK_DAYS} days`}>
-              <Card className="p-4 space-y-3">
-                {pileOnTotal === 0 ? (
-                  <EmptyState>No Pre-Call Sequence sends in this window.</EmptyState>
-                ) : (
-                  <>
-                    <SegmentedBar
-                      total={pileOnTotal}
-                      segments={[
-                        { label: "AI-personalized", value: pileOnHybrid, className: "bg-emerald-500" },
-                        { label: "Template fallback", value: pileOnFallback, className: "bg-zinc-400 dark:bg-zinc-600" },
-                      ]}
-                    />
-                    <p className="text-xs text-zinc-400 dark:text-zinc-600">
-                      {pileOnErrors} send error{pileOnErrors !== 1 ? "s" : ""} ({pct(pileOnErrors, pileOnTotal) ?? 0}%) of {pileOnTotal} total sends
-                    </p>
-                  </>
-                )}
-              </Card>
-            </Section>
-
-            {/* Cross-client benchmark */}
-            <Section title="Cross-client benchmark" caption="This account's latest audit numbers against anonymized peers in the same offer bucket (min. 20 contributing engagements)">
-              <Card className="divide-y divide-zinc-200 dark:divide-zinc-900">
-                {topBenchmarkComparisons.length === 0 ? (
-                  <EmptyState>
-                    No benchmark available yet — either this account&apos;s offer bucket (traffic temperature + price + vertical) hasn&apos;t cleared the 20-tenant
-                    anonymity floor, or no audit has run yet.
-                  </EmptyState>
-                ) : (
-                  topBenchmarkComparisons.map((c, i) => (
-                    <div key={i} className="px-4 py-3">
-                      <div className="flex items-center justify-between gap-3 text-sm">
-                        <div className="min-w-0">
-                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{c.metricName}</span>
-                          <span className="text-zinc-400 dark:text-zinc-600 ml-2 text-xs truncate">{c.buyer} · {c.bucketDisplay}</span>
-                        </div>
-                        <span className="font-mono text-xs text-zinc-500 dark:text-zinc-500 shrink-0">
-                          You: {c.current} · peer median: {c.p50} (n={c.sampleSize})
-                        </span>
-                      </div>
-                      <RangeBar current={c.current} p25={c.p25} p50={c.p50} p75={c.p75} p90={c.p90} />
-                    </div>
-                  ))
-                )}
-              </Card>
-            </Section>
-
-            {/* Booking sync distribution */}
-            <Section title="Booking sync">
-              <Card className="p-4">
-                {connectedCount === 0 ? (
-                  <EmptyState>No booking platforms connected yet.</EmptyState>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <StatCard label="Direct webhook" value={String(webhookCount)} sub="instant sync" />
-                    <StatCard label="Auto-polling" value={String(pollingCount)} sub="5-min checks" />
-                    <StatCard label="Not configured" value={String(unsetCount)} sub="needs setup" />
-                    <StatCard label="Setup needed" value={String(setupNeededCount)} sub="see Settings → Booking Sync" />
-                  </div>
-                )}
-              </Card>
-            </Section>
-          </>
-        )}
-
-        {/* Reputation Manager sections — this page's first RM coverage.
-            Hidden entirely for an account with no RM activity at all,
-            same reasoning as hasShowtimeData above. */}
-        {hasRepData && (
-          <>
-            <Section title="Reputation signal mix" caption={`Every AI-engine, Trustpilot, Reddit, and X/Twitter signal scored, last ${LOOKBACK_DAYS} days`}>
-              <Card className="p-4 space-y-4">
-                {repSignalTotal === 0 ? (
-                  <EmptyState>No reputation signals scored in this window.</EmptyState>
-                ) : (
-                  <>
-                    <SegmentedBar
-                      total={repSignalTotal}
-                      segments={[
-                        { label: "Positive", value: repSentimentCounts.positive, className: "bg-emerald-500" },
-                        { label: "Neutral", value: repSentimentCounts.neutral, className: "bg-zinc-300 dark:bg-zinc-700" },
-                        { label: "Negative", value: repSentimentCounts.negative, className: "bg-rose-500" },
-                      ]}
-                    />
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
-                      <StatCard label="Signals scored" value={String(repSignalTotal)} sub={`last ${LOOKBACK_DAYS}d`} />
-                      <StatCard label="Flagged" value={String(repFlaggedTotal)} sub={`${pct(repFlaggedTotal, repSignalTotal) ?? 0}% of scored signals`} />
-                      <StatCard label="Trustpilot avg rating" value={trustpilotAvgRating !== null ? trustpilotAvgRating.toFixed(1) : "—"} sub={`${trustpilotTotal} review${trustpilotTotal !== 1 ? "s" : ""}`} />
-                    </div>
-                  </>
-                )}
-              </Card>
-            </Section>
-
-            <Section title="Top flag reasons" caption={`Why a signal got flagged, across every RM source, last ${LOOKBACK_DAYS} days`}>
-              <Card>
-                {topRepFlagReasons.length === 0 ? (
-                  <EmptyState>Nothing flagged in this window.</EmptyState>
-                ) : (
-                  <RankedList items={topRepFlagReasons} unit="×" />
-                )}
-              </Card>
-            </Section>
-
-            {trustpilotTotal > 0 && (
-              <Section title="Trustpilot rating spread" caption={`${trustpilotTotal} review${trustpilotTotal !== 1 ? "s" : ""}, last ${LOOKBACK_DAYS} days`}>
-                <Card className="p-4">
-                  <SegmentedBar
-                    total={trustpilotTotal}
-                    segments={trustpilotRatingCounts.map((r) => ({
-                      label: `${r.star}★`,
-                      value: r.count,
-                      className: r.star >= 4 ? "bg-emerald-500" : r.star === 3 ? "bg-amber-500" : "bg-rose-500",
-                    }))}
-                  />
-                </Card>
-              </Section>
-            )}
-
-            <Section title="Crisis incidents" caption={`Declared in the last ${LOOKBACK_DAYS} days, ranked by severity`}>
-              <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-3">
-                <div className="grid grid-cols-2 lg:grid-cols-1 gap-3 lg:w-48">
-                  <StatCard label="Open" value={String(openIncidents.length)} />
-                  <StatCard label="Median time to resolve" value={medianIncidentResolutionMs !== null ? fmtDuration(medianIncidentResolutionMs) : "—"} />
-                </div>
-                <Card className="divide-y divide-zinc-200 dark:divide-zinc-900">
-                  {topIncidentsBySeverity.length === 0 ? (
-                    <EmptyState>No incidents declared in this window.</EmptyState>
-                  ) : (
-                    topIncidentsBySeverity.map((inc, i) => (
-                      <div key={i} className="px-4 py-3 space-y-1">
-                        <div className="flex items-center justify-between gap-3 text-sm">
-                          <span className="font-mono text-xs font-bold text-rose-600 dark:text-rose-400 shrink-0">Severity {inc.severityScore}/100</span>
-                          <span className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600 shrink-0">{inc.status}</span>
-                        </div>
-                        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed line-clamp-2">{inc.summary}</p>
-                      </div>
-                    ))
-                  )}
-                </Card>
-              </div>
-            </Section>
-          </>
-        )}
+        <CategorySignalsSection signals={categorySignals} />
       </div>
     </div>
   );

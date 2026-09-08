@@ -55,7 +55,6 @@ export default async function ReportsPage() {
   const enabledWorkerIds = engagementId ? await getEnabledWorkerIdsForEngagement(engagementId) : [];
 
   const now = new Date();
-  const periods: ReportPeriod[] = ["week", "month", "all_time"];
 
   const [weekBlocks, monthBlocks, allTimeBlocks, priorWeekSnapshot] = engagementId
     ? await Promise.all([
@@ -75,7 +74,13 @@ export default async function ReportsPage() {
     all_time: attachTrends(allTimeBlocks, null),
   };
 
-  const hasAnyBlocks = periods.some((p) => blocksByPeriod[p].length > 0);
+  // Gated on enabled workers, not on blocks — a client with only Funnel
+  // Audit enabled has zero blocks in every period (leak-map's resolver
+  // never produces one) but is very much "reporting data," just not as a
+  // number here. Gating on blocks alone would show the same false "no
+  // skills reporting" message the silentWorkerIds fix below exists to
+  // avoid inside the component.
+  const hasAnyWorkers = enabledWorkerIds.length > 0;
 
   const recentReviews = engagementId ? await getRecentAccountReviews(engagementId) : [];
   const initialReviews = recentReviews.map((r) => ({ ...r, generatedAt: r.generatedAt.toISOString() }));
@@ -99,7 +104,7 @@ export default async function ReportsPage() {
         <div className="space-y-6">
           <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{engagement.buyer}</p>
 
-          {!hasAnyBlocks ? (
+          {!hasAnyWorkers ? (
             <div className="text-center py-8">
               <FileText className="w-6 h-6 text-zinc-300 dark:text-zinc-700 mx-auto mb-2" />
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -108,8 +113,10 @@ export default async function ReportsPage() {
             </div>
           ) : (
             <DynamicClientReport
+              engagementId={engagementId!}
               offerDetails={engagement.offerDetails as Record<string, string | boolean> | null}
               blocksByPeriod={blocksByPeriod}
+              enabledWorkerIds={enabledWorkerIds}
             />
           )}
 

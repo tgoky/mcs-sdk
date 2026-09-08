@@ -347,7 +347,7 @@ export default async function EngagementDetailPage({
             ClientReportCard/RepClientReportCard split, which showed a
             real, correctly-zeroed Showtime card even for a client with no
             Showtime setup at all. */}
-        <DynamicClientReport offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} />
+        <DynamicClientReport engagementId={id} offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} enabledWorkerIds={workerIds} />
 
         <AccountAdvisorPanel engagementId={engagement.engagementId} initialReviews={recentAccountReviews} />
 
