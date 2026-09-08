@@ -39,7 +39,9 @@ import type { ReportPeriod } from "@/features/reports/server/report-service";
 import { getReportBlocksForEngagement, attachTrends, type ReportBlockWithTrend } from "@/lib/worker-report-blocks";
 import { getPriorSnapshot } from "@/lib/client-metric-snapshots";
 import { startOfWeek } from "@/lib/dashboard-stats";
+import { getRecentAccountReviews } from "@/features/reports/server/account-advisor";
 import { DynamicClientReport } from "@/components/reports/dynamic-client-report";
+import { AccountAdvisorPanel } from "@/components/reports/account-advisor-panel";
 import {
   SKILLS,
   phaseLabel,
@@ -181,6 +183,8 @@ export default async function EngagementDetailPage({
     month: attachTrends(monthBlocks, null),
     all_time: attachTrends(allTimeBlocks, null),
   };
+
+  const recentAccountReviews = (await getRecentAccountReviews(id)).map((r) => ({ ...r, generatedAt: r.generatedAt.toISOString() }));
 
   const runsBySkill = Object.fromEntries(
     SKILLS.map((skill) => [skill, runs.filter((r) => r.skillName === skill)])
@@ -344,6 +348,8 @@ export default async function EngagementDetailPage({
             real, correctly-zeroed Showtime card even for a client with no
             Showtime setup at all. */}
         <DynamicClientReport offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} />
+
+        <AccountAdvisorPanel engagementId={engagement.engagementId} initialReviews={recentAccountReviews} />
 
         <WorkersPanel
           engagementId={engagement.engagementId}

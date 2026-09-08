@@ -25,7 +25,9 @@ import { getReportBlocksForEngagement, attachTrends, type ReportBlockWithTrend }
 import { getPriorSnapshot } from "@/lib/client-metric-snapshots";
 import { startOfWeek } from "@/lib/dashboard-stats";
 import type { ReportPeriod } from "@/features/reports/server/report-service";
+import { getRecentAccountReviews } from "@/features/reports/server/account-advisor";
 import { DynamicClientReport } from "@/components/reports/dynamic-client-report";
+import { AccountAdvisorPanel } from "@/components/reports/account-advisor-panel";
 import { FileText } from "lucide-react";
 
 export const revalidate = 0;
@@ -75,6 +77,9 @@ export default async function ReportsPage() {
 
   const hasAnyBlocks = periods.some((p) => blocksByPeriod[p].length > 0);
 
+  const recentReviews = engagementId ? await getRecentAccountReviews(engagementId) : [];
+  const initialReviews = recentReviews.map((r) => ({ ...r, generatedAt: r.generatedAt.toISOString() }));
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
       <div className="space-y-1">
@@ -106,6 +111,12 @@ export default async function ReportsPage() {
               offerDetails={engagement.offerDetails as Record<string, string | boolean> | null}
               blocksByPeriod={blocksByPeriod}
             />
+          )}
+
+          {engagementId && (
+            <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800/80">
+              <AccountAdvisorPanel engagementId={engagementId} initialReviews={initialReviews} />
+            </div>
           )}
         </div>
       )}

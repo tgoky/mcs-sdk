@@ -12,8 +12,10 @@
 // specifically anymore.
 
 import { useState } from "react";
+import { TriangleAlert } from "lucide-react";
 import type { ReportPeriod } from "@/features/reports/server/report-service";
 import type { ReportBlockWithTrend } from "@/lib/worker-report-blocks";
+import { computeCorrelationFlags } from "@/lib/report-correlation";
 import { WorkerReportBlockGrid } from "./worker-report-block-grid";
 
 const PERIOD_TABS: { key: ReportPeriod; label: string }[] = [
@@ -34,6 +36,10 @@ export function DynamicClientReport({
 }) {
   const [period, setPeriod] = useState<ReportPeriod>("week");
   const blocks = blocksByPeriod[period];
+  // Real, same-window correlation between a Showtime outcome and an RM
+  // risk signal — only ever non-empty when both products are enabled and
+  // both actually moved unfavorably this period. See report-correlation.ts.
+  const correlationFlags = computeCorrelationFlags(blocks);
 
   const offerName = String(offerDetails?.name ?? "").trim();
   const offerPrice = String(offerDetails?.price ?? "").trim();
@@ -86,6 +92,17 @@ export function DynamicClientReport({
         <div className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-3xl">
           <span className="font-semibold text-zinc-900 dark:text-zinc-200">Targeting: </span>
           {offerIcp}
+        </div>
+      )}
+
+      {correlationFlags.length > 0 && (
+        <div className="space-y-1.5">
+          {correlationFlags.map((flag, i) => (
+            <p key={i} className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 leading-relaxed max-w-2xl">
+              <TriangleAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>{flag.message}</span>
+            </p>
+          ))}
         </div>
       )}
 

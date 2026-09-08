@@ -26,6 +26,8 @@ import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
 import { computeBucketKey } from "@/features/leak-map/server/leak-map-benchmarks";
 import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
 import { WORKER_IDS, WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
+import { getPortfolioOutcomes } from "@/features/reports/server/portfolio-outcomes";
+import { PortfolioOutcomesSection } from "@/components/analytics/portfolio-outcomes-section";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -50,10 +52,6 @@ function daysAgo(days: number): Date {
 
 function fmtCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
-}
-
-function fmtDollars(amount: number): string {
-  return `$${Math.round(amount).toLocaleString()}`;
 }
 
 function pct(n: number, d: number): number | null {
@@ -400,6 +398,12 @@ export default async function AnalyticsPage() {
 
   const engagementIds = engagementRows.map((e) => e.engagementId);
 
+  // Portfolio outcomes — independent of the operational query set below,
+  // computed straight from the same engagement roster. See
+  // portfolio-outcomes.ts for why this is a real per-account read, not a
+  // recycled version of the infra-health numbers further down the page.
+  const portfolioAccounts = await getPortfolioOutcomes(engagementRows.map((e) => ({ engagementId: e.engagementId, buyer: e.buyer })));
+
   const [
     runRows,
     openPending,
@@ -657,9 +661,16 @@ export default async function AnalyticsPage() {
   const recoveryRateOfResolved = pct(winBackCounts.rebooked, winBackResolved);
   const medianRecoveryDays = median(recoveryDaysList);
 
-  const revenueTotal = revenueResults.reduce((sum, r) => sum + r.totalRevenue, 0);
-  const revenueRecoveredCount = revenueResults.reduce((sum, r) => sum + r.recoveredCount, 0);
-  const revenuePeriodLabel = revenueResults[0]?.periodLabel ?? "this quarter";
+  // Dropped: a headline "revenue recovered/attributed" figure used to be
+  // shown here and in the Win-Back section below, sourced from
+  // computeWinBackRevenueAttribution — a price-parsing heuristic against
+  // offer text, not a real transaction. This app has no billing/Stripe
+  // integration, so presenting that estimate as a confident dollar
+  // figure read as fabricated data. revenueResults is still fetched
+  // above (Win-Back's own module, left as-is rather than touching the
+  // large positional query destructure above) but is intentionally
+  // unused here now — Recovery rate and Rebooked count below are the
+  // real, defensible numbers.
 
   // ── Show-rate calibration ──────────────────────────────────────────────
   const usableScored = showRateWindow.filter((r) => r.actualOutcome === "showed" || r.actualOutcome === "no_show");
@@ -851,20 +862,30 @@ export default async function AnalyticsPage() {
             Analytics
           </h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+            Which accounts need a look, and whether the automation running them is healthy.
+          </p>
+        </div>
+
+        <PortfolioOutcomesSection accounts={portfolioAccounts} />
+
+        {/* Automation health — is the pipeline itself running, not
+            whether an account is winning or losing. Legitimately useful
+            to the operator, kept, just no longer the first thing on the
+            page — see PortfolioOutcomesSection above for the primary,
+            action-oriented view. */}
+        <div>
+          <h2 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+            Automation health
+          </h2>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
             Last {TREND_DAYS} days of activity, and up to {LOOKBACK_DAYS} days of slower-moving signals, across every engagement on this account.
           </p>
         </div>
 
-        {/* Top-line stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard label="Total runs" value={String(totalRuns)} sub={`${engagementRows.length} engagement${engagementRows.length !== 1 ? "s" : ""}`} />
           <StatCard label="Success rate" value={successRate !== null ? `${successRate}%` : "—"} sub={resolvedRuns > 0 ? `${totalSuccess}/${resolvedRuns} resolved runs` : "No resolved runs yet"} />
           <StatCard label="Model spend" value={fmtCents(totalCostCents)} sub={`last ${TREND_DAYS}d, all skills`} />
-          <StatCard
-            label="Revenue recovered"
-            value={revenueTotal > 0 ? fmtDollars(revenueTotal) : "—"}
-            sub={`${revenueRecoveredCount} rebooked, ${revenuePeriodLabel}`}
-          />
           <StatCard label="Queue open" value={String(openPending.length + openBlockers.length)} sub={`${decidedActions.length + resolvedBlockers.length} resolved in ${LOOKBACK_DAYS}d`} />
           <StatCard
             label="Median resolution time"
@@ -981,7 +1002,7 @@ export default async function AnalyticsPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
                       <StatCard label="Recovery rate" value={recoveryRateOfResolved !== null ? `${recoveryRateOfResolved}%` : "—"} sub={`of ${winBackResolved} resolved (excludes still-active)`} />
                       <StatCard label="Median time to rebook" value={medianRecoveryDays !== null ? `${Math.round(medianRecoveryDays)}d` : "—"} sub="enrollment to rebooking" />
-                      <StatCard label="Revenue attributed" value={revenueTotal > 0 ? fmtDollars(revenueTotal) : "—"} sub={revenuePeriodLabel} />
+                      <StatCard label="Rebooked" value={String(winBackCounts.rebooked)} sub={`of ${winBackTotal} enrolled, ${LOOKBACK_DAYS}d`} />
                     </div>
                   </>
                 )}

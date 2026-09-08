@@ -1803,6 +1803,27 @@ export const clientMetricSnapshots = pgTable(
   })
 );
 
+// On-demand Account Advisor (Phase 4 of the reports/analytics rework) —
+// a real cross-skill synthesis, triggered by the user, not the thin
+// per-period restatement clientReportNotes holds. Deliberately its own
+// table rather than reusing clientReportNotes: that one is unique-keyed
+// per (engagementId, period, periodKey) for a caching purpose this
+// isn't — an account review can be regenerated any time the user wants
+// a fresh read, and every one of them is kept as real history, not
+// upserted over the last one.
+export const accountReviews = pgTable("account_reviews", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  reviewText: text("review_text").notNull(),
+  // The exact WorkerReportBlock[] (with trend + correlation context) the
+  // review was grounded in — lets a later reader see precisely what the
+  // model saw, instead of trusting the prose alone.
+  blocksSnapshot: jsonb("blocks_snapshot").notNull(),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+});
+
 // ── Conversation Intelligence Sessions (recovery gap 24) ───────────────────
 // One row per Recall.ai bot dispatched to a call. See
 // src/lib/platforms/conversation-intelligence.ts. Deliberately scoped to
