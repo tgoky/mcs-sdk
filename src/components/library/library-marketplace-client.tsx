@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ChevronLeft, Search } from "lucide-react";
+import { ChevronLeft, Search, X } from "lucide-react";
 import { WORKER_IDS, WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import type { ProductId } from "@/lib/product-catalog";
 import { WorkerCard } from "@/components/library/worker-card";
@@ -95,56 +95,22 @@ export function LibraryMarketplaceClient({
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-xs font-semibold">
-            {(["all", "showtime", "reputation-manager"] as const).map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setProductFilter(id)}
-                className={`px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
-                  productFilter === id
-                    ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
-                    : "border-border text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
-                }`}
-              >
-                {id === "all" ? "All" : id === "showtime" ? "Showtime" : "Reputation Manager"}
-              </button>
-            ))}
-          </div>
+        {/* Same in-place swap OverviewStatsPanel's Tasks/Issues tiles use —
+            configuring a worker hides the catalog entirely and renders the
+            form in its exact place, instead of appending a second block
+            below a grid the user would have to scroll past. Transparent,
+            no card chrome — the form is the content, not a widget floating
+            on top of one. */}
+        {expandedWorker && engagementId ? (
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setExpandedWorker(null)}
+              className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" /> Close — back to all skills
+            </button>
 
-          <div className="relative w-full sm:w-72">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search skills…"
-              className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-amber-400 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400 shadow-sm"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
-          {sorted.map((worker) => (
-            <WorkerCard
-              key={worker.id}
-              worker={worker}
-              enabled={enabledSet.has(worker.id)}
-              engagementId={engagementId}
-              buyerName={buyerName}
-              isConfiguring={expandedWorker === worker.id}
-              onToggleConfigure={
-                worker.hasHingesPanel && engagementId
-                  ? () => setExpandedWorker((prev) => (prev === worker.id ? null : worker.id))
-                  : undefined
-              }
-            />
-          ))}
-        </div>
-
-        {expandedWorker && engagementId && (
-          <div className="rounded-2xl border border-border bg-white dark:bg-zinc-900/60 shadow-sm overflow-hidden">
             {expandedWorker === "leak-map" && (
               <LeakMapConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
             )}
@@ -166,6 +132,54 @@ export function LibraryMarketplaceClient({
               />
             )}
           </div>
+        ) : (
+          <>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-xs font-semibold">
+                {(["all", "showtime", "reputation-manager"] as const).map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setProductFilter(id)}
+                    className={`px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
+                      productFilter === id
+                        ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
+                        : "border-border text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+                    }`}
+                  >
+                    {id === "all" ? "All" : id === "showtime" ? "Showtime" : "Reputation Manager"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full sm:w-72">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search skills…"
+                  className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-amber-400 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400 shadow-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
+              {sorted.map((worker) => (
+                <WorkerCard
+                  key={worker.id}
+                  worker={worker}
+                  enabled={enabledSet.has(worker.id)}
+                  engagementId={engagementId}
+                  buyerName={buyerName}
+                  isConfiguring={false}
+                  onToggleConfigure={
+                    worker.hasHingesPanel && engagementId ? () => setExpandedWorker(worker.id) : undefined
+                  }
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

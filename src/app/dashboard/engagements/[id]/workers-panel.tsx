@@ -184,8 +184,46 @@ export function WorkersPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-        {workerIds.map((workerId) => {
+      {/* Same in-place swap OverviewStatsPanel's Tasks/Issues tiles use —
+          configuring a worker hides the whole card grid and renders the
+          form in its exact place, instead of appending a second block
+          below every card the user would have to scroll past. Transparent,
+          no card chrome — the form is the content, not a widget floating
+          on top of one. */}
+      {expandedWorker ? (
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => setExpandedWorker(null)}
+            className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" /> Close — back to all skills
+          </button>
+
+          {expandedWorker === "leak-map" && (
+            <LeakMapConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "pre-call-read" && (
+            <PreCallReadConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "win-back" && (
+            <WinBackConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "rep-onboarding" && (
+            <RepOnboardingConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} />
+          )}
+          {expandedWorker === "pin-down" && (
+            <PinDownConfigForm
+              engagementId={engagementId}
+              onCancel={() => setExpandedWorker(null)}
+              onSaved={(result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : setExpandedWorker(null))}
+              cancelLabel="Close"
+            />
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {workerIds.map((workerId) => {
           const worker = WORKER_REGISTRY[workerId];
           const isEnabled = states[workerId] ?? true;
           const isBusy = updatingWorkers.has(workerId);
@@ -332,30 +370,6 @@ export function WorkersPanel({
           );
         })}
       </div>
-
-      {expandedWorker && (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/60 backdrop-blur-xs overflow-hidden">
-          {expandedWorker === "leak-map" && (
-            <LeakMapConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "pre-call-read" && (
-            <PreCallReadConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "win-back" && (
-            <WinBackConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "rep-onboarding" && (
-            <RepOnboardingConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} />
-          )}
-          {expandedWorker === "pin-down" && (
-            <PinDownConfigForm
-              engagementId={engagementId}
-              onCancel={() => setExpandedWorker(null)}
-              onSaved={(result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : setExpandedWorker(null))}
-              cancelLabel="Close"
-            />
-          )}
-        </div>
       )}
     </div>
   );
