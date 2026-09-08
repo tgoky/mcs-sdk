@@ -637,3 +637,45 @@ export function workersForProduct(productId: ProductId): WorkerDefinition[] {
 export function allWorkers(): WorkerDefinition[] {
   return WORKER_IDS.map((id) => WORKER_REGISTRY[id]);
 }
+
+/**
+ * Showtime workers with their own dedicated single-client page (schedule/
+ * report content, not a run-execution list — see e.g.
+ * bridges/leak-map's sibling skills/leak-map/page.tsx). Previously
+ * duplicated as a local const inside workers-panel.tsx; centralized here
+ * once skills-nav-list.tsx needed the identical list for Capabilities'
+ * own links — two independently-maintained copies of "which workers have
+ * a page" is exactly the kind of drift this registry exists to prevent.
+ */
+export const SKILLS_WITH_OWN_PAGE: WorkerId[] = ["pre-call-read", "pile-on", "win-back", "leak-map"];
+
+/** The 5 Reputation Manager workers (every one but rep-onboarding itself)
+ * that share one findings page across all of them — see
+ * rep-findings-panel.tsx's own header for why one page, not five. */
+export const REP_SKILLS_WITH_FINDINGS_PAGE: WorkerId[] = [
+  "rep-engine-panel",
+  "rep-trustpilot-watch",
+  "rep-reddit-watch",
+  "rep-twitter-watch",
+  "rep-crisis-response",
+];
+
+/**
+ * The one real "go see this worker for this client" destination —
+ * replaces routing every worker through /dashboard/modules/[skill] (a
+ * roster of every client with that skill, pointless now that a workspace
+ * only ever has one) with whichever real, single-client page already
+ * exists for it: its own schedule/report page, RM's shared findings
+ * page, or — for a worker with neither (pin-down, rep-onboarding) — the
+ * engagement page's own Run History, pre-filtered to just this worker's
+ * runs via the same `?skill=` param its filter chips already use.
+ */
+export function workerPrimaryHref(workerId: WorkerId, engagementId: string): string {
+  if (SKILLS_WITH_OWN_PAGE.includes(workerId)) {
+    return `/dashboard/engagements/${engagementId}/skills/${workerId}`;
+  }
+  if (REP_SKILLS_WITH_FINDINGS_PAGE.includes(workerId)) {
+    return `/dashboard/engagements/${engagementId}/skills/reputation-manager`;
+  }
+  return `/dashboard/engagements/${engagementId}?skill=${workerId}#run-history`;
+}

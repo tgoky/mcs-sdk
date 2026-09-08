@@ -15,8 +15,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "mudd 1.34",
-  description: "Showtime Revenue Infrastructure Panel",
+  title: "Unified Tools Platform",
+  description: "One workspace, one client — every worker's status, configuration, and analytics in one place.",
+  icons: {
+    icon: "/logos/homelg.png",
+  },
 };
 
 export default function RootLayout({

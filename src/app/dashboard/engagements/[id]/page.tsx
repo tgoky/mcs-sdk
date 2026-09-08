@@ -433,7 +433,7 @@ export default async function EngagementDetailPage({
 
         {/* Run History */}
         {runs.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-3" id="run-history">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">Run History</h2>
               {filteredRuns.length > 20 && (

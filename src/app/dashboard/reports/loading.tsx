@@ -1,10 +1,8 @@
 /**
- * Shown while page.tsx's session/workspace/client-list/report-metrics
- * queries resolve — same reasoning as calendar/loading.tsx and
- * teammates/loading.tsx: revalidate=0 means every visit and every client
- * switch (now driven by the sidebar, see reports-client-links.tsx) is a
- * real round trip, this route just never had a loading boundary to paint
- * something during it.
+ * Shown while page.tsx's session/workspace/report-metrics queries
+ * resolve — same reasoning as calendar/loading.tsx and teammates/
+ * loading.tsx: revalidate=0 means every visit is a real round trip, this
+ * route just never had a loading boundary to paint something during it.
  */
 export default function ReportsLoading() {
   return (

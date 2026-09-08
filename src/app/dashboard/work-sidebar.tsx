@@ -119,11 +119,11 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
 
       <div className="h-px bg-zinc-200/80 dark:bg-zinc-800/80 my-1 mx-1" />
 
-      {/* SKILLS SECTION */}
+      {/* INSTALLED SKILLS SECTION */}
       <div className="space-y-1">
         <div className="flex items-center gap-1.5 px-2 py-1.5 text-[13px] font-bold text-zinc-600 dark:text-zinc-300 tracking-tight">
           <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
-          <span>Capabilities</span>
+          <span>Installed Skills</span>
         </div>
 
         <SkillsNavList
@@ -131,6 +131,7 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
           layout="grid"
           enabledWorkerIds={enabledWorkerIds}
           needsAttentionWorkerIds={needsAttentionWorkerIds}
+          engagementId={primaryEngagementId}
         />
       </div>
     </div>

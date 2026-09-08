@@ -74,15 +74,15 @@ export function LibraryMarketplaceClient({
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Library</h1>
                 <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 font-medium">
-                  Every worker available to this client — enable, configure, and see how each one&rsquo;s performing.
+                  Every skill available to this client — read what it does, install it, configure it, and see how much it&rsquo;s actually running.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400 -mt-1">
                 <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-800 dark:text-zinc-200 font-mono text-[11px] font-semibold">
-                  {workers.length} workers
+                  {workers.length} skills
                 </span>
                 <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-800 dark:text-zinc-200 font-mono text-[11px] font-semibold">
-                  {enabledCount} enabled
+                  {enabledCount} installed
                 </span>
               </div>
             </div>
@@ -91,7 +91,7 @@ export function LibraryMarketplaceClient({
 
         {!engagementId && (
           <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-            No client yet in this workspace — create one first, then come back here to enable workers for them.
+            No client yet in this workspace — create one first, then come back here to install skills for them.
           </div>
         )}
 
@@ -119,7 +119,7 @@ export function LibraryMarketplaceClient({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search workers…"
+              placeholder="Search skills…"
               className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-amber-400 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400 shadow-sm"
             />
           </div>
