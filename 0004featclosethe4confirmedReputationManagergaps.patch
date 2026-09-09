@@ -1,0 +1,2131 @@
+From cfb8f3a73880d6d106c5088847f033aad9ef3746 Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Tue, 8 Sep 2026 23:12:27 +0000
+Subject: [PATCH] feat: close the 4 confirmed Reputation Manager gaps vs the OG
+ skill spec
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Same as the earlier commit of this name, minus the hand-written
+migration file and its _journal.json entry — this repo's real migration
+workflow is drizzle-kit generate against a live dev DB (confirmed by the
+buyer's own locally-generated 0037/0038 migrations), not a hand-authored
+SQL file guessed without DB access. Run your own generate command after
+applying this to produce the correctly-numbered migration for the new
+repIdentityGraphs.operatorPagePhone and repIncidents.responseTier/
+selectedPosture/evidencePackage columns.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QUtoSxeDgHLtQ4dzKfdai8
+---
+ .../[id]/bridges/rep-onboarding/route.ts      |   2 +
+ .../[incidentId]/escalate-outcome/route.ts    |  77 ++++
+ .../incidents/[incidentId]/posture/route.ts   | 122 ++++++
+ src/app/api/inngest/route.ts                  |   3 +-
+ src/app/dashboard/inbox/page.tsx              |   4 +-
+ .../incidents/incident-row.tsx                | 208 ++++++++--
+ .../reputation-manager/incidents/page.tsx     |   3 +
+ src/components/rep-skill-badge.tsx            |   3 +-
+ .../identity-graph-form.tsx                   |  11 +
+ .../reputation-manager/rep-thresholds.ts      | 104 ++++-
+ .../server/crisis-response-service.ts         | 130 ++++--
+ .../reputation-manager/server/digest.ts       | 149 +++++++
+ .../server/draft-response.ts                  |  74 +++-
+ .../server/onboarding-service.ts              |  12 +
+ .../server/response-routing.ts                | 389 ++++++++++++++++++
+ src/inngest/reputation-manager.ts             |  55 +++
+ src/lib/approval-gate.ts                      |  68 ++-
+ src/lib/copy.ts                               |   1 +
+ src/lib/notify.ts                             |  50 ++-
+ src/lib/platforms/sms.ts                      |  27 ++
+ src/lib/rep-skill-manifest.ts                 |  18 +-
+ src/lib/rep-skill-registry.ts                 |   5 +
+ src/lib/worker-registry.ts                    |   2 +
+ src/models/schema.ts                          |  37 +-
+ 24 files changed, 1462 insertions(+), 92 deletions(-)
+ create mode 100644 src/app/api/engagements/[id]/incidents/[incidentId]/escalate-outcome/route.ts
+ create mode 100644 src/app/api/engagements/[id]/incidents/[incidentId]/posture/route.ts
+ create mode 100644 src/features/reputation-manager/server/digest.ts
+ create mode 100644 src/features/reputation-manager/server/response-routing.ts
+
+diff --git a/src/app/api/engagements/[id]/bridges/rep-onboarding/route.ts b/src/app/api/engagements/[id]/bridges/rep-onboarding/route.ts
+index 5514159..3ce5dba 100644
+--- a/src/app/api/engagements/[id]/bridges/rep-onboarding/route.ts
++++ b/src/app/api/engagements/[id]/bridges/rep-onboarding/route.ts
+@@ -67,6 +67,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
+           soleAuthorityName: graph.soleAuthorityName,
+           crisisThresholdOverride: graph.crisisThresholdOverride,
+           activeEngines: graph.activeEngines,
++          operatorPagePhone: graph.operatorPagePhone,
+         }
+       : null,
+   });
+@@ -126,6 +127,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
+       activeEngines: Array.isArray(body.activeEngines)
+         ? body.activeEngines.filter((v: unknown): v is RepEngineId => typeof v === "string" && REP_ENGINE_IDS.includes(v as RepEngineId))
+         : null,
++      operatorPagePhone: typeof body.operatorPagePhone === "string" ? body.operatorPagePhone : null,
+     };
+ 
+     // saveRepIdentityGraphIntake owns every actual validation rule (see
+diff --git a/src/app/api/engagements/[id]/incidents/[incidentId]/escalate-outcome/route.ts b/src/app/api/engagements/[id]/incidents/[incidentId]/escalate-outcome/route.ts
+new file mode 100644
+index 0000000..3c4cfe3
+--- /dev/null
++++ b/src/app/api/engagements/[id]/incidents/[incidentId]/escalate-outcome/route.ts
+@@ -0,0 +1,77 @@
++import { NextResponse } from "next/server";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { isAdminEmail, isAuthorizedForEngagement } from "@/lib/whop-access";
++import { db } from "@/lib/db";
++import { engagements, repIncidents } from "@/models/schema";
++import { and, eq } from "drizzle-orm";
++import { logAuditEvent } from "@/features/reputation-manager/server/audit-log";
++
++/**
++ * Tier 4 (external_escalation) close-out — thresholds.yml.template's own
++ * description: "you route outside the system, system logs the handoff and
++ * waits for you to bring the outcome back." This is that: the operator
++ * reports what actually happened with counsel/the platform, it's logged as
++ * an outcome audit event (chained to nothing specific — the escalation's
++ * own external_action/ai_engine_notice event has no id captured client-side
++ * to chain off, same reasoning logAuditEventsBatch gives for unchained
++ * batch writes), and the incident is resolved.
++ */
++export async function POST(req: Request, { params }: { params: Promise<{ id: string; incidentId: string }> }) {
++  const session = await getSession();
++  if (!session.whopUserId) {
++    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
++  }
++
++  const { id: engagementId, incidentId } = await params;
++
++  let body: { outcomeDetail?: string };
++  try {
++    body = await req.json();
++  } catch {
++    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
++  }
++
++  const outcomeDetail = body.outcomeDetail?.trim();
++  if (!outcomeDetail) {
++    return NextResponse.json({ error: "outcomeDetail is required — describe what happened." }, { status: 400 });
++  }
++
++  const [incident] = await db
++    .select({ id: repIncidents.id, engagementId: repIncidents.engagementId, status: repIncidents.status })
++    .from(repIncidents)
++    .where(and(eq(repIncidents.id, incidentId), eq(repIncidents.engagementId, engagementId)))
++    .limit(1);
++  if (!incident) {
++    return NextResponse.json({ error: "Incident not found." }, { status: 404 });
++  }
++
++  if (!(await isAuthorizedForEngagement(session, engagementId))) {
++    return NextResponse.json({ error: "You don't have access to this engagement." }, { status: 403 });
++  }
++
++  if (!isAdminEmail(session.email)) {
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++    const [inWorkspace] = await db
++      .select({ id: engagements.id })
++      .from(engagements)
++      .where(and(eq(engagements.engagementId, engagementId), eq(engagements.workspaceId, activeWorkspace.workspaceId)))
++      .limit(1);
++    if (!inWorkspace) {
++      return NextResponse.json({ error: "Engagement not found in active workspace." }, { status: 404 });
++    }
++  }
++
++  if (incident.status !== "external_escalation_pending") {
++    return NextResponse.json({ error: "This incident isn't awaiting an external escalation outcome." }, { status: 409 });
++  }
++
++  await logAuditEvent(engagementId, { eventType: "outcome", payload: { outcomeType: "external_escalation_resolved", outcomeDetail } });
++
++  await db
++    .update(repIncidents)
++    .set({ status: "resolved", resolvedAt: new Date(), resolvedBy: session.email })
++    .where(eq(repIncidents.id, incidentId));
++
++  return NextResponse.json({ ok: true });
++}
+diff --git a/src/app/api/engagements/[id]/incidents/[incidentId]/posture/route.ts b/src/app/api/engagements/[id]/incidents/[incidentId]/posture/route.ts
+new file mode 100644
+index 0000000..d7163da
+--- /dev/null
++++ b/src/app/api/engagements/[id]/incidents/[incidentId]/posture/route.ts
+@@ -0,0 +1,122 @@
++import { NextResponse } from "next/server";
++import crypto from "crypto";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { isAdminEmail, isAuthorizedForEngagement } from "@/lib/whop-access";
++import { db } from "@/lib/db";
++import { engagements, repIncidents } from "@/models/schema";
++import { and, eq } from "drizzle-orm";
++import { RESPONSE_POSTURES, type ResponsePostureId } from "@/features/reputation-manager/rep-thresholds";
++import { draftForChosenPosture } from "@/features/reputation-manager/server/response-routing";
++
++const VALID_POSTURES = new Set<string>(RESPONSE_POSTURES.map((p) => p.id));
++
++/**
++ * Tier 3 (pause_and_instruct) posture selection — thresholds.yml.template's
++ * own rationale: no draft exists until the sole authority chooses one of
++ * these, because the choice itself is the load-bearing operator judgment.
++ * This is that choice: it stores the posture on the incident, then
++ * generates the draft to it (draftForChosenPosture) and queues it for
++ * approval exactly like a tier 1/2 draft.
++ */
++export async function POST(req: Request, { params }: { params: Promise<{ id: string; incidentId: string }> }) {
++  const session = await getSession();
++  if (!session.whopUserId) {
++    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
++  }
++
++  const { id: engagementId, incidentId } = await params;
++
++  let body: { posture?: string };
++  try {
++    body = await req.json();
++  } catch {
++    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
++  }
++
++  if (!body.posture || !VALID_POSTURES.has(body.posture)) {
++    return NextResponse.json({ error: `posture must be one of: ${[...VALID_POSTURES].join(", ")}` }, { status: 400 });
++  }
++  const posture = body.posture as ResponsePostureId;
++
++  const [incident] = await db
++    .select({ id: repIncidents.id, engagementId: repIncidents.engagementId, selectedPosture: repIncidents.selectedPosture })
++    .from(repIncidents)
++    .where(and(eq(repIncidents.id, incidentId), eq(repIncidents.engagementId, engagementId)))
++    .limit(1);
++  if (!incident) {
++    return NextResponse.json({ error: "Incident not found." }, { status: 404 });
++  }
++
++  if (!(await isAuthorizedForEngagement(session, engagementId))) {
++    return NextResponse.json({ error: "You don't have access to this engagement." }, { status: 403 });
++  }
++
++  if (!isAdminEmail(session.email)) {
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++    const [inWorkspace] = await db
++      .select({ id: engagements.id })
++      .from(engagements)
++      .where(and(eq(engagements.engagementId, engagementId), eq(engagements.workspaceId, activeWorkspace.workspaceId)))
++      .limit(1);
++    if (!inWorkspace) {
++      return NextResponse.json({ error: "Engagement not found in active workspace." }, { status: 404 });
++    }
++  }
++
++  if (incident.selectedPosture) {
++    return NextResponse.json({ error: `A posture (${incident.selectedPosture}) has already been chosen for this incident.` }, { status: 409 });
++  }
++
++  await db.update(repIncidents).set({ selectedPosture: posture }).where(eq(repIncidents.id, incidentId));
++
++  if (posture === "escalate_externally") {
++    // The one posture that isn't "draft something" — the operator decided
++    // mid-review this actually belongs at tier 4. No draft, same evidence-
++    // package/handoff path a force-triggered tier 4 finding gets.
++    const { buildEvidencePackage } = await import("@/features/reputation-manager/server/response-routing");
++    const [full] = await db
++      .select({
++        summary: repIncidents.summary,
++        severityScore: repIncidents.severityScore,
++        signalClass: repIncidents.signalClass,
++        contributingFindings: repIncidents.contributingFindings,
++        declaredAt: repIncidents.declaredAt,
++      })
++      .from(repIncidents)
++      .where(eq(repIncidents.id, incidentId))
++      .limit(1);
++    if (full) {
++      const { repIdentityGraphs } = await import("@/models/schema");
++      const [graph] = await db
++        .select({ operatorName: repIdentityGraphs.operatorName, soleAuthorityName: repIdentityGraphs.soleAuthorityName })
++        .from(repIdentityGraphs)
++        .where(eq(repIdentityGraphs.engagementId, engagementId))
++        .limit(1);
++      if (graph) {
++        const evidencePackage = buildEvidencePackage({
++          operatorName: graph.operatorName,
++          soleAuthorityName: graph.soleAuthorityName,
++          incidentId,
++          severityScore: full.severityScore,
++          signalClass: full.signalClass,
++          summary: full.summary,
++          findings: full.contributingFindings as any,
++          declaredAt: full.declaredAt,
++        });
++        await db.update(repIncidents).set({ status: "external_escalation_pending", evidencePackage }).where(eq(repIncidents.id, incidentId));
++      }
++    }
++    return NextResponse.json({ ok: true, escalated: true });
++  }
++
++  const runId = crypto.randomUUID();
++  try {
++    await draftForChosenPosture({ engagementId, incidentId, posture, runId });
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : String(error);
++    return NextResponse.json({ error: `Posture saved but drafting failed: ${message}` }, { status: 500 });
++  }
++
++  return NextResponse.json({ ok: true, drafted: true });
++}
+diff --git a/src/app/api/inngest/route.ts b/src/app/api/inngest/route.ts
+index b2019a3..6e36ca5 100644
+--- a/src/app/api/inngest/route.ts
++++ b/src/app/api/inngest/route.ts
+@@ -8,7 +8,7 @@ import { processWinBackSmsSequence } from "@/inngest/win-back-sms";
+ import { processWinBackEmailSmtpSequence } from "@/inngest/win-back-email-smtp";
+ import { processConversationIntelligenceTranscript } from "@/inngest/conversation-intelligence";
+ import { processBookingWebhookEvent } from "@/inngest/booking-webhook";
+-import { repEnginePanelCron, repTrustpilotWatchCron, repRedditWatchCron, repTwitterWatchCron, repCrisisResponseCron } from "@/inngest/reputation-manager";
++import { repEnginePanelCron, repTrustpilotWatchCron, repRedditWatchCron, repTwitterWatchCron, repCrisisResponseCron, repDigestCron } from "@/inngest/reputation-manager";
+ import {
+   nightlyBriefsCron,
+   leakMapScheduleCron,
+@@ -144,5 +144,6 @@ export const { GET, POST, PUT } = serve({
+     repRedditWatchCron,
+     repTwitterWatchCron,
+     repCrisisResponseCron,
++    repDigestCron,
+   ],
+ });
+\ No newline at end of file
+diff --git a/src/app/dashboard/inbox/page.tsx b/src/app/dashboard/inbox/page.tsx
+index 5ecb8ed..b0e866f 100644
+--- a/src/app/dashboard/inbox/page.tsx
++++ b/src/app/dashboard/inbox/page.tsx
+@@ -15,10 +15,10 @@ const TABS: Array<{ key: string; label: string; types: NotificationType[] | null
+   {
+     key: "alerts",
+     label: "Alerts",
+-    types: ["run_failed", "run_timed_out", "credential_invalid", "credential_check_error", "reputation_crisis_declared"],
++    types: ["run_failed", "run_timed_out", "credential_invalid", "credential_check_error", "reputation_crisis_declared", "reputation_elevated_activity"],
+   },
+   { key: "win-back", label: skillName("win-back"), types: ["lost_deal_swept"] },
+-  { key: "insights", label: "Insights", types: ["weekly_metrics", "conversation_intelligence_objection_found"] },
++  { key: "insights", label: "Insights", types: ["weekly_metrics", "conversation_intelligence_objection_found", "reputation_daily_digest"] },
+ ];
+ 
+ function dayBucket(iso: string): string {
+diff --git a/src/app/dashboard/reputation-manager/incidents/incident-row.tsx b/src/app/dashboard/reputation-manager/incidents/incident-row.tsx
+index abe7656..d8f6a10 100644
+--- a/src/app/dashboard/reputation-manager/incidents/incident-row.tsx
++++ b/src/app/dashboard/reputation-manager/incidents/incident-row.tsx
+@@ -3,14 +3,29 @@
+ import { useState } from "react";
+ import { useRouter } from "next/navigation";
+ import Link from "next/link";
+-import { AlertTriangle, Check, Loader2 } from "lucide-react";
++import { AlertTriangle, Check, Loader2, FileText, Send } from "lucide-react";
+ 
+ const STATUS_STYLES: Record<string, string> = {
+   open: "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-400",
+   acknowledged: "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-400",
+   resolved: "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-400",
++  external_escalation_pending: "bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-900 text-orange-700 dark:text-orange-400",
+ };
+ 
++const TIER_LABELS: Record<string, string> = {
++  tier1_one_click: "Tier 1 — drafted, one-click approve",
++  tier2_review: "Tier 2 — drafted, review & approve",
++  tier3_pause_and_instruct: "Tier 3 — choose a posture",
++  tier4_external_escalation: "Tier 4 — external escalation",
++};
++
++const RESPONSE_POSTURES = [
++  { id: "acknowledge_private_resolution", label: "Acknowledge & invite private resolution" },
++  { id: "factual_correction", label: "Non-defensive factual correction" },
++  { id: "monitor_only", label: "No public response — monitor only" },
++  { id: "escalate_externally", label: "Escalate externally instead" },
++];
++
+ function signalClassLabel(signalClass: string): string {
+   return signalClass.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+ }
+@@ -23,17 +38,28 @@ export interface IncidentRowData {
+   summary: string;
+   status: string;
+   signalClass: string | null;
++  responseTier: string | null;
++  selectedPosture: string | null;
++  evidencePackage: string | null;
+ }
+ 
+ /** The one real close-out action for a declared incident — see the
+  * resolve route's own doc for why this didn't exist before. Resolving
+  * here is also what lets the reputation-crisis send gate
+  * (worker-blocking-conditions.ts) clear, since that gate only checks
+- * status === "open". */
++ * status === "open". Also surfaces the response-routing tier (see
++ * response-routing.ts) and the two follow-up actions it can require: a
++ * tier 3 posture choice, or a tier 4 escalation outcome. */
+ export function IncidentRow({ incident }: { incident: IncidentRowData }) {
+   const router = useRouter();
+   const [resolving, setResolving] = useState(false);
+   const [status, setStatus] = useState(incident.status);
++  const [postureBusy, setPostureBusy] = useState<string | null>(null);
++  const [postureError, setPostureError] = useState<string | null>(null);
++  const [selectedPosture, setSelectedPosture] = useState(incident.selectedPosture);
++  const [showEvidence, setShowEvidence] = useState(false);
++  const [outcomeText, setOutcomeText] = useState("");
++  const [outcomeBusy, setOutcomeBusy] = useState(false);
+ 
+   async function handleResolve(e: React.MouseEvent) {
+     e.preventDefault();
+@@ -52,43 +78,165 @@ export function IncidentRow({ incident }: { incident: IncidentRowData }) {
+     }
+   }
+ 
++  async function handleChoosePosture(e: React.MouseEvent, posture: string) {
++    e.preventDefault();
++    e.stopPropagation();
++    setPostureBusy(posture);
++    setPostureError(null);
++    try {
++      const res = await fetch(`/api/engagements/${incident.engagementId}/incidents/${incident.id}/posture`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ posture }),
++      });
++      const data = await res.json();
++      if (!res.ok) {
++        setPostureError(data.error ?? "Failed to save posture.");
++        return;
++      }
++      setSelectedPosture(posture);
++      router.refresh();
++    } finally {
++      setPostureBusy(null);
++    }
++  }
++
++  async function handleLogOutcome(e: React.MouseEvent) {
++    e.preventDefault();
++    e.stopPropagation();
++    if (!outcomeText.trim()) return;
++    setOutcomeBusy(true);
++    try {
++      const res = await fetch(`/api/engagements/${incident.engagementId}/incidents/${incident.id}/escalate-outcome`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ outcomeDetail: outcomeText.trim() }),
++      });
++      if (res.ok) {
++        setStatus("resolved");
++        router.refresh();
++      }
++    } finally {
++      setOutcomeBusy(false);
++    }
++  }
++
+   return (
+-    <div className="flex items-start justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3.5 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
+-      <Link href={`/dashboard/engagements/${incident.engagementId}`} className="flex items-start gap-3 min-w-0 flex-1">
+-        <AlertTriangle className="w-4 h-4 mt-0.5 text-rose-500 dark:text-rose-400 shrink-0" />
+-        <div className="min-w-0">
+-          <div className="flex items-center gap-1.5 flex-wrap">
+-            <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">{incident.buyer}</p>
+-            <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">severity {incident.severityScore}</span>
+-            {incident.signalClass && (
+-              <span
+-                className="text-[10px] font-semibold uppercase rounded-md border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 px-1.5 py-0.5"
+-                title="Declared regardless of severity score because of this signal class"
++    <div className="flex flex-col gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3.5 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
++      <div className="flex items-start justify-between gap-3">
++        <Link href={`/dashboard/engagements/${incident.engagementId}`} className="flex items-start gap-3 min-w-0 flex-1">
++          <AlertTriangle className="w-4 h-4 mt-0.5 text-rose-500 dark:text-rose-400 shrink-0" />
++          <div className="min-w-0">
++            <div className="flex items-center gap-1.5 flex-wrap">
++              <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">{incident.buyer}</p>
++              <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">severity {incident.severityScore}</span>
++              {incident.signalClass && (
++                <span
++                  className="text-[10px] font-semibold uppercase rounded-md border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 px-1.5 py-0.5"
++                  title="Declared regardless of severity score because of this signal class"
++                >
++                  Force-triggered · {signalClassLabel(incident.signalClass)}
++                </span>
++              )}
++              {incident.responseTier && (
++                <span className="text-[10px] font-semibold rounded-md border border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-400 px-1.5 py-0.5">
++                  {TIER_LABELS[incident.responseTier] ?? incident.responseTier}
++                </span>
++              )}
++            </div>
++            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 line-clamp-2">{incident.summary}</p>
++          </div>
++        </Link>
++
++        <div className="shrink-0 flex items-center gap-2">
++          {status === "open" && (
++            <button
++              type="button"
++              onClick={handleResolve}
++              disabled={resolving}
++              className="inline-flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 text-[10px] font-semibold uppercase text-zinc-600 dark:text-zinc-400 hover:border-emerald-300 dark:hover:border-emerald-800 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors cursor-pointer disabled:opacity-50"
++            >
++              {resolving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
++              Resolve
++            </button>
++          )}
++          <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_STYLES[status] ?? STATUS_STYLES.open}`}>
++            {status.replace(/_/g, " ")}
++          </span>
++        </div>
++      </div>
++
++      {/* Tier 3: no draft exists until a posture is chosen. */}
++      {status === "open" && incident.responseTier === "tier3_pause_and_instruct" && !selectedPosture && (
++        <div className="ml-7 rounded-lg border border-sky-200 dark:border-sky-900 bg-sky-50/50 dark:bg-sky-950/20 p-2.5">
++          <p className="text-[11px] font-semibold text-sky-700 dark:text-sky-400 mb-1.5">
++            Choose a response posture — nothing is drafted until you do:
++          </p>
++          <div className="flex flex-wrap gap-1.5">
++            {RESPONSE_POSTURES.map((p) => (
++              <button
++                key={p.id}
++                type="button"
++                onClick={(e) => handleChoosePosture(e, p.id)}
++                disabled={postureBusy !== null}
++                className="rounded-md border border-sky-200 dark:border-sky-900 bg-white dark:bg-zinc-900 px-2 py-1 text-[11px] font-medium text-sky-700 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-950/40 transition-colors cursor-pointer disabled:opacity-50"
+               >
+-                Force-triggered · {signalClassLabel(incident.signalClass)}
+-              </span>
+-            )}
++                {postureBusy === p.id ? <Loader2 className="w-3 h-3 animate-spin inline mr-1" /> : null}
++                {p.label}
++              </button>
++            ))}
+           </div>
+-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 line-clamp-2">{incident.summary}</p>
++          {postureError && <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1.5">{postureError}</p>}
+         </div>
+-      </Link>
++      )}
++      {selectedPosture && (
++        <p className="ml-7 text-[11px] text-zinc-500 dark:text-zinc-400">
++          Posture chosen: {RESPONSE_POSTURES.find((p) => p.id === selectedPosture)?.label ?? selectedPosture} — draft queued in the Queue for approval.
++        </p>
++      )}
+ 
+-      <div className="shrink-0 flex items-center gap-2">
+-        {status === "open" && (
++      {/* Tier 4: evidence package + outcome logging. */}
++      {incident.evidencePackage && (
++        <div className="ml-7">
+           <button
+             type="button"
+-            onClick={handleResolve}
+-            disabled={resolving}
+-            className="inline-flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 text-[10px] font-semibold uppercase text-zinc-600 dark:text-zinc-400 hover:border-emerald-300 dark:hover:border-emerald-800 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors cursor-pointer disabled:opacity-50"
++            onClick={(e) => {
++              e.preventDefault();
++              e.stopPropagation();
++              setShowEvidence((v) => !v);
++            }}
++            className="inline-flex items-center gap-1 text-[11px] font-semibold text-orange-700 dark:text-orange-400 hover:underline cursor-pointer"
+           >
+-            {resolving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+-            Resolve
++            <FileText className="w-3 h-3" />
++            {showEvidence ? "Hide evidence package" : "View evidence package"}
+           </button>
+-        )}
+-        <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_STYLES[status] ?? STATUS_STYLES.open}`}>
+-          {status}
+-        </span>
+-      </div>
++          {showEvidence && (
++            <pre className="mt-1.5 rounded-lg border border-orange-200 dark:border-orange-900 bg-orange-50/50 dark:bg-orange-950/20 p-2.5 text-[11px] text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap font-mono max-h-64 overflow-y-auto">
++              {incident.evidencePackage}
++            </pre>
++          )}
++          {status === "external_escalation_pending" && (
++            <div className="mt-2 flex items-center gap-1.5">
++              <input
++                type="text"
++                value={outcomeText}
++                onChange={(e) => setOutcomeText(e.target.value)}
++                placeholder="What happened with counsel/the platform?"
++                className="flex-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-400"
++              />
++              <button
++                type="button"
++                onClick={handleLogOutcome}
++                disabled={outcomeBusy || !outcomeText.trim()}
++                className="inline-flex items-center gap-1 rounded-md border border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-950/40 px-2 py-1 text-[11px] font-semibold text-orange-700 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-950/60 transition-colors cursor-pointer disabled:opacity-50"
++              >
++                {outcomeBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
++                Log outcome
++              </button>
++            </div>
++          )}
++        </div>
++      )}
+     </div>
+   );
+ }
+diff --git a/src/app/dashboard/reputation-manager/incidents/page.tsx b/src/app/dashboard/reputation-manager/incidents/page.tsx
+index 0c85ae1..08a0dc2 100644
+--- a/src/app/dashboard/reputation-manager/incidents/page.tsx
++++ b/src/app/dashboard/reputation-manager/incidents/page.tsx
+@@ -37,6 +37,9 @@ export default async function ReputationManagerIncidentsPage() {
+           summary: repIncidents.summary,
+           status: repIncidents.status,
+           signalClass: repIncidents.signalClass,
++          responseTier: repIncidents.responseTier,
++          selectedPosture: repIncidents.selectedPosture,
++          evidencePackage: repIncidents.evidencePackage,
+           declaredAt: repIncidents.declaredAt,
+           buyer: engagements.buyer,
+         })
+diff --git a/src/components/rep-skill-badge.tsx b/src/components/rep-skill-badge.tsx
+index 1987c94..a3b51a9 100644
+--- a/src/components/rep-skill-badge.tsx
++++ b/src/components/rep-skill-badge.tsx
+@@ -1,6 +1,6 @@
+ "use client";
+ 
+-import { Fingerprint, Radar, Star, MessageCircle, AtSign, ShieldAlert } from "lucide-react";
++import { Fingerprint, Radar, Star, MessageCircle, AtSign, ShieldAlert, Newspaper } from "lucide-react";
+ import type { RepSkillId } from "@/lib/rep-skill-manifest";
+ 
+ /**
+@@ -19,6 +19,7 @@ export const REP_SKILL_SQUISHY_CONFIG: Record<RepSkillId, { bgClass: string; ico
+   "rep-reddit-watch": { bgClass: "bg-[#fdba74]", icon: MessageCircle }, // orange — mentions/threads
+   "rep-twitter-watch": { bgClass: "bg-[#c4b5fd]", icon: AtSign }, // violet — X mentions
+   "rep-crisis-response": { bgClass: "bg-[#fca5a5]", icon: ShieldAlert }, // red — crisis/incident
++  "rep-digest": { bgClass: "bg-[#e5e7eb]", icon: Newspaper }, // neutral gray — quiet rollup, not an alert color
+ };
+ 
+ export function RepSkillBadge({ skill, size = 20 }: { skill: RepSkillId; size?: number }) {
+diff --git a/src/features/reputation-manager/identity-graph-form.tsx b/src/features/reputation-manager/identity-graph-form.tsx
+index dd7febd..06f8887 100644
+--- a/src/features/reputation-manager/identity-graph-form.tsx
++++ b/src/features/reputation-manager/identity-graph-form.tsx
+@@ -30,6 +30,7 @@ export type IdentityGraphFormState = {
+   trustedSources: string; // newline-separated
+   seedPanelPrompts: string; // newline-separated
+   crisisThresholdOverride: string; // numeric string, "" means unset
++  operatorPagePhone: string; // "" means no SMS paging fallback configured
+   // Always a concrete array in form state (checkbox-friendly) — the
+   // null-means-"all engines, unrestricted" semantics (see
+   // repIdentityGraphs.activeEngines) is handled at the toIntakePayload/
+@@ -52,6 +53,7 @@ export const EMPTY_IDENTITY_GRAPH_FORM: IdentityGraphFormState = {
+   trustedSources: "",
+   seedPanelPrompts: "",
+   crisisThresholdOverride: "",
++  operatorPagePhone: "",
+   activeEngines: [...REP_ENGINE_IDS],
+   entities: [],
+   competitors: [],
+@@ -97,6 +99,7 @@ export function toIntakePayload(form: IdentityGraphFormState) {
+     trustedSources: splitLines(form.trustedSources),
+     seedPanelPrompts: splitLines(form.seedPanelPrompts),
+     crisisThresholdOverride: form.crisisThresholdOverride.trim() ? Number(form.crisisThresholdOverride.trim()) : null,
++    operatorPagePhone: form.operatorPagePhone.trim() || null,
+     // All 5 checked means "no restriction" — send null, matching every
+     // row's state before this field existed, rather than an explicit
+     // list that happens to equal the full set.
+@@ -125,6 +128,7 @@ export function fromSavedGraph(graph: {
+   soleAuthorityName: string;
+   crisisThresholdOverride: number | null;
+   activeEngines: RepEngineId[] | null;
++  operatorPagePhone?: string | null;
+ }): IdentityGraphFormState {
+   return {
+     operatorName: graph.operatorName,
+@@ -136,6 +140,7 @@ export function fromSavedGraph(graph: {
+     trustedSources: graph.trustedSources.join("\n"),
+     seedPanelPrompts: graph.seedPanelPrompts.join("\n"),
+     crisisThresholdOverride: graph.crisisThresholdOverride != null ? String(graph.crisisThresholdOverride) : "",
++    operatorPagePhone: graph.operatorPagePhone ?? "",
+     activeEngines: graph.activeEngines ?? [...REP_ENGINE_IDS],
+     entities: graph.entities,
+     // collision_check-sourced entries are shown read-only lower in the
+@@ -491,6 +496,12 @@ export function IdentityGraphForm({
+           placeholder="Leave blank to use the shared default (80)"
+           type="number"
+         />
++        <InputField
++          label="Crisis paging phone (SMS fallback)"
++          value={form.operatorPagePhone}
++          onChange={(v) => set("operatorPagePhone", v)}
++          placeholder="+1 555 555 5555 — leave blank to skip SMS paging"
++        />
+       </div>
+     </div>
+   );
+diff --git a/src/features/reputation-manager/rep-thresholds.ts b/src/features/reputation-manager/rep-thresholds.ts
+index fa77a5d..bb22caf 100644
+--- a/src/features/reputation-manager/rep-thresholds.ts
++++ b/src/features/reputation-manager/rep-thresholds.ts
+@@ -30,11 +30,15 @@
+ // anomaly-detection.ts is their consumer, computed and force-triggered
+ // into crisis-response-service.ts alongside signal-class classification.
+ //
+-// STILL NOT ported: the full write_low_or_medium / write_high /
+-// external_escalation routing tiers. Those gate a draft-for-approval
+-// flow — nothing in this product drafts a response yet, so there's
+-// nothing for those tiers to route. Added alongside whichever skill
+-// first needs them, not speculatively here.
++// NOW ALSO ported (this file's third half, below resolveResponseTier):
++// the full write_low_or_medium / write_high / external_escalation routing
++// tiers. response-routing.ts is their consumer, called from
++// crisis-response-service.ts right after an incident is declared — each
++// contributing finding's already-computed compositeScore and signalClass
++// route it to tier 1 (auto-draft, one-click approve), tier 2 (auto-draft,
++// review-and-approve), tier 3 (no draft — page the operator with the
++// evidence and let them choose a posture first), or tier 4 (evidence
++// package, external handoff, no draft at all).
+ 
+ export const REP_THRESHOLD_DEFAULTS = {
+   /** Composite threat-score (0-100, produced downstream by whatever skill
+@@ -46,13 +50,22 @@ export const REP_THRESHOLD_DEFAULTS = {
+   /** Real-time push floor from thresholds.yml.template's
+    * real_time_alert_gate — everything below this batches into a daily
+    * digest instead of an immediate page, specifically to avoid alert
+-   * fatigue in the first 30 days of a new engagement. */
++   * fatigue in the first 30 days of a new engagement. Consumer:
++   * crisis-response-service.ts's runRepCrisisResponse fires a lighter,
++   * non-incident "elevated activity" notification (severity "warning", no
++   * repIncidents row) when a batch's max compositeScore clears this floor
++   * but stays under crisisScoreFloor — everything below THIS floor gets no
++   * immediate push at all and only surfaces in digest.ts's next run. */
+   realTimeAlertFloor: 75,
+ 
+   /** Minimum minutes between an incident being detected and any public
+    * response being allowed to go out, even with sole-authority approval —
+    * the deliberate anti-hasty-response delay from crisis-triggers.yml.template's
+-   * response_timing block. */
++   * response_timing block. Consumer: decidePendingAction (approval-gate.ts)
++   * refuses to approve a "rep_response_approval" pending action until this
++   * many minutes have passed since the related incident's declaredAt —
++   * the row stays "pending" (not failed) so the operator can just retry
++   * the approve once the window clears. */
+   minMinutesBeforePublicResponse: 60,
+ } as const;
+ 
+@@ -166,3 +179,80 @@ export const ANOMALY_CLASSES = [
+ ] as const;
+ 
+ export type AnomalyClass = (typeof ANOMALY_CLASSES)[number];
++
++/**
++ * thresholds.yml.template's routing matrix (write_low_or_medium /
++ * write_high / external_escalation) — response-routing.ts is the
++ * consumer. A finding's compositeScore is already "severity axis average
++ * x10" (see scoreFindings in crisis-response-service.ts: three 1-10 axes
++ * weighted-summed to ~1-10, then x10 for a 0-100 reporting scale), so the
++ * spec's 1-10 severity_range boundaries map onto compositeScore by the
++ * same x10 factor: [1,4]->(0,40], [5,6]->(40,60], [7,10]->(60,100].
++ */
++export const RESPONSE_TIER_SCORE_BOUNDS = {
++  tier1Max: 40, // severity 1-4, compositeScore <= 40
++  tier2Max: 60, // severity 5-6, compositeScore 41-60; above is severity 7-10
++} as const;
++
++export type ResponseTier = "tier1_one_click" | "tier2_review" | "tier3_pause_and_instruct" | "tier4_external_escalation";
++
++/**
++ * The subset of SIGNAL_CLASSES_FORCE_TRIGGER whose real-world remedy
++ * fundamentally requires going outside this app — legal counsel or a
++ * platform's own trust & safety team, not a posture this product can draft
++ * to. Matches thresholds.yml.template's external_escalation example
++ * actions (cease-and-desist, court-order tracking = a legal/regulatory
++ * matter; account-compromise/formal-complaint = a personal-safety matter).
++ * The other four force-trigger classes (defamation, review-bomb,
++ * competitor disinfo, adversarial press) stay in-system at tier 3 —
++ * serious, but still something the sole authority can choose a public
++ * response posture to, which is what tier 3 is for.
++ */
++export const EXTERNAL_ESCALATION_SIGNAL_CLASSES: readonly SignalClass[] = ["regulatory_or_legal_action", "doxx_or_personal_safety"];
++
++/**
++ * Candidate response postures offered at tier 3 (pause_and_instruct) —
++ * thresholds.yml.template's own rationale: "the system refuses to write
++ * until you choose, because the choice itself is the load-bearing operator
++ * judgment." No draft exists until one of these is picked; response-
++ * routing.ts then drafts TO the chosen posture rather than guessing one.
++ */
++export const RESPONSE_POSTURES = [
++  { id: "acknowledge_private_resolution", label: "Acknowledge and invite a private resolution" },
++  { id: "factual_correction", label: "Non-defensive factual correction" },
++  { id: "monitor_only", label: "No public response — monitor only" },
++  { id: "escalate_externally", label: "Escalate externally instead of drafting" },
++] as const;
++
++export type ResponsePostureId = (typeof RESPONSE_POSTURES)[number]["id"];
++
++/**
++ * thresholds.yml.template's two-axis routing matrix, collapsed to the
++ * single lookup response-routing.ts needs: given one finding's already-
++ * computed compositeScore and (if any) its force-trigger signalClass,
++ * which of the four response tiers does it route to. Signal class wins
++ * over score when it's in EXTERNAL_ESCALATION_SIGNAL_CLASSES (a low-reach
++ * legal notice is still a legal notice); otherwise score alone decides.
++ */
++export function resolveResponseTier(compositeScore: number, signalClass: SignalClass | null): ResponseTier {
++  if (signalClass && EXTERNAL_ESCALATION_SIGNAL_CLASSES.includes(signalClass)) return "tier4_external_escalation";
++  if (compositeScore > RESPONSE_TIER_SCORE_BOUNDS.tier2Max) return "tier3_pause_and_instruct";
++  if (compositeScore > RESPONSE_TIER_SCORE_BOUNDS.tier1Max) return "tier2_review";
++  return "tier1_one_click";
++}
++
++/** Ranks tiers by severity so an incident with multiple contributing
++ * findings can report the single highest tier among them — same "worst
++ * finding sets the incident's posture" reasoning severityScore itself
++ * already uses (max across findings, not an average). */
++const RESPONSE_TIER_RANK: Record<ResponseTier, number> = {
++  tier1_one_click: 1,
++  tier2_review: 2,
++  tier3_pause_and_instruct: 3,
++  tier4_external_escalation: 4,
++};
++
++export function highestResponseTier(tiers: ResponseTier[]): ResponseTier | null {
++  if (tiers.length === 0) return null;
++  return tiers.reduce((max, t) => (RESPONSE_TIER_RANK[t] > RESPONSE_TIER_RANK[max] ? t : max));
++}
+diff --git a/src/features/reputation-manager/server/crisis-response-service.ts b/src/features/reputation-manager/server/crisis-response-service.ts
+index 09efabd..837b2fb 100644
+--- a/src/features/reputation-manager/server/crisis-response-service.ts
++++ b/src/features/reputation-manager/server/crisis-response-service.ts
+@@ -10,9 +10,13 @@ import {
+   SEVERITY_AXIS_RUBRIC,
+   SIGNAL_CLASSES_FORCE_TRIGGER,
+   isForceTriggerSignalClass,
++  REP_THRESHOLD_DEFAULTS,
++  highestResponseTier,
+   type SignalClass,
++  type ResponseTier,
+ } from "@/features/reputation-manager/rep-thresholds";
+ import { detectAnomalies, anomalyCooldownMs, type AnomalyResult } from "@/features/reputation-manager/server/anomaly-detection";
++import { loadRoutingContext, routeOneFinding } from "@/features/reputation-manager/server/response-routing";
+ import type { GetStepTools, Inngest } from "inngest";
+ 
+ type StepTools = GetStepTools<Inngest.Any>;
+@@ -234,8 +238,9 @@ async function declareIncident(params: {
+   triggerReason: string;
+   operatorName: string;
+   soleAuthorityName: string;
++  operatorPagePhone: string | null;
+ }): Promise<{ incidentId: string }> {
+-  const { tenant, engagementId, runId, severityScore, summaryText, allFindings, declaredSignalClass, triggerReason, operatorName, soleAuthorityName } = params;
++  const { tenant, engagementId, runId, severityScore, summaryText, allFindings, declaredSignalClass, triggerReason, operatorName, soleAuthorityName, operatorPagePhone } = params;
+ 
+   const [incident] = await db
+     .insert(repIncidents)
+@@ -259,6 +264,7 @@ async function declareIncident(params: {
+       `${summaryText}\n\n${triggerReason} Severity: ${severityScore}/100. ` +
+       `Sole authority on record: ${soleAuthorityName}. Nothing has been published — this is a notification only.`,
+     slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
++    smsToPhone: operatorPagePhone ?? undefined,
+   });
+ 
+   return { incidentId: incident.id };
+@@ -340,6 +346,29 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
+     const severityScore = anomalyForceTriggered ? Math.max(maxCompositeScore, floor) : maxCompositeScore;
+ 
+     if (!forceTriggered && severityScore < floor) {
++      // Real-time-alert floor (thresholds.yml.template's real_time_alert_gate,
++      // REP_THRESHOLD_DEFAULTS.realTimeAlertFloor) — not severe enough for a
++      // declared incident, but severe enough that waiting for the next
++      // digest.ts run would be a real gap. A lighter, non-incident heads-up:
++      // no repIncidents row, no SMS (severity "warning" not "critical"), just
++      // in-app/Slack/email so the operator sees it today instead of tomorrow.
++      // Below this floor, nothing fires here — digest.ts's next run is where
++      // it surfaces, exactly as the spec intends.
++      if (severityScore >= REP_THRESHOLD_DEFAULTS.realTimeAlertFloor) {
++        await notifyUser({
++          whopUserId: tenant.whopUserId,
++          engagementId,
++          runId,
++          type: "reputation_elevated_activity",
++          severity: "warning",
++          title: `Elevated activity — ${graph.operatorName}`,
++          body:
++            `${contentSummary ?? "Flagged findings"} scored ${severityScore}/100 — below the ${floor} incident threshold, ` +
++            "but above the real-time-alert floor, so this isn't waiting for the next digest.",
++          slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
++        });
++      }
++
+       await logStep(runId, {
+         phase: "crisis_response",
+         status: "success",
+@@ -364,36 +393,83 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
+         ? `Force-triggered by anomaly detection: ${anomalies.map((a) => a.anomalyClass).join(", ")} (declares regardless of score).`
+         : `Severity ${severityScore}/100 crossed this engagement's threshold of ${floor}.`;
+ 
++    // One step: insert the incident and notify — see declareIncident's
++    // own comment for why both needed to move behind a single step.run
++    // rather than running directly here.
++    const declareParams = {
++      tenant,
++      engagementId,
++      runId,
++      severityScore,
++      summaryText,
++      allFindings,
++      declaredSignalClass,
++      triggerReason,
++      operatorName: graph.operatorName,
++      soleAuthorityName: graph.soleAuthorityName,
++      operatorPagePhone: graph.operatorPagePhone,
++    };
+     // One step: insert the incident and notify — see declareIncident's
+     // own comment for why both needed to move behind a single step.run
+     // rather than running directly here.
+     const { incidentId } = await (step
+-      ? step.run("declare-incident", () =>
+-          declareIncident({
+-            tenant,
+-            engagementId,
+-            runId,
+-            severityScore,
+-            summaryText,
+-            allFindings,
+-            declaredSignalClass,
+-            triggerReason,
+-            operatorName: graph.operatorName,
+-            soleAuthorityName: graph.soleAuthorityName,
+-          })
+-        )
+-      : declareIncident({
+-          tenant,
+-          engagementId,
+-          runId,
+-          severityScore,
+-          summaryText,
+-          allFindings,
+-          declaredSignalClass,
+-          triggerReason,
+-          operatorName: graph.operatorName,
+-          soleAuthorityName: graph.soleAuthorityName,
+-        }));
++      ? step.run("declare-incident", () => declareIncident(declareParams))
++      : declareIncident(declareParams));
++
++    // Routes every contributing finding to its response tier (auto-draft,
++    // pause-for-posture, or external escalation) — see response-routing.ts.
++    // One step per finding, not one step for the whole batch: a retry
++    // triggered by an LLM drafting hiccup on finding 3 of 5 must only
++    // re-run finding 3, not re-queue duplicate drafts/pending-actions for
++    // findings 1-2 that already succeeded — step.run's own memoization is
++    // what buys that per-finding idempotency, which a single big step
++    // wrapping a for-loop would not.
++    const routingContext = await (step ? step.run("load-routing-context", () => loadRoutingContext(engagementId)) : loadRoutingContext(engagementId));
++
++    const responseTiers: ResponseTier[] = [];
++    if (routingContext) {
++      const declaredAt = new Date();
++      for (let i = 0; i < allFindings.length; i++) {
++        const finding = allFindings[i];
++        const tier = await (step
++          ? step.run(`route-finding-${i}`, () =>
++              routeOneFinding({
++                tenant,
++                engagementId,
++                incidentId,
++                runId,
++                context: routingContext,
++                finding,
++                severityScore,
++                declaredSignalClass,
++                summary: summaryText,
++                allFindings,
++                declaredAt,
++              })
++            )
++          : routeOneFinding({
++              tenant,
++              engagementId,
++              incidentId,
++              runId,
++              context: routingContext,
++              finding,
++              severityScore,
++              declaredSignalClass,
++              summary: summaryText,
++              allFindings,
++              declaredAt,
++            }));
++        if (tier) responseTiers.push(tier);
++      }
++    }
++    const responseTier = highestResponseTier(responseTiers);
++
++    if (responseTier) {
++      await (step
++        ? step.run("persist-response-tier", () => db.update(repIncidents).set({ responseTier }).where(eq(repIncidents.id, incidentId)))
++        : db.update(repIncidents).set({ responseTier }).where(eq(repIncidents.id, incidentId)));
++    }
+ 
+     await logStep(runId, {
+       phase: "crisis_response",
+diff --git a/src/features/reputation-manager/server/digest.ts b/src/features/reputation-manager/server/digest.ts
+new file mode 100644
+index 0000000..5f54e86
+--- /dev/null
++++ b/src/features/reputation-manager/server/digest.ts
+@@ -0,0 +1,149 @@
++// src/features/reputation-manager/server/digest.ts
++//
++// thresholds.yml.template's real_time_alert_gate: "Real-time alerts trigger
++// constantly in the first 30 days if every threshold pings... Real-time
++// gates to score 75+ only; everything else batches into the daily digest,
++// which you review once daily in a batched session." Everything below
++// REP_THRESHOLD_DEFAULTS.realTimeAlertFloor never gets an immediate push
++// today — it's logged (repAuditEvents "detection" rows, every scored
++// mention whether flagged or not) and then nothing else happens to it. This
++// is the "nothing else" — a once-daily rollup of what happened since the
++// last digest, delivered as a single low-severity notification instead of
++// the OG spec's twice-daily local-time cadence (see repDigestCron in
++// src/inngest/reputation-manager.ts for why once-daily, UTC-fixed, matches
++// this product's existing rep-* cron cadence rather than inventing a new
++// per-timezone mechanism for one skill).
++import { db } from "@/lib/db";
++import { repAuditEvents, repIncidents, skillRuns, repIdentityGraphs } from "@/models/schema";
++import { and, eq, gt, desc } from "drizzle-orm";
++import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
++import { notifyUser } from "@/lib/notify";
++import { logAuditEvent, type DetectionPayload } from "@/features/reputation-manager/server/audit-log";
++import type { GetStepTools, Inngest } from "inngest";
++
++type StepTools = GetStepTools<Inngest.Any>;
++
++async function lastSuccessfulDigestAt(engagementId: string): Promise<Date | null> {
++  const [row] = await db
++    .select({ completedAt: skillRuns.completedAt })
++    .from(skillRuns)
++    .where(and(eq(skillRuns.engagementId, engagementId), eq(skillRuns.skillName, "rep-digest"), eq(skillRuns.status, "success")))
++    .orderBy(desc(skillRuns.completedAt))
++    .limit(1);
++  return row?.completedAt ?? null;
++}
++
++export interface RepDigestSummary {
++  // ISO string, not Date — this struct is the return value of a step.run
++  // call (run("build-digest", ...) below), and Inngest's step output is
++  // JSON-serialized between the step and the caller: a Date field comes
++  // back as a plain string, not a rehydrated Date. Only ever used for a
++  // truthy check in formatDigestBody, so a string works exactly as well.
++  since: string | null;
++  detectionsBySource: Record<string, number>;
++  flaggedCount: number;
++  incidentsDeclared: number;
++  totalEvents: number;
++}
++
++async function buildRepDigest(engagementId: string, since: Date | null): Promise<RepDigestSummary> {
++  const detectionRows = await db
++    .select({ payload: repAuditEvents.payload })
++    .from(repAuditEvents)
++    .where(
++      since
++        ? and(eq(repAuditEvents.engagementId, engagementId), eq(repAuditEvents.eventType, "detection"), gt(repAuditEvents.createdAt, since))
++        : and(eq(repAuditEvents.engagementId, engagementId), eq(repAuditEvents.eventType, "detection"))
++    );
++
++  const detectionsBySource: Record<string, number> = {};
++  let flaggedCount = 0;
++  for (const row of detectionRows) {
++    const payload = row.payload as unknown as DetectionPayload;
++    detectionsBySource[payload.source] = (detectionsBySource[payload.source] ?? 0) + 1;
++    // "Flagged" isn't its own field on DetectionPayload — a detection this
++    // digest should call out is one whose threat_score cleared the
++    // real-time floor's own reasoning at a smaller scale: worth a mention
++    // even though it never crossed the incident/real-time thresholds.
++    if (typeof payload.threatScore === "number" && payload.threatScore >= 30) flaggedCount++;
++  }
++
++  const incidentRows = since
++    ? await db.select({ id: repIncidents.id }).from(repIncidents).where(and(eq(repIncidents.engagementId, engagementId), gt(repIncidents.declaredAt, since)))
++    : await db.select({ id: repIncidents.id }).from(repIncidents).where(eq(repIncidents.engagementId, engagementId));
++
++  return {
++    since: since ? since.toISOString() : null,
++    detectionsBySource,
++    flaggedCount,
++    incidentsDeclared: incidentRows.length,
++    totalEvents: detectionRows.length,
++  };
++}
++
++function formatDigestBody(digest: RepDigestSummary, operatorName: string): string {
++  if (digest.totalEvents === 0 && digest.incidentsDeclared === 0) {
++    return `Quiet ${digest.since ? "day" : "period"} — nothing new to report for ${operatorName}.`;
++  }
++  const bySourceLines = Object.entries(digest.detectionsBySource)
++    .map(([source, count]) => `${count} on ${source}`)
++    .join(", ");
++  const parts = [
++    digest.totalEvents > 0 ? `${digest.totalEvents} mention(s) checked (${bySourceLines})` : null,
++    digest.flaggedCount > 0 ? `${digest.flaggedCount} worth a look but below the real-time floor` : null,
++    digest.incidentsDeclared > 0 ? `${digest.incidentsDeclared} incident(s) declared (already paged separately)` : null,
++  ].filter((p): p is string => p !== null);
++  return `${operatorName}: ${parts.join(". ")}.`;
++}
++
++export async function runRepDigest(tenant: any, runId: string, step: StepTools | undefined): Promise<void> {
++  const summary = emptySummary();
++  const engagementId: string = tenant.engagementId;
++  const run = step ? <T,>(id: string, fn: () => Promise<T>) => step.run(id, fn) : <T,>(_id: string, fn: () => Promise<T>) => fn();
++
++  try {
++    const graph = await run("load-identity-graph", async () => {
++      const [row] = await db.select({ operatorName: repIdentityGraphs.operatorName }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1);
++      return row ?? null;
++    });
++
++    if (!graph) {
++      await logStep(runId, { phase: "rep_digest", status: "skipped", detail: "No identity graph yet." });
++      summary.openItems.push("Nothing to digest until the identity graph exists.");
++      await finishRun(runId, { summary, status: "skipped" });
++      return;
++    }
++
++    const sinceRaw = await run("find-last-digest", () => lastSuccessfulDigestAt(engagementId));
++    const since = sinceRaw ? new Date(sinceRaw) : null;
++
++    const digest = await run("build-digest", () => buildRepDigest(engagementId, since));
++
++    const body = formatDigestBody(digest, graph.operatorName);
++
++    await run("notify-and-log", async () => {
++      await notifyUser({
++        whopUserId: tenant.whopUserId,
++        engagementId,
++        runId,
++        type: "reputation_daily_digest",
++        severity: "info",
++        title: `Daily digest — ${graph.operatorName}`,
++        body,
++        slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
++      });
++
++      await logAuditEvent(engagementId, {
++        eventType: "reflection",
++        payload: { reportPath: `digest:${runId}`, period: "daily", eventsReviewed: digest.totalEvents },
++      });
++    });
++
++    await logStep(runId, { phase: "rep_digest", status: "success", detail: body });
++    summary.whatWorked.push(body);
++    await finishRun(runId, { summary });
++  } catch (err) {
++    await failRun(runId, err, { summary }).catch(() => {});
++    throw err;
++  }
++}
+diff --git a/src/features/reputation-manager/server/draft-response.ts b/src/features/reputation-manager/server/draft-response.ts
+index 22b2ceb..8f4d576 100644
+--- a/src/features/reputation-manager/server/draft-response.ts
++++ b/src/features/reputation-manager/server/draft-response.ts
+@@ -17,16 +17,70 @@ import { eq } from "drizzle-orm";
+ import { callClaude } from "@/lib/llm";
+ import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
+ import type { GetStepTools, Inngest } from "inngest";
++import type { ResponsePostureId } from "@/features/reputation-manager/rep-thresholds";
++import { RESPONSE_POSTURES } from "@/features/reputation-manager/rep-thresholds";
+ 
+ type StepTools = GetStepTools<Inngest.Any>;
+ 
+-const PLATFORM_LABELS: Record<string, string> = {
++export const PLATFORM_LABELS: Record<string, string> = {
+   trustpilot: "Trustpilot",
+   reddit: "Reddit",
+   twitter: "X/Twitter",
+   engine_panel: "an AI engine's answer",
+ };
+ 
++function postureInstruction(posture: ResponsePostureId | undefined): string {
++  if (!posture) return "";
++  const label = RESPONSE_POSTURES.find((p) => p.id === posture)?.label;
++  switch (posture) {
++    case "acknowledge_private_resolution":
++      return " The sole authority has chosen this posture: acknowledge the concern and invite the person to continue privately (e.g. email/DM) rather than litigating details publicly.";
++    case "factual_correction":
++      return " The sole authority has chosen this posture: correct the specific factual inaccuracy plainly and non-defensively, without arguing tone or intent.";
++    case "monitor_only":
++      return " The sole authority has chosen to not respond publicly at all — draft only an internal note summarizing why, not a public-facing reply.";
++    case "escalate_externally":
++      return "";
++    default:
++      return label ? ` The sole authority has chosen this posture: ${label}.` : "";
++  }
++}
++
++/**
++ * Reusable drafting core — shared by the manual Teammates-chat action below
++ * and response-routing.ts's automatic tier 1/2/3 drafting. Never posts
++ * anything anywhere (see file header); always returns text for a human to
++ * review, edit, and post themselves. `posture` is only ever set for a tier
++ * 3 draft, generated after the sole authority has picked one — see
++ * response-routing.ts and thresholds.yml.template's "the choice itself is
++ * the load-bearing operator judgment."
++ */
++export async function draftResponseText(params: {
++  operatorName: string;
++  findingText: string;
++  platformLabel: string;
++  brandVoice?: unknown;
++  posture?: ResponsePostureId;
++  runId: string;
++}): Promise<string> {
++  const voiceContext = params.brandVoice ? `\n\nThe operator's established brand voice (match this tone): ${JSON.stringify(params.brandVoice).slice(0, 800)}` : "";
++
++  const result = await callClaude({
++    model: "FAST",
++    runId: params.runId,
++    maxTokens: 500,
++    system:
++      `You draft a professional, de-escalating public response on behalf of a business ("${params.operatorName}") to a ${params.platformLabel} finding about them. ` +
++      "The response should: acknowledge the concern genuinely without being defensive, avoid admitting fault for anything not confirmed, invite the person to continue the conversation privately if it's a genuine complaint, and stay concise (2-4 sentences) and human, not corporate-sounding. " +
++      "Never fabricate specific facts, promises, or offers on the operator's behalf — keep it general enough that a human can add specifics before posting." +
++      postureInstruction(params.posture) +
++      `Respond with ONLY the drafted response text, no preamble, no quotation marks around it.${voiceContext}`,
++    userMessage: `The ${params.platformLabel} finding to respond to:\n\n${params.findingText}`,
++  });
++
++  return result.text.trim();
++}
++
+ export async function runDraftResponse(
+   tenant: { engagementId: string },
+   runId: string,
+@@ -56,24 +110,10 @@ export async function runDraftResponse(
+ 
+     await logStep(runId, { phase: "draft_response", status: "running", detail: `Drafting a response to ${platformLabel} finding.` });
+ 
+-    const voiceContext = brandVoice ? `\n\nThe operator's established brand voice (match this tone): ${JSON.stringify(brandVoice).slice(0, 800)}` : "";
+-
+-    const result = await run("generate-draft", () =>
+-      callClaude({
+-        model: "FAST",
+-        runId,
+-        maxTokens: 500,
+-        system:
+-          `You draft a professional, de-escalating public response on behalf of a business ("${graph.operatorName}") to a ${platformLabel} finding about them. ` +
+-          "The response should: acknowledge the concern genuinely without being defensive, avoid admitting fault for anything not confirmed, invite the person to continue the conversation privately if it's a genuine complaint, and stay concise (2-4 sentences) and human, not corporate-sounding. " +
+-          "Never fabricate specific facts, promises, or offers on the operator's behalf — keep it general enough that a human can add specifics before posting. " +
+-          `Respond with ONLY the drafted response text, no preamble, no quotation marks around it.${voiceContext}`,
+-        userMessage: `The ${platformLabel} finding to respond to:\n\n${findingText}`,
+-      })
++    const draft = await run("generate-draft", () =>
++      draftResponseText({ operatorName: graph.operatorName, findingText, platformLabel, brandVoice, runId })
+     );
+ 
+-    const draft = result.text.trim();
+-
+     await logStep(runId, { phase: "draft_response", status: "success", detail: "Draft ready." });
+     summary.whatWorked.push(`Drafted a suggested response to the ${platformLabel} finding: "${draft}"`);
+     summary.openItems.push("This draft was not posted anywhere — review and edit it, then post it manually wherever the original finding was.");
+diff --git a/src/features/reputation-manager/server/onboarding-service.ts b/src/features/reputation-manager/server/onboarding-service.ts
+index 9c34b68..058611f 100644
+--- a/src/features/reputation-manager/server/onboarding-service.ts
++++ b/src/features/reputation-manager/server/onboarding-service.ts
+@@ -35,6 +35,13 @@ export type RepIntakeInput = {
+   // engine runs," matching every row's behavior before this field
+   // existed. See repIdentityGraphs.activeEngines' own comment.
+   activeEngines?: RepEngineId[] | null;
++  // Destination for crisis-response's SMS paging fallback — see
++  // repIdentityGraphs.operatorPagePhone's own comment. Not in the OG
++  // skill's 10-question interview (that's the ntfy/Twilio paging skill's
++  // own concern in the local tool); added here since this hosted product's
++  // paging config lives on the same per-engagement identity row as the
++  // crisis threshold it's adjacent to.
++  operatorPagePhone?: string | null;
+ };
+ 
+ const MAX_LIST_LENGTH = 50; // generous ceiling against a malformed/scripted payload, not a real-world limit
+@@ -163,6 +170,9 @@ export async function saveRepIdentityGraphIntake(
+   ) {
+     return { error: "Crisis threshold override must be a number between 1 and 100, or omitted to use the shared default." };
+   }
++  if (input.operatorPagePhone != null && input.operatorPagePhone.trim() && !/^\+?[0-9\s\-().]{7,20}$/.test(input.operatorPagePhone.trim())) {
++    return { error: "Operator page phone doesn't look like a valid phone number." };
++  }
+ 
+   const values = {
+     engagementId,
+@@ -180,6 +190,7 @@ export async function saveRepIdentityGraphIntake(
+     soleAuthorityName: input.soleAuthorityName.trim(),
+     crisisThresholdOverride: input.crisisThresholdOverride ?? null,
+     activeEngines: input.activeEngines ?? null,
++    operatorPagePhone: input.operatorPagePhone?.trim() || null,
+     updatedAt: new Date(),
+   };
+ 
+@@ -208,6 +219,7 @@ export async function saveRepIdentityGraphIntake(
+         soleAuthorityName: values.soleAuthorityName,
+         crisisThresholdOverride: values.crisisThresholdOverride,
+         activeEngines: values.activeEngines,
++        operatorPagePhone: values.operatorPagePhone,
+         updatedAt: values.updatedAt,
+         // collisions intentionally omitted here — merged below in a
+         // separate statement so a collision_check-sourced entry from a
+diff --git a/src/features/reputation-manager/server/response-routing.ts b/src/features/reputation-manager/server/response-routing.ts
+new file mode 100644
+index 0000000..b26b7c8
+--- /dev/null
++++ b/src/features/reputation-manager/server/response-routing.ts
+@@ -0,0 +1,389 @@
++// src/features/reputation-manager/server/response-routing.ts
++//
++// thresholds.yml.template's response-routing matrix — the piece
++// rep-thresholds.ts's own comment used to flag as "STILL NOT ported"
++// because nothing in this product drafted a response yet. draft-response.ts
++// closed half that gap (a manual, chat-triggered draft action) but had zero
++// connection to severity score, signal class, or an approval queue. This
++// file is the other half: crisis-response-service.ts calls loadRoutingContext
++// once and routeOneFinding per contributing finding right after declaring
++// an incident, and every finding gets routed to exactly one of the four
++// tiers below.
++//
++// What "publish" means here, honestly: this app has no API for posting a
++// reply to Trustpilot, Reddit, or X on the operator's behalf (see
++// draft-response.ts's own header) — that's a deliberate scope boundary,
++// not an oversight. So "approve" never means "post it for you." It means
++// "reviewed and cleared — go paste this where it needs to go," which is
++// exactly the spec's own division of labor ("the system drafts; the buyer
++// publishes").
++import { db } from "@/lib/db";
++import { repIncidents, repIdentityGraphs, engagements } from "@/models/schema";
++import { eq } from "drizzle-orm";
++import { queuePendingAction } from "@/lib/approval-gate";
++import { notifyUser } from "@/lib/notify";
++import { logAuditEvent } from "@/features/reputation-manager/server/audit-log";
++import { draftResponseText, PLATFORM_LABELS } from "@/features/reputation-manager/server/draft-response";
++import {
++  resolveResponseTier,
++  RESPONSE_POSTURES,
++  type ResponseTier,
++  type ResponsePostureId,
++  type SignalClass,
++} from "@/features/reputation-manager/rep-thresholds";
++import type { EngagementStack } from "@/models/schema";
++
++export interface RoutableFinding {
++  source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "anomaly";
++  excerpt: string;
++  flagReason: string | null;
++  compositeScore?: number;
++  signalClass?: string | null;
++}
++
++function platformLabelFor(source: RoutableFinding["source"]): string {
++  return PLATFORM_LABELS[source] ?? "this";
++}
++
++/** Tier 1/2: auto-draft immediately and queue it for approval — one-click
++ * for tier 1, review-and-approve framing for tier 2 (same mechanics today,
++ * since this app has no per-tier UI weight yet; the payload's `tier` field
++ * is what a future queue-panel affordance would key off). */
++async function queueDraftApproval(params: {
++  engagementId: string;
++  incidentId: string;
++  runId: string;
++  finding: RoutableFinding;
++  tier: "tier1_one_click" | "tier2_review";
++  operatorName: string;
++  brandVoice: unknown;
++}): Promise<void> {
++  const platformLabel = platformLabelFor(params.finding.source);
++  const draft = await draftResponseText({
++    operatorName: params.operatorName,
++    findingText: params.finding.excerpt,
++    platformLabel,
++    brandVoice: params.brandVoice,
++    runId: params.runId,
++  });
++
++  const draftEventId = await logAuditEvent(params.engagementId, {
++    eventType: "draft",
++    payload: {
++      draftClass: params.finding.source,
++      draftPath: `incident:${params.incidentId}`,
++      complianceCheck: "passed",
++      tier: params.tier === "tier1_one_click" ? 1 : 2,
++    },
++  });
++
++  const label = params.tier === "tier1_one_click" ? "one-click approve" : "review before approving";
++  await queuePendingAction(
++    params.engagementId,
++    "rep_response_approval",
++    {
++      incidentId: params.incidentId,
++      draftEventId,
++      source: params.finding.source,
++      findingExcerpt: params.finding.excerpt,
++      draftText: draft,
++      tier: params.tier,
++      _title: `Response draft ready (${label}) — ${platformLabel}`,
++    },
++    `Severity ${params.finding.compositeScore ?? "n/a"}/100 on ${platformLabel}. Drafted response: "${draft}"`
++  );
++}
++
++/** Tier 3: no draft. Page the operator with the evidence and the posture
++ * menu — thresholds.yml.template's own rationale is that drafting first
++ * anchors the operator on the wrong response, so the system refuses to
++ * write until a posture is chosen (see the posture route). */
++async function pageForPostureChoice(params: {
++  tenant: any;
++  engagementId: string;
++  incidentId: string;
++  finding: RoutableFinding;
++  operatorName: string;
++  soleAuthorityName: string;
++}): Promise<void> {
++  const platformLabel = platformLabelFor(params.finding.source);
++  const postureList = RESPONSE_POSTURES.map((p) => `- ${p.label}`).join("\n");
++
++  await notifyUser({
++    whopUserId: params.tenant.whopUserId,
++    engagementId: params.engagementId,
++    type: "reputation_crisis_declared",
++    severity: "critical",
++    title: `Response posture needed — ${params.operatorName}`,
++    body:
++      `A high-severity ${platformLabel} finding needs a response posture before anything gets drafted:\n\n"${params.finding.excerpt}"\n\n` +
++      `Choose one from the incident page:\n${postureList}\n\n` +
++      `Sole authority on record: ${params.soleAuthorityName}. No draft exists yet — choosing a posture is what generates one.`,
++    slackWebhookUrl: (params.tenant.stack as EngagementStack | null)?.slack_webhook_url,
++  });
++}
++
++/** Tier 4: no draft, no posture menu — this is a legal/personal-safety
++ * matter that goes outside the system entirely. Generates the evidence
++ * package the operator hands to counsel or a platform's trust & safety
++ * team, logs the handoff, and marks the incident as awaiting an outcome
++ * the operator brings back (escalate-outcome route). */
++export function buildEvidencePackage(params: {
++  operatorName: string;
++  soleAuthorityName: string;
++  incidentId: string;
++  severityScore: number;
++  signalClass: string | null;
++  summary: string;
++  findings: RoutableFinding[];
++  declaredAt: Date;
++}): string {
++  const lines: string[] = [
++    `Evidence package — ${params.operatorName}`,
++    `Incident: ${params.incidentId}`,
++    `Declared: ${params.declaredAt.toISOString()}`,
++    `Severity: ${params.severityScore}/100${params.signalClass ? ` (force-triggered: ${params.signalClass})` : ""}`,
++    `Sole authority: ${params.soleAuthorityName}`,
++    "",
++    "Summary:",
++    params.summary,
++    "",
++    "Contributing findings:",
++  ];
++  for (const f of params.findings) {
++    lines.push(`- [${f.source}] ${f.excerpt}${f.flagReason ? ` (flagged: ${f.flagReason})` : ""}`);
++  }
++  lines.push("", "This package was generated for handoff to counsel or a platform's trust & safety team. Log the outcome once you have one.");
++  return lines.join("\n");
++}
++
++async function escalateExternally(params: {
++  tenant: any;
++  engagementId: string;
++  incidentId: string;
++  finding: RoutableFinding;
++  operatorName: string;
++  soleAuthorityName: string;
++  severityScore: number;
++  signalClass: string | null;
++  summary: string;
++  allFindings: RoutableFinding[];
++  declaredAt: Date;
++}): Promise<void> {
++  const evidencePackage = buildEvidencePackage({
++    operatorName: params.operatorName,
++    soleAuthorityName: params.soleAuthorityName,
++    incidentId: params.incidentId,
++    severityScore: params.severityScore,
++    signalClass: params.signalClass,
++    summary: params.summary,
++    findings: params.allFindings,
++    declaredAt: params.declaredAt,
++  });
++
++  await db
++    .update(repIncidents)
++    .set({ status: "external_escalation_pending", evidencePackage })
++    .where(eq(repIncidents.id, params.incidentId));
++
++  // engine_panel-sourced escalations get the spec's dedicated
++  // ai_engine_notice event type (a vendor hallucination/spurious-output
++  // notice) instead of the generic external_action — genuinely a
++  // different kind of handoff (to the AI vendor, not counsel/a platform).
++  if (params.finding.source === "engine_panel") {
++    await logAuditEvent(params.engagementId, {
++      eventType: "ai_engine_notice",
++      payload: {
++        vendor: "unspecified", // the scored finding doesn't carry which of the 5 engines produced it — see engine-panel-service.ts
++        spuriousOutput: params.finding.excerpt,
++        evidencePackagePath: `incident:${params.incidentId}`,
++      },
++    });
++  } else {
++    await logAuditEvent(params.engagementId, {
++      eventType: "external_action",
++      payload: { channel: params.finding.source, status: "queued" },
++    });
++  }
++
++  await notifyUser({
++    whopUserId: params.tenant.whopUserId,
++    engagementId: params.engagementId,
++    type: "reputation_crisis_declared",
++    severity: "critical",
++    title: `External escalation needed — ${params.operatorName}`,
++    body:
++      `This incident needs to go outside the system — legal counsel or the platform's own trust & safety team, not a drafted reply.\n\n` +
++      `Signal: ${params.signalClass ?? "n/a"}. Severity ${params.severityScore}/100.\n\n` +
++      `An evidence package has been generated on the incident page. Log the outcome there once you have one.`,
++    slackWebhookUrl: (params.tenant.stack as EngagementStack | null)?.slack_webhook_url,
++  });
++}
++
++export interface RoutingContext {
++  operatorName: string;
++  soleAuthorityName: string;
++  brandVoice: unknown;
++}
++
++/** Fetched once per incident (crisis-response-service.ts wraps this in its
++ * own step) and passed into every per-finding routeOneFinding call below —
++ * avoids re-fetching the identity graph once per contributing finding. */
++export async function loadRoutingContext(engagementId: string): Promise<RoutingContext | null> {
++  const [graph] = await db
++    .select({ operatorName: repIdentityGraphs.operatorName, soleAuthorityName: repIdentityGraphs.soleAuthorityName })
++    .from(repIdentityGraphs)
++    .where(eq(repIdentityGraphs.engagementId, engagementId))
++    .limit(1);
++  if (!graph) return null;
++
++  const [engagementRow] = await db
++    .select({ brandVoiceProfile: engagements.brandVoiceProfile })
++    .from(engagements)
++    .where(eq(engagements.engagementId, engagementId))
++    .limit(1);
++
++  return { operatorName: graph.operatorName, soleAuthorityName: graph.soleAuthorityName, brandVoice: engagementRow?.brandVoiceProfile ?? null };
++}
++
++export interface RouteOneFindingParams {
++  tenant: any;
++  engagementId: string;
++  incidentId: string;
++  runId: string;
++  context: RoutingContext;
++  finding: RoutableFinding;
++  severityScore: number;
++  declaredSignalClass: string | null;
++  summary: string;
++  allFindings: RoutableFinding[];
++  declaredAt: Date;
++}
++
++/**
++ * Routes exactly one contributing finding to its response tier and
++ * executes that tier's behavior. Deliberately one finding per call, each
++ * wrapped in its own step.run by the caller (crisis-response-service.ts) —
++ * NOT a loop-with-one-big-step, so a mid-batch retry (an LLM drafting
++ * hiccup on finding 3 of 5, say) re-runs only that finding instead of
++ * re-queueing duplicate drafts/pending-actions for findings 1-2 that
++ * already succeeded. Returns null for a synthetic "anomaly" entry (see
++ * anomalyToFinding in crisis-response-service.ts) or any finding with no
++ * real compositeScore — there's no content to route to a drafting tier.
++ */
++export async function routeOneFinding(params: RouteOneFindingParams): Promise<ResponseTier | null> {
++  const { finding } = params;
++  if (finding.source === "anomaly" || typeof finding.compositeScore !== "number") return null;
++
++  const tier = resolveResponseTier(finding.compositeScore, (finding.signalClass as SignalClass | null) ?? null);
++
++  switch (tier) {
++    case "tier1_one_click":
++    case "tier2_review":
++      await queueDraftApproval({
++        engagementId: params.engagementId,
++        incidentId: params.incidentId,
++        runId: params.runId,
++        finding,
++        tier,
++        operatorName: params.context.operatorName,
++        brandVoice: params.context.brandVoice,
++      });
++      return tier;
++    case "tier3_pause_and_instruct":
++      await pageForPostureChoice({
++        tenant: params.tenant,
++        engagementId: params.engagementId,
++        incidentId: params.incidentId,
++        finding,
++        operatorName: params.context.operatorName,
++        soleAuthorityName: params.context.soleAuthorityName,
++      });
++      return tier;
++    case "tier4_external_escalation":
++      await escalateExternally({
++        tenant: params.tenant,
++        engagementId: params.engagementId,
++        incidentId: params.incidentId,
++        finding,
++        operatorName: params.context.operatorName,
++        soleAuthorityName: params.context.soleAuthorityName,
++        severityScore: params.severityScore,
++        signalClass: params.declaredSignalClass,
++        summary: params.summary,
++        allFindings: params.allFindings,
++        declaredAt: params.declaredAt,
++      });
++      return tier;
++  }
++}
++
++/** Called from the posture-selection API route once the sole authority has
++ * chosen a tier-3 posture — generates the draft NOW, to that posture, and
++ * queues it for approval exactly like a tier 1/2 draft would be. */
++export async function draftForChosenPosture(params: {
++  engagementId: string;
++  incidentId: string;
++  posture: ResponsePostureId;
++  runId: string;
++}): Promise<void> {
++  const [incident] = await db
++    .select({ contributingFindings: repIncidents.contributingFindings, severityScore: repIncidents.severityScore })
++    .from(repIncidents)
++    .where(eq(repIncidents.id, params.incidentId))
++    .limit(1);
++  if (!incident) throw new Error("Incident not found.");
++
++  const [graph] = await db
++    .select({ operatorName: repIdentityGraphs.operatorName })
++    .from(repIdentityGraphs)
++    .where(eq(repIdentityGraphs.engagementId, params.engagementId))
++    .limit(1);
++  if (!graph) throw new Error("Identity graph not found.");
++
++  const [engagementRow] = await db
++    .select({ brandVoiceProfile: engagements.brandVoiceProfile })
++    .from(engagements)
++    .where(eq(engagements.engagementId, params.engagementId))
++    .limit(1);
++
++  const findings = incident.contributingFindings as RoutableFinding[];
++  // The highest-severity real finding is what the posture is drafted
++  // against — same "worst finding sets the tone" reasoning the incident's
++  // own severityScore already uses.
++  const worst = findings
++    .filter((f) => f.source !== "anomaly")
++    .reduce<RoutableFinding | null>((max, f) => (!max || (f.compositeScore ?? 0) > (max.compositeScore ?? 0) ? f : max), null);
++  if (!worst) throw new Error("No draftable finding on this incident.");
++
++  const platformLabel = platformLabelFor(worst.source);
++  const draft = await draftResponseText({
++    operatorName: graph.operatorName,
++    findingText: worst.excerpt,
++    platformLabel,
++    brandVoice: engagementRow?.brandVoiceProfile ?? null,
++    posture: params.posture,
++    runId: params.runId,
++  });
++
++  const draftEventId = await logAuditEvent(params.engagementId, {
++    eventType: "draft",
++    payload: { draftClass: worst.source, draftPath: `incident:${params.incidentId}`, complianceCheck: "passed", tier: 3 },
++  });
++
++  await queuePendingAction(
++    params.engagementId,
++    "rep_response_approval",
++    {
++      incidentId: params.incidentId,
++      draftEventId,
++      source: worst.source,
++      findingExcerpt: worst.excerpt,
++      draftText: draft,
++      tier: "tier3_pause_and_instruct",
++      posture: params.posture,
++      _title: `Response draft ready (review before approving) — ${platformLabel}`,
++    },
++    `Posture chosen: ${RESPONSE_POSTURES.find((p) => p.id === params.posture)?.label ?? params.posture}. Drafted response: "${draft}"`
++  );
++}
+diff --git a/src/inngest/reputation-manager.ts b/src/inngest/reputation-manager.ts
+index 0a7eba4..7ed8591 100644
+--- a/src/inngest/reputation-manager.ts
++++ b/src/inngest/reputation-manager.ts
+@@ -271,3 +271,58 @@ export const repCrisisResponseCron = inngest.createFunction(
+     return { dispatched: prepared.length };
+   }
+ );
++
++/**
++ * Dispatches rep-digest once daily, at the end of the day's monitoring
++ * cycle (18:00 UTC — well past crisis-response's 09:00, so a full day's
++ * detections are in before the rollup runs). Fixed UTC, not the OG spec's
++ * twice-daily per-timezone cadence — see digest.ts's own header for why
++ * once-daily matches this product's existing rep-* cron shape rather than
++ * inventing a new per-timezone mechanism for one skill. Same eligibility
++ * gate as every other rep-* cron (has a real identity graph).
++ */
++export const repDigestCron = inngest.createFunction(
++  { id: "rep-digest-cron", triggers: [{ cron: "TZ=UTC 0 18 * * *" }], retries: 1 }, // 18:00 UTC daily
++  async ({ step }) => {
++    const prepared = await step.run("prepare-digest-runs", async () => {
++      const rows = await db
++        .select({
++          engagementId: engagements.engagementId,
++          buyer: engagements.buyer,
++          pausedAt: engagements.pausedAt,
++          deletedAt: engagements.deletedAt,
++        })
++        .from(repIdentityGraphs)
++        .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
++        .where(isNull(engagements.deletedAt));
++
++      const disabled = await getDisabledEngagementIdsForSkill("rep-digest");
++
++      const out: { runId: string; engagementId: string }[] = [];
++      for (const row of rows) {
++        if (isEngagementPaused(row)) continue;
++        if (disabled.has(row.engagementId)) continue;
++
++        const runId = crypto.randomUUID();
++        await startRun({
++          id: runId,
++          engagementId: row.engagementId,
++          skillName: "rep-digest",
++          phase: "rep_digest",
++          label: row.buyer,
++        });
++        out.push({ runId, engagementId: row.engagementId });
++      }
++      return out;
++    });
++
++    if (prepared.length > 0) {
++      await step.sendEvent(
++        "dispatch-rep-digest-runs",
++        prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-digest" }))
++      );
++    }
++
++    return { dispatched: prepared.length };
++  }
++);
+diff --git a/src/lib/approval-gate.ts b/src/lib/approval-gate.ts
+index fef54c8..6ba0082 100644
+--- a/src/lib/approval-gate.ts
++++ b/src/lib/approval-gate.ts
+@@ -30,16 +30,25 @@
+ // this codebase already applies to Inngest event payloads.
+ import crypto from "crypto";
+ import { db } from "@/lib/db";
+-import { pendingActions, engagements, type EngagementStack } from "@/models/schema";
++import { pendingActions, engagements, repIncidents, type EngagementStack } from "@/models/schema";
+ import { eq } from "drizzle-orm";
+ import { notifyUser } from "@/lib/notify";
+ import { isEngagementPaused } from "@/lib/engagement-status";
++import { REP_THRESHOLD_DEFAULTS } from "@/features/reputation-manager/rep-thresholds";
+ 
+ export type PendingActionType =
+   | "webhook_enrollment"
+   | "cohort_membership_add"
+   | "cohort_membership_remove"
+-  | "confirmation_page_deploy";
++  | "confirmation_page_deploy"
++  // Reputation Manager's response-routing tiers 1-3 (response-routing.ts) —
++  // always gated, never routed through isApprovalRequired's opt-in check,
++  // since there is no "auto-execute" mode for a drafted public response:
++  // this app has no API to post to Trustpilot/Reddit/X on the operator's
++  // behalf (see draft-response.ts's header), so every draft this queues is
++  // always headed for a human to review and paste manually. Queued
++  // directly via the exported queuePendingAction, not gateOrExecute.
++  | "rep_response_approval";
+ 
+ export function isApprovalRequired(
+   stack: EngagementStack | null | undefined,
+@@ -50,10 +59,20 @@ export function isApprovalRequired(
+   // Gate is on with no scoping list => gate every gateable action type.
+   // Gate is on with a list => gate only the listed types.
+   if (!scoped || scoped.length === 0) return true;
+-  return scoped.includes(actionType);
++  // scoped's element type is the narrower, older set of gateable-by-opt-in
++  // action types (EngagementStack.require_approval_action_types) —
++  // rep_response_approval deliberately isn't in it (see PendingActionType's
++  // own comment: it's always gated, never opt-in), so it can never appear
++  // in scoped and this check is safely widened to a plain string compare.
++  return (scoped as readonly string[]).includes(actionType);
+ }
+ 
+-async function queuePendingAction(
++/** Exported so response-routing.ts can queue a rep_response_approval row
++ * directly — that action type is always gated (see PendingActionType's own
++ * comment), so it has no use for gateOrExecute's opt-in isApprovalRequired
++ * check and calls this entry point straight, exactly like the assumed-
++ * no-show sweep's forceGate path already does for webhook_enrollment. */
++export async function queuePendingAction(
+   engagementId: string,
+   actionType: PendingActionType,
+   payload: Record<string, unknown>,
+@@ -356,6 +375,21 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string,
+       detail: deployResult.reason,
+     });
+   },
++
++  // Nothing to actually execute — this app has no API to post to
++  // Trustpilot/Reddit/X on the operator's behalf (see draft-response.ts's
++  // header), so "approved" here means "reviewed and cleared to post,"
++  // logged as the audit trail's approval event chained off the draft event
++  // response-routing.ts created. The operator still pastes the draft text
++  // (already visible on the pending-action row) wherever it needs to go.
++  rep_response_approval: async (engagementId, payload) => {
++    const { logAuditEvent } = await import("@/features/reputation-manager/server/audit-log");
++    await logAuditEvent(
++      engagementId,
++      { eventType: "approval", payload: { approver: "sole_authority", decision: "approved" } },
++      payload?.draftEventId ?? null
++    );
++  },
+ };
+ 
+ /**
+@@ -392,6 +426,32 @@ export async function decidePendingAction(
+     return { ok: true, status: "rejected" };
+   }
+ 
++  // Anti-hasty-response cooling-off period (thresholds.yml.template's
++  // response_timing block, ported as REP_THRESHOLD_DEFAULTS.
++  // minMinutesBeforePublicResponse) — a public response can't be approved
++  // until this many minutes have passed since the incident it responds to
++  // was declared, even with sole-authority approval. Checked here, before
++  // the row flips to "approved", so a too-early click leaves the row
++  // "pending" and simply retryable once the window clears, rather than
++  // landing in a dead execution_failed state.
++  if (decision === "approved" && action.actionType === "rep_response_approval") {
++    const incidentId = (action.payload as { incidentId?: string } | null)?.incidentId;
++    if (incidentId) {
++      const [incident] = await db.select({ declaredAt: repIncidents.declaredAt }).from(repIncidents).where(eq(repIncidents.id, incidentId)).limit(1);
++      if (incident) {
++        const minutesSinceDeclared = (Date.now() - incident.declaredAt.getTime()) / 60_000;
++        const required = REP_THRESHOLD_DEFAULTS.minMinutesBeforePublicResponse;
++        if (minutesSinceDeclared < required) {
++          const minutesLeft = Math.ceil(required - minutesSinceDeclared);
++          return {
++            ok: false,
++            error: `Anti-hasty-response cooling-off period active — wait ${minutesLeft} more minute${minutesLeft === 1 ? "" : "s"} before approving a public response to this incident.`,
++          };
++        }
++      }
++    }
++  }
++
+   // Approved — mark decided first (so a slow/failing executor can't leave
+   // the row looking un-decided and retryable-by-accident), then attempt
+   // execution, recording failure on the row rather than throwing it away.
+diff --git a/src/lib/copy.ts b/src/lib/copy.ts
+index 5348ff6..2e49256 100644
+--- a/src/lib/copy.ts
++++ b/src/lib/copy.ts
+@@ -343,6 +343,7 @@ export const ACTION_TYPE_LABELS: Record<string, string> = {
+   cohort_membership_add: "Add prospect to cohort",
+   cohort_membership_remove: "Remove prospect from cohort",
+   confirmation_page_deploy: "Confirmation page ready — approve to publish",
++  rep_response_approval: "Reputation response draft — review before posting",
+ };
+ 
+ export const BLOCKER_TYPE_LABELS: Record<string, string> = {
+diff --git a/src/lib/notify.ts b/src/lib/notify.ts
+index 7c2766a..2584ae1 100644
+--- a/src/lib/notify.ts
++++ b/src/lib/notify.ts
+@@ -56,6 +56,22 @@
+ //      round is the message and the same runId/engagementId deep link
+ //      every other channel already gets, not the full interactive parity.
+ //
++//   5. SMS (2026-09-08) — Reputation Manager's crisis paging fallback, the
++//      spec's ntfy-push-plus-Twilio-SMS redundancy (counterclaim-paging's
++//      SKILL.md: "a crisis alert has two independent delivery paths").
++//      Platform-level Twilio (REP_PAGING_TWILIO_* env vars), not a
++//      per-tenant BYO account — same "platform provides the capability,
++//      the recipient just needs to be reachable" shape email's
++//      RESEND_API_KEY already uses, not Pile-On/Win-Back's per-tenant
++//      Twilio (that's prospect-facing marketing SMS with its own A2P
++//      10DLC compliance gate; this is a single transactional page to the
++//      operator's own number, a materially different send — see
++//      sendOperatorPageSms's own comment in lib/platforms/sms.ts for why
++//      it doesn't route through sendSmsForTenant's A2P gate). Opt-in via
++//      smsToPhone (repIdentityGraphs.operatorPagePhone) — silently no-ops
++//      without it, same graceful-degradation shape every optional channel
++//      here has. Gated to severity "critical" only.
++//
+ // Every channel is isolated in its own try/catch. A Slack outage or a
+ // missing/invalid Resend key must NEVER prevent the in-app row (the one
+ // channel every tenant is guaranteed to have) from being written.
+@@ -64,6 +80,7 @@ import { notifications, users } from "@/models/schema";
+ import { eq } from "drizzle-orm";
+ import crypto from "crypto";
+ import { findOrCreateThreadForEvent, appendMessage } from "@/lib/chat-threads";
++import { sendOperatorPageSms } from "@/lib/platforms/sms";
+ 
+ export type NotificationType =
+   | "run_failed"
+@@ -85,7 +102,18 @@ export type NotificationType =
+   // problem. Confirmed both real consumers of this union (inbox/page.tsx
+   // and human-blockers.ts) use array membership checks, not an
+   // exhaustive switch, so this is safe to add.
+-  | "reputation_crisis_declared";
++  | "reputation_crisis_declared"
++  // A batch's max compositeScore cleared REP_THRESHOLD_DEFAULTS.
++  // realTimeAlertFloor (75) but stayed under crisisScoreFloor (80) — not
++  // severe enough to declare an incident, but per thresholds.yml.template's
++  // real_time_alert_gate, still severe enough to warrant an immediate,
++  // lighter-weight heads-up rather than waiting for the next digest. See
++  // crisis-response-service.ts.
++  | "reputation_elevated_activity"
++  // digest.ts's rollup of everything that happened since the last digest
++  // run and never crossed realTimeAlertFloor — the spec's "everything else
++  // batches into the daily digest, which you review once daily."
++  | "reputation_daily_digest";
+ 
+ export type NotificationSeverity = "info" | "warning" | "critical";
+ 
+@@ -139,6 +167,16 @@ export interface NotifyOptions {
+    * workspace context.
+    */
+   workspaceId?: string;
++  /**
++   * Operator's own phone number (repIdentityGraphs.operatorPagePhone) —
++   * enables the SMS paging fallback (see file header, channel 5). Same
++   * caller-fetches-it-and-passes-it-in convention slackWebhookUrl already
++   * uses, not a lookup this file does itself. Severity-gated to critical
++   * only — same reasoning chat is gated to warning/critical, just one
++   * notch stricter since an SMS is the single most interruptive channel
++   * this app has.
++   */
++  smsToPhone?: string;
+ }
+ 
+ export async function notifyUser(opts: NotifyOptions): Promise<void> {
+@@ -268,4 +306,14 @@ export async function notifyUser(opts: NotifyOptions): Promise<void> {
+       console.error("[notify] chat channel error:", e);
+     }
+   }
++
++  // ── 5. SMS (best-effort, only if smsToPhone + platform Twilio env vars
++  // are both present, AND severity is critical) ──────────────────────────
++  if (opts.smsToPhone && opts.severity === "critical") {
++    try {
++      await sendOperatorPageSms(opts.smsToPhone, `[${opts.severity.toUpperCase()}] ${opts.title}\n${opts.body}`);
++    } catch (e) {
++      console.error("[notify] SMS channel error:", e);
++    }
++  }
+ }
+\ No newline at end of file
+diff --git a/src/lib/platforms/sms.ts b/src/lib/platforms/sms.ts
+index 4981337..87420c9 100644
+--- a/src/lib/platforms/sms.ts
++++ b/src/lib/platforms/sms.ts
+@@ -245,6 +245,33 @@ export async function sendSmsForTenant(
+   }
+ }
+ 
++// ── Operator paging (platform-level, not per-tenant) ────────────────────
++
++/**
++ * Reputation Manager's crisis-paging SMS fallback (notify.ts channel 5) —
++ * a single transactional page to the OPERATOR's own verified number, sent
++ * from the platform's own Twilio account (REP_PAGING_TWILIO_* env vars),
++ * not the buyer's. This is deliberately NOT routed through
++ * sendSmsForTenant: that function's A2P 10DLC gate and STOP/HELP
++ * compliance footer exist because it sends bulk, prospect-facing marketing
++ * SMS at scale — a real US-carrier compliance requirement for that traffic
++ * shape. A single "your reputation monitor found something critical" page
++ * to the account owner's own number is transactional/operational
++ * messaging, not marketing, and doesn't carry that same requirement.
++ * Silently no-ops (throws, caught by notify.ts's own try/catch) if the
++ * platform hasn't configured paging — same graceful-degradation shape
++ * every other optional notify.ts channel has.
++ */
++export async function sendOperatorPageSms(toPhone: string, body: string): Promise<void> {
++  const accountSid = process.env.REP_PAGING_TWILIO_ACCOUNT_SID;
++  const authToken = process.env.REP_PAGING_TWILIO_AUTH_TOKEN;
++  const fromNumber = process.env.REP_PAGING_TWILIO_FROM_NUMBER;
++  if (!accountSid || !authToken || !fromNumber) {
++    throw new Error("Operator SMS paging isn't configured — set REP_PAGING_TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM_NUMBER.");
++  }
++  await new TwilioClient(accountSid, authToken, undefined, fromNumber).sendSms(toPhone, body);
++}
++
+ /** Tag-based path — hubspot_sms only today. */
+ export async function enrollSmsSequenceForTenant(
+   smsPlatform: string,
+diff --git a/src/lib/rep-skill-manifest.ts b/src/lib/rep-skill-manifest.ts
+index adc5e26..162e086 100644
+--- a/src/lib/rep-skill-manifest.ts
++++ b/src/lib/rep-skill-manifest.ts
+@@ -26,7 +26,14 @@
+ // with a real third product being the trigger to generalize further, not
+ // a guess made now from a sample size of one.
+ 
+-export type RepSkillId = "rep-onboarding" | "rep-engine-panel" | "rep-trustpilot-watch" | "rep-reddit-watch" | "rep-twitter-watch" | "rep-crisis-response";
++export type RepSkillId =
++  | "rep-onboarding"
++  | "rep-engine-panel"
++  | "rep-trustpilot-watch"
++  | "rep-reddit-watch"
++  | "rep-twitter-watch"
++  | "rep-crisis-response"
++  | "rep-digest";
+ 
+ export const REP_SKILL_IDS: RepSkillId[] = [
+   "rep-onboarding",
+@@ -35,6 +42,7 @@ export const REP_SKILL_IDS: RepSkillId[] = [
+   "rep-reddit-watch",
+   "rep-twitter-watch",
+   "rep-crisis-response",
++  "rep-digest",
+ ];
+ 
+ export interface RepSkillManifestEntry {
+@@ -113,6 +121,14 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
+     runOnSetup: false,
+     hasHingesPanel: false,
+   },
++  "rep-digest": {
++    id: "rep-digest",
++    name: "Daily Digest",
++    description:
++      "Once a day, rolls up everything monitored since the last digest that never crossed the real-time-alert floor into one summary notification — so quiet activity is still reviewed, just not pushed the moment it happens.",
++    runOnSetup: false,
++    hasHingesPanel: false,
++  },
+ };
+ 
+ export function isRepSkillId(value: string): value is RepSkillId {
+diff --git a/src/lib/rep-skill-registry.ts b/src/lib/rep-skill-registry.ts
+index b91cc5a..2f02968 100644
+--- a/src/lib/rep-skill-registry.ts
++++ b/src/lib/rep-skill-registry.ts
+@@ -5,6 +5,7 @@ import { runRepTrustpilotWatch } from "@/features/reputation-manager/server/trus
+ import { runRepRedditWatch } from "@/features/reputation-manager/server/reddit-watch-service";
+ import { runRepTwitterWatch } from "@/features/reputation-manager/server/twitter-watch-service";
+ import { runRepCrisisResponse } from "@/features/reputation-manager/server/crisis-response-service";
++import { runRepDigest } from "@/features/reputation-manager/server/digest";
+ import {
+   REP_SKILL_IDS,
+   REP_SKILL_MANIFEST,
+@@ -56,4 +57,8 @@ export const REP_SKILL_REGISTRY: Record<RepSkillId, RepSkillDefinition> = {
+     ...REP_SKILL_MANIFEST["rep-crisis-response"],
+     execute: (tenant, runId, step) => runRepCrisisResponse(tenant, runId, step),
+   },
++  "rep-digest": {
++    ...REP_SKILL_MANIFEST["rep-digest"],
++    execute: (tenant, runId, step) => runRepDigest(tenant, runId, step),
++  },
+ };
+\ No newline at end of file
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+index 2de4839..40578ba 100644
+--- a/src/lib/worker-registry.ts
++++ b/src/lib/worker-registry.ts
+@@ -604,6 +604,7 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
+   "rep-reddit-watch": [],
+   "rep-twitter-watch": [],
+   "rep-crisis-response": [],
++  "rep-digest": [],
+ };
+ 
+ // Single source of truth for category, kept out of skill-manifest.ts and
+@@ -623,6 +624,7 @@ const WORKER_CATEGORIES: Record<WorkerId, WorkerCategory> = {
+   "rep-reddit-watch": "Monitoring",
+   "rep-twitter-watch": "Monitoring",
+   "rep-crisis-response": "Crisis & Recovery",
++  "rep-digest": "Monitoring",
+ };
+ 
+ function buildRegistry(): Record<WorkerId, WorkerDefinition> {
+diff --git a/src/models/schema.ts b/src/models/schema.ts
+index 0671df0..dba5e58 100644
+--- a/src/models/schema.ts
++++ b/src/models/schema.ts
+@@ -2018,6 +2018,17 @@ export const repIdentityGraphs = pgTable(
+     // worth tuning per client instead of centralizing.
+     crisisThresholdOverride: integer("crisis_threshold_override"),
+ 
++    // Destination number for crisis-response's SMS paging fallback (see
++    // notify.ts's SMS channel / sendOperatorPageSms in lib/platforms/sms.ts).
++    // Null means "no SMS fallback configured" — paging still happens via
++    // in-app/Slack/email exactly as before, this only adds a channel.
++    // Lives here rather than on engagements.stack because it's a
++    // Reputation-Manager-specific paging concern edited on this same form,
++    // same reasoning crisisThresholdOverride's own comment gives for being
++    // the one per-engagement value worth its own column instead of a
++    // shared default.
++    operatorPagePhone: text("operator_page_phone"),
++
+     // Set the first time runRepOnboarding's collision-detection web-search
+     // pass actually runs, so re-saving this form from the hinges panel
+     // doesn't re-trigger it on every edit — matches the source skill's
+@@ -2254,9 +2265,33 @@ export const repIncidents = pgTable("rep_incidents", {
+ 
+   // "open" (declared, operator notified) | "acknowledged" (operator has
+   // seen it — set by a future dashboard action, nothing writes this yet)
+-  // | "resolved" (set by a future dashboard action)
++  // | "resolved" (the Resolve action) | "external_escalation_pending"
++  // (tier4 — evidence package generated, handoff logged, waiting for the
++  // operator to bring the outcome back per response-routing.ts)
+   status: text("status").notNull().default("open"),
+ 
++  // The response-routing tier this incident's most severe contributing
++  // finding resolved to (see response-routing.ts's resolveResponseTier) —
++  // "tier1_one_click" | "tier2_review" | "tier3_pause_and_instruct" |
++  // "tier4_external_escalation". Null on incidents declared before this
++  // column existed, or on the rare incident whose only contributing
++  // findings were anomaly-only (no per-finding severity to route from).
++  responseTier: text("response_tier"),
++
++  // Tier 3 only (pause_and_instruct): the response posture the sole
++  // authority chose after being paged with the evidence and posture
++  // options — see response-routing.ts's RESPONSE_POSTURES. Null until
++  // chosen; a draft is only ever generated after this is set, per the
++  // spec's "the choice itself is the load-bearing operator judgment."
++  selectedPosture: text("selected_posture"),
++
++  // Tier 4 only (external_escalation): the generated evidence package —
++  // incident summary, severity breakdown, every contributing finding's
++  // excerpt — handed to counsel/a platform trust & safety team outside
++  // this app. Generated once at escalation time, not regenerated later,
++  // so it stays an accurate record of what was actually handed off.
++  evidencePackage: text("evidence_package"),
++
+   declaredAt: timestamp("declared_at").defaultNow().notNull(),
+   resolvedAt: timestamp("resolved_at"),
+   resolvedBy: text("resolved_by"),
+-- 
+2.43.0
+

@@ -36,7 +36,7 @@ export function LandingWrapper({
       <header className="relative z-30 w-full px-8 py-6 flex items-center justify-between">
    <div className="flex items-center z-10">
   <img
-    src="/logos/homelg.png"
+    src="/images/logo.png"
     alt="Unified Tools Platform"
     className="h-11 md:h-14 w-auto object-contain"
   />
