@@ -1,0 +1,25 @@
+import { NextResponse } from "next/server";
+import { createHash } from "crypto";
+
+export const runtime = "nodejs";
+
+// TEMPORARY diagnostic route for the self-hosted Inngest migration — confirms
+// what the running Vercel deployment actually resolves these env vars to,
+// without ever exposing the real secret values. Delete once the migration's
+// event-key mismatch is confirmed/resolved.
+function hashEnv(name: string): string | null {
+  const value = process.env[name];
+  if (!value) return null;
+  return createHash("sha256").update(value).digest("hex").slice(0, 16);
+}
+
+export async function GET() {
+  return NextResponse.json({
+    INNGEST_EVENT_KEY_hash: hashEnv("INNGEST_EVENT_KEY"),
+    INNGEST_SIGNING_KEY_hash: hashEnv("INNGEST_SIGNING_KEY"),
+    INNGEST_BASE_URL: process.env.INNGEST_BASE_URL ?? null,
+    INNGEST_SERVE_ORIGIN: process.env.INNGEST_SERVE_ORIGIN ?? null,
+    INNGEST_DEV: process.env.INNGEST_DEV ?? null,
+    VERCEL_ENV: process.env.VERCEL_ENV ?? null,
+  });
+}
