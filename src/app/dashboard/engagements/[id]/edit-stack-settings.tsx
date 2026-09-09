@@ -538,8 +538,9 @@ export function EditStackSettings({
               </optgroup>
             </select>
             <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
-              Drives when nightly briefs, credential-health checks, the lost-deal sweep, and weekly metrics fire for
-              this client — each runs at this client&apos;s local hour, not the server&apos;s.
+              Drives when nightly briefs, credential-health checks, the lost-deal sweep, weekly metrics, and (for
+              Reputation Manager clients) the AI-engine/Trustpilot/Reddit/X watches, crisis response, and daily
+              digest all fire for this client — each runs at this client&apos;s local hour, not the server&apos;s.
             </p>
           </label>
         </div>

@@ -8,7 +8,7 @@ import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
 import { saveRepIdentityGraphIntake, type RepIntakeInput } from "@/features/reputation-manager/server/onboarding-service";
 import { REP_ENGINE_IDS } from "@/features/reputation-manager/engine-models";
-import type { RepEngineId } from "@/models/schema";
+import type { RepEngineId, EngagementStack } from "@/models/schema";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
@@ -61,6 +61,21 @@ export async function POST(request: Request) {
         workspaceId: activeWorkspace.workspaceId,
         buyer: buyerName,
         schemaVersion: "1.0",
+        // Seeded from the workspace's own Settings > Timezones & Region
+        // default — same seeding Showtime's engagement wizard already does
+        // (engagements/new/submit-payload.ts) — so the rep-* crons
+        // (reputation-manager.ts's matchesDailyLocalHour checks) fire at a
+        // sensible local hour from the moment this client exists, instead
+        // of silently defaulting to UTC until someone happens to open Edit
+        // stack settings and notices the field is unset.
+        // Cast: EngagementStack's type declares Showtime-only fields
+        // (booking_platform, hosting_platform, ...) as required, but this
+        // column has never actually held a complete EngagementStack for a
+        // Reputation-Manager-only engagement — every read site already
+        // optional-chains (stack?.foo), so a partial object here is
+        // consistent with how this column is actually used, not a new
+        // looseness introduced by this line.
+        stack: { timezone: activeWorkspace.timezone } as EngagementStack,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
