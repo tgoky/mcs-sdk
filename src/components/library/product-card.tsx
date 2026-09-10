@@ -72,7 +72,7 @@ export function ProductCard({
   const skillNames = skillIds.map((id) => getWorkerDefinition(id).name).join(", ");
 
   return (
-    <div className="group relative flex flex-col justify-between rounded-2xl surface-glass-2 p-6 hover-lift hover:shadow-elevation-3 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
+    <div className="group relative flex flex-col justify-between rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-6 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
       <Link href={`/dashboard/library/${productId}`} className="space-y-5 block">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4 min-w-0">
@@ -141,7 +141,7 @@ export function ProductCard({
           type="button"
           onClick={toggleInstalled}
           disabled={pending}
-          className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 hover-lift press-settle shadow-elevation-1 ${
+          className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 ${
             installed
               ? "border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-300 dark:hover:border-rose-800 hover:text-rose-700 dark:hover:text-rose-300 text-zinc-700 dark:text-zinc-200"
               : "bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900"

@@ -128,7 +128,7 @@ export function WorkerCard({
           type="button"
           onClick={onToggleConfigure}
           title={isConfiguring ? "Close" : "Configure"}
-          className={`inline-flex items-center justify-center rounded-lg border w-8 h-8 transition-colors cursor-pointer hover-lift press-settle shadow-elevation-1 ${
+          className={`inline-flex items-center justify-center rounded-lg border w-8 h-8 transition-colors cursor-pointer ${
             isConfiguring
               ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
               : "border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200"
@@ -172,7 +172,7 @@ export function WorkerCard({
       onClick={() => (needsLighterForm ? setShowEnableModal(true) : enable())}
       disabled={pending || !engagementId}
       title={!engagementId ? "Create a client first" : undefined}
-      className="inline-flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3.5 py-2 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer whitespace-nowrap hover-lift press-settle shadow-elevation-1"
+      className="inline-flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3.5 py-2 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer whitespace-nowrap"
     >
       {pending ? "Enabling…" : "Enable"}
     </button>

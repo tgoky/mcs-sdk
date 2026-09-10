@@ -119,11 +119,11 @@ export function EnablePileOnModal({
   return (
     <Modal title="Enable Pile-On" onClose={onClose} maxWidthClass="max-w-xl">
       <div className="space-y-4 font-sans">
-        <div className="flex items-center gap-1 rounded-xl surface-glass-1 p-1 text-xs w-fit">
+        <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs w-fit">
           <button
             type="button"
             onClick={() => selectMode("form")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer hover-lift press-settle ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
               mode === "form" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
             }`}
           >
@@ -132,7 +132,7 @@ export function EnablePileOnModal({
           <button
             type="button"
             onClick={() => selectMode("chat")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer hover-lift press-settle ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
               mode === "chat" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
             }`}
           >
@@ -147,7 +147,7 @@ export function EnablePileOnModal({
               details) continues from Edit Stack Settings after enabling.
             </p>
 
-            <div className="flex items-center justify-between gap-3 rounded-xl surface-glass-1 px-3 py-2">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2">
               <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">SMS follow-ups</label>
               <Dropdown
                 items={SMS_DROPDOWN_ITEMS}
@@ -158,7 +158,7 @@ export function EnablePileOnModal({
               />
             </div>
 
-            <div className="flex items-center justify-between gap-3 rounded-xl surface-glass-1 px-3 py-2">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2">
               <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">Ad-data cohort sync</label>
               <Dropdown
                 items={AD_DATA_DROPDOWN_ITEMS}
@@ -180,7 +180,7 @@ export function EnablePileOnModal({
                 type="button"
                 onClick={() => submitForm(true)}
                 disabled={pending}
-                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40 hover-lift press-settle"
+                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40"
               >
                 Skip for now
               </button>
@@ -188,7 +188,7 @@ export function EnablePileOnModal({
                 type="button"
                 onClick={() => submitForm(false)}
                 disabled={pending}
-                className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer hover-lift press-settle shadow-elevation-1"
+                className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
               >
                 {pending ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
                 Enable Pile-On
@@ -196,7 +196,7 @@ export function EnablePileOnModal({
             </div>
           </div>
         ) : (
-          <div className="h-[420px] rounded-xl surface-glass-1 overflow-hidden">
+          <div className="h-[420px] rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
             <TeammatesChat
               size="compact"
               initialThreadId={null}
