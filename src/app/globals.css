@@ -329,16 +329,38 @@
 }
 
 /* Elevated surfaces (cards, panels, popovers, modals) — glass fill over a
-   real blur, diffused shadow, thin inset top highlight. All three tiers
-   now share the same strong glass treatment (2026-09-10: "make every card
-   feel like the action-menu dropdown") — the numbered classes stay so call
-   sites keep expressing intent (1 = resting content, 2 = a card that sits
-   above the page, 3 = floating overlays), but they render identically. */
+   real blur, diffused shadow, thin inset top highlight. Light mode keeps
+   three distinct tiers (1 lightest, 3 strongest) — heavy blur reads as
+   muddy/grey on a light background, not "premium". Dark mode is where
+   the strong glass look actually reads well, so all three tiers there
+   share the same strong treatment (2026-09-10: "make every card feel
+   like the action-menu dropdown" — dark theme only, per direct
+   feedback). The numbered classes stay identical between themes for
+   intent (1 = resting content, 2 = a card above the page, 3 = floating
+   overlay) even though only dark mode makes them render the same. */
 .surface-glass-1,
 .surface-glass-2,
 .surface-glass-3 {
   background: var(--surface-glass);
   border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.surface-glass-1 {
+  box-shadow: var(--shadow-elevation-1), var(--shadow-inset-highlight);
+}
+.surface-glass-2 {
+  box-shadow: var(--shadow-elevation-2), var(--shadow-inset-highlight);
+}
+.surface-glass-3 {
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow: var(--shadow-elevation-3), var(--shadow-inset-highlight);
+}
+
+.dark .surface-glass-1,
+.dark .surface-glass-2,
+.dark .surface-glass-3 {
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
   box-shadow: var(--shadow-elevation-3), var(--shadow-inset-highlight);
