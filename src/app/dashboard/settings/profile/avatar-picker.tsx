@@ -5,7 +5,15 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Upload, Sparkles, Check, Loader2, ChevronLeft } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
-import { AVATAR_STYLES, AVATAR_STYLE_IDS, seedsForStyle, generateAvatarDataUri, type AvatarStyleId } from "@/lib/avatar";
+import {
+  AVATAR_STYLES,
+  AVATAR_STYLE_IDS,
+  DEFAULT_AVATAR_STYLE,
+  seedsForStyle,
+  defaultSeedForIdentifier,
+  generateAvatarDataUri,
+  type AvatarStyleId,
+} from "@/lib/avatar";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
 
 const GRID_SEEDS = seedsForStyle(25);
@@ -58,17 +66,32 @@ type Step = "collapsed" | "choice" | "avatar" | "upload";
  * then either a file picker or a category + 5x5 seed grid, with a live
  * preview on the avatar itself the whole time.
  */
-export function AvatarPicker({ displayName, initialAvatar }: { displayName: string; initialAvatar: UserAvatarPrefs }) {
+export function AvatarPicker({
+  displayName,
+  identityFallback,
+  initialAvatar,
+}: {
+  displayName: string;
+  /** Stable per-user string (email or whopUserId) — see UserAvatar's own doc. */
+  identityFallback: string;
+  initialAvatar: UserAvatarPrefs;
+}) {
   const router = useRouter();
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme !== "light";
 
+  // A user who's never explicitly chosen defaults to the same PixelBot
+  // UserAvatar already shows them everywhere else (see its own doc) —
+  // opening "Choose an avatar" for the first time shows that exact seed
+  // pre-selected with a checkmark, not a blank grid that contradicts
+  // what their avatar already looks like on every other page.
+  const defaultCategory = initialAvatar.avatarStyle ?? DEFAULT_AVATAR_STYLE;
+  const defaultSeed = initialAvatar.avatarType === "dicebear" ? initialAvatar.avatarSeed : defaultSeedForIdentifier(identityFallback);
+
   const [avatar, setAvatar] = useState(initialAvatar);
   const [step, setStep] = useState<Step>("collapsed");
-  const [category, setCategory] = useState<AvatarStyleId>(initialAvatar.avatarStyle ?? "pixel-art");
-  const [pendingSeed, setPendingSeed] = useState<string | null>(
-    initialAvatar.avatarType === "dicebear" ? initialAvatar.avatarSeed : null
-  );
+  const [category, setCategory] = useState<AvatarStyleId>(defaultCategory);
+  const [pendingSeed, setPendingSeed] = useState<string | null>(defaultSeed);
   const [pendingUpload, setPendingUpload] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +99,7 @@ export function AvatarPicker({ displayName, initialAvatar }: { displayName: stri
   const initials = displayName.slice(0, 2).toUpperCase();
 
   const gridUris = useMemo(
-    () => GRID_SEEDS.map((seed) => ({ seed, uri: generateAvatarDataUri(category, seed, { isDark, size: 64 }) })),
+    () => GRID_SEEDS.map((seed) => ({ seed, uri: generateAvatarDataUri(category, seed, { isDark, size: 40 }) })),
     [category, isDark]
   );
 
@@ -92,8 +115,8 @@ export function AvatarPicker({ displayName, initialAvatar }: { displayName: stri
     setStep("collapsed");
     setError(null);
     setPendingUpload(null);
-    setPendingSeed(avatar.avatarType === "dicebear" ? avatar.avatarSeed : null);
-    setCategory(avatar.avatarStyle ?? "pixel-art");
+    setPendingSeed(avatar.avatarType === "dicebear" ? avatar.avatarSeed : defaultSeedForIdentifier(identityFallback));
+    setCategory(avatar.avatarStyle ?? DEFAULT_AVATAR_STYLE);
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -154,7 +177,8 @@ export function AvatarPicker({ displayName, initialAvatar }: { displayName: stri
         return;
       }
       setAvatar({ avatarType: null, avatarStyle: null, avatarSeed: null, avatarImageUrl: null });
-      setPendingSeed(null);
+      setPendingSeed(defaultSeedForIdentifier(identityFallback));
+      setCategory(DEFAULT_AVATAR_STYLE);
       setPendingUpload(null);
       router.refresh();
     } finally {
@@ -173,6 +197,7 @@ export function AvatarPicker({ displayName, initialAvatar }: { displayName: stri
       <div className="flex items-center gap-3">
         <UserAvatar
           avatar={avatar}
+          identityFallback={identityFallback}
           size={56}
           className="border border-zinc-300 dark:border-zinc-700"
           fallback={fallbackInitials}
@@ -231,6 +256,7 @@ export function AvatarPicker({ displayName, initialAvatar }: { displayName: stri
                       ? { avatarType: "upload", avatarImageUrl: pendingUpload, avatarStyle: null, avatarSeed: null }
                       : avatar
                   }
+                  identityFallback={identityFallback}
                   size={48}
                   className="border border-zinc-300 dark:border-zinc-700"
                   fallback={fallbackInitials}
@@ -275,7 +301,12 @@ export function AvatarPicker({ displayName, initialAvatar }: { displayName: stri
                 ))}
               </div>
 
-              <div className="grid grid-cols-5 gap-1.5">
+              {/* Fixed-size swatches, not grid columns stretched to fill
+                  whatever width the panel happens to have — that's what
+                  made these render nearly full-card-sized. 36px is a real
+                  "pick one from a grid" thumbnail, matching e.g. Slack's
+                  own emoji/avatar pickers. */}
+              <div className="grid grid-cols-[repeat(5,36px)] gap-1.5">
                 {gridUris.map(({ seed, uri }) => {
                   const selected = pendingSeed === seed;
                   return (
@@ -285,7 +316,7 @@ export function AvatarPicker({ displayName, initialAvatar }: { displayName: stri
                       onClick={() => setPendingSeed(seed)}
                       aria-label={`Select avatar ${seed}`}
                       aria-pressed={selected}
-                      className={`relative aspect-square rounded-md overflow-hidden border-2 transition-all cursor-pointer ${
+                      className={`relative w-9 h-9 rounded-md overflow-hidden border-2 transition-all cursor-pointer ${
                         selected
                           ? "border-amber-500 dark:border-amber-400 scale-95"
                           : "border-transparent hover:border-zinc-300 dark:hover:border-zinc-700"
@@ -294,8 +325,8 @@ export function AvatarPicker({ displayName, initialAvatar }: { displayName: stri
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={uri} alt="" className="w-full h-full object-cover" />
                       {selected && (
-                        <span className="absolute top-0.5 right-0.5 flex items-center justify-center w-3.5 h-3.5 rounded-full bg-amber-500 text-white">
-                          <Check size={9} strokeWidth={3} />
+                        <span className="absolute -top-1 -right-1 flex items-center justify-center w-3 h-3 rounded-full bg-amber-500 text-white ring-1 ring-white dark:ring-zinc-950">
+                          <Check size={7} strokeWidth={3.5} />
                         </span>
                       )}
                     </button>

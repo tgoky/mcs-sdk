@@ -132,6 +132,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
         >
           <UserAvatar
             avatar={avatar}
+            identityFallback={userEmail}
             size={32}
             fallback={
               <div className="w-8 h-8 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-[11px] font-bold text-white dark:text-[#1f1a2e] font-mono flex items-center justify-center">
@@ -236,6 +237,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                     <div className="flex items-center gap-3">
                       <UserAvatar
                         avatar={avatar}
+                        identityFallback={userEmail}
                         size={44}
                         fallback={
                           <div className="w-11 h-11 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-xs">

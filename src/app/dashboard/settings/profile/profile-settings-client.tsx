@@ -31,7 +31,7 @@ export default function ProfileSettingsClient({
 
       {/* Profile Image */}
       <div className="pb-4 border-b border-zinc-200 dark:border-zinc-800/80">
-        <AvatarPicker displayName={displayName} initialAvatar={avatar} />
+        <AvatarPicker displayName={displayName} identityFallback={email || displayName} initialAvatar={avatar} />
       </div>
 
       {/* Name Inputs */}

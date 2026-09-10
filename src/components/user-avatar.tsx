@@ -2,16 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
-import { generateAvatarDataUri } from "@/lib/avatar";
+import { generateAvatarDataUri, defaultSeedForIdentifier, DEFAULT_AVATAR_STYLE } from "@/lib/avatar";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
 
 /**
- * Renders a user's real chosen avatar (an uploaded photo, or a
- * regenerated DiceBear image) when they have one, or `fallback` — each
- * caller's own existing initials markup — when they don't. That keeps
- * every surface's look exactly as it was for the (initially: everyone)
- * users who haven't picked an avatar yet, instead of unifying three
- * different existing initials color schemes into a guess at one.
+ * Renders a user's real avatar: an uploaded photo, a regenerated DiceBear
+ * image for an explicit choice, or — for the (initially: everyone) users
+ * who haven't picked one yet — a real PixelBot deterministically seeded
+ * from `identityFallback` (their email, or whopUserId), so "no avatar
+ * set" still looks like a real per-person avatar instead of a blank slot.
+ * `fallback` (each caller's own existing initials markup) is a true last
+ * resort, only used if identityFallback is somehow empty.
  *
  * DiceBear's own default background reads as a near-black square; on a
  * light-theme page that's a dark hole next to everything else, so the
@@ -21,12 +22,15 @@ import type { UserAvatarPrefs } from "@/lib/user-avatar";
  */
 export function UserAvatar({
   avatar,
+  identityFallback,
   size,
   radiusClassName = "rounded-full",
   className = "",
   fallback,
 }: {
   avatar: UserAvatarPrefs;
+  /** Stable per-user string (email or whopUserId) that seeds the default PixelBot when no avatar has been explicitly chosen. */
+  identityFallback: string;
   size: number;
   radiusClassName?: string;
   className?: string;
@@ -49,9 +53,14 @@ export function UserAvatar({
   const isDark = mounted ? resolvedTheme !== "light" : true;
 
   const dicebearUri = useMemo(() => {
-    if (avatar.avatarType !== "dicebear" || !avatar.avatarStyle || !avatar.avatarSeed) return null;
-    return generateAvatarDataUri(avatar.avatarStyle, avatar.avatarSeed, { isDark });
-  }, [avatar.avatarType, avatar.avatarStyle, avatar.avatarSeed, isDark]);
+    if (avatar.avatarType === "dicebear" && avatar.avatarStyle && avatar.avatarSeed) {
+      return generateAvatarDataUri(avatar.avatarStyle, avatar.avatarSeed, { isDark });
+    }
+    if (avatar.avatarType === null && identityFallback) {
+      return generateAvatarDataUri(DEFAULT_AVATAR_STYLE, defaultSeedForIdentifier(identityFallback), { isDark });
+    }
+    return null;
+  }, [avatar.avatarType, avatar.avatarStyle, avatar.avatarSeed, identityFallback, isDark]);
 
   const imgClassName = `shrink-0 object-cover select-none ${radiusClassName} ${className}`;
 

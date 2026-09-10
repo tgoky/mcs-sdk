@@ -35,6 +35,25 @@ export function seedsForStyle(count = 25): string[] {
 }
 
 /**
+ * Every user gets a real PixelBot by default — not a blank slot that
+ * falls back to initials until they visit the picker. Hashes a stable
+ * per-user identifier (email, or whopUserId if no email) onto one of the
+ * same curated seeds seedsForStyle() generates, so the default is both
+ * distinct per user (unlike a single hardcoded seed everyone would
+ * share) and a real option already sitting in the picker grid — opening
+ * "Choose an avatar" for the first time shows this exact seed selected,
+ * not an empty grid.
+ */
+export function defaultSeedForIdentifier(identifier: string, count = 25): string {
+  let hash = 0;
+  for (let i = 0; i < identifier.length; i++) hash = (hash * 31 + identifier.charCodeAt(i)) | 0;
+  const index = Math.abs(hash) % count;
+  return `avatar-${index + 1}`;
+}
+
+export const DEFAULT_AVATAR_STYLE: AvatarStyleId = "pixel-art";
+
+/**
  * Dark theme keeps DiceBear's own default (a near-black fill); light
  * theme swaps to white so the square doesn't read as a dark hole on a
  * light page. Hex without "#", matching DiceBear's own backgroundColor

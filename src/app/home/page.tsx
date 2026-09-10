@@ -62,6 +62,7 @@ export default async function WorkspaceHomePage() {
             <div className="flex items-center gap-3">
               <UserAvatar
                 avatar={avatar}
+                identityFallback={session.email || whopUserId}
                 size={36}
                 radiusClassName="rounded-lg"
                 fallback={
