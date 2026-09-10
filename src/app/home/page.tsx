@@ -2,7 +2,8 @@ import { getSession } from "@/lib/session";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HOME_COPY } from "@/lib/copy";
-import { listWorkspaces, getInstalledPackagesByWorkspace } from "@/lib/workspace";
+import { listWorkspaces, getInstalledPackagesByWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
+import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
 import { WorkspaceHomeClient } from "./workspace-home-client";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,19 @@ export default async function WorkspaceHomePage() {
   installedMap.forEach((packages, wsId) => {
     installedByWorkspace[wsId] = packages;
   });
+
+  // Each workspace's enabled-skill state lives on its primary engagement
+  // (see getPrimaryEngagementIdForWorkspace's own doc) — looked up per
+  // workspace so the card grid can show "Enabled skills" as the real
+  // enabled subset, not just every skill the installed product ships with.
+  const enabledEntries = await Promise.all(
+    workspaceList.map(async (w) => {
+      const engagementId = await getPrimaryEngagementIdForWorkspace(w.workspaceId);
+      const enabled = engagementId ? await getEnabledWorkerIdsForEngagement(engagementId) : [];
+      return [w.workspaceId, enabled] as const;
+    })
+  );
+  const enabledSkillsByWorkspace: Record<string, string[]> = Object.fromEntries(enabledEntries);
 
   return (
     <div className="relative min-h-screen w-full font-sans text-zinc-600 antialiased dark:text-zinc-400 transition-colors duration-200 flex items-center justify-center p-4 sm:p-6 lg:p-10 overflow-hidden">
@@ -68,6 +82,7 @@ export default async function WorkspaceHomePage() {
           <WorkspaceHomeClient
             workspaceList={workspaceList}
             installedByWorkspace={installedByWorkspace}
+            enabledSkillsByWorkspace={enabledSkillsByWorkspace}
           />
         </div>
 

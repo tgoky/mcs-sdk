@@ -5,12 +5,49 @@ import Link from "next/link";
 import { Plus, ArrowRight, LayoutGrid, List } from "lucide-react";
 import { HOME_COPY, WORKSPACE_PRODUCTS } from "@/lib/copy";
 import type { Workspace } from "@/lib/workspace";
-import { SquishySkillBadge } from "@/components/squishy-skill-badge";
-import { SKILL_IDS, SKILL_MANIFEST } from "@/lib/skill-manifest";
+import { AnySkillBadge } from "@/components/any-skill-badge";
+import { workersForProduct, type WorkerDefinition } from "@/lib/worker-registry";
+import { isProductId } from "@/lib/product-catalog";
 import { useLocalViewState } from "@/lib/use-local-view-state";
 import { WorkspaceCardMenu } from "./workspace-card-menu";
 
 const PACKAGE_NAMES = new Map(WORKSPACE_PRODUCTS.map((p) => [p.id, p.name] as const));
+
+/**
+ * Skills across every installed product for one workspace, split into
+ * "available" (everything the installed products ship, regardless of
+ * on/off state) and "enabled" (the actual enabled subset, per
+ * getEnabledWorkerIdsForEngagement) — this used to just render Showtime's
+ * SKILL_IDS with enabled hardcoded to true, so a Cold Open or Reputation
+ * Manager workspace showed Showtime's icons (wrong product entirely) and
+ * every workspace showed every skill as "enabled" whether it actually was
+ * or not.
+ */
+function workspaceSkills(
+  packageIds: string[],
+  enabledIds: string[]
+): { available: WorkerDefinition[]; enabled: WorkerDefinition[]; enabledSet: Set<string> } {
+  const available = packageIds.filter(isProductId).flatMap((id) => workersForProduct(id));
+  const enabledSet = new Set(enabledIds);
+  const enabled = available.filter((skill) => enabledSet.has(skill.id));
+  return { available, enabled, enabledSet };
+}
+
+function SkillBadgeStrip({ skills, enabledIds, size }: { skills: WorkerDefinition[]; enabledIds: Set<string>; size: number }) {
+  return (
+    <div className="flex items-center -space-x-1.5 overflow-hidden">
+      {skills.map((skill) => (
+        <div
+          key={skill.id}
+          title={skill.name}
+          className="relative flex items-center justify-center rounded-md bg-white dark:bg-zinc-900 p-0.5 ring-2 ring-zinc-200/80 dark:ring-zinc-800/80 transition-transform group-hover:scale-105"
+        >
+          <AnySkillBadge skill={skill.id} size={size} enabled={enabledIds.has(skill.id)} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function relativeTime(date: Date | string): string {
   const ms = Date.now() - new Date(date).getTime();
@@ -62,17 +99,19 @@ function PackageBadge({ packageId }: { packageId: string }) {
 function WorkspaceCard({
   workspace,
   packageIds,
+  enabledSkillIds,
   workspaceCount,
   isSwitching,
   onSwitch,
 }: {
   workspace: Workspace;
   packageIds: string[];
+  enabledSkillIds: string[];
   workspaceCount: number;
   isSwitching: boolean;
   onSwitch: (id: string) => void;
 }) {
-  const hasShowtime = packageIds.includes("showtime");
+  const { available, enabled, enabledSet } = workspaceSkills(packageIds, enabledSkillIds);
 
   return (
     <div className="hover-lift group relative flex h-full w-full flex-col justify-between surface-glass-3 surface-blend-page rounded-2xl p-6 text-left select-none hover:border-zinc-300 dark:hover:border-zinc-700">
@@ -117,22 +156,22 @@ function WorkspaceCard({
               : "No packages installed yet"}
           </p>
         </div>
-        {hasShowtime && (
-          <div className="pt-1">
-            <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">
-              Enabled Skills
-            </p>
-            <div className="flex items-center -space-x-1.5 overflow-hidden">
-              {SKILL_IDS.map((skillId) => (
-                <div
-                  key={skillId}
-                  title={SKILL_MANIFEST[skillId].name}
-                  className="relative flex items-center justify-center rounded-md bg-white dark:bg-zinc-900 p-0.5 ring-2 ring-zinc-200/80 dark:ring-zinc-800/80 transition-transform group-hover:scale-105"
-                >
-                  <SquishySkillBadge skill={skillId} size={20} enabled={true} />
-                </div>
-              ))}
+        {available.length > 0 && (
+          <div className="pt-1 space-y-2">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">
+                Available skills
+              </p>
+              <SkillBadgeStrip skills={available} enabledIds={enabledSet} size={20} />
             </div>
+            {enabled.length > 0 && (
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">
+                  Enabled skills
+                </p>
+                <SkillBadgeStrip skills={enabled} enabledIds={enabledSet} size={20} />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -154,6 +193,7 @@ function WorkspaceCard({
 function WorkspaceRow({
   workspace,
   packageIds,
+  enabledSkillIds,
   index,
   workspaceCount,
   isSwitching,
@@ -161,6 +201,7 @@ function WorkspaceRow({
 }: {
   workspace: Workspace;
   packageIds: string[];
+  enabledSkillIds: string[];
   index: number;
   workspaceCount: number;
   isSwitching: boolean;
@@ -168,7 +209,7 @@ function WorkspaceRow({
 }) {
   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const initial = workspace.name.slice(0, 1).toUpperCase() || "W";
-  const hasShowtime = packageIds.includes("showtime");
+  const { available, enabled, enabledSet } = workspaceSkills(packageIds, enabledSkillIds);
 
   return (
     <tr className="group border-b border-zinc-200/80 dark:border-zinc-800/60 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60 transition-colors">
@@ -199,23 +240,24 @@ function WorkspaceRow({
         </form>
       </td>
       <td className="py-3.5 px-3 text-xs">
-        <div className="flex items-center gap-3">
+        <div className="space-y-1">
           <span className="font-mono text-xs font-bold text-zinc-800 dark:text-zinc-200">
             {packageIds.length > 0
               ? packageIds.map((id) => PACKAGE_NAMES.get(id) ?? id).join(", ")
               : "No packages"}
           </span>
-          {hasShowtime && (
-            <div className="flex items-center -space-x-1.5 overflow-hidden py-0.5">
-              {SKILL_IDS.map((skillId) => (
-                <div
-                  key={skillId}
-                  title={SKILL_MANIFEST[skillId].name}
-                  className="relative flex items-center justify-center rounded-md bg-white dark:bg-zinc-900 p-0.5 ring-2 ring-zinc-200/80 dark:ring-zinc-800/80 transition-transform group-hover:scale-105"
-                >
-                  <SquishySkillBadge skill={skillId} size={20} enabled={true} />
+          {available.length > 0 && (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Available</span>
+                <SkillBadgeStrip skills={available} enabledIds={enabledSet} size={16} />
+              </div>
+              {enabled.length > 0 && (
+                <div className="flex items-center gap-1">
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Enabled</span>
+                  <SkillBadgeStrip skills={enabled} enabledIds={enabledSet} size={16} />
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
@@ -260,11 +302,13 @@ function WorkspaceRow({
 interface WorkspaceHomeClientProps {
   workspaceList: Workspace[];
   installedByWorkspace: Record<string, string[]>;
+  enabledSkillsByWorkspace: Record<string, string[]>;
 }
 
 export function WorkspaceHomeClient({
   workspaceList,
   installedByWorkspace,
+  enabledSkillsByWorkspace,
 }: WorkspaceHomeClientProps) {
   const [viewMode, setViewMode] = useLocalViewState<"card" | "list">("mcs:home:view-mode", "card");
   const [switchingId, setSwitchingId] = useState<string | null>(null);
@@ -322,6 +366,7 @@ export function WorkspaceHomeClient({
               key={workspace.workspaceId}
               workspace={workspace}
               packageIds={installedByWorkspace[workspace.workspaceId] ?? []}
+              enabledSkillIds={enabledSkillsByWorkspace[workspace.workspaceId] ?? []}
               workspaceCount={workspaceList.length}
               isSwitching={switchingId === workspace.workspaceId}
               onSwitch={(id) => setSwitchingId(id)}
@@ -334,7 +379,7 @@ export function WorkspaceHomeClient({
             <thead>
               <tr className="border-b border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/40 text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
                 <th className="py-3 pl-4 pr-3">Workspace Name</th>
-                <th className="py-3 px-3">Package & Enabled Skills</th>
+                <th className="py-3 px-3">Package & Skills</th>
                 <th className="py-3 px-3">Status</th>
                 <th className="py-3 px-3">Created</th>
                 <th className="py-3 pr-4 pl-3 text-right">Action</th>
@@ -346,6 +391,7 @@ export function WorkspaceHomeClient({
                   key={workspace.workspaceId}
                   workspace={workspace}
                   packageIds={installedByWorkspace[workspace.workspaceId] ?? []}
+                  enabledSkillIds={enabledSkillsByWorkspace[workspace.workspaceId] ?? []}
                   index={idx}
                   workspaceCount={workspaceList.length}
                   isSwitching={switchingId === workspace.workspaceId}
