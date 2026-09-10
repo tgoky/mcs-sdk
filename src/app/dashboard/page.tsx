@@ -37,12 +37,11 @@ export default async function DashboardPage() {
       totalRunsResult,
       thisWeekResult,
       lastWeekResult,
-      runningCountResult,
       recentRunsRaw,
       queueItems,
       completedThisWeekBySkillRaw,
       recentCompletionsRaw,
-      unseenCount, // CHANGED: new 10th slot — MUST stay positionally aligned with the 10th query below
+      unseenCount, // CHANGED: new 9th slot — MUST stay positionally aligned with the 9th query below
     ],
     primaryEngagementId,
   ] = await Promise.all([
@@ -94,18 +93,6 @@ export default async function DashboardPage() {
           eq(skillRuns.status, "success"),
           gte(skillRuns.completedAt, lastWeekStart),
           lt(skillRuns.completedAt, lastWeekEnd)
-        )
-      ),
-
-    db
-      .select({ count: sql<number>`count(*)` })
-      .from(skillRuns)
-      .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-      .where(
-        and(
-          eq(engagements.whopUserId, whopUserId),
-          eq(engagements.workspaceId, workspaceId),
-          eq(skillRuns.status, "running")
         )
       ),
 
@@ -168,7 +155,7 @@ export default async function DashboardPage() {
       .orderBy(desc(skillRuns.completedAt))
       .limit(8),
 
-    // CHANGED: new 10th query — pairs with `unseenCount` above.
+    // CHANGED: new 9th query — pairs with `unseenCount` above.
    getUnseenCompletedExecutionCount(whopUserId, workspaceId),
     ]),
     getPrimaryEngagementIdForWorkspace(workspaceId),
@@ -178,8 +165,6 @@ export default async function DashboardPage() {
   const completedLastWeek = Number(lastWeekResult[0]?.count ?? 0);
   const completedAllTime = Number(totalRunsResult[0]?.count ?? 0);
   const weeklyTrend = weeklyTrendLabel(completedThisWeek, completedLastWeek);
-  const runningCount = Number(runningCountResult[0]?.count ?? 0);
-  const pausedCount = userEngagements.filter((e) => e.pausedAt).length;
   const issues = summarizeIssues(queueItems);
 
   const completedThisWeekBySkill = completedThisWeekBySkillRaw
@@ -253,9 +238,6 @@ export default async function DashboardPage() {
 
         {/* Overview stats */}
         <OverviewStatsPanel
-          activeAccountsCount={userEngagements.length}
-          runningCount={runningCount}
-          pausedCount={pausedCount}
           completedThisWeek={completedThisWeek}
           completedAllTime={completedAllTime}
           weeklyTrend={weeklyTrend}

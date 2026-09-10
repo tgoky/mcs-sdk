@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { engagements, skillRuns } from "@/models/schema";
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace, isPackageInstalledInWorkspace } from "@/lib/workspace";
 import { getQueueItems } from "@/lib/queue";
@@ -38,26 +38,21 @@ export default async function ShowtimePage() {
 
   const { thisWeekStart, lastWeekStart, lastWeekEnd } = getWeekWindows();
   const baseFilter = and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId), isNull(engagements.deletedAt));
-  const showtimeFilter = and(baseFilter, isNotNull(engagements.stack));
   const runsBaseFilter = and(baseFilter, inArray(skillRuns.skillName, SHOWTIME_SKILL_IDS));
 
   const [
-    showtimeClientRows,
     totalRunsResult,
     thisWeekResult,
     lastWeekResult,
-    runningCountResult,
     recentCompletionsRaw,
     completedThisWeekBySkillRaw,
     queueItems,
     clientRows,
     runRows,
   ] = await Promise.all([
-    db.select({ engagementId: engagements.engagementId, pausedAt: engagements.pausedAt }).from(engagements).where(showtimeFilter),
     db.select({ count: sql<number>`count(*)` }).from(skillRuns).innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId)).where(and(runsBaseFilter, eq(skillRuns.status, "success"))),
     db.select({ count: sql<number>`count(*)` }).from(skillRuns).innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId)).where(and(runsBaseFilter, eq(skillRuns.status, "success"), gte(skillRuns.completedAt, thisWeekStart))),
     db.select({ count: sql<number>`count(*)` }).from(skillRuns).innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId)).where(and(runsBaseFilter, eq(skillRuns.status, "success"), gte(skillRuns.completedAt, lastWeekStart), lt(skillRuns.completedAt, lastWeekEnd))),
-    db.select({ count: sql<number>`count(*)` }).from(skillRuns).innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId)).where(and(runsBaseFilter, eq(skillRuns.status, "running"))),
     db
       .select({ id: skillRuns.id, skillName: skillRuns.skillName, engagementId: skillRuns.engagementId, buyerName: engagements.buyer, completedAt: skillRuns.completedAt, steps: skillRuns.steps })
       .from(skillRuns)
@@ -126,9 +121,6 @@ export default async function ShowtimePage() {
         </div>
 
         <OverviewStatsPanel
-          activeAccountsCount={showtimeClientRows.length}
-          runningCount={Number(runningCountResult[0]?.count ?? 0)}
-          pausedCount={showtimeClientRows.filter((e) => e.pausedAt).length}
           completedThisWeek={completedThisWeek}
           completedAllTime={Number(totalRunsResult[0]?.count ?? 0)}
           weeklyTrend={weeklyTrendLabel(completedThisWeek, completedLastWeek)}

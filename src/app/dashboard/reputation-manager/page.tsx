@@ -60,7 +60,6 @@ export default async function ReputationManagerHomePage() {
     totalRunsResult,
     thisWeekResult,
     lastWeekResult,
-    runningCountResult,
     recentCompletionsRaw,
     completedThisWeekBySkillRaw,
     recentIncidents,
@@ -76,7 +75,6 @@ export default async function ReputationManagerHomePage() {
     db.select({ count: sql<number>`count(*)` }).from(skillRuns).innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId)).where(and(runsBaseFilter, eq(skillRuns.status, "success"))),
     db.select({ count: sql<number>`count(*)` }).from(skillRuns).innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId)).where(and(runsBaseFilter, eq(skillRuns.status, "success"), gte(skillRuns.completedAt, thisWeekStart))),
     db.select({ count: sql<number>`count(*)` }).from(skillRuns).innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId)).where(and(runsBaseFilter, eq(skillRuns.status, "success"), gte(skillRuns.completedAt, lastWeekStart), lt(skillRuns.completedAt, lastWeekEnd))),
-    db.select({ count: sql<number>`count(*)` }).from(skillRuns).innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId)).where(and(runsBaseFilter, eq(skillRuns.status, "running"))),
     db
       .select({ id: skillRuns.id, skillName: skillRuns.skillName, engagementId: skillRuns.engagementId, buyerName: engagements.buyer, completedAt: skillRuns.completedAt, steps: skillRuns.steps })
       .from(skillRuns)
@@ -169,9 +167,6 @@ export default async function ReputationManagerHomePage() {
         </div>
 
         <OverviewStatsPanel
-          activeAccountsCount={repClientRows.length}
-          runningCount={Number(runningCountResult[0]?.count ?? 0)}
-          pausedCount={repClientRows.filter((e) => e.pausedAt).length}
           completedThisWeek={completedThisWeek}
           completedAllTime={Number(totalRunsResult[0]?.count ?? 0)}
           weeklyTrend={weeklyTrendLabel(completedThisWeek, completedLastWeek)}

@@ -101,7 +101,7 @@ function WorkspaceCard({
             )}
           </div>
           <div className="flex items-center gap-1.5 z-20">
-            <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400">
+            <span className="inline-flex items-center rounded-md bg-amber-500/10 dark:bg-amber-500/20 px-2.5 py-0.5 text-[10px] font-mono font-medium text-amber-600 dark:text-amber-400">
               Active
             </span>
             <WorkspaceCardMenu workspace={workspace} canDelete={workspaceCount > 1 && !workspace.isLegacy} />
@@ -221,7 +221,7 @@ function WorkspaceRow({
         </div>
       </td>
       <td className="py-3.5 px-3 text-xs whitespace-nowrap">
-        <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 font-mono">
+        <span className="inline-flex items-center rounded-md bg-amber-500/10 dark:bg-amber-500/20 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-400 font-mono">
           Active
         </span>
       </td>

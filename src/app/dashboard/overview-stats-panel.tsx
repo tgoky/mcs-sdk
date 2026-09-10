@@ -39,9 +39,6 @@ interface RecentCompletion {
 }
 
 export function OverviewStatsPanel({
-  activeAccountsCount,
-  runningCount,
-  pausedCount,
   completedThisWeek,
   completedAllTime,
   weeklyTrend,
@@ -51,9 +48,6 @@ export function OverviewStatsPanel({
   issuesBreakdown,
   queueItems = [],
 }: {
-  activeAccountsCount: number;
-  runningCount: number;
-  pausedCount: number;
   completedThisWeek: number;
   completedAllTime: number;
   weeklyTrend: string | null;
@@ -449,28 +443,12 @@ export function OverviewStatsPanel({
         {copy.overviewSectionTitle}
       </p>
 
-      <div className="grid gap-4 sm:grid-cols-3 pt-1 border-t border-zinc-200/60 dark:border-zinc-900/20">
-        {/* Active Accounts */}
-        <div className="space-y-1">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">{copy.stat.activeAccounts}</p>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{activeAccountsCount}</span>
-            <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">
-              {runningCount > 0 ? copy.stat.activeAccountsRunning(runningCount) : copy.stat.activeAccountsAllGood}
-            </span>
-          </div>
-          {pausedCount > 0 && (
-            <p className="text-[11px] text-amber-600 dark:text-amber-400 font-mono">
-              {copy.stat.activeAccountsPaused(pausedCount)}
-            </p>
-          )}
-        </div>
-
+      <div className="grid gap-4 sm:grid-cols-2 pt-1 border-t border-zinc-200/60 dark:border-zinc-900/20">
         {/* Tasks Completed (Clickable) */}
         <button
           type="button"
           onClick={() => setExpandedSection("tasks")}
-          className="group space-y-1 text-left sm:border-l border-zinc-200 dark:border-zinc-900 sm:pl-4 cursor-pointer rounded-md -m-1 p-1 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors"
+          className="group space-y-1 text-left cursor-pointer rounded-md -m-1 p-1 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors"
         >
           <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium flex items-center gap-1">
             {copy.stat.automatedActions} <span className="text-zinc-400 dark:text-zinc-600">· {copy.stat.automatedActionsThisWeek}</span>
