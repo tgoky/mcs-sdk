@@ -33,7 +33,21 @@ function workspaceSkills(
   return { available, enabled, enabledSet };
 }
 
-function SkillBadgeStrip({ skills, enabledIds, size }: { skills: WorkerDefinition[]; enabledIds: Set<string>; size: number }) {
+/**
+ * `enabledIds` only dims a skill when it's actually meaningful to ask
+ * "is this one on" — the Enabled-skills strip, where every entry is
+ * already enabled by construction, or nowhere at all. The Available
+ * strip passes `null` here on purpose: "available" already means
+ * "ships with an installed product," a separate question from on/off,
+ * and dimming it by enabled state was actively misleading — Showtime's
+ * badges support a real dim/color distinction but Reputation Manager's
+ * and Cold Open's don't (no `enabled` prop on those two components), so
+ * a workspace with nothing configured yet showed Showtime's skills
+ * grayed to near-invisible while the other two products' skills stayed
+ * full-color regardless, reading as "only some skills are even
+ * available" when they all equally were.
+ */
+function SkillBadgeStrip({ skills, enabledIds, size }: { skills: WorkerDefinition[]; enabledIds: Set<string> | null; size: number }) {
   return (
     <div className="flex items-center -space-x-1.5 overflow-hidden">
       {skills.map((skill) => (
@@ -42,7 +56,7 @@ function SkillBadgeStrip({ skills, enabledIds, size }: { skills: WorkerDefinitio
           title={skill.name}
           className="relative flex items-center justify-center rounded-md bg-white dark:bg-zinc-900 p-0.5 ring-2 ring-zinc-200/80 dark:ring-zinc-800/80 transition-transform group-hover:scale-105"
         >
-          <AnySkillBadge skill={skill.id} size={size} enabled={enabledIds.has(skill.id)} />
+          <AnySkillBadge skill={skill.id} size={size} enabled={enabledIds ? enabledIds.has(skill.id) : true} />
         </div>
       ))}
     </div>
@@ -162,7 +176,7 @@ function WorkspaceCard({
               <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">
                 Available skills
               </p>
-              <SkillBadgeStrip skills={available} enabledIds={enabledSet} size={20} />
+              <SkillBadgeStrip skills={available} enabledIds={null} size={20} />
             </div>
             {enabled.length > 0 && (
               <div>
@@ -250,7 +264,7 @@ function WorkspaceRow({
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1">
                 <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Available</span>
-                <SkillBadgeStrip skills={available} enabledIds={enabledSet} size={16} />
+                <SkillBadgeStrip skills={available} enabledIds={null} size={16} />
               </div>
               {enabled.length > 0 && (
                 <div className="flex items-center gap-1">

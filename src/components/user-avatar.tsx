@@ -27,6 +27,7 @@ export function UserAvatar({
   radiusClassName = "rounded-full",
   className = "",
   fallback,
+  transparentBackground = false,
 }: {
   avatar: UserAvatarPrefs;
   /** Stable per-user string (email or whopUserId) that seeds the default PixelBot when no avatar has been explicitly chosen. */
@@ -35,6 +36,11 @@ export function UserAvatar({
   radiusClassName?: string;
   className?: string;
   fallback: React.ReactNode;
+  /** For a generated DiceBear avatar only — renders with no background
+   * rect at all instead of the usual filled square, for a surface that
+   * already has its own background (a chat message row). Has no effect
+   * on an uploaded photo, which is opaque either way. */
+  transparentBackground?: boolean;
 }) {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -54,13 +60,13 @@ export function UserAvatar({
 
   const dicebearUri = useMemo(() => {
     if (avatar.avatarType === "dicebear" && avatar.avatarStyle && avatar.avatarSeed) {
-      return generateAvatarDataUri(avatar.avatarStyle, avatar.avatarSeed, { isDark });
+      return generateAvatarDataUri(avatar.avatarStyle, avatar.avatarSeed, { isDark, transparentBackground });
     }
     if (avatar.avatarType === null && identityFallback) {
-      return generateAvatarDataUri(DEFAULT_AVATAR_STYLE, defaultSeedForIdentifier(identityFallback), { isDark });
+      return generateAvatarDataUri(DEFAULT_AVATAR_STYLE, defaultSeedForIdentifier(identityFallback), { isDark, transparentBackground });
     }
     return null;
-  }, [avatar.avatarType, avatar.avatarStyle, avatar.avatarSeed, identityFallback, isDark]);
+  }, [avatar.avatarType, avatar.avatarStyle, avatar.avatarSeed, identityFallback, isDark, transparentBackground]);
 
   const imgClassName = `shrink-0 object-cover select-none ${radiusClassName} ${className}`;
 

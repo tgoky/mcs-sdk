@@ -6,13 +6,16 @@
 // on every render instead.
 
 import { createAvatar } from "@dicebear/core";
-import { pixelArt, micah, openPeeps } from "@dicebear/collection";
+import { pixelArt } from "@dicebear/collection";
 import type { Style } from "@dicebear/core";
 
+// Just PixelBot, by design — Micah and Open Peeps were dropped per direct
+// request rather than left as unused options. Kept as a one-entry record
+// (not a single hardcoded style everywhere) so the stored avatarStyle
+// column and isAvatarStyleId still mean something and a style could be
+// added back without a schema change.
 export const AVATAR_STYLES = {
   "pixel-art": { label: "PixelBot", style: pixelArt as Style<Record<string, unknown>> },
-  micah: { label: "Micah", style: micah as Style<Record<string, unknown>> },
-  "open-peeps": { label: "Open Peeps", style: openPeeps as Style<Record<string, unknown>> },
 } as const;
 
 export type AvatarStyleId = keyof typeof AVATAR_STYLES;
@@ -54,6 +57,15 @@ export function defaultSeedForIdentifier(identifier: string, count = 25): string
 export const DEFAULT_AVATAR_STYLE: AvatarStyleId = "pixel-art";
 
 /**
+ * Fixed seed for "the worker" (the AI side of a Teammates conversation),
+ * not tied to any real person — deliberately distinct from any seed
+ * defaultSeedForIdentifier could ever produce for a real user account,
+ * since it's the same style/seed pair every workspace sees, unlike a
+ * user's own per-person default.
+ */
+export const WORKER_AVATAR_SEED = "mcs-worker";
+
+/**
  * Dark theme keeps DiceBear's own default (a near-black fill); light
  * theme swaps to white so the square doesn't read as a dark hole on a
  * light page. Hex without "#", matching DiceBear's own backgroundColor
@@ -66,14 +78,20 @@ export function avatarBackgroundColor(isDark: boolean): string {
 export function generateAvatarDataUri(
   styleId: AvatarStyleId,
   seed: string,
-  opts?: { isDark?: boolean; size?: number }
+  opts?: { isDark?: boolean; size?: number; transparentBackground?: boolean }
 ): string {
   const { style } = AVATAR_STYLES[styleId];
   const avatar = createAvatar(style, {
     seed,
     size: opts?.size ?? 128,
-    backgroundColor: [avatarBackgroundColor(opts?.isDark ?? true)],
-    backgroundType: ["solid"],
+    // Omitting backgroundColor/backgroundType entirely renders with no
+    // background rect at all — real transparency, not a color chosen to
+    // *look* transparent. Used where the avatar sits on a surface that
+    // already has its own background (a chat bubble row), not the
+    // filled-square look everywhere else.
+    ...(opts?.transparentBackground
+      ? {}
+      : { backgroundColor: [avatarBackgroundColor(opts?.isDark ?? true)], backgroundType: ["solid" as const] }),
     radius: 0,
   });
   return avatar.toDataUri();

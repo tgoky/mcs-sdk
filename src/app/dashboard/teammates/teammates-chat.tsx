@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   CheckCircle2,
@@ -11,9 +11,15 @@ import {
   Pencil,
   Check,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { PrefillLoader } from "@/components/prefill-loader";
 import { AnySkillBadge } from "@/components/any-skill-badge";
+import { UserAvatar } from "@/components/user-avatar";
+import { generateAvatarDataUri, DEFAULT_AVATAR_STYLE, WORKER_AVATAR_SEED } from "@/lib/avatar";
+import type { UserAvatarPrefs } from "@/lib/user-avatar";
 import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
+
+const NO_AVATAR: UserAvatarPrefs = { avatarType: null, avatarStyle: null, avatarSeed: null, avatarImageUrl: null };
 
 interface ChatMessage {
   role: "user" | "worker" | "assistant";
@@ -203,6 +209,35 @@ export function TeammatesChat({
   const [threadTitle, setThreadTitle] = useState<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
+
+  // For the small pfp next to each "You" message row — fetched here
+  // rather than threaded as a prop, since this component is instantiated
+  // from three separate trees (teammates-workspace.tsx,
+  // teammates-panel-content.tsx, enable-worker-modal.tsx) with no single
+  // server-component ancestor to fetch it once and pass down.
+  const [userAvatar, setUserAvatar] = useState<UserAvatarPrefs>(NO_AVATAR);
+  const [identityFallback, setIdentityFallback] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/user/avatar")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setUserAvatar(data.avatar ?? NO_AVATAR);
+        setIdentityFallback(typeof data.identityFallback === "string" ? data.identityFallback : "");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme !== "light";
+  const workerAvatarUri = useMemo(
+    () => generateAvatarDataUri(DEFAULT_AVATAR_STYLE, WORKER_AVATAR_SEED, { isDark, size: 32, transparentBackground: true }),
+    [isDark]
+  );
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -439,7 +474,21 @@ export function TeammatesChat({
                   }`}
                 >
                 <div className={`flex items-center gap-1.5 px-1 font-medium text-zinc-500 dark:text-zinc-400 ${labelSize}`}>
-                  {isUser ? <span>You</span> : <span>Worker</span>}
+                  {!isUser && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={workerAvatarUri} alt="" className="w-4 h-4 shrink-0 opacity-90" />
+                  )}
+                  <span>{isUser ? "You" : "Worker"}</span>
+                  {isUser && (
+                    <UserAvatar
+                      avatar={userAvatar}
+                      identityFallback={identityFallback}
+                      size={16}
+                      className="opacity-90"
+                      transparentBackground
+                      fallback={<span className="w-4 h-4 rounded-full bg-zinc-300 dark:bg-zinc-700 shrink-0" />}
+                    />
+                  )}
                 </div>
                 <div
                   className={`${bubbleMaxWidth} rounded-2xl ${bubblePadding} ${textSize} transition-colors ${

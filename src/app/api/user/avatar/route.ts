@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { isAvatarStyleId } from "@/lib/avatar";
-import { setDicebearAvatar, setUploadedAvatar, clearUserAvatar } from "@/lib/user-avatar";
+import { getUserAvatar, setDicebearAvatar, setUploadedAvatar, clearUserAvatar } from "@/lib/user-avatar";
 
 export const runtime = "nodejs";
 
@@ -10,6 +10,27 @@ export const runtime = "nodejs";
 // the users row. ~350KB decoded, comfortably above what a resized-to-256px
 // JPEG needs.
 const MAX_DATA_URI_LENGTH = 500_000;
+
+/**
+ * For client components that need the current user's avatar but aren't
+ * reachable from a server component's own props — e.g. TeammatesChat,
+ * instantiated from three different trees (teammates-workspace.tsx,
+ * teammates-panel-content.tsx, enable-worker-modal.tsx). One fetch here
+ * beats threading the same avatar prop through three separate parents.
+ */
+export async function GET() {
+  try {
+    const session = await getSession();
+    if (!session?.whopUserId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const avatar = await getUserAvatar(session.whopUserId);
+    return NextResponse.json({ avatar, identityFallback: session.email || session.whopUserId });
+  } catch (err) {
+    console.error("[user/avatar GET]", err);
+    return NextResponse.json({ error: "Failed to load avatar." }, { status: 500 });
+  }
+}
 
 /** Body: either { type: "dicebear", style, seed } or { type: "upload", dataUri }. */
 export async function POST(request: Request) {

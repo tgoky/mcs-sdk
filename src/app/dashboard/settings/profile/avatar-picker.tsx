@@ -5,15 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Upload, Sparkles, Check, Loader2, ChevronLeft } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
-import {
-  AVATAR_STYLES,
-  AVATAR_STYLE_IDS,
-  DEFAULT_AVATAR_STYLE,
-  seedsForStyle,
-  defaultSeedForIdentifier,
-  generateAvatarDataUri,
-  type AvatarStyleId,
-} from "@/lib/avatar";
+import { DEFAULT_AVATAR_STYLE, seedsForStyle, defaultSeedForIdentifier, generateAvatarDataUri } from "@/lib/avatar";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
 
 const GRID_SEEDS = seedsForStyle(25);
@@ -85,12 +77,10 @@ export function AvatarPicker({
   // opening "Choose an avatar" for the first time shows that exact seed
   // pre-selected with a checkmark, not a blank grid that contradicts
   // what their avatar already looks like on every other page.
-  const defaultCategory = initialAvatar.avatarStyle ?? DEFAULT_AVATAR_STYLE;
   const defaultSeed = initialAvatar.avatarType === "dicebear" ? initialAvatar.avatarSeed : defaultSeedForIdentifier(identityFallback);
 
   const [avatar, setAvatar] = useState(initialAvatar);
   const [step, setStep] = useState<Step>("collapsed");
-  const [category, setCategory] = useState<AvatarStyleId>(defaultCategory);
   const [pendingSeed, setPendingSeed] = useState<string | null>(defaultSeed);
   const [pendingUpload, setPendingUpload] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -99,14 +89,14 @@ export function AvatarPicker({
   const initials = displayName.slice(0, 2).toUpperCase();
 
   const gridUris = useMemo(
-    () => GRID_SEEDS.map((seed) => ({ seed, uri: generateAvatarDataUri(category, seed, { isDark, size: 40 }) })),
-    [category, isDark]
+    () => GRID_SEEDS.map((seed) => ({ seed, uri: generateAvatarDataUri(DEFAULT_AVATAR_STYLE, seed, { isDark, size: 40 }) })),
+    [isDark]
   );
 
   const previewAvatar: UserAvatarPrefs = pendingUpload
     ? { avatarType: "upload", avatarImageUrl: pendingUpload, avatarStyle: null, avatarSeed: null }
     : pendingSeed
-    ? { avatarType: "dicebear", avatarStyle: category, avatarSeed: pendingSeed, avatarImageUrl: null }
+    ? { avatarType: "dicebear", avatarStyle: DEFAULT_AVATAR_STYLE, avatarSeed: pendingSeed, avatarImageUrl: null }
     : avatar;
 
   const dirty = step === "upload" ? Boolean(pendingUpload) : step === "avatar" ? Boolean(pendingSeed) : false;
@@ -116,7 +106,6 @@ export function AvatarPicker({
     setError(null);
     setPendingUpload(null);
     setPendingSeed(avatar.avatarType === "dicebear" ? avatar.avatarSeed : defaultSeedForIdentifier(identityFallback));
-    setCategory(avatar.avatarStyle ?? DEFAULT_AVATAR_STYLE);
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -145,7 +134,7 @@ export function AvatarPicker({
     try {
       const body = pendingUpload
         ? { type: "upload", dataUri: pendingUpload }
-        : { type: "dicebear", style: category, seed: pendingSeed };
+        : { type: "dicebear", style: DEFAULT_AVATAR_STYLE, seed: pendingSeed };
       const res = await fetch("/api/user/avatar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -178,7 +167,6 @@ export function AvatarPicker({
       }
       setAvatar({ avatarType: null, avatarStyle: null, avatarSeed: null, avatarImageUrl: null });
       setPendingSeed(defaultSeedForIdentifier(identityFallback));
-      setCategory(DEFAULT_AVATAR_STYLE);
       setPendingUpload(null);
       router.refresh();
     } finally {
@@ -280,26 +268,6 @@ export function AvatarPicker({
           {step === "avatar" && (
             <div className="space-y-2.5">
               <BackRow onBack={() => setStep("choice")} />
-
-              <div className="flex items-center gap-1 rounded-md bg-zinc-200/60 dark:bg-zinc-800/60 p-0.5 w-fit">
-                {AVATAR_STYLE_IDS.map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => {
-                      setCategory(id);
-                      setPendingSeed(null);
-                    }}
-                    className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
-                      category === id
-                        ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs"
-                        : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
-                    }`}
-                  >
-                    {AVATAR_STYLES[id].label}
-                  </button>
-                ))}
-              </div>
 
               {/* Fixed-size swatches, not grid columns stretched to fill
                   whatever width the panel happens to have — that's what
