@@ -361,19 +361,20 @@
 .dark .surface-glass-1,
 .dark .surface-glass-2,
 .dark .surface-glass-3 {
-  /* The reference look (action-menu dropdown) isn't just blur+shadow —
-     it's backdrop-blur picking up whatever bright/colorful content sits
-     behind the panel and smearing it into a soft bloom. That's incidental
-     (depends entirely on what happens to be behind it), so bake an
-     equivalent ambient glow directly into the surface instead — every
-     dark-mode card gets the same atmosphere regardless of what's behind
-     it. Soft lavender radial, matching the theme's existing accent
-     (--success: #c5b7ea in dark mode), low-opacity, off-center high like
-     a light source rather than a flat tint. */
+  /* Corrected 2026-09-10: the reference (action-menu dropdown) reads as
+     "seamless" precisely because it has almost no visible border and a
+     single soft, wide shadow — not a crisp edge plus a heavy multi-layer
+     shadow stack. The earlier version of this rule used shadow-elevation-3
+     (two stacked shadows) plus the inset top highlight plus the default
+     10%-opacity border, which is what made cards read as "boxy"/heavy
+     instead of blending into the page. This drops to a near-invisible
+     border, one soft ambient shadow, and no inset highlight — the glow
+     and blur do the work instead of an edge. */
   background: radial-gradient(ellipse 75% 55% at 50% 30%, rgba(197, 183, 234, 0.10), transparent 70%), var(--surface-glass);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
-  box-shadow: var(--shadow-elevation-3), var(--shadow-inset-highlight);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
 }
 
 /* Flat solid surfaces (buttons) that still need real depth without a

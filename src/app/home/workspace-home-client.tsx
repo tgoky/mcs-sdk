@@ -151,23 +151,6 @@ function WorkspaceCard({
   );
 }
 
-function CreateWorkspaceCard() {
-  return (
-    <Link
-      href="/home/new"
-      className="hover-lift press-settle group surface-glass-3 flex h-full flex-col items-center justify-center gap-2.5 rounded-2xl p-6 text-center hover:border-zinc-400 dark:hover:border-zinc-700 min-h-[220px]"
-      style={{ borderStyle: "dashed" }}
-    >
-      <div className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500 group-hover:border-amber-400 group-hover:text-amber-500 transition-colors">
-        <Plus size={16} />
-      </div>
-      <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors">
-        Create workspace
-      </span>
-    </Link>
-  );
-}
-
 function WorkspaceRow({
   workspace,
   packageIds,
@@ -344,7 +327,6 @@ export function WorkspaceHomeClient({
               onSwitch={(id) => setSwitchingId(id)}
             />
           ))}
-          <CreateWorkspaceCard />
         </div>
       ) : (
         <div className="surface-glass-3 rounded-2xl overflow-hidden">
