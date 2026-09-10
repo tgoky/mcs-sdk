@@ -15,9 +15,16 @@
  *   </div>
  */
 export function GlowBacklight({
-  className = "absolute top-4 left-1/2 -translate-x-1/2 h-16 w-3/4",
+  className = "absolute inset-x-[15%] top-[12%] h-1/5",
 }: {
   className?: string;
 }) {
-  return <div aria-hidden="true" className={`${className} rounded-full bg-white/80 dark:bg-white/70 blur-2xl pointer-events-none`} />;
+  // Inset generously from every edge, as a percentage of the card's own
+  // size rather than fixed pixels — blur-lg's ~16px visual spread has to
+  // stay inside that margin regardless of how big or small the card
+  // actually is, or the glow shows up as a raw shape outside the card's
+  // border instead of a contained interior bloom (the bug this replaces:
+  // a fixed 40px+ blur positioned only 16px from the edge, which bled
+  // straight past the card's bottom edge onto the page).
+  return <div aria-hidden="true" className={`${className} rounded-full bg-white/80 dark:bg-white/70 blur-lg pointer-events-none`} />;
 }
