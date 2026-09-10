@@ -23,7 +23,7 @@ export function PortfolioOutcomesSection({ accounts }: { accounts: PortfolioAcco
 
   if (flagged.length === 0) {
     return (
-      <div className="surface-glass-1 rounded-xl p-4 flex items-center gap-3">
+      <div className="p-4 flex items-center gap-3">
         <CircleCheck className="w-5 h-5 shrink-0" style={{ color: "var(--success)" }} />
         <div>
           <h2 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
@@ -38,7 +38,7 @@ export function PortfolioOutcomesSection({ accounts }: { accounts: PortfolioAcco
   }
 
   return (
-    <div className="surface-glass-1 rounded-xl p-4 space-y-3">
+    <div className="p-4 space-y-3">
       <div className="flex items-center gap-3">
         <TriangleAlert className="w-5 h-5 shrink-0" style={{ color: "var(--error)" }} />
         <div>

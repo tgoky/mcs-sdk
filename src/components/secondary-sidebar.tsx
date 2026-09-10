@@ -35,16 +35,22 @@ export function SecondarySidebar({ work, settings }: SecondarySidebarProps) {
 
   // Library is intentionally a single-page marketplace. Teammates is
   // intentionally a self-contained two-pane layout of its own (thread
-  // rail + chat, see teammates-workspace.tsx) — the generic Work sidebar
-  // (Home/Reports/Queue/Executions/Capabilities) was showing up to its
-  // left for no reason, wasting width and duplicating the "list of
-  // things" role its own thread rail already plays. Hiding this column
-  // for both routes lets their own content use the full width instead.
+  // rail + chat, see teammates-workspace.tsx). Analytics is one
+  // self-contained overview page with nothing to navigate between within
+  // it (its own AnalyticsSidebar went unused for exactly that reason —
+  // see that file's header). The generic Work sidebar (Home/Reports/
+  // Queue/Executions/Capabilities) was showing up to the left of all
+  // three for no reason, wasting width and duplicating a "list of
+  // things" role each page either doesn't need or already has its own
+  // version of. Hiding this column for all three lets their own content
+  // use the full width instead.
   if (
     pathname === "/dashboard/library" ||
     pathname.startsWith("/dashboard/library/") ||
     pathname === "/dashboard/teammates" ||
-    pathname.startsWith("/dashboard/teammates/")
+    pathname.startsWith("/dashboard/teammates/") ||
+    pathname === "/dashboard/analytics" ||
+    pathname.startsWith("/dashboard/analytics/")
   ) {
     return null;
   }

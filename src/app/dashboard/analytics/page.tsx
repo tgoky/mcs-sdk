@@ -10,6 +10,14 @@ import { getPortfolioOutcomes } from "@/features/reports/server/portfolio-outcom
 import { PortfolioOutcomesSection } from "@/components/analytics/portfolio-outcomes-section";
 import { getCategorySignals, type CategoryFlaggedItem } from "@/features/reports/server/category-signals";
 import { CategorySignalsSection } from "@/components/analytics/category-signals-section";
+import { SkillComparisonSection, type SkillStat } from "@/components/analytics/skill-comparison-section";
+
+// Fix: this used to be a plain reputation-manager-or-not ternary, which
+// meant every Cold Open skill's own comparison row silently mislabeled
+// itself "ST" (Showtime) — the same "Cold Open falls through to the
+// wrong product" bug already found and fixed in several other files
+// this session.
+const PRODUCT_LABEL: Record<string, string> = { showtime: "ST", "reputation-manager": "RM", "cold-open": "CO" };
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -30,10 +38,6 @@ const LOOKBACK_DAYS = 90;
  * server components included. */
 function daysAgo(days: number): Date {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-}
-
-function fmtCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
 }
 
 function pct(n: number, d: number): number | null {
@@ -100,21 +104,15 @@ function Section({
   );
 }
 
+// Plain content block, no card fill/border/shadow — per direct request,
+// every section on this page sits transparently on the page background
+// instead of boxed off.
 function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`surface-glass-1 rounded-xl ${className}`}>{children}</div>;
+  return <div className={className}>{children}</div>;
 }
 
 function EmptyState({ children }: { children: ReactNode }) {
   return <p className="text-sm text-zinc-500 dark:text-zinc-500 px-4 py-7 text-center leading-relaxed">{children}</p>;
-}
-
-function Bar({ value, max, className }: { value: number; max: number; className: string }) {
-  const pctVal = max > 0 ? Math.max((value / max) * 100, value > 0 ? 2 : 0) : 0;
-  return (
-    <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-900 overflow-hidden">
-      <div className={`h-full rounded-full ${className}`} style={{ width: `${pctVal}%` }} />
-    </div>
-  );
 }
 
 /** Daily stacked-volume chart for the last N days, plain HTML/CSS (no SVG)
@@ -283,7 +281,21 @@ export default async function AnalyticsPage() {
     }
   }
 
-  const maxSkillRuns = Math.max(1, ...Object.values(perSkill).map((s) => s.total));
+  const skillStats: SkillStat[] = WORKER_IDS.map((skill) => {
+    const s = perSkill[skill];
+    const resolved = s.success + s.terminalFailure;
+    return {
+      id: skill,
+      name: WORKER_REGISTRY[skill].name,
+      productLabel: PRODUCT_LABEL[WORKER_REGISTRY[skill].productId] ?? "?",
+      total: s.total,
+      resolved,
+      rate: pct(s.success, resolved),
+      volumeSharePct: pct(s.total, totalRuns) ?? 0,
+      avgCostCents: s.total > 0 ? s.costCents / s.total : 0,
+      avgDurationMs: s.durationsMs.length > 0 ? s.durationsMs.reduce((a, b) => a + b, 0) / s.durationsMs.length : null,
+    };
+  });
 
   const dailyActivity = Array.from(dayBuckets.entries()).map(([key, v]) => ({
     key,
@@ -402,55 +414,12 @@ export default async function AnalyticsPage() {
           </Card>
         </Section>
 
-        {/* Cross-skill comparison — every worker across both products, busiest first */}
-        <Section title="Skill comparison" caption={`Last ${TREND_DAYS} days — every skill across every installed product, busiest first`}>
-          <Card>
-            <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-x-4 px-4 py-2 text-[10.5px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600 border-b border-zinc-200 dark:border-zinc-900">
-              <span>Skill</span>
-              <span>Volume share</span>
-              <span>Success rate</span>
-              <span className="text-right">Avg cost</span>
-              <span className="text-right">Avg duration</span>
-            </div>
-            <div className="divide-y divide-zinc-200 dark:divide-zinc-900">
-              {[...WORKER_IDS]
-                .sort((a, b) => perSkill[b].total - perSkill[a].total)
-                .map((skill) => {
-                  const s = perSkill[skill];
-                  const resolved = s.success + s.terminalFailure;
-                  const rate = pct(s.success, resolved);
-                  const volumeSharePct = pct(s.total, totalRuns) ?? 0;
-                  const avgCost = s.total > 0 ? s.costCents / s.total : 0;
-                  const avgDurationMs = s.durationsMs.length > 0 ? s.durationsMs.reduce((a, b) => a + b, 0) / s.durationsMs.length : null;
-                  return (
-                    <div key={skill} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-x-4 px-4 py-3 items-center">
-                      <span className="min-w-0 flex items-baseline gap-1.5">
-                        <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">{WORKER_REGISTRY[skill].name}</span>
-                        <span className="text-[9.5px] font-mono uppercase text-zinc-400 dark:text-zinc-600 shrink-0">
-                          {WORKER_REGISTRY[skill].productId === "reputation-manager" ? "RM" : "ST"}
-                        </span>
-                      </span>
-                      <div className="space-y-1">
-                        <Bar value={s.total} max={maxSkillRuns} className="bg-ink" />
-                        <span className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600">{s.total} run{s.total !== 1 ? "s" : ""} ({volumeSharePct}%)</span>
-                      </div>
-                      <div className="space-y-1">
-                        {resolved > 0 ? (
-                          <>
-                            <Bar value={s.success} max={resolved} className={s.terminalFailure > 0 ? "bg-rose-500" : "bg-emerald-500"} />
-                            <span className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600">{rate}% of {resolved}</span>
-                          </>
-                        ) : (
-                          <span className="text-[10.5px] font-mono text-zinc-300 dark:text-zinc-700">no resolved runs</span>
-                        )}
-                      </div>
-                      <span className="text-xs font-mono text-zinc-500 dark:text-zinc-500 text-right">{s.total > 0 ? fmtCents(avgCost) : "—"}</span>
-                      <span className="text-xs font-mono text-zinc-500 dark:text-zinc-500 text-right">{avgDurationMs !== null ? fmtDuration(avgDurationMs) : "—"}</span>
-                    </div>
-                  );
-                })}
-            </div>
-          </Card>
+        {/* Cross-skill comparison — the user picks which two skills to
+            actually compare, instead of every worker across every
+            installed product rendering at once (real value once there
+            are more than a handful, mostly just a long scroll before). */}
+        <Section title="Skill comparison" caption={`Last ${TREND_DAYS} days — pick two skills to compare side by side`}>
+          <SkillComparisonSection skills={skillStats} />
         </Section>
 
         {/* Per-skill deep dives (show-rate calibration, win-back funnel,
