@@ -1,0 +1,195 @@
+From 8f54b5589376982baa15f7674371f143f32502b0 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 10 Sep 2026 14:57:40 +0000
+Subject: [PATCH] Fix new-client product cards: dead click toggle,
+ auto-selected defaults, off-brand color, oversized layout
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The card selection UI on /home/new had a real interaction bug: each
+product card was a <label onClick=...> wrapping a checkbox with a
+no-op onChange. Clicking a label natively forwards a click to its
+wrapped checkbox, which bubbles back up through the label and fires
+that onClick a second time — two toggles per click, canceling out, so
+selecting/deselecting a product silently did nothing. Fix: toggle
+logic now lives only in the checkbox's onChange; clicking anywhere on
+the card still works via native label behavior, just without the
+duplicate handler firing it twice.
+
+Also:
+- No products pre-selected by default — a new client's products are a
+  real choice, not something to opt out of. createWorkspace already
+  has a clean "select at least one" validation error for an empty
+  selection, so this is a fully supported state, not a dead end.
+- Swapped the selected-state/focus teal for amber, matching the accent
+  used everywhere else in the app (toggle switches, selected states,
+  focus rings).
+- Tightened card padding/icon/text sizing and switched the grid from a
+  fixed grid-cols-1 sm:grid-cols-2 (wraps awkwardly once there's an
+  odd number of products) to auto-fit/minmax so cards stay equal-width
+  in one row for however many products exist.
+- Replaced the hardcoded reputation-manager/else-showtime icon lookup
+  with product.image straight off WORKSPACE_PRODUCTS — the old
+  fallback would have silently shown Cold Open with Showtime's logo.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FPsSvSBeDRnxgyKVkAJLkR
+---
+ src/app/home/new/page.tsx | 78 +++++++++++++++++++--------------------
+ 1 file changed, 39 insertions(+), 39 deletions(-)
+
+diff --git a/src/app/home/new/page.tsx b/src/app/home/new/page.tsx
+index 438c568..b6d2d9b 100644
+--- a/src/app/home/new/page.tsx
++++ b/src/app/home/new/page.tsx
+@@ -23,25 +23,6 @@ function SegmentedBarLoader({ count = 8 }: { count?: number }) {
+   );
+ }
+ 
+-function PackageIcon({ productId }: { productId: string }) {
+-  if (productId === "reputation-manager") {
+-    return (
+-      <img
+-        src="/images/repm.png"
+-        alt="Reputation Manager"
+-        className="h-10 w-10 shrink-0 object-contain select-none transition-transform duration-200 group-hover:scale-105"
+-      />
+-    );
+-  }
+-  return (
+-    <img
+-      src="/images/showtime.png"
+-      alt="Showtime"
+-      className="h-10 w-10 shrink-0 object-contain select-none transition-transform duration-200 group-hover:scale-105"
+-    />
+-  );
+-}
+-
+ export default function NewWorkspacePage({
+   searchParams,
+ }: {
+@@ -50,11 +31,11 @@ export default function NewWorkspacePage({
+   const resolvedParams = use(searchParams);
+   const error = resolvedParams?.error;
+ 
+-  const [selectedPackages, setSelectedPackages] = useState<string[]>(() =>
+-    WORKSPACE_PRODUCTS
+-      .filter((p) => p.status === "available")
+-      .map((p) => p.id)
+-  );
++  // Nothing pre-selected — a new client's products are a real choice to
++  // make, not a default to opt out of. createWorkspace already validates
++  // "at least one" with a clear inline error, so an empty starting state
++  // is a fully supported, well-handled case, not a dead end.
++  const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
+   const [isSubmitting, setIsSubmitting] = useState(false);
+ 
+   const togglePackage = (id: string, available: boolean) => {
+@@ -116,7 +97,7 @@ export default function NewWorkspacePage({
+               disabled={isSubmitting}
+               maxLength={80}
+               placeholder="e.g. Acme Roofing Co."
+-              className="w-full rounded-xl border border-zinc-200 bg-white/80 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:placeholder:text-zinc-600 transition-all duration-200"
++              className="w-full rounded-xl border border-zinc-200 bg-white/80 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:placeholder:text-zinc-600 transition-all duration-200"
+             />
+             <p className="text-xs text-zinc-400 dark:text-zinc-500">
+               The person or business you&apos;re running this for.
+@@ -128,7 +109,12 @@ export default function NewWorkspacePage({
+               Choose what to install
+             </label>
+ 
+-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
++            {/* auto-fit + minmax gives every card the same width in one
++                row (however many products there are today), wrapping only
++                once the viewport is too narrow to fit them — "uniform
++                horizontally" without hardcoding a column count that would
++                look wrong the next time a product is added or removed. */}
++            <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+               {WORKSPACE_PRODUCTS.map((product) => {
+                 const installable = product.status === "available";
+                 const isSelected = selectedPackages.includes(product.id);
+@@ -136,53 +122,67 @@ export default function NewWorkspacePage({
+                 return (
+                   <label
+                     key={product.id}
+-                    onClick={() => togglePackage(product.id, installable)}
+-                    className={`group relative flex flex-col justify-between rounded-2xl border p-4 transition-all duration-200 select-none ${
++                    className={`group relative flex flex-col rounded-xl border p-3 transition-all duration-200 select-none ${
+                       installable
+                         ? "cursor-pointer active:scale-[0.98]"
+                         : "cursor-not-allowed opacity-60"
+                     } ${
+                       installable && isSelected
+-                        ? "border-teal-500/80 bg-teal-50/50 dark:border-teal-400/80 dark:bg-teal-950/30 shadow-xs"
++                        ? "border-amber-500/70 bg-amber-500/10 dark:border-amber-400/70 dark:bg-amber-500/10 shadow-xs"
+                         : "border-zinc-200/90 bg-white/80 hover:border-zinc-300 dark:border-zinc-800/90 dark:bg-zinc-900/60 dark:hover:border-zinc-700"
+                     }`}
+                   >
++                    {/* No onClick here — the checkbox is the single
++                        source of truth. A label wrapping a checkbox
++                        already natively forwards a click anywhere in the
++                        label to the checkbox (that's the whole point of
++                        pairing them), so an onClick here as well fired
++                        togglePackage twice per click — once for the
++                        label's own click, once more when that native
++                        forwarded click bubbled back up through the label.
++                        The two toggles canceled out, so selecting/
++                        deselecting a card silently did nothing. */}
+                     <input
+                       type="checkbox"
+                       name="packageIds"
+                       value={product.id}
+                       checked={isSelected}
+                       disabled={!installable || isSubmitting}
+-                      onChange={() => {}}
++                      onChange={() => togglePackage(product.id, installable)}
+                       className="sr-only"
+                     />
+-                    <div className="flex items-center justify-between gap-2 mb-3">
+-                      <PackageIcon productId={product.id} />
++                    <div className="flex items-center justify-between gap-2 mb-2">
++                      {/* eslint-disable-next-line @next/next/no-img-element */}
++                      <img
++                        src={product.image}
++                        alt={product.name}
++                        className="h-7 w-7 shrink-0 object-contain select-none transition-transform duration-200 group-hover:scale-105"
++                      />
+                       {installable ? (
+                         <div
+-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all duration-200 ${
++                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-all duration-200 ${
+                             isSelected
+-                              ? "border-teal-500 bg-teal-500 text-white scale-100 dark:border-teal-400 dark:bg-teal-400 dark:text-zinc-950"
++                              ? "border-amber-500 bg-amber-500 text-white scale-100 dark:border-amber-400 dark:bg-amber-400 dark:text-zinc-950"
+                               : "border-zinc-300 dark:border-zinc-700 bg-transparent scale-95"
+                           }`}
+                         >
+                           <Check
+-                            className={`h-3 w-3 transition-transform duration-200 ${
++                            className={`h-2.5 w-2.5 transition-transform duration-200 ${
+                               isSelected ? "scale-100" : "scale-0"
+                             }`}
+                           />
+                         </div>
+                       ) : (
+-                        <span className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 font-mono text-[10px] font-bold text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500">
++                        <span className="rounded-full border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500">
+                           Coming soon
+                         </span>
+                       )}
+                     </div>
+-                    <div className="space-y-1">
+-                      <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
++                    <div className="space-y-0.5">
++                      <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                         {product.name}
+                       </h3>
+-                      <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
++                      <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400 line-clamp-2">
+                         {product.description}
+                       </p>
+                     </div>
+-- 
+2.43.0
+

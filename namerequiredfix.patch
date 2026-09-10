@@ -1,0 +1,70 @@
+From b1be197123c7d7a1632c5a84c509ecb9ea92a091 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 10 Sep 2026 15:17:50 +0000
+Subject: [PATCH] Fix the real cause of "Workspace name is required" on a
+ filled-in form
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Confirmed from a live production network trace: the POST to
+/api/workspaces had content-length: 0 — an entirely empty body,
+regardless of what was typed or selected. A disabled form control is
+excluded from form submission per the HTML spec, and both the name
+input and every product checkbox were wired to disabled={... isSubmitting}.
+Clicking submit synchronously flips isSubmitting to true, and that
+re-render disables every field fast enough to beat the browser's own
+default form-submission action — which then has nothing left to
+serialize. The server-side "Workspace name is required" was accurate:
+the name genuinely never left the browser.
+
+Fix: stop disabling the name input and the product checkboxes on
+submit — only the submit button needs disabling, to block a second
+click while the request is in flight. The form wrapper's existing
+opacity-75 pointer-events-none already covers the visual/interaction-
+blocking "busy" treatment without touching which fields get submitted.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FPsSvSBeDRnxgyKVkAJLkR
+---
+ src/app/home/new/page.tsx | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/src/app/home/new/page.tsx b/src/app/home/new/page.tsx
+index b6d2d9b..0d83a5e 100644
+--- a/src/app/home/new/page.tsx
++++ b/src/app/home/new/page.tsx
+@@ -94,7 +94,17 @@ export default function NewWorkspacePage({
+               name="name"
+               type="text"
+               required
+-              disabled={isSubmitting}
++              // Not disabled on submit — confirmed live (production
++              // network trace: the POST to /api/workspaces had
++              // content-length: 0, an entirely empty body) that
++              // React's setIsSubmitting(true) re-render disables every
++              // `disabled={... isSubmitting}` field fast enough to beat
++              // the browser's own default form-submission action, which
++              // then serializes zero fields — a disabled form control is
++              // excluded from submission entirely, per the HTML spec.
++              // The visible "disabled" treatment during submit comes
++              // from the form wrapper's opacity-75 pointer-events-none
++              // instead, which doesn't touch what actually gets sent.
+               maxLength={80}
+               placeholder="e.g. Acme Roofing Co."
+               className="w-full rounded-xl border border-zinc-200 bg-white/80 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:placeholder:text-zinc-600 transition-all duration-200"
+@@ -147,7 +157,10 @@ export default function NewWorkspacePage({
+                       name="packageIds"
+                       value={product.id}
+                       checked={isSelected}
+-                      disabled={!installable || isSubmitting}
++                      // Not gated on isSubmitting either — see the name
++                      // input's comment above; same disabled-excludes-
++                      // the-field-from-the-POST mechanism confirmed live.
++                      disabled={!installable}
+                       onChange={() => togglePackage(product.id, installable)}
+                       className="sr-only"
+                     />
+-- 
+2.43.0
+

@@ -1,0 +1,511 @@
+From c8c3493cf6d51a17342e782f5ea4cb40a9eb0638 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 10 Sep 2026 11:29:21 +0000
+Subject: [PATCH 1/4] =?UTF-8?q?Strengthen=20GlowBacklight=20=E2=80=94=20th?=
+ =?UTF-8?q?e=20Library=20page=20has=20nothing=20bright=20behind=20cards?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Verified the Library page's actual background is a plain dot-grid, no
+color or brightness behind the cards at all — unlike the dropdown, which
+floats over whatever busy page content it's opened from. The original
+small corner rectangle (40x192px) wasn't generous enough to produce a
+comparable bloom against that plain a backdrop. Now a larger, centered,
+more diffuse top light source instead, closer to matching the reference
+regardless of what page a glass card sits on.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013tmyB4bNsymQY5xKRXZJD7
+---
+ src/components/ui/glow-backlight.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/components/ui/glow-backlight.tsx b/src/components/ui/glow-backlight.tsx
+index d94baf1..58eac54 100644
+--- a/src/components/ui/glow-backlight.tsx
++++ b/src/components/ui/glow-backlight.tsx
+@@ -15,9 +15,9 @@
+  *   </div>
+  */
+ export function GlowBacklight({
+-  className = "absolute bottom-4 right-6 h-10 w-48",
++  className = "absolute top-4 left-1/2 -translate-x-1/2 h-16 w-3/4",
+ }: {
+   className?: string;
+ }) {
+-  return <div aria-hidden="true" className={`${className} rounded-xl bg-white/70 dark:bg-white/60 blur-xl pointer-events-none`} />;
++  return <div aria-hidden="true" className={`${className} rounded-full bg-white/80 dark:bg-white/70 blur-2xl pointer-events-none`} />;
+ }
+-- 
+2.43.0
+
+
+From f92ffbb518710ce49bb05dcf5730ea2185122d61 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 10 Sep 2026 11:34:31 +0000
+Subject: [PATCH 2/4] Fix GlowBacklight bleeding outside the card's edges
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Real bug, not a style call: blur-2xl spreads visually far past an
+element's own box (~40px+ kernel), and the previous position (top-4 /
+bottom-4, i.e. only 16px from the card's edge) put nowhere near enough
+margin between the glow and the card boundary — the blurred shape spilled
+straight past the rounded corner onto the page behind it, visible as a
+raw white blob instead of a contained interior bloom (see the "Showtime"
+card screenshot).
+
+Fix: percentage-based inset (15% from the sides, 12% from the top,
+sized to a 1/5-height band) so the margin scales with the card instead
+of a fixed pixel gap that only worked for one specific card size, and
+blur-lg instead of blur-2xl to shrink the visual spread to something
+that actually fits inside that margin.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013tmyB4bNsymQY5xKRXZJD7
+---
+ src/components/ui/glow-backlight.tsx | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/components/ui/glow-backlight.tsx b/src/components/ui/glow-backlight.tsx
+index 58eac54..2b0c760 100644
+--- a/src/components/ui/glow-backlight.tsx
++++ b/src/components/ui/glow-backlight.tsx
+@@ -15,9 +15,16 @@
+  *   </div>
+  */
+ export function GlowBacklight({
+-  className = "absolute top-4 left-1/2 -translate-x-1/2 h-16 w-3/4",
++  className = "absolute inset-x-[15%] top-[12%] h-1/5",
+ }: {
+   className?: string;
+ }) {
+-  return <div aria-hidden="true" className={`${className} rounded-full bg-white/80 dark:bg-white/70 blur-2xl pointer-events-none`} />;
++  // Inset generously from every edge, as a percentage of the card's own
++  // size rather than fixed pixels — blur-lg's ~16px visual spread has to
++  // stay inside that margin regardless of how big or small the card
++  // actually is, or the glow shows up as a raw shape outside the card's
++  // border instead of a contained interior bloom (the bug this replaces:
++  // a fixed 40px+ blur positioned only 16px from the edge, which bled
++  // straight past the card's bottom edge onto the page).
++  return <div aria-hidden="true" className={`${className} rounded-full bg-white/80 dark:bg-white/70 blur-lg pointer-events-none`} />;
+ }
+-- 
+2.43.0
+
+
+From c8f1db9250fc1b365f243c49b992320234c0c4be Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 10 Sep 2026 12:08:28 +0000
+Subject: [PATCH 3/4] Replace per-card GlowBacklight hack with a page-level
+ ambient wash
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The per-card light source was a hack repeated per component and exactly
+what caused the edge-bleed bug — margins have to be manually tuned per
+card size, and it's easy to get wrong. Better fix: give the page itself
+real material to diffuse, once, so every glass card on it benefits
+automatically via its own backdrop-filter — same principle as the home
+page's photo background, but built entirely from CSS radial-gradients
+using colors already in the theme (the lavender accent, the existing
+ring/blue accent) instead of a new image asset.
+
+Adds .bg-ambient-glow (dark mode only) and wires it into the Library
+page background alongside the existing dot-grid. Removes GlowBacklight
+and its one usage in product-card.tsx entirely — no longer needed.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013tmyB4bNsymQY5xKRXZJD7
+---
+ src/app/globals.css                           | 16 ++++++++++
+ .../library/library-marketplace-client.tsx    |  1 +
+ src/components/library/product-card.tsx       |  6 +---
+ src/components/ui/glow-backlight.tsx          | 30 -------------------
+ 4 files changed, 18 insertions(+), 35 deletions(-)
+ delete mode 100644 src/components/ui/glow-backlight.tsx
+
+diff --git a/src/app/globals.css b/src/app/globals.css
+index 444a4bf..715368f 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -299,6 +299,22 @@
+   background-image: radial-gradient(#3f3f46 0.5px, transparent 0.5px);
+ }
+ 
++/* Page-level ambient wash — pure CSS, no image asset. Replaces the idea
++   of gluing a light source behind every individual glass card (a hack
++   repeated per component, and exactly what caused the edge-bleed bug in
++   GlowBacklight) with one soft, colorful layer behind the whole page:
++   every glass card's backdrop-filter picks up real material to diffuse
++   automatically, the same way the home page's photo background does it,
++   but built from theme colors already in use elsewhere (the lavender
++   accent) instead of a new binary asset. Dark mode only — light mode's
++   plain background already reads well against the lighter glass tiers. */
++.dark .bg-ambient-glow {
++  background:
++    radial-gradient(ellipse 55% 45% at 15% 10%, rgba(197, 183, 234, 0.16), transparent 60%),
++    radial-gradient(ellipse 50% 40% at 88% 25%, rgba(111, 168, 255, 0.12), transparent 60%),
++    radial-gradient(ellipse 55% 50% at 45% 95%, rgba(197, 183, 234, 0.12), transparent 60%);
++}
++
+ /* ────────────────────────────────────────────────────────────────────── */
+ /* ELEVATION SYSTEM                                                       */
+ /* Replaces the one-off "rounded-lg border border-zinc-200/70 dark:border-*/
+diff --git a/src/components/library/library-marketplace-client.tsx b/src/components/library/library-marketplace-client.tsx
+index 39174d8..20888f0 100644
+--- a/src/components/library/library-marketplace-client.tsx
++++ b/src/components/library/library-marketplace-client.tsx
+@@ -99,6 +99,7 @@ export function LibraryMarketplaceClient({
+ 
+   return (
+     <div className="relative min-h-screen w-full font-sans transition-colors duration-200 overflow-hidden pb-10">
++      <div className="pointer-events-none absolute inset-0 z-0 bg-ambient-glow" aria-hidden="true" />
+       <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
+ 
+       <div className="relative z-10 w-full space-y-6">
+diff --git a/src/components/library/product-card.tsx b/src/components/library/product-card.tsx
+index 581fa68..e9b6ed6 100644
+--- a/src/components/library/product-card.tsx
++++ b/src/components/library/product-card.tsx
+@@ -19,7 +19,6 @@ import { Download, Trash2, ArrowUpRight, Loader2 } from "lucide-react";
+ import { getWorkerDefinition, type WorkerId } from "@/lib/worker-registry";
+ import { HOME_COPY } from "@/lib/copy";
+ import { StatChip } from "@/components/library/stat-chip";
+-import { GlowBacklight } from "@/components/ui/glow-backlight";
+ import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+ import { RepSkillBadge } from "@/components/rep-skill-badge";
+ import type { RepSkillId } from "@/lib/rep-skill-manifest";
+@@ -73,9 +72,7 @@ export function ProductCard({
+   const skillNames = skillIds.map((id) => getWorkerDefinition(id).name).join(", ");
+ 
+   return (
+-    <div className="relative">
+-      <GlowBacklight />
+-      <div className="group relative z-10 flex flex-col justify-between rounded-2xl surface-glass-2 p-6 hover-lift hover:shadow-elevation-3 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
++    <div className="group relative flex flex-col justify-between rounded-2xl surface-glass-2 p-6 hover-lift hover:shadow-elevation-3 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
+       <Link href={`/dashboard/library/${productId}`} className="space-y-5 block">
+         <div className="flex items-start justify-between gap-4">
+           <div className="flex items-start gap-4 min-w-0">
+@@ -167,7 +164,6 @@ export function ProductCard({
+         </Link>
+       </div>
+       {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+-      </div>
+     </div>
+   );
+ }
+diff --git a/src/components/ui/glow-backlight.tsx b/src/components/ui/glow-backlight.tsx
+deleted file mode 100644
+index 2b0c760..0000000
+--- a/src/components/ui/glow-backlight.tsx
++++ /dev/null
+@@ -1,30 +0,0 @@
+-/**
+- * A bright, blurred shape meant to sit BEHIND a surface-glass-* element so
+- * that element's own backdrop-filter picks it up and diffuses it — real
+- * light passing through frosted glass, not a gradient painted on top of
+- * the blur (which is what the CSS-only .surface-glass-* glow does). Must
+- * be a sibling positioned behind the glass box, not its child: backdrop-
+- * filter samples what's behind an element's box, never its own content.
+- *
+- * Usage: wrap the glass card in a `relative` container, put this first
+- * (so it paints behind), then the card itself with `relative z-10`:
+- *
+- *   <div className="relative">
+- *     <GlowBacklight />
+- *     <div className="relative z-10 surface-glass-2 rounded-2xl ...">...</div>
+- *   </div>
+- */
+-export function GlowBacklight({
+-  className = "absolute inset-x-[15%] top-[12%] h-1/5",
+-}: {
+-  className?: string;
+-}) {
+-  // Inset generously from every edge, as a percentage of the card's own
+-  // size rather than fixed pixels — blur-lg's ~16px visual spread has to
+-  // stay inside that margin regardless of how big or small the card
+-  // actually is, or the glow shows up as a raw shape outside the card's
+-  // border instead of a contained interior bloom (the bug this replaces:
+-  // a fixed 40px+ blur positioned only 16px from the edge, which bled
+-  // straight past the card's bottom edge onto the page).
+-  return <div aria-hidden="true" className={`${className} rounded-full bg-white/80 dark:bg-white/70 blur-lg pointer-events-none`} />;
+-}
+-- 
+2.43.0
+
+
+From ddcae138afbb46355bf9fdcc3e23a4b8a8b423dc Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 10 Sep 2026 12:21:19 +0000
+Subject: [PATCH 4/4] Revert Library feature to its pre-elevation-system state
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Per direct request: the Library page and its cards (enable-worker-modal,
+library-marketplace-client, media-gallery, product-card,
+product-detail-client, worker-card) are restored exactly to their
+de39472 content — none of the elevation-system, glow, or glass styling
+experimentation from this session touches this feature anymore. Nothing
+outside these 6 files is affected; the rest of the app keeps the
+elevation system as-is.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013tmyB4bNsymQY5xKRXZJD7
+---
+ src/components/library/enable-worker-modal.tsx | 16 ++++++++--------
+ .../library/library-marketplace-client.tsx     |  1 -
+ src/components/library/media-gallery.tsx       |  6 +++---
+ src/components/library/product-card.tsx        |  4 ++--
+ .../library/product-detail-client.tsx          | 18 +++++++++---------
+ src/components/library/worker-card.tsx         |  4 ++--
+ 6 files changed, 24 insertions(+), 25 deletions(-)
+
+diff --git a/src/components/library/enable-worker-modal.tsx b/src/components/library/enable-worker-modal.tsx
+index 2c61a01..f6ed6c4 100644
+--- a/src/components/library/enable-worker-modal.tsx
++++ b/src/components/library/enable-worker-modal.tsx
+@@ -119,11 +119,11 @@ export function EnablePileOnModal({
+   return (
+     <Modal title="Enable Pile-On" onClose={onClose} maxWidthClass="max-w-xl">
+       <div className="space-y-4 font-sans">
+-        <div className="flex items-center gap-1 rounded-xl surface-glass-1 p-1 text-xs w-fit">
++        <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs w-fit">
+           <button
+             type="button"
+             onClick={() => selectMode("form")}
+-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer hover-lift press-settle ${
++            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+               mode === "form" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+             }`}
+           >
+@@ -132,7 +132,7 @@ export function EnablePileOnModal({
+           <button
+             type="button"
+             onClick={() => selectMode("chat")}
+-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer hover-lift press-settle ${
++            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+               mode === "chat" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+             }`}
+           >
+@@ -147,7 +147,7 @@ export function EnablePileOnModal({
+               details) continues from Edit Stack Settings after enabling.
+             </p>
+ 
+-            <div className="flex items-center justify-between gap-3 rounded-xl surface-glass-1 px-3 py-2">
++            <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2">
+               <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">SMS follow-ups</label>
+               <Dropdown
+                 items={SMS_DROPDOWN_ITEMS}
+@@ -158,7 +158,7 @@ export function EnablePileOnModal({
+               />
+             </div>
+ 
+-            <div className="flex items-center justify-between gap-3 rounded-xl surface-glass-1 px-3 py-2">
++            <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2">
+               <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">Ad-data cohort sync</label>
+               <Dropdown
+                 items={AD_DATA_DROPDOWN_ITEMS}
+@@ -180,7 +180,7 @@ export function EnablePileOnModal({
+                 type="button"
+                 onClick={() => submitForm(true)}
+                 disabled={pending}
+-                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40 hover-lift press-settle"
++                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40"
+               >
+                 Skip for now
+               </button>
+@@ -188,7 +188,7 @@ export function EnablePileOnModal({
+                 type="button"
+                 onClick={() => submitForm(false)}
+                 disabled={pending}
+-                className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer hover-lift press-settle shadow-elevation-1"
++                className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
+               >
+                 {pending ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+                 Enable Pile-On
+@@ -196,7 +196,7 @@ export function EnablePileOnModal({
+             </div>
+           </div>
+         ) : (
+-          <div className="h-[420px] rounded-xl surface-glass-1 overflow-hidden">
++          <div className="h-[420px] rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+             <TeammatesChat
+               size="compact"
+               initialThreadId={null}
+diff --git a/src/components/library/library-marketplace-client.tsx b/src/components/library/library-marketplace-client.tsx
+index 20888f0..39174d8 100644
+--- a/src/components/library/library-marketplace-client.tsx
++++ b/src/components/library/library-marketplace-client.tsx
+@@ -99,7 +99,6 @@ export function LibraryMarketplaceClient({
+ 
+   return (
+     <div className="relative min-h-screen w-full font-sans transition-colors duration-200 overflow-hidden pb-10">
+-      <div className="pointer-events-none absolute inset-0 z-0 bg-ambient-glow" aria-hidden="true" />
+       <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
+ 
+       <div className="relative z-10 w-full space-y-6">
+diff --git a/src/components/library/media-gallery.tsx b/src/components/library/media-gallery.tsx
+index 7265842..087e027 100644
+--- a/src/components/library/media-gallery.tsx
++++ b/src/components/library/media-gallery.tsx
+@@ -62,7 +62,7 @@ export function MediaGallery({ items }: { items: MediaGalleryItem[] }) {
+           type="button"
+           onClick={() => scroll("left")}
+           aria-label="Scroll left"
+-          className="absolute left-3 top-1/2 -translate-y-1/2 z-20 surface-glass-2 text-zinc-900 dark:text-white p-3 rounded-full hover:scale-110 active:scale-95 transition-all cursor-pointer"
++          className="absolute left-3 top-1/2 -translate-y-1/2 z-20 backdrop-blur-md bg-white/70 dark:bg-zinc-950/70 border border-white/60 dark:border-zinc-700/60 shadow-xl text-zinc-900 dark:text-white p-3 rounded-full hover:scale-110 active:scale-95 transition-all cursor-pointer"
+         >
+           <ChevronLeft size={18} className="stroke-[2.5px]" />
+         </button>
+@@ -73,7 +73,7 @@ export function MediaGallery({ items }: { items: MediaGalleryItem[] }) {
+           type="button"
+           onClick={() => scroll("right")}
+           aria-label="Scroll right"
+-          className="absolute right-3 top-1/2 -translate-y-1/2 z-20 surface-glass-2 text-zinc-900 dark:text-white p-3 rounded-full hover:scale-110 active:scale-95 transition-all cursor-pointer"
++          className="absolute right-3 top-1/2 -translate-y-1/2 z-20 backdrop-blur-md bg-white/70 dark:bg-zinc-950/70 border border-white/60 dark:border-zinc-700/60 shadow-xl text-zinc-900 dark:text-white p-3 rounded-full hover:scale-110 active:scale-95 transition-all cursor-pointer"
+         >
+           <ChevronRight size={18} className="stroke-[2.5px]" />
+         </button>
+@@ -85,7 +85,7 @@ export function MediaGallery({ items }: { items: MediaGalleryItem[] }) {
+       >
+         {items.map((item) => (
+           <div key={item.id} className="shrink-0 w-[300px] sm:w-[420px] snap-start space-y-2 group">
+-            <div className="relative aspect-video w-full rounded-2xl surface-glass-1 overflow-hidden group-hover:border-zinc-400 dark:group-hover:border-zinc-700 transition-all">
++            <div className="relative aspect-video w-full rounded-2xl border border-border bg-zinc-100 dark:bg-zinc-900 overflow-hidden shadow-sm group-hover:border-zinc-400 dark:group-hover:border-zinc-700 transition-all">
+               {/* eslint-disable-next-line @next/next/no-img-element */}
+               <img
+                 src={item.image}
+diff --git a/src/components/library/product-card.tsx b/src/components/library/product-card.tsx
+index e9b6ed6..7fab6c2 100644
+--- a/src/components/library/product-card.tsx
++++ b/src/components/library/product-card.tsx
+@@ -72,7 +72,7 @@ export function ProductCard({
+   const skillNames = skillIds.map((id) => getWorkerDefinition(id).name).join(", ");
+ 
+   return (
+-    <div className="group relative flex flex-col justify-between rounded-2xl surface-glass-2 p-6 hover-lift hover:shadow-elevation-3 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
++    <div className="group relative flex flex-col justify-between rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-6 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
+       <Link href={`/dashboard/library/${productId}`} className="space-y-5 block">
+         <div className="flex items-start justify-between gap-4">
+           <div className="flex items-start gap-4 min-w-0">
+@@ -141,7 +141,7 @@ export function ProductCard({
+           type="button"
+           onClick={toggleInstalled}
+           disabled={pending}
+-          className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 hover-lift press-settle shadow-elevation-1 ${
++          className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 ${
+             installed
+               ? "border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-300 dark:hover:border-rose-800 hover:text-rose-700 dark:hover:text-rose-300 text-zinc-700 dark:text-zinc-200"
+               : "bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900"
+diff --git a/src/components/library/product-detail-client.tsx b/src/components/library/product-detail-client.tsx
+index a051929..2005f0e 100644
+--- a/src/components/library/product-detail-client.tsx
++++ b/src/components/library/product-detail-client.tsx
+@@ -146,7 +146,7 @@ export function ProductDetailClient({
+       <div className="flex items-start gap-3">
+         <Link
+           href="/dashboard/library"
+-          className="flex items-center justify-center w-8 h-8 rounded-full surface-glass-1 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mt-0.5"
++          className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mt-0.5"
+           aria-label="Back to Library"
+         >
+           <ChevronLeft className="w-4 h-4" />
+@@ -168,7 +168,7 @@ export function ProductDetailClient({
+         </div>
+       </div>
+ 
+-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl surface-glass-1 p-4">
++      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-transparent p-4">
+         <div className="flex items-center gap-6">
+           <StatChip label="Skills on" value={`${enabledCount}/${workers.length}`} />
+           <StatChip label="Runs (7d)" value={String(runsInWindow)} />
+@@ -183,7 +183,7 @@ export function ProductDetailClient({
+           type="button"
+           onClick={toggleInstalled}
+           disabled={pending}
+-          className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 hover-lift press-settle shadow-elevation-1 ${
++          className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 ${
+             installed
+               ? "border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-300 dark:hover:border-rose-800 hover:text-rose-700 dark:hover:text-rose-300 text-zinc-700 dark:text-zinc-200"
+               : "bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900"
+@@ -232,7 +232,7 @@ export function ProductDetailClient({
+             <button
+               type="button"
+               onClick={() => toggleSection("status")}
+-              className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer hover-lift press-settle"
++              className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer"
+             >
+               <span>Status</span>
+               {openSections.status ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+@@ -271,7 +271,7 @@ export function ProductDetailClient({
+               <button
+                 type="button"
+                 onClick={() => toggleSection("category")}
+-                className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer hover-lift press-settle"
++                className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer"
+               >
+                 <span>Categories</span>
+                 {openSections.category ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+@@ -325,12 +325,12 @@ export function ProductDetailClient({
+                 <button
+                   type="button"
+                   onClick={() => setExpandedWorker(null)}
+-                  className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer hover-lift press-settle"
++                  className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+                 >
+                   <X className="w-3.5 h-3.5" /> Close
+                 </button>
+               </div>
+-              <div className="rounded-2xl surface-glass-2 p-5">
++              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-5">
+                 {renderConfigForm(workers.find((w) => w.id === expandedWorker)!)}
+               </div>
+             </>
+@@ -350,7 +350,7 @@ export function ProductDetailClient({
+                     value={searchQuery}
+                     onChange={(e) => setSearchQuery(e.target.value)}
+                     placeholder="Search skills…"
+-                    className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs surface-glass-1 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400"
++                    className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400"
+                   />
+                 </div>
+               </div>
+@@ -360,7 +360,7 @@ export function ProductDetailClient({
+                   No skills match these filters.
+                 </div>
+               ) : (
+-                <div className="rounded-2xl surface-glass-2 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80">
++                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80">
+                   {filteredWorkers.map((worker, i) => (
+                     <WorkerCard
+                       key={worker.id}
+diff --git a/src/components/library/worker-card.tsx b/src/components/library/worker-card.tsx
+index 7504914..f62642e 100644
+--- a/src/components/library/worker-card.tsx
++++ b/src/components/library/worker-card.tsx
+@@ -128,7 +128,7 @@ export function WorkerCard({
+           type="button"
+           onClick={onToggleConfigure}
+           title={isConfiguring ? "Close" : "Configure"}
+-          className={`inline-flex items-center justify-center rounded-lg border w-8 h-8 transition-colors cursor-pointer hover-lift press-settle shadow-elevation-1 ${
++          className={`inline-flex items-center justify-center rounded-lg border w-8 h-8 transition-colors cursor-pointer ${
+             isConfiguring
+               ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
+               : "border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200"
+@@ -172,7 +172,7 @@ export function WorkerCard({
+       onClick={() => (needsLighterForm ? setShowEnableModal(true) : enable())}
+       disabled={pending || !engagementId}
+       title={!engagementId ? "Create a client first" : undefined}
+-      className="inline-flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3.5 py-2 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer whitespace-nowrap hover-lift press-settle shadow-elevation-1"
++      className="inline-flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3.5 py-2 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer whitespace-nowrap"
+     >
+       {pending ? "Enabling…" : "Enable"}
+     </button>
+-- 
+2.43.0
+
