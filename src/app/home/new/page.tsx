@@ -94,7 +94,17 @@ export default function NewWorkspacePage({
               name="name"
               type="text"
               required
-              disabled={isSubmitting}
+              // Not disabled on submit — confirmed live (production
+              // network trace: the POST to /api/workspaces had
+              // content-length: 0, an entirely empty body) that
+              // React's setIsSubmitting(true) re-render disables every
+              // `disabled={... isSubmitting}` field fast enough to beat
+              // the browser's own default form-submission action, which
+              // then serializes zero fields — a disabled form control is
+              // excluded from submission entirely, per the HTML spec.
+              // The visible "disabled" treatment during submit comes
+              // from the form wrapper's opacity-75 pointer-events-none
+              // instead, which doesn't touch what actually gets sent.
               maxLength={80}
               placeholder="e.g. Acme Roofing Co."
               className="w-full rounded-xl border border-zinc-200 bg-white/80 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:placeholder:text-zinc-600 transition-all duration-200"
@@ -147,7 +157,10 @@ export default function NewWorkspacePage({
                       name="packageIds"
                       value={product.id}
                       checked={isSelected}
-                      disabled={!installable || isSubmitting}
+                      // Not gated on isSubmitting either — see the name
+                      // input's comment above; same disabled-excludes-
+                      // the-field-from-the-POST mechanism confirmed live.
+                      disabled={!installable}
                       onChange={() => togglePackage(product.id, installable)}
                       className="sr-only"
                     />
