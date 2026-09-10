@@ -329,19 +329,21 @@
 }
 
 /* Elevated surfaces (cards, panels, popovers, modals) — glass fill over a
-   real blur, diffused shadow, thin inset top highlight. Light mode keeps
-   three distinct tiers (1 lightest, 3 strongest) — heavy blur reads as
-   muddy/grey on a light background, not "premium". Dark mode is where
-   the strong glass look actually reads well, so all three tiers there
-   share the same strong treatment (2026-09-10: "make every card feel
-   like the action-menu dropdown" — dark theme only, per direct
-   feedback). The numbered classes stay identical between themes for
+   real blur, diffused shadow, thin inset top highlight, plus the same
+   baked-in ambient glow used in dark mode (2026-09-10: light theme's
+   existing colors/shadows/tiers are kept exactly as they were — that
+   part already reads well — this just adds the same soft lavender glow
+   layer on top, per feedback). Light mode keeps three distinct tiers
+   (1 lightest, 3 strongest) — heavy blur reads as muddy/grey on a light
+   background, not "premium". Dark mode is where the strong glass look
+   actually reads well, so all three tiers there share the same strong
+   treatment. The numbered classes stay identical between themes for
    intent (1 = resting content, 2 = a card above the page, 3 = floating
    overlay) even though only dark mode makes them render the same. */
 .surface-glass-1,
 .surface-glass-2,
 .surface-glass-3 {
-  background: var(--surface-glass);
+  background: radial-gradient(ellipse 75% 55% at 50% 30%, rgba(197, 183, 234, 0.10), transparent 70%), var(--surface-glass);
   border: 1px solid var(--border);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
