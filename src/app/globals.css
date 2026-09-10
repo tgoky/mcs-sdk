@@ -299,6 +299,22 @@
   background-image: radial-gradient(#3f3f46 0.5px, transparent 0.5px);
 }
 
+/* Page-level ambient wash — pure CSS, no image asset. Replaces the idea
+   of gluing a light source behind every individual glass card (a hack
+   repeated per component, and exactly what caused the edge-bleed bug in
+   GlowBacklight) with one soft, colorful layer behind the whole page:
+   every glass card's backdrop-filter picks up real material to diffuse
+   automatically, the same way the home page's photo background does it,
+   but built from theme colors already in use elsewhere (the lavender
+   accent) instead of a new binary asset. Dark mode only — light mode's
+   plain background already reads well against the lighter glass tiers. */
+.dark .bg-ambient-glow {
+  background:
+    radial-gradient(ellipse 55% 45% at 15% 10%, rgba(197, 183, 234, 0.16), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 88% 25%, rgba(111, 168, 255, 0.12), transparent 60%),
+    radial-gradient(ellipse 55% 50% at 45% 95%, rgba(197, 183, 234, 0.12), transparent 60%);
+}
+
 /* ────────────────────────────────────────────────────────────────────── */
 /* ELEVATION SYSTEM                                                       */
 /* Replaces the one-off "rounded-lg border border-zinc-200/70 dark:border-*/

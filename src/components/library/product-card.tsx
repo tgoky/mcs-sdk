@@ -19,7 +19,6 @@ import { Download, Trash2, ArrowUpRight, Loader2 } from "lucide-react";
 import { getWorkerDefinition, type WorkerId } from "@/lib/worker-registry";
 import { HOME_COPY } from "@/lib/copy";
 import { StatChip } from "@/components/library/stat-chip";
-import { GlowBacklight } from "@/components/ui/glow-backlight";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { RepSkillBadge } from "@/components/rep-skill-badge";
 import type { RepSkillId } from "@/lib/rep-skill-manifest";
@@ -73,9 +72,7 @@ export function ProductCard({
   const skillNames = skillIds.map((id) => getWorkerDefinition(id).name).join(", ");
 
   return (
-    <div className="relative">
-      <GlowBacklight />
-      <div className="group relative z-10 flex flex-col justify-between rounded-2xl surface-glass-2 p-6 hover-lift hover:shadow-elevation-3 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
+    <div className="group relative flex flex-col justify-between rounded-2xl surface-glass-2 p-6 hover-lift hover:shadow-elevation-3 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
       <Link href={`/dashboard/library/${productId}`} className="space-y-5 block">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4 min-w-0">
@@ -167,7 +164,6 @@ export function ProductCard({
         </Link>
       </div>
       {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
-      </div>
     </div>
   );
 }

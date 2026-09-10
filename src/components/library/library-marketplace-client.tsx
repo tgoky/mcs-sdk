@@ -99,6 +99,7 @@ export function LibraryMarketplaceClient({
 
   return (
     <div className="relative min-h-screen w-full font-sans transition-colors duration-200 overflow-hidden pb-10">
+      <div className="pointer-events-none absolute inset-0 z-0 bg-ambient-glow" aria-hidden="true" />
       <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
 
       <div className="relative z-10 w-full space-y-6">
