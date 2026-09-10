@@ -75,7 +75,7 @@ function WorkspaceCard({
   const hasShowtime = packageIds.includes("showtime");
 
   return (
-    <div className="hover-lift group relative flex h-full w-full flex-col justify-between surface-glass-3 rounded-2xl p-6 text-left select-none hover:border-zinc-300 dark:hover:border-zinc-700">
+    <div className="hover-lift group relative flex h-full w-full flex-col justify-between surface-glass-3 surface-blend-page rounded-2xl p-6 text-left select-none hover:border-zinc-300 dark:hover:border-zinc-700">
       <form
         action={`/api/workspaces/${workspace.workspaceId}/switch`}
         method="POST"
