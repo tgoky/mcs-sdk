@@ -15,9 +15,9 @@
  *   </div>
  */
 export function GlowBacklight({
-  className = "absolute bottom-4 right-6 h-10 w-48",
+  className = "absolute top-4 left-1/2 -translate-x-1/2 h-16 w-3/4",
 }: {
   className?: string;
 }) {
-  return <div aria-hidden="true" className={`${className} rounded-xl bg-white/70 dark:bg-white/60 blur-xl pointer-events-none`} />;
+  return <div aria-hidden="true" className={`${className} rounded-full bg-white/80 dark:bg-white/70 blur-2xl pointer-events-none`} />;
 }
