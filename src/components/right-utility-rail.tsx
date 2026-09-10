@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   CalendarRange,
   MessageSquareQuote,
@@ -9,7 +10,7 @@ import {
   NotebookText,
   type LucideIcon,
 } from "lucide-react";
-import type { RightPanelKey } from "@/components/right-utility-panel";
+import { RIGHT_PANEL_META, type RightPanelKey } from "@/components/right-utility-panel";
 
 interface UtilityIconConfig {
   key: RightPanelKey;
@@ -70,43 +71,80 @@ export function RightUtilityRail({
   const isAnyActive = activePanel !== null;
 
   return (
-    <div className="flex items-center gap-1.5 p-1 rounded-full bg-zinc-200/40 dark:bg-zinc-900/40 backdrop-blur-md border border-white/20 dark:border-white/5">
-      {ICONS.map(({ key, icon: Icon, label, fillStyle }) => {
-        const active = activePanel === key;
-        const isBell = key === "notifications";
+    <>
+      {/* Desktop: opens the compact inline side panel (right-utility-panel.tsx),
+          which only ever renders `hidden md:flex` — a real side panel with a
+          drag-to-resize rail doesn't have a sensible mobile shape, so it was
+          built desktop-only on purpose. The bug was that these buttons stayed
+          rendered (and tappable) below md too, wired to onSelect(key), which
+          dutifully set activePanel — just with nowhere visible for that state
+          to show up: a tap "worked" and produced zero visible result. */}
+      <div className="hidden md:flex items-center gap-1.5 p-1 rounded-full bg-zinc-200/40 dark:bg-zinc-900/40 backdrop-blur-md border border-white/20 dark:border-white/5">
+        {ICONS.map(({ key, icon: Icon, label, fillStyle }) => {
+          const active = activePanel === key;
+          const isBell = key === "notifications";
 
-        return (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onSelect(key)}
-            aria-label={label}
-            aria-pressed={active}
-            title={label}
-            className={`group relative flex items-center justify-center w-9 h-9 rounded-full transition-all duration-300 cursor-pointer backdrop-blur-md overflow-hidden ${
-              active
-                ? "bg-white/90 dark:bg-white/20 border border-white/90 dark:border-white/30 shadow-[0_4px_14px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,1)] dark:shadow-[0_4px_14px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.4)] opacity-100 scale-105 z-10"
-                : isAnyActive
-                ? "border border-transparent bg-transparent opacity-45 hover:opacity-100 hover:bg-white/40 dark:hover:bg-white/10 hover:border-white/30"
-                : "border border-transparent bg-transparent opacity-85 hover:opacity-100 hover:bg-white/50 dark:hover:bg-white/10 hover:border-white/40 dark:hover:border-white/10"
-            }`}
-          >
-            <div
-              className={`transition-all duration-300 ease-out transform flex items-center justify-center ${
-                active ? "scale-110" : "scale-100 group-hover:scale-110"
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onSelect(key)}
+              aria-label={label}
+              aria-pressed={active}
+              title={label}
+              className={`group relative flex items-center justify-center w-9 h-9 rounded-full transition-all duration-300 cursor-pointer backdrop-blur-md overflow-hidden ${
+                active
+                  ? "bg-white/90 dark:bg-white/20 border border-white/90 dark:border-white/30 shadow-[0_4px_14px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,1)] dark:shadow-[0_4px_14px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.4)] opacity-100 scale-105 z-10"
+                  : isAnyActive
+                  ? "border border-transparent bg-transparent opacity-45 hover:opacity-100 hover:bg-white/40 dark:hover:bg-white/10 hover:border-white/30"
+                  : "border border-transparent bg-transparent opacity-85 hover:opacity-100 hover:bg-white/50 dark:hover:bg-white/10 hover:border-white/40 dark:hover:border-white/10"
               }`}
             >
-              <Icon size={18} className={`stroke-[1.8px] transition-all ${fillStyle}`} />
-            </div>
+              <div
+                className={`transition-all duration-300 ease-out transform flex items-center justify-center ${
+                  active ? "scale-110" : "scale-100 group-hover:scale-110"
+                }`}
+              >
+                <Icon size={18} className={`stroke-[1.8px] transition-all ${fillStyle}`} />
+              </div>
 
-            {isBell && unreadCount > 0 && (
-              <span className="absolute top-1 right-1 flex items-center justify-center min-w-[15px] h-3.5 px-1 rounded-full bg-rose-500 text-[9px] font-bold text-white leading-none z-10 shadow-xs">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
+              {isBell && unreadCount > 0 && (
+                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[15px] h-3.5 px-1 rounded-full bg-rose-500 text-[9px] font-bold text-white leading-none z-10 shadow-xs">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Mobile: no compact side panel to open, so each icon goes straight
+          to that panel's own real full-screen page instead — the exact
+          same destination the desktop panel's own "Expand" button already
+          uses (RIGHT_PANEL_META's expandHref), not a new surface. */}
+      <div className="flex md:hidden items-center gap-1 p-1 rounded-full bg-zinc-200/40 dark:bg-zinc-900/40 backdrop-blur-md border border-white/20 dark:border-white/5">
+        {ICONS.map(({ key, icon: Icon, label, fillStyle }) => {
+          const isBell = key === "notifications";
+
+          return (
+            <Link
+              key={key}
+              href={RIGHT_PANEL_META[key].expandHref}
+              aria-label={label}
+              title={label}
+              className="group relative flex items-center justify-center w-9 h-9 rounded-full transition-all duration-200 active:scale-95 backdrop-blur-md overflow-hidden border border-transparent bg-transparent opacity-85 active:opacity-100 active:bg-white/50 dark:active:bg-white/10"
+            >
+              <Icon size={18} className={`stroke-[1.8px] transition-all ${fillStyle}`} />
+
+              {isBell && unreadCount > 0 && (
+                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[15px] h-3.5 px-1 rounded-full bg-rose-500 text-[9px] font-bold text-white leading-none z-10 shadow-xs">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+    </>
   );
 }
