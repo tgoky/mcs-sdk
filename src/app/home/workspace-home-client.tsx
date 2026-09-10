@@ -75,7 +75,7 @@ function WorkspaceCard({
   const hasShowtime = packageIds.includes("showtime");
 
   return (
-    <div className="hover-lift group relative flex h-full w-full flex-col justify-between surface-glass-2 rounded-md p-6 text-left select-none hover:border-zinc-300 dark:hover:border-zinc-700">
+    <div className="hover-lift group relative flex h-full w-full flex-col justify-between surface-glass-3 rounded-2xl p-6 text-left select-none hover:border-zinc-300 dark:hover:border-zinc-700">
       <form
         action={`/api/workspaces/${workspace.workspaceId}/switch`}
         method="POST"
@@ -86,7 +86,7 @@ function WorkspaceCard({
           type="submit"
           disabled={isSwitching}
           aria-label={`Open ${workspace.name}`}
-          className="absolute inset-0 z-10 cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+          className="absolute inset-0 z-10 cursor-pointer rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
         />
       </form>
       <div className="space-y-4">
@@ -155,7 +155,7 @@ function CreateWorkspaceCard() {
   return (
     <Link
       href="/home/new"
-      className="hover-lift press-settle group surface-glass-2 flex h-full flex-col items-center justify-center gap-2.5 rounded-md p-6 text-center hover:border-zinc-400 dark:hover:border-zinc-700 min-h-[220px]"
+      className="hover-lift press-settle group surface-glass-3 flex h-full flex-col items-center justify-center gap-2.5 rounded-2xl p-6 text-center hover:border-zinc-400 dark:hover:border-zinc-700 min-h-[220px]"
       style={{ borderStyle: "dashed" }}
     >
       <div className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500 group-hover:border-amber-400 group-hover:text-amber-500 transition-colors">
@@ -347,7 +347,7 @@ export function WorkspaceHomeClient({
           <CreateWorkspaceCard />
         </div>
       ) : (
-        <div className="surface-glass-2 rounded-md overflow-hidden">
+        <div className="surface-glass-3 rounded-2xl overflow-hidden">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/40 text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
