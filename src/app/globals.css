@@ -361,6 +361,16 @@
 .dark .surface-glass-1,
 .dark .surface-glass-2,
 .dark .surface-glass-3 {
+  /* The reference look (action-menu dropdown) isn't just blur+shadow —
+     it's backdrop-blur picking up whatever bright/colorful content sits
+     behind the panel and smearing it into a soft bloom. That's incidental
+     (depends entirely on what happens to be behind it), so bake an
+     equivalent ambient glow directly into the surface instead — every
+     dark-mode card gets the same atmosphere regardless of what's behind
+     it. Soft lavender radial, matching the theme's existing accent
+     (--success: #c5b7ea in dark mode), low-opacity, off-center high like
+     a light source rather than a flat tint. */
+  background: radial-gradient(ellipse 75% 55% at 50% 30%, rgba(197, 183, 234, 0.10), transparent 70%), var(--surface-glass);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
   box-shadow: var(--shadow-elevation-3), var(--shadow-inset-highlight);
