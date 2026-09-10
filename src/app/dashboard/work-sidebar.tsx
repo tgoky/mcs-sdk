@@ -15,7 +15,7 @@ import { SkillsNavList } from "@/components/skills-nav-list";
 import { getInstalledPackagesByWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
 import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
 import { getWorkspaceWorkerOverview } from "@/lib/worker-analytics";
-import type { ProductId } from "@/lib/product-catalog";
+import { isProductId } from "@/lib/product-catalog";
 import type { WorkerId } from "@/lib/worker-registry";
 
 export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: string; workspaceId: string }) {
@@ -50,9 +50,11 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
     console.error("[WorkSidebar] query failed:", err);
     return [0, [{ count: 0 }], 0, new Map<string, string[]>(), null, { totalClients: 0, workers: [], windowDays: 7 }] as const;
   });
-  const installedProductIds = (installedPackageMap.get(workspaceId) ?? []).filter(
-    (id): id is ProductId => id === "showtime" || id === "reputation-manager"
-  );
+  // Fix: this used to only recognize "showtime"/"reputation-manager" —
+  // Cold Open (a real installable product, see product-catalog.ts) was
+  // silently filtered out, so a Cold Open workspace's sidebar "Enabled
+  // Skills" grid always rendered empty no matter what was actually on.
+  const installedProductIds = (installedPackageMap.get(workspaceId) ?? []).filter(isProductId);
 
   // The Capabilities grid's whole job is "jump straight into something
   // already running for this client" — it should show what's enabled, not

@@ -4,49 +4,40 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, Loader2, Plus, Settings2 } from "lucide-react";
-import { SKILL_IDS, SKILL_MANIFEST } from "@/lib/skill-manifest";
-import { REP_SKILL_IDS, REP_SKILL_MANIFEST, type RepSkillId } from "@/lib/rep-skill-manifest";
 import type { ProductId } from "@/lib/product-catalog";
-import { WORKER_REGISTRY, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
-import { SquishySkillBadge } from "@/components/squishy-skill-badge";
-import { RepSkillBadge } from "@/components/rep-skill-badge";
+import { WORKER_REGISTRY, workersForProduct, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
+import { AnySkillBadge } from "@/components/any-skill-badge";
 import { SidebarNavLinks, type NavLinkItem } from "@/app/dashboard/sidebar-nav-links";
 
 interface SkillEntry {
   skillId: WorkerId;
   href: string;
   label: string;
-  isRep: boolean;
 }
 
+// Fix: this used to special-case "showtime" and treat every other
+// productId as Reputation Manager — harmless while those were the only
+// two products, but Cold Open (a real installable product, see
+// product-catalog.ts) silently got REP_SKILL_IDS entries instead of its
+// own, duplicating Reputation Manager's skills and never showing Cold
+// Open's. workersForProduct already knows every product's real skills.
 function buildEntries(productIds: ProductId[]): SkillEntry[] {
-  return productIds.flatMap((productId) => {
-    if (productId === "showtime") {
-      return SKILL_IDS.map(
-        (skillId): SkillEntry => ({
-          skillId,
-          href: `/dashboard/modules/${skillId}`,
-          label: SKILL_MANIFEST[skillId].name,
-          isRep: false,
-        })
-      );
-    }
-
-    return REP_SKILL_IDS.map(
-      (skillId): SkillEntry => ({
-        skillId,
-        href: `/dashboard/modules/${skillId}`,
-        label: REP_SKILL_MANIFEST[skillId].name,
-        isRep: true,
+  return productIds.flatMap((productId) =>
+    workersForProduct(productId).map(
+      (worker): SkillEntry => ({
+        skillId: worker.id,
+        href: `/dashboard/modules/${worker.id}`,
+        label: worker.name,
       })
-    );
-  });
+    )
+  );
 }
 
 function toggleEndpoint(engagementId: string, workerId: WorkerId): string {
-  return WORKER_REGISTRY[workerId].productId === "reputation-manager"
-    ? `/api/engagements/${engagementId}/skills/rep/${workerId}`
-    : `/api/engagements/${engagementId}/skills/${workerId}`;
+  const productId = WORKER_REGISTRY[workerId].productId;
+  if (productId === "reputation-manager") return `/api/engagements/${engagementId}/skills/rep/${workerId}`;
+  if (productId === "cold-open") return `/api/engagements/${engagementId}/skills/cold-open/${workerId}`;
+  return `/api/engagements/${engagementId}/skills/${workerId}`;
 }
 
 /**
@@ -184,11 +175,7 @@ function InstalledSkillsList({
                   >
                     <div className="flex items-center justify-center gap-1">
                       <div className="relative shrink-0">
-                        {entry.isRep ? (
-                          <RepSkillBadge skill={entry.skillId as RepSkillId} size={18} />
-                        ) : (
-                          <SquishySkillBadge skill={entry.skillId} size={18} />
-                        )}
+                        <AnySkillBadge skill={entry.skillId} size={18} />
                         {needsAttention && (
                           <span
                             title={`${entry.label} — failing on its most recent run`}
@@ -299,7 +286,7 @@ export function SkillsNavList({
   const links: NavLinkItem[] = entries.map((entry) => ({
     href: entry.href,
     label: entry.label,
-    icon: entry.isRep ? <RepSkillBadge skill={entry.skillId as RepSkillId} size={18} /> : <SquishySkillBadge skill={entry.skillId} size={18} />,
+    icon: <AnySkillBadge skill={entry.skillId} size={18} />,
   }));
 
   return <SidebarNavLinks links={links} />;
