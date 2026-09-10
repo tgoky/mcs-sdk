@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { TriangleAlert } from "lucide-react";
+import { CircleCheck, TriangleAlert } from "lucide-react";
 import type { PortfolioAccountOutcome } from "@/features/reports/server/portfolio-outcomes";
 
 /**
@@ -23,26 +23,32 @@ export function PortfolioOutcomesSection({ accounts }: { accounts: PortfolioAcco
 
   if (flagged.length === 0) {
     return (
-      <div>
-        <h2 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-          Portfolio
-        </h2>
-        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-          Nothing needs attention this week across {accounts.length} engagement{accounts.length !== 1 ? "s" : ""}.
-        </p>
+      <div className="surface-glass-1 rounded-xl p-4 flex items-center gap-3">
+        <CircleCheck className="w-5 h-5 shrink-0" style={{ color: "var(--success)" }} />
+        <div>
+          <h2 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+            Portfolio — all clear
+          </h2>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+            Nothing needs attention this week across {accounts.length} engagement{accounts.length !== 1 ? "s" : ""}.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h2 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-          Portfolio — accounts to check first
-        </h2>
-        <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-          {flagged.length} of {accounts.length} engagements have something real to look at this week.
-        </p>
+    <div className="surface-glass-1 rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-3">
+        <TriangleAlert className="w-5 h-5 shrink-0" style={{ color: "var(--error)" }} />
+        <div>
+          <h2 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+            Portfolio — accounts to check first
+          </h2>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+            {flagged.length} of {accounts.length} engagements have something real to look at this week.
+          </p>
+        </div>
       </div>
 
       <div className="divide-y divide-zinc-200 dark:divide-zinc-800/80">

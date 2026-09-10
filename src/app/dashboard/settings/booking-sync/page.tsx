@@ -47,7 +47,7 @@ export default async function BookingSyncSettingsPage() {
       </div>
 
       {syncStatuses.length === 0 ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-8 text-center text-xs text-zinc-400">
+        <div className="surface-glass-1 rounded-xl p-8 text-center text-xs text-zinc-400">
           No client engagements configured yet. Add a client to monitor booking sync health.
         </div>
       ) : (
@@ -55,7 +55,7 @@ export default async function BookingSyncSettingsPage() {
           {syncStatuses.map(({ engagementId, buyer, platformLabel, syncStatus }) => (
             <div
               key={engagementId}
-              className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4"
+              className="surface-glass-1 rounded-xl p-5 space-y-4"
             >
               {/* Client Header */}
               <div className="flex items-center justify-between border-b border-zinc-800 pb-3">

@@ -101,11 +101,7 @@ function Section({
 }
 
 function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return (
-    <div className={`rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent backdrop-blur-sm ${className}`}>
-      {children}
-    </div>
-  );
+  return <div className={`surface-glass-1 rounded-xl ${className}`}>{children}</div>;
 }
 
 function EmptyState({ children }: { children: ReactNode }) {
@@ -385,13 +381,13 @@ export default async function AnalyticsPage() {
 
         <PortfolioOutcomesSection accounts={portfolioAccounts} />
 
-        {/* Automation health — is the pipeline itself running, not
-            whether an account is winning or losing. Legitimately useful
-            to the operator, kept, just no longer the first thing on the
-            page — see PortfolioOutcomesSection above for the primary,
-            action-oriented view. */}
-        <div>
-          <h2 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+        {/* Automation health is a group header for the four subsections
+            below it (daily activity, skill comparison, resolution times,
+            by category) — one tier above them, not a peer of Portfolio's
+            status card above. A divider marks the zone change instead of
+            repeating Portfolio's bare heading+caption a second time. */}
+        <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+          <h2 className="text-sm font-bold pt-4" style={{ color: "var(--text-primary)" }}>
             Automation health
           </h2>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>

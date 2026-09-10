@@ -36,7 +36,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-900/60">
+    <div className="surface-glass-1 rounded-xl p-4">
       <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{label}</p>
       <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1">{value}</p>
       {sub && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{sub}</p>}
@@ -117,7 +117,7 @@ export default async function WorkerAnalyticsPage({ params }: { params: Promise<
             <StatCard label="Reddit mentions" value={detail.repSignals.redditMentions} />
             <StatCard label="Flagged signals" value={detail.repSignals.flaggedSignals} />
           </div>
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-900/60">
+          <div className="surface-glass-1 rounded-xl p-4">
             <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">Sentiment across every signal</p>
             <SentimentBar {...detail.repSignals.sentiment} />
           </div>
@@ -131,7 +131,7 @@ export default async function WorkerAnalyticsPage({ params }: { params: Promise<
         {detail.recentRuns.length === 0 ? (
           <p className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">No runs recorded in this window.</p>
         ) : (
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-100 dark:divide-zinc-800 bg-white dark:bg-zinc-900/60 overflow-hidden">
+          <div className="surface-glass-1 rounded-xl divide-y divide-zinc-100 dark:divide-zinc-800 overflow-hidden">
             {detail.recentRuns.map((run) => (
               <Link
                 key={run.id}

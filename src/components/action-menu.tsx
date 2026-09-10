@@ -100,7 +100,7 @@ export function ActionMenu({
             <div
               ref={panelRef}
               role="menu"
-              className="rounded-2xl border border-border bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 shadow-xl dark:shadow-2xl dark:shadow-black p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5"
+              className="rounded-2xl surface-glass-3 text-zinc-900 dark:text-zinc-100 p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5"
             >
               {typeof children === "function" ? children(close) : children}
             </div>
@@ -185,7 +185,7 @@ export function ActionMenuItem({
   );
 
   const cls = cn(
-    "group w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors select-none cursor-pointer",
+    "group w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors select-none cursor-pointer hover-lift press-settle",
     disabled ? "opacity-40 cursor-not-allowed" : toneClass
   );
 

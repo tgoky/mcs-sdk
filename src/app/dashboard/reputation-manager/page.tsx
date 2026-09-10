@@ -195,7 +195,7 @@ export default async function ReputationManagerHomePage() {
                 <Link
                   key={incident.id}
                   href={`/dashboard/engagements/${incident.engagementId}`}
-                  className="flex items-center gap-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 bg-white dark:bg-zinc-900/60 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
+                  className="hover-lift flex items-center gap-2.5 surface-glass-1 rounded-xl p-3 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
                 >
                   <AlertTriangle className="w-4 h-4 text-rose-500 dark:text-rose-400 shrink-0" />
                   <div className="min-w-0">

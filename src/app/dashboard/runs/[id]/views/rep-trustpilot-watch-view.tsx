@@ -34,7 +34,7 @@ export function RepTrustpilotWatchView({ detail }: { detail: RepTrustpilotWatchD
         {reviews.length} new review{reviews.length === 1 ? "" : "s"} · {reviews.filter((r) => r.flagged).length} flagged
       </p>
       {reviews.map((r) => (
-        <div key={r.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3.5">
+        <div key={r.id} className="rounded-xl surface-glass-1 p-3.5">
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <div className="flex items-center gap-2">
               <StarRating rating={r.rating} />

@@ -146,7 +146,7 @@ export function ProductDetailClient({
       <div className="flex items-start gap-3">
         <Link
           href="/dashboard/library"
-          className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mt-0.5"
+          className="flex items-center justify-center w-8 h-8 rounded-full surface-glass-1 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0 mt-0.5"
           aria-label="Back to Library"
         >
           <ChevronLeft className="w-4 h-4" />
@@ -168,7 +168,7 @@ export function ProductDetailClient({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-transparent p-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl surface-glass-1 p-4">
         <div className="flex items-center gap-6">
           <StatChip label="Skills on" value={`${enabledCount}/${workers.length}`} />
           <StatChip label="Runs (7d)" value={String(runsInWindow)} />
@@ -183,7 +183,7 @@ export function ProductDetailClient({
           type="button"
           onClick={toggleInstalled}
           disabled={pending}
-          className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 ${
+          className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 hover-lift press-settle shadow-elevation-1 ${
             installed
               ? "border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-300 dark:hover:border-rose-800 hover:text-rose-700 dark:hover:text-rose-300 text-zinc-700 dark:text-zinc-200"
               : "bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900"
@@ -232,7 +232,7 @@ export function ProductDetailClient({
             <button
               type="button"
               onClick={() => toggleSection("status")}
-              className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer"
+              className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer hover-lift press-settle"
             >
               <span>Status</span>
               {openSections.status ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -271,7 +271,7 @@ export function ProductDetailClient({
               <button
                 type="button"
                 onClick={() => toggleSection("category")}
-                className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer"
+                className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer hover-lift press-settle"
               >
                 <span>Categories</span>
                 {openSections.category ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -325,12 +325,12 @@ export function ProductDetailClient({
                 <button
                   type="button"
                   onClick={() => setExpandedWorker(null)}
-                  className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer hover-lift press-settle"
                 >
                   <X className="w-3.5 h-3.5" /> Close
                 </button>
               </div>
-              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-5">
+              <div className="rounded-2xl surface-glass-2 p-5">
                 {renderConfigForm(workers.find((w) => w.id === expandedWorker)!)}
               </div>
             </>
@@ -350,7 +350,7 @@ export function ProductDetailClient({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search skills…"
-                    className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400"
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs surface-glass-1 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400"
                   />
                 </div>
               </div>
@@ -360,7 +360,7 @@ export function ProductDetailClient({
                   No skills match these filters.
                 </div>
               ) : (
-                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80">
+                <div className="rounded-2xl surface-glass-2 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80">
                   {filteredWorkers.map((worker, i) => (
                     <WorkerCard
                       key={worker.id}

@@ -128,7 +128,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
       {/* 1. CADENCE LIFECYCLE BANNER                                       */}
       {/* ----------------------------------------------------------------- */}
       {enrollment ? (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 font-sans overflow-hidden">
+        <div className="rounded-2xl surface-glass-2 font-sans overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 shrink-0">
@@ -149,7 +149,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                 <button
                   type="button"
                   onClick={handleManualStopCadence}
-                  className="flex items-center gap-1.5 rounded-lg border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 cursor-pointer transition-colors font-sans"
+                  className="flex items-center gap-1.5 rounded-lg border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 cursor-pointer transition-colors font-sans shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
                   title="Stop the automated sequence — use this if the prospect already rebooked elsewhere or replied directly"
                 >
                   <SquareX size={12} /> Stop Cadence
@@ -276,7 +276,7 @@ function CadenceTimeline({
   const windowEnd = new Date(enrolledAt.getTime() + windowDays * 86_400_000);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
+    <div className="overflow-hidden rounded-2xl surface-glass-2 font-sans">
       <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-4 py-2.5 font-sans">
         <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
           {hasEnrollment ? "Recovery cadence" : "Standard cadence template"}
@@ -300,7 +300,7 @@ function CadenceTimeline({
                 key={tp.key}
                 type="button"
                 onClick={() => onSelect(tp)}
-                className="group flex items-stretch gap-3 text-left cursor-pointer"
+                className="group flex items-stretch gap-3 text-left cursor-pointer hover-lift press-settle"
               >
                 <div className="flex w-2.5 shrink-0 flex-col items-center">
                   <div
@@ -317,7 +317,7 @@ function CadenceTimeline({
                   />
                   {!isLast && <div className="w-px flex-1 bg-zinc-100 dark:bg-zinc-800" />}
                 </div>
-                <div className="mb-2 flex flex-1 items-center justify-between gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-3 py-2 transition-colors group-hover:border-zinc-400 dark:group-hover:border-zinc-700">
+                <div className="mb-2 flex flex-1 items-center justify-between gap-2 rounded-xl surface-glass-1 px-3 py-2 transition-colors">
                   <div className="flex min-w-0 items-center gap-2.5">
                     {tp.type === "email" ? (
                       <Mail size={13} className="shrink-0 text-zinc-500 dark:text-zinc-500" />
@@ -397,7 +397,7 @@ function TouchpointDrawer({
                 <button
                   type="button"
                   onClick={handleCopyText}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-xs cursor-pointer transition-colors font-sans"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-xs cursor-pointer transition-colors font-sans shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
                 >
                   {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                   <span className="font-sans">{copied ? "Copied" : "Copy"}</span>
@@ -429,13 +429,13 @@ function TouchpointDrawer({
                 {touchpoint.subject && (
                   <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 font-sans">Subject: {touchpoint.subject}</p>
                 )}
-                <div className="whitespace-pre-wrap rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">
+                <div className="whitespace-pre-wrap rounded-xl surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">
                   {touchpoint.body}
                 </div>
               </div>
 
               {exitedOffsetDays != null && touchpoint.offsetDays > exitedOffsetDays && (
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/40 dark:bg-zinc-900/40 p-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 flex items-center gap-2 font-sans">
+                <div className="rounded-xl surface-glass-1 p-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 flex items-center gap-2 font-sans">
                   <AlertCircle size={13} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
                   <span className="font-sans">This touch was skipped — the prospect exited the cadence on Day {exitedOffsetDays + 1}.</span>
                 </div>

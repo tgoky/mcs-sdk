@@ -58,7 +58,7 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex flex-col border-l border-zinc-800 bg-zinc-950 shadow-2xl outline-none",
+          "fixed inset-y-0 right-0 z-50 flex flex-col surface-glass-3 outline-none",
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right data-[state=open]:duration-250 data-[state=closed]:duration-200",
           widthClassName,
           className

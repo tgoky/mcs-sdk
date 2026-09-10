@@ -122,7 +122,7 @@ export function IncidentRow({ incident }: { incident: IncidentRowData }) {
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3.5 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
+    <div className="hover-lift flex flex-col gap-2 surface-glass-1 rounded-xl p-3.5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
       <div className="flex items-start justify-between gap-3">
         <Link href={`/dashboard/engagements/${incident.engagementId}`} className="flex items-start gap-3 min-w-0 flex-1">
           <AlertTriangle className="w-4 h-4 mt-0.5 text-rose-500 dark:text-rose-400 shrink-0" />

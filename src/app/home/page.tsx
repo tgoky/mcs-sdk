@@ -37,7 +37,7 @@ export default async function WorkspaceHomePage() {
       />
 
       {/* Primary Card */}
-      <div className="relative z-10 w-full max-w-6xl rounded-xl border border-zinc-200/80 bg-white/90 dark:bg-zinc-950/90 p-6 sm:p-8 lg:p-10 shadow-2xl backdrop-blur-xl dark:border-zinc-800/80 flex flex-col justify-between min-h-[80vh]">
+      <div className="relative z-10 w-full max-w-6xl surface-glass-3 rounded-xl p-6 sm:p-8 lg:p-10 flex flex-col justify-between min-h-[80vh]">
         <div className="space-y-6">
           <header className="flex items-center justify-between gap-4 border-b border-zinc-200/80 pb-5 dark:border-zinc-800/80">
             <div className="flex items-center gap-3">

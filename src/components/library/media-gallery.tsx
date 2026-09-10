@@ -62,7 +62,7 @@ export function MediaGallery({ items }: { items: MediaGalleryItem[] }) {
           type="button"
           onClick={() => scroll("left")}
           aria-label="Scroll left"
-          className="absolute left-3 top-1/2 -translate-y-1/2 z-20 backdrop-blur-md bg-white/70 dark:bg-zinc-950/70 border border-white/60 dark:border-zinc-700/60 shadow-xl text-zinc-900 dark:text-white p-3 rounded-full hover:scale-110 active:scale-95 transition-all cursor-pointer"
+          className="absolute left-3 top-1/2 -translate-y-1/2 z-20 surface-glass-2 text-zinc-900 dark:text-white p-3 rounded-full hover:scale-110 active:scale-95 transition-all cursor-pointer"
         >
           <ChevronLeft size={18} className="stroke-[2.5px]" />
         </button>
@@ -73,7 +73,7 @@ export function MediaGallery({ items }: { items: MediaGalleryItem[] }) {
           type="button"
           onClick={() => scroll("right")}
           aria-label="Scroll right"
-          className="absolute right-3 top-1/2 -translate-y-1/2 z-20 backdrop-blur-md bg-white/70 dark:bg-zinc-950/70 border border-white/60 dark:border-zinc-700/60 shadow-xl text-zinc-900 dark:text-white p-3 rounded-full hover:scale-110 active:scale-95 transition-all cursor-pointer"
+          className="absolute right-3 top-1/2 -translate-y-1/2 z-20 surface-glass-2 text-zinc-900 dark:text-white p-3 rounded-full hover:scale-110 active:scale-95 transition-all cursor-pointer"
         >
           <ChevronRight size={18} className="stroke-[2.5px]" />
         </button>
@@ -85,7 +85,7 @@ export function MediaGallery({ items }: { items: MediaGalleryItem[] }) {
       >
         {items.map((item) => (
           <div key={item.id} className="shrink-0 w-[300px] sm:w-[420px] snap-start space-y-2 group">
-            <div className="relative aspect-video w-full rounded-2xl border border-border bg-zinc-100 dark:bg-zinc-900 overflow-hidden shadow-sm group-hover:border-zinc-400 dark:group-hover:border-zinc-700 transition-all">
+            <div className="relative aspect-video w-full rounded-2xl surface-glass-1 overflow-hidden group-hover:border-zinc-400 dark:group-hover:border-zinc-700 transition-all">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={item.image}

@@ -38,7 +38,7 @@ export function WinBackCadencePreview({
 
   if (!assetMap) {
     return (
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-5 font-sans">
+      <div className="surface-glass-2 rounded-2xl p-5 font-sans">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-400">
             <Sparkles size={13} />
@@ -64,7 +64,7 @@ export function WinBackCadencePreview({
   ].sort((a, b) => a.offsetDays - b.offsetDays);
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 overflow-hidden shadow-xl font-sans">
+    <div className="surface-glass-2 rounded-2xl overflow-hidden font-sans">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/40 px-5 py-3">
         <div>
           <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
@@ -85,7 +85,7 @@ export function WinBackCadencePreview({
               <button
                 type="button"
                 onClick={() => setExpandedKey(expanded ? null : t.key)}
-                className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900/40 transition-colors cursor-pointer font-sans"
+                className="hover-lift press-settle flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900/40 transition-colors cursor-pointer font-sans"
               >
                 <span className={cn(
                   "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors",
@@ -107,7 +107,7 @@ export function WinBackCadencePreview({
               </button>
               {expanded && (
                 <div className="px-5 pb-4 pl-[3.25rem]">
-                  <p className="text-xs text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-3 shadow-xs">
+                  <p className="text-xs text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans surface-glass-1 rounded-xl p-3">
                     {t.body}
                   </p>
                 </div>

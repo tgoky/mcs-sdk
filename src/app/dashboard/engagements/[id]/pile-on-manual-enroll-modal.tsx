@@ -104,7 +104,7 @@ export function PileOnManualEnrollModal({
             <button
               type="button"
               onClick={onClose}
-              className="mt-2 rounded-lg bg-zinc-900 dark:bg-white px-4 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 cursor-pointer"
+              className="hover-lift press-settle shadow-elevation-1 mt-2 rounded-lg bg-zinc-900 dark:bg-white px-4 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 cursor-pointer"
             >
               Done
             </button>
@@ -156,7 +156,7 @@ export function PileOnManualEnrollModal({
             )}
 
             {(step === "previewed" || step === "submitting") && preview && (
-              <div className="space-y-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3">
+              <div className="space-y-2 surface-glass-1 rounded-xl p-3">
                 <p className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">This is what would happen — nothing has been sent yet</p>
                 <ul className="space-y-1.5">
                   {preview.actions.map((a, i) => (
@@ -193,7 +193,7 @@ export function PileOnManualEnrollModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                className="hover-lift press-settle rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
                 disabled={step === "previewing" || step === "submitting"}
               >
                 Cancel
@@ -204,7 +204,7 @@ export function PileOnManualEnrollModal({
                   type="button"
                   onClick={confirmEnroll}
                   disabled={step === "submitting" || (preview !== null && preview.warnings.length > 0 && !acknowledgeWarning)}
-                  className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {step === "submitting" ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
                   Confirm enrollment
@@ -214,7 +214,7 @@ export function PileOnManualEnrollModal({
                   type="button"
                   onClick={runPreview}
                   disabled={!emailValid || step === "previewing"}
-                  className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {step === "previewing" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
                   Preview

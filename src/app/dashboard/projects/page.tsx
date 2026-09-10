@@ -43,7 +43,7 @@ export default async function ProjectsPage() {
       <div className="relative z-10 space-y-6 max-w-4xl mx-auto">
         
         {/* Header Hero Banner with Transparent Background */}
-        <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-transparent p-6 flex flex-col sm:flex-row items-center justify-between gap-6 overflow-hidden">
+        <div className="surface-glass-1 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6 overflow-hidden">
           <div className="space-y-2 max-w-md">
             <div className="flex items-center gap-2">
             
@@ -57,7 +57,7 @@ export default async function ProjectsPage() {
             <div className="pt-2">
               {/* <Link
                 href="/dashboard/projects/new"
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-lg shadow-xs hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.98] transition-all"
+                className="hover-lift press-settle inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-lg shadow-elevation-1 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all"
               >
                 <Plus size={14} strokeWidth={2.5} />
                 <span>Create New Project</span>
@@ -81,7 +81,7 @@ export default async function ProjectsPage() {
             </p>
             <Link
               href="/dashboard/projects/new"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-teal-600 text-white dark:bg-teal-500 rounded-lg shadow-xs hover:bg-teal-700 transition-all"
+              className="hover-lift press-settle inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-teal-600 text-white dark:bg-teal-500 rounded-lg shadow-elevation-1 hover:bg-teal-700 transition-all"
             >
               <Plus size={14} strokeWidth={2.5} />
               Create your first project
@@ -101,7 +101,7 @@ export default async function ProjectsPage() {
                   <Link
                     key={project.id}
                     href={`/dashboard/projects/${project.id}`}
-                    className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-900/50 p-4 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-all shadow-2xs"
+                    className="hover-lift group flex flex-col sm:flex-row sm:items-center justify-between gap-4 surface-glass-1 rounded-xl p-4 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all"
                   >
                     <div className="space-y-2 min-w-0 flex-1">
                       <div className="flex items-center gap-2">

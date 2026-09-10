@@ -214,7 +214,7 @@ function DraftResponseButton({ engagementId, findingText, findingPlatform }: { e
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1 text-[10.5px] font-mono font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+        className="hover-lift press-settle flex items-center gap-1 text-[10.5px] font-mono font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
       >
         <PenLine size={11} /> Draft a response
       </button>
@@ -228,7 +228,7 @@ function DraftResponseButton({ engagementId, findingText, findingPlatform }: { e
           type="button"
           onClick={() => fire({ action: "draft_response", findingText, findingPlatform })}
           disabled={state === "running"}
-          className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-2.5 py-1 text-[10.5px] font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
+          className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-2.5 py-1 text-[10.5px] font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
         >
           {state === "running" ? <Loader2 size={11} className="animate-spin" /> : <PenLine size={11} />}
           Confirm — draft a response to this
@@ -251,7 +251,7 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
   const [crisisSource, setCrisisSource] = useState("trustpilot");
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3">
+    <div className="flex flex-col gap-2 surface-glass-1 rounded-xl p-3">
       {source === "engine" && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
@@ -266,7 +266,7 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
             type="button"
             onClick={() => trigger.fire({ action: "check_ai_engines", subject: engineSubject.trim() || undefined, question: engineQuestion.trim() || undefined })}
             disabled={trigger.state === "running"}
-            className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
           >
             {trigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
             Ask now
@@ -284,7 +284,7 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
             type="button"
             onClick={() => trigger.fire({ action: source === "trustpilot" ? "trustpilot_deep_scan" : "twitter_deep_scan", deepScanSinceDate: sinceDate })}
             disabled={trigger.state === "running" || !sinceDate}
-            className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
           >
             {trigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
             Deep scan
@@ -306,7 +306,7 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
             type="button"
             onClick={() => trigger.fire({ action: "reddit_deep_scan", deepScanTimeframe: redditTimeframe })}
             disabled={trigger.state === "running"}
-            className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
           >
             {trigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
             Widen scan
@@ -333,7 +333,7 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
               type="button"
               onClick={() => trigger.fire({ action: "check_crisis_threshold", hypotheticalFindingText: crisisText, hypotheticalFindingSource: crisisSource })}
               disabled={trigger.state === "running" || !crisisText.trim()}
-              className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
+              className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
             >
               {trigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
               Test threshold
@@ -414,7 +414,7 @@ export function RepFindingsPanel({ engagementId }: { engagementId: string }) {
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       {/* Toolbar & Controls — same shell as leak-map-schedule.tsx */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2 shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 surface-glass-1 rounded-2xl p-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-56">
             <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-400 dark:text-zinc-500" />
@@ -431,7 +431,7 @@ export function RepFindingsPanel({ engagementId }: { engagementId: string }) {
               type="button"
               onClick={() => setSourceFilter("all")}
               className={cn(
-                "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer whitespace-nowrap",
+                "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer whitespace-nowrap",
                 sourceFilter === "all" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
               )}
             >
@@ -443,7 +443,7 @@ export function RepFindingsPanel({ engagementId }: { engagementId: string }) {
                 type="button"
                 onClick={() => setSourceFilter(kind)}
                 className={cn(
-                  "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer whitespace-nowrap",
+                  "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer whitespace-nowrap",
                   sourceFilter === kind ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
                 )}
               >
@@ -459,7 +459,7 @@ export function RepFindingsPanel({ engagementId }: { engagementId: string }) {
             type="button"
             onClick={load}
             disabled={loading}
-            className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
@@ -473,7 +473,7 @@ export function RepFindingsPanel({ engagementId }: { engagementId: string }) {
         {/* Timeline feed — full width, flat and newest-first (a continuous
             multi-source feed, not a handful of scheduled runs, so no
             calendar-style day buckets — just a timestamp per row) */}
-        <div className="overflow-hidden rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xs flex flex-col">
+        <div className="overflow-hidden surface-glass-1 rounded-2xl flex flex-col">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60">
             <span className="text-xs font-bold text-zinc-900 dark:text-white">Findings Timeline</span>
             <span className="text-[10.5px] font-mono text-zinc-500">{filtered.length} shown</span>
@@ -496,7 +496,7 @@ export function RepFindingsPanel({ engagementId }: { engagementId: string }) {
                     type="button"
                     onClick={() => setSelectedKey(entryKey(e))}
                     className={cn(
-                      "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-0",
+                      "hover-lift press-settle flex w-full items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-0",
                       isSelected ? "bg-zinc-100/80 dark:bg-zinc-800" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                     )}
                   >
@@ -525,7 +525,7 @@ export function RepFindingsPanel({ engagementId }: { engagementId: string }) {
         </div>
 
         {/* Diagnostic panel — full detail for whatever's selected */}
-        <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 space-y-3 shadow-xs">
+        <div className="surface-glass-1 rounded-2xl p-4 space-y-3">
           {selected ? (
             (() => {
               const meta = SOURCE_META[selected.kind];

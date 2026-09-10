@@ -198,13 +198,13 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       {/* Toolbar & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2 shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 surface-glass-1 rounded-2xl p-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800/80 rounded-xl border border-zinc-200/80 dark:border-zinc-800 p-1">
             <button
               type="button"
               onClick={() => handleMonthChange(new Date(year, month - 1, 1))}
-              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+              className="hover-lift press-settle rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
             >
               <ChevronLeft size={14} />
             </button>
@@ -214,14 +214,14 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
             <button
               type="button"
               onClick={() => handleMonthChange(new Date(year, month + 1, 1))}
-              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+              className="hover-lift press-settle rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
             >
               <ChevronRight size={14} />
             </button>
             <button
               type="button"
               onClick={handleTodayClick}
-              className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer ml-0.5"
+              className="hover-lift press-settle shadow-elevation-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer ml-0.5"
             >
               Today
             </button>
@@ -243,7 +243,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
             type="button"
             onClick={load}
             disabled={loading}
-            className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
@@ -264,7 +264,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
               {scheduled.map((s) => (
                 <div
                   key={s.auditType}
-                  className="flex items-center gap-2.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 shadow-xs"
+                  className="flex items-center gap-2.5 surface-glass-1 rounded-2xl p-3"
                 >
                   <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold shrink-0">
                     <CalendarClock size={16} />
@@ -304,7 +304,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
           )}
 
           {/* Monthly Timeline Feed — full width */}
-          <div className="overflow-hidden rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xs flex flex-col">
+          <div className="overflow-hidden surface-glass-1 rounded-2xl flex flex-col">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
@@ -318,7 +318,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                   type="button"
                   onClick={() => setScopeFilter("all")}
                   className={cn(
-                    "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer",
+                    "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer",
                     scopeFilter === "all"
                       ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
                       : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
@@ -330,7 +330,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                   type="button"
                   onClick={() => setScopeFilter("weekly")}
                   className={cn(
-                    "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer",
+                    "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer",
                     scopeFilter === "weekly"
                       ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
                       : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
@@ -342,7 +342,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                   type="button"
                   onClick={() => setScopeFilter("monthly")}
                   className={cn(
-                    "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer",
+                    "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer",
                     scopeFilter === "monthly"
                       ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
                       : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
@@ -384,7 +384,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                               handleUpdateSelectedDate(new Date(item.createdAt));
                             }}
                             className={cn(
-                              "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-0",
+                              "hover-lift press-settle flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-0",
                               isSelected
                                 ? "bg-zinc-100/80 dark:bg-zinc-800 text-zinc-900 dark:text-white"
                                 : "bg-white dark:bg-transparent hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
@@ -442,7 +442,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
         </div>
 
         {/* Diagnostic panel — full width, underneath timeline */}
-        <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 space-y-4 shadow-xs">
+        <div className="surface-glass-1 rounded-2xl p-4 space-y-4">
           {selected ? (
             <>
               <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
@@ -483,15 +483,15 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
 
               {/* Metric Breakdown Cards */}
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 p-2 space-y-0.5">
+                <div className="surface-glass-1 rounded-xl p-2 space-y-0.5">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Issues</span>
                   <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.topIssueCount}</span>
                 </div>
-                <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 p-2 space-y-0.5">
+                <div className="surface-glass-1 rounded-xl p-2 space-y-0.5">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Alerts</span>
                   <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.alertsFiredCount}</span>
                 </div>
-                <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 p-2 space-y-0.5">
+                <div className="surface-glass-1 rounded-xl p-2 space-y-0.5">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Gaps</span>
                   <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.gapsCount}</span>
                 </div>

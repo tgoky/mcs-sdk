@@ -77,7 +77,7 @@ export function RunPinDownPieceButton({
           type="button"
           onClick={trigger}
           disabled={state === "running" || !value.trim()}
-          className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
+          className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
         >
           {state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
           {buttonLabel}

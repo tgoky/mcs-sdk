@@ -50,7 +50,7 @@ export function ViewCustomizer({
           type="button"
           aria-label="Customize view"
           className={cn(
-            "inline-flex items-center justify-center w-7 h-7 rounded-lg border shrink-0 transition-colors duration-150 cursor-pointer active:scale-95",
+            "inline-flex items-center justify-center w-7 h-7 rounded-lg border shrink-0 transition-colors duration-150 cursor-pointer active:scale-95 hover-lift press-settle",
             open
               ? "border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
               : "border-border text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-zinc-200"
@@ -61,7 +61,7 @@ export function ViewCustomizer({
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        className="w-[260px] p-1.5 rounded-2xl border border-border bg-white/95 dark:bg-black/95 backdrop-blur-xl text-zinc-900 dark:text-zinc-100 shadow-xl dark:shadow-2xl dark:shadow-black overflow-hidden font-sans tracking-tight antialiased"
+        className="w-[260px] p-1.5 rounded-2xl surface-glass-3 text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans tracking-tight antialiased"
       >
         {menuTitle && (
           <p className="px-2.5 pt-2 pb-1.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
@@ -81,7 +81,7 @@ export function ViewCustomizer({
                     key={opt.id}
                     type="button"
                     onClick={() => onToggle(opt.id)}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[13px] text-left text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[13px] text-left text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors cursor-pointer hover-lift press-settle"
                   >
                     <span
                       className={cn(
@@ -139,9 +139,9 @@ export function FilterChipBar({
             type="button"
             onClick={() => onToggle(chip.id)}
             className={cn(
-              "inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer",
+              "inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer hover-lift press-settle",
               active
-                ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white"
+                ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-elevation-1"
                 : "bg-transparent text-zinc-500 dark:text-zinc-400 border-border hover:border-zinc-300 dark:hover:border-zinc-700 hover:text-zinc-700 dark:hover:text-zinc-200"
             )}
           >

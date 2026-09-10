@@ -148,7 +148,7 @@ function CredentialRow({
         <div className="flex items-center gap-0.5 text-[10px] font-mono">
           <button
             onClick={() => setMode("paste")}
-            className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+            className={`hover-lift press-settle px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
               mode === "paste"
                 ? "border-ink/40 bg-ink/10 text-ink-hover dark:text-ink"
                 : "border-transparent text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400"
@@ -158,7 +158,7 @@ function CredentialRow({
           </button>
           <button
             onClick={() => setMode("reuse")}
-            className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+            className={`hover-lift press-settle px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
               mode === "reuse"
                 ? "border-ink/40 bg-ink/10 text-ink-hover dark:text-ink"
                 : "border-transparent text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400"
@@ -182,7 +182,7 @@ function CredentialRow({
             <button
               onClick={update}
               disabled={busy || !value.trim()}
-              className="text-[11px] font-mono font-bold px-2.5 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-40 transition-all cursor-pointer shrink-0"
+              className="hover-lift press-settle text-[11px] font-mono font-bold px-2.5 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-40 transition-all cursor-pointer shrink-0"
             >
               {busy ? "Saving " : "Update"}
             </button>
@@ -231,7 +231,7 @@ function CredentialRow({
               <button
                 onClick={link}
                 disabled={linking || !selectedVaultId || selectedVaultId === currentlyLinkedVaultId}
-                className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2.5 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-40 transition-all cursor-pointer shrink-0"
+                className="hover-lift press-settle inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2.5 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-40 transition-all cursor-pointer shrink-0"
               >
                 <Link2 className="w-3 h-3" /> {linking ? "Linking " : "Link"}
               </button>
@@ -289,7 +289,7 @@ export function UpdateCredentialsForm({
     return (
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-1 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all cursor-pointer"
+        className="hover-lift press-settle inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-1 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all cursor-pointer"
       >
         <KeyRound className="w-3 h-3" /> Update credentials
       </button>
@@ -297,7 +297,7 @@ export function UpdateCredentialsForm({
   }
 
   return (
-    <div className={embedded ? "space-y-3" : "rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-zinc-950/20 p-4 space-y-3 shadow-sm"}>
+    <div className={embedded ? "space-y-3" : "surface-glass-2 rounded-lg p-4 space-y-3"}>
       {!embedded && (
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
@@ -305,7 +305,7 @@ export function UpdateCredentialsForm({
           </p>
           <button
             onClick={() => { setOpen(false); onRequestClose?.(); }}
-            className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors cursor-pointer"
+            className="hover-lift press-settle text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors cursor-pointer"
           >
             Close
           </button>

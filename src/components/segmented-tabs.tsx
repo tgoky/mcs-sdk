@@ -33,7 +33,7 @@ export function SegmentedTabs<T extends string>({
     <div
       role="tablist"
       className={cn(
-        "inline-flex items-center gap-0.5 p-0.5 rounded-lg border border-border bg-zinc-50/70 dark:bg-zinc-950/40 shrink-0",
+        "inline-flex items-center gap-0.5 p-0.5 rounded-lg surface-glass-1 shrink-0",
         className
       )}
     >
@@ -47,9 +47,9 @@ export function SegmentedTabs<T extends string>({
             aria-selected={active}
             onClick={() => onChange(opt.key)}
             className={cn(
-              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors cursor-pointer",
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors cursor-pointer hover-lift press-settle",
               active
-                ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700"
+                ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-elevation-1 ring-1 ring-zinc-200 dark:ring-zinc-700"
                 : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
             )}
           >

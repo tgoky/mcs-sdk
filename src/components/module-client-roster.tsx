@@ -283,7 +283,7 @@ export function ModuleClientRoster({
                       setPage(0);
                     }}
                     className={cn(
-                      "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap bg-transparent",
+                      "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap bg-transparent hover-lift press-settle",
                       isActive
                         ? "border-zinc-400 dark:border-zinc-400 text-zinc-900 dark:text-white font-semibold"
                         : "border-zinc-200/90 dark:border-zinc-800/90 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-600"
@@ -299,7 +299,7 @@ export function ModuleClientRoster({
                 <button
                   type="button"
                   onClick={() => setStatusFilter("activity")}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border border-zinc-200/90 dark:border-zinc-800/90 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer whitespace-nowrap bg-transparent"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border border-zinc-200/90 dark:border-zinc-800/90 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer whitespace-nowrap bg-transparent hover-lift press-settle"
                 >
                   <ActivityIcon size={13} className="text-zinc-600 dark:text-zinc-400" />
                   <span>Activity</span>
@@ -322,12 +322,12 @@ export function ModuleClientRoster({
                 />
               </div>
 
-              <div className="flex items-center rounded-full border border-zinc-200/90 dark:border-zinc-800/90 bg-transparent p-0.5 shrink-0">
+              <div className="flex items-center rounded-full surface-glass-1 p-0.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setMode("list")}
                   className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
+                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent hover-lift press-settle",
                     mode === "list"
                       ? "text-zinc-900 dark:text-white font-semibold border border-zinc-400 dark:border-zinc-600"
                       : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -341,7 +341,7 @@ export function ModuleClientRoster({
                   type="button"
                   onClick={() => setMode("board")}
                   className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
+                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent hover-lift press-settle",
                     mode === "board"
                       ? "text-zinc-900 dark:text-white font-semibold border border-zinc-400 dark:border-zinc-600"
                       : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -475,7 +475,7 @@ export function ModuleClientRoster({
                       key={size}
                       onClick={() => setPageSize(size)}
                       className={cn(
-                        "px-2 py-0.5 rounded border transition-colors cursor-pointer",
+                        "px-2 py-0.5 rounded border transition-colors cursor-pointer hover-lift press-settle",
                         pageSize === size
                           ? "border-zinc-400 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
                           : "border-transparent text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
@@ -494,14 +494,14 @@ export function ModuleClientRoster({
                     <button
                       onClick={() => setPage((p) => Math.max(0, p - 1))}
                       disabled={clampedPage === 0}
-                      className="px-2 py-1 rounded border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      className="px-2 py-1 rounded border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer hover-lift press-settle"
                     >
                       Prev
                     </button>
                     <button
                       onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
                       disabled={clampedPage >= pageCount - 1}
-                      className="px-2 py-1 rounded border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      className="px-2 py-1 rounded border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer hover-lift press-settle"
                     >
                       Next
                     </button>
@@ -524,7 +524,7 @@ export function ModuleClientRoster({
                 return (
                   <div
                     key={colKey}
-                    className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-transparent p-3 flex flex-col gap-2 font-sans"
+                    className="rounded-2xl surface-glass-1 p-3 flex flex-col gap-2 font-sans"
                   >
                     <div className="mb-1 flex items-center justify-between px-1">
                       <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{colTitles[colKey]}</span>
@@ -538,7 +538,7 @@ export function ModuleClientRoster({
                         <div
                           key={c.engagementId}
                           onClick={() => router.push(hrefFor(skill, c.engagementId))}
-                          className="w-full text-left rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-transparent hover:border-zinc-300 dark:hover:border-zinc-700 p-3 transition-all cursor-pointer group flex flex-col gap-2 font-sans"
+                          className="w-full text-left rounded-xl surface-glass-1 p-3 transition-all cursor-pointer group flex flex-col gap-2 font-sans hover-lift press-settle"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
@@ -578,7 +578,7 @@ export function ModuleClientRoster({
                       ))}
 
                       {board[colKey].length === 0 && (
-                        <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-4 text-center text-[10px] text-zinc-700 dark:text-zinc-600">
+                        <div className="rounded-xl surface-glass-1 p-4 text-center text-[10px] text-zinc-700 dark:text-zinc-600">
                           No clients in this column
                         </div>
                       )}

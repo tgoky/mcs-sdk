@@ -109,7 +109,7 @@ export function TimeRangeMenu({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors cursor-pointer shrink-0"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors cursor-pointer shrink-0 hover-lift press-settle"
         >
           <Clock size={12} />
           {timeRangeLabel(value)}
@@ -118,13 +118,13 @@ export function TimeRangeMenu({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[220px] p-1.5 rounded-2xl border border-border bg-white/95 dark:bg-black/95 backdrop-blur-xl shadow-xl overflow-hidden font-sans"
+        className="w-[220px] p-1.5 rounded-2xl surface-glass-3 overflow-hidden font-sans"
       >
         <div className="space-y-0.5">
           <button
             type="button"
             onClick={() => setTodayExpanded((e) => !e)}
-            className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-[13px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors cursor-pointer"
+            className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-[13px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors cursor-pointer hover-lift press-settle"
           >
             <span className="flex items-center gap-2">
               {TODAY_VALUES.includes(value) && <Check size={13} />}
@@ -147,7 +147,7 @@ export function TimeRangeMenu({
                     setOpen(false);
                   }}
                   className={cn(
-                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] text-left transition-colors cursor-pointer",
+                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] text-left transition-colors cursor-pointer hover-lift press-settle",
                     value === opt.key
                       ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium"
                       : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -170,7 +170,7 @@ export function TimeRangeMenu({
                 setOpen(false);
               }}
               className={cn(
-                "w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-[13px] text-left transition-colors cursor-pointer",
+                "w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-[13px] text-left transition-colors cursor-pointer hover-lift press-settle",
                 value === opt.key
                   ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium"
                   : "text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80"
@@ -190,7 +190,7 @@ export function TimeRangeMenu({
               setOpen(false);
             }}
             className={cn(
-              "w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-[13px] text-left transition-colors cursor-pointer",
+              "w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-[13px] text-left transition-colors cursor-pointer hover-lift press-settle",
               value === "all"
                 ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium"
                 : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"

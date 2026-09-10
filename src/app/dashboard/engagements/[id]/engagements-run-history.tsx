@@ -37,7 +37,7 @@ export function EngagementRunHistory({
         <button
           type="button"
           onClick={() => setSelectedSkill("all")}
-          className={`px-2.5 py-1 text-xs font-mono rounded-md border transition-colors cursor-pointer ${
+          className={`hover-lift press-settle px-2.5 py-1 text-xs font-mono rounded-md border transition-colors cursor-pointer ${
             selectedSkill === "all"
               ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-transparent font-semibold"
               : "bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200"
@@ -55,7 +55,7 @@ export function EngagementRunHistory({
               key={skill}
               type="button"
               onClick={() => setSelectedSkill(skill)}
-              className={`px-2.5 py-1 text-xs font-mono rounded-md border transition-colors cursor-pointer ${
+              className={`hover-lift press-settle px-2.5 py-1 text-xs font-mono rounded-md border transition-colors cursor-pointer ${
                 selectedSkill === skill
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-transparent font-semibold"
                   : "bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200"
@@ -68,7 +68,7 @@ export function EngagementRunHistory({
       </div>
 
       {/* Filtered Runs List */}
-      <div className="w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-transparent transition-colors">
+      <div className="w-full overflow-hidden surface-glass-1 rounded-xl transition-colors">
         <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
           {filteredRuns.slice(0, 20).map((run) => (
             <li key={run.id} className="group relative">

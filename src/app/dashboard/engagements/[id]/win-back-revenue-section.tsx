@@ -182,7 +182,7 @@ export function WinBackRevenueSection({
           <button
             type="button"
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             <Calendar size={13} className="text-zinc-500" />
             <span>{selectedPeriod.label} ({selectedPeriod.sublabel})</span>
@@ -191,7 +191,7 @@ export function WinBackRevenueSection({
 
           {/* Screenshot 1 Popup Styling */}
           {dropdownOpen && (
-            <div className="absolute right-0 mt-1.5 w-72 rounded-2xl border border-border bg-white dark:bg-zinc-900 shadow-xl dark:shadow-2xl z-50 p-1.5 space-y-0.5 animate-in fade-in-50 zoom-in-95 duration-100">
+            <div className="absolute right-0 mt-1.5 w-72 surface-glass-3 rounded-2xl z-50 p-1.5 space-y-0.5 animate-in fade-in-50 zoom-in-95 duration-100">
               <div className="px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                 Select Reporting Period
               </div>
@@ -205,7 +205,7 @@ export function WinBackRevenueSection({
                       setSelectedPeriod(p);
                       setDropdownOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-colors cursor-pointer ${
+                    className={`hover-lift press-settle w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-colors cursor-pointer ${
                       isSelected
                         ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-semibold"
                         : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
@@ -235,7 +235,7 @@ export function WinBackRevenueSection({
       </div>
 
       {/* ── TOP STATS SUMMARY BAR ── */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-4 shadow-xs">
+      <div className="surface-glass-1 rounded-2xl p-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="space-y-1 p-2">
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
@@ -274,7 +274,7 @@ export function WinBackRevenueSection({
       {/* ── Weekly Recovery Trend — a compact bar strip instead of a 12-card
            kanban board that rendered "No Recoveries" placeholders for every
            empty week. Same information, no empty scaffolding. ── */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 p-4">
+      <div className="surface-glass-1 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
             Weekly Recovery Trend — {selectedPeriod.label}
@@ -316,7 +316,7 @@ export function WinBackRevenueSection({
 
       {/* ── Recovered Deals — flat chronological list. Only real rows,
            one honest empty state instead of stacked per-week placeholders. ── */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50 overflow-hidden">
+      <div className="surface-glass-1 rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800/80">
           <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
             Recovered Deals — {selectedPeriod.label}
@@ -338,7 +338,7 @@ export function WinBackRevenueSection({
                 key={d.prospectEmail + idx}
                 type="button"
                 onClick={() => setSelectedDeal(d)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer"
+                className="hover-lift press-settle w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer"
               >
                 <div className="w-7 h-7 rounded-full bg-pink-100 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 text-[10px] font-bold flex items-center justify-center shrink-0">
                   {getInitials(d.prospectName, d.prospectEmail)}
@@ -399,7 +399,7 @@ function RecoveredDealDrawer({
                 <span className="truncate">{deal.prospectEmail}</span>
               </div>
 
-              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 p-3 space-y-2">
+              <div className="surface-glass-1 rounded-xl p-3 space-y-2">
                 {offerPrice > 0 && (
                   <div className="flex items-center justify-between text-xs font-sans">
                     <span className="text-zinc-600 dark:text-zinc-400">Revenue attributed</span>
@@ -423,11 +423,11 @@ function RecoveredDealDrawer({
               </div>
 
               {deal.runId && (
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 overflow-hidden">
+                <div className="surface-glass-1 rounded-xl overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setShowRunActivity((p) => !p)}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-white dark:hover:bg-zinc-900 transition-colors"
+                    className="hover-lift press-settle flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-white dark:hover:bg-zinc-900 transition-colors"
                   >
                     <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                       <SquishySkillBadge skill="win-back" size={14} enabled={true} />

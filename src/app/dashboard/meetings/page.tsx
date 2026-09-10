@@ -136,7 +136,7 @@ export default async function MeetingsPage({
             No {isPast ? "past" : "upcoming"} bookings tracked.
           </div>
         ) : (
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-900 divide-y divide-zinc-200 dark:divide-zinc-900 overflow-hidden bg-white dark:bg-zinc-900/30">
+          <div className="surface-glass-1 rounded-xl divide-y divide-zinc-200 dark:divide-zinc-900 overflow-hidden">
             {bookings.map((row) => (
               <Link
                 key={row.id}
@@ -191,7 +191,7 @@ export default async function MeetingsPage({
             No {isPast ? "past" : "upcoming"} calls briefed.
           </div>
         ) : (
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-900 divide-y divide-zinc-200 dark:divide-zinc-900 overflow-hidden bg-white dark:bg-zinc-900/30">
+          <div className="surface-glass-1 rounded-xl divide-y divide-zinc-200 dark:divide-zinc-900 overflow-hidden">
             {briefed.map((row) => (
               <Link
                 key={row.id}

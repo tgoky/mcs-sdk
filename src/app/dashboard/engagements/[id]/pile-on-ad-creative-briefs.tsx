@@ -26,7 +26,7 @@ export function PileOnAdCreativeBriefs({ pack }: { pack: AdCreativeBriefPack | n
 
   if (!pack || pack.briefs.length === 0) {
     return (
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-5 font-sans">
+      <div className="surface-glass-2 rounded-2xl p-5 font-sans">
         <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Ad Creative Briefs</h3>
         <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans mt-1">
           No ad creative briefs have been generated yet — this gets built automatically during setup.
@@ -36,7 +36,7 @@ export function PileOnAdCreativeBriefs({ pack }: { pack: AdCreativeBriefPack | n
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 overflow-hidden shadow-xl font-sans">
+    <div className="surface-glass-2 rounded-2xl overflow-hidden font-sans">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/40 px-5 py-3">
         <div>
           <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Ad Creative Briefs</h3>
@@ -55,7 +55,7 @@ export function PileOnAdCreativeBriefs({ pack }: { pack: AdCreativeBriefPack | n
         {pack.briefs.map((b) => {
           const expanded = expandedId === b.id;
           return (
-            <div key={b.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 overflow-hidden shadow-xs">
+            <div key={b.id} className="surface-glass-1 rounded-xl overflow-hidden">
               <div className="px-3.5 pt-3 pb-2.5 font-sans">
                 <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800/60 px-2 py-0.5 text-[9.5px] font-mono font-semibold uppercase text-zinc-600 dark:text-zinc-400">
                   <Megaphone size={9} /> {adCreativePillarLabel(b.pillar)}
@@ -67,7 +67,7 @@ export function PileOnAdCreativeBriefs({ pack }: { pack: AdCreativeBriefPack | n
               <button
                 type="button"
                 onClick={() => setExpandedId(expanded ? null : b.id)}
-                className="flex w-full items-center justify-between gap-2 border-t border-zinc-200 dark:border-zinc-800/60 px-3.5 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900/60 transition-colors cursor-pointer font-sans"
+                className="hover-lift press-settle flex w-full items-center justify-between gap-2 border-t border-zinc-200 dark:border-zinc-800/60 px-3.5 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900/60 transition-colors cursor-pointer font-sans"
               >
                 <span className="text-[10.5px] font-mono text-zinc-500">{expanded ? "Hide details" : "Talking points, format & CTA"}</span>
                 <ChevronDown size={12} className={cn("text-zinc-500 shrink-0 transition-transform", expanded && "rotate-180")} />
@@ -90,7 +90,7 @@ export function PileOnAdCreativeBriefs({ pack }: { pack: AdCreativeBriefPack | n
                     <span className="text-zinc-500 font-semibold">Format</span>
                     <span className="text-zinc-800 dark:text-zinc-300 font-medium text-right">{b.suggestedFormat}</span>
                   </div>
-                  <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1.5 font-sans">
+                  <div className="surface-glass-1 rounded-lg px-2.5 py-1.5 font-sans">
                     <span className="text-[9.5px] font-mono uppercase text-zinc-500 block">CTA</span>
                     <span className="text-xs font-medium text-zinc-900 dark:text-white font-sans">{b.cta}</span>
                   </div>

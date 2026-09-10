@@ -226,14 +226,14 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       {/* Shared Toolbar & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-2 shadow-sm font-sans">
+      <div className="flex flex-wrap items-center justify-between gap-3 surface-glass-1 rounded-2xl p-2 font-sans">
         <div className="flex flex-wrap items-center gap-2">
           {/* Universal Month Navigation */}
           <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
             <button
               type="button"
               onClick={() => handleMonthChange(new Date(year, month - 1, 1))}
-              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+              className="hover-lift press-settle rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
             >
               <ChevronLeft size={14} />
             </button>
@@ -243,14 +243,14 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
             <button
               type="button"
               onClick={() => handleMonthChange(new Date(year, month + 1, 1))}
-              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+              className="hover-lift press-settle rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
             >
               <ChevronRight size={14} />
             </button>
             <button
               type="button"
               onClick={handleTodayClick}
-              className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
+              className="hover-lift press-settle shadow-elevation-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
             >
               Today
             </button>
@@ -279,7 +279,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
             type="button"
             onClick={load}
             disabled={loading}
-            className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
@@ -287,7 +287,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
           <button
             type="button"
             onClick={() => setShowManualEnroll(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
             title="Manually enroll a prospect who cancelled outside a connected webhook"
           >
             <UserPlus size={13} />
@@ -303,7 +303,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
       {/* SMART SPLIT-PANE RECOVERY FEED */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
         {/* LEFT 7 COLUMNS: CHRONOLOGICAL RECOVERY FEED */}
-        <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans flex flex-col">
+        <div className="lg:col-span-7 overflow-hidden surface-glass-2 rounded-2xl font-sans flex flex-col">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
             <div className="flex items-center gap-1.5">
               <CalendarDays size={14} className="text-zinc-500" />
@@ -318,7 +318,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                   <button
                     type="button"
                     onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 7 * 86400000))}
-                    className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                    className="hover-lift press-settle p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
                     title="Previous Week"
                   >
                     <ChevronLeft size={13} />
@@ -326,14 +326,14 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                   <button
                     type="button"
                     onClick={handleTodayClick}
-                    className="text-[10.5px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
+                    className="hover-lift press-settle text-[10.5px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
                   >
                     Today
                   </button>
                   <button
                     type="button"
                     onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() + 7 * 86400000))}
-                    className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                    className="hover-lift press-settle p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
                     title="Next Week"
                   >
                     <ChevronRight size={13} />
@@ -346,7 +346,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                   type="button"
                   onClick={() => setListScope("week")}
                   className={cn(
-                    "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                    "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
                     listScope === "week" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
                   )}
                 >
@@ -356,7 +356,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                   type="button"
                   onClick={() => setListScope("month")}
                   className={cn(
-                    "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                    "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
                     listScope === "month" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
                   )}
                 >
@@ -447,7 +447,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                             setSelectedId(null);
                           }}
                           className={cn(
-                            "w-full px-4 py-2.5 text-left text-xs font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
+                            "hover-lift press-settle w-full px-4 py-2.5 text-left text-xs font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
                             isSelectedDay
                               ? "bg-zinc-200/60 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 font-semibold"
                               : "text-zinc-400 dark:text-zinc-600 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40"
@@ -466,7 +466,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
         </div>
 
         {/* RIGHT 5 COLUMNS: PERSISTENT RECOVERY INSPECTOR PANEL */}
-        <div className="lg:col-span-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
+        <div className="lg:col-span-5 surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
           {selected ? (
             <>
               <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
@@ -497,7 +497,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+              <div className="surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
                 <div className="flex items-center justify-between font-sans">
                   <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
                   <span className="font-mono text-zinc-900 dark:text-white">{selected.touchesSent} / {selected.touchesTotal}</span>
@@ -527,7 +527,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
               </div>
 
               {selected.freshRescheduleLink && (
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                <div className="surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
                   <span className="text-[10.5px] font-mono text-zinc-500 uppercase block font-semibold flex items-center gap-1.5">
                     <Link2 size={12} /> Single-use Reschedule Link
                   </span>
@@ -551,11 +551,11 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
 
               {/* CLEAN RUN ACTIVITY PANEL IN LIGHT MODE - NO DARK BOX OVERFLOW */}
               {selected.runId && (
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 overflow-hidden text-xs font-sans">
+                <div className="surface-glass-1 rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden text-xs font-sans">
                   <button
                     type="button"
                     onClick={() => setShowRunActivity((p) => !p)}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
+                    className="hover-lift press-settle flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
                   >
                     <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
                       <SquishySkillBadge skill="win-back" size={14} enabled={true} />

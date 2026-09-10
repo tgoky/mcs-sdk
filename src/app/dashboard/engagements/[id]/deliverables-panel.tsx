@@ -179,7 +179,7 @@ function DeliverableRow({
     <div
       className={
         isOpen
-          ? "bg-white dark:bg-zinc-900/90 text-zinc-900 dark:text-zinc-100 rounded-2xl shadow-md dark:shadow-xl my-3 border border-zinc-200 dark:border-zinc-700/60 transition-all duration-200"
+          ? "surface-glass-2 text-zinc-900 dark:text-zinc-100 rounded-2xl my-3 transition-all duration-200"
           : "border-b border-zinc-200/80 dark:border-zinc-800/60 last:border-b-0 transition-all duration-200"
       }
     >
@@ -188,8 +188,8 @@ function DeliverableRow({
         onClick={onToggle}
         className={
           isOpen
-            ? "w-full flex items-center justify-between py-4 px-3.5 text-left cursor-pointer select-none"
-            : "w-full flex items-center justify-between py-4 px-3 hover:bg-zinc-200/50 dark:hover:bg-zinc-900/40 rounded-xl transition-all text-left cursor-pointer select-none group"
+            ? "hover-lift press-settle w-full flex items-center justify-between py-4 px-3.5 text-left cursor-pointer select-none"
+            : "hover-lift press-settle w-full flex items-center justify-between py-4 px-3 hover:bg-zinc-200/50 dark:hover:bg-zinc-900/40 rounded-xl transition-all text-left cursor-pointer select-none group"
         }
       >
         <div className="flex items-center gap-3.5 min-w-0">
@@ -280,7 +280,7 @@ export function DeliverablesPanel({
     <div className="w-full space-y-6 font-sans">
       {/* CALL INTELLIGENCE STATUS HEADER */}
       {conversationIntelligence?.enabled ? (
-        <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950/60 text-xs">
+        <div className="flex items-center justify-between p-3.5 surface-glass-1 rounded-xl text-xs">
           <div className="flex items-center gap-3">
             <Radio size={16} className="text-emerald-500 dark:text-emerald-400 animate-pulse shrink-0" />
             <div>
@@ -299,7 +299,7 @@ export function DeliverablesPanel({
           </span>
         </div>
       ) : (
-        <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950/60 text-xs">
+        <div className="flex items-center justify-between p-3.5 surface-glass-1 rounded-xl text-xs">
           <div className="flex items-center gap-3">
             <div className="p-1.5 rounded-lg bg-zinc-200 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-800 shrink-0">
               <Radio size={16} />
@@ -323,7 +323,7 @@ export function DeliverablesPanel({
       )}
 
       {/* MAIN DELIVERABLES CONTAINER */}
-      <div className="w-full bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-2 sm:p-4 divide-y divide-zinc-200 dark:divide-zinc-800/60 shadow-lg">
+      <div className="w-full surface-glass-2 rounded-2xl p-2 sm:p-4 divide-y divide-zinc-200 dark:divide-zinc-800/60">
         
         {/* BRAND VOICE & SITE INTELLIGENCE ROW */}
         <DeliverableRow
@@ -413,7 +413,7 @@ export function DeliverablesPanel({
                     const clamped = Math.max(1, Math.min(5, val.score));
                     const pct = ((clamped - 1) / 4) * 100;
                     return (
-                      <div key={key} className="p-3 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-2">
+                      <div key={key} className="p-3 surface-glass-1 rounded-lg space-y-2">
                         <div className="flex justify-between text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
                           <span>{axis?.left ?? key}</span>
                           <span className="text-zinc-900 dark:text-zinc-100 font-bold">{val.score}/5</span>
@@ -493,7 +493,7 @@ export function DeliverablesPanel({
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {voiceScrapeArtifacts.sources.map((s, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-xs">
+                    <div key={i} className="flex items-center justify-between px-3 py-2 surface-glass-1 rounded-lg text-xs">
                       <span className="text-zinc-800 dark:text-zinc-200 truncate max-w-[80%]" title={s.url}>
                         <strong className="font-semibold">{SOURCE_KIND_LABELS[s.kind] ?? s.kind}</strong>
                         {s.url ? ` — ${s.url}` : ""}
@@ -588,7 +588,7 @@ export function DeliverablesPanel({
                   </div>
                   <div className="space-y-2">
                     {pinDownScriptPack.heroScript.chapters.map((c, i) => (
-                      <div key={i} className="p-3 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-1">
+                      <div key={i} className="p-3 surface-glass-1 rounded-lg space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="text-zinc-700 dark:text-zinc-300 font-mono font-bold text-[11px]">{c.timestampLabel}</span>
                           <span className="text-zinc-900 dark:text-zinc-100 font-semibold">{c.beat}</span>
@@ -610,7 +610,7 @@ export function DeliverablesPanel({
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {pinDownScriptPack.breakoutScripts.map((s) => (
-                      <div key={s.id} className="p-3 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-2">
+                      <div key={s.id} className="p-3 surface-glass-1 rounded-lg space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-zinc-900 dark:text-zinc-100">{s.title}</span>
                           <span className="text-[11px] font-mono text-zinc-500">~{s.targetLengthSeconds}s</span>
@@ -634,7 +634,7 @@ export function DeliverablesPanel({
                     Recording Logistics Checklist
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-1.5">
+                    <div className="p-3 surface-glass-1 rounded-lg space-y-1.5">
                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
                         <Wrench size={13} className="text-zinc-500" /> Equipment
                       </span>
@@ -645,7 +645,7 @@ export function DeliverablesPanel({
                       </ul>
                     </div>
 
-                    <div className="p-3 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-1.5">
+                    <div className="p-3 surface-glass-1 rounded-lg space-y-1.5">
                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
                         <Camera size={13} className="text-zinc-500" /> Environment
                       </span>
@@ -656,7 +656,7 @@ export function DeliverablesPanel({
                       </ul>
                     </div>
 
-                    <div className="p-3 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-1.5">
+                    <div className="p-3 surface-glass-1 rounded-lg space-y-1.5">
                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
                         <Shirt size={13} className="text-zinc-500" /> Wardrobe &amp; Framing
                       </span>
@@ -685,7 +685,7 @@ export function DeliverablesPanel({
             subtitle={`Audited ${pinDownPageAudit.auditedUrl}`}
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
-              <div className="space-y-1.5 p-3 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+              <div className="space-y-1.5 p-3 surface-glass-1 rounded-lg">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
                   <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400" /> Strengths
                 </span>
@@ -696,7 +696,7 @@ export function DeliverablesPanel({
                 </ul>
               </div>
 
-              <div className="space-y-1.5 p-3 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+              <div className="space-y-1.5 p-3 surface-glass-1 rounded-lg">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
                   <AlertCircle size={12} className="text-rose-600 dark:text-rose-400" /> Weaknesses
                 </span>
@@ -707,7 +707,7 @@ export function DeliverablesPanel({
                 </ul>
               </div>
 
-              <div className="space-y-1.5 p-3 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+              <div className="space-y-1.5 p-3 surface-glass-1 rounded-lg">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
                   v1 Improvements
                 </span>
@@ -720,7 +720,7 @@ export function DeliverablesPanel({
             </div>
 
             {pinDownPageAudit.competitorComparison && pinDownPageAudit.competitorComparison.notes.length > 0 && (
-              <div className="space-y-1.5 p-3 mt-3 rounded-lg bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-xs">
+              <div className="space-y-1.5 p-3 mt-3 surface-glass-1 rounded-lg text-xs">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
                   Vs. {pinDownPageAudit.competitorComparison.url}
                 </span>

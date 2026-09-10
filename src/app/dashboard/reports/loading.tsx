@@ -13,7 +13,7 @@ export default function ReportsLoading() {
         <div className="h-3 w-2/3 max-w-2xl rounded-sm bg-zinc-100 dark:bg-zinc-900" />
       </div>
 
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-900/50 p-6 space-y-6">
+      <div className="surface-glass-1 rounded-xl p-6 space-y-6">
         <div className="flex items-center gap-2">
           {["This week", "This month", "All time"].map((label) => (
             <div key={label} className="h-7 w-20 rounded-lg bg-zinc-100 dark:bg-zinc-900" />

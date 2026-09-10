@@ -27,7 +27,7 @@ export function ViewSwitcher({
 }) {
   const visibleModes = modes ? MODES.filter((m) => modes.includes(m.key)) : MODES;
   return (
-    <div className={cn("inline-flex items-center gap-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 p-0.5", className)}>
+    <div className={cn("inline-flex items-center gap-0.5 rounded-lg surface-glass-1 p-0.5", className)}>
       {visibleModes.map(({ key, label, icon: Icon }) => {
         const active = value === key;
         return (
@@ -37,8 +37,8 @@ export function ViewSwitcher({
             onClick={() => onChange(key)}
             aria-pressed={active}
             className={cn(
-              "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer",
-              active ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+              "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer hover-lift press-settle",
+              active ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-elevation-1" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
             )}
           >
             <Icon size={13} />

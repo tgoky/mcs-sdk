@@ -326,7 +326,7 @@ export function LeakMapModuleView({
               onClick={onBack}
               aria-label="Back to all clients"
               title="Back to all clients"
-              className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-zinc-200 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all cursor-pointer shadow-xs mr-1"
+              className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-full surface-glass-1 text-zinc-200 hover:text-white transition-all cursor-pointer mr-1 hover-lift press-settle"
             >
               <ChevronLeft size={14} />
             </button>
@@ -347,7 +347,7 @@ export function LeakMapModuleView({
                 type="button"
                 onClick={() => { setStatusFilter(tab); setPage(0); }}
                 className={cn(
-                  "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap bg-transparent",
+                  "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer whitespace-nowrap bg-transparent hover-lift press-settle",
                   isActive
                     ? "border-zinc-400 text-white font-semibold"
                     : "border-zinc-800/90 text-zinc-400 hover:text-white hover:border-zinc-600"
@@ -366,7 +366,7 @@ export function LeakMapModuleView({
             type="button"
             onClick={() => setPolling((p) => !p)}
             className={cn(
-              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer select-none",
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer select-none shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle",
               polling
                 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
                 : "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
@@ -390,7 +390,7 @@ export function LeakMapModuleView({
             type="button"
             onClick={() => setGroupRepeats((g) => !g)}
             className={cn(
-              "px-2.5 py-1 rounded-full text-[11px] font-mono border transition-colors cursor-pointer bg-transparent",
+              "px-2.5 py-1 rounded-full text-[11px] font-mono border transition-colors cursor-pointer bg-transparent hover-lift press-settle",
               groupRepeats ? "border-zinc-600 text-zinc-300" : "border-zinc-800 text-zinc-500"
             )}
           >
@@ -402,7 +402,7 @@ export function LeakMapModuleView({
               type="button"
               onClick={() => setMode("list")}
               className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
+                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent hover-lift press-settle",
                 mode === "list" ? "text-white font-semibold border border-zinc-600" : "text-zinc-400 hover:text-zinc-200"
               )}
             >
@@ -414,7 +414,7 @@ export function LeakMapModuleView({
               type="button"
               onClick={() => setMode("board")}
               className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent",
+                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer bg-transparent hover-lift press-settle",
                 mode === "board" ? "text-white font-semibold border border-zinc-600" : "text-zinc-400 hover:text-zinc-200"
               )}
             >
@@ -560,7 +560,7 @@ export function LeakMapModuleView({
                   key={size}
                   onClick={() => setPageSize(size)}
                   className={cn(
-                    "px-2 py-0.5 rounded border transition-colors cursor-pointer",
+                    "px-2 py-0.5 rounded border transition-colors cursor-pointer hover-lift press-settle",
                     pageSize === size ? "border-zinc-600 bg-zinc-800 text-white" : "border-transparent text-zinc-500 hover:text-zinc-300"
                   )}
                 >
@@ -575,14 +575,14 @@ export function LeakMapModuleView({
                 <button
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={clampedPage === 0}
-                  className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer hover-lift press-settle"
                 >
                   ← Prev
                 </button>
                 <button
                   onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
                   disabled={clampedPage >= pageCount - 1}
-                  className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer hover-lift press-settle"
                 >
                   Next →
                 </button>
@@ -601,7 +601,7 @@ export function LeakMapModuleView({
             const colTitles = { running: "In Progress", needs_attention: "Needs Attention", completed: "Completed" };
 
             return (
-              <div key={colKey} className="rounded-2xl border border-zinc-800/80 bg-transparent p-3 flex flex-col gap-2 font-sans">
+              <div key={colKey} className="rounded-2xl surface-glass-1 p-3 flex flex-col gap-2 font-sans">
                 <div className="mb-1 flex items-center justify-between px-1">
                   <span className="text-xs font-bold text-zinc-300">{colTitles[colKey]}</span>
                   <span className="text-[10px] font-mono text-zinc-500 border border-zinc-800 px-2 py-0.5 rounded-md font-bold">
@@ -614,7 +614,7 @@ export function LeakMapModuleView({
                     <div
                       key={r.id}
                       onClick={() => router.push(`/dashboard/runs/${r.id}`)}
-                      className="w-full text-left rounded-xl border border-zinc-800/80 bg-transparent hover:border-zinc-700 p-3 transition-all cursor-pointer group flex flex-col gap-2 font-sans"
+                      className="w-full text-left rounded-xl surface-glass-1 p-3 transition-all cursor-pointer group flex flex-col gap-2 font-sans hover-lift press-settle"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
@@ -645,7 +645,7 @@ export function LeakMapModuleView({
                   ))}
 
                   {board[colKey].length === 0 && (
-                    <div className="rounded-xl border border-dashed border-zinc-800 p-4 text-center text-[10px] text-zinc-600">
+                    <div className="rounded-xl surface-glass-1 p-4 text-center text-[10px] text-zinc-600">
                       No runs in this column
                     </div>
                   )}

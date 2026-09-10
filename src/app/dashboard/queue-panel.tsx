@@ -413,7 +413,7 @@ function QueueRow({
               <button
                 disabled={isBusy}
                 onClick={() => onDecide("approved")}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-600 dark:bg-rose-500 text-white hover:bg-rose-700 dark:hover:bg-rose-400 transition-colors cursor-pointer shadow-2xs"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-600 dark:bg-rose-500 text-white hover:bg-rose-700 dark:hover:bg-rose-400 transition-colors cursor-pointer shadow-elevation-1"
                 title="Confirm no-show and start Win-Back recovery"
               >
                 <UserX size={12} /> Confirm no-show
@@ -421,7 +421,7 @@ function QueueRow({
               <button
                 disabled={isBusy}
                 onClick={() => onResolveSweepNoShow("showed")}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-2xs"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-elevation-1"
                 title="Log that they actually showed — no Win-Back"
               >
                 <UserCheck size={12} /> Showed
@@ -429,7 +429,7 @@ function QueueRow({
               <button
                 disabled={isBusy}
                 onClick={() => onResolveSweepNoShow("rescheduled")}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-500 text-zinc-950 hover:bg-amber-400 transition-colors cursor-pointer shadow-2xs"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-500 text-zinc-950 hover:bg-amber-400 transition-colors cursor-pointer shadow-elevation-1"
                 title="Log that they rescheduled — no Win-Back"
               >
                 <CalendarClock size={12} /> Rescheduled
@@ -438,7 +438,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={() => onDecide("rejected")}
-              className="text-[10.5px] font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer"
+              className="hover-lift press-settle text-[10.5px] font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer"
               title="Dismiss without logging anything — resolve it later from the roster"
             >
               Not sure — dismiss
@@ -450,14 +450,14 @@ function QueueRow({
               <button
                 disabled={isBusy}
                 onClick={() => onDecide("approved")}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-2xs"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-elevation-1"
               >
                 <Check size={12} /> {copy.actions.approve}
               </button>
               <button
                 disabled={isBusy}
                 onClick={() => onDecide("rejected")}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
               >
                 <X size={12} /> {copy.actions.reject}
               </button>
@@ -471,7 +471,7 @@ function QueueRow({
               <Link
                 href={repair?.kind === "link" ? repair.href : (href as string)}
                 onClick={handleFixLinkClick}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors shadow-2xs"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors shadow-elevation-1"
               >
                 <ArrowUpRight size={12} /> {repair?.label ?? "Review"}
               </Link>
@@ -479,7 +479,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={onDismissSyncSetup}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
+              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
             >
               <X size={12} /> Not now
             </button>
@@ -494,7 +494,7 @@ function QueueRow({
                 onClick={() =>
                   dispatch(repair.key, () => triggerSkillRun(repair.engagementId, repair.skillName), onActionComplete)
                 }
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors disabled:opacity-60 shadow-2xs"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors disabled:opacity-60 shadow-elevation-1"
               >
                 <RotateCcw size={12} /> {busyKey === repair.key ? "Running…" : repair.label}
               </button>
@@ -502,7 +502,7 @@ function QueueRow({
               <Link
                 href={repair?.kind === "link" ? repair.href : (href as string)}
                 onClick={handleFixLinkClick}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors shadow-2xs"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors shadow-elevation-1"
               >
                 <ArrowUpRight size={12} /> {repair?.label ?? "Fix now"}
               </Link>
@@ -510,7 +510,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={onDismissRunFailure}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
+              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
             >
               <X size={12} /> Not now
             </button>
@@ -522,14 +522,14 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={() => onDecide("resolved")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-2xs"
+              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-elevation-1"
             >
               <Check size={12} /> {copy.actions.resolve}
             </button>
             <button
               disabled={isBusy}
               onClick={() => onDecide("abandoned")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
+              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
             >
               <X size={12} /> {copy.actions.dismiss}
             </button>
@@ -551,7 +551,7 @@ function QueueRow({
               // opens that instead of skipping straight past it.
               <button
                 onClick={() => setPanelOpen(true)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors cursor-pointer shadow-2xs"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors cursor-pointer shadow-elevation-1"
               >
                 <ArrowUpRight size={12} /> {copy.actions.open}
               </button>
@@ -559,7 +559,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={() => onRunMutation(`/api/notifications/${item.id}/read`)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-2xs"
+              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
             >
               <X size={12} /> {copy.actions.dismiss}
             </button>
@@ -1292,7 +1292,7 @@ export function QueuePanel({
             <Link
               href={viewAllHref}
               title="Open full Queue"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 bg-white dark:bg-zinc-900/60 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-800 transition-all duration-150 shadow-2xs group"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 bg-white dark:bg-zinc-900/60 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-800 transition-all duration-150 shadow-elevation-1 group"
             >
               <span>View all</span>
               <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-200 transition-colors" />
@@ -1302,11 +1302,11 @@ export function QueuePanel({
       </div>
 
       {/* MAIN CONTAINER FRAME (Integrated Rail + Table) */}
-      <div className="border border-zinc-200/80 dark:border-sidebar-border rounded-2xl bg-white/60 dark:bg-sidebar shadow-xs overflow-visible flex flex-col md:flex-row min-h-[400px] w-full">
+      <div className="surface-glass-2 rounded-2xl overflow-visible flex flex-col md:flex-row min-h-[400px] w-full">
         {/* LEFT RAIL */}
         <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-zinc-200/80 dark:border-sidebar-border bg-[#f8f7fa] dark:bg-sidebar p-3 flex flex-col shrink-0 space-y-3 select-none rounded-t-2xl md:rounded-tr-none md:rounded-l-2xl">
           {/* SCOPE CARD */}
-          <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/50 text-xs font-semibold text-zinc-900 dark:text-zinc-100 shadow-xs">
+          <div className="flex items-center justify-between px-3 py-2.5 surface-glass-1 rounded-xl text-xs font-semibold text-zinc-900 dark:text-zinc-100">
             <span>{railView === "all" ? "All queues" : "All clients"}</span>
             <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 font-bold tabular-nums">
               {railView === "all" ? items.length : clients.length}
@@ -1319,7 +1319,7 @@ export function QueuePanel({
               <button
                 type="button"
                 onClick={() => setIsGroupingPopoverOpen((p) => !p)}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900/80 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 font-medium transition-colors cursor-pointer shadow-2xs"
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900/80 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 font-medium transition-colors cursor-pointer shadow-elevation-1"
               >
                 <div className="flex items-center gap-2 truncate">
                   <GripVertical size={13} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
@@ -1331,7 +1331,7 @@ export function QueuePanel({
               {isGroupingPopoverOpen && (
                 <>
                   <div className="fixed inset-0 z-30" onClick={() => setIsGroupingPopoverOpen(false)} />
-                  <div className="absolute top-full left-0 mt-1 w-full z-40 p-1 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl space-y-0.5 text-xs">
+                  <div className="absolute top-full left-0 mt-1 w-full z-40 p-1 surface-glass-3 rounded-xl space-y-0.5 text-xs">
                     {(Object.keys(groupingModeLabels) as RailGroupingMode[]).map((mode) => (
                       <button
                         key={mode}
@@ -1644,7 +1644,7 @@ export function QueuePanel({
                 </p>
               </div>
             ) : (
-              <div className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border border border-zinc-200/80 dark:border-sidebar-border rounded-xl overflow-hidden bg-white dark:bg-zinc-900/30 shadow-xs">
+              <div className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border surface-glass-1 rounded-xl overflow-hidden">
                 {archiveItems.map((it) => (
                   <ClosedQueueRow key={it.id} item={it} />
                 ))}
@@ -1657,7 +1657,7 @@ export function QueuePanel({
                 <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>
               </div>
             ) : (
-              <div className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border border border-zinc-200/80 dark:border-sidebar-border rounded-xl overflow-hidden bg-white dark:bg-zinc-900/30 shadow-xs">
+              <div className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border surface-glass-1 rounded-xl overflow-hidden">
                 {clients.map((client) => (
                   <button
                     key={client.engagementId}
@@ -1685,7 +1685,7 @@ export function QueuePanel({
               <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>
             </div>
           ) : (
-            <div ref={listContainerRef} className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border border border-zinc-200/80 dark:border-sidebar-border rounded-xl overflow-hidden bg-white dark:bg-zinc-900/30 shadow-xs">
+            <div ref={listContainerRef} className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border surface-glass-1 rounded-xl overflow-hidden">
               {pagedGroups.map((group) => {
                 const expanded = expandedGroups.has(group.signature);
                 return (
@@ -1710,7 +1710,7 @@ export function QueuePanel({
               <button
                 type="button"
                 onClick={() => setSavedView((p) => ({ ...p, pageSize: 10 }))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800/80 hover:bg-zinc-50 dark:hover:bg-zinc-700/80 text-zinc-800 dark:text-zinc-200 border border-zinc-200/80 dark:border-zinc-700/60 transition-colors cursor-pointer shadow-2xs"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800/80 hover:bg-zinc-50 dark:hover:bg-zinc-700/80 text-zinc-800 dark:text-zinc-200 border border-zinc-200/80 dark:border-zinc-700/60 transition-colors cursor-pointer shadow-elevation-1"
               >
                 <span>View more</span>
                 <span className="font-mono text-[11px] text-zinc-400">({queueGroups.length - 5} remaining)</span>
@@ -1741,14 +1741,14 @@ export function QueuePanel({
                 <button
                   onClick={() => setPage(Math.max(0, clampedPage - 1))}
                   disabled={clampedPage === 0}
-                  className="px-2 py-1 rounded border border-zinc-200 dark:border-sidebar-border bg-white dark:bg-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 cursor-pointer shadow-2xs"
+                  className="px-2 py-1 rounded border border-zinc-200 dark:border-sidebar-border bg-white dark:bg-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 cursor-pointer shadow-elevation-1"
                 >
                   ← Prev
                 </button>
                 <button
                   onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}
                   disabled={clampedPage >= pageCount - 1}
-                  className="px-2 py-1 rounded border border-zinc-200 dark:border-sidebar-border bg-white dark:bg-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 cursor-pointer shadow-2xs"
+                  className="px-2 py-1 rounded border border-zinc-200 dark:border-sidebar-border bg-white dark:bg-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 cursor-pointer shadow-elevation-1"
                 >
                   Next →
                 </button>
@@ -1764,7 +1764,7 @@ export function QueuePanel({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 dark:bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="absolute inset-0" onClick={() => setIsAddTagOpen(false)} />
 
-          <div className="relative z-10 w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-2xl text-xs space-y-3.5 font-sans [scrollbar-width:none]">
+          <div className="relative z-10 w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 surface-glass-3 rounded-2xl text-xs space-y-3.5 font-sans [scrollbar-width:none]">
             <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-2.5">
               <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">Create New Tag</span>
               <button
@@ -1801,7 +1801,7 @@ export function QueuePanel({
                 </button>
 
                 {isSkillDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl space-y-0.5">
+                  <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 surface-glass-3 rounded-xl space-y-0.5">
                     {Object.entries(skillTargetLabels).map(([k, label]) => (
                       <button
                         key={k}
@@ -1828,7 +1828,7 @@ export function QueuePanel({
                 </button>
 
                 {isCategoryDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl space-y-0.5">
+                  <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 surface-glass-3 rounded-xl space-y-0.5">
                     {Object.entries(categoryTargetLabels).map(([k, label]) => (
                       <button
                         key={k}

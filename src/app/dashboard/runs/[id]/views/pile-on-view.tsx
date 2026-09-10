@@ -250,7 +250,7 @@ export function PileOnView({
           success) purely for decoration — the same status is already
           stated in words by the badge two lines down, so the bar added
           no information, just an "AI slop" visual flourish. Dropped. */}
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-4 space-y-3 shadow-xs">
+      <div className="rounded-xl surface-glass-2 p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <SquishySkillBadge
@@ -269,7 +269,7 @@ export function PileOnView({
                   <button
                     type="button"
                     onClick={() => handleCopy(prospectEmail, "email")}
-                    className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+                    className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors hover-lift press-settle"
                     title="Copy email"
                   >
                     {copiedKey === "email" ? (
@@ -366,7 +366,7 @@ export function PileOnView({
             <button
               type="button"
               onClick={() => handleCopy(send.personalizedIntro!, "intro")}
-              className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+              className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors hover-lift press-settle"
             >
               {copiedKey === "intro" ? (
                 <Check size={11} className="text-emerald-500" />
@@ -494,7 +494,7 @@ export function PileOnView({
                     {ch.messages.map((m, i) => (
                       <div
                         key={m.id}
-                        className="flex items-center justify-between text-xs py-1.5 px-3 rounded bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800"
+                        className="flex items-center justify-between text-xs py-1.5 px-3 rounded surface-glass-1"
                       >
                         <span className="font-medium text-zinc-700 dark:text-zinc-300">
                           Text #{i + 1} —{" "}

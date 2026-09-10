@@ -52,7 +52,7 @@ function relativeTime(iso: string | null): string {
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-zinc-300 dark:border-zinc-800 bg-background px-2.5 py-1.5 space-y-0.5">
+    <div className="rounded surface-glass-1 px-2.5 py-1.5 space-y-0.5">
       <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">
         {label}
       </p>
@@ -81,14 +81,14 @@ function CopyField({ label, value, mask }: { label: string; value: string; mask?
         {label}
       </span>
       <div className="flex items-center gap-1.5">
-        <code className="flex-1 min-w-0 truncate text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300">
+        <code className="flex-1 min-w-0 truncate text-xs font-mono px-2 py-1.5 rounded surface-glass-1 text-zinc-700 dark:text-zinc-300">
           {revealed ? value : "•".repeat(Math.min(value.length, 40))}
         </code>
         {mask && (
           <button
             type="button"
             onClick={() => setRevealed((r) => !r)}
-            className="shrink-0 p-1.5 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+            className="shrink-0 p-1.5 rounded surface-glass-1 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer hover-lift press-settle"
             title={revealed ? "Hide" : "Reveal"}
           >
             {revealed ? <EyeOff size={13} /> : <Eye size={13} />}
@@ -97,7 +97,7 @@ function CopyField({ label, value, mask }: { label: string; value: string; mask?
         <button
           type="button"
           onClick={copy}
-          className="shrink-0 p-1.5 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+          className="shrink-0 p-1.5 rounded surface-glass-1 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer hover-lift press-settle"
           title="Copy"
         >
           {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
@@ -188,7 +188,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
   }
 
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-black p-3 space-y-3 font-mono">
+    <div className="rounded-lg surface-glass-2 p-3 space-y-3 font-mono">
       {/* Header */}
       <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-900/50">
         <div className="flex items-center gap-2 min-w-0">
@@ -241,7 +241,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
 
       {/* Manual Setup & Webhook Controls for GHL Calendar & OnceHub */}
       {!supportsAutoWebhook && (
-        <div className="rounded border border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/50 p-3 space-y-3">
+        <div className="rounded surface-glass-1 p-3 space-y-3">
           <div className="flex items-start gap-2">
             <Zap size={14} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
             <div className="space-y-0.5">
@@ -273,7 +273,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
                 type="button"
                 disabled={busy !== null}
                 onClick={() => patch({ mode: "webhook" }, "webhook")}
-                className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-3 py-1.5 rounded bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-white disabled:opacity-50 transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-3 py-1.5 rounded bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-white disabled:opacity-50 transition-all cursor-pointer hover-lift press-settle shadow-elevation-1"
               >
                 {busy === "webhook" ? "Switching…" : "I've added it · switch to Direct Webhook"}
               </button>
@@ -286,7 +286,7 @@ export function BookingSyncStatusCard({ engagementId, status: initial }: Props) 
                   type="button"
                   disabled={busy !== null}
                   onClick={() => patch({ mode: "polling" }, "polling")}
-                  className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-1 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-1 rounded surface-glass-1 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all cursor-pointer hover-lift press-settle"
                 >
                   <RefreshCw size={11} className={busy === "polling" ? "animate-spin" : ""} />
                   {busy === "polling" ? "Switching…" : "Switch to auto-polling"}

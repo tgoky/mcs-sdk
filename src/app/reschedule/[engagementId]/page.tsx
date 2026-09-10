@@ -93,7 +93,7 @@ export default async function ReschedulePage({
               <a
                 key={i}
                 href={buildSlotLink(stack.booking_platform, standardBookingUrl, slot, stack.booking_platform_meta)}
-                className="block w-full rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:border-zinc-400 transition-colors dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                className="hover-lift press-settle block w-full surface-glass-1 rounded-lg px-4 py-3 text-sm font-medium text-zinc-900 hover:border-zinc-400 transition-colors dark:text-zinc-100"
               >
                 {slot.toLocaleString(undefined, {
                   weekday: "long",

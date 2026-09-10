@@ -129,7 +129,7 @@ export function PreCallReadView({
       {/* ----------------------------------------------------------------- */}
       {/* 1. ASANA TOOLBAR (PERSISTENT SEARCH + VIEW SWITCHER)              */}
       {/* ----------------------------------------------------------------- */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f8f7fa] dark:bg-zinc-950 p-1.5 border border-zinc-200 dark:border-zinc-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl surface-glass-1 p-1.5">
         <div className="relative w-64">
           <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
           <input
@@ -157,7 +157,7 @@ export function PreCallReadView({
       {/* ----------------------------------------------------------------- */}
       {mode === "calendar" && (
         <div key="calendar" className="run-view-content-enter flex flex-col gap-3 font-sans">
-          <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-black/40 px-3 py-2.5 text-[11px] font-sans">
+          <div className="flex items-center gap-2.5 rounded-xl surface-glass-1 px-3 py-2.5 text-[11px] font-sans">
             <div className="h-3.5 w-1 shrink-0 rounded-full bg-emerald-500/80" />
             <span className="text-zinc-600 dark:text-zinc-400 font-semibold">{phaseLabel("roster_fetch")}</span>
             <span className="text-zinc-400 dark:text-zinc-700">·</span>
@@ -173,7 +173,7 @@ export function PreCallReadView({
           </div>
 
           {callsByDay.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa]/50 dark:bg-zinc-950/50 py-14 text-zinc-700 dark:text-zinc-600 font-sans">
+            <div className="flex flex-col items-center gap-2 rounded-2xl surface-glass-1 py-14 text-zinc-700 dark:text-zinc-600 font-sans">
               <CalendarX size={22} />
               <span className="text-xs">This run&apos;s window came back empty — nothing to brief.</span>
             </div>
@@ -182,7 +182,7 @@ export function PreCallReadView({
               const d = new Date(dayKeyStr);
               const isToday = dateKey(new Date()) === dayKeyStr;
               return (
-<div key={dayKeyStr} className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-transparent shadow-xl font-sans">                
+<div key={dayKeyStr} className="overflow-hidden rounded-2xl surface-glass-2 font-sans">
                   <div className="flex items-center gap-4 border-b border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-5 py-4">
                     <div
                       className={cn(
@@ -222,7 +222,7 @@ export function PreCallReadView({
       {/* 3. DENSE LIST VIEW                                                */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
-        <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 font-sans">
+        <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl surface-glass-2 font-sans">
           {callsByDay.length === 0 ? (
             <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic font-sans">
               No sales calls scheduled in this briefing window.
@@ -277,7 +277,7 @@ export function PreCallReadView({
                                   e.stopPropagation();
                                   setExpandedId(isExpanded ? null : call.id);
                                 }}
-                                className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 dark:bg-white px-2.5 py-1.5 text-[11px] font-bold text-white dark:text-zinc-950 hover:bg-zinc-700 dark:hover:bg-zinc-200 cursor-pointer font-sans"
+                                className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 dark:bg-white px-2.5 py-1.5 text-[11px] font-bold text-white dark:text-zinc-950 hover:bg-zinc-700 dark:hover:bg-zinc-200 cursor-pointer font-sans shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
                               >
                                 {isExpanded ? "Hide" : "View"}
                                 {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -398,7 +398,7 @@ function CallCard({
     : null;
 
   return (
-   <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-transparent shadow-sm font-sans antialiased overflow-hidden">
+   <div className="rounded-2xl surface-glass-2 font-sans antialiased overflow-hidden">
       {/* Header: prospect, time, status — all visible with no click */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
         <div className="min-w-0">
@@ -412,7 +412,7 @@ function CallCard({
           <button
             type="button"
             onClick={handleCopyText}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[11px] font-semibold cursor-pointer transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[11px] font-semibold cursor-pointer transition-colors shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
           >
             {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
             {copied ? "Copied" : "Copy"}
@@ -427,11 +427,11 @@ function CallCard({
             that failed to send still showed "Sent to: Slack message" as
             if it succeeded — the exact mismatch that broke trust. */}
         <div className="grid grid-cols-2 gap-2 text-xs">
-         <div className="space-y-0.5 rounded-xl bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 p-2.5">
+         <div className="space-y-0.5 rounded-xl surface-glass-1 p-2.5">
             <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Prospect identity</span>
             <p className="font-semibold text-zinc-800 dark:text-zinc-200">{matchLabel(call).text}</p>
           </div>
- <div className="space-y-0.5 rounded-xl bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 p-2.5">
+ <div className="space-y-0.5 rounded-xl surface-glass-1 p-2.5">
             <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Sent to</span>
             {call.briefDeliveredAt ? (
               <p className="flex items-center gap-1 font-semibold text-zinc-800 dark:text-zinc-200">
@@ -453,7 +453,7 @@ function CallCard({
               <button
                 type="button"
                 onClick={() => setIsEditing((p) => !p)}
-                className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white underline cursor-pointer"
+                className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white underline cursor-pointer hover-lift press-settle"
               >
                 {isEditing ? "Done editing" : "Edit brief text"}
               </button>
@@ -468,11 +468,11 @@ function CallCard({
               className="w-full p-3.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-zinc-500 leading-relaxed"
             />
           ) : editableText ? (
-           <div className="rounded-xl bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+           <div className="rounded-xl surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
               {editableText}
             </div>
           ) : (
-            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-950 p-3.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+            <div className="rounded-xl surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
               {status === "failed"
                 ? stepDetail
                   ? `Brief generation failed: ${stepDetail}`
@@ -497,7 +497,7 @@ function CallCard({
               onClick={() => handleLogOutcome("showed")}
               disabled={outcomeSubmitting !== null}
               className={cn(
-                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
+                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle",
                 loggedOutcome === "showed"
                   ? "bg-emerald-500 text-zinc-950"
                   : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
@@ -512,7 +512,7 @@ function CallCard({
               onClick={() => handleLogOutcome("no_show")}
               disabled={outcomeSubmitting !== null}
               className={cn(
-                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
+                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle",
                 loggedOutcome === "no_show"
                   ? "bg-rose-500 text-white"
                   : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
@@ -527,7 +527,7 @@ function CallCard({
               onClick={() => handleLogOutcome("rescheduled")}
               disabled={outcomeSubmitting !== null}
               className={cn(
-                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
+                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle",
                 loggedOutcome === "rescheduled"
                   ? "bg-amber-500 text-zinc-950"
                   : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
@@ -547,7 +547,7 @@ function CallCard({
               type="button"
               onClick={handleResendToSlack}
               disabled={deliveryState === "sending"}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 font-bold text-xs hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 font-bold text-xs hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
             >
               {deliveryState === "sent" ? <Check size={13} /> : <Send size={13} />}
               {deliveryState === "sending"

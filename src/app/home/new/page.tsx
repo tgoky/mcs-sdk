@@ -74,7 +74,7 @@ export default function NewWorkspacePage({
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-2xl flex-col px-6 py-10 sm:px-10 animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out">
         <Link
           href="/home"
-          className="flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-all duration-200 hover:scale-105 active:scale-95 shrink-0 mb-8 shadow-2xs"
+          className="flex items-center justify-center w-8 h-8 rounded-full border border-border bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-all duration-200 hover:scale-105 active:scale-95 shrink-0 mb-8 shadow-elevation-1"
           aria-label="Back to workspaces"
         >
           <ChevronLeft className="w-4 h-4" />
@@ -196,7 +196,7 @@ export default function NewWorkspacePage({
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="relative cursor-pointer min-w-[140px] bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 font-bold text-xs shadow-xs transition-all duration-200 hover:scale-[1.01] active:scale-[0.98] disabled:opacity-80"
+              className="relative cursor-pointer min-w-[140px] bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 font-bold text-xs disabled:opacity-80"
             >
               {isSubmitting ? (
                 <div className="flex items-center gap-2">

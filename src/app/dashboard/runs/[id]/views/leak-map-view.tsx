@@ -113,7 +113,7 @@ export function LeakMapView({
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       {/* TOOLBAR */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f8f7fa] dark:bg-zinc-950 p-1.5 border border-zinc-200 dark:border-zinc-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl surface-glass-1 p-1.5">
         {!embedded && (
           <div className="relative w-64">
             <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
@@ -149,7 +149,7 @@ export function LeakMapView({
                   overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData &&
                     "border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10",
                   overallSeverity !== "high" && overallSeverity !== "medium" && hasAnyUsableData &&
-                    "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/30"
+                    "surface-glass-1"
                 )}
               >
                 <div className="flex items-center gap-2 shrink-0">
@@ -212,13 +212,13 @@ export function LeakMapView({
                       ))}
                     </div>
                   ) : (
-                    <p className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/30 p-3.5 text-xs italic text-zinc-500 dark:text-zinc-500">
+                    <p className="rounded-xl surface-glass-1 p-3.5 text-xs italic text-zinc-500 dark:text-zinc-500">
                       No funnel metrics match your search filter.
                     </p>
                   )}
 
                   {/* Executive Report Reader */}
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3.5">
+                  <div className="rounded-xl surface-glass-2 p-3.5">
                     <div className="mb-2 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <FileText size={13} className="text-zinc-600 dark:text-zinc-400" />
@@ -230,7 +230,7 @@ export function LeakMapView({
                         <button
                           type="button"
                           onClick={handleCopyReport}
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-700 text-xs font-mono transition-all cursor-pointer"
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-700 text-xs font-mono transition-all cursor-pointer shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
                         >
                           {copiedReport ? (
                             <Check size={12} className="text-emerald-400" />
@@ -243,11 +243,11 @@ export function LeakMapView({
                     </div>
 
                     {audit.reportMarkdown ? (
-                      <div className="whitespace-pre-wrap rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/60 p-3 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto">
+                      <div className="whitespace-pre-wrap rounded-lg surface-glass-1 p-3 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto">
                         {audit.reportMarkdown}
                       </div>
                     ) : (
-                      <p className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/40 p-3 text-xs italic text-zinc-500 dark:text-zinc-500">
+                      <p className="rounded-lg surface-glass-1 p-3 text-xs italic text-zinc-500 dark:text-zinc-500">
                         No report text stored for this run. Check the Steps panel to confirm whether delivery (Resend/Slack) succeeded.
                       </p>
                     )}
@@ -278,7 +278,7 @@ export function LeakMapView({
 
           {/* LIST VIEW */}
           {mode === "list" && (
-            <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950">
+            <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl surface-glass-2">
               {filteredIssues.length === 0 ? (
                 <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic">
                   {issues.length === 0
@@ -369,7 +369,7 @@ function IssueCard({ issue }: { issue: IssueType }) {
         cardTone === "danger" && "border-rose-900/40 bg-rose-950/10",
         cardTone === "warning" && "border-orange-900/40 bg-orange-950/10",
         cardTone === "gap" && "border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10",
-        (cardTone === "info" || cardTone === "neutral") && "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40"
+        (cardTone === "info" || cardTone === "neutral") && "surface-glass-1"
       )}
     >
       {/* Header row */}

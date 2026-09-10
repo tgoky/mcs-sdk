@@ -56,7 +56,7 @@ function ActionPanelRow({ item, busy, onClose }: { item: ActionPanelItem; busy: 
   const danger = item.tone === "danger";
 
   const className = cn(
-    "group w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] font-sans font-medium text-left transition-colors duration-100 select-none cursor-pointer active:scale-[0.98]",
+    "group w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] font-sans font-medium text-left transition-colors duration-100 select-none cursor-pointer active:scale-[0.98] hover-lift press-settle",
     "disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100",
     item.active
       ? "bg-zinc-100 dark:bg-zinc-800/80 text-zinc-900 dark:text-white"
@@ -136,7 +136,7 @@ export function ActionPanel({
           aria-label={triggerLabel}
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            "inline-flex items-center justify-center w-7 h-7 rounded-lg border shrink-0 transition-colors duration-150 cursor-pointer active:scale-95",
+            "inline-flex items-center justify-center w-7 h-7 rounded-lg border shrink-0 transition-colors duration-150 cursor-pointer active:scale-95 hover-lift press-settle",
             open
               ? "border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
               : "border-transparent text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-zinc-200 dark:hover:border-zinc-800",
@@ -152,7 +152,7 @@ export function ActionPanel({
         side={side}
         align={align}
         onClick={(e) => e.stopPropagation()}
-        className="w-[280px] sm:w-[300px] p-1.5 rounded-2xl border border-border bg-white/95 dark:bg-black/95 backdrop-blur-xl text-zinc-900 dark:text-zinc-100 shadow-xl dark:shadow-2xl dark:shadow-black overflow-hidden font-sans tracking-tight antialiased"
+        className="w-[280px] sm:w-[300px] p-1.5 rounded-2xl surface-glass-3 text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans tracking-tight antialiased"
       >
         {header && (
           <div className="px-3 pt-2.5 pb-2 border-b border-zinc-100 dark:border-zinc-800/80 text-xs font-sans leading-normal text-zinc-600 dark:text-zinc-300">

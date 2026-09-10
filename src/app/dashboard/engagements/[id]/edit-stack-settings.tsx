@@ -484,7 +484,7 @@ export function EditStackSettings({
     return (
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-1 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all cursor-pointer"
+        className="hover-lift press-settle inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-1 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all cursor-pointer"
       >
         <Settings2 className="w-3 h-3" /> Edit stack settings
       </button>
@@ -492,7 +492,7 @@ export function EditStackSettings({
   }
 
   return (
-    <div className={embedded ? "space-y-4" : "rounded-lg border border-zinc-200 dark:border-zinc-900 bg-white/40 dark:bg-black p-4 space-y-4 shadow-sm"}>
+    <div className={embedded ? "space-y-4" : "surface-glass-2 rounded-lg p-4 space-y-4"}>
       {!embedded && (
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
@@ -500,7 +500,7 @@ export function EditStackSettings({
           </p>
           <button
             onClick={() => { setOpen(false); onRequestClose?.(); }}
-            className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors cursor-pointer"
+            className="hover-lift press-settle text-[11px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 transition-colors cursor-pointer"
           >
             Close
           </button>
@@ -860,7 +860,7 @@ export function EditStackSettings({
         <button
           onClick={save}
           disabled={busy}
-          className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-3 py-1.5 rounded bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-white disabled:opacity-50 transition-all cursor-pointer mt-3"
+          className="hover-lift press-settle shadow-elevation-1 inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-3 py-1.5 rounded bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-white disabled:opacity-50 transition-all cursor-pointer mt-3"
         >
           <Save className="w-3 h-3" /> {busy ? "Saving…" : "Save changes"}
         </button>

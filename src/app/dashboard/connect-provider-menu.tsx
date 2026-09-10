@@ -50,7 +50,7 @@ export function ConnectProviderMenu({ recent }: { recent: RecentEngagement[] }) 
         onClick={() => setOpen((p) => !p)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-[#dfd7ea] dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100 transition-all cursor-pointer"
+        className="hover-lift press-settle flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-[#dfd7ea] dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-100 transition-all cursor-pointer"
       >
         <Radio className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0" />
         <span className="flex flex-col items-start">
@@ -62,7 +62,7 @@ export function ConnectProviderMenu({ recent }: { recent: RecentEngagement[] }) 
       {open && (
         <div
           role="menu"
-          className="absolute left-0 top-full z-20 mt-1 w-64 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg overflow-hidden"
+          className="absolute left-0 top-full z-20 mt-1 w-64 surface-glass-3 rounded-xl overflow-hidden"
         >
           <div className="px-3 py-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 border-b border-zinc-100 dark:border-zinc-800">
             Connect Recall.ai for…

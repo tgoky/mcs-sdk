@@ -19,7 +19,7 @@ export function RepOnboardingView({ detail }: { detail: RepOnboardingDetail }) {
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">
+      <div className="rounded-xl surface-glass-2 p-4">
         <div className="flex items-center gap-2 mb-3">
           <Fingerprint size={14} className="text-zinc-500 dark:text-zinc-500" />
           <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-200">Identity graph</h2>
@@ -43,7 +43,7 @@ export function RepOnboardingView({ detail }: { detail: RepOnboardingDetail }) {
       </div>
 
       {identityGraph.entities.length > 0 && (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">
+        <div className="rounded-xl surface-glass-2 p-4">
           <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2">
             Entities ({identityGraph.entities.length})
           </h3>
@@ -80,7 +80,7 @@ export function RepOnboardingView({ detail }: { detail: RepOnboardingDetail }) {
       )}
 
       {identityGraph.seedPanelPrompts.length > 0 && (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">
+        <div className="rounded-xl surface-glass-2 p-4">
           <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2">
             Seed AI-engine prompts ({identityGraph.seedPanelPrompts.length})
           </h3>

@@ -113,7 +113,7 @@ export function NewProjectForm({ clients }: { clients: Client[] }) {
                 onClick={() => toggleSkill(skillId)}
                 className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
                   isEnabled
-                    ? "border-border bg-white dark:bg-zinc-900/80 shadow-2xs"
+                    ? "surface-glass-1"
                     : "border-zinc-200/50 dark:border-zinc-800/40 bg-zinc-50/40 dark:bg-zinc-950/20 opacity-60"
                 }`}
               >
@@ -151,7 +151,7 @@ export function NewProjectForm({ clients }: { clients: Client[] }) {
             No clients created yet. You can assign clients later.
           </p>
         ) : (
-          <div className="max-h-48 overflow-y-auto flex flex-col gap-1 rounded-xl border border-border p-2 bg-white/50 dark:bg-zinc-900/30">
+          <div className="max-h-48 overflow-y-auto flex flex-col gap-1 surface-glass-1 rounded-xl p-2">
             {clients.map((client) => {
               const isSelected = selectedClients.has(client.engagementId);
               return (

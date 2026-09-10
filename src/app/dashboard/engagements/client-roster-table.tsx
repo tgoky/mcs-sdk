@@ -45,7 +45,7 @@ export interface RosterRun {
 }
 
 const MENU_CARD =
-  "bg-white dark:bg-zinc-900 border border-border rounded-sm shadow-xl text-zinc-900 dark:text-zinc-100 font-sans antialiased";
+  "surface-glass-3 rounded-sm text-zinc-900 dark:text-zinc-100 font-sans antialiased";
 const MENU_ITEM =
   "group/item flex items-center gap-2.5 px-2.5 py-1.5 rounded-none text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white focus:bg-zinc-100 dark:focus:bg-zinc-800 data-open:bg-zinc-100 dark:data-open:bg-zinc-800 cursor-pointer outline-none";
 const MENU_ICON =
@@ -221,7 +221,7 @@ export function ClientRosterTable({
           <div key={eng.engagementId} className="flex flex-col">
             <div
               className={cn(
-                "group/row flex flex-col md:flex-row md:items-center justify-between gap-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-3.5 py-2.5 transition-all shadow-2xs",
+                "group/row flex flex-col md:flex-row md:items-center justify-between gap-2.5 surface-glass-1 rounded-xl px-3.5 py-2.5 transition-all",
                 !isEditing && "hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/30"
               )}
             >
@@ -280,7 +280,7 @@ export function ClientRosterTable({
                       onClick={() => commitEdit(eng)}
                       disabled={isBusy}
                       title="Save"
-                      className="p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer shrink-0 disabled:opacity-50 mt-0.5"
+                      className="hover-lift press-settle p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer shrink-0 disabled:opacity-50 mt-0.5"
                     >
                       {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                     </button>
@@ -289,7 +289,7 @@ export function ClientRosterTable({
                       onClick={cancelEditing}
                       disabled={isBusy}
                       title="Cancel"
-                      className="p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer shrink-0 disabled:opacity-50 mt-0.5"
+                      className="hover-lift press-settle p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer shrink-0 disabled:opacity-50 mt-0.5"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -333,7 +333,7 @@ export function ClientRosterTable({
                           type="button"
                           title="More options"
                           className={cn(
-                            "shrink-0 p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700/60 transition-colors cursor-pointer",
+                            "hover-lift press-settle shrink-0 p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700/60 transition-colors cursor-pointer",
                             "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 data-[state=open]:bg-zinc-200 dark:data-[state=open]:bg-zinc-700/60 data-[state=open]:text-zinc-900 dark:data-[state=open]:text-white"
                           )}
                         >

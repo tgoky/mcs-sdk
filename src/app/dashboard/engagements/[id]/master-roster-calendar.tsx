@@ -112,7 +112,7 @@ function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => voi
       <button
         type="button"
         onClick={onRetry}
-        className="rounded-lg border border-rose-300 dark:border-rose-700 bg-rose-200/50 dark:bg-rose-900/50 px-2.5 py-1 font-semibold text-rose-900 dark:text-rose-200 hover:bg-rose-300/50 dark:hover:bg-rose-800 cursor-pointer font-sans"
+        className="hover-lift press-settle rounded-lg border border-rose-300 dark:border-rose-700 bg-rose-200/50 dark:bg-rose-900/50 px-2.5 py-1 font-semibold text-rose-900 dark:text-rose-200 hover:bg-rose-300/50 dark:hover:bg-rose-800 cursor-pointer font-sans"
       >
         Retry
       </button>
@@ -484,14 +484,14 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
       {activity.error && <ErrorBanner message={activity.error} onRetry={fetchActivity} />}
 
       {/* Toolbar & View Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-2 shadow-sm font-sans">
+      <div className="flex flex-wrap items-center justify-between gap-3 surface-glass-1 rounded-2xl p-2 font-sans">
         <div className="flex items-center gap-2">
           {/* Universal Month Navigation */}
           <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
             <button
               type="button"
               onClick={() => handleMonthChange(new Date(year, month - 1, 1))}
-              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+              className="hover-lift press-settle rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
             >
               <ChevronLeft size={14} />
             </button>
@@ -501,14 +501,14 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
             <button
               type="button"
               onClick={() => handleMonthChange(new Date(year, month + 1, 1))}
-              className="rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+              className="hover-lift press-settle rounded-lg p-1 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
             >
               <ChevronRight size={14} />
             </button>
             <button
               type="button"
               onClick={handleTodayClick}
-              className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
+              className="hover-lift press-settle shadow-elevation-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
             >
               Today
             </button>
@@ -528,7 +528,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
             type="button"
             onClick={fetchRoster}
             disabled={roster.loading}
-            className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
           >
             <RefreshCw size={13} className={cn(roster.loading && "animate-spin")} />
           </button>
@@ -543,7 +543,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 type="button"
                 onClick={() => setMode(viewMode)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-semibold transition-colors cursor-pointer font-sans",
+                  "hover-lift press-settle flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-semibold transition-colors cursor-pointer font-sans",
                   mode === viewMode ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
                 )}
               >
@@ -557,7 +557,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
 
       {/* Loading Skeleton */}
       {roster.loading && (
-        <div className="grid grid-cols-7 gap-px rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/40 overflow-hidden font-sans">
+        <div className="grid grid-cols-7 gap-px surface-glass-1 rounded-2xl overflow-hidden font-sans">
           {Array.from({ length: 35 }).map((_, i) => (
             <div key={i} className="min-h-[105px] bg-[#f8f7fa] dark:bg-zinc-950 animate-pulse" />
           ))}
@@ -566,7 +566,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
 
       {/* 1. Month View */}
       {mode === "month" && !roster.loading && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
+        <div className="overflow-hidden surface-glass-2 rounded-2xl font-sans">
           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
@@ -592,7 +592,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   type="button"
                   onClick={() => { setSelectedDate(date); setMode("day"); }}
                   className={cn(
-                    "group relative flex min-h-[105px] flex-col justify-between border-b border-r border-zinc-200 dark:border-zinc-800/60 p-2 text-left transition-all hover:bg-zinc-200/60 dark:hover:bg-zinc-800/80 cursor-pointer font-sans",
+                    "press-settle group relative flex min-h-[105px] flex-col justify-between border-b border-r border-zinc-200 dark:border-zinc-800/60 p-2 text-left transition-all hover:bg-zinc-200/60 dark:hover:bg-zinc-800/80 cursor-pointer font-sans",
                     !isCurrentMonth && "bg-zinc-100/50 dark:bg-zinc-900/20 opacity-40",
                     isCurrentMonth && isPast && "bg-zinc-200/35 dark:bg-zinc-900/60",
                     isCurrentMonth && !isPast && !isToday && "bg-white dark:bg-zinc-950"
@@ -675,13 +675,13 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
       {mode === "day" && !roster.loading && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
           {/* LEFT 7 COLUMNS: HOURLY TIMELINE GRID */}
-          <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl flex flex-col font-sans">
+          <div className="lg:col-span-7 overflow-hidden surface-glass-2 rounded-2xl flex flex-col font-sans">
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-4 py-3 font-sans">
               <div className="flex items-center gap-2 font-sans">
-                <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
+                <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="hover-lift press-settle rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
                   <ChevronLeft size={15} />
                 </button>
-                <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() + 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
+                <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() + 86400000))} className="hover-lift press-settle rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
                   <ChevronRight size={15} />
                 </button>
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
@@ -720,7 +720,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                         setInspectionType("activity");
                       }}
                       className={cn(
-                        "flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs cursor-pointer transition-colors font-sans",
+                        "hover-lift press-settle flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs cursor-pointer transition-colors font-sans",
                         inspectionType === "activity" && selectedActivityId === ev.id
                           ? "border-amber-400 bg-amber-100/80 dark:bg-amber-950/60 text-zinc-900 dark:text-white font-bold"
                           : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent text-zinc-800 dark:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700"
@@ -759,7 +759,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                               setInspectionType("call");
                             }}
                             className={cn(
-                              "w-full rounded-xl p-2.5 text-left transition-all cursor-pointer flex items-start justify-between gap-2 shadow-xs font-sans border-0",
+                              "hover-lift press-settle w-full rounded-xl p-2.5 text-left transition-all cursor-pointer flex items-start justify-between gap-2 shadow-xs font-sans border-0",
                               isSelected
                                 ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-white ring-1 ring-zinc-400 dark:ring-zinc-600"
                                 : "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white hover:bg-zinc-100 dark:hover:bg-zinc-700/80"
@@ -798,7 +798,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                 e.stopPropagation();
                                 handleCopyText(entry.prospectEmail ?? "", "email");
                               }}
-                              className="rounded-lg bg-zinc-100 dark:bg-zinc-700/80 p-1.5 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white shrink-0 font-sans border-0"
+                              className="hover-lift press-settle shadow-elevation-1 rounded-lg bg-zinc-100 dark:bg-zinc-700/80 p-1.5 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white shrink-0 font-sans border-0"
                             >
                               {copiedEmail ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                             </button>
@@ -815,7 +815,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
           {/* RIGHT 5 COLUMNS: MINI CALENDAR + PROSPECT INSPECTOR PANEL */}
           <div className="lg:col-span-5 space-y-3 font-sans">
             {/* MINI CALENDAR NAVIGATOR */}
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 shadow-lg font-sans">
+            <div className="surface-glass-1 rounded-2xl p-3 space-y-2 font-sans">
               <span className="text-[11px] font-bold text-zinc-900 dark:text-white block px-1 font-sans">{monthName} {year}</span>
               <div className="grid grid-cols-7 text-center text-[9px] font-mono text-zinc-500 font-bold uppercase font-sans">
                 {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <div key={i}>{d}</div>)}
@@ -829,7 +829,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       type="button"
                       onClick={() => handleUpdateSelectedDate(date)}
                       className={cn(
-                        "h-6 w-6 mx-auto flex items-center justify-center rounded-full font-mono text-[10px] transition-colors cursor-pointer font-sans",
+                        "hover-lift press-settle h-6 w-6 mx-auto flex items-center justify-center rounded-full font-mono text-[10px] transition-colors cursor-pointer font-sans",
                         isSelected ? "bg-emerald-500 text-zinc-950 font-bold" : isCurrentMonth ? "text-zinc-800 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800" : "text-zinc-400 dark:text-zinc-700"
                       )}
                     >
@@ -841,7 +841,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
             </div>
 
             {/* FULL INSPECTOR PANEL (CALL INSPECTION vs ACTIVITY INSPECTION) */}
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
+            <div className="surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
               {inspectionType === "activity" && selectedActivity ? (
                 /* SYSTEM EVENT / LEAK-MAP AUDIT PREVIEW */
                 <div className="space-y-4 font-sans">
@@ -864,7 +864,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                  <div className="surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
                     <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Audit Findings & Diagnostic</span>
                     <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans text-xs">
                       {selectedActivity.detail || "Automated audit scan completed."}
@@ -872,7 +872,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   </div>
 
                   {selectedActivity.prospectEmail && (
-                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1 text-xs font-sans">
+                    <div className="surface-glass-1 rounded-xl p-3 space-y-1 text-xs font-sans">
                       <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Associated Lead</span>
                       <p className="font-bold text-zinc-900 dark:text-white">{selectedActivity.prospectName ?? selectedActivity.prospectEmail}</p>
                       <p className="font-mono text-zinc-500 text-[11px]">{selectedActivity.prospectEmail}</p>
@@ -882,7 +882,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   <div className="pt-2 font-sans">
                     <Link
                       href={`/dashboard/engagements/${engagementId}/skills/${selectedActivity.skill}`}
-                      className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center shadow-xs"
+                      className="inline-flex items-center gap-2 surface-glass-1 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center"
                     >
                       <span>Open Full {ACTIVITY_SKILL_LABEL[selectedActivity.skill]} Skill Page</span>
                       <ExternalLink size={12} />
@@ -900,7 +900,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       <button
                         type="button"
                         onClick={() => handleCopyText(selectedEntry.prospectEmail ?? "", "email")}
-                        className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
+                        className="hover-lift press-settle flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
                       >
                         {copiedEmail ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                         <span>Copy Email</span>
@@ -954,7 +954,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             type="button"
                             onClick={() => handleLogOutcome(selectedEntry, "showed")}
                             disabled={outcomeSubmittingId !== null}
-                            className="flex items-center justify-center gap-1 py-1.5 rounded-lg bg-emerald-500 text-zinc-950 text-[11px] font-bold hover:bg-emerald-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                            className="hover-lift press-settle shadow-elevation-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-emerald-500 text-zinc-950 text-[11px] font-bold hover:bg-emerald-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <UserCheck size={11} /> {outcomeSubmittingId === selectedEntry.externalCallId ? "…" : "Showed"}
                           </button>
@@ -962,7 +962,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             type="button"
                             onClick={() => handleLogOutcome(selectedEntry, "no_show")}
                             disabled={outcomeSubmittingId !== null}
-                            className="flex items-center justify-center gap-1 py-1.5 rounded-lg bg-rose-500 text-white text-[11px] font-bold hover:bg-rose-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                            className="hover-lift press-settle shadow-elevation-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-rose-500 text-white text-[11px] font-bold hover:bg-rose-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <UserX size={11} /> No-Show
                           </button>
@@ -970,7 +970,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             type="button"
                             onClick={() => handleLogOutcome(selectedEntry, "rescheduled")}
                             disabled={outcomeSubmittingId !== null}
-                            className="flex items-center justify-center gap-1 py-1.5 rounded-lg bg-zinc-700 dark:bg-zinc-600 text-white text-[11px] font-bold hover:bg-zinc-600 dark:hover:bg-zinc-500 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                            className="hover-lift press-settle shadow-elevation-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-zinc-700 dark:bg-zinc-600 text-white text-[11px] font-bold hover:bg-zinc-600 dark:hover:bg-zinc-500 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Resched.
                           </button>
@@ -985,7 +985,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       type="button"
                       onClick={() => setActiveTab("brief")}
                       className={cn(
-                        "flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
+                        "hover-lift press-settle flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
                         activeTab === "brief" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
                       )}
                     >
@@ -995,7 +995,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       type="button"
                       onClick={() => setActiveTab("pile_on")}
                       className={cn(
-                        "flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
+                        "hover-lift press-settle flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
                         activeTab === "pile_on" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
                       )}
                     >
@@ -1005,7 +1005,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       type="button"
                       onClick={() => setActiveTab("win_back")}
                       className={cn(
-                        "flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
+                        "hover-lift press-settle flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
                         activeTab === "win_back" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
                       )}
                     >
@@ -1022,7 +1022,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                         </StatusPill>
                       </div>
 
-                      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 font-sans">
+                      <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
                         <div className="flex items-center justify-between text-[11px] font-sans">
                           <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
                           <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ?? "Slack"}</span>
@@ -1039,7 +1039,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       {selectedEntry.runId && (
                         <a
                           href={`/dashboard/runs/${selectedEntry.runId}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
+                          className="hover-lift press-settle inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
                         >
                           <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
                           <span>View research execution run</span>
@@ -1060,7 +1060,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             </StatusPill>
                           </div>
 
-                          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 font-sans">
+                          <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
                             <div className="flex items-center justify-between text-[11px] font-sans">
                               <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
                               <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.pileOnData.sentVia ?? "hybrid"}</span>
@@ -1088,7 +1088,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             </StatusPill>
                           </div>
 
-                          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 font-sans">
+                          <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
                             <div className="flex items-center justify-between text-[11px] font-sans">
                               <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
                               <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.winBackData.touchesSent} / {selectedEntry.winBackData.touchesTotal}</span>
@@ -1105,7 +1105,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             <button
                               type="button"
                               onClick={() => handleCopyText(selectedEntry.winBackData!.freshRescheduleLink!, "link")}
-                              className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 dark:border-amber-800/50 bg-amber-100/60 dark:bg-amber-950/30 px-3 py-2 text-xs font-semibold text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/40 cursor-pointer transition-colors font-sans"
+                              className="hover-lift press-settle w-full flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 dark:border-amber-800/50 bg-amber-100/60 dark:bg-amber-950/30 px-3 py-2 text-xs font-semibold text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/40 cursor-pointer transition-colors font-sans"
                             >
                               {copiedLink ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
                               <span>{copiedLink ? "Link Copied!" : "Copy Fresh Reschedule Link"}</span>
@@ -1150,7 +1150,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
       {mode === "list" && !roster.loading && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
           {/* LEFT 7 COLUMNS: UNIFIED MULTI-SKILL FEED */}
-          <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans flex flex-col">
+          <div className="lg:col-span-7 overflow-hidden surface-glass-2 rounded-2xl font-sans flex flex-col">
             {/* List Feed Scope Control Header */}
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
               <div className="flex items-center gap-1.5">
@@ -1166,7 +1166,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     <button
                       type="button"
                       onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 7 * 86400000))}
-                      className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                      className="hover-lift press-settle p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
                       title="Previous Week"
                     >
                       <ChevronLeft size={13} />
@@ -1174,14 +1174,14 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     <button
                       type="button"
                       onClick={handleTodayClick}
-                      className="text-[10.5px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
+                      className="hover-lift press-settle text-[10.5px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
                     >
                       Today
                     </button>
                     <button
                       type="button"
                       onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() + 7 * 86400000))}
-                      className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                      className="hover-lift press-settle p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
                       title="Next Week"
                     >
                       <ChevronRight size={13} />
@@ -1194,7 +1194,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     type="button"
                     onClick={() => setListScope("week")}
                     className={cn(
-                      "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                      "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
                       listScope === "week" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
                     )}
                   >
@@ -1204,7 +1204,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     type="button"
                     onClick={() => setListScope("month")}
                     className={cn(
-                      "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                      "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
                       listScope === "month" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
                     )}
                   >
@@ -1258,7 +1258,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                 handleUpdateSelectedDate(dateObj);
                               }}
                               className={cn(
-                                "w-full flex items-center justify-between px-4 py-2 text-xs font-sans cursor-pointer transition-colors border-0 border-b border-amber-500/20 text-left",
+                                "hover-lift press-settle w-full flex items-center justify-between px-4 py-2 text-xs font-sans cursor-pointer transition-colors border-0 border-b border-amber-500/20 text-left",
                                 isSelectedAudit
                                   ? "bg-amber-500/25 dark:bg-amber-950/60 ring-1 ring-amber-400"
                                   : "bg-amber-500/10 dark:bg-amber-950/30 hover:bg-amber-500/15"
@@ -1296,7 +1296,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                   handleUpdateSelectedDate(new Date(entry.callTime));
                                 }}
                                 className={cn(
-                                  "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer font-sans border-0",
+                                  "hover-lift press-settle flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer font-sans border-0",
                                   isFailed && "bg-[#ffcfd2]/40 dark:bg-rose-950/30",
                                   isSelected
                                     ? "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-white"
@@ -1358,7 +1358,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                         e.stopPropagation();
                                         handleCopyText(entry.prospectEmail!, "email");
                                       }}
-                                      className="p-1 rounded-md text-zinc-400 hover:text-zinc-800 dark:hover:text-white transition-colors"
+                                      className="hover-lift press-settle p-1 rounded-md text-zinc-400 hover:text-zinc-800 dark:hover:text-white transition-colors"
                                     >
                                       {copiedEmail ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                                     </button>
@@ -1377,7 +1377,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                               setSelectedActivityId(null);
                             }}
                             className={cn(
-                              "w-full px-4 py-2.5 text-left text-xs font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
+                              "hover-lift press-settle w-full px-4 py-2.5 text-left text-xs font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
                               isSelectedDay
                                 ? "bg-zinc-200/60 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 font-semibold"
                                 : "text-zinc-400 dark:text-zinc-600 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40"
@@ -1403,7 +1403,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     <button
                       type="button"
                       onClick={() => setShowUpcomingInMonth((p) => !p)}
-                      className="flex w-full items-center justify-between px-4 py-2 text-[11px] font-mono font-bold text-zinc-500 uppercase tracking-wider hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer font-sans"
+                      className="hover-lift press-settle flex w-full items-center justify-between px-4 py-2 text-[11px] font-mono font-bold text-zinc-500 uppercase tracking-wider hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer font-sans"
                     >
                       <span>Upcoming Bookings in {monthName} ({monthDaysSmart.future.reduce((acc, d) => acc + d.calls.length, 0)})</span>
                       <ChevronDown size={13} className={cn("transition-transform", showUpcomingInMonth && "rotate-180")} />
@@ -1432,7 +1432,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                     setInspectionType("call");
                                     handleUpdateSelectedDate(new Date(entry.callTime));
                                   }}
-                                  className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50 cursor-pointer font-sans border-0"
+                                  className="hover-lift press-settle flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50 cursor-pointer font-sans border-0"
                                 >
                                   <div className="flex items-center gap-3 min-w-0">
                                     <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0">
@@ -1460,7 +1460,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
           </div>
 
           {/* RIGHT 5 COLUMNS: MULTI-SKILL INSPECTOR PANEL */}
-          <div className="lg:col-span-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
+          <div className="lg:col-span-5 surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
             {inspectionType === "activity" && selectedActivity ? (
               /* SYSTEM EVENT / LEAK-MAP AUDIT PREVIEW */
               <div className="space-y-4 font-sans">
@@ -1483,7 +1483,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                <div className="surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Audit Findings & Diagnostic</span>
                   <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans text-xs">
                     {selectedActivity.detail || "Automated audit scan completed."}
@@ -1491,7 +1491,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 </div>
 
                 {selectedActivity.prospectEmail && (
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1 text-xs font-sans">
+                  <div className="surface-glass-1 rounded-xl p-3 space-y-1 text-xs font-sans">
                     <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Associated Lead</span>
                     <p className="font-bold text-zinc-900 dark:text-white">{selectedActivity.prospectName ?? selectedActivity.prospectEmail}</p>
                     <p className="font-mono text-zinc-500 text-[11px]">{selectedActivity.prospectEmail}</p>
@@ -1501,7 +1501,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 <div className="pt-2 font-sans">
                   <Link
                     href={`/dashboard/engagements/${engagementId}/skills/${selectedActivity.skill}`}
-                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center shadow-xs font-sans"
+                    className="inline-flex items-center gap-2 surface-glass-1 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center font-sans"
                   >
                     <span>Open Full {ACTIVITY_SKILL_LABEL[selectedActivity.skill]} Skill Page</span>
                     <ExternalLink size={12} />
@@ -1519,7 +1519,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     <button
                       type="button"
                       onClick={() => handleCopyText(selectedEntry.prospectEmail ?? "", "email")}
-                      className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
+                      className="hover-lift press-settle flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
                     >
                       {copiedEmail ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                       <span>Copy Email</span>
@@ -1560,7 +1560,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           type="button"
                           onClick={() => handleLogOutcome(selectedEntry, "showed")}
                           disabled={outcomeSubmittingId !== null}
-                          className="flex items-center justify-center gap-1 py-1.5 rounded-lg bg-emerald-500 text-zinc-950 text-[11px] font-bold hover:bg-emerald-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                          className="hover-lift press-settle shadow-elevation-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-emerald-500 text-zinc-950 text-[11px] font-bold hover:bg-emerald-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <UserCheck size={11} /> {outcomeSubmittingId === selectedEntry.externalCallId ? "…" : "Showed"}
                         </button>
@@ -1568,7 +1568,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           type="button"
                           onClick={() => handleLogOutcome(selectedEntry, "no_show")}
                           disabled={outcomeSubmittingId !== null}
-                          className="flex items-center justify-center gap-1 py-1.5 rounded-lg bg-rose-500 text-white text-[11px] font-bold hover:bg-rose-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                          className="hover-lift press-settle shadow-elevation-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-rose-500 text-white text-[11px] font-bold hover:bg-rose-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <UserX size={11} /> No-Show
                         </button>
@@ -1576,7 +1576,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           type="button"
                           onClick={() => handleLogOutcome(selectedEntry, "rescheduled")}
                           disabled={outcomeSubmittingId !== null}
-                          className="flex items-center justify-center gap-1 py-1.5 rounded-lg bg-zinc-700 dark:bg-zinc-600 text-white text-[11px] font-bold hover:bg-zinc-600 dark:hover:bg-zinc-500 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                          className="hover-lift press-settle shadow-elevation-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-zinc-700 dark:bg-zinc-600 text-white text-[11px] font-bold hover:bg-zinc-600 dark:hover:bg-zinc-500 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Resched.
                         </button>
@@ -1592,7 +1592,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     type="button"
                     onClick={() => setActiveTab("brief")}
                     className={cn(
-                      "flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
+                      "hover-lift press-settle flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
                       activeTab === "brief" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
                     )}
                   >
@@ -1602,7 +1602,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     type="button"
                     onClick={() => setActiveTab("pile_on")}
                     className={cn(
-                      "flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
+                      "hover-lift press-settle flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
                       activeTab === "pile_on" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
                     )}
                   >
@@ -1612,7 +1612,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     type="button"
                     onClick={() => setActiveTab("win_back")}
                     className={cn(
-                      "flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
+                      "hover-lift press-settle flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
                       activeTab === "win_back" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
                     )}
                   >
@@ -1629,7 +1629,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       </StatusPill>
                     </div>
 
-                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 font-sans">
+                    <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
                       <div className="flex items-center justify-between text-[11px] font-sans">
                         <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
                         <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ?? "Slack"}</span>
@@ -1646,7 +1646,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     {selectedEntry.runId && (
                       <a
                         href={`/dashboard/runs/${selectedEntry.runId}`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
+                        className="hover-lift press-settle inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2.5 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
                       >
                         <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
                         <span>View research execution run</span>
@@ -1667,7 +1667,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           </StatusPill>
                         </div>
 
-                        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 font-sans">
+                        <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
                           <div className="flex items-center justify-between text-[11px] font-sans">
                             <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
                             <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.pileOnData.sentVia ?? "hybrid"}</span>
@@ -1695,7 +1695,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           </StatusPill>
                         </div>
 
-                        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 font-sans">
+                        <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
                           <div className="flex items-center justify-between text-[11px] font-sans">
                             <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
                             <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.winBackData.touchesSent} / {selectedEntry.winBackData.touchesTotal}</span>
@@ -1712,7 +1712,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           <button
                             type="button"
                             onClick={() => handleCopyText(selectedEntry.winBackData!.freshRescheduleLink!, "link")}
-                            className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 dark:border-amber-800/50 bg-amber-100/60 dark:bg-amber-950/30 px-3 py-2 text-xs font-semibold text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/40 cursor-pointer transition-colors font-sans"
+                            className="hover-lift press-settle w-full flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 dark:border-amber-800/50 bg-amber-100/60 dark:bg-amber-950/30 px-3 py-2 text-xs font-semibold text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/40 cursor-pointer transition-colors font-sans"
                           >
                             {copiedLink ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
                             <span>{copiedLink ? "Link Copied!" : "Copy Fresh Reschedule Link"}</span>
