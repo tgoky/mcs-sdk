@@ -27,6 +27,7 @@ import {
 import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, SKILLS } from "@/lib/copy";
 import { anySkillDisplayName as skillDisplayName } from "@/lib/any-skill";
 import { REP_SKILL_IDS } from "@/lib/rep-skill-manifest";
+import { useQueueItemActions } from "./use-queue-item-actions";
 import type { StackSection } from "@/lib/error-classification";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
 import { triggerSkillRun, copyToClipboard } from "@/lib/quick-actions";
@@ -638,9 +639,6 @@ export function QueuePanel({
   apiUrl?: string;
 }) {
   const [items, setItems] = useState<QueueItemDTO[]>(initialItems);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [errorId, setErrorId] = useState<string | null>(null);
-  const [errorText, setErrorText] = useState<string>(copy.errors.generic);
 
   // Items mid-exit-animation — still rendered (collapsing/fading out) so a
   // resolved item doesn't just vanish, but no longer counted or actionable.
@@ -658,6 +656,13 @@ export function QueuePanel({
       });
     }, CLOSE_ANIMATION_MS);
   }, []);
+
+  // The real mutation logic (which endpoint, which method, which body per
+  // source/category) — shared with the dashboard's "Needs attention"
+  // overview tile via use-queue-item-actions.ts, so both surfaces offer
+  // the exact same real actions instead of drifting apart.
+  const { busyId, errorId, errorText, runMutation, decide, resolveSweepNoShow, dismissSyncSetup, dismissRunFailure } =
+    useQueueItemActions(closeItemWithAnimation);
 
   // "Closed" tab — what the user already decided, read back from the DB
   // (see getQueueArchiveItems). Loaded lazily on first visit to the tab,
@@ -1006,93 +1011,6 @@ export function QueuePanel({
     const controller = new AbortController();
     load(controller.signal);
   }, [load]);
-
-  async function runMutation(item: QueueItemDTO, url: string, body?: object, method: "POST" | "PATCH" = "POST") {
-    setBusyId(item.id);
-    setErrorId(null);
-    try {
-      const res = await fetch(url, {
-        method,
-        headers: body ? { "Content-Type": "application/json" } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      if (!res.ok) {
-        const message = res.status === 403
-          ? copy.errors.adminOnly
-          : await res.json().then((d) => d?.error).catch(() => null) || copy.errors.generic;
-        setErrorId(item.id);
-        setErrorText(message);
-        return;
-      }
-      closeItemWithAnimation(item.id);
-    } catch {
-      setErrorId(item.id);
-      setErrorText(copy.errors.generic);
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  function decide(item: QueueItemDTO, decision: string) {
-    if (item.source === "action") return runMutation(item, `/api/actions/${item.id}/review`, { decision });
-    if (item.source === "blocker") return runMutation(item, `/api/blockers/${item.id}/resolve`, { decision });
-    return runMutation(item, `/api/notifications/${item.id}/read`);
-  }
-
-  // Richer resolution for a sweep-inferred no-show — see
-  // QueueItem.sweepNoShowReview's doc. Logs the real outcome (via the
-  // general per-booking endpoint, same one the master roster's inline
-  // buttons use) before closing out the pending action, instead of a
-  // plain reject that recorded nothing and left the booking's own status
-  // exactly as ambiguous as it was before the sweep ever looked at it.
-  async function resolveSweepNoShow(item: QueueItemDTO, outcome: "showed" | "rescheduled") {
-    if (!item.engagementId || !item.sweepNoShowReview) return;
-    setBusyId(item.id);
-    setErrorId(null);
-    try {
-      const res = await fetch(
-        `/api/engagements/${item.engagementId}/bookings/${item.sweepNoShowReview.bookingId}/outcome`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ outcome }),
-        }
-      );
-      if (!res.ok) {
-        const message =
-          res.status === 403
-            ? copy.errors.adminOnly
-            : (await res.json().then((d) => d?.error).catch(() => null)) || copy.errors.generic;
-        setErrorId(item.id);
-        setErrorText(message);
-        return;
-      }
-      // The real outcome is on file now — this pending action's own
-      // question is already answered, so close it the same way a plain
-      // reject would, just with something more specific already recorded.
-      await fetch(`/api/actions/${item.id}/review`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision: "rejected" }),
-      }).catch(() => {});
-      closeItemWithAnimation(item.id);
-    } catch {
-      setErrorId(item.id);
-      setErrorText(copy.errors.generic);
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  function dismissSyncSetup(item: QueueItemDTO) {
-    if (!item.engagementId) return;
-    return runMutation(item, `/api/engagements/${item.engagementId}/sync-mode`, { dismissSetupNudge: true }, "PATCH");
-  }
-
-  function dismissRunFailure(item: QueueItemDTO) {
-    if (!item.engagementId || !item.skillName) return;
-    return runMutation(item, `/api/engagements/${item.engagementId}/dismiss-run-failure`, { skillName: item.skillName }, "PATCH");
-  }
 
   const openHref = (item: QueueItemDTO) =>
     item.fixHref ?? (item.runId ? `/dashboard/runs/${item.runId}` : item.engagementId ? `/dashboard/engagements/${item.engagementId}` : null);
