@@ -8,6 +8,7 @@ import { SettingsSidebar } from "@/app/dashboard/settings/settings-sidebar";
 import { RightUtilityPanel, type RightPanelKey } from "@/components/right-utility-panel";
 import { useNotifications } from "@/app/dashboard/use-notifications";
 import type { Workspace } from "@/lib/workspace";
+import type { UserAvatarPrefs } from "@/lib/user-avatar";
 
 const PANEL_WIDTH_KEY = "mcs-right-panel-width";
 const DEFAULT_PANEL_WIDTH = 360;
@@ -18,6 +19,7 @@ export function ShellLayout({
   userEmail,
   workspaces,
   activeWorkspaceId,
+  avatar,
   work,
   settings,
 }: {
@@ -26,6 +28,7 @@ export function ShellLayout({
   userEmail: string;
   workspaces: Workspace[];
   activeWorkspaceId: string;
+  avatar: UserAvatarPrefs;
   work: ReactNode;
   settings?: ReactNode;
 }) {
@@ -77,6 +80,7 @@ export function ShellLayout({
             userEmail={userEmail}
             workspaces={workspaces}
             activeWorkspaceId={activeWorkspaceId}
+            avatar={avatar}
           />
         </div>
 

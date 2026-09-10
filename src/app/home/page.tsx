@@ -4,6 +4,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { HOME_COPY } from "@/lib/copy";
 import { listWorkspaces, getInstalledPackagesByWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
 import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
+import { getUserAvatar } from "@/lib/user-avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { WorkspaceHomeClient } from "./workspace-home-client";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +16,10 @@ export default async function WorkspaceHomePage() {
   const whopUserId = session.whopUserId!;
   const displayName = session.email?.split("@")[0] ?? "there";
   const initials = displayName.slice(0, 2).toUpperCase();
-  const workspaceList = await listWorkspaces(whopUserId);
+  const [workspaceList, avatar] = await Promise.all([
+    listWorkspaces(whopUserId),
+    getUserAvatar(whopUserId),
+  ]);
   const installedMap = await getInstalledPackagesByWorkspace(
     workspaceList.map((w) => w.workspaceId)
   );
@@ -55,9 +60,16 @@ export default async function WorkspaceHomePage() {
         <div className="space-y-6">
           <header className="flex items-center justify-between gap-4 border-b border-zinc-200/80 pb-5 dark:border-zinc-800/80">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-xs font-bold text-white dark:text-zinc-950 font-mono shadow-2xs">
-                {initials}
-              </div>
+              <UserAvatar
+                avatar={avatar}
+                size={36}
+                radiusClassName="rounded-lg"
+                fallback={
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-xs font-bold text-white dark:text-zinc-950 font-mono shadow-2xs">
+                    {initials}
+                  </div>
+                }
+              />
               <div className="space-y-0.5">
                 <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                   {HOME_COPY.eyebrow}

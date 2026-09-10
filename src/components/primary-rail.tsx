@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
+import type { UserAvatarPrefs } from "@/lib/user-avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
 
 interface PrimaryRailProps {
@@ -24,6 +26,7 @@ interface PrimaryRailProps {
   userEmail: string;
   workspaces: Workspace[];
   activeWorkspaceId: string;
+  avatar: UserAvatarPrefs;
 }
 
 /**
@@ -42,7 +45,7 @@ const NAV_ICON_MAP: Record<string, string> = {
   "/dashboard/library": "/images/lib.png",
 };
 
-export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId }: PrimaryRailProps) {
+export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, avatar }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
   const pathname = usePathname();
@@ -125,9 +128,17 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
         <button
           type="button"
           onClick={() => setPopoverOpen((prev) => !prev)}
-          className="w-8 h-8 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-[11px] font-bold text-white dark:text-[#1f1a2e] font-mono flex items-center justify-center hover:ring-2 hover:ring-[#2a233c]/30 dark:hover:ring-[#e4dff2]/30 transition-all cursor-pointer shadow-xs"
+          className="w-8 h-8 rounded-full hover:ring-2 hover:ring-[#2a233c]/30 dark:hover:ring-[#e4dff2]/30 transition-all cursor-pointer shadow-xs"
         >
-          {initials}
+          <UserAvatar
+            avatar={avatar}
+            size={32}
+            fallback={
+              <div className="w-8 h-8 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-[11px] font-bold text-white dark:text-[#1f1a2e] font-mono flex items-center justify-center">
+                {initials}
+              </div>
+            }
+          />
         </button>
 
         {/* Profile Popover */}
@@ -223,9 +234,15 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900">
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-xs">
-                        {initials}
-                      </div>
+                      <UserAvatar
+                        avatar={avatar}
+                        size={44}
+                        fallback={
+                          <div className="w-11 h-11 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-xs">
+                            {initials}
+                          </div>
+                        }
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                           {displayName}

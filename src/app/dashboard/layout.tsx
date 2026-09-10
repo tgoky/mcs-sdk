@@ -6,6 +6,7 @@ import { BreadcrumbProvider } from "@/components/breadcrumbs/breadcrumb-context"
 import { BookingToast } from "./booking-toast";
 import { WorkSidebar, WorkSidebarSkeleton } from "./work-sidebar";
 import { getActiveWorkspace, listWorkspaces } from "@/lib/workspace";
+import { getUserAvatar } from "@/lib/user-avatar";
 import { MobileNavPill } from "@/components/mobile-nav-pill";
 
 export const dynamic = "force-dynamic";
@@ -34,9 +35,10 @@ export default async function DashboardLayout({
   // React-cache()'d, so WorkSidebar/EngagementsSidebar/page.tsx resolving
   // it again below this in the tree reuse this same lookup instead of
   // re-querying.
-  const [activeWorkspace, workspaceList] = await Promise.all([
+  const [activeWorkspace, workspaceList, avatar] = await Promise.all([
     getActiveWorkspace(whopUserId),
     listWorkspaces(whopUserId),
+    getUserAvatar(whopUserId),
   ]);
 
   return (
@@ -57,6 +59,7 @@ export default async function DashboardLayout({
         userEmail={userEmail}
         workspaces={workspaceList}
         activeWorkspaceId={activeWorkspace.workspaceId}
+        avatar={avatar}
         work={
           <Suspense fallback={<WorkSidebarSkeleton />}>
             <WorkSidebar whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} />

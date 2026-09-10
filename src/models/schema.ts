@@ -481,6 +481,26 @@ export const users = pgTable("users", {
   // now() when the user actually visits /dashboard/runs — see
   // markExecutionsSeen in run-log.ts.
   executionsLastSeenAt: timestamp("executions_last_seen_at"),
+  /**
+   * Profile picture, in place of the plain colored-initials avatar every
+   * surface (home welcome header, primary rail, profile page) used to
+   * hardcode. Null across all four columns means "no avatar chosen yet" —
+   * every existing user reads that way and every caller falls back to
+   * initials for it, same "absent means default" convention as
+   * executionsLastSeenAt above, no backfill needed.
+   *
+   * "upload": avatarImageUrl holds the picture itself, resized/compressed
+   * client-side into a small data URI before it ever reaches this column
+   * — there's no blob/object storage wired into this app yet, and a
+   * capped-size data URI needs none.
+   * "dicebear": avatarStyle + avatarSeed regenerate the exact same
+   * generated avatar on every render (see lib/avatar.ts) — nothing about
+   * the image itself is stored, just the two values that reproduce it.
+   */
+  avatarType: text("avatar_type"), // "upload" | "dicebear" | null
+  avatarStyle: text("avatar_style"), // dicebear style id, only set when avatarType = "dicebear"
+  avatarSeed: text("avatar_seed"), // dicebear seed, only set when avatarType = "dicebear"
+  avatarImageUrl: text("avatar_image_url"), // data URI, only set when avatarType = "upload"
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
