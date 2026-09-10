@@ -75,7 +75,7 @@ function WorkspaceCard({
   const hasShowtime = packageIds.includes("showtime");
 
   return (
-    <div className="group relative flex h-full w-full flex-col justify-between rounded-md border border-zinc-200/80 bg-zinc-50/50 p-6 text-left transition-all duration-200 select-none hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/60">
+    <div className="hover-lift group relative flex h-full w-full flex-col justify-between surface-glass-2 rounded-md p-6 text-left select-none hover:border-zinc-300 dark:hover:border-zinc-700">
       <form
         action={`/api/workspaces/${workspace.workspaceId}/switch`}
         method="POST"
@@ -155,7 +155,8 @@ function CreateWorkspaceCard() {
   return (
     <Link
       href="/home/new"
-      className="group flex h-full flex-col items-center justify-center gap-2.5 rounded-md border border-dashed border-zinc-300 dark:border-zinc-800 bg-transparent p-6 text-center transition-all duration-200 hover:-translate-y-1 hover:scale-[1.01] active:scale-[0.98] hover:border-zinc-400 hover:bg-zinc-100/50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/30 min-h-[220px]"
+      className="hover-lift press-settle group surface-glass-2 flex h-full flex-col items-center justify-center gap-2.5 rounded-md p-6 text-center hover:border-zinc-400 dark:hover:border-zinc-700 min-h-[220px]"
+      style={{ borderStyle: "dashed" }}
     >
       <div className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500 group-hover:border-amber-400 group-hover:text-amber-500 transition-colors">
         <Plus size={16} />
@@ -200,7 +201,7 @@ function WorkspaceRow({
             disabled={isSwitching}
             className="flex items-center gap-3 text-left group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors cursor-pointer"
           >
-            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-mono text-xs font-bold ${avatarColor} shadow-2xs`}>
+            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-mono text-xs font-bold ${avatarColor} shadow-elevation-1`}>
               {initial}
             </div>
             <div className="min-w-0">
@@ -298,9 +299,9 @@ export function WorkspaceHomeClient({
             <button
               type="button"
               onClick={() => setViewMode("card")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+              className={`hover-lift press-settle flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                 viewMode === "card"
-                  ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xs"
+                  ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-elevation-1"
                   : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
               }`}
               title="Card View"
@@ -311,9 +312,9 @@ export function WorkspaceHomeClient({
             <button
               type="button"
               onClick={() => setViewMode("list")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+              className={`hover-lift press-settle flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                 viewMode === "list"
-                  ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xs"
+                  ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-elevation-1"
                   : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
               }`}
               title="List View"
@@ -324,7 +325,7 @@ export function WorkspaceHomeClient({
           </div>
           <Link
             href="/home/new"
-            className="inline-flex items-center gap-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-2xs"
+            className="hover-lift press-settle inline-flex items-center gap-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all duration-200 shadow-elevation-1"
           >
             <Plus size={14} />
             <span>Add workspace</span>
@@ -346,7 +347,7 @@ export function WorkspaceHomeClient({
           <CreateWorkspaceCard />
         </div>
       ) : (
-        <div className="rounded-md border border-zinc-200/90 bg-white/80 dark:border-zinc-800/90 dark:bg-zinc-900/60 overflow-hidden shadow-xs backdrop-blur-xs">
+        <div className="surface-glass-2 rounded-md overflow-hidden">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/40 text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
