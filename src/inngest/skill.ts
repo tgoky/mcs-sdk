@@ -6,6 +6,7 @@ import { failRun, logStep, finishRun } from "@/lib/run-log";
 import { SKILL_REGISTRY, isSkillId, type SkillDefinition } from "@/lib/skill-registry";
 import { REP_SKILL_REGISTRY, isRepSkillId, type RepSkillDefinition } from "@/lib/rep-skill-registry";
 import { CHAT_SKILL_REGISTRY, isChatSkillId, type ChatSkillDefinition } from "@/lib/chat-skill-registry";
+import { COLD_OPEN_SKILL_REGISTRY, isColdOpenSkillId, type ColdOpenSkillDefinition } from "@/lib/cold-open-skill-registry";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { isEngagementPaused } from "@/lib/engagement-status"; // <--- ADDED
 
@@ -23,15 +24,16 @@ import { isEngagementPaused } from "@/lib/engagement-status"; // <--- ADDED
  * a sequential if-chain into a loop over a registered list — done now,
  * not before, same "generalize once a real second (now third) example
  * exists" reasoning this app applies everywhere else. A fourth catalog
- * costs one array entry, not another branch.
+ * (cold-open, 2026-09-10) costs one array entry, exactly as promised.
  */
-const SKILL_CATALOGS: { isId: (v: string) => boolean; registry: Record<string, SkillDefinition | RepSkillDefinition | ChatSkillDefinition> }[] = [
+const SKILL_CATALOGS: { isId: (v: string) => boolean; registry: Record<string, SkillDefinition | RepSkillDefinition | ChatSkillDefinition | ColdOpenSkillDefinition> }[] = [
   { isId: isSkillId, registry: SKILL_REGISTRY },
   { isId: isRepSkillId, registry: REP_SKILL_REGISTRY },
   { isId: isChatSkillId, registry: CHAT_SKILL_REGISTRY },
+  { isId: isColdOpenSkillId, registry: COLD_OPEN_SKILL_REGISTRY },
 ];
 
-function resolveSkillDefinition(skillName: string): SkillDefinition | RepSkillDefinition | ChatSkillDefinition | null {
+function resolveSkillDefinition(skillName: string): SkillDefinition | RepSkillDefinition | ChatSkillDefinition | ColdOpenSkillDefinition | null {
   for (const { isId, registry } of SKILL_CATALOGS) {
     if (isId(skillName)) return registry[skillName];
   }

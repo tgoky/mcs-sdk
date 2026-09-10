@@ -2513,3 +2513,230 @@ export const chatMessages = pgTable(
     chatMessagesThreadCreatedIdx: index("chat_messages_thread_created_idx").on(table.threadId, table.createdAt),
   })
 );
+
+// ── Cold Open: Engagement Config (2026-09-10) ───────────────────────────────
+// The hosted, per-engagement mirror of the Cold Open skill pack's
+// coldopen.config.md frontmatter (see COLD_OPEN_SKILL_PACK_REVIEW.md) —
+// same sections (product identity, ICPs, sizing bounds, voice profile,
+// lead sources, send platform, campaign map, phase state), one Postgres
+// row instead of one markdown file per buyer-owned engagement folder.
+// Filled in across icp-lock (runOnSetup, seeds everything through
+// reviewRequiredIcps), voice-capture, source-connect, and send-connect —
+// same "single writer per section" convention the source pack's config.py
+// documents, enforced here by each skill's own save function only ever
+// setting its own columns.
+export type ColdOpenIcp = {
+  slug: string;
+  label: string;
+  weight: number;
+  tracking?: { openTracking: boolean; linkTracking: boolean };
+};
+
+export type ColdOpenSizingBound = {
+  teamSizeMin?: number;
+  teamSizeMax?: number;
+  disqualifyIf: string[];
+};
+
+export type ColdOpenLeadSourceType = "csv" | "apify" | "sales_nav";
+
+// Sales Nav and Apollo sources: accepted here as a real config choice (so
+// Source Connect never lies about what a buyer picked) but source-connect.ts's
+// executor honestly reports "connect only, verification pull not yet built"
+// for anything but csv/apify — same "ask, flagged unbuilt" convention this
+// app already uses for pre-call-read's personMatchConfidenceThreshold and
+// leak-map's sampleSizeMinimum, rather than silently pretending a fetcher
+// exists that doesn't.
+export type ColdOpenLeadSource = {
+  icp: string;
+  fetcherType: ColdOpenLeadSourceType;
+  dailyLimit?: number;
+  // The pasted/uploaded CSV's raw text, stored inline rather than as a
+  // file path — this app has no blob-storage path wired for Cold Open,
+  // and a lead-list CSV is small enough (hundreds to low thousands of
+  // rows) that storing it inline in this jsonb column is a reasonable v1
+  // choice over building upload infrastructure for it.
+  csvContent?: string;
+  csvMapping?: Record<string, string>; // LeadRow field -> the buyer's column header
+  apifyActorId?: string;
+  salesNavExportNote?: string;
+};
+
+export type ColdOpenSendPlatformId = "instantly" | "smartlead" | "lemlist" | "reply_io";
+
+export type ColdOpenPhaseKey =
+  | "icp_lock"
+  | "voice_capture"
+  | "source_connect"
+  | "send_connect"
+  | "daily_send"
+  | "reply_sort"
+  | "send_report";
+
+export type ColdOpenPhaseState = "not_started" | "in_progress" | "complete";
+
+export type ColdOpenRunSummary = {
+  fetched: number;
+  kept: number;
+  pushed: number;
+  held: number;
+  duplicate: number;
+  skippedDead: number;
+  skippedFiltered: number;
+  errors: string[];
+};
+
+export const coldOpenConfig = pgTable(
+  "cold_open_config",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+
+    // ── icp-lock ──────────────────────────────────────────────────────
+    productIdentity: jsonb("product_identity").$type<{ name: string; url: string; price: string; valueProp: string } | null>(),
+    productAllocation: jsonb("product_allocation").$type<Record<string, number>>().notNull().default({}),
+    icps: jsonb("icps").$type<ColdOpenIcp[]>().notNull().default([]),
+    sizingBounds: jsonb("sizing_bounds").$type<Record<string, ColdOpenSizingBound>>().notNull().default({}),
+    reviewRequiredIcps: jsonb("review_required_icps").$type<string[]>().notNull().default([]),
+    trackingDefaults: jsonb("tracking_defaults").$type<{ openTracking: boolean; linkTracking: boolean }>().notNull().default({ openTracking: true, linkTracking: true }),
+
+    // ── voice-capture ─────────────────────────────────────────────────
+    voiceProfile: jsonb("voice_profile").$type<{ greeting: string; signOff: string; tone: string; sourceDomain?: string } | null>(),
+    subjectVariants: jsonb("subject_variants").$type<string[]>().notNull().default([]),
+    // icp slug (or "default") -> pool of {subject, body1, body2, body3} touchsets.
+    // Mirrors body_variants.py's resolution precedence (icp-specific > default).
+    bodyVariantPools: jsonb("body_variant_pools").$type<Record<string, { subject: string; body1: string; body2: string; body3: string }[]>>().notNull().default({}),
+
+    // ── source-connect ────────────────────────────────────────────────
+    leadSources: jsonb("lead_sources").$type<ColdOpenLeadSource[]>().notNull().default([]),
+
+    // ── send-connect ──────────────────────────────────────────────────
+    // Credential itself is never stored here — resolved via
+    // resolveCredential(engagementId, `cold_open_${platform}`), same
+    // encrypted-vault path every other platform credential in this app
+    // uses (see src/lib/credentials.ts). This column is the platform
+    // CHOICE only, same convention pin-down's own bookingPlatform takes.
+    sendPlatform: jsonb("send_platform").$type<{ platform: ColdOpenSendPlatformId; baseUrl?: string } | null>(),
+    campaignMap: jsonb("campaign_map").$type<Record<string, string>>().notNull().default({}),
+    autoPushIcps: jsonb("auto_push_icps").$type<string[]>().notNull().default([]),
+
+    // ── daily-send ────────────────────────────────────────────────────
+    // liveSendEnabled defaults to false wherever this object is first
+    // created (see daily-send.ts's own save path) — same "dry-run is the
+    // default, nothing reaches the ESP until explicitly flipped live"
+    // contract the source pack's daily_send.py CLI holds itself to,
+    // adapted for a hosted always-on cron: a buyer must explicitly opt in
+    // once before any real send happens, rather than every scheduled run
+    // defaulting to dry-run forever.
+    dailySendSettings: jsonb("daily_send_settings").$type<{ volume: number; localHour: number; timezone?: string; copyMode: "generate" | "upload"; liveSendEnabled: boolean } | null>(),
+
+    phaseState: jsonb("phase_state")
+      .$type<Record<ColdOpenPhaseKey, ColdOpenPhaseState>>()
+      .notNull()
+      .default({
+        icp_lock: "not_started",
+        voice_capture: "not_started",
+        source_connect: "not_started",
+        send_connect: "not_started",
+        daily_send: "not_started",
+        reply_sort: "not_started",
+        send_report: "not_started",
+      }),
+
+    lastRunAt: timestamp("last_run_at"),
+    lastRunSummary: jsonb("last_run_summary").$type<ColdOpenRunSummary | null>(),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    coldOpenConfigEngagementUnique: uniqueIndex("cold_open_config_engagement_unique").on(table.engagementId),
+  })
+);
+
+// ── Cold Open: Leads (idempotency + push status) ────────────────────────────
+// The hosted mirror of esp/base.py's PushRegistry (a per-engagement
+// (email, campaign_id) -> first-push JSON file) plus the fetch-stage skip
+// reasons daily_send.py's batch report tracks — one row per lead per
+// engagement, so a re-run's dedupe check is a real unique-index lookup
+// instead of reading and re-parsing a JSON blob.
+export type ColdOpenLeadStatus = "held" | "duplicate" | "dry_run" | "pushed" | "skipped_dead" | "skipped_filtered" | "error";
+
+export const coldOpenLeads = pgTable(
+  "cold_open_leads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    runId: text("run_id").notNull(),
+
+    email: text("email").notNull(),
+    domain: text("domain").notNull(),
+    companyName: text("company_name").notNull(),
+    firstName: text("first_name"),
+    lastName: text("last_name"),
+    title: text("title"),
+    icp: text("icp"),
+    source: text("source"),
+    campaignId: text("campaign_id").notNull(),
+
+    status: text("status").$type<ColdOpenLeadStatus>().notNull(),
+    // Push-attempt detail (the ESP's payload/response on pushed, a skip/hold
+    // reason otherwise) — same shape esp/base.py's push_lead() second tuple
+    // element carries, kept as-is rather than flattened into more columns.
+    statusDetail: jsonb("status_detail"),
+    pushedAt: timestamp("pushed_at"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    // Same (email, campaign_id) key as PushRegistry.key(), scoped to this
+    // engagement rather than a shared file — a re-run's ON CONFLICT DO
+    // NOTHING against this index IS the idempotency check.
+    coldOpenLeadPushUnique: uniqueIndex("cold_open_lead_push_unique").on(table.engagementId, table.email, table.campaignId),
+    coldOpenLeadsEngagementIdx: index("cold_open_leads_engagement_idx").on(table.engagementId),
+  })
+);
+
+// ── Cold Open: Replies (reply-sort's classified output) ─────────────────────
+export type ColdOpenReplyDisposition = "interested" | "not_now" | "not_a_fit" | "objection" | "auto_reply" | "unsubscribe" | "unclassified";
+
+export const coldOpenReplies = pgTable(
+  "cold_open_replies",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    leadEmail: text("lead_email").notNull(),
+    campaignId: text("campaign_id"),
+    // The ESP's own reply/email id, when the feed provides one (Instantly
+    // does) — lets a re-poll skip a reply it already classified instead of
+    // reclassifying and re-routing it on every cron tick. Null for a feed
+    // that doesn't carry a stable id; such rows are never deduped against.
+    externalReplyId: text("external_reply_id"),
+
+    disposition: text("disposition").$type<ColdOpenReplyDisposition>().notNull(),
+    // "heuristic" (opt-out/OOO caught before any model call), "model"
+    // (Haiku classified it), or "none" (empty body — routed straight to
+    // the human queue, per reply_classifier.py's own ordering).
+    classificationSource: text("classification_source").$type<"heuristic" | "model" | "none">().notNull(),
+    rawBody: text("raw_body").notNull(),
+
+    // unclassified/interested/objection route to the human queue
+    // (src/lib/queue.ts) — same "a misrouted interested costs the buyer a
+    // deal; a queue visit costs a click" reasoning reply_classifier.py's
+    // own header states.
+    routedToQueue: boolean("routed_to_queue").notNull().default(false),
+
+    classifiedAt: timestamp("classified_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    coldOpenRepliesEngagementIdx: index("cold_open_replies_engagement_idx").on(table.engagementId),
+    coldOpenRepliesExternalIdUnique: uniqueIndex("cold_open_replies_external_id_unique").on(table.engagementId, table.externalReplyId),
+  })
+);

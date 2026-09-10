@@ -25,7 +25,7 @@ import { getWorkerAnalyticsDetail } from "@/lib/worker-analytics";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const PRODUCT_LABELS = { showtime: "Showtime", "reputation-manager": "Reputation Manager" } as const;
+const PRODUCT_LABELS = { showtime: "Showtime", "reputation-manager": "Reputation Manager", "cold-open": "Cold Open" } as const;
 
 const STATUS_STYLES: Record<string, string> = {
   success: "text-emerald-600 dark:text-emerald-400",

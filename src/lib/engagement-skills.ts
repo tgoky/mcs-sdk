@@ -1,8 +1,9 @@
 import { db } from "@/lib/db";
-import { engagements, engagementSkills, repIdentityGraphs } from "@/models/schema";
+import { engagements, engagementSkills, repIdentityGraphs, coldOpenConfig } from "@/models/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
 import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
+import { COLD_OPEN_SKILL_IDS, type ColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
 import { WORKER_IDS, type WorkerId } from "@/lib/worker-registry";
 
 /**
@@ -84,6 +85,20 @@ export async function getDisabledEngagementIdsForSkill(skillId: string): Promise
   return new Set(rows.map((r) => r.engagementId));
 }
 
+/** Same "no row = enabled" query as getEngagementSkillStates, for Cold
+ * Open's own Skills panel — same table, same convention, just
+ * COLD_OPEN_SKILL_IDS instead of Showtime's SKILL_IDS. */
+export async function getColdOpenEngagementSkillStates(engagementId: string): Promise<Record<ColdOpenSkillId, boolean>> {
+  const rows = await db
+    .select({ skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
+    .from(engagementSkills)
+    .where(eq(engagementSkills.engagementId, engagementId));
+
+  const disabled = new Set(rows.filter((r) => !r.enabled).map((r) => r.skillId));
+
+  return Object.fromEntries(COLD_OPEN_SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<ColdOpenSkillId, boolean>;
+}
+
 /**
  * Same "no row = enabled" state getEngagementSkillStates resolves, but for
  * every engagement in one query — for the account-wide Autopilot rail
@@ -156,6 +171,35 @@ export async function getRepSkillStatesForEngagements(
   );
 }
 
+/** Same bulk shape as getSkillStatesForEngagements/getRepSkillStatesForEngagements, for Cold Open's 7 skills. */
+export async function getColdOpenSkillStatesForEngagements(
+  engagementIds: string[]
+): Promise<Record<string, Record<ColdOpenSkillId, boolean>>> {
+  const allEnabled = Object.fromEntries(COLD_OPEN_SKILL_IDS.map((id) => [id, true])) as Record<ColdOpenSkillId, boolean>;
+  if (engagementIds.length === 0) return {};
+
+  const rows = await db
+    .select({ engagementId: engagementSkills.engagementId, skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
+    .from(engagementSkills)
+    .where(inArray(engagementSkills.engagementId, engagementIds));
+
+  const disabledByEngagement = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (row.enabled) continue;
+    const set = disabledByEngagement.get(row.engagementId) ?? new Set<string>();
+    set.add(row.skillId);
+    disabledByEngagement.set(row.engagementId, set);
+  }
+
+  return Object.fromEntries(
+    engagementIds.map((engagementId) => {
+      const disabled = disabledByEngagement.get(engagementId);
+      if (!disabled) return [engagementId, allEnabled];
+      return [engagementId, Object.fromEntries(COLD_OPEN_SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<ColdOpenSkillId, boolean>];
+    })
+  );
+}
+
 /** Upserts the enabled flag for one (engagementId, skillId) pair — see the Skills panel on the engagement detail page.
  * skillId widened to string, same reasoning as isSkillEnabledForEngagement above.
  *
@@ -203,12 +247,13 @@ export async function setSkillEnabledForEngagement(
  * client look like it already has all 11 workers turned on.
  */
 export async function getEnabledWorkerIdsForEngagement(engagementId: string): Promise<WorkerId[]> {
-  const [rows, [engagement], repGraph] = await Promise.all([
+  const [rows, [engagement], repGraph, coldOpenRow] = await Promise.all([
     db.select({ skillId: engagementSkills.skillId, enabled: engagementSkills.enabled, enabledAt: engagementSkills.enabledAt })
       .from(engagementSkills)
       .where(eq(engagementSkills.engagementId, engagementId)),
     db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1),
     db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1),
+    db.select({ engagementId: coldOpenConfig.engagementId }).from(coldOpenConfig).where(eq(coldOpenConfig.engagementId, engagementId)).limit(1),
   ]);
 
   const explicitlyEnabled = new Set(rows.filter((r) => r.enabled && r.enabledAt).map((r) => r.skillId));
@@ -216,12 +261,13 @@ export async function getEnabledWorkerIdsForEngagement(engagementId: string): Pr
 
   const hasShowtimeEvidence = Boolean(engagement?.stack);
   const hasRepEvidence = repGraph.length > 0;
+  const hasColdOpenEvidence = coldOpenRow.length > 0;
 
   return WORKER_IDS.filter((id) => {
     if (explicitlyDisabled.has(id)) return false;
     if (explicitlyEnabled.has(id)) return true;
-    const isShowtimeWorker = (SKILL_IDS as string[]).includes(id);
-    if (isShowtimeWorker) return hasShowtimeEvidence;
+    if ((SKILL_IDS as string[]).includes(id)) return hasShowtimeEvidence;
+    if ((COLD_OPEN_SKILL_IDS as string[]).includes(id)) return hasColdOpenEvidence;
     return hasRepEvidence;
   });
 }
@@ -234,6 +280,11 @@ export async function getEnabledWorkerIdsForEngagement(engagementId: string): Pr
 export function resolveEnabledWorkerIds(opts: {
   hasShowtimeEvidence: boolean;
   hasRepEvidence: boolean;
+  /** Optional so every existing call site (pre-dating Cold Open) keeps
+   * compiling unchanged; omitted means "no evidence", same as not passing
+   * hasRepEvidence would for an RM-unaware caller before this field
+   * existed. */
+  hasColdOpenEvidence?: boolean;
   explicitRows: { skillId: string; enabled: boolean; enabledAt: Date | null }[];
 }): WorkerId[] {
   const explicitlyEnabled = new Set(opts.explicitRows.filter((r) => r.enabled && r.enabledAt).map((r) => r.skillId));
@@ -242,7 +293,8 @@ export function resolveEnabledWorkerIds(opts: {
   return WORKER_IDS.filter((id) => {
     if (explicitlyDisabled.has(id)) return false;
     if (explicitlyEnabled.has(id)) return true;
-    const isShowtimeWorker = (SKILL_IDS as string[]).includes(id);
-    return isShowtimeWorker ? opts.hasShowtimeEvidence : opts.hasRepEvidence;
+    if ((SKILL_IDS as string[]).includes(id)) return opts.hasShowtimeEvidence;
+    if ((COLD_OPEN_SKILL_IDS as string[]).includes(id)) return Boolean(opts.hasColdOpenEvidence);
+    return opts.hasRepEvidence;
   });
 }

@@ -43,7 +43,7 @@ function daysAgo(days: number): Date {
 export interface WorkerOverviewStat {
   workerId: WorkerId;
   name: string;
-  productId: "showtime" | "reputation-manager";
+  productId: "showtime" | "reputation-manager" | "cold-open";
   activeClients: number;
   runsInWindow: number;
   successRate: number | null;
@@ -199,7 +199,7 @@ export interface RepSignalSummary {
 }
 
 export interface WorkerAnalyticsDetail {
-  worker: { id: WorkerId; name: string; description: string; productId: "showtime" | "reputation-manager" };
+  worker: { id: WorkerId; name: string; description: string; productId: "showtime" | "reputation-manager" | "cold-open" };
   windowDays: number;
   runsInWindow: number;
   successRate: number | null;

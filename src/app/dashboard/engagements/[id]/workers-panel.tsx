@@ -14,6 +14,11 @@ import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-con
 import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
 import { RepOnboardingConfigForm } from "@/components/worker-config-forms/rep-onboarding-config-form";
 import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
+import { IcpLockConfigForm } from "@/components/worker-config-forms/icp-lock-config-form";
+import { VoiceCaptureConfigForm } from "@/components/worker-config-forms/voice-capture-config-form";
+import { SourceConnectConfigForm } from "@/components/worker-config-forms/source-connect-config-form";
+import { SendConnectConfigForm } from "@/components/worker-config-forms/send-connect-config-form";
+import { DailySendConfigForm } from "@/components/worker-config-forms/daily-send-config-form";
 
 /**
  * Replaces SkillsPanel + RepSkillsPanel — two near-identical components
@@ -109,9 +114,10 @@ export function WorkersPanel({
   const [expandedWorker, setExpandedWorker] = useState<WorkerId | null>(null);
 
   function toggleEndpoint(workerId: WorkerId): string {
-    return WORKER_REGISTRY[workerId].productId === "reputation-manager"
-      ? `/api/engagements/${engagementId}/skills/rep/${workerId}`
-      : `/api/engagements/${engagementId}/skills/${workerId}`;
+    const productId = WORKER_REGISTRY[workerId].productId;
+    if (productId === "reputation-manager") return `/api/engagements/${engagementId}/skills/rep/${workerId}`;
+    if (productId === "cold-open") return `/api/engagements/${engagementId}/skills/cold-open/${workerId}`;
+    return `/api/engagements/${engagementId}/skills/${workerId}`;
   }
 
   async function handleToggle(workerId: WorkerId) {
@@ -212,6 +218,26 @@ export function WorkersPanel({
           )}
           {expandedWorker === "rep-onboarding" && (
             <RepOnboardingConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} />
+          )}
+          {expandedWorker === "icp-lock" && (
+            <IcpLockConfigForm
+              engagementId={engagementId}
+              onCancel={() => setExpandedWorker(null)}
+              onSaved={(result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : setExpandedWorker(null))}
+              cancelLabel="Close"
+            />
+          )}
+          {expandedWorker === "voice-capture" && (
+            <VoiceCaptureConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "source-connect" && (
+            <SourceConnectConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "send-connect" && (
+            <SendConnectConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "daily-send" && (
+            <DailySendConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
           )}
           {expandedWorker === "pin-down" && (
             <PinDownConfigForm

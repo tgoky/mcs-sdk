@@ -19,9 +19,10 @@
 
 import { SKILL_IDS, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
 import { REP_SKILL_IDS, REP_SKILL_MANIFEST, type RepSkillId } from "@/lib/rep-skill-manifest";
+import { COLD_OPEN_SKILL_IDS, COLD_OPEN_SKILL_MANIFEST, type ColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
 import type { ProductId } from "@/lib/product-catalog";
 
-export type WorkerId = SkillId | RepSkillId;
+export type WorkerId = SkillId | RepSkillId | ColdOpenSkillId;
 
 /**
  * How a worker's config field should be sourced when it's being enabled
@@ -607,6 +608,149 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
   "rep-digest": [],
 };
 
+// Traced against the Cold Open skill pack's own config schema (see
+// COLD_OPEN_SKILL_PACK_REVIEW.md and coldOpenConfig in schema.ts, which
+// mirrors coldopen.config.md's frontmatter section by section). Two real
+// reuse opportunities from Showtime, both flagged "derivable" the same
+// way pin-down's own rawVoiceCorpus/buyerDomain fields are: a client that
+// already ran Pin-Down has a primaryDomain and a buyer name on file, so
+// icp-lock and voice-capture should offer those as a starting suggestion
+// rather than a blank field — same unbuilt-pre-fill caveat
+// ClientProfileFact's own doc comment already states for every other
+// "derivable" entry in this file (the resolver exists; nothing calls it
+// from a UI surface yet).
+const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField[]>> = {
+  "icp-lock": [
+    {
+      key: "productName",
+      label: "Product / offer name",
+      kind: "derivable",
+      description: "Pre-fillable from the client's own buyer name (engagements.buyer) — a starting suggestion to confirm or edit.",
+      derivableFrom: "buyerName",
+    },
+    {
+      key: "productUrl",
+      label: "Product URL",
+      kind: "derivable",
+      description: "Pre-fillable from the client profile's shared primaryDomain, same mechanism pin-down's own buyerDomain field uses.",
+      derivableFrom: "primaryDomain",
+    },
+    {
+      key: "productPrice",
+      label: "Price",
+      kind: "ask",
+      description: "Not derivable — the operator's own pricing.",
+    },
+    {
+      key: "productValueProp",
+      label: "Value proposition",
+      kind: "ask",
+      description: "One sentence on what the offer actually does for a buyer — a real business fact only the operator knows.",
+    },
+    {
+      key: "icps",
+      label: "ICPs (slug, label, weight)",
+      kind: "ask",
+      description: "Who this client sells to, and the traffic-allocation weight across each ICP if there's more than one — a judgment call, not inferred.",
+    },
+    {
+      key: "sizingBounds",
+      label: "Sizing bounds + disqualifiers",
+      kind: "ask",
+      description: "Per-ICP sizing sweet spot and who to skip — real business rules, paired one-to-one with the ICPs above.",
+    },
+    {
+      key: "reviewRequiredIcps",
+      label: "Review-required ICPs",
+      kind: "ask",
+      description: "Which ICPs (if any) hold for manual review before a push instead of auto-pushing — a real risk-tolerance preference, defaults to none held.",
+    },
+  ],
+  "voice-capture": [
+    {
+      key: "voiceProfile",
+      label: "Greeting, sign-off, and tone",
+      kind: "derivable",
+      description: "Derived by crawling the client's domain — the same brand-voice extraction pin-down's own rawVoiceCorpus field already runs, reused rather than re-implemented.",
+      derivableFrom: "primaryDomain",
+    },
+    {
+      key: "subjectVariants",
+      label: "Subject line pool",
+      kind: "ask",
+      description: "AI-assisted drafting from the captured voice is plausible in a future pass, but not built — honestly ask for now, same reasoning as pin-down's topCallQuestions entry.",
+    },
+    {
+      key: "bodyVariantPools",
+      label: "Body variant pool(s)",
+      kind: "ask",
+      description: "At least 2 variants per ICP are required before Daily Send can run in upload mode (see body-variants.ts) — same reasoning as subjectVariants above.",
+    },
+  ],
+  "source-connect": [
+    {
+      key: "leadSourceType",
+      label: "Lead source",
+      kind: "ask",
+      description: "CSV upload, Apify actor, or a Sales Navigator export — a real choice. Only CSV and Apify have a working verification pull today; Sales Navigator is accepted as a config choice and flagged unbuilt.",
+    },
+    {
+      key: "leadSourceCredential",
+      label: "Apify API token",
+      kind: "secret",
+      description: "Routes to the credential vault path — only needed when leadSourceType is apify.",
+    },
+    {
+      key: "csvMapping",
+      label: "CSV column mapping",
+      kind: "ask",
+      description: "Which of the client's own CSV column headers map to email/company/name/etc — real per-file mapping, not derivable.",
+    },
+  ],
+  "send-connect": [
+    {
+      key: "sendPlatform",
+      label: "Sending platform",
+      kind: "ask",
+      description: "Instantly, SmartLead, Reply.io, or Lemlist — a real choice.",
+    },
+    {
+      key: "sendPlatformCredential",
+      label: "Sending platform API key",
+      kind: "secret",
+      description: "Routes to the credential vault path — never a plain text field.",
+    },
+    {
+      key: "campaignMap",
+      label: "ICP -> campaign mapping",
+      kind: "ask",
+      description: "Which real campaign in the client's own ESP account each ICP pushes into — only knowable from their account, not derivable.",
+    },
+  ],
+  "daily-send": [
+    {
+      key: "dailySendVolume",
+      label: "Daily send volume",
+      kind: "ask",
+      description: "Real per-client throughput preference, bounded by their own inbox warm-up state — not a sane global default.",
+    },
+    {
+      key: "dailySendLocalHour",
+      label: "Send hour (client-local time)",
+      kind: "ask",
+      description: "Real per-client cadence preference, same pattern leak-map's weeklySummarySchedule already uses.",
+    },
+    {
+      key: "copyMode",
+      label: "Copy mode",
+      kind: "ask",
+      description: "generate (fresh LLM copy per lead) or upload (the buyer's own fixed templates, rotated) — a real workflow choice.",
+    },
+  ],
+  "reply-sort": [],
+  "send-report": [],
+};
+
 // Single source of truth for category, kept out of skill-manifest.ts and
 // rep-skill-manifest.ts on purpose — those files stay each product's own
 // id/name/description authority (see this module's header), while
@@ -625,6 +769,13 @@ const WORKER_CATEGORIES: Record<WorkerId, WorkerCategory> = {
   "rep-twitter-watch": "Monitoring",
   "rep-crisis-response": "Crisis & Recovery",
   "rep-digest": "Monitoring",
+  "icp-lock": "Setup",
+  "voice-capture": "Setup",
+  "source-connect": "Setup",
+  "send-connect": "Setup",
+  "daily-send": "Outreach & Sequences",
+  "reply-sort": "Outreach & Sequences",
+  "send-report": "Analysis & Briefing",
 };
 
 function buildRegistry(): Record<WorkerId, WorkerDefinition> {
@@ -658,12 +809,26 @@ function buildRegistry(): Record<WorkerId, WorkerDefinition> {
     };
   }
 
+  for (const id of COLD_OPEN_SKILL_IDS) {
+    const entry = COLD_OPEN_SKILL_MANIFEST[id];
+    registry[id] = {
+      id,
+      productId: "cold-open",
+      name: entry.name,
+      description: entry.description,
+      category: WORKER_CATEGORIES[id],
+      runOnSetup: entry.runOnSetup,
+      hasHingesPanel: entry.hasHingesPanel,
+      configFields: COLD_OPEN_CONFIG_FIELDS[id] ?? [],
+    };
+  }
+
   return registry;
 }
 
 export const WORKER_REGISTRY: Record<WorkerId, WorkerDefinition> = buildRegistry();
 
-export const WORKER_IDS: WorkerId[] = [...SKILL_IDS, ...REP_SKILL_IDS];
+export const WORKER_IDS: WorkerId[] = [...SKILL_IDS, ...REP_SKILL_IDS, ...COLD_OPEN_SKILL_IDS];
 
 export function isWorkerId(value: string): value is WorkerId {
   return (WORKER_IDS as string[]).includes(value);

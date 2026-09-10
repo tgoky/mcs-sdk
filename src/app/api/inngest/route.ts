@@ -9,6 +9,7 @@ import { processWinBackEmailSmtpSequence } from "@/inngest/win-back-email-smtp";
 import { processConversationIntelligenceTranscript } from "@/inngest/conversation-intelligence";
 import { processBookingWebhookEvent } from "@/inngest/booking-webhook";
 import { repEnginePanelCron, repTrustpilotWatchCron, repRedditWatchCron, repTwitterWatchCron, repCrisisResponseCron, repDigestCron } from "@/inngest/reputation-manager";
+import { coldOpenDailySendCron, coldOpenReplySortCron } from "@/inngest/cold-open";
 import {
   nightlyBriefsCron,
   leakMapScheduleCron,
@@ -145,5 +146,11 @@ export const { GET, POST, PUT } = serve({
     repTwitterWatchCron,
     repCrisisResponseCron,
     repDigestCron,
+    // Cold Open's own scheduling (src/inngest/cold-open.ts) — same
+    // hourly-checked-against-local-hour pattern nightlyBriefsCron uses,
+    // gated the same enablement-check-before-startRun way every cron in
+    // this app is (see that file's own header).
+    coldOpenDailySendCron,
+    coldOpenReplySortCron,
   ],
 });

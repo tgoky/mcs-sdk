@@ -1,8 +1,10 @@
 "use client";
 
 import { isRepSkillId } from "@/lib/rep-skill-manifest";
+import { isColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { RepSkillBadge } from "@/components/rep-skill-badge";
+import { ColdOpenSkillBadge } from "@/components/cold-open-skill-badge";
 
 /**
  * Badge for a skillRuns.skillName value from EITHER product's catalog —
@@ -31,10 +33,10 @@ export function AnySkillBadge({
   paused?: boolean;
   count?: number;
 }) {
-  if (isRepSkillId(skill)) {
+  if (isRepSkillId(skill) || isColdOpenSkillId(skill)) {
     return (
       <div className="relative shrink-0" style={{ width: size, height: size }}>
-        <RepSkillBadge skill={skill} size={size} />
+        {isRepSkillId(skill) ? <RepSkillBadge skill={skill} size={size} /> : <ColdOpenSkillBadge skill={skill} size={size} />}
         {Boolean(count) && (
           <span
             className="absolute -bottom-1 -right-1 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[10px] font-mono font-bold leading-none ring-2 ring-white dark:ring-zinc-950"

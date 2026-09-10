@@ -632,6 +632,15 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
     status: "available",
     image: "/images/repm.png",
   },
+  {
+    id: "cold-open",
+    name: "Cold Open",
+    description:
+      "A daily cold-email operation for your top of funnel: lock your ICP, capture your voice, connect a lead source and sending platform, and let a scheduled run fetch, personalize, and push fresh leads every day.",
+    href: "/dashboard/library/cold-open",
+    status: "available",
+    image: "/images/cold-open.svg",
+  },
 ];
 
 // ---------------------------------------------------------------------------

@@ -13,11 +13,13 @@ import { EnablePileOnModal } from "./enable-worker-modal";
 const PRODUCT_LABELS: Record<WorkerDefinition["productId"], string> = {
   showtime: "Showtime",
   "reputation-manager": "Reputation Manager",
+  "cold-open": "Cold Open",
 };
 
 const PRODUCT_ACCENT: Record<WorkerDefinition["productId"], string> = {
   showtime: "border-amber-200 dark:border-amber-900/70",
   "reputation-manager": "border-indigo-200 dark:border-indigo-900/70",
+  "cold-open": "border-rose-200 dark:border-rose-900/70",
 };
 
 /**
