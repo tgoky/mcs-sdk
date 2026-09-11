@@ -1,0 +1,42 @@
+From 06264a5d7dd3b1d920398e91f6a7124c7900b197 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 11 Sep 2026 13:22:19 +0000
+Subject: [PATCH] Fix build error: engagements.workspaceId is nullable in the
+ schema
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+getPrimaryEngagementIdsForWorkspaces used row.workspaceId as a Map key
+typed string, but that column has no .notNull() (unlike every other
+workspaceId column in schema.ts), so Drizzle types it string | null.
+The inArray() filter already guarantees it's never actually null at
+runtime — added an explicit guard so the type checker agrees.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011PX9qLTKPtXba6ncjAwLyN
+---
+ src/lib/workspace.ts | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/lib/workspace.ts b/src/lib/workspace.ts
+index ab3c6a0..9a5326b 100644
+--- a/src/lib/workspace.ts
++++ b/src/lib/workspace.ts
+@@ -293,7 +293,12 @@ export async function getPrimaryEngagementIdsForWorkspaces(workspaceIds: string[
+ 
+   const byWorkspace = new Map<string, string>();
+   for (const row of rows) {
+-    if (!byWorkspace.has(row.workspaceId)) byWorkspace.set(row.workspaceId, row.engagementId);
++    // engagements.workspaceId is nullable in the schema (unlike every
++    // other table's workspaceId column), but the inArray() filter above
++    // means every row here already matched one of the given ids, so this
++    // is never actually null at runtime — just narrowing the type Drizzle
++    // can't infer from the WHERE clause.
++    if (row.workspaceId && !byWorkspace.has(row.workspaceId)) byWorkspace.set(row.workspaceId, row.engagementId);
+   }
+   return byWorkspace;
+ }
+-- 
+2.43.0
+

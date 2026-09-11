@@ -1,0 +1,108 @@
+From 0355bcc93678da2e1a4de347d54d0bb76d45fa33 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 11 Sep 2026 14:34:07 +0000
+Subject: [PATCH] Clients icon: swap plain Users glyph for a DiceBear filled
+ icon badge
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Plain outline Users icon read as too generic/flat next to the initials
+avatars elsewhere in the switcher. Uses DiceBear's `icons` style instead
+— a solid glyph on a colored rounded backdrop (the Slack/Discord
+default-avatar look), pinned to a fixed seed and one of the same violet
+tones used by client initials avatars so it reads as part of the same
+color system rather than a one-off.
+
+This sandbox's network policy blocks api.dicebear.com, so the exact
+glyph this seed renders hasn't been visually previewed here — swapping
+the seed string is a one-line follow-up if it doesn't land.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011PX9qLTKPtXba6ncjAwLyN
+---
+ src/components/primary-rail.tsx |  6 +++---
+ src/lib/avatar.ts               | 26 +++++++++++++++++++++++++-
+ 2 files changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/src/components/primary-rail.tsx b/src/components/primary-rail.tsx
+index bd909ee..d421903 100644
+--- a/src/components/primary-rail.tsx
++++ b/src/components/primary-rail.tsx
+@@ -16,14 +16,13 @@ import {
+   Loader2,
+   Search,
+   GripVertical,
+-  Users,
+ } from "lucide-react";
+ import { ThemeToggle } from "@/components/theme-toggle";
+ import type { Workspace } from "@/lib/workspace";
+ import type { UserAvatarPrefs } from "@/lib/user-avatar";
+ import { UserAvatar } from "@/components/user-avatar";
+ import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
+-import { generateInitialsAvatarDataUri } from "@/lib/avatar";
++import { generateInitialsAvatarDataUri, generateNeutralNavIconDataUri } from "@/lib/avatar";
+ 
+ const CLIENT_ORDER_STORAGE_KEY = "mcs-client-order";
+ 
+@@ -74,6 +73,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+   const initials = displayName.slice(0, 2).toUpperCase();
+   const topNavItems = PRIMARY_NAV_SECTIONS;
+   const activeClient = workspaces.find((w) => w.workspaceId === activeWorkspaceId);
++  const neutralIconUri = useMemo(() => generateNeutralNavIconDataUri({ size: 64 }), []);
+ 
+   // Custom drag order is a per-browser preference, not account data — no
+   // migration, no server round trip, and it degrades to plain creation
+@@ -196,7 +196,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+                   specific client, so it deliberately does NOT show the
+                   active client's own avatar (that's the separate quick-
+                   link row right below this button instead). */}
+-              <Users className="w-5 h-5 shrink-0" />
++              <img src={neutralIconUri} alt="" className="w-6 h-6 shrink-0 object-cover rounded-md" />
+             </div>
+             <span
+               className={
+diff --git a/src/lib/avatar.ts b/src/lib/avatar.ts
+index 611e390..82c9827 100644
+--- a/src/lib/avatar.ts
++++ b/src/lib/avatar.ts
+@@ -6,7 +6,7 @@
+ // on every render instead.
+ 
+ import { createAvatar } from "@dicebear/core";
+-import { pixelArt, initials } from "@dicebear/collection";
++import { pixelArt, initials, icons } from "@dicebear/collection";
+ import type { Style } from "@dicebear/core";
+ 
+ // Just PixelBot, by design — Micah and Open Peeps were dropped per direct
+@@ -134,3 +134,27 @@ export function generateInitialsAvatarDataUri(name: string, opts?: { size?: numb
+   });
+   return avatar.toDataUri();
+ }
++
++/**
++ * DiceBear's `icons` style — a solid/filled glyph on a colored rounded
++ * backdrop (the Slack/Discord "default avatar" look), for a control that
++ * represents the *category* "clients" rather than any one specific
++ * client. A fixed seed so it's the same glyph every time, not a random
++ * one per render — this is a nav icon, not an avatar that's supposed to
++ * vary. backgroundColor pinned to one of CLIENT_AVATAR_COLORS' own
++ * violet so this button reads as part of the same client-color system
++ * rather than a clashing one-off.
++ *
++ * Note: this sandbox's network policy blocks api.dicebear.com, so this
++ * exact seed's actual rendered glyph hasn't been visually previewed —
++ * if it doesn't land, swapping the seed string is a one-line change.
++ */
++export function generateNeutralNavIconDataUri(opts?: { size?: number }): string {
++  const avatar = createAvatar(icons as Style<Record<string, unknown>>, {
++    seed: "clients-nav-icon",
++    size: opts?.size ?? 64,
++    radius: 20,
++    backgroundColor: ["7c3aed"],
++  });
++  return avatar.toDataUri();
++}
+-- 
+2.43.0
+

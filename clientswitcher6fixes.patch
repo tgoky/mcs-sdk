@@ -1,0 +1,369 @@
+From 3894de92f865ed6c463cfed48b729322c764e650 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 11 Sep 2026 13:50:04 +0000
+Subject: [PATCH] Fix client switcher: neutral icon, per-client colors,
+ drag-to-reorder
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The Clients rail button now shows a fixed DiceBear identicon instead of
+the active client's own initials — it represents the switcher category,
+not any one client. That distinction moves to the "My workspace" quick-
+link pill below it, which now renders the active client's initials
+avatar and matches the same zoom-on-hover/active treatment as the other
+rail items instead of being a static text-only pill.
+
+Client initials avatars were all rendering the same color regardless of
+name — DiceBear's `initials` style needs an explicit backgroundColor
+palette to vary by seed, so added one and each client now hashes to a
+distinct color.
+
+Dropdown panel and rows get back a small amount of border radius
+(rounded-xl/rounded-lg) instead of being fully squared off. Each row now
+has a 6-dot grip handle and real drag-and-drop reordering via native
+HTML5 DnD, persisted per-browser in localStorage (no DB migration, since
+drizzle-kit can't run in this sandbox to safely regenerate snapshot
+metadata).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011PX9qLTKPtXba6ncjAwLyN
+---
+ src/components/primary-rail.tsx | 160 +++++++++++++++++++++++++++-----
+ src/lib/avatar.ts               |  50 ++++++++--
+ 2 files changed, 182 insertions(+), 28 deletions(-)
+
+diff --git a/src/components/primary-rail.tsx b/src/components/primary-rail.tsx
+index 38bc3bf..45b5bb0 100644
+--- a/src/components/primary-rail.tsx
++++ b/src/components/primary-rail.tsx
+@@ -15,14 +15,16 @@ import {
+   UserPlus,
+   Loader2,
+   Search,
+-  Building2,
++  GripVertical,
+ } from "lucide-react";
+ import { ThemeToggle } from "@/components/theme-toggle";
+ import type { Workspace } from "@/lib/workspace";
+ import type { UserAvatarPrefs } from "@/lib/user-avatar";
+ import { UserAvatar } from "@/components/user-avatar";
+ import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
+-import { generateInitialsAvatarDataUri } from "@/lib/avatar";
++import { generateInitialsAvatarDataUri, generateNeutralNavIconDataUri } from "@/lib/avatar";
++
++const CLIENT_ORDER_STORAGE_KEY = "mcs-client-order";
+ 
+ interface PrimaryRailProps {
+   displayName: string;
+@@ -64,13 +66,75 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+   const [clientSearch, setClientSearch] = useState("");
+   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
+   const [skillCounts, setSkillCounts] = useState<Map<string, number> | null>(null);
++  const [clientOrder, setClientOrder] = useState<string[] | null>(null);
++  const [draggedId, setDraggedId] = useState<string | null>(null);
++  const [dragOverId, setDragOverId] = useState<string | null>(null);
+   const pathname = usePathname();
+   const initials = displayName.slice(0, 2).toUpperCase();
+   const topNavItems = PRIMARY_NAV_SECTIONS;
+   const activeClient = workspaces.find((w) => w.workspaceId === activeWorkspaceId);
++  const neutralIconUri = useMemo(() => generateNeutralNavIconDataUri({ size: 64 }), []);
++
++  // Custom drag order is a per-browser preference, not account data — no
++  // migration, no server round trip, and it degrades to plain creation
++  // order (workspaces' own default) the first time or in a fresh browser.
++  useEffect(() => {
++    try {
++      const stored = window.localStorage.getItem(CLIENT_ORDER_STORAGE_KEY);
++      if (stored) setClientOrder(JSON.parse(stored));
++    } catch {
++      // Corrupt/blocked storage — falls back to creation order below.
++    }
++  }, []);
++
++  const orderedWorkspaces = useMemo(() => {
++    if (!clientOrder) return workspaces;
++    const byId = new Map(workspaces.map((w) => [w.workspaceId, w]));
++    const ordered: Workspace[] = [];
++    for (const id of clientOrder) {
++      const w = byId.get(id);
++      if (w) {
++        ordered.push(w);
++        byId.delete(id);
++      }
++    }
++    // Anything not in the stored order (new since last reorder) — appended
++    // in its normal creation order rather than dropped.
++    for (const w of workspaces) if (byId.has(w.workspaceId)) ordered.push(w);
++    return ordered;
++  }, [workspaces, clientOrder]);
++
+   const filteredWorkspaces = clientSearch.trim()
+-    ? workspaces.filter((w) => w.name.toLowerCase().includes(clientSearch.trim().toLowerCase()))
+-    : workspaces;
++    ? orderedWorkspaces.filter((w) => w.name.toLowerCase().includes(clientSearch.trim().toLowerCase()))
++    : orderedWorkspaces;
++  // Reordering while a search filter is active would mean "insert
++  // relative to a hidden item," which has no obvious right answer — drag
++  // is disabled until the search is cleared instead of guessing.
++  const dragEnabled = !clientSearch.trim();
++
++  function handleDrop(targetId: string) {
++    if (!draggedId || draggedId === targetId) {
++      setDraggedId(null);
++      setDragOverId(null);
++      return;
++    }
++    const current = orderedWorkspaces.map((w) => w.workspaceId);
++    const from = current.indexOf(draggedId);
++    const to = current.indexOf(targetId);
++    if (from === -1 || to === -1) return;
++    const next = [...current];
++    next.splice(from, 1);
++    next.splice(to, 0, draggedId);
++    setClientOrder(next);
++    try {
++      window.localStorage.setItem(CLIENT_ORDER_STORAGE_KEY, JSON.stringify(next));
++    } catch {
++      // Best-effort persistence — the reorder still applies for this
++      // session even if storage is blocked/full.
++    }
++    setDraggedId(null);
++    setDragOverId(null);
++  }
+ 
+   // Fetched lazily the first time the switcher opens, not on every page
+   // load — see the route's own doc for why this can't just be a prop.
+@@ -127,16 +191,12 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+                 (clientSwitcherOpen ? "scale-[1.4] translate-y-[3px]" : "scale-100 group-hover:scale-[1.4] group-hover:translate-y-[3px]")
+               }
+             >
+-              {/* Shows the ACTIVE client's own initials avatar rather than
+-                  a generic icon — same "current org's mark sits in the
+-                  switcher trigger" pattern most multi-tenant apps use, and
+-                  doubles as a quiet "this is who you're on right now" cue
+-                  even when the button isn't hovered/open. */}
+-              {activeClient ? (
+-                <ClientAvatar name={activeClient.name} size="w-6 h-6" />
+-              ) : (
+-                <Building2 className="w-5 h-5 shrink-0" />
+-              )}
++              {/* A fixed, never-changing icon — this button represents the
++                  *category* "clients" (open the switcher), not any one
++                  specific client, so it deliberately does NOT show the
++                  active client's own avatar (that's the separate quick-
++                  link row right below this button instead). */}
++              <img src={neutralIconUri} alt="" className="w-6 h-6 shrink-0 object-cover rounded-md" />
+             </div>
+             <span
+               className={
+@@ -160,7 +220,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+                   backdrop-blur, soft ambient shadow, so whatever's behind
+                   it visibly diffuses through instead of a flat opaque
+                   panel. */}
+-              <div className="absolute left-full top-0 ml-2 z-50 w-72 surface-glass-3 text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
++              <div className="absolute left-full top-0 ml-2 z-50 w-72 surface-glass-3 rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+                 <div className="p-3 space-y-2">
+                   <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 px-0.5">Clients</p>
+                   {workspaces.length > 6 && (
+@@ -171,7 +231,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+                         value={clientSearch}
+                         onChange={(e) => setClientSearch(e.target.value)}
+                         placeholder="Search clients..."
+-                        className="w-full pl-8 pr-2.5 py-1.5 text-xs border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/60 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
++                        className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/60 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                       />
+                     </div>
+                   )}
+@@ -185,17 +245,41 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+                       const isActive = workspace.workspaceId === activeWorkspaceId;
+                       const isSwitching = switchingWorkspaceId === workspace.workspaceId;
+                       const skillCount = skillCounts?.get(workspace.workspaceId);
++                      const isDragging = draggedId === workspace.workspaceId;
++                      const isDragOver =
++                        dragOverId === workspace.workspaceId && draggedId !== null && draggedId !== workspace.workspaceId;
+                       return (
+                         <form
+                           key={workspace.workspaceId}
+                           action={`/api/workspaces/${workspace.workspaceId}/switch`}
+                           method="POST"
+                           onSubmit={() => setSwitchingWorkspaceId(workspace.workspaceId)}
++                          draggable={dragEnabled}
++                          onDragStart={() => setDraggedId(workspace.workspaceId)}
++                          onDragOver={(e) => {
++                            if (!dragEnabled || !draggedId) return;
++                            e.preventDefault();
++                            if (dragOverId !== workspace.workspaceId) setDragOverId(workspace.workspaceId);
++                          }}
++                          onDragLeave={() => setDragOverId((prev) => (prev === workspace.workspaceId ? null : prev))}
++                          onDrop={(e) => {
++                            e.preventDefault();
++                            handleDrop(workspace.workspaceId);
++                          }}
++                          onDragEnd={() => {
++                            setDraggedId(null);
++                            setDragOverId(null);
++                          }}
++                          className={
++                            "rounded-lg transition-opacity " +
++                            (isDragging ? "opacity-40 " : "") +
++                            (isDragOver ? "ring-1 ring-inset ring-zinc-400 dark:ring-zinc-500" : "")
++                          }
+                         >
+                           <button
+                             type="submit"
+                             disabled={isActive || switchingWorkspaceId !== null}
+-                            className={`w-full flex items-center gap-2.5 py-2 px-2.5 min-w-0 transition-colors disabled:cursor-not-allowed ${
++                            className={`w-full flex items-center gap-1.5 py-2 px-2 min-w-0 rounded-lg transition-colors disabled:cursor-not-allowed ${
+                               isActive
+                                 ? "bg-white/70 dark:bg-zinc-800/70 cursor-default"
+                                 : switchingWorkspaceId !== null
+@@ -203,8 +287,17 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+                                 : "cursor-pointer hover:bg-white/50 dark:hover:bg-zinc-800/50"
+                             }`}
+                           >
++                            {/* 2x3 grip handle — a pure drag affordance; the
++                                whole row is the actual drag source via the
++                                wrapping form's draggable attribute. */}
++                            <GripVertical
++                              className={
++                                "w-3.5 h-3.5 shrink-0 text-zinc-300 dark:text-zinc-700 " +
++                                (dragEnabled ? "cursor-grab" : "opacity-0 pointer-events-none")
++                              }
++                            />
+                             <ClientAvatar name={workspace.name} />
+-                            <div className="min-w-0 text-left">
++                            <div className="min-w-0 text-left flex-1">
+                               <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate" title={workspace.name}>
+                                 {workspace.name}
+                               </p>
+@@ -228,7 +321,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+                   <Link
+                     href="/home/new"
+                     onClick={() => setClientSwitcherOpen(false)}
+-                    className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-white/50 dark:hover:bg-zinc-800/50 transition-colors"
++                    className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-white/50 dark:hover:bg-zinc-800/50 transition-colors"
+                   >
+                     <Plus className="w-4 h-4 shrink-0" />
+                     <span>New client</span>
+@@ -249,13 +342,38 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+             title={`${activeClient.name}'s profile`}
+             aria-current={pathname.startsWith("/dashboard/engagements") ? "page" : undefined}
+             className={
+-              "group relative w-full h-[42px] flex items-center justify-center gap-1 px-1 rounded-xl transition-all duration-300 overflow-hidden text-[10px] font-medium " +
++              "group relative w-full h-[58px] flex flex-col items-center justify-center p-1 rounded-xl transition-all duration-300 overflow-hidden " +
+               (pathname.startsWith("/dashboard/engagements")
+                 ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
+                 : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
+             }
+           >
+-            <span className="truncate max-w-full">{activeClient.name}</span>
++            {/* Same zoom-up-on-active/hover treatment as every other rail
++                item above — this one differs only in *which* icon it shows:
++                the active client's own initials avatar, since (unlike the
++                Clients button right above it) this row IS one specific
++                client, not the category switcher. */}
++            <div
++              className={
++                "transition-all duration-300 ease-out transform flex items-center justify-center " +
++                (pathname.startsWith("/dashboard/engagements")
++                  ? "scale-[1.4] translate-y-[3px]"
++                  : "scale-100 group-hover:scale-[1.4] group-hover:translate-y-[3px]")
++              }
++            >
++              <ClientAvatar name={activeClient.name} size="w-5 h-5" />
++            </div>
++
++            <span
++              className={
++                "text-[9.5px] font-medium leading-none text-center truncate max-w-full px-0.5 transition-all duration-300 ease-out origin-bottom " +
++                (pathname.startsWith("/dashboard/engagements")
++                  ? "max-h-0 opacity-0 scale-75 mt-0 pointer-events-none"
++                  : "max-h-4 opacity-100 scale-100 mt-1.5 group-hover:max-h-0 group-hover:opacity-0 group-hover:scale-75 group-hover:mt-0 group-hover:pointer-events-none")
++              }
++            >
++              {activeClient.name}
++            </span>
+           </Link>
+         )}
+ 
+diff --git a/src/lib/avatar.ts b/src/lib/avatar.ts
+index b5fe7bf..cc6ea12 100644
+--- a/src/lib/avatar.ts
++++ b/src/lib/avatar.ts
+@@ -6,7 +6,7 @@
+ // on every render instead.
+ 
+ import { createAvatar } from "@dicebear/core";
+-import { pixelArt, initials } from "@dicebear/collection";
++import { pixelArt, initials, identicon } from "@dicebear/collection";
+ import type { Style } from "@dicebear/core";
+ 
+ // Just PixelBot, by design — Micah and Open Peeps were dropped per direct
+@@ -97,21 +97,57 @@ export function generateAvatarDataUri(
+   return avatar.toDataUri();
+ }
+ 
++// DiceBear's `initials` style needs an explicit multi-color list to
++// actually vary background color by seed — called with no palette at all,
++// every seed falls back to the same single default color, which is
++// exactly the bug this list fixes (every client avatar rendering
++// identically orange regardless of name). Hex without "#", matching
++// DiceBear's own backgroundColor format.
++const CLIENT_AVATAR_COLORS = [
++  "7c3aed", // violet
++  "0284c7", // sky
++  "059669", // emerald
++  "d97706", // amber
++  "e11d48", // rose
++  "4f46e5", // indigo
++  "0d9488", // teal
++  "c026d3", // fuchsia
++];
++
+ /**
+  * DiceBear's `initials` style, for entities that aren't a user (a client
+  * / workspace) and so were never going to have a PixelBot — this style
+- * derives the letters itself from the seed text (the client's name) and
+- * picks a deterministic background from its own palette, no chars/color
+- * config needed. Deliberately NOT added to AVATAR_STYLES above: that
+- * record is specifically the curated set exposed in a *user's* own
+- * avatar picker (tied to users.avatarStyle), not a general "every
+- * DiceBear style this app can render" list.
++ * derives the letters itself from the seed text (the client's name) and,
++ * given CLIENT_AVATAR_COLORS, picks one deterministically by hashing the
++ * seed, so two different client names reliably land on two different
++ * colors. Deliberately NOT added to AVATAR_STYLES above: that record is
++ * specifically the curated set exposed in a *user's* own avatar picker
++ * (tied to users.avatarStyle), not a general "every DiceBear style this
++ * app can render" list.
+  */
+ export function generateInitialsAvatarDataUri(name: string, opts?: { size?: number }): string {
+   const avatar = createAvatar(initials as Style<Record<string, unknown>>, {
+     seed: name.trim() || "?",
+     size: opts?.size ?? 64,
+     radius: 20,
++    backgroundColor: CLIENT_AVATAR_COLORS,
++  });
++  return avatar.toDataUri();
++}
++
++/**
++ * DiceBear's `identicon` style with a fixed, never-changing seed — a
++ * generic "switch accounts"-style abstract glyph (same idea as GitHub's
++ * classic identicon) for a control that represents the *category*
++ * "clients" rather than any one specific client. Deliberately a
++ * different DiceBear style from generateInitialsAvatarDataUri, not that
++ * function called with a fixed seed — this needs to read as "an icon,"
++ * not as "a client whose name happens to be this seed."
++ */
++export function generateNeutralNavIconDataUri(opts?: { size?: number }): string {
++  const avatar = createAvatar(identicon as Style<Record<string, unknown>>, {
++    seed: "clients-switcher",
++    size: opts?.size ?? 64,
+   });
+   return avatar.toDataUri();
+ }
+-- 
+2.43.0
+

@@ -1,0 +1,78 @@
+From 90b0de5c05050421161c5569d3ebfaf43eb50716 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 11 Sep 2026 14:47:29 +0000
+Subject: [PATCH] Clients button: drop label, bigger badge by default, amber
+ instead of navy
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Removed the "Clients" text under the icon — the colored badge is
+self-explanatory on its own, unlike the plain outline icons above it.
+With no label to make room for, the badge is now sized close to what it
+used to only reach on hover/active (w-8 h-8, up from w-6 h-6) instead of
+needing a hover/click to zoom into view. Background swapped from the
+app's navy accent to bg-amber-400 with a dark icon on top for contrast.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011PX9qLTKPtXba6ncjAwLyN
+---
+ src/components/primary-rail.tsx | 28 +++++++++++-----------------
+ 1 file changed, 11 insertions(+), 17 deletions(-)
+
+diff --git a/src/components/primary-rail.tsx b/src/components/primary-rail.tsx
+index e8bfef2..6f5c790 100644
+--- a/src/components/primary-rail.tsx
++++ b/src/components/primary-rail.tsx
+@@ -179,16 +179,20 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+             title="Switch client"
+             aria-expanded={clientSwitcherOpen}
+             className={
+-              "group relative w-full h-[58px] flex flex-col items-center justify-center p-1 rounded-xl transition-all duration-300 overflow-hidden cursor-pointer " +
++              "group relative w-full h-[58px] flex items-center justify-center p-1 rounded-xl transition-all duration-300 overflow-hidden cursor-pointer " +
+               (clientSwitcherOpen
+-                ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
+-                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
++                ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 shadow-xs"
++                : "hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
+             }
+           >
++            {/* No label — this badge is self-explanatory (a distinct
++                colored icon, unlike the plain outline icons above it),
++                and full-size by default rather than only reaching this
++                size on hover/active like the labeled items below. */}
+             <div
+               className={
+-                "transition-all duration-300 ease-out transform flex items-center justify-center " +
+-                (clientSwitcherOpen ? "scale-[1.4] translate-y-[3px]" : "scale-100 group-hover:scale-[1.4] group-hover:translate-y-[3px]")
++                "transition-transform duration-300 ease-out " +
++                (clientSwitcherOpen ? "scale-105" : "group-hover:scale-105")
+               }
+             >
+               {/* A fixed, never-changing icon — this button represents the
+@@ -201,20 +205,10 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+                   look as every other icon in this app, and fully
+                   controllable/previewable in code instead of a seed
+                   gambling on which auto-generated glyph shows up. */}
+-              <div className="w-6 h-6 shrink-0 rounded-md bg-[#2a233c] dark:bg-[#e4dff2] flex items-center justify-center">
+-                <Users className="w-3.5 h-3.5 text-white dark:text-[#1f1a2e]" strokeWidth={2.5} />
++              <div className="w-8 h-8 shrink-0 rounded-md bg-amber-400 flex items-center justify-center">
++                <Users className="w-[18px] h-[18px] text-[#1f1a2e]" strokeWidth={2.5} />
+               </div>
+             </div>
+-            <span
+-              className={
+-                "text-[9.5px] font-medium leading-none text-center truncate max-w-full px-0.5 transition-all duration-300 ease-out origin-bottom " +
+-                (clientSwitcherOpen
+-                  ? "max-h-0 opacity-0 scale-75 mt-0 pointer-events-none"
+-                  : "max-h-4 opacity-100 scale-100 mt-1.5 group-hover:max-h-0 group-hover:opacity-0 group-hover:scale-75 group-hover:mt-0 group-hover:pointer-events-none")
+-              }
+-            >
+-              Clients
+-            </span>
+           </button>
+ 
+           {clientSwitcherOpen && (
+-- 
+2.43.0
+

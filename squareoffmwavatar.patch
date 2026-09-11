@@ -1,0 +1,72 @@
+From 9e54500e7343b4f5d377c69451fede50fb86e6da Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 11 Sep 2026 14:35:12 +0000
+Subject: [PATCH] Square off the active-client initials avatar in the workspace
+ pill
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The MW-style initials badge on the active-client quick-link pill had
+rounded corners like every other ClientAvatar instance. Added an
+optional square prop (drops both the outer rounded-lg CSS class and
+DiceBear's own SVG-level radius) and set it only on that one pill's
+avatar — the dropdown rows' avatars keep their existing rounding.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011PX9qLTKPtXba6ncjAwLyN
+---
+ src/components/primary-rail.tsx | 11 +++++++----
+ src/lib/avatar.ts               |  4 ++--
+ 2 files changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/src/components/primary-rail.tsx b/src/components/primary-rail.tsx
+index d421903..68bcc54 100644
+--- a/src/components/primary-rail.tsx
++++ b/src/components/primary-rail.tsx
+@@ -55,9 +55,12 @@ const NAV_ICON_MAP: Record<string, string> = {
+ // specifically the *user* avatar style, per avatar.ts's own doc — a
+ // client/company isn't a person). Memoized per name since createAvatar
+ // does real SVG work, not a free string format.
+-function ClientAvatar({ name, size = "w-7 h-7" }: { name: string; size?: string }) {
+-  const dataUri = useMemo(() => generateInitialsAvatarDataUri(name, { size: 64 }), [name]);
+-  return <img src={dataUri} alt="" className={`${size} rounded-lg shrink-0 object-cover`} />;
++function ClientAvatar({ name, size = "w-7 h-7", square = false }: { name: string; size?: string; square?: boolean }) {
++  const dataUri = useMemo(
++    () => generateInitialsAvatarDataUri(name, { size: 64, radius: square ? 0 : 20 }),
++    [name, square]
++  );
++  return <img src={dataUri} alt="" className={`${size} ${square ? "" : "rounded-lg"} shrink-0 object-cover`} />;
+ }
+ 
+ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, avatar }: PrimaryRailProps) {
+@@ -358,7 +361,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
+                 (pathname.startsWith("/dashboard/engagements") ? "scale-105" : "group-hover:scale-110")
+               }
+             >
+-              <ClientAvatar name={activeClient.name} size="w-9 h-9" />
++              <ClientAvatar name={activeClient.name} size="w-9 h-9" square />
+             </div>
+           </Link>
+         )}
+diff --git a/src/lib/avatar.ts b/src/lib/avatar.ts
+index 82c9827..969e3e5 100644
+--- a/src/lib/avatar.ts
++++ b/src/lib/avatar.ts
+@@ -125,11 +125,11 @@ const CLIENT_AVATAR_COLORS = [
+  * (tied to users.avatarStyle), not a general "every DiceBear style this
+  * app can render" list.
+  */
+-export function generateInitialsAvatarDataUri(name: string, opts?: { size?: number }): string {
++export function generateInitialsAvatarDataUri(name: string, opts?: { size?: number; radius?: number }): string {
+   const avatar = createAvatar(initials as Style<Record<string, unknown>>, {
+     seed: name.trim() || "?",
+     size: opts?.size ?? 64,
+-    radius: 20,
++    radius: opts?.radius ?? 20,
+     backgroundColor: CLIENT_AVATAR_COLORS,
+   });
+   return avatar.toDataUri();
+-- 
+2.43.0
+

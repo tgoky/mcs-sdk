@@ -1,0 +1,1194 @@
+From 3848fbcd1bbde6939c5c17e17390ce76c6f73b8c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 11 Sep 2026 12:33:44 +0000
+Subject: [PATCH] De-card the runs/[id] route, promote client switching, split
+ RM findings by skill
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+De-carding (runs/[id] page + every skill view):
+- Added the dashboard's hyper-micro dot-grid background to
+  runs/[id]/page.tsx, replacing the page's opaque background.
+- Stripped surface-glass/border/bg "card" wrappers from every section on
+  the run detail page (Step-by-step log, Summary, Details, deliverables
+  loading/empty states) and across all 12 skill-specific view files
+  (pin-down, pile-on, pre-call-read, win-back, leak-map, rep-onboarding,
+  rep-engine-panel, rep-trustpilot/reddit/twitter-watch,
+  rep-crisis-response) plus the shared run-activity-panel/empty-state/
+  view-switcher/adhoc-run-summary-view components. Kept header/divider
+  rows, row-level divide-y lists, form-input borders, and semantic
+  colored alerts (severity/incident/failure banners) — only removed the
+  generic card chrome around otherwise-neutral panels.
+
+Client switching:
+- Promoted workspace switching (each workspace is one client) from a
+  generic "Workspaces" list buried in the avatar's account-settings
+  popover to a labeled "Clients" button on the primary rail, with search
+  for accounts with many clients.
+- /api/workspaces/[id]/switch now redirects straight to that client's
+  engagement profile instead of generic Work/home.
+
+Reputation Manager findings:
+- The 4 RM "watch" workers (engine panel, Trustpilot, Reddit, Twitter)
+  now each get their own bookmarkable link into the shared findings
+  page via a `?source=` filter, instead of all landing on the
+  unfiltered mixed feed.
+- rep-crisis-response now routes to the existing incident-lifecycle
+  tracker (dashboard/reputation-manager/incidents — resolve, choose
+  posture, escalate) instead of the read-only findings feed, since
+  managing an incident and browsing a findings stream are genuinely
+  different jobs. Incidents still appear in the mixed timeline
+  read-only for cross-source context.
+- Replaced workers-panel.tsx's duplicate inline href-building logic
+  with the canonical workerPrimaryHref() from worker-registry.ts.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011PX9qLTKPtXba6ncjAwLyN
+---
+ src/app/api/workspaces/[id]/switch/route.ts   |  17 +-
+ .../engagements/[id]/rep-findings-panel.tsx   |  14 +-
+ .../[id]/skills/reputation-manager/page.tsx   |  15 +-
+ .../engagements/[id]/workers-panel.tsx        |  14 +-
+ .../runs/[id]/_shared/empty-state.tsx         |   2 +-
+ .../runs/[id]/_shared/run-activity-panel.tsx  |   6 +-
+ .../runs/[id]/_shared/view-switcher.tsx       |   2 +-
+ src/app/dashboard/runs/[id]/page.tsx          |  40 +++--
+ .../[id]/views/adhoc-run-summary-view.tsx     |   2 +-
+ .../runs/[id]/views/leak-map-view.tsx         |  33 ++--
+ .../runs/[id]/views/pile-on-view.tsx          |   4 +-
+ .../runs/[id]/views/pin-down-view.tsx         |  18 +--
+ .../runs/[id]/views/pre-call-read-view.tsx    |  30 ++--
+ .../[id]/views/rep-crisis-response-view.tsx   |   8 +-
+ .../runs/[id]/views/rep-engine-panel-view.tsx |   6 +-
+ .../runs/[id]/views/rep-onboarding-view.tsx   |  12 +-
+ .../runs/[id]/views/rep-reddit-watch-view.tsx |   6 +-
+ .../[id]/views/rep-trustpilot-watch-view.tsx  |   6 +-
+ .../[id]/views/rep-twitter-watch-view.tsx     |   6 +-
+ .../runs/[id]/views/win-back-view.tsx         |  20 +--
+ src/components/primary-rail.tsx               | 151 ++++++++++++++++++
+ src/lib/worker-registry.ts                    |  37 ++++-
+ 22 files changed, 332 insertions(+), 117 deletions(-)
+
+diff --git a/src/app/api/workspaces/[id]/switch/route.ts b/src/app/api/workspaces/[id]/switch/route.ts
+index ba7a260..091ceee 100644
+--- a/src/app/api/workspaces/[id]/switch/route.ts
++++ b/src/app/api/workspaces/[id]/switch/route.ts
+@@ -1,7 +1,7 @@
+ import { redirect } from "next/navigation";
+ import { cookies } from "next/headers";
+ import { getSession } from "@/lib/session";
+-import { getOwnedWorkspace, ACTIVE_WORKSPACE_COOKIE } from "@/lib/workspace";
++import { getOwnedWorkspace, getPrimaryEngagementIdForWorkspace, ACTIVE_WORKSPACE_COOKIE } from "@/lib/workspace";
+ 
+ export const runtime = "nodejs";
+ 
+@@ -35,9 +35,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
+     maxAge: 60 * 60 * 24 * 365,
+   });
+ 
+-  // Always lands on the dashboard root rather than trying to preserve
+-  // whatever deep /dashboard/engagements/... path the switch was triggered
+-  // from — that path almost certainly names a client that belongs to the
+-  // *previous* workspace and would 404 or misrender in the new one.
+-  redirect("/dashboard");
++  // Lands directly on this workspace's one client — since a workspace IS
++  // a client under this app's model, "switch workspace" is really "switch
++  // client," and the useful destination is that client's own profile, not
++  // Work/home (which said nothing about which client you'd just landed
++  // on). Falls back to /dashboard only for a workspace whose client
++  // somehow doesn't resolve (predates the one-workspace-one-client
++  // guarantee, or its client was deleted) — same fallback
++  // /dashboard/engagements/page.tsx already uses for the same case.
++  const engagementId = await getPrimaryEngagementIdForWorkspace(workspace.workspaceId);
++  redirect(engagementId ? `/dashboard/engagements/${engagementId}` : "/dashboard");
+ }
+diff --git a/src/app/dashboard/engagements/[id]/rep-findings-panel.tsx b/src/app/dashboard/engagements/[id]/rep-findings-panel.tsx
+index 9a19083..5edc957 100644
+--- a/src/app/dashboard/engagements/[id]/rep-findings-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/rep-findings-panel.tsx
+@@ -348,12 +348,22 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
+   );
+ }
+ 
+-export function RepFindingsPanel({ engagementId }: { engagementId: string }) {
++export function RepFindingsPanel({
++  engagementId,
++  initialSource,
++}: {
++  engagementId: string;
++  /** Pre-selects a source tab — how each RM "watch" worker's own Findings
++   * link (workerPrimaryHref in worker-registry.ts) opens this page
++   * scoped to just that worker instead of the full mixed feed, without
++   * needing 4 separate page shells for what's structurally one view. */
++  initialSource?: SourceFilter | null;
++}) {
+   const [data, setData] = useState<FindingsData | null>(null);
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState<string | null>(null);
+   const [filterText, setFilterText] = useState("");
+-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
++  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialSource ?? "all");
+   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+ 
+   const load = useCallback(async () => {
+diff --git a/src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx b/src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx
+index b317d85..faf0812 100644
+--- a/src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx
++++ b/src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx
+@@ -20,15 +20,19 @@ import { RepFindingsPanel } from "../../rep-findings-panel";
+ 
+ export const revalidate = 0;
+ 
++type FindingsSource = "engine" | "trustpilot" | "reddit" | "twitter";
++const VALID_SOURCES: ReadonlySet<string> = new Set<FindingsSource>(["engine", "trustpilot", "reddit", "twitter"]);
++
+ export default async function ReputationManagerFindingsPage({
+   params,
+   searchParams,
+ }: {
+   params: Promise<{ id: string }>;
+-  searchParams: Promise<{ from?: string }>;
++  searchParams: Promise<{ from?: string; source?: string }>;
+ }) {
+   const { id } = await params;
+-  const { from } = await searchParams;
++  const { from, source } = await searchParams;
++  const initialSource: FindingsSource | null = source && VALID_SOURCES.has(source) ? (source as FindingsSource) : null;
+   const session = await getSession();
+   const activeWorkspace = await getActiveWorkspace(session?.whopUserId ?? "");
+ 
+@@ -69,12 +73,15 @@ export default async function ReputationManagerFindingsPage({
+             Reputation Manager — {engagement.buyer}
+           </h1>
+           <p className="text-xs text-zinc-500 mt-0.5">
+-            Every finding, review, and mention on file for this client — AI engines, Trustpilot, Reddit, X, and any declared incidents.
++            Every finding, review, and mention on file for this client — AI engines, Trustpilot, Reddit, and X.{" "}
++            <Link href="/dashboard/reputation-manager/incidents" className="underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300">
++              Manage declared incidents →
++            </Link>
+           </p>
+         </div>
+       </div>
+ 
+-      <RepFindingsPanel engagementId={id} />
++      <RepFindingsPanel engagementId={id} initialSource={initialSource} />
+     </div>
+   );
+ }
+diff --git a/src/app/dashboard/engagements/[id]/workers-panel.tsx b/src/app/dashboard/engagements/[id]/workers-panel.tsx
+index 91100f9..9cd710b 100644
+--- a/src/app/dashboard/engagements/[id]/workers-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/workers-panel.tsx
+@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
+ import Link from "next/link";
+ import { ArrowRight, Settings2, ExternalLink, PauseCircle, X } from "lucide-react";
+ import { type ModuleStatus, phaseLabel } from "@/lib/copy";
+-import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, type WorkerId } from "@/lib/worker-registry";
++import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
+ import { AnySkillBadge } from "@/components/any-skill-badge";
+ import { StatusSwatch } from "@/components/status-swatch";
+ import { TriggerSkillButton } from "./trigger-skill-button";
+@@ -371,7 +371,7 @@ export function WorkersPanel({
+ 
+                     {SKILLS_WITH_OWN_PAGE.includes(workerId) && (
+                       <Link
+-                        href={`/dashboard/engagements/${engagementId}/skills/${workerId}`}
++                        href={workerPrimaryHref(workerId, engagementId)}
+                         className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+                       >
+                         <span>Pipeline</span>
+@@ -379,12 +379,16 @@ export function WorkersPanel({
+                       </Link>
+                     )}
+ 
+-                    {REP_SKILLS_WITH_FINDINGS_PAGE.includes(workerId) && (
++                    {/* rep-crisis-response gets its own label here since its
++                        real destination is now the incident tracker, not
++                        the shared findings feed — workerPrimaryHref already
++                        routes it there (see worker-registry.ts). */}
++                    {(REP_SKILLS_WITH_FINDINGS_PAGE.includes(workerId) || workerId === "rep-crisis-response") && (
+                       <Link
+-                        href={`/dashboard/engagements/${engagementId}/skills/reputation-manager`}
++                        href={workerPrimaryHref(workerId, engagementId)}
+                         className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+                       >
+-                        <span>Findings</span>
++                        <span>{workerId === "rep-crisis-response" ? "Incidents" : "Findings"}</span>
+                         <ExternalLink size={11} />
+                       </Link>
+                     )}
+diff --git a/src/app/dashboard/runs/[id]/_shared/empty-state.tsx b/src/app/dashboard/runs/[id]/_shared/empty-state.tsx
+index ee44fc1..ad9f2fc 100644
+--- a/src/app/dashboard/runs/[id]/_shared/empty-state.tsx
++++ b/src/app/dashboard/runs/[id]/_shared/empty-state.tsx
+@@ -10,7 +10,7 @@ export function EmptyState({
+   description: string;
+ }) {
+   return (
+-    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl no-ambient-glow surface-glass-1 px-6 py-14 text-center">
++    <div className="flex flex-col items-center justify-center gap-3 px-6 py-14 text-center">
+       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-500">
+         <Icon size={18} />
+       </div>
+diff --git a/src/app/dashboard/runs/[id]/_shared/run-activity-panel.tsx b/src/app/dashboard/runs/[id]/_shared/run-activity-panel.tsx
+index fb73ae0..79a3e4f 100644
+--- a/src/app/dashboard/runs/[id]/_shared/run-activity-panel.tsx
++++ b/src/app/dashboard/runs/[id]/_shared/run-activity-panel.tsx
+@@ -88,11 +88,11 @@ export function RunActivityPanel({ runId }: { runId: string }) {
+   return (
+     <div className="space-y-3 font-sans">
+       <div className="grid grid-cols-2 gap-2 text-center">
+-        <div className="rounded-lg no-ambient-glow surface-glass-1 py-2">
++        <div className="py-2">
+           <span className="block text-[9px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Status</span>
+           <span className="block text-[11px] font-semibold text-zinc-900 dark:text-white mt-0.5 truncate px-1">{runStatusLabel(run.status)}</span>
+         </div>
+-        <div className="rounded-lg no-ambient-glow surface-glass-1 py-2">
++        <div className="py-2">
+           <span className="block text-[9px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Duration</span>
+           <span className="block text-[11px] font-mono font-semibold text-zinc-900 dark:text-white mt-0.5">{formatDuration(run.durationMs)}</span>
+         </div>
+@@ -126,7 +126,7 @@ export function RunActivityPanel({ runId }: { runId: string }) {
+       })()}
+ 
+       {steps.length > 0 ? (
+-        <div className="rounded-xl no-ambient-glow surface-glass-1 p-2.5 max-h-[300px] overflow-y-auto">
++        <div className="max-h-[300px] overflow-y-auto pt-1">
+           <StepTimeline steps={steps} isRunning={isRunning} runStatus={run.status} />
+         </div>
+       ) : (
+diff --git a/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx b/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx
+index 9efad34..553700b 100644
+--- a/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx
++++ b/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx
+@@ -27,7 +27,7 @@ export function ViewSwitcher({
+ }) {
+   const visibleModes = modes ? MODES.filter((m) => modes.includes(m.key)) : MODES;
+   return (
+-    <div className={cn("inline-flex items-center gap-0.5 rounded-lg no-ambient-glow surface-glass-1 p-0.5", className)}>
++    <div className={cn("inline-flex items-center gap-0.5 p-0.5", className)}>
+       {visibleModes.map(({ key, label, icon: Icon }) => {
+         const active = value === key;
+         return (
+diff --git a/src/app/dashboard/runs/[id]/page.tsx b/src/app/dashboard/runs/[id]/page.tsx
+index 11a82e5..7d25fd9 100644
+--- a/src/app/dashboard/runs/[id]/page.tsx
++++ b/src/app/dashboard/runs/[id]/page.tsx
+@@ -204,8 +204,8 @@ function SummarySection({ summary }: { summary: RunSummary }) {
+   if (visibleFields.length === 0) return null;
+ 
+   return (
+-    <section className="overflow-hidden rounded-xl no-ambient-glow surface-glass-1">
+-      <div className="flex items-center gap-2 border-b border-zinc-200/80 dark:border-zinc-800/80 px-4 py-3">
++    <section>
++      <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+         <FileText className="h-4 w-4 text-zinc-500 dark:text-zinc-500" />
+         <h2 className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{copy.summarySectionTitle}</h2>
+       </div>
+@@ -213,7 +213,7 @@ function SummarySection({ summary }: { summary: RunSummary }) {
+         {visibleFields.map(({ key, label, emptyText, tone }) => {
+           const items = summary[key] ?? [];
+           return (
+-            <div key={key} className="px-4 py-3">
++            <div key={key} className="py-2.5">
+               <p className={`text-[10px] font-bold uppercase tracking-wider ${tone}`}>{label}</p>
+               {items.length > 0 ? (
+                 <ul className="mt-1.5 space-y-1">
+@@ -371,7 +371,16 @@ export default function RunDetailPage() {
+   const isTimedOut = run.status === "timed_out";
+ 
+   return (
+-    <div className="mx-auto w-full max-w-6xl space-y-3 pb-8 text-zinc-700 dark:text-zinc-300 font-sans">
++    <div className="relative w-full min-h-screen overflow-hidden">
++      {/* Same hyper-micro dot grid the dashboard home page sits on
++          (bg-dot-grid, globals.css) — replaces the run detail page's old
++          wall of bordered/backgrounded "surface-glass" cards (Step-by-step
++          log, Summary, Details, deliverables) with flat sections that sit
++          directly on this background, same treatment now applied across
++          every view/*.tsx file under this route. */}
++      <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
++
++      <div className="relative z-10 mx-auto w-full max-w-6xl space-y-3 pb-8 text-zinc-700 dark:text-zinc-300 font-sans">
+       <SetBreadcrumbLabel label={`${anySkillDisplayName(run.skillName)} run`} />
+ 
+       {/* 1. COMPACT 1-LINE HEADER */}
+@@ -458,7 +467,7 @@ export default function RunDetailPage() {
+       })()}
+ 
+       {isCancelled && (
+-        <div className="flex items-center gap-2 rounded-xl no-ambient-glow surface-glass-1 px-3.5 py-2 text-xs text-zinc-600 dark:text-zinc-400">
++        <div className="flex items-center gap-2 border-l-2 border-zinc-300 dark:border-zinc-700 pl-3 py-1 text-xs text-zinc-600 dark:text-zinc-400">
+           <Ban size={14} className="text-zinc-500 dark:text-zinc-500" />
+           <span>This run was cancelled.</span>
+         </div>
+@@ -474,13 +483,13 @@ export default function RunDetailPage() {
+       {/* 3. AUTOMATION DELIVERABLES */}
+       <main className="w-full">
+         {detailLoading && !detail ? (
+-          <div className="flex h-40 items-center justify-center rounded-2xl no-ambient-glow surface-glass-1">
++          <div className="flex h-40 items-center justify-center">
+             <Loader2 className="h-5 w-5 animate-spin text-zinc-700 dark:text-zinc-600" />
+           </div>
+         ) : detail && detail.run.id === run.id ? (
+           <SkillView detail={detail} steps={steps} onRefreshDetail={fetchDetail} />
+         ) : (
+-          <div className="rounded-2xl no-ambient-glow surface-glass-1 px-6 py-10 text-center text-xs text-zinc-500 dark:text-zinc-500">
++          <div className="px-6 py-10 text-center text-xs text-zinc-500 dark:text-zinc-500">
+             We don&apos;t have anything more to show for this run yet.
+           </div>
+         )}
+@@ -510,13 +519,13 @@ export default function RunDetailPage() {
+         )}
+ 
+         {showRunActivity && (
+-          <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
+-            <section className="overflow-hidden rounded-xl no-ambient-glow surface-glass-2">
+-              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
++          <div className="mt-3 grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
++            <section>
++              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
+                 <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Step-by-step log</span>
+                 <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500">{steps.length} steps</span>
+               </div>
+-              <div className="max-h-[75vh] overflow-y-auto p-4">
++              <div className="max-h-[75vh] overflow-y-auto pt-3">
+                 {steps.length === 0 ? (
+                   <p className="text-xs text-zinc-500 dark:text-zinc-500 italic text-center py-6">{copy.noStepsRecorded}</p>
+                 ) : (
+@@ -525,11 +534,11 @@ export default function RunDetailPage() {
+               </div>
+             </section>
+ 
+-            <aside className="space-y-4">
++            <aside className="space-y-5">
+               {run.summary && <SummarySection summary={run.summary} />}
+-              <div className="rounded-xl no-ambient-glow surface-glass-1 p-4 text-xs space-y-2">
+-                <span className="text-[10px] uppercase text-zinc-500 dark:text-zinc-500 block font-sans font-bold">Details</span>
+-                <div className="flex justify-between text-zinc-600 dark:text-zinc-400 font-sans">
++              <div className="text-xs space-y-2">
++                <span className="text-[10px] uppercase text-zinc-500 dark:text-zinc-500 block font-sans font-bold border-b border-zinc-200 dark:border-zinc-800 pb-2">Details</span>
++                <div className="flex justify-between text-zinc-600 dark:text-zinc-400 font-sans pt-1">
+                   <span>Started</span>
+                   <span className="text-zinc-800 dark:text-zinc-200">{formatDiaryDateTime(run.startedAt)}</span>
+                 </div>
+@@ -547,6 +556,7 @@ export default function RunDetailPage() {
+           </div>
+         )}
+       </section>
++      </div>
+     </div>
+   );
+ }
+\ No newline at end of file
+diff --git a/src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx b/src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx
+index eced1e7..d06ea8f 100644
+--- a/src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx
+@@ -72,7 +72,7 @@ export function AdhocRunSummaryView({ detail }: { detail: AdhocRunDetail }) {
+   }
+ 
+   return (
+-    <div className="flex flex-col gap-4 font-sans antialiased rounded-2xl no-ambient-glow surface-glass-2 p-4">
++    <div className="flex flex-col gap-4 font-sans antialiased">
+       <SummarySection icon={CheckCircle2} label="What worked" items={summary.whatWorked} tone="success" />
+       <SummarySection icon={XCircle} label="What failed" items={summary.whatFailed} tone="danger" />
+       <SummarySection icon={Circle} label="Decisions made" items={summary.decisionsMade} tone="info" />
+diff --git a/src/app/dashboard/runs/[id]/views/leak-map-view.tsx b/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
+index ddf6d36..ee778af 100644
+--- a/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
+@@ -113,7 +113,7 @@ export function LeakMapView({
+   return (
+     <div className="flex flex-col gap-3 font-sans antialiased">
+       {/* TOOLBAR */}
+-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl no-ambient-glow surface-glass-1 p-1.5">
++      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+         {!embedded && (
+           <div className="relative w-64">
+             <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
+@@ -143,13 +143,11 @@ export function LeakMapView({
+               {/* Status Strip */}
+               <div
+                 className={cn(
+-                  "flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border px-3.5 py-2.5 transition-all",
+-                  overallSeverity === "high" && "border-rose-900/50 bg-rose-950/10",
+-                  overallSeverity === "medium" && "border-orange-900/50 bg-orange-950/10",
++                  "flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl px-3.5 py-2.5 transition-all",
++                  overallSeverity === "high" && "border border-rose-900/50 bg-rose-950/10",
++                  overallSeverity === "medium" && "border border-orange-900/50 bg-orange-950/10",
+                   overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData &&
+-                    "border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10",
+-                  overallSeverity !== "high" && overallSeverity !== "medium" && hasAnyUsableData &&
+-                    "no-ambient-glow surface-glass-1"
++                    "border border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10"
+                 )}
+               >
+                 <div className="flex items-center gap-2 shrink-0">
+@@ -212,14 +210,14 @@ export function LeakMapView({
+                       ))}
+                     </div>
+                   ) : (
+-                    <p className="rounded-xl no-ambient-glow surface-glass-1 p-3.5 text-xs italic text-zinc-500 dark:text-zinc-500">
++                    <p className="p-3.5 text-xs italic text-zinc-500 dark:text-zinc-500">
+                       No funnel metrics match your search filter.
+                     </p>
+                   )}
+ 
+                   {/* Executive Report Reader */}
+-                  <div className="rounded-xl no-ambient-glow surface-glass-2 p-3.5">
+-                    <div className="mb-2 flex items-center justify-between">
++                  <div>
++                    <div className="mb-2 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
+                       <div className="flex items-center gap-2">
+                         <FileText size={13} className="text-zinc-600 dark:text-zinc-400" />
+                         <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+@@ -243,11 +241,11 @@ export function LeakMapView({
+                     </div>
+ 
+                     {audit.reportMarkdown ? (
+-                      <div className="whitespace-pre-wrap rounded-lg no-ambient-glow surface-glass-1 p-3 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto">
++                      <div className="whitespace-pre-wrap pt-2 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto">
+                         {audit.reportMarkdown}
+                       </div>
+                     ) : (
+-                      <p className="rounded-lg no-ambient-glow surface-glass-1 p-3 text-xs italic text-zinc-500 dark:text-zinc-500">
++                      <p className="pt-2 text-xs italic text-zinc-500 dark:text-zinc-500">
+                         No report text stored for this run. Check the Steps panel to confirm whether delivery (Resend/Slack) succeeded.
+                       </p>
+                     )}
+@@ -278,7 +276,7 @@ export function LeakMapView({
+ 
+           {/* LIST VIEW */}
+           {mode === "list" && (
+-            <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl no-ambient-glow surface-glass-2">
++            <div key="list" className="run-view-content-enter">
+               {filteredIssues.length === 0 ? (
+                 <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic">
+                   {issues.length === 0
+@@ -365,11 +363,10 @@ function IssueCard({ issue }: { issue: IssueType }) {
+   return (
+     <div
+       className={cn(
+-        "rounded-xl border p-3 transition-all",
+-        cardTone === "danger" && "border-rose-900/40 bg-rose-950/10",
+-        cardTone === "warning" && "border-orange-900/40 bg-orange-950/10",
+-        cardTone === "gap" && "border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10",
+-        (cardTone === "info" || cardTone === "neutral") && "no-ambient-glow surface-glass-1"
++        "rounded-xl p-3 transition-all",
++        cardTone === "danger" && "border border-rose-900/40 bg-rose-950/10",
++        cardTone === "warning" && "border border-orange-900/40 bg-orange-950/10",
++        cardTone === "gap" && "border border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10"
+       )}
+     >
+       {/* Header row */}
+diff --git a/src/app/dashboard/runs/[id]/views/pile-on-view.tsx b/src/app/dashboard/runs/[id]/views/pile-on-view.tsx
+index ee87c27..8048dd2 100644
+--- a/src/app/dashboard/runs/[id]/views/pile-on-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/pile-on-view.tsx
+@@ -250,7 +250,7 @@ export function PileOnView({
+           success) purely for decoration — the same status is already
+           stated in words by the badge two lines down, so the bar added
+           no information, just an "AI slop" visual flourish. Dropped. */}
+-      <div className="rounded-xl no-ambient-glow surface-glass-2 p-4 space-y-3">
++      <div className="space-y-3">
+         <div className="flex flex-wrap items-center justify-between gap-4">
+           <div className="flex items-center gap-3">
+             <SquishySkillBadge
+@@ -494,7 +494,7 @@ export function PileOnView({
+                     {ch.messages.map((m, i) => (
+                       <div
+                         key={m.id}
+-                        className="flex items-center justify-between text-xs py-1.5 px-3 rounded no-ambient-glow surface-glass-1"
++                        className="flex items-center justify-between text-xs py-1.5"
+                       >
+                         <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                           Text #{i + 1} —{" "}
+diff --git a/src/app/dashboard/runs/[id]/views/pin-down-view.tsx b/src/app/dashboard/runs/[id]/views/pin-down-view.tsx
+index f3eb5d2..f0dfc04 100644
+--- a/src/app/dashboard/runs/[id]/views/pin-down-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/pin-down-view.tsx
+@@ -290,7 +290,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
+       {/* ----------------------------------------------------------------- */}
+       {/* 1. ASANA TOP GREETING HEADER WITH ORBITAL RING                    */}
+       {/* ----------------------------------------------------------------- */}
+-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl no-ambient-glow surface-glass-2">
++      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-5 border-b border-zinc-200 dark:border-zinc-800">
+         <div className="space-y-1 max-w-xl">
+           <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 font-sans">{formattedDate}</p>
+           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
+@@ -324,7 +324,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
+       {/* ----------------------------------------------------------------- */}
+       {/* 2. TRANSPARENT STATUS UPDATES CARD                                */}
+       {/* ----------------------------------------------------------------- */}
+-      <div className="rounded-2xl no-ambient-glow surface-glass-2 p-6 font-sans">
++      <div className="font-sans">
+         <div className="flex items-center justify-between pb-4 border-b border-zinc-200/80 dark:border-zinc-800/80">
+           <h2 className="text-base font-bold text-zinc-900 dark:text-white tracking-tight font-sans">Status updates</h2>
+           <button
+@@ -409,7 +409,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
+       {/* ----------------------------------------------------------------- */}
+       {/* 3. TRANSPARENT DELIVERABLES PANEL                                 */}
+       {/* ----------------------------------------------------------------- */}
+-      <div className="rounded-2xl no-ambient-glow surface-glass-2 p-6 font-sans">
++      <div className="font-sans">
+         <div className="flex items-center gap-3 pb-4 border-b border-zinc-200/80 dark:border-zinc-800/80">
+           <div className="h-8 w-8 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 flex items-center justify-center font-bold text-xs shrink-0">
+             {buyerName.slice(0, 2).toUpperCase()}
+@@ -487,7 +487,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
+                 return (
+                   <div
+                     key={brief.id}
+-                    className="flex flex-col justify-between p-5 rounded-2xl no-ambient-glow surface-glass-1 transition-colors font-sans space-y-4"
++                    className="flex flex-col justify-between p-5 transition-colors font-sans space-y-4"
+                   >
+                     {/* Header: Sticky Note Icon + Title & Subtitle + Copy */}
+                     <div className="space-y-3">
+@@ -675,12 +675,12 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
+                     </button>
+                   </div>
+ 
+-                  <div className="max-h-64 overflow-auto rounded-xl no-ambient-glow surface-glass-1 p-4 font-mono text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
++                  <div className="max-h-64 overflow-auto p-4 font-mono text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                     <pre className="whitespace-pre-wrap break-all">{run.pasteReadyHtml}</pre>
+                   </div>
+ 
+                   {run.pasteReadyInstructions && (
+-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 p-3 rounded-xl leading-relaxed no-ambient-glow surface-glass-1 font-sans">
++                    <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed font-sans">
+                       {run.pasteReadyInstructions}
+                     </p>
+                   )}
+@@ -701,19 +701,19 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
+               {voice ? (
+                 <>
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+-                    <div className="p-3 rounded-xl no-ambient-glow surface-glass-1">
++                    <div className="p-3">
+                       <p className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Formal ↔ Casual</p>
+                       <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{voice.tone.formal_casual.score}/5</p>
+                       <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.formal_casual.note}</p>
+                     </div>
+ 
+-                    <div className="p-3 rounded-xl no-ambient-glow surface-glass-1">
++                    <div className="p-3">
+                       <p className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Technical ↔ Plain</p>
+                       <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{voice.tone.technical_plain.score}/5</p>
+                       <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.technical_plain.note}</p>
+                     </div>
+ 
+-                    <div className="p-3 rounded-xl no-ambient-glow surface-glass-1">
++                    <div className="p-3">
+                       <p className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Warm ↔ Neutral</p>
+                       <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{voice.tone.warm_neutral.score}/5</p>
+                       <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.warm_neutral.note}</p>
+diff --git a/src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx b/src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx
+index 66b9545..6111fff 100644
+--- a/src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx
+@@ -129,7 +129,7 @@ export function PreCallReadView({
+       {/* ----------------------------------------------------------------- */}
+       {/* 1. ASANA TOOLBAR (PERSISTENT SEARCH + VIEW SWITCHER)              */}
+       {/* ----------------------------------------------------------------- */}
+-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl no-ambient-glow surface-glass-1 p-1.5">
++      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+         <div className="relative w-64">
+           <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
+           <input
+@@ -157,7 +157,7 @@ export function PreCallReadView({
+       {/* ----------------------------------------------------------------- */}
+       {mode === "calendar" && (
+         <div key="calendar" className="run-view-content-enter flex flex-col gap-3 font-sans">
+-          <div className="flex items-center gap-2.5 rounded-xl no-ambient-glow surface-glass-1 px-3 py-2.5 text-[11px] font-sans">
++          <div className="flex items-center gap-2.5 text-[11px] font-sans">
+             <div className="h-3.5 w-1 shrink-0 rounded-full bg-emerald-500/80" />
+             <span className="text-zinc-600 dark:text-zinc-400 font-semibold">{phaseLabel("roster_fetch")}</span>
+             <span className="text-zinc-400 dark:text-zinc-700">·</span>
+@@ -173,7 +173,7 @@ export function PreCallReadView({
+           </div>
+ 
+           {callsByDay.length === 0 ? (
+-            <div className="flex flex-col items-center gap-2 rounded-2xl no-ambient-glow surface-glass-1 py-14 text-zinc-700 dark:text-zinc-600 font-sans">
++            <div className="flex flex-col items-center gap-2 py-14 text-zinc-700 dark:text-zinc-600 font-sans">
+               <CalendarX size={22} />
+               <span className="text-xs">This run&apos;s window came back empty — nothing to brief.</span>
+             </div>
+@@ -182,8 +182,8 @@ export function PreCallReadView({
+               const d = new Date(dayKeyStr);
+               const isToday = dateKey(new Date()) === dayKeyStr;
+               return (
+-<div key={dayKeyStr} className="overflow-hidden rounded-2xl no-ambient-glow surface-glass-2 font-sans">
+-                  <div className="flex items-center gap-4 border-b border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-5 py-4">
++<div key={dayKeyStr} className="font-sans">
++                  <div className="flex items-center gap-4 border-b border-zinc-200 dark:border-zinc-800 py-4">
+                     <div
+                       className={cn(
+                         "flex flex-col items-center justify-center rounded-xl w-14 h-14 shrink-0 leading-none",
+@@ -206,7 +206,7 @@ export function PreCallReadView({
+                     </div>
+                   </div>
+ 
+-                  <div className="flex flex-col gap-3 px-5 py-4">
++                  <div className="flex flex-col gap-3 py-4">
+                     {dayCalls.map((call) => (
+                       <CallCard key={call.id} call={call} steps={steps} destinationLabel={run.stack?.brief_landing_destination} onRefreshDetail={onRefreshDetail} />
+                     ))}
+@@ -222,7 +222,7 @@ export function PreCallReadView({
+       {/* 3. DENSE LIST VIEW                                                */}
+       {/* ----------------------------------------------------------------- */}
+       {mode === "list" && (
+-        <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl no-ambient-glow surface-glass-2 font-sans">
++        <div key="list" className="run-view-content-enter font-sans">
+           {callsByDay.length === 0 ? (
+             <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic font-sans">
+               No sales calls scheduled in this briefing window.
+@@ -230,7 +230,7 @@ export function PreCallReadView({
+           ) : (
+             callsByDay.map(([day, dayCalls]) => (
+               <div key={day}>
+-                <div className="border-b border-t border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 font-sans">
++                <div className="border-b border-t border-zinc-200 dark:border-zinc-800 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 font-sans">
+                   {new Date(day + "T00:00:00").toLocaleDateString(undefined, {
+                     weekday: "long",
+                     month: "long",
+@@ -398,9 +398,9 @@ function CallCard({
+     : null;
+ 
+   return (
+-   <div className="rounded-2xl no-ambient-glow surface-glass-2 font-sans antialiased overflow-hidden">
++   <div className="font-sans antialiased">
+       {/* Header: prospect, time, status — all visible with no click */}
+-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
++      <div className="flex items-center justify-between gap-2 py-3 border-b border-zinc-100 dark:border-zinc-800">
+         <div className="min-w-0">
+           <p className="truncate text-sm font-bold text-zinc-900 dark:text-white">{call.prospectName ?? "Unnamed prospect"}</p>
+           <p className="mt-0.5 text-[11px] font-mono text-zinc-500 dark:text-zinc-500">
+@@ -420,18 +420,18 @@ function CallCard({
+         </div>
+       </div>
+ 
+-      <div className="p-4 space-y-3.5">
++      <div className="pt-3 space-y-3.5">
+         {/* Metadata — sent-to only claims delivery once it actually
+             happened. Fix: this used to fall back to the run's configured
+             destination even when nothing had been delivered, so a call
+             that failed to send still showed "Sent to: Slack message" as
+             if it succeeded — the exact mismatch that broke trust. */}
+         <div className="grid grid-cols-2 gap-2 text-xs">
+-         <div className="space-y-0.5 rounded-xl no-ambient-glow surface-glass-1 p-2.5">
++         <div className="space-y-0.5">
+             <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Prospect identity</span>
+             <p className="font-semibold text-zinc-800 dark:text-zinc-200">{matchLabel(call).text}</p>
+           </div>
+- <div className="space-y-0.5 rounded-xl no-ambient-glow surface-glass-1 p-2.5">
++ <div className="space-y-0.5">
+             <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Sent to</span>
+             {call.briefDeliveredAt ? (
+               <p className="flex items-center gap-1 font-semibold text-zinc-800 dark:text-zinc-200">
+@@ -468,11 +468,11 @@ function CallCard({
+               className="w-full p-3.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-zinc-500 leading-relaxed"
+             />
+           ) : editableText ? (
+-           <div className="rounded-xl no-ambient-glow surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
++           <div className="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+               {editableText}
+             </div>
+           ) : (
+-            <div className="rounded-xl no-ambient-glow surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
++            <div className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+               {status === "failed"
+                 ? stepDetail
+                   ? `Brief generation failed: ${stepDetail}`
+diff --git a/src/app/dashboard/runs/[id]/views/rep-crisis-response-view.tsx b/src/app/dashboard/runs/[id]/views/rep-crisis-response-view.tsx
+index deee41d..64036d2 100644
+--- a/src/app/dashboard/runs/[id]/views/rep-crisis-response-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/rep-crisis-response-view.tsx
+@@ -61,13 +61,13 @@ export function RepCrisisResponseView({ detail }: { detail: RepCrisisResponseDet
+       </div>
+ 
+       {incident.contributingFindings.length > 0 && (
+-        <div className="rounded-xl no-ambient-glow surface-glass-2 p-4">
+-          <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2">
++        <div>
++          <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
+             Contributing findings ({incident.contributingFindings.length})
+           </h3>
+-          <div className="flex flex-col gap-2">
++          <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+             {incident.contributingFindings.map((f, i) => (
+-              <div key={i} className="rounded-lg no-ambient-glow surface-glass-1 p-3">
++              <div key={i} className="py-3 first:pt-2">
+                 <div className="flex items-center justify-between gap-2 mb-1">
+                   <span className="inline-flex items-center gap-1.5">
+                     <span className={`w-2 h-2 rounded-[2.5px] shrink-0 ${SOURCE_SWATCH[f.source] ?? "bg-zinc-400"}`} aria-hidden="true" />
+diff --git a/src/app/dashboard/runs/[id]/views/rep-engine-panel-view.tsx b/src/app/dashboard/runs/[id]/views/rep-engine-panel-view.tsx
+index 13ca4b6..2d40fc2 100644
+--- a/src/app/dashboard/runs/[id]/views/rep-engine-panel-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/rep-engine-panel-view.tsx
+@@ -32,7 +32,7 @@ export function RepEnginePanelView({ detail }: { detail: RepEnginePanelDetail })
+ 
+   return (
+     <div className="flex flex-col gap-3 font-sans antialiased">
+-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl no-ambient-glow surface-glass-1 p-1.5">
++      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+         <div className="relative w-64">
+           <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
+           <input
+@@ -47,9 +47,9 @@ export function RepEnginePanelView({ detail }: { detail: RepEnginePanelDetail })
+         </p>
+       </div>
+ 
+-      <div className="flex flex-col gap-2">
++      <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+         {filtered.map((f) => (
+-          <div key={f.id} className="rounded-xl no-ambient-glow surface-glass-1 p-3.5">
++          <div key={f.id} className="py-3.5 first:pt-0">
+             <div className="flex items-center justify-between gap-2 mb-1.5">
+               <span className="text-[11px] font-mono font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">{f.engineId}</span>
+               <div className="flex items-center gap-2">
+diff --git a/src/app/dashboard/runs/[id]/views/rep-onboarding-view.tsx b/src/app/dashboard/runs/[id]/views/rep-onboarding-view.tsx
+index 8a3464d..5f2acd5 100644
+--- a/src/app/dashboard/runs/[id]/views/rep-onboarding-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/rep-onboarding-view.tsx
+@@ -19,8 +19,8 @@ export function RepOnboardingView({ detail }: { detail: RepOnboardingDetail }) {
+ 
+   return (
+     <div className="flex flex-col gap-3 font-sans antialiased">
+-      <div className="rounded-xl no-ambient-glow surface-glass-2 p-4">
+-        <div className="flex items-center gap-2 mb-3">
++      <div>
++        <div className="flex items-center gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800 mb-3">
+           <Fingerprint size={14} className="text-zinc-500 dark:text-zinc-500" />
+           <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-200">Identity graph</h2>
+         </div>
+@@ -43,8 +43,8 @@ export function RepOnboardingView({ detail }: { detail: RepOnboardingDetail }) {
+       </div>
+ 
+       {identityGraph.entities.length > 0 && (
+-        <div className="rounded-xl no-ambient-glow surface-glass-2 p-4">
+-          <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2">
++        <div>
++          <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
+             Entities ({identityGraph.entities.length})
+           </h3>
+           <div className="flex flex-wrap gap-1.5">
+@@ -80,8 +80,8 @@ export function RepOnboardingView({ detail }: { detail: RepOnboardingDetail }) {
+       )}
+ 
+       {identityGraph.seedPanelPrompts.length > 0 && (
+-        <div className="rounded-xl no-ambient-glow surface-glass-2 p-4">
+-          <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2">
++        <div>
++          <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
+             Seed AI-engine prompts ({identityGraph.seedPanelPrompts.length})
+           </h3>
+           <ul className="space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
+diff --git a/src/app/dashboard/runs/[id]/views/rep-reddit-watch-view.tsx b/src/app/dashboard/runs/[id]/views/rep-reddit-watch-view.tsx
+index b1e2f67..1c31839 100644
+--- a/src/app/dashboard/runs/[id]/views/rep-reddit-watch-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/rep-reddit-watch-view.tsx
+@@ -20,11 +20,12 @@ export function RepRedditWatchView({ detail }: { detail: RepRedditWatchDetail })
+ 
+   return (
+     <div className="flex flex-col gap-2 font-sans antialiased">
+-      <p className="text-[11px] text-zinc-500 dark:text-zinc-500">
++      <p className="text-[11px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
+         {mentions.length} new mention{mentions.length === 1 ? "" : "s"} · {mentions.filter((m) => m.flagged).length} flagged
+       </p>
++      <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+       {mentions.map((m) => (
+-        <div key={m.id} className="rounded-xl no-ambient-glow surface-glass-1 p-3.5">
++        <div key={m.id} className="py-3.5 first:pt-0">
+           <div className="flex items-center justify-between gap-2 mb-1.5">
+             <div className="flex items-center gap-2 text-xs font-mono text-zinc-600 dark:text-zinc-400">
+               <span className="font-bold">r/{m.subreddit}</span>
+@@ -42,6 +43,7 @@ export function RepRedditWatchView({ detail }: { detail: RepRedditWatchDetail })
+           {m.flagReason && <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1.5">{m.flagReason}</p>}
+         </div>
+       ))}
++      </div>
+     </div>
+   );
+ }
+diff --git a/src/app/dashboard/runs/[id]/views/rep-trustpilot-watch-view.tsx b/src/app/dashboard/runs/[id]/views/rep-trustpilot-watch-view.tsx
+index 568d486..39199b1 100644
+--- a/src/app/dashboard/runs/[id]/views/rep-trustpilot-watch-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/rep-trustpilot-watch-view.tsx
+@@ -30,11 +30,12 @@ export function RepTrustpilotWatchView({ detail }: { detail: RepTrustpilotWatchD
+ 
+   return (
+     <div className="flex flex-col gap-2 font-sans antialiased">
+-      <p className="text-[11px] text-zinc-500 dark:text-zinc-500">
++      <p className="text-[11px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
+         {reviews.length} new review{reviews.length === 1 ? "" : "s"} · {reviews.filter((r) => r.flagged).length} flagged
+       </p>
++      <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+       {reviews.map((r) => (
+-        <div key={r.id} className="rounded-xl no-ambient-glow surface-glass-1 p-3.5">
++        <div key={r.id} className="py-3.5 first:pt-0">
+           <div className="flex items-center justify-between gap-2 mb-1.5">
+             <div className="flex items-center gap-2">
+               <StarRating rating={r.rating} />
+@@ -49,6 +50,7 @@ export function RepTrustpilotWatchView({ detail }: { detail: RepTrustpilotWatchD
+           {r.flagReason && <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1.5">{r.flagReason}</p>}
+         </div>
+       ))}
++      </div>
+     </div>
+   );
+ }
+diff --git a/src/app/dashboard/runs/[id]/views/rep-twitter-watch-view.tsx b/src/app/dashboard/runs/[id]/views/rep-twitter-watch-view.tsx
+index 801dbde..e0fa4fd 100644
+--- a/src/app/dashboard/runs/[id]/views/rep-twitter-watch-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/rep-twitter-watch-view.tsx
+@@ -20,11 +20,12 @@ export function RepTwitterWatchView({ detail }: { detail: RepTwitterWatchDetail
+ 
+   return (
+     <div className="flex flex-col gap-2 font-sans antialiased">
+-      <p className="text-[11px] text-zinc-500 dark:text-zinc-500">
++      <p className="text-[11px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
+         {mentions.length} new mention{mentions.length === 1 ? "" : "s"} · {mentions.filter((m) => m.flagged).length} flagged
+       </p>
++      <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+       {mentions.map((m) => (
+-        <div key={m.id} className="rounded-xl no-ambient-glow surface-glass-1 p-3.5">
++        <div key={m.id} className="py-3.5 first:pt-0">
+           <div className="flex items-center justify-between gap-2 mb-1.5">
+             <div className="flex items-center gap-2 text-xs font-mono text-zinc-600 dark:text-zinc-400">
+               {m.author && <span className="font-bold">@{m.author}</span>}
+@@ -41,6 +42,7 @@ export function RepTwitterWatchView({ detail }: { detail: RepTwitterWatchDetail
+           {m.flagReason && <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1.5">{m.flagReason}</p>}
+         </div>
+       ))}
++      </div>
+     </div>
+   );
+ }
+diff --git a/src/app/dashboard/runs/[id]/views/win-back-view.tsx b/src/app/dashboard/runs/[id]/views/win-back-view.tsx
+index 054a6b1..a8617b5 100644
+--- a/src/app/dashboard/runs/[id]/views/win-back-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/win-back-view.tsx
+@@ -128,8 +128,8 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
+       {/* 1. CADENCE LIFECYCLE BANNER                                       */}
+       {/* ----------------------------------------------------------------- */}
+       {enrollment ? (
+-        <div className="rounded-2xl no-ambient-glow surface-glass-2 font-sans overflow-hidden">
+-          <div className="flex flex-wrap items-center justify-between gap-3 p-4">
++        <div className="font-sans">
++          <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
+             <div className="flex items-center gap-3">
+               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 shrink-0">
+                 <UserCheck size={16} />
+@@ -175,7 +175,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
+               does to make sense of "Active in cadence." Spelled out in
+               plain language, and made status-aware so it stays accurate
+               once the cadence exits instead of always describing "active." */}
+-          <p className="border-t border-zinc-200 dark:border-zinc-800 bg-white/40 dark:bg-zinc-900/40 px-4 py-2.5 text-xs text-zinc-600 dark:text-zinc-400 font-sans leading-relaxed">
++          <p className="border-t border-zinc-200 dark:border-zinc-800 pt-2.5 text-xs text-zinc-600 dark:text-zinc-400 font-sans leading-relaxed">
+             {manualExited || enrollment.status === "manual_override" ? (
+               <>You stopped this sequence manually — no further messages will go out to this prospect.</>
+             ) : enrollment.status === "rebooked" ? (
+@@ -276,8 +276,8 @@ function CadenceTimeline({
+   const windowEnd = new Date(enrolledAt.getTime() + windowDays * 86_400_000);
+ 
+   return (
+-    <div className="overflow-hidden rounded-2xl no-ambient-glow surface-glass-2 font-sans">
+-      <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-4 py-2.5 font-sans">
++    <div className="font-sans">
++      <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2.5 font-sans">
+         <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
+           {hasEnrollment ? "Recovery cadence" : "Standard cadence template"}
+         </h3>
+@@ -291,7 +291,7 @@ function CadenceTimeline({
+           No recovery cadence content has been generated for this engagement yet.
+         </div>
+       ) : (
+-        <div className="flex flex-col px-4 py-3">
++        <div className="flex flex-col py-3">
+           {touchpoints.map((tp, i) => {
+             const status = statusFor(tp);
+             const isLast = i === touchpoints.length - 1;
+@@ -317,7 +317,7 @@ function CadenceTimeline({
+                   />
+                   {!isLast && <div className="w-px flex-1 bg-zinc-100 dark:bg-zinc-800" />}
+                 </div>
+-                <div className="mb-2 flex flex-1 items-center justify-between gap-2 rounded-xl no-ambient-glow surface-glass-1 px-3 py-2 transition-colors">
++                <div className="mb-2 flex flex-1 items-center justify-between gap-2 px-3 py-2 transition-colors">
+                   <div className="flex min-w-0 items-center gap-2.5">
+                     {tp.type === "email" ? (
+                       <Mail size={13} className="shrink-0 text-zinc-500 dark:text-zinc-500" />
+@@ -337,7 +337,7 @@ function CadenceTimeline({
+         </div>
+       )}
+ 
+-      <p className="border-t border-zinc-200 dark:border-zinc-800 bg-white/30 dark:bg-zinc-900/30 px-4 py-2 text-[10px] text-zinc-500 dark:text-zinc-500 font-sans">
++      <p className="border-t border-zinc-200 dark:border-zinc-800 pt-2 text-[10px] text-zinc-500 dark:text-zinc-500 font-sans">
+         The first message is confirmed sent directly. Later messages are queued in your email/SMS platform to go out automatically — the dates above are when they&apos;re scheduled to send.
+       </p>
+     </div>
+@@ -429,13 +429,13 @@ function TouchpointDrawer({
+                 {touchpoint.subject && (
+                   <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 font-sans">Subject: {touchpoint.subject}</p>
+                 )}
+-                <div className="whitespace-pre-wrap rounded-xl no-ambient-glow surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">
++                <div className="whitespace-pre-wrap p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">
+                   {touchpoint.body}
+                 </div>
+               </div>
+ 
+               {exitedOffsetDays != null && touchpoint.offsetDays > exitedOffsetDays && (
+-                <div className="rounded-xl no-ambient-glow surface-glass-1 p-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 flex items-center gap-2 font-sans">
++                <div className="p-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 flex items-center gap-2 font-sans">
+                   <AlertCircle size={13} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
+                   <span className="font-sans">This touch was skipped — the prospect exited the cadence on Day {exitedOffsetDays + 1}.</span>
+                 </div>
+diff --git a/src/components/primary-rail.tsx b/src/components/primary-rail.tsx
+index 674a6fa..1df2b35 100644
+--- a/src/components/primary-rail.tsx
++++ b/src/components/primary-rail.tsx
+@@ -14,6 +14,8 @@ import {
+   Plus,
+   UserPlus,
+   Loader2,
++  Building2,
++  Search,
+ } from "lucide-react";
+ import { ThemeToggle } from "@/components/theme-toggle";
+ import type { Workspace } from "@/lib/workspace";
+@@ -47,15 +49,164 @@ const NAV_ICON_MAP: Record<string, string> = {
+ 
+ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, avatar }: PrimaryRailProps) {
+   const [popoverOpen, setPopoverOpen] = useState(false);
++  const [clientSwitcherOpen, setClientSwitcherOpen] = useState(false);
++  const [clientSearch, setClientSearch] = useState("");
+   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
+   const pathname = usePathname();
+   const initials = displayName.slice(0, 2).toUpperCase();
+   const topNavItems = PRIMARY_NAV_SECTIONS;
++  const activeClient = workspaces.find((w) => w.workspaceId === activeWorkspaceId);
++  const filteredWorkspaces = clientSearch.trim()
++    ? workspaces.filter((w) => w.name.toLowerCase().includes(clientSearch.trim().toLowerCase()))
++    : workspaces;
+ 
+   return (
+     <aside className="w-[76px] bg-background border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1.5 shrink-0 select-none z-20 transition-colors duration-200">
+       {/* Top Section */}
+       <div className="flex flex-col items-center gap-1.5 w-full">
++        {/* Client switcher — a workspace IS a client under this app's
++            model (one workspace = one client, enforced at creation), so
++            this is really "switch client." Previously the only way to do
++            this was a generic "Workspaces" list buried inside the avatar
++            popover at the bottom of the rail, indistinguishable from any
++            other SaaS org-switcher and easy to never discover — this is
++            the same switch mechanism (same /api/workspaces/[id]/switch
++            POST), promoted to its own labeled, always-visible rail item,
++            landing directly on the chosen client's profile page instead
++            of Work/home (see that route's own updated redirect). */}
++        <div className="relative w-full">
++          <button
++            type="button"
++            onClick={() => setClientSwitcherOpen((p) => !p)}
++            title="Switch client"
++            aria-expanded={clientSwitcherOpen}
++            className={
++              "group relative w-full h-[58px] flex flex-col items-center justify-center p-1 rounded-xl transition-all duration-300 overflow-hidden cursor-pointer " +
++              (clientSwitcherOpen
++                ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
++                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
++            }
++          >
++            <div
++              className={
++                "transition-all duration-300 ease-out transform flex items-center justify-center " +
++                (clientSwitcherOpen ? "scale-[1.4] translate-y-[3px]" : "scale-100 group-hover:scale-[1.4] group-hover:translate-y-[3px]")
++              }
++            >
++              <Building2 className="w-5 h-5 shrink-0" />
++            </div>
++            <span
++              className={
++                "text-[9.5px] font-medium leading-none text-center truncate max-w-full px-0.5 transition-all duration-300 ease-out origin-bottom " +
++                (clientSwitcherOpen
++                  ? "max-h-0 opacity-0 scale-75 mt-0 pointer-events-none"
++                  : "max-h-4 opacity-100 scale-100 mt-1.5 group-hover:max-h-0 group-hover:opacity-0 group-hover:scale-75 group-hover:mt-0 group-hover:pointer-events-none")
++              }
++            >
++              Clients
++            </span>
++          </button>
++
++          {clientSwitcherOpen && (
++            <>
++              <div className="fixed inset-0 z-40" onClick={() => setClientSwitcherOpen(false)} />
++              <div className="absolute left-full top-0 ml-2 z-50 w-72 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-2xl overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
++                <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 space-y-2">
++                  <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 px-0.5">Clients</p>
++                  {workspaces.length > 6 && (
++                    <div className="relative">
++                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
++                      <input
++                        autoFocus
++                        value={clientSearch}
++                        onChange={(e) => setClientSearch(e.target.value)}
++                        placeholder="Search clients..."
++                        className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
++                      />
++                    </div>
++                  )}
++                </div>
++
++                <div className="max-h-80 overflow-y-auto p-1.5 space-y-0.5">
++                  {filteredWorkspaces.length === 0 ? (
++                    <p className="text-xs text-zinc-400 text-center py-4">No clients match &quot;{clientSearch}&quot;.</p>
++                  ) : (
++                    filteredWorkspaces.map((workspace) => {
++                      const isActive = workspace.workspaceId === activeWorkspaceId;
++                      const isSwitching = switchingWorkspaceId === workspace.workspaceId;
++                      return (
++                        <form
++                          key={workspace.workspaceId}
++                          action={`/api/workspaces/${workspace.workspaceId}/switch`}
++                          method="POST"
++                          onSubmit={() => setSwitchingWorkspaceId(workspace.workspaceId)}
++                        >
++                          <button
++                            type="submit"
++                            disabled={isActive || switchingWorkspaceId !== null}
++                            className={`w-full flex items-center gap-2.5 py-1.5 px-2 rounded-xl min-w-0 transition-colors disabled:cursor-not-allowed ${
++                              isActive
++                                ? "bg-zinc-100 dark:bg-zinc-800/80 cursor-default"
++                                : switchingWorkspaceId !== null
++                                ? "opacity-50"
++                                : "cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
++                            }`}
++                          >
++                            <div className="w-6 h-6 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
++                              {workspace.name.slice(0, 2).toUpperCase()}
++                            </div>
++                            <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate min-w-0 text-left" title={workspace.name}>
++                              {workspace.name}
++                            </span>
++                            {isSwitching ? (
++                              <Loader2 className="w-3.5 h-3.5 text-[#2a233c] dark:text-[#e4dff2] shrink-0 ml-auto animate-spin" />
++                            ) : (
++                              isActive && <Check className="w-3.5 h-3.5 text-[#2a233c] dark:text-[#e4dff2] shrink-0 ml-auto" />
++                            )}
++                          </button>
++                        </form>
++                      );
++                    })
++                  )}
++                </div>
++
++                <div className="p-1.5 border-t border-zinc-100 dark:border-zinc-800">
++                  <Link
++                    href="/home/new"
++                    onClick={() => setClientSwitcherOpen(false)}
++                    className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
++                  >
++                    <Plus className="w-4 h-4 shrink-0" />
++                    <span>New client</span>
++                  </Link>
++                </div>
++              </div>
++            </>
++          )}
++        </div>
++
++        {/* Direct link to the currently active client's profile — the
++            switcher above picks *which* client, this jumps straight into
++            it without opening the popover, for the common case of "I'm
++            already on the right client, just take me to their page." */}
++        {activeClient && (
++          <Link
++            href="/dashboard/engagements"
++            title={`${activeClient.name}'s profile`}
++            aria-current={pathname.startsWith("/dashboard/engagements") ? "page" : undefined}
++            className={
++              "group relative w-full h-[42px] flex items-center justify-center gap-1 px-1 rounded-xl transition-all duration-300 overflow-hidden text-[10px] font-medium " +
++              (pathname.startsWith("/dashboard/engagements")
++                ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
++                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
++            }
++          >
++            <span className="truncate max-w-full">{activeClient.name}</span>
++          </Link>
++        )}
++
++        <div className="h-px bg-zinc-200/80 dark:bg-zinc-800/80 w-8 my-0.5" />
++
+         <nav className="flex flex-col items-center gap-1.5 w-full">
+           {topNavItems.map((section) => {
+             const isActive = isRailItemActive(section.href, pathname);
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+index 302d938..660b374 100644
+--- a/src/lib/worker-registry.ts
++++ b/src/lib/worker-registry.ts
+@@ -857,24 +857,45 @@ export function allWorkers(): WorkerDefinition[] {
+  */
+ export const SKILLS_WITH_OWN_PAGE: WorkerId[] = ["pre-call-read", "pile-on", "win-back", "leak-map"];
+ 
+-/** The 5 Reputation Manager workers (every one but rep-onboarding itself)
+- * that share one findings page across all of them — see
+- * rep-findings-panel.tsx's own header for why one page, not five. */
++/** The 4 Reputation Manager "watch" workers — same shape (a stream of
++ * findings: text + sentiment + flag + permalink), so they share one
++ * findings page with a `?source=` filter per worker instead of 4 copies
++ * of the same timeline+detail layout — see rep-findings-panel.tsx's own
++ * header for why. rep-crisis-response is deliberately NOT here: an
++ * incident is a lifecycle to manage (status, response tier, posture,
++ * escalation — see incident-row.tsx), not a feed to browse, so it gets
++ * its own real page (REP_CRISIS_RESPONSE_HREF below) instead of being
++ * forced into this shape as a 5th filter value. */
+ export const REP_SKILLS_WITH_FINDINGS_PAGE: WorkerId[] = [
+   "rep-engine-panel",
+   "rep-trustpilot-watch",
+   "rep-reddit-watch",
+   "rep-twitter-watch",
+-  "rep-crisis-response",
+ ];
+ 
++/** `?source=` value each findings-page worker maps to — same keys
++ * rep-findings-panel.tsx's own SourceKind type uses. */
++const REP_FINDINGS_SOURCE: Partial<Record<WorkerId, string>> = {
++  "rep-engine-panel": "engine",
++  "rep-trustpilot-watch": "trustpilot",
++  "rep-reddit-watch": "reddit",
++  "rep-twitter-watch": "twitter",
++};
++
++/** rep-crisis-response's real destination: the existing incident-lifecycle
++ * tracker (resolve / choose posture / escalate), not the findings feed.
++ * Workspace-scoped in URL, but since a workspace is one client, this is
++ * already that one client's incidents — no engagementId needed. */
++const REP_CRISIS_RESPONSE_HREF = "/dashboard/reputation-manager/incidents";
++
+ /**
+  * The one real "go see this worker for this client" destination —
+  * replaces routing every worker through /dashboard/modules/[skill] (a
+  * roster of every client with that skill, pointless now that a workspace
+  * only ever has one) with whichever real, single-client page already
+  * exists for it: its own schedule/report page, RM's shared findings
+- * page, or — for a worker with neither (pin-down, rep-onboarding) — the
++ * page (pre-filtered to this worker's source), the incidents tracker, or
++ * — for a worker with none of those (pin-down, rep-onboarding) — the
+  * engagement page's own Run History, pre-filtered to just this worker's
+  * runs via the same `?skill=` param its filter chips already use.
+  */
+@@ -882,8 +903,12 @@ export function workerPrimaryHref(workerId: WorkerId, engagementId: string): str
+   if (SKILLS_WITH_OWN_PAGE.includes(workerId)) {
+     return `/dashboard/engagements/${engagementId}/skills/${workerId}`;
+   }
++  if (workerId === "rep-crisis-response") {
++    return REP_CRISIS_RESPONSE_HREF;
++  }
+   if (REP_SKILLS_WITH_FINDINGS_PAGE.includes(workerId)) {
+-    return `/dashboard/engagements/${engagementId}/skills/reputation-manager`;
++    const source = REP_FINDINGS_SOURCE[workerId];
++    return `/dashboard/engagements/${engagementId}/skills/reputation-manager${source ? `?source=${source}` : ""}`;
+   }
+   return `/dashboard/engagements/${engagementId}?skill=${workerId}#run-history`;
+ }
+-- 
+2.43.0
+

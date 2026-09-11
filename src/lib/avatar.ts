@@ -104,14 +104,14 @@ export function generateAvatarDataUri(
 // identically orange regardless of name). Hex without "#", matching
 // DiceBear's own backgroundColor format.
 const CLIENT_AVATAR_COLORS = [
-  "7c3aed", // violet
-  "0284c7", // sky
   "059669", // emerald
-  "d97706", // amber
-  "e11d48", // rose
-  "4f46e5", // indigo
   "0d9488", // teal
-  "c026d3", // fuchsia
+  "0284c7", // sky
+  "0891b2", // cyan
+  "d97706", // amber/gold
+  "ea580c", // orange
+  "65a30d", // lime
+  "475569", // slate blue
 ];
 
 /**
