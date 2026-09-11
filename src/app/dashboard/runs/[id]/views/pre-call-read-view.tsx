@@ -129,7 +129,7 @@ export function PreCallReadView({
       {/* ----------------------------------------------------------------- */}
       {/* 1. ASANA TOOLBAR (PERSISTENT SEARCH + VIEW SWITCHER)              */}
       {/* ----------------------------------------------------------------- */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl no-ambient-glow surface-glass-1 p-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
         <div className="relative w-64">
           <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
           <input
@@ -157,7 +157,7 @@ export function PreCallReadView({
       {/* ----------------------------------------------------------------- */}
       {mode === "calendar" && (
         <div key="calendar" className="run-view-content-enter flex flex-col gap-3 font-sans">
-          <div className="flex items-center gap-2.5 rounded-xl no-ambient-glow surface-glass-1 px-3 py-2.5 text-[11px] font-sans">
+          <div className="flex items-center gap-2.5 text-[11px] font-sans">
             <div className="h-3.5 w-1 shrink-0 rounded-full bg-emerald-500/80" />
             <span className="text-zinc-600 dark:text-zinc-400 font-semibold">{phaseLabel("roster_fetch")}</span>
             <span className="text-zinc-400 dark:text-zinc-700">·</span>
@@ -173,7 +173,7 @@ export function PreCallReadView({
           </div>
 
           {callsByDay.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-2xl no-ambient-glow surface-glass-1 py-14 text-zinc-700 dark:text-zinc-600 font-sans">
+            <div className="flex flex-col items-center gap-2 py-14 text-zinc-700 dark:text-zinc-600 font-sans">
               <CalendarX size={22} />
               <span className="text-xs">This run&apos;s window came back empty — nothing to brief.</span>
             </div>
@@ -182,8 +182,8 @@ export function PreCallReadView({
               const d = new Date(dayKeyStr);
               const isToday = dateKey(new Date()) === dayKeyStr;
               return (
-<div key={dayKeyStr} className="overflow-hidden rounded-2xl no-ambient-glow surface-glass-2 font-sans">
-                  <div className="flex items-center gap-4 border-b border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-5 py-4">
+<div key={dayKeyStr} className="font-sans">
+                  <div className="flex items-center gap-4 border-b border-zinc-200 dark:border-zinc-800 py-4">
                     <div
                       className={cn(
                         "flex flex-col items-center justify-center rounded-xl w-14 h-14 shrink-0 leading-none",
@@ -206,7 +206,7 @@ export function PreCallReadView({
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-3 px-5 py-4">
+                  <div className="flex flex-col gap-3 py-4">
                     {dayCalls.map((call) => (
                       <CallCard key={call.id} call={call} steps={steps} destinationLabel={run.stack?.brief_landing_destination} onRefreshDetail={onRefreshDetail} />
                     ))}
@@ -222,7 +222,7 @@ export function PreCallReadView({
       {/* 3. DENSE LIST VIEW                                                */}
       {/* ----------------------------------------------------------------- */}
       {mode === "list" && (
-        <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl no-ambient-glow surface-glass-2 font-sans">
+        <div key="list" className="run-view-content-enter font-sans">
           {callsByDay.length === 0 ? (
             <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic font-sans">
               No sales calls scheduled in this briefing window.
@@ -230,7 +230,7 @@ export function PreCallReadView({
           ) : (
             callsByDay.map(([day, dayCalls]) => (
               <div key={day}>
-                <div className="border-b border-t border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 font-sans">
+                <div className="border-b border-t border-zinc-200 dark:border-zinc-800 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 font-sans">
                   {new Date(day + "T00:00:00").toLocaleDateString(undefined, {
                     weekday: "long",
                     month: "long",
@@ -398,9 +398,9 @@ function CallCard({
     : null;
 
   return (
-   <div className="rounded-2xl no-ambient-glow surface-glass-2 font-sans antialiased overflow-hidden">
+   <div className="font-sans antialiased">
       {/* Header: prospect, time, status — all visible with no click */}
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+      <div className="flex items-center justify-between gap-2 py-3 border-b border-zinc-100 dark:border-zinc-800">
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-zinc-900 dark:text-white">{call.prospectName ?? "Unnamed prospect"}</p>
           <p className="mt-0.5 text-[11px] font-mono text-zinc-500 dark:text-zinc-500">
@@ -420,18 +420,18 @@ function CallCard({
         </div>
       </div>
 
-      <div className="p-4 space-y-3.5">
+      <div className="pt-3 space-y-3.5">
         {/* Metadata — sent-to only claims delivery once it actually
             happened. Fix: this used to fall back to the run's configured
             destination even when nothing had been delivered, so a call
             that failed to send still showed "Sent to: Slack message" as
             if it succeeded — the exact mismatch that broke trust. */}
         <div className="grid grid-cols-2 gap-2 text-xs">
-         <div className="space-y-0.5 rounded-xl no-ambient-glow surface-glass-1 p-2.5">
+         <div className="space-y-0.5">
             <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Prospect identity</span>
             <p className="font-semibold text-zinc-800 dark:text-zinc-200">{matchLabel(call).text}</p>
           </div>
- <div className="space-y-0.5 rounded-xl no-ambient-glow surface-glass-1 p-2.5">
+ <div className="space-y-0.5">
             <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Sent to</span>
             {call.briefDeliveredAt ? (
               <p className="flex items-center gap-1 font-semibold text-zinc-800 dark:text-zinc-200">
@@ -468,11 +468,11 @@ function CallCard({
               className="w-full p-3.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-zinc-500 leading-relaxed"
             />
           ) : editableText ? (
-           <div className="rounded-xl no-ambient-glow surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+           <div className="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
               {editableText}
             </div>
           ) : (
-            <div className="rounded-xl no-ambient-glow surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+            <div className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
               {status === "failed"
                 ? stepDetail
                   ? `Brief generation failed: ${stepDetail}`

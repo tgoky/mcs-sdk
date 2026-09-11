@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Settings2, ExternalLink, PauseCircle, X } from "lucide-react";
 import { type ModuleStatus, phaseLabel } from "@/lib/copy";
-import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, type WorkerId } from "@/lib/worker-registry";
+import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { StatusSwatch } from "@/components/status-swatch";
 import { TriggerSkillButton } from "./trigger-skill-button";
@@ -371,7 +371,7 @@ export function WorkersPanel({
 
                     {SKILLS_WITH_OWN_PAGE.includes(workerId) && (
                       <Link
-                        href={`/dashboard/engagements/${engagementId}/skills/${workerId}`}
+                        href={workerPrimaryHref(workerId, engagementId)}
                         className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
                       >
                         <span>Pipeline</span>
@@ -379,12 +379,16 @@ export function WorkersPanel({
                       </Link>
                     )}
 
-                    {REP_SKILLS_WITH_FINDINGS_PAGE.includes(workerId) && (
+                    {/* rep-crisis-response gets its own label here since its
+                        real destination is now the incident tracker, not
+                        the shared findings feed — workerPrimaryHref already
+                        routes it there (see worker-registry.ts). */}
+                    {(REP_SKILLS_WITH_FINDINGS_PAGE.includes(workerId) || workerId === "rep-crisis-response") && (
                       <Link
-                        href={`/dashboard/engagements/${engagementId}/skills/reputation-manager`}
+                        href={workerPrimaryHref(workerId, engagementId)}
                         className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
                       >
-                        <span>Findings</span>
+                        <span>{workerId === "rep-crisis-response" ? "Incidents" : "Findings"}</span>
                         <ExternalLink size={11} />
                       </Link>
                     )}

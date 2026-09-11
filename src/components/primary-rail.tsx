@@ -14,6 +14,8 @@ import {
   Plus,
   UserPlus,
   Loader2,
+  Building2,
+  Search,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
@@ -47,15 +49,164 @@ const NAV_ICON_MAP: Record<string, string> = {
 
 export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, avatar }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [clientSwitcherOpen, setClientSwitcherOpen] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
   const pathname = usePathname();
   const initials = displayName.slice(0, 2).toUpperCase();
   const topNavItems = PRIMARY_NAV_SECTIONS;
+  const activeClient = workspaces.find((w) => w.workspaceId === activeWorkspaceId);
+  const filteredWorkspaces = clientSearch.trim()
+    ? workspaces.filter((w) => w.name.toLowerCase().includes(clientSearch.trim().toLowerCase()))
+    : workspaces;
 
   return (
     <aside className="w-[76px] bg-background border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1.5 shrink-0 select-none z-20 transition-colors duration-200">
       {/* Top Section */}
       <div className="flex flex-col items-center gap-1.5 w-full">
+        {/* Client switcher — a workspace IS a client under this app's
+            model (one workspace = one client, enforced at creation), so
+            this is really "switch client." Previously the only way to do
+            this was a generic "Workspaces" list buried inside the avatar
+            popover at the bottom of the rail, indistinguishable from any
+            other SaaS org-switcher and easy to never discover — this is
+            the same switch mechanism (same /api/workspaces/[id]/switch
+            POST), promoted to its own labeled, always-visible rail item,
+            landing directly on the chosen client's profile page instead
+            of Work/home (see that route's own updated redirect). */}
+        <div className="relative w-full">
+          <button
+            type="button"
+            onClick={() => setClientSwitcherOpen((p) => !p)}
+            title="Switch client"
+            aria-expanded={clientSwitcherOpen}
+            className={
+              "group relative w-full h-[58px] flex flex-col items-center justify-center p-1 rounded-xl transition-all duration-300 overflow-hidden cursor-pointer " +
+              (clientSwitcherOpen
+                ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
+                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
+            }
+          >
+            <div
+              className={
+                "transition-all duration-300 ease-out transform flex items-center justify-center " +
+                (clientSwitcherOpen ? "scale-[1.4] translate-y-[3px]" : "scale-100 group-hover:scale-[1.4] group-hover:translate-y-[3px]")
+              }
+            >
+              <Building2 className="w-5 h-5 shrink-0" />
+            </div>
+            <span
+              className={
+                "text-[9.5px] font-medium leading-none text-center truncate max-w-full px-0.5 transition-all duration-300 ease-out origin-bottom " +
+                (clientSwitcherOpen
+                  ? "max-h-0 opacity-0 scale-75 mt-0 pointer-events-none"
+                  : "max-h-4 opacity-100 scale-100 mt-1.5 group-hover:max-h-0 group-hover:opacity-0 group-hover:scale-75 group-hover:mt-0 group-hover:pointer-events-none")
+              }
+            >
+              Clients
+            </span>
+          </button>
+
+          {clientSwitcherOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setClientSwitcherOpen(false)} />
+              <div className="absolute left-full top-0 ml-2 z-50 w-72 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-2xl overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+                <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 space-y-2">
+                  <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 px-0.5">Clients</p>
+                  {workspaces.length > 6 && (
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                      <input
+                        autoFocus
+                        value={clientSearch}
+                        onChange={(e) => setClientSearch(e.target.value)}
+                        placeholder="Search clients..."
+                        className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="max-h-80 overflow-y-auto p-1.5 space-y-0.5">
+                  {filteredWorkspaces.length === 0 ? (
+                    <p className="text-xs text-zinc-400 text-center py-4">No clients match &quot;{clientSearch}&quot;.</p>
+                  ) : (
+                    filteredWorkspaces.map((workspace) => {
+                      const isActive = workspace.workspaceId === activeWorkspaceId;
+                      const isSwitching = switchingWorkspaceId === workspace.workspaceId;
+                      return (
+                        <form
+                          key={workspace.workspaceId}
+                          action={`/api/workspaces/${workspace.workspaceId}/switch`}
+                          method="POST"
+                          onSubmit={() => setSwitchingWorkspaceId(workspace.workspaceId)}
+                        >
+                          <button
+                            type="submit"
+                            disabled={isActive || switchingWorkspaceId !== null}
+                            className={`w-full flex items-center gap-2.5 py-1.5 px-2 rounded-xl min-w-0 transition-colors disabled:cursor-not-allowed ${
+                              isActive
+                                ? "bg-zinc-100 dark:bg-zinc-800/80 cursor-default"
+                                : switchingWorkspaceId !== null
+                                ? "opacity-50"
+                                : "cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                            }`}
+                          >
+                            <div className="w-6 h-6 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
+                              {workspace.name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate min-w-0 text-left" title={workspace.name}>
+                              {workspace.name}
+                            </span>
+                            {isSwitching ? (
+                              <Loader2 className="w-3.5 h-3.5 text-[#2a233c] dark:text-[#e4dff2] shrink-0 ml-auto animate-spin" />
+                            ) : (
+                              isActive && <Check className="w-3.5 h-3.5 text-[#2a233c] dark:text-[#e4dff2] shrink-0 ml-auto" />
+                            )}
+                          </button>
+                        </form>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="p-1.5 border-t border-zinc-100 dark:border-zinc-800">
+                  <Link
+                    href="/home/new"
+                    onClick={() => setClientSwitcherOpen(false)}
+                    className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
+                  >
+                    <Plus className="w-4 h-4 shrink-0" />
+                    <span>New client</span>
+                  </Link>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Direct link to the currently active client's profile — the
+            switcher above picks *which* client, this jumps straight into
+            it without opening the popover, for the common case of "I'm
+            already on the right client, just take me to their page." */}
+        {activeClient && (
+          <Link
+            href="/dashboard/engagements"
+            title={`${activeClient.name}'s profile`}
+            aria-current={pathname.startsWith("/dashboard/engagements") ? "page" : undefined}
+            className={
+              "group relative w-full h-[42px] flex items-center justify-center gap-1 px-1 rounded-xl transition-all duration-300 overflow-hidden text-[10px] font-medium " +
+              (pathname.startsWith("/dashboard/engagements")
+                ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
+                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
+            }
+          >
+            <span className="truncate max-w-full">{activeClient.name}</span>
+          </Link>
+        )}
+
+        <div className="h-px bg-zinc-200/80 dark:bg-zinc-800/80 w-8 my-0.5" />
+
         <nav className="flex flex-col items-center gap-1.5 w-full">
           {topNavItems.map((section) => {
             const isActive = isRailItemActive(section.href, pathname);

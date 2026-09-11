@@ -348,12 +348,22 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
   );
 }
 
-export function RepFindingsPanel({ engagementId }: { engagementId: string }) {
+export function RepFindingsPanel({
+  engagementId,
+  initialSource,
+}: {
+  engagementId: string;
+  /** Pre-selects a source tab — how each RM "watch" worker's own Findings
+   * link (workerPrimaryHref in worker-registry.ts) opens this page
+   * scoped to just that worker instead of the full mixed feed, without
+   * needing 4 separate page shells for what's structurally one view. */
+  initialSource?: SourceFilter | null;
+}) {
   const [data, setData] = useState<FindingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialSource ?? "all");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {

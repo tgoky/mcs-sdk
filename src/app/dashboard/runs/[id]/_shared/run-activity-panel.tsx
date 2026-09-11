@@ -88,11 +88,11 @@ export function RunActivityPanel({ runId }: { runId: string }) {
   return (
     <div className="space-y-3 font-sans">
       <div className="grid grid-cols-2 gap-2 text-center">
-        <div className="rounded-lg no-ambient-glow surface-glass-1 py-2">
+        <div className="py-2">
           <span className="block text-[9px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Status</span>
           <span className="block text-[11px] font-semibold text-zinc-900 dark:text-white mt-0.5 truncate px-1">{runStatusLabel(run.status)}</span>
         </div>
-        <div className="rounded-lg no-ambient-glow surface-glass-1 py-2">
+        <div className="py-2">
           <span className="block text-[9px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Duration</span>
           <span className="block text-[11px] font-mono font-semibold text-zinc-900 dark:text-white mt-0.5">{formatDuration(run.durationMs)}</span>
         </div>
@@ -126,7 +126,7 @@ export function RunActivityPanel({ runId }: { runId: string }) {
       })()}
 
       {steps.length > 0 ? (
-        <div className="rounded-xl no-ambient-glow surface-glass-1 p-2.5 max-h-[300px] overflow-y-auto">
+        <div className="max-h-[300px] overflow-y-auto pt-1">
           <StepTimeline steps={steps} isRunning={isRunning} runStatus={run.status} />
         </div>
       ) : (

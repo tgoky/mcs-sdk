@@ -290,7 +290,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
       {/* ----------------------------------------------------------------- */}
       {/* 1. ASANA TOP GREETING HEADER WITH ORBITAL RING                    */}
       {/* ----------------------------------------------------------------- */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl no-ambient-glow surface-glass-2">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-5 border-b border-zinc-200 dark:border-zinc-800">
         <div className="space-y-1 max-w-xl">
           <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 font-sans">{formattedDate}</p>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
@@ -324,7 +324,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
       {/* ----------------------------------------------------------------- */}
       {/* 2. TRANSPARENT STATUS UPDATES CARD                                */}
       {/* ----------------------------------------------------------------- */}
-      <div className="rounded-2xl no-ambient-glow surface-glass-2 p-6 font-sans">
+      <div className="font-sans">
         <div className="flex items-center justify-between pb-4 border-b border-zinc-200/80 dark:border-zinc-800/80">
           <h2 className="text-base font-bold text-zinc-900 dark:text-white tracking-tight font-sans">Status updates</h2>
           <button
@@ -409,7 +409,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
       {/* ----------------------------------------------------------------- */}
       {/* 3. TRANSPARENT DELIVERABLES PANEL                                 */}
       {/* ----------------------------------------------------------------- */}
-      <div className="rounded-2xl no-ambient-glow surface-glass-2 p-6 font-sans">
+      <div className="font-sans">
         <div className="flex items-center gap-3 pb-4 border-b border-zinc-200/80 dark:border-zinc-800/80">
           <div className="h-8 w-8 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 flex items-center justify-center font-bold text-xs shrink-0">
             {buyerName.slice(0, 2).toUpperCase()}
@@ -487,7 +487,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                 return (
                   <div
                     key={brief.id}
-                    className="flex flex-col justify-between p-5 rounded-2xl no-ambient-glow surface-glass-1 transition-colors font-sans space-y-4"
+                    className="flex flex-col justify-between p-5 transition-colors font-sans space-y-4"
                   >
                     {/* Header: Sticky Note Icon + Title & Subtitle + Copy */}
                     <div className="space-y-3">
@@ -675,12 +675,12 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                     </button>
                   </div>
 
-                  <div className="max-h-64 overflow-auto rounded-xl no-ambient-glow surface-glass-1 p-4 font-mono text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                  <div className="max-h-64 overflow-auto p-4 font-mono text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
                     <pre className="whitespace-pre-wrap break-all">{run.pasteReadyHtml}</pre>
                   </div>
 
                   {run.pasteReadyInstructions && (
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 p-3 rounded-xl leading-relaxed no-ambient-glow surface-glass-1 font-sans">
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed font-sans">
                       {run.pasteReadyInstructions}
                     </p>
                   )}
@@ -701,19 +701,19 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
               {voice ? (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3 rounded-xl no-ambient-glow surface-glass-1">
+                    <div className="p-3">
                       <p className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Formal ↔ Casual</p>
                       <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{voice.tone.formal_casual.score}/5</p>
                       <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.formal_casual.note}</p>
                     </div>
 
-                    <div className="p-3 rounded-xl no-ambient-glow surface-glass-1">
+                    <div className="p-3">
                       <p className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Technical ↔ Plain</p>
                       <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{voice.tone.technical_plain.score}/5</p>
                       <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.technical_plain.note}</p>
                     </div>
 
-                    <div className="p-3 rounded-xl no-ambient-glow surface-glass-1">
+                    <div className="p-3">
                       <p className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Warm ↔ Neutral</p>
                       <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{voice.tone.warm_neutral.score}/5</p>
                       <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.warm_neutral.note}</p>

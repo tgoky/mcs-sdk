@@ -30,11 +30,12 @@ export function RepTrustpilotWatchView({ detail }: { detail: RepTrustpilotWatchD
 
   return (
     <div className="flex flex-col gap-2 font-sans antialiased">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-500">
+      <p className="text-[11px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
         {reviews.length} new review{reviews.length === 1 ? "" : "s"} · {reviews.filter((r) => r.flagged).length} flagged
       </p>
+      <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
       {reviews.map((r) => (
-        <div key={r.id} className="rounded-xl no-ambient-glow surface-glass-1 p-3.5">
+        <div key={r.id} className="py-3.5 first:pt-0">
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <div className="flex items-center gap-2">
               <StarRating rating={r.rating} />
@@ -49,6 +50,7 @@ export function RepTrustpilotWatchView({ detail }: { detail: RepTrustpilotWatchD
           {r.flagReason && <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1.5">{r.flagReason}</p>}
         </div>
       ))}
+      </div>
     </div>
   );
 }

@@ -27,7 +27,7 @@ export function ViewSwitcher({
 }) {
   const visibleModes = modes ? MODES.filter((m) => modes.includes(m.key)) : MODES;
   return (
-    <div className={cn("inline-flex items-center gap-0.5 rounded-lg no-ambient-glow surface-glass-1 p-0.5", className)}>
+    <div className={cn("inline-flex items-center gap-0.5 p-0.5", className)}>
       {visibleModes.map(({ key, label, icon: Icon }) => {
         const active = value === key;
         return (

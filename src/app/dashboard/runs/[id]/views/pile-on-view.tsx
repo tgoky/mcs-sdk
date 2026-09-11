@@ -250,7 +250,7 @@ export function PileOnView({
           success) purely for decoration — the same status is already
           stated in words by the badge two lines down, so the bar added
           no information, just an "AI slop" visual flourish. Dropped. */}
-      <div className="rounded-xl no-ambient-glow surface-glass-2 p-4 space-y-3">
+      <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <SquishySkillBadge
@@ -494,7 +494,7 @@ export function PileOnView({
                     {ch.messages.map((m, i) => (
                       <div
                         key={m.id}
-                        className="flex items-center justify-between text-xs py-1.5 px-3 rounded no-ambient-glow surface-glass-1"
+                        className="flex items-center justify-between text-xs py-1.5"
                       >
                         <span className="font-medium text-zinc-700 dark:text-zinc-300">
                           Text #{i + 1} —{" "}

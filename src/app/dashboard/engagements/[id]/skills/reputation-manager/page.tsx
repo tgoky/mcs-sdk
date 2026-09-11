@@ -20,15 +20,19 @@ import { RepFindingsPanel } from "../../rep-findings-panel";
 
 export const revalidate = 0;
 
+type FindingsSource = "engine" | "trustpilot" | "reddit" | "twitter";
+const VALID_SOURCES: ReadonlySet<string> = new Set<FindingsSource>(["engine", "trustpilot", "reddit", "twitter"]);
+
 export default async function ReputationManagerFindingsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; source?: string }>;
 }) {
   const { id } = await params;
-  const { from } = await searchParams;
+  const { from, source } = await searchParams;
+  const initialSource: FindingsSource | null = source && VALID_SOURCES.has(source) ? (source as FindingsSource) : null;
   const session = await getSession();
   const activeWorkspace = await getActiveWorkspace(session?.whopUserId ?? "");
 
@@ -69,12 +73,15 @@ export default async function ReputationManagerFindingsPage({
             Reputation Manager — {engagement.buyer}
           </h1>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Every finding, review, and mention on file for this client — AI engines, Trustpilot, Reddit, X, and any declared incidents.
+            Every finding, review, and mention on file for this client — AI engines, Trustpilot, Reddit, and X.{" "}
+            <Link href="/dashboard/reputation-manager/incidents" className="underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300">
+              Manage declared incidents →
+            </Link>
           </p>
         </div>
       </div>
 
-      <RepFindingsPanel engagementId={id} />
+      <RepFindingsPanel engagementId={id} initialSource={initialSource} />
     </div>
   );
 }

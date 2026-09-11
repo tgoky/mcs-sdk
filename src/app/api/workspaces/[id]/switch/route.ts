@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getSession } from "@/lib/session";
-import { getOwnedWorkspace, ACTIVE_WORKSPACE_COOKIE } from "@/lib/workspace";
+import { getOwnedWorkspace, getPrimaryEngagementIdForWorkspace, ACTIVE_WORKSPACE_COOKIE } from "@/lib/workspace";
 
 export const runtime = "nodejs";
 
@@ -35,9 +35,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     maxAge: 60 * 60 * 24 * 365,
   });
 
-  // Always lands on the dashboard root rather than trying to preserve
-  // whatever deep /dashboard/engagements/... path the switch was triggered
-  // from — that path almost certainly names a client that belongs to the
-  // *previous* workspace and would 404 or misrender in the new one.
-  redirect("/dashboard");
+  // Lands directly on this workspace's one client — since a workspace IS
+  // a client under this app's model, "switch workspace" is really "switch
+  // client," and the useful destination is that client's own profile, not
+  // Work/home (which said nothing about which client you'd just landed
+  // on). Falls back to /dashboard only for a workspace whose client
+  // somehow doesn't resolve (predates the one-workspace-one-client
+  // guarantee, or its client was deleted) — same fallback
+  // /dashboard/engagements/page.tsx already uses for the same case.
+  const engagementId = await getPrimaryEngagementIdForWorkspace(workspace.workspaceId);
+  redirect(engagementId ? `/dashboard/engagements/${engagementId}` : "/dashboard");
 }

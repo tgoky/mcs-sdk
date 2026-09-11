@@ -72,7 +72,7 @@ export function AdhocRunSummaryView({ detail }: { detail: AdhocRunDetail }) {
   }
 
   return (
-    <div className="flex flex-col gap-4 font-sans antialiased rounded-2xl no-ambient-glow surface-glass-2 p-4">
+    <div className="flex flex-col gap-4 font-sans antialiased">
       <SummarySection icon={CheckCircle2} label="What worked" items={summary.whatWorked} tone="success" />
       <SummarySection icon={XCircle} label="What failed" items={summary.whatFailed} tone="danger" />
       <SummarySection icon={Circle} label="Decisions made" items={summary.decisionsMade} tone="info" />

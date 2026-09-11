@@ -204,8 +204,8 @@ function SummarySection({ summary }: { summary: RunSummary }) {
   if (visibleFields.length === 0) return null;
 
   return (
-    <section className="overflow-hidden rounded-xl no-ambient-glow surface-glass-1">
-      <div className="flex items-center gap-2 border-b border-zinc-200/80 dark:border-zinc-800/80 px-4 py-3">
+    <section>
+      <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
         <FileText className="h-4 w-4 text-zinc-500 dark:text-zinc-500" />
         <h2 className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{copy.summarySectionTitle}</h2>
       </div>
@@ -213,7 +213,7 @@ function SummarySection({ summary }: { summary: RunSummary }) {
         {visibleFields.map(({ key, label, emptyText, tone }) => {
           const items = summary[key] ?? [];
           return (
-            <div key={key} className="px-4 py-3">
+            <div key={key} className="py-2.5">
               <p className={`text-[10px] font-bold uppercase tracking-wider ${tone}`}>{label}</p>
               {items.length > 0 ? (
                 <ul className="mt-1.5 space-y-1">
@@ -371,7 +371,16 @@ export default function RunDetailPage() {
   const isTimedOut = run.status === "timed_out";
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-3 pb-8 text-zinc-700 dark:text-zinc-300 font-sans">
+    <div className="relative w-full min-h-screen overflow-hidden">
+      {/* Same hyper-micro dot grid the dashboard home page sits on
+          (bg-dot-grid, globals.css) — replaces the run detail page's old
+          wall of bordered/backgrounded "surface-glass" cards (Step-by-step
+          log, Summary, Details, deliverables) with flat sections that sit
+          directly on this background, same treatment now applied across
+          every view/*.tsx file under this route. */}
+      <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
+
+      <div className="relative z-10 mx-auto w-full max-w-6xl space-y-3 pb-8 text-zinc-700 dark:text-zinc-300 font-sans">
       <SetBreadcrumbLabel label={`${anySkillDisplayName(run.skillName)} run`} />
 
       {/* 1. COMPACT 1-LINE HEADER */}
@@ -458,7 +467,7 @@ export default function RunDetailPage() {
       })()}
 
       {isCancelled && (
-        <div className="flex items-center gap-2 rounded-xl no-ambient-glow surface-glass-1 px-3.5 py-2 text-xs text-zinc-600 dark:text-zinc-400">
+        <div className="flex items-center gap-2 border-l-2 border-zinc-300 dark:border-zinc-700 pl-3 py-1 text-xs text-zinc-600 dark:text-zinc-400">
           <Ban size={14} className="text-zinc-500 dark:text-zinc-500" />
           <span>This run was cancelled.</span>
         </div>
@@ -474,13 +483,13 @@ export default function RunDetailPage() {
       {/* 3. AUTOMATION DELIVERABLES */}
       <main className="w-full">
         {detailLoading && !detail ? (
-          <div className="flex h-40 items-center justify-center rounded-2xl no-ambient-glow surface-glass-1">
+          <div className="flex h-40 items-center justify-center">
             <Loader2 className="h-5 w-5 animate-spin text-zinc-700 dark:text-zinc-600" />
           </div>
         ) : detail && detail.run.id === run.id ? (
           <SkillView detail={detail} steps={steps} onRefreshDetail={fetchDetail} />
         ) : (
-          <div className="rounded-2xl no-ambient-glow surface-glass-1 px-6 py-10 text-center text-xs text-zinc-500 dark:text-zinc-500">
+          <div className="px-6 py-10 text-center text-xs text-zinc-500 dark:text-zinc-500">
             We don&apos;t have anything more to show for this run yet.
           </div>
         )}
@@ -510,13 +519,13 @@ export default function RunDetailPage() {
         )}
 
         {showRunActivity && (
-          <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
-            <section className="overflow-hidden rounded-xl no-ambient-glow surface-glass-2">
-              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
+          <div className="mt-3 grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
+            <section>
+              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
                 <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Step-by-step log</span>
                 <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500">{steps.length} steps</span>
               </div>
-              <div className="max-h-[75vh] overflow-y-auto p-4">
+              <div className="max-h-[75vh] overflow-y-auto pt-3">
                 {steps.length === 0 ? (
                   <p className="text-xs text-zinc-500 dark:text-zinc-500 italic text-center py-6">{copy.noStepsRecorded}</p>
                 ) : (
@@ -525,11 +534,11 @@ export default function RunDetailPage() {
               </div>
             </section>
 
-            <aside className="space-y-4">
+            <aside className="space-y-5">
               {run.summary && <SummarySection summary={run.summary} />}
-              <div className="rounded-xl no-ambient-glow surface-glass-1 p-4 text-xs space-y-2">
-                <span className="text-[10px] uppercase text-zinc-500 dark:text-zinc-500 block font-sans font-bold">Details</span>
-                <div className="flex justify-between text-zinc-600 dark:text-zinc-400 font-sans">
+              <div className="text-xs space-y-2">
+                <span className="text-[10px] uppercase text-zinc-500 dark:text-zinc-500 block font-sans font-bold border-b border-zinc-200 dark:border-zinc-800 pb-2">Details</span>
+                <div className="flex justify-between text-zinc-600 dark:text-zinc-400 font-sans pt-1">
                   <span>Started</span>
                   <span className="text-zinc-800 dark:text-zinc-200">{formatDiaryDateTime(run.startedAt)}</span>
                 </div>
@@ -547,6 +556,7 @@ export default function RunDetailPage() {
           </div>
         )}
       </section>
+      </div>
     </div>
   );
 }

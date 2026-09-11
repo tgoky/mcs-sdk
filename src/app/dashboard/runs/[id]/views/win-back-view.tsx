@@ -128,8 +128,8 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
       {/* 1. CADENCE LIFECYCLE BANNER                                       */}
       {/* ----------------------------------------------------------------- */}
       {enrollment ? (
-        <div className="rounded-2xl no-ambient-glow surface-glass-2 font-sans overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="font-sans">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 shrink-0">
                 <UserCheck size={16} />
@@ -175,7 +175,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
               does to make sense of "Active in cadence." Spelled out in
               plain language, and made status-aware so it stays accurate
               once the cadence exits instead of always describing "active." */}
-          <p className="border-t border-zinc-200 dark:border-zinc-800 bg-white/40 dark:bg-zinc-900/40 px-4 py-2.5 text-xs text-zinc-600 dark:text-zinc-400 font-sans leading-relaxed">
+          <p className="border-t border-zinc-200 dark:border-zinc-800 pt-2.5 text-xs text-zinc-600 dark:text-zinc-400 font-sans leading-relaxed">
             {manualExited || enrollment.status === "manual_override" ? (
               <>You stopped this sequence manually — no further messages will go out to this prospect.</>
             ) : enrollment.status === "rebooked" ? (
@@ -276,8 +276,8 @@ function CadenceTimeline({
   const windowEnd = new Date(enrolledAt.getTime() + windowDays * 86_400_000);
 
   return (
-    <div className="overflow-hidden rounded-2xl no-ambient-glow surface-glass-2 font-sans">
-      <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-4 py-2.5 font-sans">
+    <div className="font-sans">
+      <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2.5 font-sans">
         <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
           {hasEnrollment ? "Recovery cadence" : "Standard cadence template"}
         </h3>
@@ -291,7 +291,7 @@ function CadenceTimeline({
           No recovery cadence content has been generated for this engagement yet.
         </div>
       ) : (
-        <div className="flex flex-col px-4 py-3">
+        <div className="flex flex-col py-3">
           {touchpoints.map((tp, i) => {
             const status = statusFor(tp);
             const isLast = i === touchpoints.length - 1;
@@ -317,7 +317,7 @@ function CadenceTimeline({
                   />
                   {!isLast && <div className="w-px flex-1 bg-zinc-100 dark:bg-zinc-800" />}
                 </div>
-                <div className="mb-2 flex flex-1 items-center justify-between gap-2 rounded-xl no-ambient-glow surface-glass-1 px-3 py-2 transition-colors">
+                <div className="mb-2 flex flex-1 items-center justify-between gap-2 px-3 py-2 transition-colors">
                   <div className="flex min-w-0 items-center gap-2.5">
                     {tp.type === "email" ? (
                       <Mail size={13} className="shrink-0 text-zinc-500 dark:text-zinc-500" />
@@ -337,7 +337,7 @@ function CadenceTimeline({
         </div>
       )}
 
-      <p className="border-t border-zinc-200 dark:border-zinc-800 bg-white/30 dark:bg-zinc-900/30 px-4 py-2 text-[10px] text-zinc-500 dark:text-zinc-500 font-sans">
+      <p className="border-t border-zinc-200 dark:border-zinc-800 pt-2 text-[10px] text-zinc-500 dark:text-zinc-500 font-sans">
         The first message is confirmed sent directly. Later messages are queued in your email/SMS platform to go out automatically — the dates above are when they&apos;re scheduled to send.
       </p>
     </div>
@@ -429,13 +429,13 @@ function TouchpointDrawer({
                 {touchpoint.subject && (
                   <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 font-sans">Subject: {touchpoint.subject}</p>
                 )}
-                <div className="whitespace-pre-wrap rounded-xl no-ambient-glow surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">
+                <div className="whitespace-pre-wrap p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">
                   {touchpoint.body}
                 </div>
               </div>
 
               {exitedOffsetDays != null && touchpoint.offsetDays > exitedOffsetDays && (
-                <div className="rounded-xl no-ambient-glow surface-glass-1 p-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 flex items-center gap-2 font-sans">
+                <div className="p-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 flex items-center gap-2 font-sans">
                   <AlertCircle size={13} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
                   <span className="font-sans">This touch was skipped — the prospect exited the cadence on Day {exitedOffsetDays + 1}.</span>
                 </div>

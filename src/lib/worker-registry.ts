@@ -857,16 +857,36 @@ export function allWorkers(): WorkerDefinition[] {
  */
 export const SKILLS_WITH_OWN_PAGE: WorkerId[] = ["pre-call-read", "pile-on", "win-back", "leak-map"];
 
-/** The 5 Reputation Manager workers (every one but rep-onboarding itself)
- * that share one findings page across all of them — see
- * rep-findings-panel.tsx's own header for why one page, not five. */
+/** The 4 Reputation Manager "watch" workers — same shape (a stream of
+ * findings: text + sentiment + flag + permalink), so they share one
+ * findings page with a `?source=` filter per worker instead of 4 copies
+ * of the same timeline+detail layout — see rep-findings-panel.tsx's own
+ * header for why. rep-crisis-response is deliberately NOT here: an
+ * incident is a lifecycle to manage (status, response tier, posture,
+ * escalation — see incident-row.tsx), not a feed to browse, so it gets
+ * its own real page (REP_CRISIS_RESPONSE_HREF below) instead of being
+ * forced into this shape as a 5th filter value. */
 export const REP_SKILLS_WITH_FINDINGS_PAGE: WorkerId[] = [
   "rep-engine-panel",
   "rep-trustpilot-watch",
   "rep-reddit-watch",
   "rep-twitter-watch",
-  "rep-crisis-response",
 ];
+
+/** `?source=` value each findings-page worker maps to — same keys
+ * rep-findings-panel.tsx's own SourceKind type uses. */
+const REP_FINDINGS_SOURCE: Partial<Record<WorkerId, string>> = {
+  "rep-engine-panel": "engine",
+  "rep-trustpilot-watch": "trustpilot",
+  "rep-reddit-watch": "reddit",
+  "rep-twitter-watch": "twitter",
+};
+
+/** rep-crisis-response's real destination: the existing incident-lifecycle
+ * tracker (resolve / choose posture / escalate), not the findings feed.
+ * Workspace-scoped in URL, but since a workspace is one client, this is
+ * already that one client's incidents — no engagementId needed. */
+const REP_CRISIS_RESPONSE_HREF = "/dashboard/reputation-manager/incidents";
 
 /**
  * The one real "go see this worker for this client" destination —
@@ -874,7 +894,8 @@ export const REP_SKILLS_WITH_FINDINGS_PAGE: WorkerId[] = [
  * roster of every client with that skill, pointless now that a workspace
  * only ever has one) with whichever real, single-client page already
  * exists for it: its own schedule/report page, RM's shared findings
- * page, or — for a worker with neither (pin-down, rep-onboarding) — the
+ * page (pre-filtered to this worker's source), the incidents tracker, or
+ * — for a worker with none of those (pin-down, rep-onboarding) — the
  * engagement page's own Run History, pre-filtered to just this worker's
  * runs via the same `?skill=` param its filter chips already use.
  */
@@ -882,8 +903,12 @@ export function workerPrimaryHref(workerId: WorkerId, engagementId: string): str
   if (SKILLS_WITH_OWN_PAGE.includes(workerId)) {
     return `/dashboard/engagements/${engagementId}/skills/${workerId}`;
   }
+  if (workerId === "rep-crisis-response") {
+    return REP_CRISIS_RESPONSE_HREF;
+  }
   if (REP_SKILLS_WITH_FINDINGS_PAGE.includes(workerId)) {
-    return `/dashboard/engagements/${engagementId}/skills/reputation-manager`;
+    const source = REP_FINDINGS_SOURCE[workerId];
+    return `/dashboard/engagements/${engagementId}/skills/reputation-manager${source ? `?source=${source}` : ""}`;
   }
   return `/dashboard/engagements/${engagementId}?skill=${workerId}#run-history`;
 }
