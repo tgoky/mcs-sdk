@@ -16,13 +16,14 @@ import {
   Loader2,
   Search,
   GripVertical,
+  Users,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/user-avatar";
 import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
-import { generateInitialsAvatarDataUri, generateNeutralNavIconDataUri } from "@/lib/avatar";
+import { generateInitialsAvatarDataUri } from "@/lib/avatar";
 
 const CLIENT_ORDER_STORAGE_KEY = "mcs-client-order";
 
@@ -55,12 +56,9 @@ const NAV_ICON_MAP: Record<string, string> = {
 // specifically the *user* avatar style, per avatar.ts's own doc — a
 // client/company isn't a person). Memoized per name since createAvatar
 // does real SVG work, not a free string format.
-function ClientAvatar({ name, size = "w-7 h-7", square = false }: { name: string; size?: string; square?: boolean }) {
-  const dataUri = useMemo(
-    () => generateInitialsAvatarDataUri(name, { size: 64, radius: square ? 0 : 20 }),
-    [name, square]
-  );
-  return <img src={dataUri} alt="" className={`${size} ${square ? "" : "rounded-lg"} shrink-0 object-cover`} />;
+function ClientAvatar({ name, size = "w-7 h-7" }: { name: string; size?: string }) {
+  const dataUri = useMemo(() => generateInitialsAvatarDataUri(name, { size: 64 }), [name]);
+  return <img src={dataUri} alt="" className={`${size} rounded-lg shrink-0 object-cover`} />;
 }
 
 export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, avatar }: PrimaryRailProps) {
@@ -76,7 +74,6 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
   const initials = displayName.slice(0, 2).toUpperCase();
   const topNavItems = PRIMARY_NAV_SECTIONS;
   const activeClient = workspaces.find((w) => w.workspaceId === activeWorkspaceId);
-  const neutralIconUri = useMemo(() => generateNeutralNavIconDataUri({ size: 64 }), []);
 
   // Custom drag order is a per-browser preference, not account data — no
   // migration, no server round trip, and it degrades to plain creation
@@ -198,8 +195,15 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                   *category* "clients" (open the switcher), not any one
                   specific client, so it deliberately does NOT show the
                   active client's own avatar (that's the separate quick-
-                  link row right below this button instead). */}
-              <img src={neutralIconUri} alt="" className="w-6 h-6 shrink-0 object-cover rounded-md" />
+                  link row right below this button instead). A plain
+                  hand-built colored badge (not DiceBear) — solid glyph on
+                  a solid rounded-square backdrop, the same macOS-app-icon
+                  look as every other icon in this app, and fully
+                  controllable/previewable in code instead of a seed
+                  gambling on which auto-generated glyph shows up. */}
+              <div className="w-6 h-6 shrink-0 rounded-md bg-[#2a233c] dark:bg-[#e4dff2] flex items-center justify-center">
+                <Users className="w-3.5 h-3.5 text-white dark:text-[#1f1a2e]" strokeWidth={2.5} />
+              </div>
             </div>
             <span
               className={
@@ -351,9 +355,9 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 : "hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
             }
           >
-            {/* Just the active client's square initials avatar, sized up —
-                no label underneath (the name is already on the row above
-                in the dropdown, and on the title tooltip here), this is
+            {/* Just the active client's initials avatar, sized up — no
+                label underneath (the name is already on the row above in
+                the dropdown, and on the title tooltip here), this is
                 purely a "jump straight to my current client" glyph. */}
             <div
               className={
@@ -361,7 +365,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 (pathname.startsWith("/dashboard/engagements") ? "scale-105" : "group-hover:scale-110")
               }
             >
-              <ClientAvatar name={activeClient.name} size="w-9 h-9" square />
+              <ClientAvatar name={activeClient.name} size="w-9 h-9" />
             </div>
           </Link>
         )}
