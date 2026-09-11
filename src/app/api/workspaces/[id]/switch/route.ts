@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getSession } from "@/lib/session";
-import { getOwnedWorkspace, getPrimaryEngagementIdForWorkspace, ACTIVE_WORKSPACE_COOKIE } from "@/lib/workspace";
+import { getOwnedWorkspace, ACTIVE_WORKSPACE_COOKIE } from "@/lib/workspace";
 
 export const runtime = "nodejs";
 
@@ -35,14 +35,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     maxAge: 60 * 60 * 24 * 365,
   });
 
-  // Lands directly on this workspace's one client — since a workspace IS
-  // a client under this app's model, "switch workspace" is really "switch
-  // client," and the useful destination is that client's own profile, not
-  // Work/home (which said nothing about which client you'd just landed
-  // on). Falls back to /dashboard only for a workspace whose client
-  // somehow doesn't resolve (predates the one-workspace-one-client
-  // guarantee, or its client was deleted) — same fallback
-  // /dashboard/engagements/page.tsx already uses for the same case.
-  const engagementId = await getPrimaryEngagementIdForWorkspace(workspace.workspaceId);
-  redirect(engagementId ? `/dashboard/engagements/${engagementId}` : "/dashboard");
+  // Lands on Work/home with the new client now active, not straight into
+  // their profile — switching clients is a starting point, not itself a
+  // request to view one client's engagement detail.
+  redirect("/dashboard");
 }
