@@ -6,7 +6,7 @@
 // on every render instead.
 
 import { createAvatar } from "@dicebear/core";
-import { pixelArt, initials } from "@dicebear/collection";
+import { pixelArt, initials, icons } from "@dicebear/collection";
 import type { Style } from "@dicebear/core";
 
 // Just PixelBot, by design — Micah and Open Peeps were dropped per direct
@@ -131,6 +131,30 @@ export function generateInitialsAvatarDataUri(name: string, opts?: { size?: numb
     size: opts?.size ?? 64,
     radius: 20,
     backgroundColor: CLIENT_AVATAR_COLORS,
+  });
+  return avatar.toDataUri();
+}
+
+/**
+ * DiceBear's `icons` style — a solid/filled glyph on a colored rounded
+ * backdrop (the Slack/Discord "default avatar" look), for a control that
+ * represents the *category* "clients" rather than any one specific
+ * client. A fixed seed so it's the same glyph every time, not a random
+ * one per render — this is a nav icon, not an avatar that's supposed to
+ * vary. backgroundColor pinned to one of CLIENT_AVATAR_COLORS' own
+ * violet so this button reads as part of the same client-color system
+ * rather than a clashing one-off.
+ *
+ * Note: this sandbox's network policy blocks api.dicebear.com, so this
+ * exact seed's actual rendered glyph hasn't been visually previewed —
+ * if it doesn't land, swapping the seed string is a one-line change.
+ */
+export function generateNeutralNavIconDataUri(opts?: { size?: number }): string {
+  const avatar = createAvatar(icons as Style<Record<string, unknown>>, {
+    seed: "clients-nav-icon",
+    size: opts?.size ?? 64,
+    radius: 20,
+    backgroundColor: ["7c3aed"],
   });
   return avatar.toDataUri();
 }

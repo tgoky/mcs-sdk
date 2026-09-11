@@ -16,14 +16,13 @@ import {
   Loader2,
   Search,
   GripVertical,
-  Users,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/user-avatar";
 import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
-import { generateInitialsAvatarDataUri } from "@/lib/avatar";
+import { generateInitialsAvatarDataUri, generateNeutralNavIconDataUri } from "@/lib/avatar";
 
 const CLIENT_ORDER_STORAGE_KEY = "mcs-client-order";
 
@@ -74,6 +73,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
   const initials = displayName.slice(0, 2).toUpperCase();
   const topNavItems = PRIMARY_NAV_SECTIONS;
   const activeClient = workspaces.find((w) => w.workspaceId === activeWorkspaceId);
+  const neutralIconUri = useMemo(() => generateNeutralNavIconDataUri({ size: 64 }), []);
 
   // Custom drag order is a per-browser preference, not account data — no
   // migration, no server round trip, and it degrades to plain creation
@@ -196,7 +196,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                   specific client, so it deliberately does NOT show the
                   active client's own avatar (that's the separate quick-
                   link row right below this button instead). */}
-              <Users className="w-5 h-5 shrink-0" />
+              <img src={neutralIconUri} alt="" className="w-6 h-6 shrink-0 object-cover rounded-md" />
             </div>
             <span
               className={
