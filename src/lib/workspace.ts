@@ -293,7 +293,12 @@ export async function getPrimaryEngagementIdsForWorkspaces(workspaceIds: string[
 
   const byWorkspace = new Map<string, string>();
   for (const row of rows) {
-    if (!byWorkspace.has(row.workspaceId)) byWorkspace.set(row.workspaceId, row.engagementId);
+    // engagements.workspaceId is nullable in the schema (unlike every
+    // other table's workspaceId column), but the inArray() filter above
+    // means every row here already matched one of the given ids, so this
+    // is never actually null at runtime — just narrowing the type Drizzle
+    // can't infer from the WHERE clause.
+    if (row.workspaceId && !byWorkspace.has(row.workspaceId)) byWorkspace.set(row.workspaceId, row.engagementId);
   }
   return byWorkspace;
 }
