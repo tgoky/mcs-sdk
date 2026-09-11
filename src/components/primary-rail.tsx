@@ -171,7 +171,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                         value={clientSearch}
                         onChange={(e) => setClientSearch(e.target.value)}
                         placeholder="Search clients..."
-                        className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/60 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                        className="w-full pl-8 pr-2.5 py-1.5 text-xs border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/60 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
                       />
                     </div>
                   )}
@@ -195,7 +195,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                           <button
                             type="submit"
                             disabled={isActive || switchingWorkspaceId !== null}
-                            className={`w-full flex items-center gap-2.5 py-2 px-2.5 rounded-xl min-w-0 transition-colors disabled:cursor-not-allowed ${
+                            className={`w-full flex items-center gap-2.5 py-2 px-2.5 min-w-0 transition-colors disabled:cursor-not-allowed ${
                               isActive
                                 ? "bg-white/70 dark:bg-zinc-800/70 cursor-default"
                                 : switchingWorkspaceId !== null
@@ -228,7 +228,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                   <Link
                     href="/home/new"
                     onClick={() => setClientSwitcherOpen(false)}
-                    className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 rounded-lg hover:bg-white/50 dark:hover:bg-zinc-800/50 transition-colors"
+                    className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-white/50 dark:hover:bg-zinc-800/50 transition-colors"
                   >
                     <Plus className="w-4 h-4 shrink-0" />
                     <span>New client</span>
