@@ -125,11 +125,11 @@ const CLIENT_AVATAR_COLORS = [
  * (tied to users.avatarStyle), not a general "every DiceBear style this
  * app can render" list.
  */
-export function generateInitialsAvatarDataUri(name: string, opts?: { size?: number }): string {
+export function generateInitialsAvatarDataUri(name: string, opts?: { size?: number; radius?: number }): string {
   const avatar = createAvatar(initials as Style<Record<string, unknown>>, {
     seed: name.trim() || "?",
     size: opts?.size ?? 64,
-    radius: 20,
+    radius: opts?.radius ?? 20,
     backgroundColor: CLIENT_AVATAR_COLORS,
   });
   return avatar.toDataUri();

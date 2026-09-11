@@ -55,9 +55,12 @@ const NAV_ICON_MAP: Record<string, string> = {
 // specifically the *user* avatar style, per avatar.ts's own doc — a
 // client/company isn't a person). Memoized per name since createAvatar
 // does real SVG work, not a free string format.
-function ClientAvatar({ name, size = "w-7 h-7" }: { name: string; size?: string }) {
-  const dataUri = useMemo(() => generateInitialsAvatarDataUri(name, { size: 64 }), [name]);
-  return <img src={dataUri} alt="" className={`${size} rounded-lg shrink-0 object-cover`} />;
+function ClientAvatar({ name, size = "w-7 h-7", square = false }: { name: string; size?: string; square?: boolean }) {
+  const dataUri = useMemo(
+    () => generateInitialsAvatarDataUri(name, { size: 64, radius: square ? 0 : 20 }),
+    [name, square]
+  );
+  return <img src={dataUri} alt="" className={`${size} ${square ? "" : "rounded-lg"} shrink-0 object-cover`} />;
 }
 
 export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, avatar }: PrimaryRailProps) {
@@ -358,7 +361,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 (pathname.startsWith("/dashboard/engagements") ? "scale-105" : "group-hover:scale-110")
               }
             >
-              <ClientAvatar name={activeClient.name} size="w-9 h-9" />
+              <ClientAvatar name={activeClient.name} size="w-9 h-9" square />
             </div>
           </Link>
         )}
