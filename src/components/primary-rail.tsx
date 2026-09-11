@@ -16,13 +16,14 @@ import {
   Loader2,
   Search,
   GripVertical,
+  Users,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/user-avatar";
 import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
-import { generateInitialsAvatarDataUri, generateNeutralNavIconDataUri } from "@/lib/avatar";
+import { generateInitialsAvatarDataUri } from "@/lib/avatar";
 
 const CLIENT_ORDER_STORAGE_KEY = "mcs-client-order";
 
@@ -73,7 +74,6 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
   const initials = displayName.slice(0, 2).toUpperCase();
   const topNavItems = PRIMARY_NAV_SECTIONS;
   const activeClient = workspaces.find((w) => w.workspaceId === activeWorkspaceId);
-  const neutralIconUri = useMemo(() => generateNeutralNavIconDataUri({ size: 64 }), []);
 
   // Custom drag order is a per-browser preference, not account data — no
   // migration, no server round trip, and it degrades to plain creation
@@ -196,7 +196,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                   specific client, so it deliberately does NOT show the
                   active client's own avatar (that's the separate quick-
                   link row right below this button instead). */}
-              <img src={neutralIconUri} alt="" className="w-6 h-6 shrink-0 object-cover rounded-md" />
+              <Users className="w-5 h-5 shrink-0" />
             </div>
             <span
               className={
@@ -339,41 +339,27 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
         {activeClient && (
           <Link
             href="/dashboard/engagements"
-            title={`${activeClient.name}'s profile`}
+            title={activeClient.name}
             aria-current={pathname.startsWith("/dashboard/engagements") ? "page" : undefined}
             className={
-              "group relative w-full h-[58px] flex flex-col items-center justify-center p-1 rounded-xl transition-all duration-300 overflow-hidden " +
+              "group relative w-full h-[50px] flex items-center justify-center rounded-xl transition-all duration-300 overflow-hidden " +
               (pathname.startsWith("/dashboard/engagements")
-                ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
-                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
+                ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 shadow-xs"
+                : "hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
             }
           >
-            {/* Same zoom-up-on-active/hover treatment as every other rail
-                item above — this one differs only in *which* icon it shows:
-                the active client's own initials avatar, since (unlike the
-                Clients button right above it) this row IS one specific
-                client, not the category switcher. */}
+            {/* Just the active client's square initials avatar, sized up —
+                no label underneath (the name is already on the row above
+                in the dropdown, and on the title tooltip here), this is
+                purely a "jump straight to my current client" glyph. */}
             <div
               className={
-                "transition-all duration-300 ease-out transform flex items-center justify-center " +
-                (pathname.startsWith("/dashboard/engagements")
-                  ? "scale-[1.4] translate-y-[3px]"
-                  : "scale-100 group-hover:scale-[1.4] group-hover:translate-y-[3px]")
+                "transition-transform duration-300 ease-out " +
+                (pathname.startsWith("/dashboard/engagements") ? "scale-105" : "group-hover:scale-110")
               }
             >
-              <ClientAvatar name={activeClient.name} size="w-5 h-5" />
+              <ClientAvatar name={activeClient.name} size="w-9 h-9" />
             </div>
-
-            <span
-              className={
-                "text-[9.5px] font-medium leading-none text-center truncate max-w-full px-0.5 transition-all duration-300 ease-out origin-bottom " +
-                (pathname.startsWith("/dashboard/engagements")
-                  ? "max-h-0 opacity-0 scale-75 mt-0 pointer-events-none"
-                  : "max-h-4 opacity-100 scale-100 mt-1.5 group-hover:max-h-0 group-hover:opacity-0 group-hover:scale-75 group-hover:mt-0 group-hover:pointer-events-none")
-              }
-            >
-              {activeClient.name}
-            </span>
           </Link>
         )}
 

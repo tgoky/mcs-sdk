@@ -6,7 +6,7 @@
 // on every render instead.
 
 import { createAvatar } from "@dicebear/core";
-import { pixelArt, initials, identicon } from "@dicebear/collection";
+import { pixelArt, initials } from "@dicebear/collection";
 import type { Style } from "@dicebear/core";
 
 // Just PixelBot, by design — Micah and Open Peeps were dropped per direct
@@ -131,23 +131,6 @@ export function generateInitialsAvatarDataUri(name: string, opts?: { size?: numb
     size: opts?.size ?? 64,
     radius: 20,
     backgroundColor: CLIENT_AVATAR_COLORS,
-  });
-  return avatar.toDataUri();
-}
-
-/**
- * DiceBear's `identicon` style with a fixed, never-changing seed — a
- * generic "switch accounts"-style abstract glyph (same idea as GitHub's
- * classic identicon) for a control that represents the *category*
- * "clients" rather than any one specific client. Deliberately a
- * different DiceBear style from generateInitialsAvatarDataUri, not that
- * function called with a fixed seed — this needs to read as "an icon,"
- * not as "a client whose name happens to be this seed."
- */
-export function generateNeutralNavIconDataUri(opts?: { size?: number }): string {
-  const avatar = createAvatar(identicon as Style<Record<string, unknown>>, {
-    seed: "clients-switcher",
-    size: opts?.size ?? 64,
   });
   return avatar.toDataUri();
 }
