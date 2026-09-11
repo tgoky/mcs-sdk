@@ -484,7 +484,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
       {activity.error && <ErrorBanner message={activity.error} onRetry={fetchActivity} />}
 
       {/* Toolbar & View Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 surface-glass-1 rounded-2xl p-2 font-sans">
+      <div className="flex flex-wrap items-center justify-between gap-3 no-ambient-glow surface-glass-1 rounded-2xl p-2 font-sans">
         <div className="flex items-center gap-2">
           {/* Universal Month Navigation */}
           <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
@@ -557,7 +557,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
 
       {/* Loading Skeleton */}
       {roster.loading && (
-        <div className="grid grid-cols-7 gap-px surface-glass-1 rounded-2xl overflow-hidden font-sans">
+        <div className="grid grid-cols-7 gap-px no-ambient-glow surface-glass-1 rounded-2xl overflow-hidden font-sans">
           {Array.from({ length: 35 }).map((_, i) => (
             <div key={i} className="min-h-[105px] bg-[#f8f7fa] dark:bg-zinc-950 animate-pulse" />
           ))}
@@ -566,7 +566,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
 
       {/* 1. Month View */}
       {mode === "month" && !roster.loading && (
-        <div className="overflow-hidden surface-glass-2 rounded-2xl font-sans">
+        <div className="overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl font-sans">
           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
@@ -675,7 +675,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
       {mode === "day" && !roster.loading && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
           {/* LEFT 7 COLUMNS: HOURLY TIMELINE GRID */}
-          <div className="lg:col-span-7 overflow-hidden surface-glass-2 rounded-2xl flex flex-col font-sans">
+          <div className="lg:col-span-7 overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl flex flex-col font-sans">
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-4 py-3 font-sans">
               <div className="flex items-center gap-2 font-sans">
                 <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="hover-lift press-settle rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
@@ -815,7 +815,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
           {/* RIGHT 5 COLUMNS: MINI CALENDAR + PROSPECT INSPECTOR PANEL */}
           <div className="lg:col-span-5 space-y-3 font-sans">
             {/* MINI CALENDAR NAVIGATOR */}
-            <div className="surface-glass-1 rounded-2xl p-3 space-y-2 font-sans">
+            <div className="no-ambient-glow surface-glass-1 rounded-2xl p-3 space-y-2 font-sans">
               <span className="text-[11px] font-bold text-zinc-900 dark:text-white block px-1 font-sans">{monthName} {year}</span>
               <div className="grid grid-cols-7 text-center text-[9px] font-mono text-zinc-500 font-bold uppercase font-sans">
                 {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <div key={i}>{d}</div>)}
@@ -841,7 +841,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
             </div>
 
             {/* FULL INSPECTOR PANEL (CALL INSPECTION vs ACTIVITY INSPECTION) */}
-            <div className="surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
+            <div className="no-ambient-glow surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
               {inspectionType === "activity" && selectedActivity ? (
                 /* SYSTEM EVENT / LEAK-MAP AUDIT PREVIEW */
                 <div className="space-y-4 font-sans">
@@ -864,7 +864,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     </div>
                   </div>
 
-                  <div className="surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
+                  <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
                     <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Audit Findings & Diagnostic</span>
                     <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans text-xs">
                       {selectedActivity.detail || "Automated audit scan completed."}
@@ -872,7 +872,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   </div>
 
                   {selectedActivity.prospectEmail && (
-                    <div className="surface-glass-1 rounded-xl p-3 space-y-1 text-xs font-sans">
+                    <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-1 text-xs font-sans">
                       <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Associated Lead</span>
                       <p className="font-bold text-zinc-900 dark:text-white">{selectedActivity.prospectName ?? selectedActivity.prospectEmail}</p>
                       <p className="font-mono text-zinc-500 text-[11px]">{selectedActivity.prospectEmail}</p>
@@ -882,7 +882,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   <div className="pt-2 font-sans">
                     <Link
                       href={`/dashboard/engagements/${engagementId}/skills/${selectedActivity.skill}`}
-                      className="inline-flex items-center gap-2 surface-glass-1 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center"
+                      className="inline-flex items-center gap-2 no-ambient-glow surface-glass-1 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center"
                     >
                       <span>Open Full {ACTIVITY_SKILL_LABEL[selectedActivity.skill]} Skill Page</span>
                       <ExternalLink size={12} />
@@ -1022,7 +1022,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                         </StatusPill>
                       </div>
 
-                      <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
+                      <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
                         <div className="flex items-center justify-between text-[11px] font-sans">
                           <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
                           <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ?? "Slack"}</span>
@@ -1060,7 +1060,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             </StatusPill>
                           </div>
 
-                          <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
+                          <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
                             <div className="flex items-center justify-between text-[11px] font-sans">
                               <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
                               <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.pileOnData.sentVia ?? "hybrid"}</span>
@@ -1088,7 +1088,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             </StatusPill>
                           </div>
 
-                          <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
+                          <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
                             <div className="flex items-center justify-between text-[11px] font-sans">
                               <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
                               <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.winBackData.touchesSent} / {selectedEntry.winBackData.touchesTotal}</span>
@@ -1150,7 +1150,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
       {mode === "list" && !roster.loading && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
           {/* LEFT 7 COLUMNS: UNIFIED MULTI-SKILL FEED */}
-          <div className="lg:col-span-7 overflow-hidden surface-glass-2 rounded-2xl font-sans flex flex-col">
+          <div className="lg:col-span-7 overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl font-sans flex flex-col">
             {/* List Feed Scope Control Header */}
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
               <div className="flex items-center gap-1.5">
@@ -1460,7 +1460,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
           </div>
 
           {/* RIGHT 5 COLUMNS: MULTI-SKILL INSPECTOR PANEL */}
-          <div className="lg:col-span-5 surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
+          <div className="lg:col-span-5 no-ambient-glow surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
             {inspectionType === "activity" && selectedActivity ? (
               /* SYSTEM EVENT / LEAK-MAP AUDIT PREVIEW */
               <div className="space-y-4 font-sans">
@@ -1483,7 +1483,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   </div>
                 </div>
 
-                <div className="surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
+                <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Audit Findings & Diagnostic</span>
                   <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans text-xs">
                     {selectedActivity.detail || "Automated audit scan completed."}
@@ -1491,7 +1491,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 </div>
 
                 {selectedActivity.prospectEmail && (
-                  <div className="surface-glass-1 rounded-xl p-3 space-y-1 text-xs font-sans">
+                  <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-1 text-xs font-sans">
                     <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Associated Lead</span>
                     <p className="font-bold text-zinc-900 dark:text-white">{selectedActivity.prospectName ?? selectedActivity.prospectEmail}</p>
                     <p className="font-mono text-zinc-500 text-[11px]">{selectedActivity.prospectEmail}</p>
@@ -1501,7 +1501,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 <div className="pt-2 font-sans">
                   <Link
                     href={`/dashboard/engagements/${engagementId}/skills/${selectedActivity.skill}`}
-                    className="inline-flex items-center gap-2 surface-glass-1 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center font-sans"
+                    className="inline-flex items-center gap-2 no-ambient-glow surface-glass-1 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center font-sans"
                   >
                     <span>Open Full {ACTIVITY_SKILL_LABEL[selectedActivity.skill]} Skill Page</span>
                     <ExternalLink size={12} />
@@ -1629,7 +1629,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       </StatusPill>
                     </div>
 
-                    <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
+                    <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
                       <div className="flex items-center justify-between text-[11px] font-sans">
                         <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
                         <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ?? "Slack"}</span>
@@ -1667,7 +1667,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           </StatusPill>
                         </div>
 
-                        <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
+                        <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
                           <div className="flex items-center justify-between text-[11px] font-sans">
                             <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
                             <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.pileOnData.sentVia ?? "hybrid"}</span>
@@ -1695,7 +1695,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           </StatusPill>
                         </div>
 
-                        <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
+                        <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
                           <div className="flex items-center justify-between text-[11px] font-sans">
                             <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
                             <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.winBackData.touchesSent} / {selectedEntry.winBackData.touchesTotal}</span>

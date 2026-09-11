@@ -61,13 +61,13 @@ export function RepCrisisResponseView({ detail }: { detail: RepCrisisResponseDet
       </div>
 
       {incident.contributingFindings.length > 0 && (
-        <div className="rounded-xl surface-glass-2 p-4">
+        <div className="rounded-xl no-ambient-glow surface-glass-2 p-4">
           <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2">
             Contributing findings ({incident.contributingFindings.length})
           </h3>
           <div className="flex flex-col gap-2">
             {incident.contributingFindings.map((f, i) => (
-              <div key={i} className="rounded-lg surface-glass-1 p-3">
+              <div key={i} className="rounded-lg no-ambient-glow surface-glass-1 p-3">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <span className="inline-flex items-center gap-1.5">
                     <span className={`w-2 h-2 rounded-[2.5px] shrink-0 ${SOURCE_SWATCH[f.source] ?? "bg-zinc-400"}`} aria-hidden="true" />

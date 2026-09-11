@@ -32,7 +32,7 @@ export function RepEnginePanelView({ detail }: { detail: RepEnginePanelDetail })
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl surface-glass-1 p-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl no-ambient-glow surface-glass-1 p-1.5">
         <div className="relative w-64">
           <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
           <input
@@ -49,7 +49,7 @@ export function RepEnginePanelView({ detail }: { detail: RepEnginePanelDetail })
 
       <div className="flex flex-col gap-2">
         {filtered.map((f) => (
-          <div key={f.id} className="rounded-xl surface-glass-1 p-3.5">
+          <div key={f.id} className="rounded-xl no-ambient-glow surface-glass-1 p-3.5">
             <div className="flex items-center justify-between gap-2 mb-1.5">
               <span className="text-[11px] font-mono font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">{f.engineId}</span>
               <div className="flex items-center gap-2">

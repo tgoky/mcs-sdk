@@ -24,7 +24,7 @@ export function RepTwitterWatchView({ detail }: { detail: RepTwitterWatchDetail 
         {mentions.length} new mention{mentions.length === 1 ? "" : "s"} · {mentions.filter((m) => m.flagged).length} flagged
       </p>
       {mentions.map((m) => (
-        <div key={m.id} className="rounded-xl surface-glass-1 p-3.5">
+        <div key={m.id} className="rounded-xl no-ambient-glow surface-glass-1 p-3.5">
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <div className="flex items-center gap-2 text-xs font-mono text-zinc-600 dark:text-zinc-400">
               {m.author && <span className="font-bold">@{m.author}</span>}

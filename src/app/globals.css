@@ -405,6 +405,21 @@
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
 }
 
+/* Opt-out of the lavender ambient-glow tint baked into surface-glass-*
+   above, for surfaces that should keep the blur/shadow/border but not
+   the colored wash (tables, dense panels where the tint read as visual
+   noise). Pair with a surface-glass-* class rather than replacing it. */
+.no-ambient-glow.surface-glass-1,
+.no-ambient-glow.surface-glass-2,
+.no-ambient-glow.surface-glass-3 {
+  background: var(--surface-glass);
+}
+.dark .no-ambient-glow.surface-glass-1,
+.dark .no-ambient-glow.surface-glass-2,
+.dark .no-ambient-glow.surface-glass-3 {
+  background: var(--surface-glass);
+}
+
 /* Flat solid surfaces (buttons) that still need real depth without a
    glass fill — shadow tiers alone, no blur/translucency. */
 .shadow-elevation-1 {

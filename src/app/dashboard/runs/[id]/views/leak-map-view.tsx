@@ -113,7 +113,7 @@ export function LeakMapView({
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       {/* TOOLBAR */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl surface-glass-1 p-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl no-ambient-glow surface-glass-1 p-1.5">
         {!embedded && (
           <div className="relative w-64">
             <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
@@ -149,7 +149,7 @@ export function LeakMapView({
                   overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData &&
                     "border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10",
                   overallSeverity !== "high" && overallSeverity !== "medium" && hasAnyUsableData &&
-                    "surface-glass-1"
+                    "no-ambient-glow surface-glass-1"
                 )}
               >
                 <div className="flex items-center gap-2 shrink-0">
@@ -212,13 +212,13 @@ export function LeakMapView({
                       ))}
                     </div>
                   ) : (
-                    <p className="rounded-xl surface-glass-1 p-3.5 text-xs italic text-zinc-500 dark:text-zinc-500">
+                    <p className="rounded-xl no-ambient-glow surface-glass-1 p-3.5 text-xs italic text-zinc-500 dark:text-zinc-500">
                       No funnel metrics match your search filter.
                     </p>
                   )}
 
                   {/* Executive Report Reader */}
-                  <div className="rounded-xl surface-glass-2 p-3.5">
+                  <div className="rounded-xl no-ambient-glow surface-glass-2 p-3.5">
                     <div className="mb-2 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <FileText size={13} className="text-zinc-600 dark:text-zinc-400" />
@@ -243,11 +243,11 @@ export function LeakMapView({
                     </div>
 
                     {audit.reportMarkdown ? (
-                      <div className="whitespace-pre-wrap rounded-lg surface-glass-1 p-3 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto">
+                      <div className="whitespace-pre-wrap rounded-lg no-ambient-glow surface-glass-1 p-3 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto">
                         {audit.reportMarkdown}
                       </div>
                     ) : (
-                      <p className="rounded-lg surface-glass-1 p-3 text-xs italic text-zinc-500 dark:text-zinc-500">
+                      <p className="rounded-lg no-ambient-glow surface-glass-1 p-3 text-xs italic text-zinc-500 dark:text-zinc-500">
                         No report text stored for this run. Check the Steps panel to confirm whether delivery (Resend/Slack) succeeded.
                       </p>
                     )}
@@ -278,7 +278,7 @@ export function LeakMapView({
 
           {/* LIST VIEW */}
           {mode === "list" && (
-            <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl surface-glass-2">
+            <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl no-ambient-glow surface-glass-2">
               {filteredIssues.length === 0 ? (
                 <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic">
                   {issues.length === 0
@@ -369,7 +369,7 @@ function IssueCard({ issue }: { issue: IssueType }) {
         cardTone === "danger" && "border-rose-900/40 bg-rose-950/10",
         cardTone === "warning" && "border-orange-900/40 bg-orange-950/10",
         cardTone === "gap" && "border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10",
-        (cardTone === "info" || cardTone === "neutral") && "surface-glass-1"
+        (cardTone === "info" || cardTone === "neutral") && "no-ambient-glow surface-glass-1"
       )}
     >
       {/* Header row */}

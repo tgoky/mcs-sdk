@@ -212,7 +212,7 @@ export function AvatarPicker({
       </div>
 
       {step !== "collapsed" && (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40 p-3 space-y-3 animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className="w-fit rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40 p-3 space-y-3 animate-in fade-in slide-in-from-top-1 duration-150">
           {step === "choice" && (
             <div className="grid grid-cols-2 gap-2">
               <button

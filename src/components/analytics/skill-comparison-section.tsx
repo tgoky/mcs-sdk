@@ -7,6 +7,7 @@
 // wasn't asked for.
 
 import { useState } from "react";
+import { Dropdown } from "@/components/ui/dropdown";
 
 export interface SkillStat {
   id: string;
@@ -52,21 +53,19 @@ function SkillPicker({
   value: string;
   onChange: (id: string) => void;
 }) {
+  const items = skills.map((s) => ({ key: s.id, label: `${s.name} (${s.productLabel})` }));
   return (
-    <label className="flex items-center gap-2 text-xs">
+    <div className="flex items-center gap-2 text-xs">
       <span className="font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600 shrink-0">{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="min-w-0 flex-1 sm:flex-initial rounded-lg text-sm bg-white dark:bg-zinc-900 border border-border px-2.5 py-1.5 text-zinc-900 dark:text-white focus:outline-none focus:border-amber-400 cursor-pointer"
-      >
-        {skills.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name} ({s.productLabel})
-          </option>
-        ))}
-      </select>
-    </label>
+      <Dropdown
+        items={items}
+        selectedKey={value}
+        onSelect={onChange}
+        placeholder="Select skill…"
+        triggerClassName="min-w-0 flex-1 sm:flex-initial bg-white dark:bg-zinc-900 border border-border px-2.5 py-1.5 text-sm text-zinc-900 dark:text-white hover:bg-white dark:hover:bg-zinc-900"
+        panelClassName="bg-white dark:bg-zinc-900 border border-border"
+      />
+    </div>
   );
 }
 

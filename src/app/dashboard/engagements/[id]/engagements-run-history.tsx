@@ -68,7 +68,7 @@ export function EngagementRunHistory({
       </div>
 
       {/* Filtered Runs List */}
-      <div className="w-full overflow-hidden surface-glass-1 rounded-xl transition-colors">
+      <div className="w-full overflow-hidden no-ambient-glow surface-glass-1 rounded-xl transition-colors">
         <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
           {filteredRuns.slice(0, 20).map((run) => (
             <li key={run.id} className="group relative">
