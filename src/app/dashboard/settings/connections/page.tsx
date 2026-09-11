@@ -100,9 +100,56 @@ const PLATFORM_GROUPS: PlatformGroup[] = [
       },
     ],
   },
+  {
+    group: "Cold Open — outbound",
+    description: "Connect the sending platform and lead source Cold Open pushes to for this account. Pick one sending platform below (whichever you chose in that client's Send Connect setup) — you only need the one you're using.",
+    platforms: [
+      {
+        provider: "cold_open_instantly",
+        label: "Instantly",
+        placeholder: "your Instantly API key",
+        howTo: "Instantly → Settings → Integrations → API Key",
+      },
+      {
+        provider: "cold_open_smartlead",
+        label: "SmartLead",
+        placeholder: "your SmartLead API key",
+        howTo: "SmartLead → Settings → API Key",
+      },
+      {
+        provider: "cold_open_lemlist",
+        label: "Lemlist",
+        placeholder: "your Lemlist API key",
+        howTo: "Lemlist → Settings → Integrations → API Key",
+      },
+      {
+        provider: "cold_open_reply_io",
+        label: "Reply.io",
+        placeholder: "your Reply.io API key",
+        howTo: "Reply.io → Settings → API → Create key",
+      },
+      {
+        provider: "cold_open_apify",
+        label: "Apify",
+        placeholder: "apify_api_...",
+        howTo: "Apify → Settings → Integrations → Personal API tokens (only needed if a lead source uses an Apify actor)",
+      },
+    ],
+  },
 ];
 
-const TESTABLE_PROVIDERS = new Set(["calendly", "cal_com", "mailchimp", "convertkit", "smtp"]);
+const TESTABLE_PROVIDERS = new Set([
+  "calendly",
+  "cal_com",
+  "mailchimp",
+  "convertkit",
+  "smtp",
+  "cold_open_instantly",
+  "cold_open_smartlead",
+  "cold_open_lemlist",
+  "cold_open_reply_io",
+  "cold_open_apify",
+]);
 
 function PlatformSection({ group }: { group: PlatformGroup }) {
   const [expanded, setExpanded] = useState(false);

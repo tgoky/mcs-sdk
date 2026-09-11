@@ -114,7 +114,15 @@ export async function runDailySend(tenant: any, runId: string, step: StepTools |
             await db
               .select({ email: coldOpenLeads.email })
               .from(coldOpenLeads)
-              .where(and(eq(coldOpenLeads.engagementId, engagementId), inArray(coldOpenLeads.email, candidateEmails), inArray(coldOpenLeads.status, ["pushed", "dry_run"])))
+              // "held" and "discarded" both belong here too: a held lead is
+              // already sitting in the review queue (see held-leads.ts) and
+              // must not be re-fetched/re-personalized on every subsequent
+              // run, and a discarded one was already decided against — this
+              // used to only exclude "pushed"/"dry_run", so a lead awaiting
+              // review got refetched and re-assembled (a real LLM call in
+              // "generate" copy mode) on every single Daily Send run for as
+              // long as it stayed unreviewed.
+              .where(and(eq(coldOpenLeads.engagementId, engagementId), inArray(coldOpenLeads.email, candidateEmails), inArray(coldOpenLeads.status, ["pushed", "dry_run", "held", "discarded"])))
           ).map((r) => r.email.toLowerCase())
         )
       : new Set<string>();

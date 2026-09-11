@@ -9,6 +9,7 @@ import { getColdOpenConfig, upsertColdOpenConfig, setColdOpenPhaseState } from "
 import { createEspAdapter } from "./esp/factory";
 import { coldOpenCredentialProvider } from "./source-connect";
 import { validateDomainLive, type Gap } from "./dns-validator";
+import { normalizeDomain } from "./url-normalize";
 import { hasCredential } from "@/lib/credentials";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { ColdOpenSendPlatformId } from "@/models/schema";
@@ -80,8 +81,9 @@ export async function runSendConnect(tenant: any, runId: string, step: StepTools
     // Advisory DNS gap check against the product's own domain — the
     // sending-domain DNS Send Connect cares about. Never blocks (WARNS
     // only), same as the source module's own dns_validator.py contract.
-    if (config.productIdentity?.url) {
-      const gaps: Gap[] = await validateDomainLive(config.productIdentity.url);
+    const sendingDomain = normalizeDomain(config.productIdentity?.url);
+    if (sendingDomain) {
+      const gaps: Gap[] = await validateDomainLive(sendingDomain);
       if (gaps.length > 0) {
         const detail = gaps.map((g) => `[${g.severity}] ${g.code}: ${g.message}`).join("; ");
         await logStep(runId, { phase: "dns_gap_check", status: "success", detail });

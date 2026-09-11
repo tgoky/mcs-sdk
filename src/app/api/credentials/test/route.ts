@@ -6,6 +6,13 @@ import { resolveCredential } from "@/lib/credentials";
 import { CalendlyClient, CalComClient } from "@/lib/platforms/booking";
 import { MailchimpClient, ConvertKitClient, SMTPClient, parseSmtpCredential } from "@/lib/platforms/email";
 import { getSession } from "@/lib/session";
+import {
+  checkInstantlyCredential,
+  checkSmartleadCredential,
+  checkLemlistCredential,
+  checkReplyIoCredential,
+  checkApifyCredential,
+} from "@/features/cold-open/server/credential-check";
 
 /**
  * Same verified-endpoint set as runCredentialHealthCheck() in
@@ -18,6 +25,11 @@ const VALIDATORS: Record<string, (secret: string) => Promise<void>> = {
   mailchimp: (key) => new MailchimpClient(key).checkCredentialHealth(),
   convertkit: (secret) => new ConvertKitClient(secret).checkCredentialHealth(),
   smtp: (raw) => new SMTPClient(parseSmtpCredential(raw)).checkCredentialHealth(),
+  cold_open_instantly: (secret) => checkInstantlyCredential(secret),
+  cold_open_smartlead: (secret) => checkSmartleadCredential(secret),
+  cold_open_lemlist: (secret) => checkLemlistCredential(secret),
+  cold_open_reply_io: (secret) => checkReplyIoCredential(secret),
+  cold_open_apify: (secret) => checkApifyCredential(secret),
 };
 
 /**

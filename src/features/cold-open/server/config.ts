@@ -65,6 +65,11 @@ const SKILL_PRECONDITIONS: Record<string, { field: keyof ColdOpenConfigRow; owne
 
 function isEmpty(value: unknown): boolean {
   if (value === null || value === undefined) return true;
+  // A Date has zero enumerable own properties (Object.keys(new Date())
+  // is always []), so the generic object branch below would misreport
+  // any set Date — e.g. lastRunAt — as empty regardless of its value.
+  // Reaching here at all means the field is set to a real timestamp.
+  if (value instanceof Date) return false;
   if (Array.isArray(value)) return value.length === 0;
   if (typeof value === "object") return Object.keys(value as object).length === 0;
   return false;

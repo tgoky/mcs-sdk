@@ -142,6 +142,18 @@ function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayloa
     case "rep-twitter-deep-scan":
     case "rep-trustpilot-deep-scan":
     case "rep-reddit-deep-scan":
+    // Cold Open's 7 skills have no dedicated view (same reasoning as the
+    // 6 rep-adhoc actions above) — before this, none of these had a case
+    // here at all, so they fell to `default: <PinDownView>`, which
+    // silently rendered Pin-Down's Showtime page-builder UI against a
+    // cold-open run's detail payload (every Pin-Down-specific field null).
+    case "icp-lock":
+    case "voice-capture":
+    case "source-connect":
+    case "send-connect":
+    case "daily-send":
+    case "reply-sort":
+    case "send-report":
       return <AdhocRunSummaryView detail={detail} />;
     case "pin-down":
     default:

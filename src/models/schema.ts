@@ -2682,7 +2682,11 @@ export const coldOpenConfig = pgTable(
 // reasons daily_send.py's batch report tracks — one row per lead per
 // engagement, so a re-run's dedupe check is a real unique-index lookup
 // instead of reading and re-parsing a JSON blob.
-export type ColdOpenLeadStatus = "held" | "duplicate" | "dry_run" | "pushed" | "skipped_dead" | "skipped_filtered" | "error";
+// "discarded": a buyer reviewed a held lead and chose not to send it —
+// terminal, same as "pushed"/"dry_run", so the historical-dedupe check in
+// daily-send.ts excludes it (a discarded lead is a decision, not a gap to
+// re-fetch and re-personalize on the next run).
+export type ColdOpenLeadStatus = "held" | "duplicate" | "dry_run" | "pushed" | "skipped_dead" | "skipped_filtered" | "error" | "discarded";
 
 export const coldOpenLeads = pgTable(
   "cold_open_leads",
@@ -2741,9 +2745,12 @@ export const coldOpenReplies = pgTable(
 
     disposition: text("disposition").$type<ColdOpenReplyDisposition>().notNull(),
     // "heuristic" (opt-out/OOO caught before any model call), "model"
-    // (Haiku classified it), or "none" (empty body — routed straight to
-    // the human queue, per reply_classifier.py's own ordering).
-    classificationSource: text("classification_source").$type<"heuristic" | "model" | "none">().notNull(),
+    // (Haiku classified it), "error" (the model call itself failed —
+    // distinct from "model" so a classifier outage is visible in
+    // reporting instead of masquerading as a real classification), or
+    // "none" (empty body — routed straight to the human queue, per
+    // reply_classifier.py's own ordering).
+    classificationSource: text("classification_source").$type<"heuristic" | "model" | "error" | "none">().notNull(),
     rawBody: text("raw_body").notNull(),
 
     // unclassified/interested/objection route to the human queue

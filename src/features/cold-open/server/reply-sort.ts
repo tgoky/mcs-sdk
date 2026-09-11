@@ -82,7 +82,8 @@ export async function runReplySort(tenant: any, runId: string, step: StepTools |
         campaignId: reply.campaignId || null,
         externalReplyId: reply.replyId,
         disposition: result.disposition,
-        classificationSource: result.method === "heuristic" ? "heuristic" : result.method === "empty_body" ? "none" : "model",
+        classificationSource:
+          result.method === "heuristic" ? "heuristic" : result.method === "empty_body" ? "none" : result.method === "error" ? "error" : "model",
         rawBody: reply.bodyText,
         routedToQueue: QUEUE_WORTHY.includes(result.disposition),
       });

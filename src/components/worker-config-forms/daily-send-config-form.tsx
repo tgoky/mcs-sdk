@@ -1,10 +1,118 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check, X, Loader2 } from "lucide-react";
 import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${h.toString().padStart(2, "0")}:00` }));
+
+interface HeldLead {
+  id: string;
+  email: string;
+  companyName: string;
+  firstName: string | null;
+  lastName: string | null;
+  icp: string | null;
+  createdAt: string;
+  statusDetail: { reason?: string; copy?: { subject: string; body1: string } } | null;
+}
+
+/** Held-for-review queue — leads Daily Send set aside because their ICP is
+ * review-required (see Send Connect's "Auto-push ICPs"). Before this
+ * existed, a held lead had no UI anywhere: it just sat in the database
+ * forever with no way to approve or discard it. */
+function HeldLeadsPanel({ engagementId }: { engagementId: string }) {
+  const [leads, setLeads] = useState<HeldLead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}/bridges/daily-send/held-leads`);
+      const data = await res.json();
+      if (res.ok) setLeads(data.leads ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, [engagementId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function act(leadId: string, action: "approve" | "discard") {
+    setBusyId(leadId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}/bridges/daily-send/held-leads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId, action }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Action failed");
+      setLeads((ls) => ls.filter((l) => l.id !== leadId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Action failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (loading) return null;
+  if (leads.length === 0) return null;
+
+  return (
+    <div className="space-y-3 rounded-lg border border-amber-300 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 p-3">
+      <div>
+        <h2 className="text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+          Held for review ({leads.length})
+        </h2>
+        <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-0.5">
+          These ICPs are marked review-required in Send Connect. Approve to send now (respecting the live/dry-run setting above), or discard.
+        </p>
+      </div>
+      {error && <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {error}</p>}
+      <div className="space-y-2">
+        {leads.map((lead) => (
+          <div key={lead.id} className="flex items-center justify-between gap-3 rounded-lg bg-background border border-zinc-200 dark:border-zinc-800 px-3 py-2">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                {[lead.firstName, lead.lastName].filter(Boolean).join(" ") || lead.email} — {lead.companyName}
+              </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                {lead.email} {lead.icp ? `· ${lead.icp}` : ""} {lead.statusDetail?.copy?.subject ? `· "${lead.statusDetail.copy.subject}"` : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => act(lead.id, "approve")}
+                disabled={busyId === lead.id}
+                title="Approve & send"
+                className="p-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-40 cursor-pointer"
+              >
+                {busyId === lead.id ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              </button>
+              <button
+                type="button"
+                onClick={() => act(lead.id, "discard")}
+                disabled={busyId === lead.id}
+                title="Discard"
+                className="p-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Close" }: { engagementId: string; onCancel: () => void; cancelLabel?: string }) {
   const router = useRouter();
@@ -113,6 +221,8 @@ export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Clo
           checked. Turn it on once you&apos;ve confirmed a dry run looks right.
         </span>
       </label>
+
+      <HeldLeadsPanel engagementId={engagementId} />
 
       {saveError && <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {saveError}</p>}
       {saved && !saveError && <p className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">✓ Saved.</p>}

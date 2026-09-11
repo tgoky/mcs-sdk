@@ -7,6 +7,13 @@ import { MailchimpClient, ConvertKitClient, createDirectSendClient } from "@/lib
 import { notifyUser } from "@/lib/notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
+import {
+  checkInstantlyCredential,
+  checkSmartleadCredential,
+  checkLemlistCredential,
+  checkReplyIoCredential,
+  checkApifyCredential,
+} from "@/features/cold-open/server/credential-check";
 
 // Verified-defect fix (2026-08-08 handoff, defect #2). Was driven by a
 // literal "TZ=UTC 0 13 * * *" cron expression on credentialHealthCron;
@@ -62,6 +69,18 @@ const VALIDATORS: Record<string, (secret: string, ctx: { locationId?: string }) 
     }
     return new GHLCalendarClient(token, ctx.locationId).checkCredentialHealth();
   },
+  // Cold Open's per-engagement ESP + lead-source credentials — added once
+  // real, verified "am I still authenticated" probes existed for each
+  // (see credential-check.ts's header for why these reuse Send Connect's
+  // own campaign-listing endpoints rather than being new/unverified
+  // surface). Before this, an expired Instantly/SmartLead/Lemlist/
+  // Reply.io/Apify key got no proactive alert at all — it just failed
+  // quietly inside the next Daily Send run.
+  cold_open_instantly: (secret) => checkInstantlyCredential(secret),
+  cold_open_smartlead: (secret) => checkSmartleadCredential(secret),
+  cold_open_lemlist: (secret) => checkLemlistCredential(secret),
+  cold_open_reply_io: (secret) => checkReplyIoCredential(secret),
+  cold_open_apify: (secret) => checkApifyCredential(secret),
 };
 
 export interface CredentialHealthResult {
