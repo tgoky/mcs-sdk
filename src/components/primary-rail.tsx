@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -14,14 +14,15 @@ import {
   Plus,
   UserPlus,
   Loader2,
-  Building2,
   Search,
+  Building2,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/user-avatar";
 import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
+import { generateInitialsAvatarDataUri } from "@/lib/avatar";
 
 interface PrimaryRailProps {
   displayName: string;
@@ -47,11 +48,22 @@ const NAV_ICON_MAP: Record<string, string> = {
   "/dashboard/library": "/images/lib.png",
 };
 
+// DiceBear's `initials` style — derives the letters and a deterministic
+// background color straight from the client's name, no PixelBot (that's
+// specifically the *user* avatar style, per avatar.ts's own doc — a
+// client/company isn't a person). Memoized per name since createAvatar
+// does real SVG work, not a free string format.
+function ClientAvatar({ name, size = "w-7 h-7" }: { name: string; size?: string }) {
+  const dataUri = useMemo(() => generateInitialsAvatarDataUri(name, { size: 64 }), [name]);
+  return <img src={dataUri} alt="" className={`${size} rounded-lg shrink-0 object-cover`} />;
+}
+
 export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, avatar }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [clientSwitcherOpen, setClientSwitcherOpen] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
+  const [skillCounts, setSkillCounts] = useState<Map<string, number> | null>(null);
   const pathname = usePathname();
   const initials = displayName.slice(0, 2).toUpperCase();
   const topNavItems = PRIMARY_NAV_SECTIONS;
@@ -59,6 +71,28 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
   const filteredWorkspaces = clientSearch.trim()
     ? workspaces.filter((w) => w.name.toLowerCase().includes(clientSearch.trim().toLowerCase()))
     : workspaces;
+
+  // Fetched lazily the first time the switcher opens, not on every page
+  // load — see the route's own doc for why this can't just be a prop.
+  useEffect(() => {
+    if (!clientSwitcherOpen || skillCounts !== null) return;
+    let cancelled = false;
+    fetch("/api/workspaces/summary")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        const map = new Map<string, number>();
+        for (const s of data.summaries ?? []) map.set(s.workspaceId, s.skillCount);
+        setSkillCounts(map);
+      })
+      .catch(() => {
+        // Best-effort — the switcher still works without counts, they
+        // just don't render (see the row's fallback below).
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientSwitcherOpen, skillCounts]);
 
   return (
     <aside className="w-[76px] bg-background border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1.5 shrink-0 select-none z-20 transition-colors duration-200">
@@ -93,7 +127,16 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 (clientSwitcherOpen ? "scale-[1.4] translate-y-[3px]" : "scale-100 group-hover:scale-[1.4] group-hover:translate-y-[3px]")
               }
             >
-              <Building2 className="w-5 h-5 shrink-0" />
+              {/* Shows the ACTIVE client's own initials avatar rather than
+                  a generic icon — same "current org's mark sits in the
+                  switcher trigger" pattern most multi-tenant apps use, and
+                  doubles as a quiet "this is who you're on right now" cue
+                  even when the button isn't hovered/open. */}
+              {activeClient ? (
+                <ClientAvatar name={activeClient.name} size="w-6 h-6" />
+              ) : (
+                <Building2 className="w-5 h-5 shrink-0" />
+              )}
             </div>
             <span
               className={
@@ -110,8 +153,15 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
           {clientSwitcherOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setClientSwitcherOpen(false)} />
-              <div className="absolute left-full top-0 ml-2 z-50 w-72 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-2xl overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
-                <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 space-y-2">
+              {/* surface-glass-3 — same floating-panel treatment as the
+                  engagement page's "Modify" menu and the home page's
+                  workspace-card "..." menu (both via ActionMenu, see
+                  action-menu.tsx): near-invisible border, strong
+                  backdrop-blur, soft ambient shadow, so whatever's behind
+                  it visibly diffuses through instead of a flat opaque
+                  panel. */}
+              <div className="absolute left-full top-0 ml-2 z-50 w-72 surface-glass-3 text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+                <div className="p-3 space-y-2">
                   <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 px-0.5">Clients</p>
                   {workspaces.length > 6 && (
                     <div className="relative">
@@ -121,19 +171,20 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                         value={clientSearch}
                         onChange={(e) => setClientSearch(e.target.value)}
                         placeholder="Search clients..."
-                        className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                        className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/60 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
                       />
                     </div>
                   )}
                 </div>
 
-                <div className="max-h-80 overflow-y-auto p-1.5 space-y-0.5">
+                <div className="max-h-80 overflow-y-auto px-1.5 pb-1.5 space-y-1">
                   {filteredWorkspaces.length === 0 ? (
                     <p className="text-xs text-zinc-400 text-center py-4">No clients match &quot;{clientSearch}&quot;.</p>
                   ) : (
                     filteredWorkspaces.map((workspace) => {
                       const isActive = workspace.workspaceId === activeWorkspaceId;
                       const isSwitching = switchingWorkspaceId === workspace.workspaceId;
+                      const skillCount = skillCounts?.get(workspace.workspaceId);
                       return (
                         <form
                           key={workspace.workspaceId}
@@ -144,24 +195,27 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                           <button
                             type="submit"
                             disabled={isActive || switchingWorkspaceId !== null}
-                            className={`w-full flex items-center gap-2.5 py-1.5 px-2 rounded-xl min-w-0 transition-colors disabled:cursor-not-allowed ${
+                            className={`w-full flex items-center gap-2.5 py-2 px-2.5 rounded-xl min-w-0 transition-colors disabled:cursor-not-allowed ${
                               isActive
-                                ? "bg-zinc-100 dark:bg-zinc-800/80 cursor-default"
+                                ? "bg-white/70 dark:bg-zinc-800/70 cursor-default"
                                 : switchingWorkspaceId !== null
                                 ? "opacity-50"
-                                : "cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                                : "cursor-pointer hover:bg-white/50 dark:hover:bg-zinc-800/50"
                             }`}
                           >
-                            <div className="w-6 h-6 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
-                              {workspace.name.slice(0, 2).toUpperCase()}
+                            <ClientAvatar name={workspace.name} />
+                            <div className="min-w-0 text-left">
+                              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate" title={workspace.name}>
+                                {workspace.name}
+                              </p>
+                              <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400">
+                                {skillCount === undefined ? " " : `${skillCount} skill${skillCount === 1 ? "" : "s"} enabled`}
+                              </p>
                             </div>
-                            <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate min-w-0 text-left" title={workspace.name}>
-                              {workspace.name}
-                            </span>
                             {isSwitching ? (
-                              <Loader2 className="w-3.5 h-3.5 text-[#2a233c] dark:text-[#e4dff2] shrink-0 ml-auto animate-spin" />
+                              <Loader2 className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 shrink-0 ml-auto animate-spin" />
                             ) : (
-                              isActive && <Check className="w-3.5 h-3.5 text-[#2a233c] dark:text-[#e4dff2] shrink-0 ml-auto" />
+                              isActive && <Check className="w-3.5 h-3.5 text-zinc-700 dark:text-zinc-200 shrink-0 ml-auto" />
                             )}
                           </button>
                         </form>
@@ -170,11 +224,11 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                   )}
                 </div>
 
-                <div className="p-1.5 border-t border-zinc-100 dark:border-zinc-800">
+                <div className="p-1.5 border-t border-zinc-200/60 dark:border-zinc-800/60">
                   <Link
                     href="/home/new"
                     onClick={() => setClientSwitcherOpen(false)}
-                    className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
+                    className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 rounded-lg hover:bg-white/50 dark:hover:bg-zinc-800/50 transition-colors"
                   >
                     <Plus className="w-4 h-4 shrink-0" />
                     <span>New client</span>

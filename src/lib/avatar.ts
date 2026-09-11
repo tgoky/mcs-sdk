@@ -6,7 +6,7 @@
 // on every render instead.
 
 import { createAvatar } from "@dicebear/core";
-import { pixelArt } from "@dicebear/collection";
+import { pixelArt, initials } from "@dicebear/collection";
 import type { Style } from "@dicebear/core";
 
 // Just PixelBot, by design — Micah and Open Peeps were dropped per direct
@@ -93,6 +93,25 @@ export function generateAvatarDataUri(
       ? {}
       : { backgroundColor: [avatarBackgroundColor(opts?.isDark ?? true)], backgroundType: ["solid" as const] }),
     radius: 0,
+  });
+  return avatar.toDataUri();
+}
+
+/**
+ * DiceBear's `initials` style, for entities that aren't a user (a client
+ * / workspace) and so were never going to have a PixelBot — this style
+ * derives the letters itself from the seed text (the client's name) and
+ * picks a deterministic background from its own palette, no chars/color
+ * config needed. Deliberately NOT added to AVATAR_STYLES above: that
+ * record is specifically the curated set exposed in a *user's* own
+ * avatar picker (tied to users.avatarStyle), not a general "every
+ * DiceBear style this app can render" list.
+ */
+export function generateInitialsAvatarDataUri(name: string, opts?: { size?: number }): string {
+  const avatar = createAvatar(initials as Style<Record<string, unknown>>, {
+    seed: name.trim() || "?",
+    size: opts?.size ?? 64,
+    radius: 20,
   });
   return avatar.toDataUri();
 }

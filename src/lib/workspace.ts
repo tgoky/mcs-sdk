@@ -278,6 +278,26 @@ export async function getPrimaryEngagementIdForWorkspace(workspaceId: string): P
   return row?.engagementId ?? null;
 }
 
+/** Same rule as getPrimaryEngagementIdForWorkspace (oldest live engagement
+ * wins), batched across every workspace at once — one query instead of N,
+ * for surfaces that need "this client's engagement id" for a whole list of
+ * workspaces (the primary rail's client switcher). */
+export async function getPrimaryEngagementIdsForWorkspaces(workspaceIds: string[]): Promise<Map<string, string>> {
+  if (workspaceIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({ workspaceId: engagements.workspaceId, engagementId: engagements.engagementId, createdAt: engagements.createdAt })
+    .from(engagements)
+    .where(and(inArray(engagements.workspaceId, workspaceIds), isNull(engagements.deletedAt)))
+    .orderBy(asc(engagements.createdAt));
+
+  const byWorkspace = new Map<string, string>();
+  for (const row of rows) {
+    if (!byWorkspace.has(row.workspaceId)) byWorkspace.set(row.workspaceId, row.engagementId);
+  }
+  return byWorkspace;
+}
+
 /** Installs one available product into a workspace the caller owns. Product
  * access is workspace-scoped, never inferred from a route or client input. */
 export async function installPackageInWorkspace(
