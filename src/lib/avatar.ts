@@ -6,7 +6,7 @@
 // on every render instead.
 
 import { createAvatar } from "@dicebear/core";
-import { pixelArt, initials } from "@dicebear/collection";
+import { pixelArt, initials, identicon } from "@dicebear/collection";
 import type { Style } from "@dicebear/core";
 
 // Just PixelBot, by design — Micah and Open Peeps were dropped per direct
@@ -97,21 +97,57 @@ export function generateAvatarDataUri(
   return avatar.toDataUri();
 }
 
+// DiceBear's `initials` style needs an explicit multi-color list to
+// actually vary background color by seed — called with no palette at all,
+// every seed falls back to the same single default color, which is
+// exactly the bug this list fixes (every client avatar rendering
+// identically orange regardless of name). Hex without "#", matching
+// DiceBear's own backgroundColor format.
+const CLIENT_AVATAR_COLORS = [
+  "7c3aed", // violet
+  "0284c7", // sky
+  "059669", // emerald
+  "d97706", // amber
+  "e11d48", // rose
+  "4f46e5", // indigo
+  "0d9488", // teal
+  "c026d3", // fuchsia
+];
+
 /**
  * DiceBear's `initials` style, for entities that aren't a user (a client
  * / workspace) and so were never going to have a PixelBot — this style
- * derives the letters itself from the seed text (the client's name) and
- * picks a deterministic background from its own palette, no chars/color
- * config needed. Deliberately NOT added to AVATAR_STYLES above: that
- * record is specifically the curated set exposed in a *user's* own
- * avatar picker (tied to users.avatarStyle), not a general "every
- * DiceBear style this app can render" list.
+ * derives the letters itself from the seed text (the client's name) and,
+ * given CLIENT_AVATAR_COLORS, picks one deterministically by hashing the
+ * seed, so two different client names reliably land on two different
+ * colors. Deliberately NOT added to AVATAR_STYLES above: that record is
+ * specifically the curated set exposed in a *user's* own avatar picker
+ * (tied to users.avatarStyle), not a general "every DiceBear style this
+ * app can render" list.
  */
 export function generateInitialsAvatarDataUri(name: string, opts?: { size?: number }): string {
   const avatar = createAvatar(initials as Style<Record<string, unknown>>, {
     seed: name.trim() || "?",
     size: opts?.size ?? 64,
     radius: 20,
+    backgroundColor: CLIENT_AVATAR_COLORS,
+  });
+  return avatar.toDataUri();
+}
+
+/**
+ * DiceBear's `identicon` style with a fixed, never-changing seed — a
+ * generic "switch accounts"-style abstract glyph (same idea as GitHub's
+ * classic identicon) for a control that represents the *category*
+ * "clients" rather than any one specific client. Deliberately a
+ * different DiceBear style from generateInitialsAvatarDataUri, not that
+ * function called with a fixed seed — this needs to read as "an icon,"
+ * not as "a client whose name happens to be this seed."
+ */
+export function generateNeutralNavIconDataUri(opts?: { size?: number }): string {
+  const avatar = createAvatar(identicon as Style<Record<string, unknown>>, {
+    seed: "clients-switcher",
+    size: opts?.size ?? 64,
   });
   return avatar.toDataUri();
 }
