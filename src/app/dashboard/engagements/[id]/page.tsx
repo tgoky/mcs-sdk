@@ -364,7 +364,7 @@ export default async function EngagementDetailPage({
         {repIdentityGraphRow && (
           <Link
             href={`/dashboard/engagements/${engagement.engagementId}/offensive`}
-            className="group flex items-center justify-between gap-3 surface-glass-2 rounded-2xl p-4 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all"
+            className="group flex items-center justify-between gap-3 no-ambient-glow surface-glass-2 rounded-2xl p-4 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all"
           >
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
@@ -417,7 +417,7 @@ export default async function EngagementDetailPage({
             <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
               <Server className="w-3.5 h-3.5" /> Runtime Ownership
             </h2>
-            <div className="surface-glass-1 rounded-xl p-4 space-y-2">
+            <div className="no-ambient-glow surface-glass-1 rounded-xl p-4 space-y-2">
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed font-mono">
                 What runs on our infrastructure vs. what would move to {engagement.buyer}&apos;s own systems under an export.
               </p>
@@ -491,7 +491,7 @@ export default async function EngagementDetailPage({
 
             {/* Filtered run list */}
             {filteredRuns.length > 0 ? (
-              <div className="w-full overflow-hidden surface-glass-1 rounded-xl transition-colors">
+              <div className="w-full overflow-hidden no-ambient-glow surface-glass-1 rounded-xl transition-colors">
                 <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
                   {filteredRuns.slice(0, 20).map((run) => {
                     const isFailed = run.status.toLowerCase() === "failed";

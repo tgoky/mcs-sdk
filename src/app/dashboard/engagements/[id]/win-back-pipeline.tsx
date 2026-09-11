@@ -226,7 +226,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       {/* Shared Toolbar & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 surface-glass-1 rounded-2xl p-2 font-sans">
+      <div className="flex flex-wrap items-center justify-between gap-3 no-ambient-glow surface-glass-1 rounded-2xl p-2 font-sans">
         <div className="flex flex-wrap items-center gap-2">
           {/* Universal Month Navigation */}
           <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
@@ -303,7 +303,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
       {/* SMART SPLIT-PANE RECOVERY FEED */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
         {/* LEFT 7 COLUMNS: CHRONOLOGICAL RECOVERY FEED */}
-        <div className="lg:col-span-7 overflow-hidden surface-glass-2 rounded-2xl font-sans flex flex-col">
+        <div className="lg:col-span-7 overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl font-sans flex flex-col">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
             <div className="flex items-center gap-1.5">
               <CalendarDays size={14} className="text-zinc-500" />
@@ -466,7 +466,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
         </div>
 
         {/* RIGHT 5 COLUMNS: PERSISTENT RECOVERY INSPECTOR PANEL */}
-        <div className="lg:col-span-5 surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
+        <div className="lg:col-span-5 no-ambient-glow surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
           {selected ? (
             <>
               <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
@@ -497,7 +497,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                 </div>
               </div>
 
-              <div className="surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
+              <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
                 <div className="flex items-center justify-between font-sans">
                   <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
                   <span className="font-mono text-zinc-900 dark:text-white">{selected.touchesSent} / {selected.touchesTotal}</span>
@@ -527,7 +527,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
               </div>
 
               {selected.freshRescheduleLink && (
-                <div className="surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
+                <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
                   <span className="text-[10.5px] font-mono text-zinc-500 uppercase block font-semibold flex items-center gap-1.5">
                     <Link2 size={12} /> Single-use Reschedule Link
                   </span>
@@ -551,7 +551,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
 
               {/* CLEAN RUN ACTIVITY PANEL IN LIGHT MODE - NO DARK BOX OVERFLOW */}
               {selected.runId && (
-                <div className="surface-glass-1 rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden text-xs font-sans">
+                <div className="no-ambient-glow surface-glass-1 rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden text-xs font-sans">
                   <button
                     type="button"
                     onClick={() => setShowRunActivity((p) => !p)}

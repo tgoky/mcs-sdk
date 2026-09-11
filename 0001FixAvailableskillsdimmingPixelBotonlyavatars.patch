@@ -1,0 +1,450 @@
+From 781fb8995f79ca9f37a85d8adcd717c7b3ebbb6c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 10 Sep 2026 20:37:55 +0000
+Subject: [PATCH] Fix Available-skills dimming confusion, PixelBot-only avatars, chat pfps, brand color
+
+Dashboard home cards: the "Available skills" strip dimmed by enabled
+state, but only Showtime's badge component actually supports a dim/
+color distinction — Reputation Manager's and Cold Open's don't (no
+enabled prop on those two), so a freshly-installed, unconfigured
+workspace showed Showtime's skills grayed to near-invisible while the
+other product's stayed full-color, reading as "only some skills are
+even available" when they all equally were. Available no longer dims
+by enabled state at all — that's what the separate Enabled row is for.
+
+Avatars: dropped Micah and Open Peeps per direct request — just
+PixelBot now, with the category-tabs UI (pointless for one option)
+removed from the picker along with the now-dead category state.
+Added a transparentBackground option to the shared generator (no
+background rect at all, for a surface that already has its own), and
+wired real chat avatars into TeammatesChat — the user's own real
+avatar next to their messages, a fixed PixelBot seed representing
+"the worker" next to its replies, both small (16px) and transparent so
+they sit on the message row instead of looking like a filled badge.
+Fetched via a new GET /api/user/avatar (TeammatesChat is instantiated
+from three separate trees with no single server-component ancestor to
+thread a prop through).
+
+Library: the "Installed" badge was emerald green, inconsistent with
+the amber brand color used everywhere else this session — matched it.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FPsSvSBeDRnxgyKVkAJLkR
+
+---
+ src/app/api/user/avatar/route.ts                   | 23 +++++++++-
+ .../dashboard/settings/profile/avatar-picker.tsx   | 42 ++---------------
+ src/app/dashboard/teammates/teammates-chat.tsx     | 53 +++++++++++++++++++++-
+ src/app/home/workspace-home-client.tsx             | 22 +++++++--
+ src/components/library/product-card.tsx            |  2 +-
+ src/components/user-avatar.tsx                     | 12 +++--
+ src/lib/avatar.ts                                  | 30 +++++++++---
+ 7 files changed, 130 insertions(+), 54 deletions(-)
+
+diff --git a/src/app/api/user/avatar/route.ts b/src/app/api/user/avatar/route.ts
+index 5f5250e..0d576cb 100644
+--- a/src/app/api/user/avatar/route.ts
++++ b/src/app/api/user/avatar/route.ts
+@@ -1,7 +1,7 @@
+ import { NextResponse } from "next/server";
+ import { getSession } from "@/lib/session";
+ import { isAvatarStyleId } from "@/lib/avatar";
+-import { setDicebearAvatar, setUploadedAvatar, clearUserAvatar } from "@/lib/user-avatar";
++import { getUserAvatar, setDicebearAvatar, setUploadedAvatar, clearUserAvatar } from "@/lib/user-avatar";
+ 
+ export const runtime = "nodejs";
+ 
+@@ -11,6 +11,27 @@ export const runtime = "nodejs";
+ // JPEG needs.
+ const MAX_DATA_URI_LENGTH = 500_000;
+ 
++/**
++ * For client components that need the current user's avatar but aren't
++ * reachable from a server component's own props — e.g. TeammatesChat,
++ * instantiated from three different trees (teammates-workspace.tsx,
++ * teammates-panel-content.tsx, enable-worker-modal.tsx). One fetch here
++ * beats threading the same avatar prop through three separate parents.
++ */
++export async function GET() {
++  try {
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const avatar = await getUserAvatar(session.whopUserId);
++    return NextResponse.json({ avatar, identityFallback: session.email || session.whopUserId });
++  } catch (err) {
++    console.error("[user/avatar GET]", err);
++    return NextResponse.json({ error: "Failed to load avatar." }, { status: 500 });
++  }
++}
++
+ /** Body: either { type: "dicebear", style, seed } or { type: "upload", dataUri }. */
+ export async function POST(request: Request) {
+   try {
+diff --git a/src/app/dashboard/settings/profile/avatar-picker.tsx b/src/app/dashboard/settings/profile/avatar-picker.tsx
+index 08ec7bc..06e62dc 100644
+--- a/src/app/dashboard/settings/profile/avatar-picker.tsx
++++ b/src/app/dashboard/settings/profile/avatar-picker.tsx
+@@ -5,15 +5,7 @@ import { useRouter } from "next/navigation";
+ import { useTheme } from "next-themes";
+ import { Upload, Sparkles, Check, Loader2, ChevronLeft } from "lucide-react";
+ import { UserAvatar } from "@/components/user-avatar";
+-import {
+-  AVATAR_STYLES,
+-  AVATAR_STYLE_IDS,
+-  DEFAULT_AVATAR_STYLE,
+-  seedsForStyle,
+-  defaultSeedForIdentifier,
+-  generateAvatarDataUri,
+-  type AvatarStyleId,
+-} from "@/lib/avatar";
++import { DEFAULT_AVATAR_STYLE, seedsForStyle, defaultSeedForIdentifier, generateAvatarDataUri } from "@/lib/avatar";
+ import type { UserAvatarPrefs } from "@/lib/user-avatar";
+ 
+ const GRID_SEEDS = seedsForStyle(25);
+@@ -85,12 +77,10 @@ export function AvatarPicker({
+   // opening "Choose an avatar" for the first time shows that exact seed
+   // pre-selected with a checkmark, not a blank grid that contradicts
+   // what their avatar already looks like on every other page.
+-  const defaultCategory = initialAvatar.avatarStyle ?? DEFAULT_AVATAR_STYLE;
+   const defaultSeed = initialAvatar.avatarType === "dicebear" ? initialAvatar.avatarSeed : defaultSeedForIdentifier(identityFallback);
+ 
+   const [avatar, setAvatar] = useState(initialAvatar);
+   const [step, setStep] = useState<Step>("collapsed");
+-  const [category, setCategory] = useState<AvatarStyleId>(defaultCategory);
+   const [pendingSeed, setPendingSeed] = useState<string | null>(defaultSeed);
+   const [pendingUpload, setPendingUpload] = useState<string | null>(null);
+   const [saving, setSaving] = useState(false);
+@@ -99,14 +89,14 @@ export function AvatarPicker({
+   const initials = displayName.slice(0, 2).toUpperCase();
+ 
+   const gridUris = useMemo(
+-    () => GRID_SEEDS.map((seed) => ({ seed, uri: generateAvatarDataUri(category, seed, { isDark, size: 40 }) })),
+-    [category, isDark]
++    () => GRID_SEEDS.map((seed) => ({ seed, uri: generateAvatarDataUri(DEFAULT_AVATAR_STYLE, seed, { isDark, size: 40 }) })),
++    [isDark]
+   );
+ 
+   const previewAvatar: UserAvatarPrefs = pendingUpload
+     ? { avatarType: "upload", avatarImageUrl: pendingUpload, avatarStyle: null, avatarSeed: null }
+     : pendingSeed
+-    ? { avatarType: "dicebear", avatarStyle: category, avatarSeed: pendingSeed, avatarImageUrl: null }
++    ? { avatarType: "dicebear", avatarStyle: DEFAULT_AVATAR_STYLE, avatarSeed: pendingSeed, avatarImageUrl: null }
+     : avatar;
+ 
+   const dirty = step === "upload" ? Boolean(pendingUpload) : step === "avatar" ? Boolean(pendingSeed) : false;
+@@ -116,7 +106,6 @@ export function AvatarPicker({
+     setError(null);
+     setPendingUpload(null);
+     setPendingSeed(avatar.avatarType === "dicebear" ? avatar.avatarSeed : defaultSeedForIdentifier(identityFallback));
+-    setCategory(avatar.avatarStyle ?? DEFAULT_AVATAR_STYLE);
+   }
+ 
+   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+@@ -145,7 +134,7 @@ export function AvatarPicker({
+     try {
+       const body = pendingUpload
+         ? { type: "upload", dataUri: pendingUpload }
+-        : { type: "dicebear", style: category, seed: pendingSeed };
++        : { type: "dicebear", style: DEFAULT_AVATAR_STYLE, seed: pendingSeed };
+       const res = await fetch("/api/user/avatar", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+@@ -178,7 +167,6 @@ export function AvatarPicker({
+       }
+       setAvatar({ avatarType: null, avatarStyle: null, avatarSeed: null, avatarImageUrl: null });
+       setPendingSeed(defaultSeedForIdentifier(identityFallback));
+-      setCategory(DEFAULT_AVATAR_STYLE);
+       setPendingUpload(null);
+       router.refresh();
+     } finally {
+@@ -281,26 +269,6 @@ export function AvatarPicker({
+             <div className="space-y-2.5">
+               <BackRow onBack={() => setStep("choice")} />
+ 
+-              <div className="flex items-center gap-1 rounded-md bg-zinc-200/60 dark:bg-zinc-800/60 p-0.5 w-fit">
+-                {AVATAR_STYLE_IDS.map((id) => (
+-                  <button
+-                    key={id}
+-                    type="button"
+-                    onClick={() => {
+-                      setCategory(id);
+-                      setPendingSeed(null);
+-                    }}
+-                    className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
+-                      category === id
+-                        ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs"
+-                        : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
+-                    }`}
+-                  >
+-                    {AVATAR_STYLES[id].label}
+-                  </button>
+-                ))}
+-              </div>
+-
+               {/* Fixed-size swatches, not grid columns stretched to fill
+                   whatever width the panel happens to have — that's what
+                   made these render nearly full-card-sized. 36px is a real
+diff --git a/src/app/dashboard/teammates/teammates-chat.tsx b/src/app/dashboard/teammates/teammates-chat.tsx
+index 622a97d..4f82bd5 100644
+--- a/src/app/dashboard/teammates/teammates-chat.tsx
++++ b/src/app/dashboard/teammates/teammates-chat.tsx
+@@ -1,6 +1,6 @@
+ "use client";
+ 
+-import { useEffect, useRef, useState } from "react";
++import { useEffect, useMemo, useRef, useState } from "react";
+ import {
+   ArrowUp,
+   CheckCircle2,
+@@ -11,10 +11,16 @@ import {
+   Pencil,
+   Check,
+ } from "lucide-react";
++import { useTheme } from "next-themes";
+ import { PrefillLoader } from "@/components/prefill-loader";
+ import { AnySkillBadge } from "@/components/any-skill-badge";
++import { UserAvatar } from "@/components/user-avatar";
++import { generateAvatarDataUri, DEFAULT_AVATAR_STYLE, WORKER_AVATAR_SEED } from "@/lib/avatar";
++import type { UserAvatarPrefs } from "@/lib/user-avatar";
+ import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
+ 
++const NO_AVATAR: UserAvatarPrefs = { avatarType: null, avatarStyle: null, avatarSeed: null, avatarImageUrl: null };
++
+ interface ChatMessage {
+   role: "user" | "worker" | "assistant";
+   content: string;
+@@ -204,6 +210,35 @@ export function TeammatesChat({
+   const [isEditingTitle, setIsEditingTitle] = useState(false);
+   const [titleDraft, setTitleDraft] = useState("");
+ 
++  // For the small pfp next to each "You" message row — fetched here
++  // rather than threaded as a prop, since this component is instantiated
++  // from three separate trees (teammates-workspace.tsx,
++  // teammates-panel-content.tsx, enable-worker-modal.tsx) with no single
++  // server-component ancestor to fetch it once and pass down.
++  const [userAvatar, setUserAvatar] = useState<UserAvatarPrefs>(NO_AVATAR);
++  const [identityFallback, setIdentityFallback] = useState("");
++  useEffect(() => {
++    let cancelled = false;
++    fetch("/api/user/avatar")
++      .then((r) => (r.ok ? r.json() : null))
++      .then((data) => {
++        if (cancelled || !data) return;
++        setUserAvatar(data.avatar ?? NO_AVATAR);
++        setIdentityFallback(typeof data.identityFallback === "string" ? data.identityFallback : "");
++      })
++      .catch(() => {});
++    return () => {
++      cancelled = true;
++    };
++  }, []);
++
++  const { resolvedTheme } = useTheme();
++  const isDark = resolvedTheme !== "light";
++  const workerAvatarUri = useMemo(
++    () => generateAvatarDataUri(DEFAULT_AVATAR_STYLE, WORKER_AVATAR_SEED, { isDark, size: 32, transparentBackground: true }),
++    [isDark]
++  );
++
+   const inputRef = useRef<HTMLTextAreaElement>(null);
+ 
+   useEffect(() => {
+@@ -439,7 +474,21 @@ export function TeammatesChat({
+                   }`}
+                 >
+                 <div className={`flex items-center gap-1.5 px-1 font-medium text-zinc-500 dark:text-zinc-400 ${labelSize}`}>
+-                  {isUser ? <span>You</span> : <span>Worker</span>}
++                  {!isUser && (
++                    // eslint-disable-next-line @next/next/no-img-element
++                    <img src={workerAvatarUri} alt="" className="w-4 h-4 shrink-0 opacity-90" />
++                  )}
++                  <span>{isUser ? "You" : "Worker"}</span>
++                  {isUser && (
++                    <UserAvatar
++                      avatar={userAvatar}
++                      identityFallback={identityFallback}
++                      size={16}
++                      className="opacity-90"
++                      transparentBackground
++                      fallback={<span className="w-4 h-4 rounded-full bg-zinc-300 dark:bg-zinc-700 shrink-0" />}
++                    />
++                  )}
+                 </div>
+                 <div
+                   className={`${bubbleMaxWidth} rounded-2xl ${bubblePadding} ${textSize} transition-colors ${
+diff --git a/src/app/home/workspace-home-client.tsx b/src/app/home/workspace-home-client.tsx
+index d170b13..dfb7cde 100644
+--- a/src/app/home/workspace-home-client.tsx
++++ b/src/app/home/workspace-home-client.tsx
+@@ -33,7 +33,21 @@ function workspaceSkills(
+   return { available, enabled, enabledSet };
+ }
+ 
+-function SkillBadgeStrip({ skills, enabledIds, size }: { skills: WorkerDefinition[]; enabledIds: Set<string>; size: number }) {
++/**
++ * `enabledIds` only dims a skill when it's actually meaningful to ask
++ * "is this one on" — the Enabled-skills strip, where every entry is
++ * already enabled by construction, or nowhere at all. The Available
++ * strip passes `null` here on purpose: "available" already means
++ * "ships with an installed product," a separate question from on/off,
++ * and dimming it by enabled state was actively misleading — Showtime's
++ * badges support a real dim/color distinction but Reputation Manager's
++ * and Cold Open's don't (no `enabled` prop on those two components), so
++ * a workspace with nothing configured yet showed Showtime's skills
++ * grayed to near-invisible while the other two products' skills stayed
++ * full-color regardless, reading as "only some skills are even
++ * available" when they all equally were.
++ */
++function SkillBadgeStrip({ skills, enabledIds, size }: { skills: WorkerDefinition[]; enabledIds: Set<string> | null; size: number }) {
+   return (
+     <div className="flex items-center -space-x-1.5 overflow-hidden">
+       {skills.map((skill) => (
+@@ -42,7 +56,7 @@ function SkillBadgeStrip({ skills, enabledIds, size }: { skills: WorkerDefinitio
+           title={skill.name}
+           className="relative flex items-center justify-center rounded-md bg-white dark:bg-zinc-900 p-0.5 ring-2 ring-zinc-200/80 dark:ring-zinc-800/80 transition-transform group-hover:scale-105"
+         >
+-          <AnySkillBadge skill={skill.id} size={size} enabled={enabledIds.has(skill.id)} />
++          <AnySkillBadge skill={skill.id} size={size} enabled={enabledIds ? enabledIds.has(skill.id) : true} />
+         </div>
+       ))}
+     </div>
+@@ -162,7 +176,7 @@ function WorkspaceCard({
+               <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">
+                 Available skills
+               </p>
+-              <SkillBadgeStrip skills={available} enabledIds={enabledSet} size={20} />
++              <SkillBadgeStrip skills={available} enabledIds={null} size={20} />
+             </div>
+             {enabled.length > 0 && (
+               <div>
+@@ -250,7 +264,7 @@ function WorkspaceRow({
+             <div className="flex items-center gap-3">
+               <div className="flex items-center gap-1">
+                 <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Available</span>
+-                <SkillBadgeStrip skills={available} enabledIds={enabledSet} size={16} />
++                <SkillBadgeStrip skills={available} enabledIds={null} size={16} />
+               </div>
+               {enabled.length > 0 && (
+                 <div className="flex items-center gap-1">
+diff --git a/src/components/library/product-card.tsx b/src/components/library/product-card.tsx
+index a0b32e4..2a29ce5 100644
+--- a/src/components/library/product-card.tsx
++++ b/src/components/library/product-card.tsx
+@@ -84,7 +84,7 @@ export function ProductCard({
+                   {name}
+                 </h2>
+                 {installed && (
+-                  <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded-md">
++                  <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 rounded-md">
+                     <Download size={10} className="stroke-[2.5]" /> Installed
+                   </span>
+                 )}
+diff --git a/src/components/user-avatar.tsx b/src/components/user-avatar.tsx
+index 66a7344..319b573 100644
+--- a/src/components/user-avatar.tsx
++++ b/src/components/user-avatar.tsx
+@@ -27,6 +27,7 @@ export function UserAvatar({
+   radiusClassName = "rounded-full",
+   className = "",
+   fallback,
++  transparentBackground = false,
+ }: {
+   avatar: UserAvatarPrefs;
+   /** Stable per-user string (email or whopUserId) that seeds the default PixelBot when no avatar has been explicitly chosen. */
+@@ -35,6 +36,11 @@ export function UserAvatar({
+   radiusClassName?: string;
+   className?: string;
+   fallback: React.ReactNode;
++  /** For a generated DiceBear avatar only — renders with no background
++   * rect at all instead of the usual filled square, for a surface that
++   * already has its own background (a chat message row). Has no effect
++   * on an uploaded photo, which is opaque either way. */
++  transparentBackground?: boolean;
+ }) {
+   const { resolvedTheme } = useTheme();
+   const [mounted, setMounted] = useState(false);
+@@ -54,13 +60,13 @@ export function UserAvatar({
+ 
+   const dicebearUri = useMemo(() => {
+     if (avatar.avatarType === "dicebear" && avatar.avatarStyle && avatar.avatarSeed) {
+-      return generateAvatarDataUri(avatar.avatarStyle, avatar.avatarSeed, { isDark });
++      return generateAvatarDataUri(avatar.avatarStyle, avatar.avatarSeed, { isDark, transparentBackground });
+     }
+     if (avatar.avatarType === null && identityFallback) {
+-      return generateAvatarDataUri(DEFAULT_AVATAR_STYLE, defaultSeedForIdentifier(identityFallback), { isDark });
++      return generateAvatarDataUri(DEFAULT_AVATAR_STYLE, defaultSeedForIdentifier(identityFallback), { isDark, transparentBackground });
+     }
+     return null;
+-  }, [avatar.avatarType, avatar.avatarStyle, avatar.avatarSeed, identityFallback, isDark]);
++  }, [avatar.avatarType, avatar.avatarStyle, avatar.avatarSeed, identityFallback, isDark, transparentBackground]);
+ 
+   const imgClassName = `shrink-0 object-cover select-none ${radiusClassName} ${className}`;
+ 
+diff --git a/src/lib/avatar.ts b/src/lib/avatar.ts
+index fc79fba..9f35983 100644
+--- a/src/lib/avatar.ts
++++ b/src/lib/avatar.ts
+@@ -6,13 +6,16 @@
+ // on every render instead.
+ 
+ import { createAvatar } from "@dicebear/core";
+-import { pixelArt, micah, openPeeps } from "@dicebear/collection";
++import { pixelArt } from "@dicebear/collection";
+ import type { Style } from "@dicebear/core";
+ 
++// Just PixelBot, by design — Micah and Open Peeps were dropped per direct
++// request rather than left as unused options. Kept as a one-entry record
++// (not a single hardcoded style everywhere) so the stored avatarStyle
++// column and isAvatarStyleId still mean something and a style could be
++// added back without a schema change.
+ export const AVATAR_STYLES = {
+   "pixel-art": { label: "PixelBot", style: pixelArt as Style<Record<string, unknown>> },
+-  micah: { label: "Micah", style: micah as Style<Record<string, unknown>> },
+-  "open-peeps": { label: "Open Peeps", style: openPeeps as Style<Record<string, unknown>> },
+ } as const;
+ 
+ export type AvatarStyleId = keyof typeof AVATAR_STYLES;
+@@ -53,6 +56,15 @@ export function defaultSeedForIdentifier(identifier: string, count = 25): string
+ 
+ export const DEFAULT_AVATAR_STYLE: AvatarStyleId = "pixel-art";
+ 
++/**
++ * Fixed seed for "the worker" (the AI side of a Teammates conversation),
++ * not tied to any real person — deliberately distinct from any seed
++ * defaultSeedForIdentifier could ever produce for a real user account,
++ * since it's the same style/seed pair every workspace sees, unlike a
++ * user's own per-person default.
++ */
++export const WORKER_AVATAR_SEED = "mcs-worker";
++
+ /**
+  * Dark theme keeps DiceBear's own default (a near-black fill); light
+  * theme swaps to white so the square doesn't read as a dark hole on a
+@@ -66,14 +78,20 @@ export function avatarBackgroundColor(isDark: boolean): string {
+ export function generateAvatarDataUri(
+   styleId: AvatarStyleId,
+   seed: string,
+-  opts?: { isDark?: boolean; size?: number }
++  opts?: { isDark?: boolean; size?: number; transparentBackground?: boolean }
+ ): string {
+   const { style } = AVATAR_STYLES[styleId];
+   const avatar = createAvatar(style, {
+     seed,
+     size: opts?.size ?? 128,
+-    backgroundColor: [avatarBackgroundColor(opts?.isDark ?? true)],
+-    backgroundType: ["solid"],
++    // Omitting backgroundColor/backgroundType entirely renders with no
++    // background rect at all — real transparency, not a color chosen to
++    // *look* transparent. Used where the avatar sits on a surface that
++    // already has its own background (a chat bubble row), not the
++    // filled-square look everywhere else.
++    ...(opts?.transparentBackground
++      ? {}
++      : { backgroundColor: [avatarBackgroundColor(opts?.isDark ?? true)], backgroundType: ["solid" as const] }),
+     radius: 0,
+   });
+   return avatar.toDataUri();
+-- 
+2.43.0

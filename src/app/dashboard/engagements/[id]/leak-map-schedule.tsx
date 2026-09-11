@@ -198,7 +198,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       {/* Toolbar & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 surface-glass-1 rounded-2xl p-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 no-ambient-glow surface-glass-1 rounded-2xl p-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800/80 rounded-xl border border-zinc-200/80 dark:border-zinc-800 p-1">
             <button
@@ -264,7 +264,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
               {scheduled.map((s) => (
                 <div
                   key={s.auditType}
-                  className="flex items-center gap-2.5 surface-glass-1 rounded-2xl p-3"
+                  className="flex items-center gap-2.5 no-ambient-glow surface-glass-1 rounded-2xl p-3"
                 >
                   <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold shrink-0">
                     <CalendarClock size={16} />
@@ -304,7 +304,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
           )}
 
           {/* Monthly Timeline Feed — full width */}
-          <div className="overflow-hidden surface-glass-1 rounded-2xl flex flex-col">
+          <div className="overflow-hidden no-ambient-glow surface-glass-1 rounded-2xl flex flex-col">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
@@ -442,7 +442,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
         </div>
 
         {/* Diagnostic panel — full width, underneath timeline */}
-        <div className="surface-glass-1 rounded-2xl p-4 space-y-4">
+        <div className="no-ambient-glow surface-glass-1 rounded-2xl p-4 space-y-4">
           {selected ? (
             <>
               <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
@@ -483,15 +483,15 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
 
               {/* Metric Breakdown Cards */}
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="surface-glass-1 rounded-xl p-2 space-y-0.5">
+                <div className="no-ambient-glow surface-glass-1 rounded-xl p-2 space-y-0.5">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Issues</span>
                   <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.topIssueCount}</span>
                 </div>
-                <div className="surface-glass-1 rounded-xl p-2 space-y-0.5">
+                <div className="no-ambient-glow surface-glass-1 rounded-xl p-2 space-y-0.5">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Alerts</span>
                   <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.alertsFiredCount}</span>
                 </div>
-                <div className="surface-glass-1 rounded-xl p-2 space-y-0.5">
+                <div className="no-ambient-glow surface-glass-1 rounded-xl p-2 space-y-0.5">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Gaps</span>
                   <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.gapsCount}</span>
                 </div>

@@ -1,0 +1,1004 @@
+From 92d6fc020f7f7080c304e9b4c211bfc8c343c2b1 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 11 Sep 2026 08:54:31 +0000
+Subject: [PATCH] Fix avatar picker grid width, remove ambient glow tint, use
+ shared Dropdown for skill comparison
+
+- Avatar picker's expanded panel now sizes to its content instead of
+  stretching full-width, so the fixed-size swatch grid doesn't leave a
+  large empty gap.
+- Added a scoped .no-ambient-glow override that drops the lavender
+  radial-gradient wash baked into surface-glass-1/2/3 while keeping the
+  blur/shadow/border, and applied it to the run history table, master
+  roster, deliverables panel (including the Call Intelligence header),
+  and every surface-glass surface under dashboard/runs/[id].
+- Swapped the analytics Skill comparison section's native <select>
+  pickers for the shared Dropdown component (@/components/ui/dropdown).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011PX9qLTKPtXba6ncjAwLyN
+---
+ .../engagements/[id]/deliverables-panel.tsx   | 30 +++++++-------
+ .../[id]/engagements-run-history.tsx          |  2 +-
+ .../[id]/master-roster-calendar.tsx           | 40 +++++++++----------
+ .../runs/[id]/_shared/empty-state.tsx         |  2 +-
+ .../runs/[id]/_shared/run-activity-panel.tsx  |  6 +--
+ .../runs/[id]/_shared/view-switcher.tsx       |  2 +-
+ src/app/dashboard/runs/[id]/page.tsx          | 12 +++---
+ .../[id]/views/adhoc-run-summary-view.tsx     |  2 +-
+ .../runs/[id]/views/leak-map-view.tsx         | 16 ++++----
+ .../runs/[id]/views/pile-on-view.tsx          |  4 +-
+ .../runs/[id]/views/pin-down-view.tsx         | 18 ++++-----
+ .../runs/[id]/views/pre-call-read-view.tsx    | 20 +++++-----
+ .../[id]/views/rep-crisis-response-view.tsx   |  4 +-
+ .../runs/[id]/views/rep-engine-panel-view.tsx |  4 +-
+ .../runs/[id]/views/rep-onboarding-view.tsx   |  6 +--
+ .../runs/[id]/views/rep-reddit-watch-view.tsx |  2 +-
+ .../[id]/views/rep-trustpilot-watch-view.tsx  |  2 +-
+ .../[id]/views/rep-twitter-watch-view.tsx     |  2 +-
+ .../runs/[id]/views/win-back-view.tsx         | 10 ++---
+ .../settings/profile/avatar-picker.tsx        |  2 +-
+ src/app/globals.css                           | 15 +++++++
+ .../analytics/skill-comparison-section.tsx    | 25 ++++++------
+ 22 files changed, 120 insertions(+), 106 deletions(-)
+
+diff --git a/src/app/dashboard/engagements/[id]/deliverables-panel.tsx b/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
+index ede0a34..e78b2ea 100644
+--- a/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
+@@ -179,7 +179,7 @@ function DeliverableRow({
+     <div
+       className={
+         isOpen
+-          ? "surface-glass-2 text-zinc-900 dark:text-zinc-100 rounded-2xl my-3 transition-all duration-200"
++          ? "no-ambient-glow surface-glass-2 text-zinc-900 dark:text-zinc-100 rounded-2xl my-3 transition-all duration-200"
+           : "border-b border-zinc-200/80 dark:border-zinc-800/60 last:border-b-0 transition-all duration-200"
+       }
+     >
+@@ -280,7 +280,7 @@ export function DeliverablesPanel({
+     <div className="w-full space-y-6 font-sans">
+       {/* CALL INTELLIGENCE STATUS HEADER */}
+       {conversationIntelligence?.enabled ? (
+-        <div className="flex items-center justify-between p-3.5 surface-glass-1 rounded-xl text-xs">
++        <div className="flex items-center justify-between p-3.5 no-ambient-glow surface-glass-1 rounded-xl text-xs">
+           <div className="flex items-center gap-3">
+             <Radio size={16} className="text-emerald-500 dark:text-emerald-400 animate-pulse shrink-0" />
+             <div>
+@@ -299,7 +299,7 @@ export function DeliverablesPanel({
+           </span>
+         </div>
+       ) : (
+-        <div className="flex items-center justify-between p-3.5 surface-glass-1 rounded-xl text-xs">
++        <div className="flex items-center justify-between p-3.5 no-ambient-glow surface-glass-1 rounded-xl text-xs">
+           <div className="flex items-center gap-3">
+             <div className="p-1.5 rounded-lg bg-zinc-200 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-800 shrink-0">
+               <Radio size={16} />
+@@ -323,7 +323,7 @@ export function DeliverablesPanel({
+       )}
+ 
+       {/* MAIN DELIVERABLES CONTAINER */}
+-      <div className="w-full surface-glass-2 rounded-2xl p-2 sm:p-4 divide-y divide-zinc-200 dark:divide-zinc-800/60">
++      <div className="w-full no-ambient-glow surface-glass-2 rounded-2xl p-2 sm:p-4 divide-y divide-zinc-200 dark:divide-zinc-800/60">
+         
+         {/* BRAND VOICE & SITE INTELLIGENCE ROW */}
+         <DeliverableRow
+@@ -413,7 +413,7 @@ export function DeliverablesPanel({
+                     const clamped = Math.max(1, Math.min(5, val.score));
+                     const pct = ((clamped - 1) / 4) * 100;
+                     return (
+-                      <div key={key} className="p-3 surface-glass-1 rounded-lg space-y-2">
++                      <div key={key} className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-2">
+                         <div className="flex justify-between text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                           <span>{axis?.left ?? key}</span>
+                           <span className="text-zinc-900 dark:text-zinc-100 font-bold">{val.score}/5</span>
+@@ -493,7 +493,7 @@ export function DeliverablesPanel({
+                 </span>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                   {voiceScrapeArtifacts.sources.map((s, i) => (
+-                    <div key={i} className="flex items-center justify-between px-3 py-2 surface-glass-1 rounded-lg text-xs">
++                    <div key={i} className="flex items-center justify-between px-3 py-2 no-ambient-glow surface-glass-1 rounded-lg text-xs">
+                       <span className="text-zinc-800 dark:text-zinc-200 truncate max-w-[80%]" title={s.url}>
+                         <strong className="font-semibold">{SOURCE_KIND_LABELS[s.kind] ?? s.kind}</strong>
+                         {s.url ? ` — ${s.url}` : ""}
+@@ -588,7 +588,7 @@ export function DeliverablesPanel({
+                   </div>
+                   <div className="space-y-2">
+                     {pinDownScriptPack.heroScript.chapters.map((c, i) => (
+-                      <div key={i} className="p-3 surface-glass-1 rounded-lg space-y-1">
++                      <div key={i} className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-1">
+                         <div className="flex items-center gap-2">
+                           <span className="text-zinc-700 dark:text-zinc-300 font-mono font-bold text-[11px]">{c.timestampLabel}</span>
+                           <span className="text-zinc-900 dark:text-zinc-100 font-semibold">{c.beat}</span>
+@@ -610,7 +610,7 @@ export function DeliverablesPanel({
+                   </span>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                     {pinDownScriptPack.breakoutScripts.map((s) => (
+-                      <div key={s.id} className="p-3 surface-glass-1 rounded-lg space-y-2">
++                      <div key={s.id} className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-2">
+                         <div className="flex items-center justify-between">
+                           <span className="font-semibold text-zinc-900 dark:text-zinc-100">{s.title}</span>
+                           <span className="text-[11px] font-mono text-zinc-500">~{s.targetLengthSeconds}s</span>
+@@ -634,7 +634,7 @@ export function DeliverablesPanel({
+                     Recording Logistics Checklist
+                   </span>
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+-                    <div className="p-3 surface-glass-1 rounded-lg space-y-1.5">
++                    <div className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-1.5">
+                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
+                         <Wrench size={13} className="text-zinc-500" /> Equipment
+                       </span>
+@@ -645,7 +645,7 @@ export function DeliverablesPanel({
+                       </ul>
+                     </div>
+ 
+-                    <div className="p-3 surface-glass-1 rounded-lg space-y-1.5">
++                    <div className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-1.5">
+                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
+                         <Camera size={13} className="text-zinc-500" /> Environment
+                       </span>
+@@ -656,7 +656,7 @@ export function DeliverablesPanel({
+                       </ul>
+                     </div>
+ 
+-                    <div className="p-3 surface-glass-1 rounded-lg space-y-1.5">
++                    <div className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-1.5">
+                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
+                         <Shirt size={13} className="text-zinc-500" /> Wardrobe &amp; Framing
+                       </span>
+@@ -685,7 +685,7 @@ export function DeliverablesPanel({
+             subtitle={`Audited ${pinDownPageAudit.auditedUrl}`}
+           >
+             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
+-              <div className="space-y-1.5 p-3 surface-glass-1 rounded-lg">
++              <div className="space-y-1.5 p-3 no-ambient-glow surface-glass-1 rounded-lg">
+                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
+                   <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400" /> Strengths
+                 </span>
+@@ -696,7 +696,7 @@ export function DeliverablesPanel({
+                 </ul>
+               </div>
+ 
+-              <div className="space-y-1.5 p-3 surface-glass-1 rounded-lg">
++              <div className="space-y-1.5 p-3 no-ambient-glow surface-glass-1 rounded-lg">
+                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
+                   <AlertCircle size={12} className="text-rose-600 dark:text-rose-400" /> Weaknesses
+                 </span>
+@@ -707,7 +707,7 @@ export function DeliverablesPanel({
+                 </ul>
+               </div>
+ 
+-              <div className="space-y-1.5 p-3 surface-glass-1 rounded-lg">
++              <div className="space-y-1.5 p-3 no-ambient-glow surface-glass-1 rounded-lg">
+                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
+                   v1 Improvements
+                 </span>
+@@ -720,7 +720,7 @@ export function DeliverablesPanel({
+             </div>
+ 
+             {pinDownPageAudit.competitorComparison && pinDownPageAudit.competitorComparison.notes.length > 0 && (
+-              <div className="space-y-1.5 p-3 mt-3 surface-glass-1 rounded-lg text-xs">
++              <div className="space-y-1.5 p-3 mt-3 no-ambient-glow surface-glass-1 rounded-lg text-xs">
+                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
+                   Vs. {pinDownPageAudit.competitorComparison.url}
+                 </span>
+diff --git a/src/app/dashboard/engagements/[id]/engagements-run-history.tsx b/src/app/dashboard/engagements/[id]/engagements-run-history.tsx
+index 4d61ac8..3699fb9 100644
+--- a/src/app/dashboard/engagements/[id]/engagements-run-history.tsx
++++ b/src/app/dashboard/engagements/[id]/engagements-run-history.tsx
+@@ -68,7 +68,7 @@ export function EngagementRunHistory({
+       </div>
+ 
+       {/* Filtered Runs List */}
+-      <div className="w-full overflow-hidden surface-glass-1 rounded-xl transition-colors">
++      <div className="w-full overflow-hidden no-ambient-glow surface-glass-1 rounded-xl transition-colors">
+         <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
+           {filteredRuns.slice(0, 20).map((run) => (
+             <li key={run.id} className="group relative">
+diff --git a/src/app/dashboard/engagements/[id]/master-roster-calendar.tsx b/src/app/dashboard/engagements/[id]/master-roster-calendar.tsx
+index 9303640..0e8e7e3 100644
+--- a/src/app/dashboard/engagements/[id]/master-roster-calendar.tsx
++++ b/src/app/dashboard/engagements/[id]/master-roster-calendar.tsx
+@@ -484,7 +484,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+       {activity.error && <ErrorBanner message={activity.error} onRetry={fetchActivity} />}
+ 
+       {/* Toolbar & View Controls */}
+-      <div className="flex flex-wrap items-center justify-between gap-3 surface-glass-1 rounded-2xl p-2 font-sans">
++      <div className="flex flex-wrap items-center justify-between gap-3 no-ambient-glow surface-glass-1 rounded-2xl p-2 font-sans">
+         <div className="flex items-center gap-2">
+           {/* Universal Month Navigation */}
+           <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
+@@ -557,7 +557,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+ 
+       {/* Loading Skeleton */}
+       {roster.loading && (
+-        <div className="grid grid-cols-7 gap-px surface-glass-1 rounded-2xl overflow-hidden font-sans">
++        <div className="grid grid-cols-7 gap-px no-ambient-glow surface-glass-1 rounded-2xl overflow-hidden font-sans">
+           {Array.from({ length: 35 }).map((_, i) => (
+             <div key={i} className="min-h-[105px] bg-[#f8f7fa] dark:bg-zinc-950 animate-pulse" />
+           ))}
+@@ -566,7 +566,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+ 
+       {/* 1. Month View */}
+       {mode === "month" && !roster.loading && (
+-        <div className="overflow-hidden surface-glass-2 rounded-2xl font-sans">
++        <div className="overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl font-sans">
+           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
+             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
+@@ -675,7 +675,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+       {mode === "day" && !roster.loading && (
+         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
+           {/* LEFT 7 COLUMNS: HOURLY TIMELINE GRID */}
+-          <div className="lg:col-span-7 overflow-hidden surface-glass-2 rounded-2xl flex flex-col font-sans">
++          <div className="lg:col-span-7 overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl flex flex-col font-sans">
+             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-4 py-3 font-sans">
+               <div className="flex items-center gap-2 font-sans">
+                 <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="hover-lift press-settle rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
+@@ -815,7 +815,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+           {/* RIGHT 5 COLUMNS: MINI CALENDAR + PROSPECT INSPECTOR PANEL */}
+           <div className="lg:col-span-5 space-y-3 font-sans">
+             {/* MINI CALENDAR NAVIGATOR */}
+-            <div className="surface-glass-1 rounded-2xl p-3 space-y-2 font-sans">
++            <div className="no-ambient-glow surface-glass-1 rounded-2xl p-3 space-y-2 font-sans">
+               <span className="text-[11px] font-bold text-zinc-900 dark:text-white block px-1 font-sans">{monthName} {year}</span>
+               <div className="grid grid-cols-7 text-center text-[9px] font-mono text-zinc-500 font-bold uppercase font-sans">
+                 {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <div key={i}>{d}</div>)}
+@@ -841,7 +841,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+             </div>
+ 
+             {/* FULL INSPECTOR PANEL (CALL INSPECTION vs ACTIVITY INSPECTION) */}
+-            <div className="surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
++            <div className="no-ambient-glow surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
+               {inspectionType === "activity" && selectedActivity ? (
+                 /* SYSTEM EVENT / LEAK-MAP AUDIT PREVIEW */
+                 <div className="space-y-4 font-sans">
+@@ -864,7 +864,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+                     </div>
+                   </div>
+ 
+-                  <div className="surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
++                  <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
+                     <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Audit Findings & Diagnostic</span>
+                     <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans text-xs">
+                       {selectedActivity.detail || "Automated audit scan completed."}
+@@ -872,7 +872,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+                   </div>
+ 
+                   {selectedActivity.prospectEmail && (
+-                    <div className="surface-glass-1 rounded-xl p-3 space-y-1 text-xs font-sans">
++                    <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-1 text-xs font-sans">
+                       <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Associated Lead</span>
+                       <p className="font-bold text-zinc-900 dark:text-white">{selectedActivity.prospectName ?? selectedActivity.prospectEmail}</p>
+                       <p className="font-mono text-zinc-500 text-[11px]">{selectedActivity.prospectEmail}</p>
+@@ -882,7 +882,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+                   <div className="pt-2 font-sans">
+                     <Link
+                       href={`/dashboard/engagements/${engagementId}/skills/${selectedActivity.skill}`}
+-                      className="inline-flex items-center gap-2 surface-glass-1 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center"
++                      className="inline-flex items-center gap-2 no-ambient-glow surface-glass-1 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center"
+                     >
+                       <span>Open Full {ACTIVITY_SKILL_LABEL[selectedActivity.skill]} Skill Page</span>
+                       <ExternalLink size={12} />
+@@ -1022,7 +1022,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+                         </StatusPill>
+                       </div>
+ 
+-                      <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
++                      <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
+                         <div className="flex items-center justify-between text-[11px] font-sans">
+                           <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
+                           <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ?? "Slack"}</span>
+@@ -1060,7 +1060,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+                             </StatusPill>
+                           </div>
+ 
+-                          <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
++                          <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
+                             <div className="flex items-center justify-between text-[11px] font-sans">
+                               <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
+                               <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.pileOnData.sentVia ?? "hybrid"}</span>
+@@ -1088,7 +1088,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+                             </StatusPill>
+                           </div>
+ 
+-                          <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
++                          <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
+                             <div className="flex items-center justify-between text-[11px] font-sans">
+                               <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
+                               <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.winBackData.touchesSent} / {selectedEntry.winBackData.touchesTotal}</span>
+@@ -1150,7 +1150,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+       {mode === "list" && !roster.loading && (
+         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
+           {/* LEFT 7 COLUMNS: UNIFIED MULTI-SKILL FEED */}
+-          <div className="lg:col-span-7 overflow-hidden surface-glass-2 rounded-2xl font-sans flex flex-col">
++          <div className="lg:col-span-7 overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl font-sans flex flex-col">
+             {/* List Feed Scope Control Header */}
+             <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
+               <div className="flex items-center gap-1.5">
+@@ -1460,7 +1460,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+           </div>
+ 
+           {/* RIGHT 5 COLUMNS: MULTI-SKILL INSPECTOR PANEL */}
+-          <div className="lg:col-span-5 surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
++          <div className="lg:col-span-5 no-ambient-glow surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
+             {inspectionType === "activity" && selectedActivity ? (
+               /* SYSTEM EVENT / LEAK-MAP AUDIT PREVIEW */
+               <div className="space-y-4 font-sans">
+@@ -1483,7 +1483,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+                   </div>
+                 </div>
+ 
+-                <div className="surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
++                <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
+                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Audit Findings & Diagnostic</span>
+                   <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans text-xs">
+                     {selectedActivity.detail || "Automated audit scan completed."}
+@@ -1491,7 +1491,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+                 </div>
+ 
+                 {selectedActivity.prospectEmail && (
+-                  <div className="surface-glass-1 rounded-xl p-3 space-y-1 text-xs font-sans">
++                  <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-1 text-xs font-sans">
+                     <span className="text-[10px] font-mono text-zinc-500 uppercase block font-semibold">Associated Lead</span>
+                     <p className="font-bold text-zinc-900 dark:text-white">{selectedActivity.prospectName ?? selectedActivity.prospectEmail}</p>
+                     <p className="font-mono text-zinc-500 text-[11px]">{selectedActivity.prospectEmail}</p>
+@@ -1501,7 +1501,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+                 <div className="pt-2 font-sans">
+                   <Link
+                     href={`/dashboard/engagements/${engagementId}/skills/${selectedActivity.skill}`}
+-                    className="inline-flex items-center gap-2 surface-glass-1 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center font-sans"
++                    className="inline-flex items-center gap-2 no-ambient-glow surface-glass-1 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors w-full justify-center font-sans"
+                   >
+                     <span>Open Full {ACTIVITY_SKILL_LABEL[selectedActivity.skill]} Skill Page</span>
+                     <ExternalLink size={12} />
+@@ -1629,7 +1629,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+                       </StatusPill>
+                     </div>
+ 
+-                    <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
++                    <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
+                       <div className="flex items-center justify-between text-[11px] font-sans">
+                         <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
+                         <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ?? "Slack"}</span>
+@@ -1667,7 +1667,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+                           </StatusPill>
+                         </div>
+ 
+-                        <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
++                        <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
+                           <div className="flex items-center justify-between text-[11px] font-sans">
+                             <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
+                             <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.pileOnData.sentVia ?? "hybrid"}</span>
+@@ -1695,7 +1695,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+                           </StatusPill>
+                         </div>
+ 
+-                        <div className="surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
++                        <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 font-sans">
+                           <div className="flex items-center justify-between text-[11px] font-sans">
+                             <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
+                             <span className="font-mono text-zinc-900 dark:text-white">{selectedEntry.winBackData.touchesSent} / {selectedEntry.winBackData.touchesTotal}</span>
+diff --git a/src/app/dashboard/runs/[id]/_shared/empty-state.tsx b/src/app/dashboard/runs/[id]/_shared/empty-state.tsx
+index a9d8bce..ee44fc1 100644
+--- a/src/app/dashboard/runs/[id]/_shared/empty-state.tsx
++++ b/src/app/dashboard/runs/[id]/_shared/empty-state.tsx
+@@ -10,7 +10,7 @@ export function EmptyState({
+   description: string;
+ }) {
+   return (
+-    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl surface-glass-1 px-6 py-14 text-center">
++    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl no-ambient-glow surface-glass-1 px-6 py-14 text-center">
+       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-500">
+         <Icon size={18} />
+       </div>
+diff --git a/src/app/dashboard/runs/[id]/_shared/run-activity-panel.tsx b/src/app/dashboard/runs/[id]/_shared/run-activity-panel.tsx
+index b6d096a..fb73ae0 100644
+--- a/src/app/dashboard/runs/[id]/_shared/run-activity-panel.tsx
++++ b/src/app/dashboard/runs/[id]/_shared/run-activity-panel.tsx
+@@ -88,11 +88,11 @@ export function RunActivityPanel({ runId }: { runId: string }) {
+   return (
+     <div className="space-y-3 font-sans">
+       <div className="grid grid-cols-2 gap-2 text-center">
+-        <div className="rounded-lg surface-glass-1 py-2">
++        <div className="rounded-lg no-ambient-glow surface-glass-1 py-2">
+           <span className="block text-[9px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Status</span>
+           <span className="block text-[11px] font-semibold text-zinc-900 dark:text-white mt-0.5 truncate px-1">{runStatusLabel(run.status)}</span>
+         </div>
+-        <div className="rounded-lg surface-glass-1 py-2">
++        <div className="rounded-lg no-ambient-glow surface-glass-1 py-2">
+           <span className="block text-[9px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Duration</span>
+           <span className="block text-[11px] font-mono font-semibold text-zinc-900 dark:text-white mt-0.5">{formatDuration(run.durationMs)}</span>
+         </div>
+@@ -126,7 +126,7 @@ export function RunActivityPanel({ runId }: { runId: string }) {
+       })()}
+ 
+       {steps.length > 0 ? (
+-        <div className="rounded-xl surface-glass-1 p-2.5 max-h-[300px] overflow-y-auto">
++        <div className="rounded-xl no-ambient-glow surface-glass-1 p-2.5 max-h-[300px] overflow-y-auto">
+           <StepTimeline steps={steps} isRunning={isRunning} runStatus={run.status} />
+         </div>
+       ) : (
+diff --git a/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx b/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx
+index 37d6bb0..9efad34 100644
+--- a/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx
++++ b/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx
+@@ -27,7 +27,7 @@ export function ViewSwitcher({
+ }) {
+   const visibleModes = modes ? MODES.filter((m) => modes.includes(m.key)) : MODES;
+   return (
+-    <div className={cn("inline-flex items-center gap-0.5 rounded-lg surface-glass-1 p-0.5", className)}>
++    <div className={cn("inline-flex items-center gap-0.5 rounded-lg no-ambient-glow surface-glass-1 p-0.5", className)}>
+       {visibleModes.map(({ key, label, icon: Icon }) => {
+         const active = value === key;
+         return (
+diff --git a/src/app/dashboard/runs/[id]/page.tsx b/src/app/dashboard/runs/[id]/page.tsx
+index 8a6dff6..e0d9840 100644
+--- a/src/app/dashboard/runs/[id]/page.tsx
++++ b/src/app/dashboard/runs/[id]/page.tsx
+@@ -192,7 +192,7 @@ function SummarySection({ summary }: { summary: RunSummary }) {
+   if (visibleFields.length === 0) return null;
+ 
+   return (
+-    <section className="overflow-hidden rounded-xl surface-glass-1">
++    <section className="overflow-hidden rounded-xl no-ambient-glow surface-glass-1">
+       <div className="flex items-center gap-2 border-b border-zinc-200/80 dark:border-zinc-800/80 px-4 py-3">
+         <FileText className="h-4 w-4 text-zinc-500 dark:text-zinc-500" />
+         <h2 className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{copy.summarySectionTitle}</h2>
+@@ -446,7 +446,7 @@ export default function RunDetailPage() {
+       })()}
+ 
+       {isCancelled && (
+-        <div className="flex items-center gap-2 rounded-xl surface-glass-1 px-3.5 py-2 text-xs text-zinc-600 dark:text-zinc-400">
++        <div className="flex items-center gap-2 rounded-xl no-ambient-glow surface-glass-1 px-3.5 py-2 text-xs text-zinc-600 dark:text-zinc-400">
+           <Ban size={14} className="text-zinc-500 dark:text-zinc-500" />
+           <span>This run was cancelled.</span>
+         </div>
+@@ -462,13 +462,13 @@ export default function RunDetailPage() {
+       {/* 3. AUTOMATION DELIVERABLES */}
+       <main className="w-full">
+         {detailLoading && !detail ? (
+-          <div className="flex h-40 items-center justify-center rounded-2xl surface-glass-1">
++          <div className="flex h-40 items-center justify-center rounded-2xl no-ambient-glow surface-glass-1">
+             <Loader2 className="h-5 w-5 animate-spin text-zinc-700 dark:text-zinc-600" />
+           </div>
+         ) : detail && detail.run.id === run.id ? (
+           <SkillView detail={detail} steps={steps} onRefreshDetail={fetchDetail} />
+         ) : (
+-          <div className="rounded-2xl surface-glass-1 px-6 py-10 text-center text-xs text-zinc-500 dark:text-zinc-500">
++          <div className="rounded-2xl no-ambient-glow surface-glass-1 px-6 py-10 text-center text-xs text-zinc-500 dark:text-zinc-500">
+             We don&apos;t have anything more to show for this run yet.
+           </div>
+         )}
+@@ -499,7 +499,7 @@ export default function RunDetailPage() {
+ 
+         {showRunActivity && (
+           <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
+-            <section className="overflow-hidden rounded-xl surface-glass-2">
++            <section className="overflow-hidden rounded-xl no-ambient-glow surface-glass-2">
+               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
+                 <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Step-by-step log</span>
+                 <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500">{steps.length} steps</span>
+@@ -515,7 +515,7 @@ export default function RunDetailPage() {
+ 
+             <aside className="space-y-4">
+               {run.summary && <SummarySection summary={run.summary} />}
+-              <div className="rounded-xl surface-glass-1 p-4 text-xs space-y-2">
++              <div className="rounded-xl no-ambient-glow surface-glass-1 p-4 text-xs space-y-2">
+                 <span className="text-[10px] uppercase text-zinc-500 dark:text-zinc-500 block font-sans font-bold">Details</span>
+                 <div className="flex justify-between text-zinc-600 dark:text-zinc-400 font-sans">
+                   <span>Started</span>
+diff --git a/src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx b/src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx
+index 3ca27eb..eced1e7 100644
+--- a/src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/adhoc-run-summary-view.tsx
+@@ -72,7 +72,7 @@ export function AdhocRunSummaryView({ detail }: { detail: AdhocRunDetail }) {
+   }
+ 
+   return (
+-    <div className="flex flex-col gap-4 font-sans antialiased rounded-2xl surface-glass-2 p-4">
++    <div className="flex flex-col gap-4 font-sans antialiased rounded-2xl no-ambient-glow surface-glass-2 p-4">
+       <SummarySection icon={CheckCircle2} label="What worked" items={summary.whatWorked} tone="success" />
+       <SummarySection icon={XCircle} label="What failed" items={summary.whatFailed} tone="danger" />
+       <SummarySection icon={Circle} label="Decisions made" items={summary.decisionsMade} tone="info" />
+diff --git a/src/app/dashboard/runs/[id]/views/leak-map-view.tsx b/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
+index f96fc82..ddf6d36 100644
+--- a/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
+@@ -113,7 +113,7 @@ export function LeakMapView({
+   return (
+     <div className="flex flex-col gap-3 font-sans antialiased">
+       {/* TOOLBAR */}
+-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl surface-glass-1 p-1.5">
++      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl no-ambient-glow surface-glass-1 p-1.5">
+         {!embedded && (
+           <div className="relative w-64">
+             <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
+@@ -149,7 +149,7 @@ export function LeakMapView({
+                   overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData &&
+                     "border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10",
+                   overallSeverity !== "high" && overallSeverity !== "medium" && hasAnyUsableData &&
+-                    "surface-glass-1"
++                    "no-ambient-glow surface-glass-1"
+                 )}
+               >
+                 <div className="flex items-center gap-2 shrink-0">
+@@ -212,13 +212,13 @@ export function LeakMapView({
+                       ))}
+                     </div>
+                   ) : (
+-                    <p className="rounded-xl surface-glass-1 p-3.5 text-xs italic text-zinc-500 dark:text-zinc-500">
++                    <p className="rounded-xl no-ambient-glow surface-glass-1 p-3.5 text-xs italic text-zinc-500 dark:text-zinc-500">
+                       No funnel metrics match your search filter.
+                     </p>
+                   )}
+ 
+                   {/* Executive Report Reader */}
+-                  <div className="rounded-xl surface-glass-2 p-3.5">
++                  <div className="rounded-xl no-ambient-glow surface-glass-2 p-3.5">
+                     <div className="mb-2 flex items-center justify-between">
+                       <div className="flex items-center gap-2">
+                         <FileText size={13} className="text-zinc-600 dark:text-zinc-400" />
+@@ -243,11 +243,11 @@ export function LeakMapView({
+                     </div>
+ 
+                     {audit.reportMarkdown ? (
+-                      <div className="whitespace-pre-wrap rounded-lg surface-glass-1 p-3 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto">
++                      <div className="whitespace-pre-wrap rounded-lg no-ambient-glow surface-glass-1 p-3 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto">
+                         {audit.reportMarkdown}
+                       </div>
+                     ) : (
+-                      <p className="rounded-lg surface-glass-1 p-3 text-xs italic text-zinc-500 dark:text-zinc-500">
++                      <p className="rounded-lg no-ambient-glow surface-glass-1 p-3 text-xs italic text-zinc-500 dark:text-zinc-500">
+                         No report text stored for this run. Check the Steps panel to confirm whether delivery (Resend/Slack) succeeded.
+                       </p>
+                     )}
+@@ -278,7 +278,7 @@ export function LeakMapView({
+ 
+           {/* LIST VIEW */}
+           {mode === "list" && (
+-            <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl surface-glass-2">
++            <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl no-ambient-glow surface-glass-2">
+               {filteredIssues.length === 0 ? (
+                 <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic">
+                   {issues.length === 0
+@@ -369,7 +369,7 @@ function IssueCard({ issue }: { issue: IssueType }) {
+         cardTone === "danger" && "border-rose-900/40 bg-rose-950/10",
+         cardTone === "warning" && "border-orange-900/40 bg-orange-950/10",
+         cardTone === "gap" && "border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10",
+-        (cardTone === "info" || cardTone === "neutral") && "surface-glass-1"
++        (cardTone === "info" || cardTone === "neutral") && "no-ambient-glow surface-glass-1"
+       )}
+     >
+       {/* Header row */}
+diff --git a/src/app/dashboard/runs/[id]/views/pile-on-view.tsx b/src/app/dashboard/runs/[id]/views/pile-on-view.tsx
+index b2a7ee2..ee87c27 100644
+--- a/src/app/dashboard/runs/[id]/views/pile-on-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/pile-on-view.tsx
+@@ -250,7 +250,7 @@ export function PileOnView({
+           success) purely for decoration — the same status is already
+           stated in words by the badge two lines down, so the bar added
+           no information, just an "AI slop" visual flourish. Dropped. */}
+-      <div className="rounded-xl surface-glass-2 p-4 space-y-3">
++      <div className="rounded-xl no-ambient-glow surface-glass-2 p-4 space-y-3">
+         <div className="flex flex-wrap items-center justify-between gap-4">
+           <div className="flex items-center gap-3">
+             <SquishySkillBadge
+@@ -494,7 +494,7 @@ export function PileOnView({
+                     {ch.messages.map((m, i) => (
+                       <div
+                         key={m.id}
+-                        className="flex items-center justify-between text-xs py-1.5 px-3 rounded surface-glass-1"
++                        className="flex items-center justify-between text-xs py-1.5 px-3 rounded no-ambient-glow surface-glass-1"
+                       >
+                         <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                           Text #{i + 1} —{" "}
+diff --git a/src/app/dashboard/runs/[id]/views/pin-down-view.tsx b/src/app/dashboard/runs/[id]/views/pin-down-view.tsx
+index 58a7e0d..f3eb5d2 100644
+--- a/src/app/dashboard/runs/[id]/views/pin-down-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/pin-down-view.tsx
+@@ -290,7 +290,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
+       {/* ----------------------------------------------------------------- */}
+       {/* 1. ASANA TOP GREETING HEADER WITH ORBITAL RING                    */}
+       {/* ----------------------------------------------------------------- */}
+-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl surface-glass-2">
++      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl no-ambient-glow surface-glass-2">
+         <div className="space-y-1 max-w-xl">
+           <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 font-sans">{formattedDate}</p>
+           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
+@@ -324,7 +324,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
+       {/* ----------------------------------------------------------------- */}
+       {/* 2. TRANSPARENT STATUS UPDATES CARD                                */}
+       {/* ----------------------------------------------------------------- */}
+-      <div className="rounded-2xl surface-glass-2 p-6 font-sans">
++      <div className="rounded-2xl no-ambient-glow surface-glass-2 p-6 font-sans">
+         <div className="flex items-center justify-between pb-4 border-b border-zinc-200/80 dark:border-zinc-800/80">
+           <h2 className="text-base font-bold text-zinc-900 dark:text-white tracking-tight font-sans">Status updates</h2>
+           <button
+@@ -409,7 +409,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
+       {/* ----------------------------------------------------------------- */}
+       {/* 3. TRANSPARENT DELIVERABLES PANEL                                 */}
+       {/* ----------------------------------------------------------------- */}
+-      <div className="rounded-2xl surface-glass-2 p-6 font-sans">
++      <div className="rounded-2xl no-ambient-glow surface-glass-2 p-6 font-sans">
+         <div className="flex items-center gap-3 pb-4 border-b border-zinc-200/80 dark:border-zinc-800/80">
+           <div className="h-8 w-8 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 flex items-center justify-center font-bold text-xs shrink-0">
+             {buyerName.slice(0, 2).toUpperCase()}
+@@ -487,7 +487,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
+                 return (
+                   <div
+                     key={brief.id}
+-                    className="flex flex-col justify-between p-5 rounded-2xl surface-glass-1 transition-colors font-sans space-y-4"
++                    className="flex flex-col justify-between p-5 rounded-2xl no-ambient-glow surface-glass-1 transition-colors font-sans space-y-4"
+                   >
+                     {/* Header: Sticky Note Icon + Title & Subtitle + Copy */}
+                     <div className="space-y-3">
+@@ -675,12 +675,12 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
+                     </button>
+                   </div>
+ 
+-                  <div className="max-h-64 overflow-auto rounded-xl surface-glass-1 p-4 font-mono text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
++                  <div className="max-h-64 overflow-auto rounded-xl no-ambient-glow surface-glass-1 p-4 font-mono text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                     <pre className="whitespace-pre-wrap break-all">{run.pasteReadyHtml}</pre>
+                   </div>
+ 
+                   {run.pasteReadyInstructions && (
+-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 p-3 rounded-xl leading-relaxed surface-glass-1 font-sans">
++                    <p className="text-xs text-zinc-600 dark:text-zinc-400 p-3 rounded-xl leading-relaxed no-ambient-glow surface-glass-1 font-sans">
+                       {run.pasteReadyInstructions}
+                     </p>
+                   )}
+@@ -701,19 +701,19 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
+               {voice ? (
+                 <>
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+-                    <div className="p-3 rounded-xl surface-glass-1">
++                    <div className="p-3 rounded-xl no-ambient-glow surface-glass-1">
+                       <p className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Formal ↔ Casual</p>
+                       <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{voice.tone.formal_casual.score}/5</p>
+                       <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.formal_casual.note}</p>
+                     </div>
+ 
+-                    <div className="p-3 rounded-xl surface-glass-1">
++                    <div className="p-3 rounded-xl no-ambient-glow surface-glass-1">
+                       <p className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Technical ↔ Plain</p>
+                       <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{voice.tone.technical_plain.score}/5</p>
+                       <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.technical_plain.note}</p>
+                     </div>
+ 
+-                    <div className="p-3 rounded-xl surface-glass-1">
++                    <div className="p-3 rounded-xl no-ambient-glow surface-glass-1">
+                       <p className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Warm ↔ Neutral</p>
+                       <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{voice.tone.warm_neutral.score}/5</p>
+                       <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.warm_neutral.note}</p>
+diff --git a/src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx b/src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx
+index 9686018..66b9545 100644
+--- a/src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx
+@@ -129,7 +129,7 @@ export function PreCallReadView({
+       {/* ----------------------------------------------------------------- */}
+       {/* 1. ASANA TOOLBAR (PERSISTENT SEARCH + VIEW SWITCHER)              */}
+       {/* ----------------------------------------------------------------- */}
+-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl surface-glass-1 p-1.5">
++      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl no-ambient-glow surface-glass-1 p-1.5">
+         <div className="relative w-64">
+           <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
+           <input
+@@ -157,7 +157,7 @@ export function PreCallReadView({
+       {/* ----------------------------------------------------------------- */}
+       {mode === "calendar" && (
+         <div key="calendar" className="run-view-content-enter flex flex-col gap-3 font-sans">
+-          <div className="flex items-center gap-2.5 rounded-xl surface-glass-1 px-3 py-2.5 text-[11px] font-sans">
++          <div className="flex items-center gap-2.5 rounded-xl no-ambient-glow surface-glass-1 px-3 py-2.5 text-[11px] font-sans">
+             <div className="h-3.5 w-1 shrink-0 rounded-full bg-emerald-500/80" />
+             <span className="text-zinc-600 dark:text-zinc-400 font-semibold">{phaseLabel("roster_fetch")}</span>
+             <span className="text-zinc-400 dark:text-zinc-700">·</span>
+@@ -173,7 +173,7 @@ export function PreCallReadView({
+           </div>
+ 
+           {callsByDay.length === 0 ? (
+-            <div className="flex flex-col items-center gap-2 rounded-2xl surface-glass-1 py-14 text-zinc-700 dark:text-zinc-600 font-sans">
++            <div className="flex flex-col items-center gap-2 rounded-2xl no-ambient-glow surface-glass-1 py-14 text-zinc-700 dark:text-zinc-600 font-sans">
+               <CalendarX size={22} />
+               <span className="text-xs">This run&apos;s window came back empty — nothing to brief.</span>
+             </div>
+@@ -182,7 +182,7 @@ export function PreCallReadView({
+               const d = new Date(dayKeyStr);
+               const isToday = dateKey(new Date()) === dayKeyStr;
+               return (
+-<div key={dayKeyStr} className="overflow-hidden rounded-2xl surface-glass-2 font-sans">
++<div key={dayKeyStr} className="overflow-hidden rounded-2xl no-ambient-glow surface-glass-2 font-sans">
+                   <div className="flex items-center gap-4 border-b border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-5 py-4">
+                     <div
+                       className={cn(
+@@ -222,7 +222,7 @@ export function PreCallReadView({
+       {/* 3. DENSE LIST VIEW                                                */}
+       {/* ----------------------------------------------------------------- */}
+       {mode === "list" && (
+-        <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl surface-glass-2 font-sans">
++        <div key="list" className="run-view-content-enter overflow-hidden rounded-2xl no-ambient-glow surface-glass-2 font-sans">
+           {callsByDay.length === 0 ? (
+             <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic font-sans">
+               No sales calls scheduled in this briefing window.
+@@ -398,7 +398,7 @@ function CallCard({
+     : null;
+ 
+   return (
+-   <div className="rounded-2xl surface-glass-2 font-sans antialiased overflow-hidden">
++   <div className="rounded-2xl no-ambient-glow surface-glass-2 font-sans antialiased overflow-hidden">
+       {/* Header: prospect, time, status — all visible with no click */}
+       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+         <div className="min-w-0">
+@@ -427,11 +427,11 @@ function CallCard({
+             that failed to send still showed "Sent to: Slack message" as
+             if it succeeded — the exact mismatch that broke trust. */}
+         <div className="grid grid-cols-2 gap-2 text-xs">
+-         <div className="space-y-0.5 rounded-xl surface-glass-1 p-2.5">
++         <div className="space-y-0.5 rounded-xl no-ambient-glow surface-glass-1 p-2.5">
+             <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Prospect identity</span>
+             <p className="font-semibold text-zinc-800 dark:text-zinc-200">{matchLabel(call).text}</p>
+           </div>
+- <div className="space-y-0.5 rounded-xl surface-glass-1 p-2.5">
++ <div className="space-y-0.5 rounded-xl no-ambient-glow surface-glass-1 p-2.5">
+             <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Sent to</span>
+             {call.briefDeliveredAt ? (
+               <p className="flex items-center gap-1 font-semibold text-zinc-800 dark:text-zinc-200">
+@@ -468,11 +468,11 @@ function CallCard({
+               className="w-full p-3.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-zinc-500 leading-relaxed"
+             />
+           ) : editableText ? (
+-           <div className="rounded-xl surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
++           <div className="rounded-xl no-ambient-glow surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+               {editableText}
+             </div>
+           ) : (
+-            <div className="rounded-xl surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
++            <div className="rounded-xl no-ambient-glow surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+               {status === "failed"
+                 ? stepDetail
+                   ? `Brief generation failed: ${stepDetail}`
+diff --git a/src/app/dashboard/runs/[id]/views/rep-crisis-response-view.tsx b/src/app/dashboard/runs/[id]/views/rep-crisis-response-view.tsx
+index b519c4e..deee41d 100644
+--- a/src/app/dashboard/runs/[id]/views/rep-crisis-response-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/rep-crisis-response-view.tsx
+@@ -61,13 +61,13 @@ export function RepCrisisResponseView({ detail }: { detail: RepCrisisResponseDet
+       </div>
+ 
+       {incident.contributingFindings.length > 0 && (
+-        <div className="rounded-xl surface-glass-2 p-4">
++        <div className="rounded-xl no-ambient-glow surface-glass-2 p-4">
+           <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2">
+             Contributing findings ({incident.contributingFindings.length})
+           </h3>
+           <div className="flex flex-col gap-2">
+             {incident.contributingFindings.map((f, i) => (
+-              <div key={i} className="rounded-lg surface-glass-1 p-3">
++              <div key={i} className="rounded-lg no-ambient-glow surface-glass-1 p-3">
+                 <div className="flex items-center justify-between gap-2 mb-1">
+                   <span className="inline-flex items-center gap-1.5">
+                     <span className={`w-2 h-2 rounded-[2.5px] shrink-0 ${SOURCE_SWATCH[f.source] ?? "bg-zinc-400"}`} aria-hidden="true" />
+diff --git a/src/app/dashboard/runs/[id]/views/rep-engine-panel-view.tsx b/src/app/dashboard/runs/[id]/views/rep-engine-panel-view.tsx
+index d54680f..13ca4b6 100644
+--- a/src/app/dashboard/runs/[id]/views/rep-engine-panel-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/rep-engine-panel-view.tsx
+@@ -32,7 +32,7 @@ export function RepEnginePanelView({ detail }: { detail: RepEnginePanelDetail })
+ 
+   return (
+     <div className="flex flex-col gap-3 font-sans antialiased">
+-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl surface-glass-1 p-1.5">
++      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl no-ambient-glow surface-glass-1 p-1.5">
+         <div className="relative w-64">
+           <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
+           <input
+@@ -49,7 +49,7 @@ export function RepEnginePanelView({ detail }: { detail: RepEnginePanelDetail })
+ 
+       <div className="flex flex-col gap-2">
+         {filtered.map((f) => (
+-          <div key={f.id} className="rounded-xl surface-glass-1 p-3.5">
++          <div key={f.id} className="rounded-xl no-ambient-glow surface-glass-1 p-3.5">
+             <div className="flex items-center justify-between gap-2 mb-1.5">
+               <span className="text-[11px] font-mono font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">{f.engineId}</span>
+               <div className="flex items-center gap-2">
+diff --git a/src/app/dashboard/runs/[id]/views/rep-onboarding-view.tsx b/src/app/dashboard/runs/[id]/views/rep-onboarding-view.tsx
+index 2b65ad1..8a3464d 100644
+--- a/src/app/dashboard/runs/[id]/views/rep-onboarding-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/rep-onboarding-view.tsx
+@@ -19,7 +19,7 @@ export function RepOnboardingView({ detail }: { detail: RepOnboardingDetail }) {
+ 
+   return (
+     <div className="flex flex-col gap-3 font-sans antialiased">
+-      <div className="rounded-xl surface-glass-2 p-4">
++      <div className="rounded-xl no-ambient-glow surface-glass-2 p-4">
+         <div className="flex items-center gap-2 mb-3">
+           <Fingerprint size={14} className="text-zinc-500 dark:text-zinc-500" />
+           <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-200">Identity graph</h2>
+@@ -43,7 +43,7 @@ export function RepOnboardingView({ detail }: { detail: RepOnboardingDetail }) {
+       </div>
+ 
+       {identityGraph.entities.length > 0 && (
+-        <div className="rounded-xl surface-glass-2 p-4">
++        <div className="rounded-xl no-ambient-glow surface-glass-2 p-4">
+           <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2">
+             Entities ({identityGraph.entities.length})
+           </h3>
+@@ -80,7 +80,7 @@ export function RepOnboardingView({ detail }: { detail: RepOnboardingDetail }) {
+       )}
+ 
+       {identityGraph.seedPanelPrompts.length > 0 && (
+-        <div className="rounded-xl surface-glass-2 p-4">
++        <div className="rounded-xl no-ambient-glow surface-glass-2 p-4">
+           <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2">
+             Seed AI-engine prompts ({identityGraph.seedPanelPrompts.length})
+           </h3>
+diff --git a/src/app/dashboard/runs/[id]/views/rep-reddit-watch-view.tsx b/src/app/dashboard/runs/[id]/views/rep-reddit-watch-view.tsx
+index 26d42a9..b1e2f67 100644
+--- a/src/app/dashboard/runs/[id]/views/rep-reddit-watch-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/rep-reddit-watch-view.tsx
+@@ -24,7 +24,7 @@ export function RepRedditWatchView({ detail }: { detail: RepRedditWatchDetail })
+         {mentions.length} new mention{mentions.length === 1 ? "" : "s"} · {mentions.filter((m) => m.flagged).length} flagged
+       </p>
+       {mentions.map((m) => (
+-        <div key={m.id} className="rounded-xl surface-glass-1 p-3.5">
++        <div key={m.id} className="rounded-xl no-ambient-glow surface-glass-1 p-3.5">
+           <div className="flex items-center justify-between gap-2 mb-1.5">
+             <div className="flex items-center gap-2 text-xs font-mono text-zinc-600 dark:text-zinc-400">
+               <span className="font-bold">r/{m.subreddit}</span>
+diff --git a/src/app/dashboard/runs/[id]/views/rep-trustpilot-watch-view.tsx b/src/app/dashboard/runs/[id]/views/rep-trustpilot-watch-view.tsx
+index 9a46ddb..568d486 100644
+--- a/src/app/dashboard/runs/[id]/views/rep-trustpilot-watch-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/rep-trustpilot-watch-view.tsx
+@@ -34,7 +34,7 @@ export function RepTrustpilotWatchView({ detail }: { detail: RepTrustpilotWatchD
+         {reviews.length} new review{reviews.length === 1 ? "" : "s"} · {reviews.filter((r) => r.flagged).length} flagged
+       </p>
+       {reviews.map((r) => (
+-        <div key={r.id} className="rounded-xl surface-glass-1 p-3.5">
++        <div key={r.id} className="rounded-xl no-ambient-glow surface-glass-1 p-3.5">
+           <div className="flex items-center justify-between gap-2 mb-1.5">
+             <div className="flex items-center gap-2">
+               <StarRating rating={r.rating} />
+diff --git a/src/app/dashboard/runs/[id]/views/rep-twitter-watch-view.tsx b/src/app/dashboard/runs/[id]/views/rep-twitter-watch-view.tsx
+index 0e4658d..801dbde 100644
+--- a/src/app/dashboard/runs/[id]/views/rep-twitter-watch-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/rep-twitter-watch-view.tsx
+@@ -24,7 +24,7 @@ export function RepTwitterWatchView({ detail }: { detail: RepTwitterWatchDetail
+         {mentions.length} new mention{mentions.length === 1 ? "" : "s"} · {mentions.filter((m) => m.flagged).length} flagged
+       </p>
+       {mentions.map((m) => (
+-        <div key={m.id} className="rounded-xl surface-glass-1 p-3.5">
++        <div key={m.id} className="rounded-xl no-ambient-glow surface-glass-1 p-3.5">
+           <div className="flex items-center justify-between gap-2 mb-1.5">
+             <div className="flex items-center gap-2 text-xs font-mono text-zinc-600 dark:text-zinc-400">
+               {m.author && <span className="font-bold">@{m.author}</span>}
+diff --git a/src/app/dashboard/runs/[id]/views/win-back-view.tsx b/src/app/dashboard/runs/[id]/views/win-back-view.tsx
+index 44bd351..054a6b1 100644
+--- a/src/app/dashboard/runs/[id]/views/win-back-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/win-back-view.tsx
+@@ -128,7 +128,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
+       {/* 1. CADENCE LIFECYCLE BANNER                                       */}
+       {/* ----------------------------------------------------------------- */}
+       {enrollment ? (
+-        <div className="rounded-2xl surface-glass-2 font-sans overflow-hidden">
++        <div className="rounded-2xl no-ambient-glow surface-glass-2 font-sans overflow-hidden">
+           <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+             <div className="flex items-center gap-3">
+               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 shrink-0">
+@@ -276,7 +276,7 @@ function CadenceTimeline({
+   const windowEnd = new Date(enrolledAt.getTime() + windowDays * 86_400_000);
+ 
+   return (
+-    <div className="overflow-hidden rounded-2xl surface-glass-2 font-sans">
++    <div className="overflow-hidden rounded-2xl no-ambient-glow surface-glass-2 font-sans">
+       <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-4 py-2.5 font-sans">
+         <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
+           {hasEnrollment ? "Recovery cadence" : "Standard cadence template"}
+@@ -317,7 +317,7 @@ function CadenceTimeline({
+                   />
+                   {!isLast && <div className="w-px flex-1 bg-zinc-100 dark:bg-zinc-800" />}
+                 </div>
+-                <div className="mb-2 flex flex-1 items-center justify-between gap-2 rounded-xl surface-glass-1 px-3 py-2 transition-colors">
++                <div className="mb-2 flex flex-1 items-center justify-between gap-2 rounded-xl no-ambient-glow surface-glass-1 px-3 py-2 transition-colors">
+                   <div className="flex min-w-0 items-center gap-2.5">
+                     {tp.type === "email" ? (
+                       <Mail size={13} className="shrink-0 text-zinc-500 dark:text-zinc-500" />
+@@ -429,13 +429,13 @@ function TouchpointDrawer({
+                 {touchpoint.subject && (
+                   <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 font-sans">Subject: {touchpoint.subject}</p>
+                 )}
+-                <div className="whitespace-pre-wrap rounded-xl surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">
++                <div className="whitespace-pre-wrap rounded-xl no-ambient-glow surface-glass-1 p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">
+                   {touchpoint.body}
+                 </div>
+               </div>
+ 
+               {exitedOffsetDays != null && touchpoint.offsetDays > exitedOffsetDays && (
+-                <div className="rounded-xl surface-glass-1 p-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 flex items-center gap-2 font-sans">
++                <div className="rounded-xl no-ambient-glow surface-glass-1 p-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 flex items-center gap-2 font-sans">
+                   <AlertCircle size={13} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
+                   <span className="font-sans">This touch was skipped — the prospect exited the cadence on Day {exitedOffsetDays + 1}.</span>
+                 </div>
+diff --git a/src/app/dashboard/settings/profile/avatar-picker.tsx b/src/app/dashboard/settings/profile/avatar-picker.tsx
+index 06e62dc..1beb3ed 100644
+--- a/src/app/dashboard/settings/profile/avatar-picker.tsx
++++ b/src/app/dashboard/settings/profile/avatar-picker.tsx
+@@ -212,7 +212,7 @@ export function AvatarPicker({
+       </div>
+ 
+       {step !== "collapsed" && (
+-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40 p-3 space-y-3 animate-in fade-in slide-in-from-top-1 duration-150">
++        <div className="w-fit rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40 p-3 space-y-3 animate-in fade-in slide-in-from-top-1 duration-150">
+           {step === "choice" && (
+             <div className="grid grid-cols-2 gap-2">
+               <button
+diff --git a/src/app/globals.css b/src/app/globals.css
+index 715368f..c182cca 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -405,6 +405,21 @@
+   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+ }
+ 
++/* Opt-out of the lavender ambient-glow tint baked into surface-glass-*
++   above, for surfaces that should keep the blur/shadow/border but not
++   the colored wash (tables, dense panels where the tint read as visual
++   noise). Pair with a surface-glass-* class rather than replacing it. */
++.no-ambient-glow.surface-glass-1,
++.no-ambient-glow.surface-glass-2,
++.no-ambient-glow.surface-glass-3 {
++  background: var(--surface-glass);
++}
++.dark .no-ambient-glow.surface-glass-1,
++.dark .no-ambient-glow.surface-glass-2,
++.dark .no-ambient-glow.surface-glass-3 {
++  background: var(--surface-glass);
++}
++
+ /* Flat solid surfaces (buttons) that still need real depth without a
+    glass fill — shadow tiers alone, no blur/translucency. */
+ .shadow-elevation-1 {
+diff --git a/src/components/analytics/skill-comparison-section.tsx b/src/components/analytics/skill-comparison-section.tsx
+index 3387180..fb3ccaa 100644
+--- a/src/components/analytics/skill-comparison-section.tsx
++++ b/src/components/analytics/skill-comparison-section.tsx
+@@ -7,6 +7,7 @@
+ // wasn't asked for.
+ 
+ import { useState } from "react";
++import { Dropdown } from "@/components/ui/dropdown";
+ 
+ export interface SkillStat {
+   id: string;
+@@ -52,21 +53,19 @@ function SkillPicker({
+   value: string;
+   onChange: (id: string) => void;
+ }) {
++  const items = skills.map((s) => ({ key: s.id, label: `${s.name} (${s.productLabel})` }));
+   return (
+-    <label className="flex items-center gap-2 text-xs">
++    <div className="flex items-center gap-2 text-xs">
+       <span className="font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600 shrink-0">{label}</span>
+-      <select
+-        value={value}
+-        onChange={(e) => onChange(e.target.value)}
+-        className="min-w-0 flex-1 sm:flex-initial rounded-lg text-sm bg-white dark:bg-zinc-900 border border-border px-2.5 py-1.5 text-zinc-900 dark:text-white focus:outline-none focus:border-amber-400 cursor-pointer"
+-      >
+-        {skills.map((s) => (
+-          <option key={s.id} value={s.id}>
+-            {s.name} ({s.productLabel})
+-          </option>
+-        ))}
+-      </select>
+-    </label>
++      <Dropdown
++        items={items}
++        selectedKey={value}
++        onSelect={onChange}
++        placeholder="Select skill…"
++        triggerClassName="min-w-0 flex-1 sm:flex-initial bg-white dark:bg-zinc-900 border border-border px-2.5 py-1.5 text-sm text-zinc-900 dark:text-white hover:bg-white dark:hover:bg-zinc-900"
++        panelClassName="bg-white dark:bg-zinc-900 border border-border"
++      />
++    </div>
+   );
+ }
+ 
+-- 
+2.43.0
+

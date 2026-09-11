@@ -300,7 +300,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
         const Icon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
         const tone = delta > 0 ? "text-emerald-600 dark:text-emerald-400" : delta < 0 ? "text-rose-600 dark:text-rose-400" : "text-zinc-500";
         return (
-          <div className="flex items-center gap-2 surface-glass-1 rounded-xl px-3 py-2 font-sans">
+          <div className="flex items-center gap-2 no-ambient-glow surface-glass-1 rounded-xl px-3 py-2 font-sans">
             <Icon size={13} className={tone} />
             <span className="text-xs text-zinc-700 dark:text-zinc-300 font-sans">
               <span className="font-mono font-bold text-zinc-900 dark:text-white">{thisWeek}</span> booked this week
@@ -311,7 +311,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       })()}
 
       {/* Shared Toolbar & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 surface-glass-1 rounded-2xl p-2 font-sans">
+      <div className="flex flex-wrap items-center justify-between gap-3 no-ambient-glow surface-glass-1 rounded-2xl p-2 font-sans">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
             <button
@@ -406,7 +406,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
 
       {/* 1. MONTH VIEW */}
       {mode === "month" && !loading && (
-        <div className="overflow-hidden surface-glass-2 rounded-2xl font-sans">
+        <div className="overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl font-sans">
           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
@@ -491,7 +491,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       {/* 2. DAY VIEW (HOURLY TIMELINE + PERSISTENT INSPECTOR PANEL) */}
       {mode === "day" && !loading && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
-          <div className="lg:col-span-7 overflow-hidden surface-glass-2 rounded-2xl flex flex-col font-sans">
+          <div className="lg:col-span-7 overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl flex flex-col font-sans">
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-4 py-3 font-sans">
               <div className="flex items-center gap-2 font-sans">
                 <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="hover-lift press-settle rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
@@ -582,7 +582,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
           </div>
 
           <div className="lg:col-span-5 space-y-3 font-sans">
-            <div className="surface-glass-1 rounded-2xl p-3 space-y-2 font-sans">
+            <div className="no-ambient-glow surface-glass-1 rounded-2xl p-3 space-y-2 font-sans">
               <span className="text-[11px] font-bold text-zinc-900 dark:text-white block px-1 font-sans">{monthName} {year}</span>
               <div className="grid grid-cols-7 text-center text-[9px] font-mono text-zinc-500 font-bold uppercase font-sans">
                 {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <div key={i}>{d}</div>)}
@@ -607,7 +607,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
               </div>
             </div>
 
-            <div className="surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
+            <div className="no-ambient-glow surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
               {selected ? (
                 <>
                   <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
@@ -640,7 +640,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                     </div>
                   </div>
 
-                  <div className="surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
+                  <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
                     <div className="flex items-center justify-between font-sans">
                       <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
                       <span className="font-mono text-zinc-900 dark:text-white capitalize">{sentViaLabel(selected.sentVia)}</span>
@@ -684,7 +684,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   })()}
 
                   {selected.sentVia === "hybrid" && selected.personalizedIntro && (
-                    <div className="surface-glass-1 rounded-xl p-3 space-y-1.5 text-xs font-sans">
+                    <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-1.5 text-xs font-sans">
                       <span className="flex items-center gap-1.5 text-[10.5px] font-mono text-zinc-500 uppercase">
                         <Sparkles size={11} /> AI-personalized intro
                       </span>
@@ -693,7 +693,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   )}
 
                   {selected.runId && (
-                    <div className="surface-glass-1 rounded-xl overflow-hidden text-xs font-sans">
+                    <div className="no-ambient-glow surface-glass-1 rounded-xl overflow-hidden text-xs font-sans">
                       <button
                         type="button"
                         onClick={() => setShowRunActivity((p) => !p)}
@@ -745,7 +745,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       {/* 3. SMART LIST VIEW (DEFAULTS TO CURRENT WEEK ANCHORED ON TODAY) */}
       {mode === "list" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
-          <div className="lg:col-span-7 overflow-hidden surface-glass-2 rounded-2xl font-sans flex flex-col">
+          <div className="lg:col-span-7 overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl font-sans flex flex-col">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
@@ -1007,7 +1007,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             )}
           </div>
 
-          <div className="lg:col-span-5 surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
+          <div className="lg:col-span-5 no-ambient-glow surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
             {selected ? (
               <>
                 <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
@@ -1040,7 +1040,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   </div>
                 </div>
 
-                <div className="surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
+                <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
                   <div className="flex items-center justify-between font-sans">
                     <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
                     <span className="font-mono text-zinc-900 dark:text-white capitalize">{sentViaLabel(selected.sentVia)}</span>
@@ -1084,7 +1084,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 })()}
 
                 {selected.sentVia === "hybrid" && selected.personalizedIntro && (
-                  <div className="surface-glass-1 rounded-xl p-3 space-y-1.5 text-xs font-sans">
+                  <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-1.5 text-xs font-sans">
                     <span className="flex items-center gap-1.5 text-[10.5px] font-mono text-zinc-500 uppercase">
                       <Sparkles size={11} /> AI-personalized intro
                     </span>
@@ -1093,7 +1093,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 )}
 
                 {selected.runId && (
-                  <div className="surface-glass-1 rounded-xl overflow-hidden text-xs font-sans">
+                  <div className="no-ambient-glow surface-glass-1 rounded-xl overflow-hidden text-xs font-sans">
                     <button
                       type="button"
                       onClick={() => setShowRunActivity((p) => !p)}
