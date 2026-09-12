@@ -286,9 +286,13 @@ export function LeakMapView({
               )}
 
               {/* Executive Report Reader — flows in the page's own scroll
-                  now, no forced inner scrollbox hiding most of it. */}
-              <div>
-                <div className="mb-2 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2.5">
+                  now, no forced inner scrollbox hiding most of it. Its own
+                  bordered container (with real top margin from whatever's
+                  above) so it reads as a distinct destination on the page,
+                  not a continuation of the metrics/gaps list you could
+                  scroll straight past. */}
+              <div className="mt-2 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-4">
+                <div className="mb-3 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
                   <div className="flex items-center gap-2">
                     <FileText size={16} className="text-zinc-500 dark:text-zinc-400" />
                     <h2 className="text-base font-bold text-zinc-900 dark:text-white">Executive Audit Report</h2>

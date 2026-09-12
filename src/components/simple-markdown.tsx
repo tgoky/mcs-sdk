@@ -162,6 +162,39 @@ export function SimpleMarkdown({ text, className }: { text: string; className?: 
       paraLines.push(lines[i].trim());
       i++;
     }
+
+    // A one-line paragraph that's entirely "**bold**" (this report's own
+    // convention for a per-metric sub-head, not a real heading) directly
+    // followed by a bullet list — group both into one visually distinct
+    // segment instead of two loose blocks with nothing to tell them apart
+    // from the next sub-head + list right after it.
+    const boldOnly = paraLines.length === 1 ? /^\*\*(.+)\*\*$/.exec(paraLines[0]) : null;
+    if (boldOnly && i < lines.length && LIST_RE.test(lines[i].trim())) {
+      const segItems: string[] = [];
+      while (i < lines.length) {
+        const m = LIST_RE.exec(lines[i].trim());
+        if (!m) break;
+        segItems.push(m[1]);
+        i++;
+      }
+      const segKey = key++;
+      blocks.push(
+        <div key={segKey} className="rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/50 dark:bg-zinc-900/40 p-3 my-2.5">
+          <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-1.5">
+            {renderInline(boldOnly[1], `seg-h-${segKey}`)}
+          </p>
+          <ul className="list-disc pl-5 space-y-1">
+            {segItems.map((item, idx) => (
+              <li key={idx} className="leading-relaxed">
+                {renderInline(item, `seg-li-${segKey}-${idx}`)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+      continue;
+    }
+
     const paraKey = key++;
     blocks.push(
       <p key={paraKey} className="leading-relaxed my-1.5">

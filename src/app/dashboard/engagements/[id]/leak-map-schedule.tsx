@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Search,
   CalendarClock,
   AlertTriangle,
@@ -22,6 +23,7 @@ import { dateKey } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
 import { StatusPill, toneFromSeverity } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import { auditRunTypeLabel } from "@/lib/copy";
 import { LeakMapView } from "@/app/dashboard/runs/[id]/views/leak-map-view";
+import { ActionMenu } from "@/components/action-menu";
 import type { LeakMapDetail } from "@/app/dashboard/runs/[id]/_shared/types";
 import type { AuditHistoryItem, ScheduledAudit, ActiveAlertItem } from "@/app/api/engagements/[id]/leak-map-schedule/route";
 
@@ -234,6 +236,123 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
               className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
             />
           </div>
+
+          {/* Audit picker — replaces the old always-visible timeline rail,
+              which left a mostly-empty column whenever there weren't many
+              runs yet. Same content (week-grouped list, scope filter),
+              now a dropdown next to search instead of its own column. */}
+          <ActionMenu
+            align="start"
+            panelWidth={340}
+            trigger={({ toggle, open }) => (
+              <button
+                type="button"
+                onClick={toggle}
+                aria-expanded={open}
+                disabled={!selected}
+                className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Clock size={13} className="text-zinc-400 shrink-0" />
+                {selected ? (
+                  <span className="truncate max-w-[160px]">
+                    {formatDayHeader(dateKey(new Date(selected.createdAt)))} · {auditRunTypeLabel(selected.runType)}
+                  </span>
+                ) : (
+                  <span className="text-zinc-400">No audits yet</span>
+                )}
+                <ChevronDown size={12} className="shrink-0 text-zinc-400" />
+              </button>
+            )}
+          >
+            {(closeMenu) => (
+              <div className="flex flex-col max-h-[70vh]">
+                <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-1.5 border-b border-zinc-200 dark:border-zinc-800 text-[11px] shrink-0">
+                  {(["all", "weekly", "monthly"] as AuditScopeFilter[]).map((scope) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => setScopeFilter(scope)}
+                      className={cn(
+                        "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer capitalize",
+                        scopeFilter === scope
+                          ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
+                          : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                      )}
+                    >
+                      {scope === "all" ? `All (${monthlyRunCount})` : scope}
+                    </button>
+                  ))}
+                </div>
+
+                {monthWeeksGrouped.length === 0 && !loading ? (
+                  <div className="flex flex-col items-center gap-2 py-10 text-zinc-400 dark:text-zinc-600">
+                    <CalendarX2 size={20} />
+                    <span className="text-xs px-4 text-center">
+                      No {scopeFilter === "all" ? "" : `${scopeFilter} `}audits recorded in {monthName} {year}.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="overflow-y-auto divide-y divide-zinc-200/80 dark:divide-zinc-800/60">
+                    {monthWeeksGrouped.map(({ weekNum, audits }) => (
+                      <div key={weekNum} className="space-y-0">
+                        <div className="flex items-center justify-between px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
+                          <span>Week {weekNum}</span>
+                          <span>{audits.length} run{audits.length === 1 ? "" : "s"}</span>
+                        </div>
+                        <div className="divide-y divide-zinc-100 dark:divide-zinc-800/40">
+                          {audits.map((item) => {
+                            const isSelected = selected?.id === item.id;
+                            const timeBadge = formatTimeBadge(item.createdAt);
+                            const isManual = item.runType.toLowerCase().includes("manual") || item.runType.toLowerCase().includes("adhoc");
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedId(item.id);
+                                  handleUpdateSelectedDate(new Date(item.createdAt));
+                                  closeMenu();
+                                }}
+                                className={cn(
+                                  "hover-lift press-settle flex w-full flex-col gap-1 px-3 py-2 text-left transition-colors cursor-pointer border-0 bg-transparent",
+                                  isSelected ? "text-zinc-900 dark:text-white" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                                )}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 shrink-0">
+                                    {formatDayHeader(dateKey(new Date(item.createdAt)))} · {timeBadge}
+                                  </span>
+                                  <StatusPill
+                                    tone={toneFromSeverity(item.overallSeverity)}
+                                    className={cn(
+                                      "shrink-0 capitalize text-[10px]",
+                                      item.overallSeverity === "none" &&
+                                        "bg-transparent text-amber-700 border border-amber-400 dark:bg-zinc-800 dark:text-amber-400 dark:border-amber-500/40"
+                                    )}
+                                  >
+                                    {item.overallSeverity === "none" ? "Clean" : item.overallSeverity}
+                                  </StatusPill>
+                                </div>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="truncate text-xs font-bold text-zinc-900 dark:text-white">
+                                    {auditRunTypeLabel(item.runType)}
+                                  </span>
+                                  {isManual && <Zap size={10} className="text-amber-500 shrink-0" aria-label="Manual" />}
+                                </div>
+                                <span className="text-[11px] text-zinc-500 dark:text-zinc-500 font-mono truncate">
+                                  {item.topIssueCount} issue{item.topIssueCount === 1 ? "" : "s"} · {item.alertsFiredCount} alert{item.alertsFiredCount === 1 ? "" : "s"}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </ActionMenu>
         </div>
 
         <div className="flex items-center gap-3">
@@ -289,178 +408,43 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
         </div>
       )}
 
-      {/* MASTER-DETAIL — a narrow timeline rail (left) + the selected
-          audit's full detail (right), side by side on wide screens
-          instead of one long column where the actual diagnostic content
-          is always below the fold. Stacks on mobile since there's no
-          room for two columns. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 items-start">
-        {/* LEFT: Timeline list */}
-        <div className="overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex flex-col lg:sticky lg:top-4 lg:max-h-[calc(100vh-140px)]">
-            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-transparent">
-              <div className="flex items-center gap-1.5">
-                <CalendarDays size={14} className="text-zinc-500" />
-                {/* Just "Timeline" — the month is already shown once, in
-                    the toolbar above (with its own prev/next/Today nav),
-                    repeating it here was pure duplication. */}
-                <span className="text-xs font-bold text-zinc-900 dark:text-white">Timeline</span>
-              </div>
-
-              <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => setScopeFilter("all")}
-                  className={cn(
-                    "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer",
-                    scopeFilter === "all"
-                      ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
-                      : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-                  )}
-                >
-                  All ({monthlyRunCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setScopeFilter("weekly")}
-                  className={cn(
-                    "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer",
-                    scopeFilter === "weekly"
-                      ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
-                      : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-                  )}
-                >
-                  Weekly
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setScopeFilter("monthly")}
-                  className={cn(
-                    "hover-lift press-settle px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer",
-                    scopeFilter === "monthly"
-                      ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs"
-                      : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
-                  )}
-                >
-                  Monthly
-                </button>
-              </div>
+      {/* ONE COLUMN — the audit picker above replaces the old always-
+          visible timeline rail (which columns picked which audit, but
+          left a mostly-empty column whenever there weren't many runs
+          yet). This is just the selected audit's detail now, full
+          width — no separate "which audit" header either, since the
+          picker button already shows exactly that. */}
+      <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 space-y-3">
+        {selected ? (
+          <>
+            <div className="flex justify-end">
+              <a
+                href={`/dashboard/runs/${selected.runId}`}
+                className="inline-flex items-center gap-1 text-[10.5px] text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors font-medium shrink-0"
+              >
+                <span>Open full page</span>
+                <ArrowUpRight size={12} />
+              </a>
             </div>
 
-            {monthWeeksGrouped.length === 0 && !loading ? (
-              <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600">
-                <CalendarX2 size={22} />
-                <span className="text-xs">
-                  No {scopeFilter === "all" ? "" : `${scopeFilter} `}audits recorded in {monthName} {year}.
-                </span>
-              </div>
-            ) : (
-              <div className="flex-1 min-h-0 divide-y divide-zinc-200/80 dark:divide-zinc-800/60 overflow-y-auto">
-                {monthWeeksGrouped.map(({ weekNum, audits }) => (
-                  <div key={weekNum} className="space-y-0">
-                    <div className="sticky top-0 z-10 flex items-center justify-between bg-transparent px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
-                      <span>Week {weekNum}</span>
-                      <span>{audits.length} run{audits.length === 1 ? "" : "s"}</span>
-                    </div>
-
-                    <div className="divide-y divide-zinc-100 dark:divide-zinc-800/40">
-                      {audits.map((item) => {
-                        const isSelected = selected?.id === item.id;
-                        const timeBadge = formatTimeBadge(item.createdAt);
-                        const isManual = item.runType.toLowerCase().includes("manual") || item.runType.toLowerCase().includes("adhoc");
-
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedId(item.id);
-                              handleUpdateSelectedDate(new Date(item.createdAt));
-                            }}
-                            className={cn(
-                              "hover-lift press-settle flex w-full flex-col gap-1 px-4 py-2.5 text-left transition-colors cursor-pointer border-0 bg-transparent",
-                              isSelected ? "text-zinc-900 dark:text-white" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                            )}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 shrink-0">
-                                {formatDayHeader(dateKey(new Date(item.createdAt)))} · {timeBadge}
-                              </span>
-                              <StatusPill
-                                tone={toneFromSeverity(item.overallSeverity)}
-                                className={cn(
-                                  "shrink-0 capitalize text-[10px]",
-                                  item.overallSeverity === "none" &&
-                                    "bg-transparent text-amber-700 border border-amber-400 dark:bg-zinc-800 dark:text-amber-400 dark:border-amber-500/40"
-                                )}
-                              >
-                                {item.overallSeverity === "none" ? "Clean" : item.overallSeverity}
-                              </StatusPill>
-                            </div>
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="truncate text-xs font-bold text-zinc-900 dark:text-white">
-                                {auditRunTypeLabel(item.runType)}
-                              </span>
-                              {isManual && <Zap size={10} className="text-amber-500 shrink-0" aria-label="Manual" />}
-                            </div>
-                            <span className="text-[11px] text-zinc-500 dark:text-zinc-500 font-mono truncate">
-                              {item.topIssueCount} issue{item.topIssueCount === 1 ? "" : "s"} · {item.alertsFiredCount} alert{item.alertsFiredCount === 1 ? "" : "s"}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+            {selected.runId && (
+              <div className="relative">
+                {detailLoading && (
+                  <div className="flex items-center justify-center py-8 text-zinc-500">
+                    <Loader2 size={16} className="animate-spin" />
                   </div>
-                ))}
+                )}
+                {detailError && <p className="text-[11px] text-rose-600 dark:text-rose-400">{detailError}</p>}
+                {!detailLoading && !detailError && detail && "audit" in detail && <LeakMapView detail={detail} embedded />}
               </div>
             )}
-        </div>
-
-        {/* RIGHT: Diagnostic detail — just enough context to place it (which
-            audit, when), then the embedded LeakMapView owns the actual
-            verdict/issues/report. The severity pill and the Issues/
-            Alerts/Gaps 3-tile grid that used to live here duplicated
-            exactly what that view already shows, just less completely. */}
-        <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 space-y-4">
-          {selected ? (
-            <>
-              <div className="flex items-center justify-between flex-wrap gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
-                <div className="min-w-0">
-                  <h4 className="text-base font-bold text-zinc-900 dark:text-white truncate">
-                    {auditRunTypeLabel(selected.runType)}
-                  </h4>
-                  <div className="flex items-center gap-1.5 font-mono text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    <Clock size={11} className="shrink-0" />
-                    <span>{new Date(selected.createdAt).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                  </div>
-                </div>
-                <a
-                  href={`/dashboard/runs/${selected.runId}`}
-                  className="inline-flex items-center gap-1 text-[10.5px] text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors font-medium shrink-0"
-                >
-                  <span>Open full page</span>
-                  <ArrowUpRight size={12} />
-                </a>
-              </div>
-
-              {selected.runId && (
-                <div className="relative">
-                  {detailLoading && (
-                    <div className="flex items-center justify-center py-8 text-zinc-500">
-                      <Loader2 size={16} className="animate-spin" />
-                    </div>
-                  )}
-                  {detailError && <p className="text-[11px] text-rose-600 dark:text-rose-400">{detailError}</p>}
-                  {!detailLoading && !detailError && detail && "audit" in detail && <LeakMapView detail={detail} embedded />}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="py-12 text-center text-zinc-500 space-y-2">
-              <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-              <p className="text-xs">Select an audit from the timeline to inspect report details.</p>
-            </div>
-          )}
-        </div>
+          </>
+        ) : (
+          <div className="py-12 text-center text-zinc-500 space-y-2">
+            <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
+            <p className="text-xs">No audits recorded yet.</p>
+          </div>
+        )}
       </div>
     </div>
   );
