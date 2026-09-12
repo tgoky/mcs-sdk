@@ -1,0 +1,1714 @@
+diff --git a/src/app/api/engagements/[id]/win-back/generate-cadence/route.ts b/src/app/api/engagements/[id]/win-back/generate-cadence/route.ts
+new file mode 100644
+index 0000000..e9a58a2
+--- /dev/null
++++ b/src/app/api/engagements/[id]/win-back/generate-cadence/route.ts
+@@ -0,0 +1,73 @@
++// src/app/api/engagements/[id]/win-back/generate-cadence/route.ts
++//
++// Standalone "Generate cadence now" action for the Recovery Cadence card.
++// generateRecoveryCadence (recovery-service.ts) is pure content generation
++// from voice/offer/window-size — it doesn't need a real booking event at
++// all. The only wiring this button had before was
++// POST /api/skill-runs/trigger with skillName="win-back", which
++// unconditionally rejects both "pile-on" and "win-back" ("This module
++// fires automatically on bookings...", see skill-trigger.ts) — the button
++// could never succeed no matter what. This calls the same generation
++// function the real booking-triggered pipeline uses, directly.
++
++import { NextResponse } from "next/server";
++import { db } from "@/lib/db";
++import { engagements } from "@/models/schema";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { and, eq } from "drizzle-orm";
++import { startRun } from "@/lib/run-log";
++import { generateRecoveryCadence } from "@/features/win-back/server/recovery-service";
++import crypto from "crypto";
++
++export const runtime = "nodejs";
++
++export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
++  try {
++    const { id: engagementId } = await params;
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const [tenant] = await db
++      .select()
++      .from(engagements)
++      .where(
++        and(
++          eq(engagements.engagementId, engagementId),
++          eq(engagements.whopUserId, session.whopUserId),
++          eq(engagements.workspaceId, activeWorkspace.workspaceId)
++        )
++      )
++      .limit(1);
++
++    if (!tenant) {
++      return NextResponse.json({ error: "Engagement not found or access denied." }, { status: 404 });
++    }
++    if (tenant.deletedAt) {
++      return NextResponse.json({ error: "Can't generate a cadence for a deleted engagement." }, { status: 409 });
++    }
++
++    const runId = crypto.randomUUID();
++    await startRun({
++      id: runId,
++      engagementId,
++      skillName: "win-back",
++      phase: "cadence_generation",
++      label: "Manually triggered from the Recovery Cadence card",
++    });
++
++    // generateRecoveryCadence owns its own finishRun/failRun lifecycle
++    // (recovery-service.ts) — it re-throws on failure after recording it,
++    // so this route's catch below only needs to turn that into an HTTP
++    // error, not call failRun itself.
++    await generateRecoveryCadence(tenant, runId);
++
++    return NextResponse.json({ runId, message: "Recovery cadence generated." });
++  } catch (err: unknown) {
++    const message = err instanceof Error ? err.message : "Failed to generate cadence.";
++    return NextResponse.json({ error: message }, { status: 500 });
++  }
++}
+diff --git a/src/app/dashboard/engagements/[id]/deliverables-panel.tsx b/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
+index e78b2ea..aa55ef8 100644
+--- a/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
+@@ -1,7 +1,8 @@
+ "use client";
+ 
+ import React, { useState } from "react";
+-import { 
++import { useRouter } from "next/navigation";
++import {
+   ChevronDown, 
+   ChevronRight, 
+   Radio, 
+@@ -179,7 +180,7 @@ function DeliverableRow({
+     <div
+       className={
+         isOpen
+-          ? "no-ambient-glow surface-glass-2 text-zinc-900 dark:text-zinc-100 rounded-2xl my-3 transition-all duration-200"
++          ? "bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 text-zinc-900 dark:text-zinc-100 rounded-2xl my-3 transition-all duration-200"
+           : "border-b border-zinc-200/80 dark:border-zinc-800/60 last:border-b-0 transition-all duration-200"
+       }
+     >
+@@ -248,6 +249,7 @@ export function DeliverablesPanel({
+   pinDownPageAudit: PinDownPageAudit;
+   conversationIntelligence?: ConversationIntelligenceState;
+ }) {
++  const router = useRouter();
+   const isAiExtracted = brandVoiceProfile?.source_path === "ai_extracted";
+   const briefs = adCreativeBriefs?.briefs ?? [];
+ 
+@@ -258,6 +260,34 @@ export function DeliverablesPanel({
+     setOpenRowId((prev) => (prev === id ? null : id));
+   };
+ 
++  // Ad briefs and the script pack were only ever regenerable from the
++  // "Edit client details" drawer (client-details-drawer.tsx), nowhere
++  // near where they're actually displayed — same /regenerate endpoints,
++  // now reachable from the deliverables themselves too.
++  const [regeneratingBriefs, setRegeneratingBriefs] = useState(false);
++  const [regeneratingScripts, setRegeneratingScripts] = useState(false);
++  const [regenerateMessage, setRegenerateMessage] = useState<{ kind: "briefs" | "scripts"; text: string; ok: boolean } | null>(
++    null
++  );
++
++  async function handleRegenerate(kind: "briefs" | "scripts") {
++    const setLoading = kind === "briefs" ? setRegeneratingBriefs : setRegeneratingScripts;
++    const path = kind === "briefs" ? "ad-creative-briefs" : "scripts";
++    setLoading(true);
++    setRegenerateMessage(null);
++    try {
++      const res = await fetch(`/api/engagements/${engagementId}/regenerate/${path}`, { method: "POST" });
++      const result = await res.json().catch(() => ({}));
++      if (!res.ok) throw new Error(result.error ?? "Regeneration failed.");
++      setRegenerateMessage({ kind, ok: true, text: kind === "briefs" ? "Ad creative briefs regenerated." : "Scripts regenerated." });
++      router.refresh();
++    } catch (err) {
++      setRegenerateMessage({ kind, ok: false, text: err instanceof Error ? err.message : "Regeneration failed." });
++    } finally {
++      setLoading(false);
++    }
++  }
++
+   const scrapedWordCount = voiceScrapeArtifacts?.totalWordCount ?? 0;
+   const scrapedSourceCount = voiceScrapeArtifacts?.sources?.length ?? 0;
+   const corpusWordCount = brandVoiceProfile?.corpus_word_count ?? scrapedWordCount;
+@@ -280,7 +310,7 @@ export function DeliverablesPanel({
+     <div className="w-full space-y-6 font-sans">
+       {/* CALL INTELLIGENCE STATUS HEADER */}
+       {conversationIntelligence?.enabled ? (
+-        <div className="flex items-center justify-between p-3.5 no-ambient-glow surface-glass-1 rounded-xl text-xs">
++        <div className="flex items-center justify-between p-3.5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-xs">
+           <div className="flex items-center gap-3">
+             <Radio size={16} className="text-emerald-500 dark:text-emerald-400 animate-pulse shrink-0" />
+             <div>
+@@ -299,7 +329,7 @@ export function DeliverablesPanel({
+           </span>
+         </div>
+       ) : (
+-        <div className="flex items-center justify-between p-3.5 no-ambient-glow surface-glass-1 rounded-xl text-xs">
++        <div className="flex items-center justify-between p-3.5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-xs">
+           <div className="flex items-center gap-3">
+             <div className="p-1.5 rounded-lg bg-zinc-200 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-800 shrink-0">
+               <Radio size={16} />
+@@ -322,8 +352,9 @@ export function DeliverablesPanel({
+         </div>
+       )}
+ 
+-      {/* MAIN DELIVERABLES CONTAINER */}
+-      <div className="w-full no-ambient-glow surface-glass-2 rounded-2xl p-2 sm:p-4 divide-y divide-zinc-200 dark:divide-zinc-800/60">
++      {/* MAIN DELIVERABLES CONTAINER — transparent so the page's bg-dot-grid
++          shows through instead of the opaque glass fill hiding it. */}
++      <div className="w-full bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-2 sm:p-4 divide-y divide-zinc-200 dark:divide-zinc-800/60">
+         
+         {/* BRAND VOICE & SITE INTELLIGENCE ROW */}
+         <DeliverableRow
+@@ -413,7 +444,7 @@ export function DeliverablesPanel({
+                     const clamped = Math.max(1, Math.min(5, val.score));
+                     const pct = ((clamped - 1) / 4) * 100;
+                     return (
+-                      <div key={key} className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-2">
++                      <div key={key} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-2">
+                         <div className="flex justify-between text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                           <span>{axis?.left ?? key}</span>
+                           <span className="text-zinc-900 dark:text-zinc-100 font-bold">{val.score}/5</span>
+@@ -493,7 +524,7 @@ export function DeliverablesPanel({
+                 </span>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                   {voiceScrapeArtifacts.sources.map((s, i) => (
+-                    <div key={i} className="flex items-center justify-between px-3 py-2 no-ambient-glow surface-glass-1 rounded-lg text-xs">
++                    <div key={i} className="flex items-center justify-between px-3 py-2 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg text-xs">
+                       <span className="text-zinc-800 dark:text-zinc-200 truncate max-w-[80%]" title={s.url}>
+                         <strong className="font-semibold">{SOURCE_KIND_LABELS[s.kind] ?? s.kind}</strong>
+                         {s.url ? ` — ${s.url}` : ""}
+@@ -507,6 +538,34 @@ export function DeliverablesPanel({
+           </div>
+         </DeliverableRow>
+ 
++        {/* Regenerate control — same /regenerate/ad-creative-briefs
++            endpoint client-details-drawer.tsx already calls, surfaced
++            here too since that's where these briefs actually live. */}
++        {briefs.length > 0 && (
++          <div className="flex items-center justify-between gap-3 px-3 py-2.5">
++            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
++              Generated once during onboarding — regenerate to refresh from the current brand voice and offer details.
++            </p>
++            <button
++              type="button"
++              onClick={() => handleRegenerate("briefs")}
++              disabled={regeneratingBriefs}
++              className="hover-lift press-settle shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
++            >
++              {regeneratingBriefs ? "Regenerating…" : "Regenerate"}
++            </button>
++          </div>
++        )}
++        {regenerateMessage?.kind === "briefs" && (
++          <p
++            className={`px-3 pb-2 text-[11px] font-semibold ${
++              regenerateMessage.ok ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
++            }`}
++          >
++            {regenerateMessage.text}
++          </p>
++        )}
++
+         {/* INDIVIDUAL AD BRIEFS */}
+         {briefs.map((b) => {
+           const cfg = PILLAR_CONFIGS[b.pillar] ?? {
+@@ -580,6 +639,31 @@ export function DeliverablesPanel({
+             }
+           >
+             <div className="space-y-5 pt-2 text-xs">
++              {/* Regenerate control — same /regenerate/scripts endpoint
++                  client-details-drawer.tsx already calls. */}
++              <div className="flex items-center justify-between gap-3 pb-1">
++                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
++                  Regenerate from the current brand voice, offer, call questions, and casting choice.
++                </p>
++                <button
++                  type="button"
++                  onClick={() => handleRegenerate("scripts")}
++                  disabled={regeneratingScripts}
++                  className="hover-lift press-settle shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
++                >
++                  {regeneratingScripts ? "Regenerating…" : "Regenerate"}
++                </button>
++              </div>
++              {regenerateMessage?.kind === "scripts" && (
++                <p
++                  className={`text-[11px] font-semibold -mt-3 ${
++                    regenerateMessage.ok ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
++                  }`}
++                >
++                  {regenerateMessage.text}
++                </p>
++              )}
++
+               {pinDownScriptPack.heroScript && (
+                 <div className="space-y-3">
+                   <div className="flex items-center justify-between pb-1 border-b border-zinc-200 dark:border-zinc-800">
+@@ -588,7 +672,7 @@ export function DeliverablesPanel({
+                   </div>
+                   <div className="space-y-2">
+                     {pinDownScriptPack.heroScript.chapters.map((c, i) => (
+-                      <div key={i} className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-1">
++                      <div key={i} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1">
+                         <div className="flex items-center gap-2">
+                           <span className="text-zinc-700 dark:text-zinc-300 font-mono font-bold text-[11px]">{c.timestampLabel}</span>
+                           <span className="text-zinc-900 dark:text-zinc-100 font-semibold">{c.beat}</span>
+@@ -610,7 +694,7 @@ export function DeliverablesPanel({
+                   </span>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                     {pinDownScriptPack.breakoutScripts.map((s) => (
+-                      <div key={s.id} className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-2">
++                      <div key={s.id} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-2">
+                         <div className="flex items-center justify-between">
+                           <span className="font-semibold text-zinc-900 dark:text-zinc-100">{s.title}</span>
+                           <span className="text-[11px] font-mono text-zinc-500">~{s.targetLengthSeconds}s</span>
+@@ -634,7 +718,7 @@ export function DeliverablesPanel({
+                     Recording Logistics Checklist
+                   </span>
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+-                    <div className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-1.5">
++                    <div className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1.5">
+                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
+                         <Wrench size={13} className="text-zinc-500" /> Equipment
+                       </span>
+@@ -645,7 +729,7 @@ export function DeliverablesPanel({
+                       </ul>
+                     </div>
+ 
+-                    <div className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-1.5">
++                    <div className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1.5">
+                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
+                         <Camera size={13} className="text-zinc-500" /> Environment
+                       </span>
+@@ -656,7 +740,7 @@ export function DeliverablesPanel({
+                       </ul>
+                     </div>
+ 
+-                    <div className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-1.5">
++                    <div className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1.5">
+                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
+                         <Shirt size={13} className="text-zinc-500" /> Wardrobe &amp; Framing
+                       </span>
+@@ -685,7 +769,7 @@ export function DeliverablesPanel({
+             subtitle={`Audited ${pinDownPageAudit.auditedUrl}`}
+           >
+             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
+-              <div className="space-y-1.5 p-3 no-ambient-glow surface-glass-1 rounded-lg">
++              <div className="space-y-1.5 p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
+                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
+                   <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400" /> Strengths
+                 </span>
+@@ -696,7 +780,7 @@ export function DeliverablesPanel({
+                 </ul>
+               </div>
+ 
+-              <div className="space-y-1.5 p-3 no-ambient-glow surface-glass-1 rounded-lg">
++              <div className="space-y-1.5 p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
+                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
+                   <AlertCircle size={12} className="text-rose-600 dark:text-rose-400" /> Weaknesses
+                 </span>
+@@ -707,7 +791,7 @@ export function DeliverablesPanel({
+                 </ul>
+               </div>
+ 
+-              <div className="space-y-1.5 p-3 no-ambient-glow surface-glass-1 rounded-lg">
++              <div className="space-y-1.5 p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
+                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
+                   v1 Improvements
+                 </span>
+@@ -720,7 +804,7 @@ export function DeliverablesPanel({
+             </div>
+ 
+             {pinDownPageAudit.competitorComparison && pinDownPageAudit.competitorComparison.notes.length > 0 && (
+-              <div className="space-y-1.5 p-3 mt-3 no-ambient-glow surface-glass-1 rounded-lg text-xs">
++              <div className="space-y-1.5 p-3 mt-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg text-xs">
+                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
+                   Vs. {pinDownPageAudit.competitorComparison.url}
+                 </span>
+diff --git a/src/app/dashboard/engagements/[id]/engagements-run-history.tsx b/src/app/dashboard/engagements/[id]/engagements-run-history.tsx
+index 3699fb9..e19e402 100644
+--- a/src/app/dashboard/engagements/[id]/engagements-run-history.tsx
++++ b/src/app/dashboard/engagements/[id]/engagements-run-history.tsx
+@@ -67,8 +67,9 @@ export function EngagementRunHistory({
+         })}
+       </div>
+ 
+-      {/* Filtered Runs List */}
+-      <div className="w-full overflow-hidden no-ambient-glow surface-glass-1 rounded-xl transition-colors">
++      {/* Filtered Runs List — transparent so the page's bg-dot-grid shows
++          through instead of the opaque glass fill hiding it. */}
++      <div className="w-full overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl transition-colors">
+         <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
+           {filteredRuns.slice(0, 20).map((run) => (
+             <li key={run.id} className="group relative">
+diff --git a/src/app/dashboard/engagements/[id]/leak-map-schedule.tsx b/src/app/dashboard/engagements/[id]/leak-map-schedule.tsx
+index c32d1f9..f433f6d 100644
+--- a/src/app/dashboard/engagements/[id]/leak-map-schedule.tsx
++++ b/src/app/dashboard/engagements/[id]/leak-map-schedule.tsx
+@@ -198,7 +198,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
+   return (
+     <div className="flex flex-col gap-3 font-sans antialiased">
+       {/* Toolbar & Controls */}
+-      <div className="flex flex-wrap items-center justify-between gap-3 no-ambient-glow surface-glass-1 rounded-2xl p-2">
++      <div className="flex flex-wrap items-center justify-between gap-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-2">
+         <div className="flex flex-wrap items-center gap-2">
+           <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800/80 rounded-xl border border-zinc-200/80 dark:border-zinc-800 p-1">
+             <button
+@@ -264,7 +264,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
+               {scheduled.map((s) => (
+                 <div
+                   key={s.auditType}
+-                  className="flex items-center gap-2.5 no-ambient-glow surface-glass-1 rounded-2xl p-3"
++                  className="flex items-center gap-2.5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-3"
+                 >
+                   <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold shrink-0">
+                     <CalendarClock size={16} />
+@@ -304,8 +304,8 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
+           )}
+ 
+           {/* Monthly Timeline Feed — full width */}
+-          <div className="overflow-hidden no-ambient-glow surface-glass-1 rounded-2xl flex flex-col">
+-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60">
++          <div className="overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex flex-col">
++            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-transparent">
+               <div className="flex items-center gap-1.5">
+                 <CalendarDays size={14} className="text-zinc-500" />
+                 <span className="text-xs font-bold text-zinc-900 dark:text-white">
+@@ -364,7 +364,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
+               <div className="divide-y divide-zinc-200/80 dark:divide-zinc-800/60 max-h-[360px] overflow-y-auto">
+                 {monthWeeksGrouped.map(({ weekNum, audits }) => (
+                   <div key={weekNum} className="space-y-0">
+-                    <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/90 dark:bg-zinc-900/90 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
++                    <div className="sticky top-0 z-10 flex items-center justify-between bg-transparent px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+                       <span>Week {weekNum}</span>
+                       <span>{audits.length} run{audits.length === 1 ? "" : "s"}</span>
+                     </div>
+@@ -384,10 +384,8 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
+                               handleUpdateSelectedDate(new Date(item.createdAt));
+                             }}
+                             className={cn(
+-                              "hover-lift press-settle flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-0",
+-                              isSelected
+-                                ? "bg-zinc-100/80 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+-                                : "bg-white dark:bg-transparent hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
++                              "hover-lift press-settle flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-0 bg-transparent",
++                              isSelected ? "text-zinc-900 dark:text-white" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                             )}
+                           >
+                             <div className="flex items-center gap-3 min-w-0 flex-1">
+@@ -442,7 +440,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
+         </div>
+ 
+         {/* Diagnostic panel — full width, underneath timeline */}
+-        <div className="no-ambient-glow surface-glass-1 rounded-2xl p-4 space-y-4">
++        <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 space-y-4">
+           {selected ? (
+             <>
+               <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
+@@ -483,15 +481,15 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
+ 
+               {/* Metric Breakdown Cards */}
+               <div className="grid grid-cols-3 gap-2 text-center">
+-                <div className="no-ambient-glow surface-glass-1 rounded-xl p-2 space-y-0.5">
++                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-2 space-y-0.5">
+                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Issues</span>
+                   <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.topIssueCount}</span>
+                 </div>
+-                <div className="no-ambient-glow surface-glass-1 rounded-xl p-2 space-y-0.5">
++                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-2 space-y-0.5">
+                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Alerts</span>
+                   <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.alertsFiredCount}</span>
+                 </div>
+-                <div className="no-ambient-glow surface-glass-1 rounded-xl p-2 space-y-0.5">
++                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-2 space-y-0.5">
+                   <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Gaps</span>
+                   <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.gapsCount}</span>
+                 </div>
+diff --git a/src/app/dashboard/engagements/[id]/page.tsx b/src/app/dashboard/engagements/[id]/page.tsx
+index 1846e7f..3689315 100644
+--- a/src/app/dashboard/engagements/[id]/page.tsx
++++ b/src/app/dashboard/engagements/[id]/page.tsx
+@@ -9,7 +9,6 @@ import Link from "next/link";
+ import { EngagementPauseControl } from "./pause-control";
+ import { WorkersPanel } from "./workers-panel";
+ import { RepAuditLogPanel } from "./rep-audit-log-panel";
+-import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
+ import { MasterRosterCalendar } from "./master-roster-calendar";
+ import { CallIntelligenceLog } from "./call-intelligence-log";
+ import { EngagementActionsMenu } from "./engagement-actions-menu";
+@@ -396,16 +395,12 @@ export default async function EngagementDetailPage({
+             empty booking calendar with nothing relevant to show. */}
+         {installedProductIds.includes("showtime") && <MasterRosterCalendar engagementId={id} />}
+ 
+-        <DeliverablesPanel
+-          engagementId={id}
+-          discoveryPrefill={engagement.discoveryPrefill}
+-          voiceScrapeArtifacts={engagement.voiceScrapeArtifacts}
+-          brandVoiceProfile={engagement.brandVoiceProfile as BrandVoiceProfile}
+-          adCreativeBriefs={engagement.adCreativeBriefs}
+-          pinDownScriptPack={engagement.pinDownScriptPack}
+-          pinDownPageAudit={engagement.pinDownPageAudit}
+-          conversationIntelligence={conversationIntelligenceState}
+-        />
++        {/* Brand voice, ad briefs, script pack, and confirmation-page audit
++            (DeliverablesPanel) used to render here unconditionally for
++            every engagement, pin-down enabled or not — moved to pin-down's
++            own dedicated page (skills/pin-down/page.tsx), same as every
++            other skill in SKILLS_WITH_OWN_PAGE, instead of always showing
++            on the main engagement page regardless of setup state. */}
+ 
+         {(conversationIntelligenceState.enabled || conversationIntelligenceSessionRows.length > 0) && (
+           <CallIntelligenceLog sessions={conversationIntelligenceSessionRows} />
+@@ -489,9 +484,10 @@ export default async function EngagementDetailPage({
+               </div>
+             )}
+ 
+-            {/* Filtered run list */}
++            {/* Filtered run list — transparent so the page's bg-dot-grid
++                shows through instead of the opaque glass fill hiding it. */}
+             {filteredRuns.length > 0 ? (
+-              <div className="w-full overflow-hidden no-ambient-glow surface-glass-1 rounded-xl transition-colors">
++              <div className="w-full overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl transition-colors">
+                 <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
+                   {filteredRuns.slice(0, 20).map((run) => {
+                     const isFailed = run.status.toLowerCase() === "failed";
+diff --git a/src/app/dashboard/engagements/[id]/skill-configure-menu.tsx b/src/app/dashboard/engagements/[id]/skill-configure-menu.tsx
+new file mode 100644
+index 0000000..4dc077c
+--- /dev/null
++++ b/src/app/dashboard/engagements/[id]/skill-configure-menu.tsx
+@@ -0,0 +1,62 @@
++"use client";
++
++// src/app/dashboard/engagements/[id]/skill-configure-menu.tsx
++//
++// "Configure" was only reachable from the Library or the Skills panel on
++// the main engagement page (bridges/[skill]/page.tsx, a full page nav
++// away) — a skill's own dedicated page (skills/[skill]/page.tsx) had no
++// way to reach its settings at all. This puts the same config form
++// directly on that page instead, via FloatingPanel — the same glassy,
++// portaled-to-body treatment ActionMenu uses, but sized and behaved for
++// a real form (wider, and doesn't close on internal scroll/resize the
++// way ActionMenu does — see floating-panel.tsx's own doc for why that
++// matters here specifically).
++
++import { useRouter } from "next/navigation";
++import { Settings } from "lucide-react";
++import { FloatingPanel } from "@/components/floating-panel";
++import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
++import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
++import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
++import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
++
++export type ConfigurableSkillId = "pin-down" | "win-back" | "pre-call-read" | "leak-map";
++
++export function SkillConfigureMenu({ skillId, engagementId }: { skillId: ConfigurableSkillId; engagementId: string }) {
++  const router = useRouter();
++
++  return (
++    <FloatingPanel
++      align="end"
++      panelWidth={560}
++      trigger={({ toggle, open }) => (
++        <button
++          type="button"
++          onClick={toggle}
++          aria-expanded={open}
++          className="hover-lift press-settle flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
++        >
++          <Settings size={13} />
++          Configure
++        </button>
++      )}
++    >
++      {(close) => {
++        const closeAndRefresh = () => {
++          close();
++          router.refresh();
++        };
++        return (
++          <div className="p-2.5">
++            {skillId === "pin-down" && (
++              <PinDownConfigForm engagementId={engagementId} onCancel={close} onSaved={closeAndRefresh} />
++            )}
++            {skillId === "win-back" && <WinBackConfigForm engagementId={engagementId} onCancel={closeAndRefresh} />}
++            {skillId === "pre-call-read" && <PreCallReadConfigForm engagementId={engagementId} onCancel={closeAndRefresh} />}
++            {skillId === "leak-map" && <LeakMapConfigForm engagementId={engagementId} onCancel={closeAndRefresh} />}
++          </div>
++        );
++      }}
++    </FloatingPanel>
++  );
++}
+diff --git a/src/app/dashboard/engagements/[id]/skills/leak-map/page.tsx b/src/app/dashboard/engagements/[id]/skills/leak-map/page.tsx
+index b0e65d0..6bf6f44 100644
+--- a/src/app/dashboard/engagements/[id]/skills/leak-map/page.tsx
++++ b/src/app/dashboard/engagements/[id]/skills/leak-map/page.tsx
+@@ -10,6 +10,7 @@ import Link from "next/link";
+ import { ChevronLeft } from "lucide-react";
+ import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
+ import { LeakMapSchedule } from "../../leak-map-schedule";
++import { SkillConfigureMenu } from "../../skill-configure-menu";
+ 
+ export const revalidate = 0;
+ 
+@@ -45,31 +46,40 @@ export default async function LeakMapSkillPage({
+   const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
+ 
+   return (
+-    <div className="space-y-6 font-sans antialiased">
+-      <SetBreadcrumbLabel label={`${engagement.buyer} · Funnel Audit`} />
++    <div className="relative min-h-screen w-full mx-auto tracking-tight antialiased px-1 transition-colors duration-200 overflow-hidden pb-10">
++      {/* Dot Grid Background — same as the main engagement page */}
++      <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
+ 
+-      {/* Single Clean Page Header */}
+-      <div className="flex items-center gap-3">
+-        <Link
+-          href={backHref}
+-          className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
+-          aria-label={backLabel}
+-          title={backLabel}
+-        >
+-          <ChevronLeft className="w-4 h-4" />
+-        </Link>
++      <div className="relative z-10 space-y-6 font-sans antialiased">
++        <SetBreadcrumbLabel label={`${engagement.buyer} · Funnel Audit`} />
+ 
+-        <div>
+-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
+-            Funnel Audit — {engagement.buyer}
+-          </h1>
+-          <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
+-            Automated weekly and monthly audits checking for drop-off points and funnel leaks.
+-          </p>
++        {/* Single Clean Page Header */}
++        <div className="flex items-center justify-between gap-3">
++          <div className="flex items-center gap-3 min-w-0">
++            <Link
++              href={backHref}
++              className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
++              aria-label={backLabel}
++              title={backLabel}
++            >
++              <ChevronLeft className="w-4 h-4" />
++            </Link>
++
++            <div className="min-w-0">
++              <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
++                Funnel Audit — {engagement.buyer}
++              </h1>
++              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
++                Automated weekly and monthly audits checking for drop-off points and funnel leaks.
++              </p>
++            </div>
++          </div>
++
++          <SkillConfigureMenu skillId="leak-map" engagementId={id} />
+         </div>
+-      </div>
+ 
+-      <LeakMapSchedule engagementId={id} />
++        <LeakMapSchedule engagementId={id} />
++      </div>
+     </div>
+   );
+ }
+\ No newline at end of file
+diff --git a/src/app/dashboard/engagements/[id]/skills/pin-down/page.tsx b/src/app/dashboard/engagements/[id]/skills/pin-down/page.tsx
+new file mode 100644
+index 0000000..b36a6b4
+--- /dev/null
++++ b/src/app/dashboard/engagements/[id]/skills/pin-down/page.tsx
+@@ -0,0 +1,105 @@
++// src/app/dashboard/engagements/[id]/skills/pin-down/page.tsx
++
++import { db } from "@/lib/db";
++import { engagements, conversationIntelligenceSessions, type EngagementStack } from "@/models/schema";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { and, eq, desc } from "drizzle-orm";
++import { notFound } from "next/navigation";
++import Link from "next/link";
++import { ChevronLeft } from "lucide-react";
++import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
++import { DeliverablesPanel, type BrandVoiceProfile } from "../../deliverables-panel";
++import { SkillConfigureMenu } from "../../skill-configure-menu";
++
++export const revalidate = 0;
++
++export default async function PinDownSkillPage({
++  params,
++  searchParams,
++}: {
++  params: Promise<{ id: string }>;
++  searchParams: Promise<{ from?: string }>;
++}) {
++  const { id } = await params;
++  const { from } = await searchParams;
++  const session = await getSession();
++  const activeWorkspace = await getActiveWorkspace(session?.whopUserId ?? "");
++
++  const [engagement] = await db
++    .select()
++    .from(engagements)
++    .where(
++      and(
++        eq(engagements.engagementId, id),
++        eq(engagements.whopUserId, session?.whopUserId ?? ""),
++        eq(engagements.workspaceId, activeWorkspace.workspaceId)
++      )
++    )
++    .limit(1);
++
++  if (!engagement) notFound();
++
++  const conversationIntelligenceSessionRows = await db
++    .select()
++    .from(conversationIntelligenceSessions)
++    .where(eq(conversationIntelligenceSessions.engagementId, id))
++    .orderBy(desc(conversationIntelligenceSessions.createdAt))
++    .limit(20);
++
++  const conversationIntelligenceState = {
++    enabled: (engagement.stack as EngagementStack | null)?.conversation_intelligence_provider === "recall_ai",
++    lastProcessedAt: conversationIntelligenceSessionRows.find((s) => s.completedAt)?.completedAt?.toISOString(),
++  };
++
++  const isFromModule = from && from.startsWith("/dashboard/modules");
++  const backHref = isFromModule ? from : `/dashboard/engagements/${id}`;
++  const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
++
++  return (
++    <div className="relative min-h-screen w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200 overflow-hidden pb-10">
++      {/* Dot Grid Background — same as the main engagement page */}
++      <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
++
++      <div className="relative z-10 space-y-6 font-sans antialiased">
++        <SetBreadcrumbLabel label={`${engagement.buyer} · Show Rate Setup`} />
++
++        {/* Clean Single Header Section */}
++        <div className="flex items-center justify-between gap-3">
++          <div className="flex items-center gap-3 min-w-0">
++            <Link
++              href={backHref}
++              className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
++              aria-label={backLabel}
++              title={backLabel}
++            >
++              <ChevronLeft className="w-4 h-4" />
++            </Link>
++
++            <div className="min-w-0">
++              <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
++                Show Rate Setup — {engagement.buyer}
++              </h1>
++              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
++                Brand voice, ad creative briefs, video scripts, and confirmation page — the one-time onboarding output, not an ongoing run.
++              </p>
++            </div>
++          </div>
++
++          <SkillConfigureMenu skillId="pin-down" engagementId={id} />
++        </div>
++
++        <DeliverablesPanel
++          engagementId={id}
++          discoveryPrefill={engagement.discoveryPrefill}
++          voiceScrapeArtifacts={engagement.voiceScrapeArtifacts}
++          brandVoiceProfile={engagement.brandVoiceProfile as BrandVoiceProfile}
++          adCreativeBriefs={engagement.adCreativeBriefs}
++          pinDownScriptPack={engagement.pinDownScriptPack}
++          pinDownPageAudit={engagement.pinDownPageAudit}
++          conversationIntelligence={conversationIntelligenceState}
++        />
++      </div>
++    </div>
++  );
++}
+diff --git a/src/app/dashboard/engagements/[id]/skills/pre-call-read/page.tsx b/src/app/dashboard/engagements/[id]/skills/pre-call-read/page.tsx
+index 63c93a7..e53cdc7 100644
+--- a/src/app/dashboard/engagements/[id]/skills/pre-call-read/page.tsx
++++ b/src/app/dashboard/engagements/[id]/skills/pre-call-read/page.tsx
+@@ -8,6 +8,7 @@ import Link from "next/link";
+ import { ChevronLeft } from "lucide-react";
+ import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
+ import { PreCallReadPipeline } from "../../pre-call-read-pipeline";
++import { SkillConfigureMenu } from "../../skill-configure-menu";
+ 
+ export const revalidate = 0;
+ 
+@@ -47,24 +48,28 @@ export default async function PreCallReadSkillPage({
+       <SetBreadcrumbLabel label={`${engagement.buyer} · Call Brief`} />
+ 
+       {/* Circular Back Button & Title in the same horizontal row */}
+-      <div className="flex items-center gap-3">
+-        <Link
+-          href={backHref}
+-          className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
+-          aria-label={backLabel}
+-          title={backLabel}
+-        >
+-          <ChevronLeft className="w-4 h-4" />
+-        </Link>
++      <div className="flex items-center justify-between gap-3">
++        <div className="flex items-center gap-3 min-w-0">
++          <Link
++            href={backHref}
++            className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
++            aria-label={backLabel}
++            title={backLabel}
++          >
++            <ChevronLeft className="w-4 h-4" />
++          </Link>
+ 
+-        <div>
+-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
+-            Call Brief — {engagement.buyer}
+-          </h1>
+-          <p className="text-xs text-zinc-500 mt-0.5">
+-            Every call this engagement has ever had, not just today&apos;s calendar.
+-          </p>
++          <div className="min-w-0">
++            <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
++              Call Brief — {engagement.buyer}
++            </h1>
++            <p className="text-xs text-zinc-500 mt-0.5">
++              Every call this engagement has ever had, not just today&apos;s calendar.
++            </p>
++          </div>
+         </div>
++
++        <SkillConfigureMenu skillId="pre-call-read" engagementId={id} />
+       </div>
+ 
+       <PreCallReadPipeline engagementId={id} />
+diff --git a/src/app/dashboard/engagements/[id]/skills/win-back/page.tsx b/src/app/dashboard/engagements/[id]/skills/win-back/page.tsx
+index 77bd257..b3e27b6 100644
+--- a/src/app/dashboard/engagements/[id]/skills/win-back/page.tsx
++++ b/src/app/dashboard/engagements/[id]/skills/win-back/page.tsx
+@@ -13,6 +13,7 @@ import { computeWinBackRevenueAttribution } from "@/features/win-back/server/rev
+ import { WinBackPipeline } from "../../win-back-pipeline";
+ import { WinBackRevenueSection } from "../../win-back-revenue-section";
+ import { WinBackCadencePreview } from "../../win-back-cadence-preview";
++import { SkillConfigureMenu } from "../../skill-configure-menu";
+ 
+ export const revalidate = 0;
+ 
+@@ -54,40 +55,49 @@ export default async function WinBackSkillPage({
+   const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
+ 
+   return (
+-    <div className="space-y-6 font-sans antialiased">
+-      <SetBreadcrumbLabel label={`${engagement.buyer} · Booking Recovery`} />
++    <div className="relative min-h-screen w-full mx-auto tracking-tight antialiased px-1 transition-colors duration-200 overflow-hidden pb-10">
++      {/* Dot Grid Background — same as the main engagement page */}
++      <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
+ 
+-      {/* Clean Single Header Section */}
+-      <div className="flex items-center gap-3">
+-        <Link
+-          href={backHref}
+-          className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
+-          aria-label={backLabel}
+-          title={backLabel}
+-        >
+-          <ChevronLeft className="w-4 h-4" />
+-        </Link>
++      <div className="relative z-10 space-y-6 font-sans antialiased">
++        <SetBreadcrumbLabel label={`${engagement.buyer} · Booking Recovery`} />
+ 
+-        <div>
+-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
+-            Booking Recovery — {engagement.buyer}
+-          </h1>
+-          <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
+-            Every enrolled prospect across the whole recovery cadence — not one run page at a time.
+-          </p>
++        {/* Clean Single Header Section */}
++        <div className="flex items-center justify-between gap-3">
++          <div className="flex items-center gap-3 min-w-0">
++            <Link
++              href={backHref}
++              className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
++              aria-label={backLabel}
++              title={backLabel}
++            >
++              <ChevronLeft className="w-4 h-4" />
++            </Link>
++
++            <div className="min-w-0">
++              <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
++                Booking Recovery — {engagement.buyer}
++              </h1>
++              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
++                Every enrolled prospect across the whole recovery cadence — not one run page at a time.
++              </p>
++            </div>
++          </div>
++
++          <SkillConfigureMenu skillId="win-back" engagementId={id} />
+         </div>
+-      </div>
+ 
+-      <WinBackPipeline engagementId={id} />
++        <WinBackPipeline engagementId={id} />
+ 
+-      <WinBackCadencePreview assetMap={engagement.winBackSequenceAssetMap} engagementId={id} />
++        <WinBackCadencePreview assetMap={engagement.winBackSequenceAssetMap} engagementId={id} />
+ 
+-      <WinBackRevenueSection
+-        engagementId={id}
+-        offerPrice={revenue.offerPrice}
+-        initialEnrollments={revenue.recoveredEnrollments}
+-        initialPeriodLabel={revenue.periodLabel}
+-      />
++        <WinBackRevenueSection
++          engagementId={id}
++          offerPrice={revenue.offerPrice}
++          initialEnrollments={revenue.recoveredEnrollments}
++          initialPeriodLabel={revenue.periodLabel}
++        />
++      </div>
+     </div>
+   );
+ }
+\ No newline at end of file
+diff --git a/src/app/dashboard/engagements/[id]/win-back-cadence-preview.tsx b/src/app/dashboard/engagements/[id]/win-back-cadence-preview.tsx
+index ec278e7..a6bbf3c 100644
+--- a/src/app/dashboard/engagements/[id]/win-back-cadence-preview.tsx
++++ b/src/app/dashboard/engagements/[id]/win-back-cadence-preview.tsx
+@@ -3,9 +3,9 @@
+ // src/app/dashboard/engagements/[id]/win-back-cadence-preview.tsx
+ 
+ import { useState } from "react";
+-import { Mail, MessageSquare, ChevronDown, Sparkles } from "lucide-react";
++import { useRouter } from "next/navigation";
++import { Mail, MessageSquare, ChevronDown, Loader2, ArrowRight } from "lucide-react";
+ import { cn } from "@/lib/utils";
+-import { TriggerSkillButton } from "./trigger-skill-button";
+ 
+ export interface WinBackCadenceAssetMap {
+   windowDays: number;
+@@ -35,22 +35,48 @@ export function WinBackCadencePreview({
+   engagementId: string;
+ }) {
+   const [expandedKey, setExpandedKey] = useState<string | null>(null);
++  const router = useRouter();
++  const [generating, setGenerating] = useState(false);
++  const [generateError, setGenerateError] = useState<string | null>(null);
++
++  async function handleGenerate() {
++    setGenerating(true);
++    setGenerateError(null);
++    try {
++      const res = await fetch(`/api/engagements/${engagementId}/win-back/generate-cadence`, { method: "POST" });
++      const data = await res.json().catch(() => ({}));
++      if (!res.ok) throw new Error(data.error ?? "Failed to generate cadence.");
++      router.refresh();
++    } catch (err) {
++      setGenerateError(err instanceof Error ? err.message : "Failed to generate cadence.");
++    } finally {
++      setGenerating(false);
++    }
++  }
+ 
+   if (!assetMap) {
+     return (
+-      <div className="no-ambient-glow surface-glass-2 rounded-2xl p-5 font-sans">
++      <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-5 font-sans">
+         <div className="flex items-start gap-3">
+-          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-400">
+-            <Sparkles size={13} />
+-          </span>
+           <div className="min-w-0">
+             <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
+             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans mt-1 max-w-md">
+               No cadence has been generated yet. Win-Back builds this the first time its sequence runs for this
+               engagement — run it now to generate the emails and texts every recovered prospect will receive.
+             </p>
+-            <div className="mt-3 w-56">
+-              <TriggerSkillButton engagementId={engagementId} skillName="win-back" label="Generate cadence now" />
++            <div className="mt-3 space-y-1.5 w-56">
++              <button
++                type="button"
++                onClick={handleGenerate}
++                disabled={generating}
++                className="hover-lift press-settle shadow-elevation-1 w-full flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
++              >
++                {generating ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
++                {generating ? "Generating…" : "Generate cadence now"}
++              </button>
++              {generateError && (
++                <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">{generateError}</p>
++              )}
+             </div>
+           </div>
+         </div>
+@@ -64,7 +90,7 @@ export function WinBackCadencePreview({
+   ].sort((a, b) => a.offsetDays - b.offsetDays);
+ 
+   return (
+-    <div className="no-ambient-glow surface-glass-2 rounded-2xl overflow-hidden font-sans">
++    <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden font-sans">
+       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/40 px-5 py-3">
+         <div>
+           <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
+@@ -107,7 +133,7 @@ export function WinBackCadencePreview({
+               </button>
+               {expanded && (
+                 <div className="px-5 pb-4 pl-[3.25rem]">
+-                  <p className="text-xs text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans no-ambient-glow surface-glass-1 rounded-xl p-3">
++                  <p className="text-xs text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-3">
+                     {t.body}
+                   </p>
+                 </div>
+diff --git a/src/app/dashboard/engagements/[id]/win-back-pipeline.tsx b/src/app/dashboard/engagements/[id]/win-back-pipeline.tsx
+index 411c24f..8352fcc 100644
+--- a/src/app/dashboard/engagements/[id]/win-back-pipeline.tsx
++++ b/src/app/dashboard/engagements/[id]/win-back-pipeline.tsx
+@@ -226,7 +226,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
+   return (
+     <div className="flex flex-col gap-3 font-sans antialiased">
+       {/* Shared Toolbar & Controls */}
+-      <div className="flex flex-wrap items-center justify-between gap-3 no-ambient-glow surface-glass-1 rounded-2xl p-2 font-sans">
++      <div className="flex flex-wrap items-center justify-between gap-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-2 font-sans">
+         <div className="flex flex-wrap items-center gap-2">
+           {/* Universal Month Navigation */}
+           <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
+@@ -303,7 +303,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
+       {/* SMART SPLIT-PANE RECOVERY FEED */}
+       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
+         {/* LEFT 7 COLUMNS: CHRONOLOGICAL RECOVERY FEED */}
+-        <div className="lg:col-span-7 overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl font-sans flex flex-col">
++        <div className="lg:col-span-7 overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl font-sans flex flex-col">
+           <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
+             <div className="flex items-center gap-1.5">
+               <CalendarDays size={14} className="text-zinc-500" />
+@@ -466,7 +466,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
+         </div>
+ 
+         {/* RIGHT 5 COLUMNS: PERSISTENT RECOVERY INSPECTOR PANEL */}
+-        <div className="lg:col-span-5 no-ambient-glow surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
++        <div className="lg:col-span-5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 space-y-4 font-sans">
+           {selected ? (
+             <>
+               <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
+@@ -497,7 +497,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
+                 </div>
+               </div>
+ 
+-              <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
++              <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-3 space-y-2 text-xs font-sans">
+                 <div className="flex items-center justify-between font-sans">
+                   <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
+                   <span className="font-mono text-zinc-900 dark:text-white">{selected.touchesSent} / {selected.touchesTotal}</span>
+@@ -527,7 +527,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
+               </div>
+ 
+               {selected.freshRescheduleLink && (
+-                <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
++                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-3 space-y-2 text-xs font-sans">
+                   <span className="text-[10.5px] font-mono text-zinc-500 uppercase block font-semibold flex items-center gap-1.5">
+                     <Link2 size={12} /> Single-use Reschedule Link
+                   </span>
+@@ -551,7 +551,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
+ 
+               {/* CLEAN RUN ACTIVITY PANEL IN LIGHT MODE - NO DARK BOX OVERFLOW */}
+               {selected.runId && (
+-                <div className="no-ambient-glow surface-glass-1 rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden text-xs font-sans">
++                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden text-xs font-sans">
+                   <button
+                     type="button"
+                     onClick={() => setShowRunActivity((p) => !p)}
+diff --git a/src/app/dashboard/engagements/[id]/win-back-revenue-section.tsx b/src/app/dashboard/engagements/[id]/win-back-revenue-section.tsx
+index 4b31376..11902d2 100644
+--- a/src/app/dashboard/engagements/[id]/win-back-revenue-section.tsx
++++ b/src/app/dashboard/engagements/[id]/win-back-revenue-section.tsx
+@@ -235,7 +235,7 @@ export function WinBackRevenueSection({
+       </div>
+ 
+       {/* ── TOP STATS SUMMARY BAR ── */}
+-      <div className="no-ambient-glow surface-glass-1 rounded-2xl p-4">
++      <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4">
+         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+           <div className="space-y-1 p-2">
+             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
+@@ -274,7 +274,7 @@ export function WinBackRevenueSection({
+       {/* ── Weekly Recovery Trend — a compact bar strip instead of a 12-card
+            kanban board that rendered "No Recoveries" placeholders for every
+            empty week. Same information, no empty scaffolding. ── */}
+-      <div className="no-ambient-glow surface-glass-1 rounded-2xl p-4">
++      <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4">
+         <div className="flex items-center justify-between mb-3">
+           <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
+             Weekly Recovery Trend — {selectedPeriod.label}
+@@ -316,7 +316,7 @@ export function WinBackRevenueSection({
+ 
+       {/* ── Recovered Deals — flat chronological list. Only real rows,
+            one honest empty state instead of stacked per-week placeholders. ── */}
+-      <div className="no-ambient-glow surface-glass-1 rounded-2xl overflow-hidden">
++      <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden">
+         <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800/80">
+           <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
+             Recovered Deals — {selectedPeriod.label}
+@@ -399,7 +399,7 @@ function RecoveredDealDrawer({
+                 <span className="truncate">{deal.prospectEmail}</span>
+               </div>
+ 
+-              <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2">
++              <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-3 space-y-2">
+                 {offerPrice > 0 && (
+                   <div className="flex items-center justify-between text-xs font-sans">
+                     <span className="text-zinc-600 dark:text-zinc-400">Revenue attributed</span>
+@@ -423,7 +423,7 @@ function RecoveredDealDrawer({
+               </div>
+ 
+               {deal.runId && (
+-                <div className="no-ambient-glow surface-glass-1 rounded-xl overflow-hidden">
++                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl overflow-hidden">
+                   <button
+                     type="button"
+                     onClick={() => setShowRunActivity((p) => !p)}
+diff --git a/src/app/dashboard/runs/[id]/views/leak-map-view.tsx b/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
+index ee778af..6e88e06 100644
+--- a/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
+@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
+ import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
+ import { StatusPill, toneFromSeverity } from "../_shared/status-pill";
+ import { EmptyState } from "../_shared/empty-state";
++import { SimpleMarkdown } from "@/components/simple-markdown";
+ 
+ const INSUFFICIENT_DATA_GAP = /^\[insufficient-data\] (.+?): sample too small \(current n=(\d+), prior n=(\d+), floor=(\d+)\)\./;
+ function humanizeGap(gap: string): string {
+@@ -143,11 +144,11 @@ export function LeakMapView({
+               {/* Status Strip */}
+               <div
+                 className={cn(
+-                  "flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl px-3.5 py-2.5 transition-all",
+-                  overallSeverity === "high" && "border border-rose-900/50 bg-rose-950/10",
+-                  overallSeverity === "medium" && "border border-orange-900/50 bg-orange-950/10",
+-                  overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData &&
+-                    "border border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10"
++                  "flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border bg-transparent px-3.5 py-2.5 transition-all",
++                  overallSeverity === "high" && "border-rose-500/40",
++                  overallSeverity === "medium" && "border-orange-500/40",
++                  overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData && "border-amber-500/40",
++                  overallSeverity !== "high" && overallSeverity !== "medium" && hasAnyUsableData && "border-zinc-200/60 dark:border-zinc-800/60"
+                 )}
+               >
+                 <div className="flex items-center gap-2 shrink-0">
+@@ -190,7 +191,7 @@ export function LeakMapView({
+                   real RM risk signal both moved unfavorably this same
+                   week for this client. */}
+               {correlationFlags.length > 0 && (
+-                <div className="flex flex-col gap-1.5 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/40 dark:bg-orange-950/10 p-3">
++                <div className="flex flex-col gap-1.5 rounded-xl border border-orange-500/40 bg-transparent p-3">
+                   {correlationFlags.map((flag, i) => (
+                     <p key={i} className="flex items-start gap-2 text-xs leading-relaxed text-orange-800 dark:text-orange-300">
+                       <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+@@ -204,7 +205,7 @@ export function LeakMapView({
+               <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-3 items-start">
+                 <div className="flex flex-col gap-3 min-w-0">
+                   {filteredIssues.length > 0 ? (
+-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
++                    <div className="rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
+                       {filteredIssues.map((issue) => (
+                         <IssueCard key={issue.name} issue={issue} />
+                       ))}
+@@ -241,9 +242,10 @@ export function LeakMapView({
+                     </div>
+ 
+                     {audit.reportMarkdown ? (
+-                      <div className="whitespace-pre-wrap pt-2 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto">
+-                        {audit.reportMarkdown}
+-                      </div>
++                      <SimpleMarkdown
++                        text={audit.reportMarkdown}
++                        className="pt-2 text-xs text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto"
++                      />
+                     ) : (
+                       <p className="pt-2 text-xs italic text-zinc-500 dark:text-zinc-500">
+                         No report text stored for this run. Check the Steps panel to confirm whether delivery (Resend/Slack) succeeded.
+@@ -254,7 +256,7 @@ export function LeakMapView({
+ 
+                 {/* Data Gaps sidebar */}
+                 {filteredGaps.length > 0 && (
+-                  <div className="rounded-xl border border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10 p-3 lg:sticky lg:top-3">
++                  <div className="rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-3 lg:sticky lg:top-3">
+                     <div className="mb-1.5 flex items-center gap-1.5">
+                       <HelpCircle size={13} className="text-amber-700 dark:text-amber-400" />
+                       <h3 className="text-[11px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+@@ -354,21 +356,8 @@ export function LeakMapView({
+ function IssueCard({ issue }: { issue: IssueType }) {
+   const improved = issue.delta > 0;
+   const tone = toneFromSeverity(issue.severity);
+-  // A metric with insufficientData always has severity "none" (computeDelta
+-  // forces this), but "none because unconfirmed" and "none because
+-  // genuinely nominal" need to look different here, or this card ends up
+-  // asserting "stable performance" for something that was never actually
+-  // checked — which is exactly what it did before this field existed.
+-  const cardTone = issue.insufficientData ? "gap" : tone;
+   return (
+-    <div
+-      className={cn(
+-        "rounded-xl p-3 transition-all",
+-        cardTone === "danger" && "border border-rose-900/40 bg-rose-950/10",
+-        cardTone === "warning" && "border border-orange-900/40 bg-orange-950/10",
+-        cardTone === "gap" && "border border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10"
+-      )}
+-    >
++    <div className="p-3">
+       {/* Header row */}
+       <div className="flex items-start justify-between gap-2">
+         <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+diff --git a/src/components/booking-sync-chip.tsx b/src/components/booking-sync-chip.tsx
+index daf8423..52d24f9 100644
+--- a/src/components/booking-sync-chip.tsx
++++ b/src/components/booking-sync-chip.tsx
+@@ -2,7 +2,7 @@
+ "use client";
+ 
+ import { BookingSyncStatus } from "@/lib/booking-sync-status";
+-import { AlertCircle, CheckCircle2, Clock } from "lucide-react";
++import { Clock } from "lucide-react";
+ 
+ function relativeTime(iso: string | null): string | null {
+   if (!iso) return null;
+@@ -16,33 +16,26 @@ function relativeTime(iso: string | null): string | null {
+   return `${days}d ago`;
+ }
+ 
++// Stripped to just a filled clock + relative time — no pill bg/border, no
++// headline copy ("Auto-polling · instant sync available" etc.) cluttering
++// the page header. The full headline + detail still exist and aren't
++// silently dropped — they're on the title tooltip — and health still
++// reads through the icon's color (a real error still shows red).
+ export function BookingSyncChip({ status }: { status: BookingSyncStatus }) {
+   if (!status.platform || status.mode === "none") return null;
+ 
+   const timeLabel = relativeTime(status.lastActivityAt);
++  const toneClass =
++    status.health === "healthy"
++      ? "text-emerald-600 dark:text-emerald-400 fill-emerald-600/20 dark:fill-emerald-400/20"
++      : status.health === "error"
++      ? "text-rose-600 dark:text-rose-400 fill-rose-600/20 dark:fill-rose-400/20"
++      : "text-sky-600 dark:text-sky-400 fill-sky-600/20 dark:fill-sky-400/20";
+ 
+   return (
+-    <div
+-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-mono font-medium transition-colors ${
+-        status.health === "healthy"
+-          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+-          : status.health === "error"
+-          ? "bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400"
+-          : "bg-sky-500/10 border-sky-500/30 text-sky-600 dark:text-sky-400"
+-      }`}
+-    >
+-      {status.health === "healthy" && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
+-      {status.health === "error" && <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
+-      {status.health === "warning" && <Clock className="w-3.5 h-3.5 shrink-0" />}
+-
+-      <span>{status.headline}</span>
+-
+-      {timeLabel && (
+-        <>
+-          <span className="opacity-40">·</span>
+-          <span className="opacity-80">{timeLabel}</span>
+-        </>
+-      )}
++    <div className="inline-flex items-center gap-1.5 text-[11px] font-mono font-medium" title={`${status.headline} — ${status.detail}`}>
++      <Clock className={`w-3.5 h-3.5 shrink-0 ${toneClass}`} />
++      {timeLabel && <span className={status.health === "healthy" ? "text-emerald-700 dark:text-emerald-300" : status.health === "error" ? "text-rose-700 dark:text-rose-300" : "text-sky-700 dark:text-sky-300"}>{timeLabel}</span>}
+     </div>
+   );
+ }
+\ No newline at end of file
+diff --git a/src/components/floating-panel.tsx b/src/components/floating-panel.tsx
+new file mode 100644
+index 0000000..6bd2e45
+--- /dev/null
++++ b/src/components/floating-panel.tsx
+@@ -0,0 +1,106 @@
++"use client";
++
++// src/components/floating-panel.tsx
++//
++// Same portal-to-document.body + glass treatment as ActionMenu
++// (action-menu.tsx), but built for a wide form/settings panel instead of
++// a short menu list:
++// - Wider by default, no flip-above-if-not-enough-room logic (its own
++//   max-height + internal scroll handles overflow instead).
++// - Does NOT close on scroll or window resize. ActionMenu closes on
++//   both — reasonable for a menu (the anchor moved, bail), but for a
++//   panel tall enough to need its own internal scrolling, scrolling
++//   inside it is a real scroll event that ActionMenu's listener treats
++//   as "user scrolled the page" and closes on — which is exactly what
++//   made a config form "disappear" while editing a field further down.
++//   A mobile keyboard opening fires a resize for the same reason.  Only
++//   an outside click or Escape closes this one.
++
++import { useEffect, useRef, useState, type ReactNode } from "react";
++import { createPortal } from "react-dom";
++
++const VIEWPORT_MARGIN = 12;
++
++export function FloatingPanel({
++  trigger,
++  children,
++  align = "end",
++  panelWidth = 480,
++}: {
++  trigger: (props: { open: boolean; toggle: () => void }) => ReactNode;
++  children: ReactNode | ((close: () => void) => ReactNode);
++  align?: "start" | "end";
++  panelWidth?: number;
++}) {
++  const anchorRef = useRef<HTMLDivElement>(null);
++  const panelRef = useRef<HTMLDivElement>(null);
++  const [open, setOpen] = useState(false);
++  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
++
++  function toggle() {
++    setOpen((o) => !o);
++  }
++  function close() {
++    setOpen(false);
++  }
++
++  useEffect(() => {
++    if (!open) return;
++    const el = anchorRef.current;
++    if (!el) return;
++    const rect = el.getBoundingClientRect();
++    const top = Math.min(rect.bottom + 8, window.innerHeight - VIEWPORT_MARGIN);
++    let left = align === "end" ? rect.right - panelWidth : rect.left;
++    left = Math.min(Math.max(VIEWPORT_MARGIN, left), window.innerWidth - panelWidth - VIEWPORT_MARGIN);
++    setCoords({ top, left });
++  }, [open, align, panelWidth]);
++
++  // Deliberately no scroll/resize listeners here — see the file doc above.
++  useEffect(() => {
++    if (!open) return;
++
++    function onDocMouseDown(e: MouseEvent) {
++      const target = e.target as Node;
++      if (anchorRef.current?.contains(target)) return;
++      if (panelRef.current?.contains(target)) return;
++      close();
++    }
++    function onKeyDown(e: KeyboardEvent) {
++      if (e.key === "Escape") close();
++    }
++
++    document.addEventListener("mousedown", onDocMouseDown);
++    document.addEventListener("keydown", onKeyDown);
++    return () => {
++      document.removeEventListener("mousedown", onDocMouseDown);
++      document.removeEventListener("keydown", onKeyDown);
++    };
++  }, [open]);
++
++  return (
++    <div ref={anchorRef} className="inline-flex">
++      {trigger({ open, toggle })}
++      {open &&
++        coords &&
++        typeof document !== "undefined" &&
++        createPortal(
++          <>
++            <div className="fixed inset-0 z-40" onClick={close} />
++            <div
++              style={{ position: "fixed", top: coords.top, left: coords.left, width: panelWidth }}
++              className="z-50 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150 motion-safe:origin-top-right"
++            >
++              <div
++                ref={panelRef}
++                role="dialog"
++                className="rounded-2xl surface-glass-3 text-zinc-900 dark:text-zinc-100 max-h-[80vh] overflow-y-auto font-sans antialiased"
++              >
++                {typeof children === "function" ? children(close) : children}
++              </div>
++            </div>
++          </>,
++          document.body
++        )}
++    </div>
++  );
++}
+diff --git a/src/components/reports/dynamic-client-report.tsx b/src/components/reports/dynamic-client-report.tsx
+index 609af4d..ee499e3 100644
+--- a/src/components/reports/dynamic-client-report.tsx
++++ b/src/components/reports/dynamic-client-report.tsx
+@@ -40,9 +40,12 @@ export function DynamicClientReport({
+   offerDetails?: Record<string, string | boolean> | null;
+   blocksByPeriod: Record<ReportPeriod, ReportBlockWithTrend[]>;
+   /** Every worker actually enabled for this client — used only to name
+-   * the ones that contributed zero blocks in any period (leak-map, and
+-   * anything else with genuinely nothing trend-able) so they read as
+-   * "running, nothing numeric here" instead of looking identical to off. */
++   * the ones that contributed zero blocks in any period (pin-down,
++   * leak-map, rep-onboarding — anything with genuinely nothing
++   * trend-able) so they read as "enabled, nothing numeric to trend here"
++   * instead of looking identical to off. This is never a run-status
++   * check — a permanently-empty resolver means this forever, whether or
++   * not the skill has actually finished running. */
+   enabledWorkerIds: WorkerId[];
+ }) {
+   const [period, setPeriod] = useState<ReportPeriod>("week");
+@@ -135,7 +138,7 @@ export function DynamicClientReport({
+               href={workerPrimaryHref(id, engagementId)}
+               className="text-xs text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors underline decoration-dotted underline-offset-2"
+             >
+-              {WORKER_REGISTRY[id].name} is running — see its full report
++              {WORKER_REGISTRY[id].name} has no trend to show — see its full report
+             </Link>
+           ))}
+         </div>
+diff --git a/src/components/simple-markdown.tsx b/src/components/simple-markdown.tsx
+new file mode 100644
+index 0000000..97e4cbc
+--- /dev/null
++++ b/src/components/simple-markdown.tsx
+@@ -0,0 +1,175 @@
++// src/components/simple-markdown.tsx
++//
++// A small, dependency-free renderer for the specific markdown subset the
++// LLM-generated reports actually produce (Leak Map's executive report,
++// audit-engine.ts — headers, bold/italic, horizontal rules, bullet lists,
++// a "|"-delimited table, plain paragraphs). Not a general CommonMark
++// parser — no node_modules markdown library is pulled in for one report
++// view; this covers exactly what's needed instead of the raw "#"/"**"
++// literally showing up on screen.
++
++import React from "react";
++
++function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
++  const nodes: React.ReactNode[] = [];
++  const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g;
++  let lastIndex = 0;
++  let match: RegExpExecArray | null;
++  let i = 0;
++  while ((match = regex.exec(text)) !== null) {
++    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
++    if (match[1] !== undefined) {
++      nodes.push(
++        <strong key={`${keyPrefix}-b-${i}`} className="font-semibold text-zinc-900 dark:text-zinc-100">
++          {match[1]}
++        </strong>
++      );
++    } else if (match[2] !== undefined) {
++      nodes.push(<em key={`${keyPrefix}-i-${i}`}>{match[2]}</em>);
++    }
++    i++;
++    lastIndex = regex.lastIndex;
++  }
++  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
++  return nodes;
++}
++
++const HEADING_RE = /^(#{1,3})\s+(.*)$/;
++const LIST_RE = /^[-*]\s+(.*)$/;
++const HR_RE = /^-{3,}$/;
++const TABLE_SEPARATOR_RE = /^[\s|:-]+$/;
++
++export function SimpleMarkdown({ text, className }: { text: string; className?: string }) {
++  const lines = text.split("\n");
++  const blocks: React.ReactNode[] = [];
++  let i = 0;
++  let key = 0;
++  let listBuffer: string[] = [];
++
++  function flushList() {
++    if (listBuffer.length === 0) return;
++    const items = listBuffer;
++    listBuffer = [];
++    blocks.push(
++      <ul key={`ul-${key++}`} className="list-disc pl-5 space-y-1 my-2">
++        {items.map((item, idx) => (
++          <li key={idx} className="leading-relaxed">
++            {renderInline(item, `li-${key}-${idx}`)}
++          </li>
++        ))}
++      </ul>
++    );
++  }
++
++  while (i < lines.length) {
++    const trimmed = lines[i].trim();
++
++    if (trimmed === "") {
++      flushList();
++      i++;
++      continue;
++    }
++
++    if (HR_RE.test(trimmed)) {
++      flushList();
++      blocks.push(<hr key={`hr-${key++}`} className="my-4 border-zinc-200 dark:border-zinc-800" />);
++      i++;
++      continue;
++    }
++
++    const heading = HEADING_RE.exec(trimmed);
++    if (heading) {
++      flushList();
++      const level = heading[1].length;
++      const content = renderInline(heading[2], `h-${key}`);
++      const cls =
++        level === 1
++          ? "text-base font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-2 first:mt-0"
++          : level === 2
++          ? "text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-1.5 first:mt-0"
++          : "text-xs font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 mt-3 mb-1 first:mt-0";
++      const headingKey = key++;
++      if (level === 1) blocks.push(<h3 key={headingKey} className={cls}>{content}</h3>);
++      else if (level === 2) blocks.push(<h4 key={headingKey} className={cls}>{content}</h4>);
++      else blocks.push(<h5 key={headingKey} className={cls}>{content}</h5>);
++      i++;
++      continue;
++    }
++
++    const list = LIST_RE.exec(trimmed);
++    if (list) {
++      listBuffer.push(list[1]);
++      i++;
++      continue;
++    }
++
++    // A header row containing "|" whose next line is a "---|---" style
++    // separator — the pipe-table format the audit prompt asks for.
++    if (trimmed.includes("|") && lines[i + 1] && TABLE_SEPARATOR_RE.test(lines[i + 1].trim()) && lines[i + 1].includes("-")) {
++      flushList();
++      const headerCells = trimmed.split("|").map((c) => c.trim()).filter(Boolean);
++      i += 2;
++      const rows: string[][] = [];
++      while (i < lines.length && lines[i].trim().includes("|")) {
++        rows.push(lines[i].split("|").map((c) => c.trim()).filter(Boolean));
++        i++;
++      }
++      const tableKey = key++;
++      blocks.push(
++        <div key={tableKey} className="overflow-x-auto my-3">
++          <table className="w-full text-xs border-collapse">
++            <thead>
++              <tr>
++                {headerCells.map((c, idx) => (
++                  <th
++                    key={idx}
++                    className="text-left font-bold text-zinc-700 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800 px-2 py-1.5"
++                  >
++                    {renderInline(c, `th-${tableKey}-${idx}`)}
++                  </th>
++                ))}
++              </tr>
++            </thead>
++            <tbody>
++              {rows.map((r, ridx) => (
++                <tr key={ridx} className="border-b border-zinc-100 dark:border-zinc-800/60">
++                  {r.map((c, cidx) => (
++                    <td key={cidx} className="px-2 py-1.5 text-zinc-700 dark:text-zinc-300 align-top">
++                      {renderInline(c, `td-${tableKey}-${ridx}-${cidx}`)}
++                    </td>
++                  ))}
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        </div>
++      );
++      continue;
++    }
++
++    // Paragraph: consume consecutive plain lines until a blank line or the
++    // start of another block type.
++    flushList();
++    const paraLines: string[] = [trimmed];
++    i++;
++    while (
++      i < lines.length &&
++      lines[i].trim() !== "" &&
++      !HEADING_RE.test(lines[i].trim()) &&
++      !LIST_RE.test(lines[i].trim()) &&
++      !HR_RE.test(lines[i].trim())
++    ) {
++      paraLines.push(lines[i].trim());
++      i++;
++    }
++    const paraKey = key++;
++    blocks.push(
++      <p key={paraKey} className="leading-relaxed my-1.5">
++        {renderInline(paraLines.join(" "), `p-${paraKey}`)}
++      </p>
++    );
++  }
++  flushList();
++
++  return <div className={className}>{blocks}</div>;
++}
+diff --git a/src/features/win-back/server/cadence-builder.ts b/src/features/win-back/server/cadence-builder.ts
+index e89f6c8..3674259 100644
+--- a/src/features/win-back/server/cadence-builder.ts
++++ b/src/features/win-back/server/cadence-builder.ts
+@@ -1,4 +1,48 @@
+-import { callClaudeWithRetry, MODEL } from "@/lib/llm";
++import { callClaudeWithRetry, MODEL, type ClaudeCallOptions } from "@/lib/llm";
++
++// Pulls the JSON object out of a model response that's supposed to be
++// "ONLY JSON, no prose" but isn't guaranteed to be — strips ```json
++// fences first, then (if it still doesn't parse as-is) falls back to
++// slicing between the first "{" and the last "}", which survives a
++// stray "Here's the cadence:" preamble or trailing commentary that a
++// plain fence-strip doesn't.
++function extractJson<T>(text: string): T {
++  const fenceStripped = text.replace(/^```json\s*|```$/g, "").trim();
++  try {
++    return JSON.parse(fenceStripped);
++  } catch {
++    // fall through to bracket-slicing below
++  }
++  const start = fenceStripped.indexOf("{");
++  const end = fenceStripped.lastIndexOf("}");
++  if (start === -1 || end === -1 || end <= start) {
++    throw new Error("No JSON object found in response");
++  }
++  return JSON.parse(fenceStripped.slice(start, end + 1));
++}
++
++// callClaudeWithRetry only retries on the API call itself throwing
++// (network/rate-limit errors) — a call that succeeds but returns
++// unparseable JSON was never retried at all, it just failed the whole
++// cadence generation outright. This retries the generation itself once,
++// with an explicit correction appended to the prompt, before giving up.
++async function callClaudeForJson<T>(opts: ClaudeCallOptions, failureLabel: string): Promise<T> {
++  const first = await callClaudeWithRetry(opts);
++  try {
++    return extractJson<T>(first.text);
++  } catch {
++    const retryOpts: ClaudeCallOptions = {
++      ...opts,
++      userMessage: `${opts.userMessage}\n\nYour previous response was not valid JSON. Return ONLY the JSON object — no prose before or after it, no markdown code fences.`,
++    };
++    const second = await callClaudeWithRetry(retryOpts);
++    try {
++      return extractJson<T>(second.text);
++    } catch {
++      throw new Error(`${failureLabel} returned non-JSON output after a retry: ${second.text.slice(0, 200)}`);
++    }
++  }
++}
+ 
+ export type RecoveryWindowDays = 14 | 21 | 30 | 45 | 60;
+ 
+@@ -167,23 +211,19 @@ Include every email id and sms id listed below, in order.`;
+ Emails: ${plan.emails.map((e) => `${e.id} (${e.purpose})`).join(", ")}
+ SMS: ${plan.sms.map((s) => `${s.id} (${s.purpose})`).join(", ")}`;
+ 
+-  const result = await callClaudeWithRetry({
+-    model: MODEL.SYNTHESIS,
+-    system,
+-    userMessage,
+-    maxTokens: 2500,
+-    runId,
+-  });
+-
+-  let parsed: { emails: Array<{ id: string; subject: string; body: string }>; sms: Array<{ id: string; body: string }> };
+-  try {
+-    const cleaned = result.text.replace(/^```json\s*|\s*```$/g, "").trim();
+-    parsed = JSON.parse(cleaned);
+-  } catch {
+-    throw new Error(
+-      `Win-back cadence generation returned non-JSON output: ${result.text.slice(0, 200)}`
+-    );
+-  }
++  const parsed = await callClaudeForJson<{
++    emails: Array<{ id: string; subject: string; body: string }>;
++    sms: Array<{ id: string; body: string }>;
++  }>(
++    {
++      model: MODEL.SYNTHESIS,
++      system,
++      userMessage,
++      maxTokens: 2500,
++      runId,
++    },
++    "Win-back cadence generation"
++  );
+ 
+   const emails: CadenceAsset[] = plan.emails.map((slot) => {
+     const match = parsed.emails.find((e) => e.id === slot.id);
+@@ -278,23 +318,16 @@ Include every email id listed below, in order.`;
+   const userMessage = `Generate the sequence for this touch plan:
+ Emails: ${LONG_TERM_NURTURE_PLAN.map((e) => `${e.id} (${e.purpose})`).join(", ")}`;
+ 
+-  const result = await callClaudeWithRetry({
+-    model: MODEL.SYNTHESIS,
+-    system,
+-    userMessage,
+-    maxTokens: 3000,
+-    runId,
+-  });
+-
+-  let parsed: { emails: Array<{ id: string; subject: string; body: string }> };
+-  try {
+-    const cleaned = result.text.replace(/^```json\s*|\s*```$/g, "").trim();
+-    parsed = JSON.parse(cleaned);
+-  } catch {
+-    throw new Error(
+-      `Long-term nurture generation returned non-JSON output: ${result.text.slice(0, 200)}`
+-    );
+-  }
++  const parsed = await callClaudeForJson<{ emails: Array<{ id: string; subject: string; body: string }> }>(
++    {
++      model: MODEL.SYNTHESIS,
++      system,
++      userMessage,
++      maxTokens: 3000,
++      runId,
++    },
++    "Long-term nurture generation"
++  );
+ 
+   const emails: CadenceAsset[] = LONG_TERM_NURTURE_PLAN.map((slot) => {
+     const match = parsed.emails.find((e) => e.id === slot.id);
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+index 660b374..dc56e44 100644
+--- a/src/lib/worker-registry.ts
++++ b/src/lib/worker-registry.ts
+@@ -855,7 +855,7 @@ export function allWorkers(): WorkerDefinition[] {
+  * own links — two independently-maintained copies of "which workers have
+  * a page" is exactly the kind of drift this registry exists to prevent.
+  */
+-export const SKILLS_WITH_OWN_PAGE: WorkerId[] = ["pre-call-read", "pile-on", "win-back", "leak-map"];
++export const SKILLS_WITH_OWN_PAGE: WorkerId[] = ["pre-call-read", "pile-on", "win-back", "leak-map", "pin-down"];
+ 
+ /** The 4 Reputation Manager "watch" workers — same shape (a stream of
+  * findings: text + sentiment + flag + permalink), so they share one
+@@ -895,9 +895,9 @@ const REP_CRISIS_RESPONSE_HREF = "/dashboard/reputation-manager/incidents";
+  * only ever has one) with whichever real, single-client page already
+  * exists for it: its own schedule/report page, RM's shared findings
+  * page (pre-filtered to this worker's source), the incidents tracker, or
+- * — for a worker with none of those (pin-down, rep-onboarding) — the
+- * engagement page's own Run History, pre-filtered to just this worker's
+- * runs via the same `?skill=` param its filter chips already use.
++ * — for a worker with none of those (rep-onboarding) — the engagement
++ * page's own Run History, pre-filtered to just this worker's runs via
++ * the same `?skill=` param its filter chips already use.
+  */
+ export function workerPrimaryHref(workerId: WorkerId, engagementId: string): string {
+   if (SKILLS_WITH_OWN_PAGE.includes(workerId)) {

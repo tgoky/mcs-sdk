@@ -305,7 +305,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
 
           {/* Monthly Timeline Feed — full width */}
           <div className="overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex flex-col">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-transparent">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
                 <span className="text-xs font-bold text-zinc-900 dark:text-white">
@@ -364,7 +364,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
               <div className="divide-y divide-zinc-200/80 dark:divide-zinc-800/60 max-h-[360px] overflow-y-auto">
                 {monthWeeksGrouped.map(({ weekNum, audits }) => (
                   <div key={weekNum} className="space-y-0">
-                    <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/90 dark:bg-zinc-900/90 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+                    <div className="sticky top-0 z-10 flex items-center justify-between bg-transparent px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
                       <span>Week {weekNum}</span>
                       <span>{audits.length} run{audits.length === 1 ? "" : "s"}</span>
                     </div>
@@ -384,10 +384,8 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                               handleUpdateSelectedDate(new Date(item.createdAt));
                             }}
                             className={cn(
-                              "hover-lift press-settle flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-0",
-                              isSelected
-                                ? "bg-zinc-100/70 dark:bg-zinc-800/70 text-zinc-900 dark:text-white"
-                                : "bg-transparent hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                              "hover-lift press-settle flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-0 bg-transparent",
+                              isSelected ? "text-zinc-900 dark:text-white" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                             )}
                           >
                             <div className="flex items-center gap-3 min-w-0 flex-1">
