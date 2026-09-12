@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -64,6 +65,8 @@ function ClientAvatar({ name, size = "w-7 h-7" }: { name: string; size?: string 
 export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, avatar }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [clientSwitcherOpen, setClientSwitcherOpen] = useState(false);
+  const clientSwitcherAnchorRef = useRef<HTMLDivElement>(null);
+  const [clientSwitcherCoords, setClientSwitcherCoords] = useState<{ top: number; left: number } | null>(null);
   const [clientSearch, setClientSearch] = useState("");
   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
   const [skillCounts, setSkillCounts] = useState<Map<string, number> | null>(null);
@@ -136,6 +139,17 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
     setDragOverId(null);
   }
 
+  // Panel is portaled to document.body (see below) so backdrop-blur has
+  // real page content behind it to diffuse instead of the rail's own flat
+  // background — position has to be computed manually since it's no
+  // longer a CSS-positioned descendant of the anchor.
+  useEffect(() => {
+    if (!clientSwitcherOpen) return;
+    const rect = clientSwitcherAnchorRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setClientSwitcherCoords({ top: rect.top, left: rect.right + 8 });
+  }, [clientSwitcherOpen]);
+
   // Fetched lazily the first time the switcher opens, not on every page
   // load — see the route's own doc for why this can't just be a prop.
   useEffect(() => {
@@ -172,7 +186,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
             POST), promoted to its own labeled, always-visible rail item,
             landing directly on the chosen client's profile page instead
             of Work/home (see that route's own updated redirect). */}
-        <div className="relative w-full">
+        <div ref={clientSwitcherAnchorRef} className="relative w-full">
           <button
             type="button"
             onClick={() => setClientSwitcherOpen((p) => !p)}
@@ -211,17 +225,25 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
             </div>
           </button>
 
-          {clientSwitcherOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setClientSwitcherOpen(false)} />
-              {/* surface-glass-3 — same floating-panel treatment as the
-                  engagement page's "Modify" menu and the home page's
-                  workspace-card "..." menu (both via ActionMenu, see
-                  action-menu.tsx): near-invisible border, strong
-                  backdrop-blur, soft ambient shadow, so whatever's behind
-                  it visibly diffuses through instead of a flat opaque
-                  panel. */}
-              <div className="absolute left-full top-0 ml-2 z-50 w-72 surface-glass-3 rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+          {clientSwitcherOpen &&
+            clientSwitcherCoords &&
+            typeof document !== "undefined" &&
+            createPortal(
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setClientSwitcherOpen(false)} />
+                {/* surface-glass-3 — same floating-panel treatment as the
+                    engagement page's "Modify" menu and the home page's
+                    workspace-card "..." menu (both via ActionMenu, see
+                    action-menu.tsx): near-invisible border, strong
+                    backdrop-blur, soft ambient shadow, so whatever's behind
+                    it visibly diffuses through instead of a flat opaque
+                    panel. Portaled to document.body (like ActionMenu) so
+                    that backdrop is the actual page content instead of the
+                    rail's own flat background — otherwise there's nothing
+                    for the blur to diffuse and the glass effect is invisible. */}
+                <div
+                  style={{ position: "fixed", top: clientSwitcherCoords.top, left: clientSwitcherCoords.left }}
+                  className="z-50 w-72 surface-glass-3 rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
                 <div className="p-3 space-y-2">
                   <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 px-0.5">Clients</p>
                   {workspaces.length > 6 && (
@@ -329,8 +351,9 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                   </Link>
                 </div>
               </div>
-            </>
-          )}
+              </>,
+              document.body
+            )}
         </div>
 
         {/* Direct link to the currently active client's profile — the
