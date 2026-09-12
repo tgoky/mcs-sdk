@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   TrendingDown,
   TrendingUp,
-  FileText,
   HelpCircle,
   Search,
   Copy,
@@ -18,6 +17,7 @@ import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
 import { StatusPill, toneFromSeverity } from "../_shared/status-pill";
 import { EmptyState } from "../_shared/empty-state";
 import { SimpleMarkdown } from "@/components/simple-markdown";
+import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 
 const INSUFFICIENT_DATA_GAP = /^\[insufficient-data\] (.+?): sample too small \(current n=(\d+), prior n=(\d+), floor=(\d+)\)\./;
 function humanizeGap(gap: string): string {
@@ -158,27 +158,10 @@ export function LeakMapView({
               {/* Verdict — the one thing this view leads with. Bigger dot,
                   bigger text, more room than a thin status strip, since
                   this is the answer to "is anything wrong," not a footnote. */}
-              <div
-                className={cn(
-                  "flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border bg-transparent px-4 py-4 transition-all",
-                  overallSeverity === "high" && "border-rose-500/50",
-                  overallSeverity === "medium" && "border-orange-500/50",
-                  overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData && "border-amber-500/50",
-                  overallSeverity !== "high" && overallSeverity !== "medium" && hasAnyUsableData && "border-zinc-200/60 dark:border-zinc-800/60"
-                )}
-              >
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-transparent px-1 py-2 transition-all">
                 <div className="flex items-center gap-3 shrink-0">
-                  <span
-                    className={cn(
-                      "h-3 w-3 rounded-full shrink-0",
-                      overallSeverity === "high" && "bg-rose-500",
-                      overallSeverity === "medium" && "bg-orange-500",
-                      overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData && "bg-amber-500",
-                      overallSeverity !== "high" && overallSeverity !== "medium" && hasAnyUsableData && "bg-emerald-500"
-                    )}
-                    aria-hidden
-                  />
-                  <p className="text-base font-bold text-zinc-900 dark:text-white whitespace-nowrap">
+                  <SquishySkillBadge skill="leak-map" size={28} />
+                  <p className="text-lg font-bold text-zinc-900 dark:text-white whitespace-nowrap">
                     Funnel health:{" "}
                     {overallSeverity === "none"
                       ? hasAnyUsableData
@@ -188,7 +171,7 @@ export function LeakMapView({
                   </p>
                 </div>
 
-                <p className="text-xs text-zinc-500 dark:text-zinc-500">
+                <p className="text-sm text-zinc-500 dark:text-zinc-500">
                   {auditRunTypeLabel(audit.runType)} · {issues.length} metric
                   {issues.length === 1 ? "" : "s"} evaluated
                   {filteredGaps.length > 0 && ` · ${filteredGaps.length} data gap${filteredGaps.length === 1 ? "" : "s"}`}
@@ -294,8 +277,8 @@ export function LeakMapView({
               <div className="mt-2 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-4">
                 <div className="mb-3 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
                   <div className="flex items-center gap-2">
-                    <FileText size={16} className="text-zinc-500 dark:text-zinc-400" />
-                    <h2 className="text-base font-bold text-zinc-900 dark:text-white">Executive Audit Report</h2>
+                    <SquishySkillBadge skill="leak-map" size={24} />
+                    <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Executive Audit Report</h2>
                   </div>
                   {audit.reportMarkdown && (
                     <button
