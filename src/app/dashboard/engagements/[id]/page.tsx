@@ -9,7 +9,6 @@ import Link from "next/link";
 import { EngagementPauseControl } from "./pause-control";
 import { WorkersPanel } from "./workers-panel";
 import { RepAuditLogPanel } from "./rep-audit-log-panel";
-import { DeliverablesPanel, type BrandVoiceProfile } from "./deliverables-panel";
 import { MasterRosterCalendar } from "./master-roster-calendar";
 import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
@@ -396,16 +395,12 @@ export default async function EngagementDetailPage({
             empty booking calendar with nothing relevant to show. */}
         {installedProductIds.includes("showtime") && <MasterRosterCalendar engagementId={id} />}
 
-        <DeliverablesPanel
-          engagementId={id}
-          discoveryPrefill={engagement.discoveryPrefill}
-          voiceScrapeArtifacts={engagement.voiceScrapeArtifacts}
-          brandVoiceProfile={engagement.brandVoiceProfile as BrandVoiceProfile}
-          adCreativeBriefs={engagement.adCreativeBriefs}
-          pinDownScriptPack={engagement.pinDownScriptPack}
-          pinDownPageAudit={engagement.pinDownPageAudit}
-          conversationIntelligence={conversationIntelligenceState}
-        />
+        {/* Brand voice, ad briefs, script pack, and confirmation-page audit
+            (DeliverablesPanel) used to render here unconditionally for
+            every engagement, pin-down enabled or not — moved to pin-down's
+            own dedicated page (skills/pin-down/page.tsx), same as every
+            other skill in SKILLS_WITH_OWN_PAGE, instead of always showing
+            on the main engagement page regardless of setup state. */}
 
         {(conversationIntelligenceState.enabled || conversationIntelligenceSessionRows.length > 0) && (
           <CallIntelligenceLog sessions={conversationIntelligenceSessionRows} />
@@ -489,9 +484,10 @@ export default async function EngagementDetailPage({
               </div>
             )}
 
-            {/* Filtered run list */}
+            {/* Filtered run list — transparent so the page's bg-dot-grid
+                shows through instead of the opaque glass fill hiding it. */}
             {filteredRuns.length > 0 ? (
-              <div className="w-full overflow-hidden no-ambient-glow surface-glass-1 rounded-xl transition-colors">
+              <div className="w-full overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl transition-colors">
                 <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
                   {filteredRuns.slice(0, 20).map((run) => {
                     const isFailed = run.status.toLowerCase() === "failed";

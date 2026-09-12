@@ -40,9 +40,12 @@ export function DynamicClientReport({
   offerDetails?: Record<string, string | boolean> | null;
   blocksByPeriod: Record<ReportPeriod, ReportBlockWithTrend[]>;
   /** Every worker actually enabled for this client — used only to name
-   * the ones that contributed zero blocks in any period (leak-map, and
-   * anything else with genuinely nothing trend-able) so they read as
-   * "running, nothing numeric here" instead of looking identical to off. */
+   * the ones that contributed zero blocks in any period (pin-down,
+   * leak-map, rep-onboarding — anything with genuinely nothing
+   * trend-able) so they read as "enabled, nothing numeric to trend here"
+   * instead of looking identical to off. This is never a run-status
+   * check — a permanently-empty resolver means this forever, whether or
+   * not the skill has actually finished running. */
   enabledWorkerIds: WorkerId[];
 }) {
   const [period, setPeriod] = useState<ReportPeriod>("week");
@@ -135,7 +138,7 @@ export function DynamicClientReport({
               href={workerPrimaryHref(id, engagementId)}
               className="text-xs text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors underline decoration-dotted underline-offset-2"
             >
-              {WORKER_REGISTRY[id].name} is running — see its full report
+              {WORKER_REGISTRY[id].name} has no trend to show — see its full report
             </Link>
           ))}
         </div>

@@ -855,7 +855,7 @@ export function allWorkers(): WorkerDefinition[] {
  * own links — two independently-maintained copies of "which workers have
  * a page" is exactly the kind of drift this registry exists to prevent.
  */
-export const SKILLS_WITH_OWN_PAGE: WorkerId[] = ["pre-call-read", "pile-on", "win-back", "leak-map"];
+export const SKILLS_WITH_OWN_PAGE: WorkerId[] = ["pre-call-read", "pile-on", "win-back", "leak-map", "pin-down"];
 
 /** The 4 Reputation Manager "watch" workers — same shape (a stream of
  * findings: text + sentiment + flag + permalink), so they share one
@@ -895,9 +895,9 @@ const REP_CRISIS_RESPONSE_HREF = "/dashboard/reputation-manager/incidents";
  * only ever has one) with whichever real, single-client page already
  * exists for it: its own schedule/report page, RM's shared findings
  * page (pre-filtered to this worker's source), the incidents tracker, or
- * — for a worker with none of those (pin-down, rep-onboarding) — the
- * engagement page's own Run History, pre-filtered to just this worker's
- * runs via the same `?skill=` param its filter chips already use.
+ * — for a worker with none of those (rep-onboarding) — the engagement
+ * page's own Run History, pre-filtered to just this worker's runs via
+ * the same `?skill=` param its filter chips already use.
  */
 export function workerPrimaryHref(workerId: WorkerId, engagementId: string): string {
   if (SKILLS_WITH_OWN_PAGE.includes(workerId)) {
