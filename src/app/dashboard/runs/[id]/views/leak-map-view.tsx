@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { ViewSwitcher, type RunViewMode } from "../_shared/view-switcher";
 import { StatusPill, toneFromSeverity } from "../_shared/status-pill";
 import { EmptyState } from "../_shared/empty-state";
+import { SimpleMarkdown } from "@/components/simple-markdown";
 
 const INSUFFICIENT_DATA_GAP = /^\[insufficient-data\] (.+?): sample too small \(current n=(\d+), prior n=(\d+), floor=(\d+)\)\./;
 function humanizeGap(gap: string): string {
@@ -143,11 +144,11 @@ export function LeakMapView({
               {/* Status Strip */}
               <div
                 className={cn(
-                  "flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl px-3.5 py-2.5 transition-all",
-                  overallSeverity === "high" && "border border-rose-900/50 bg-rose-950/10",
-                  overallSeverity === "medium" && "border border-orange-900/50 bg-orange-950/10",
-                  overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData &&
-                    "border border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10"
+                  "flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border-l-2 bg-transparent px-3.5 py-2.5 transition-all",
+                  overallSeverity === "high" && "border-rose-500/60",
+                  overallSeverity === "medium" && "border-orange-500/60",
+                  overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData && "border-amber-500/60",
+                  overallSeverity !== "high" && overallSeverity !== "medium" && hasAnyUsableData && "border-zinc-200/60 dark:border-zinc-800/60"
                 )}
               >
                 <div className="flex items-center gap-2 shrink-0">
@@ -190,7 +191,7 @@ export function LeakMapView({
                   real RM risk signal both moved unfavorably this same
                   week for this client. */}
               {correlationFlags.length > 0 && (
-                <div className="flex flex-col gap-1.5 rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/40 dark:bg-orange-950/10 p-3">
+                <div className="flex flex-col gap-1.5 rounded-xl border-l-2 border-orange-500/60 bg-transparent p-3">
                   {correlationFlags.map((flag, i) => (
                     <p key={i} className="flex items-start gap-2 text-xs leading-relaxed text-orange-800 dark:text-orange-300">
                       <AlertTriangle size={13} className="shrink-0 mt-0.5" />
@@ -241,9 +242,10 @@ export function LeakMapView({
                     </div>
 
                     {audit.reportMarkdown ? (
-                      <div className="whitespace-pre-wrap pt-2 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto">
-                        {audit.reportMarkdown}
-                      </div>
+                      <SimpleMarkdown
+                        text={audit.reportMarkdown}
+                        className="pt-2 text-xs text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto"
+                      />
                     ) : (
                       <p className="pt-2 text-xs italic text-zinc-500 dark:text-zinc-500">
                         No report text stored for this run. Check the Steps panel to confirm whether delivery (Resend/Slack) succeeded.
@@ -254,7 +256,7 @@ export function LeakMapView({
 
                 {/* Data Gaps sidebar */}
                 {filteredGaps.length > 0 && (
-                  <div className="rounded-xl border border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10 p-3 lg:sticky lg:top-3">
+                  <div className="rounded-xl border-l-2 border-amber-500/60 bg-transparent p-3 lg:sticky lg:top-3">
                     <div className="mb-1.5 flex items-center gap-1.5">
                       <HelpCircle size={13} className="text-amber-700 dark:text-amber-400" />
                       <h3 className="text-[11px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">
@@ -363,10 +365,11 @@ function IssueCard({ issue }: { issue: IssueType }) {
   return (
     <div
       className={cn(
-        "rounded-xl p-3 transition-all",
-        cardTone === "danger" && "border border-rose-900/40 bg-rose-950/10",
-        cardTone === "warning" && "border border-orange-900/40 bg-orange-950/10",
-        cardTone === "gap" && "border border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10"
+        "rounded-xl border-l-2 bg-transparent p-3 transition-all",
+        cardTone === "danger" && "border-rose-500/60",
+        cardTone === "warning" && "border-orange-500/60",
+        cardTone === "gap" && "border-amber-500/60",
+        cardTone !== "danger" && cardTone !== "warning" && cardTone !== "gap" && "border-zinc-200/60 dark:border-zinc-800/60"
       )}
     >
       {/* Header row */}

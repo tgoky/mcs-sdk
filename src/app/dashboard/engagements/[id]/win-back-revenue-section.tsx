@@ -235,7 +235,7 @@ export function WinBackRevenueSection({
       </div>
 
       {/* ── TOP STATS SUMMARY BAR ── */}
-      <div className="no-ambient-glow surface-glass-1 rounded-2xl p-4">
+      <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="space-y-1 p-2">
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
@@ -274,7 +274,7 @@ export function WinBackRevenueSection({
       {/* ── Weekly Recovery Trend — a compact bar strip instead of a 12-card
            kanban board that rendered "No Recoveries" placeholders for every
            empty week. Same information, no empty scaffolding. ── */}
-      <div className="no-ambient-glow surface-glass-1 rounded-2xl p-4">
+      <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
             Weekly Recovery Trend — {selectedPeriod.label}
@@ -316,7 +316,7 @@ export function WinBackRevenueSection({
 
       {/* ── Recovered Deals — flat chronological list. Only real rows,
            one honest empty state instead of stacked per-week placeholders. ── */}
-      <div className="no-ambient-glow surface-glass-1 rounded-2xl overflow-hidden">
+      <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800/80">
           <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
             Recovered Deals — {selectedPeriod.label}
@@ -399,7 +399,7 @@ function RecoveredDealDrawer({
                 <span className="truncate">{deal.prospectEmail}</span>
               </div>
 
-              <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2">
+              <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-3 space-y-2">
                 {offerPrice > 0 && (
                   <div className="flex items-center justify-between text-xs font-sans">
                     <span className="text-zinc-600 dark:text-zinc-400">Revenue attributed</span>
@@ -423,7 +423,7 @@ function RecoveredDealDrawer({
               </div>
 
               {deal.runId && (
-                <div className="no-ambient-glow surface-glass-1 rounded-xl overflow-hidden">
+                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setShowRunActivity((p) => !p)}

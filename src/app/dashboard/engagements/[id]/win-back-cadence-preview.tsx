@@ -3,9 +3,9 @@
 // src/app/dashboard/engagements/[id]/win-back-cadence-preview.tsx
 
 import { useState } from "react";
-import { Mail, MessageSquare, ChevronDown, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Mail, MessageSquare, ChevronDown, Loader2, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TriggerSkillButton } from "./trigger-skill-button";
 
 export interface WinBackCadenceAssetMap {
   windowDays: number;
@@ -35,22 +35,48 @@ export function WinBackCadencePreview({
   engagementId: string;
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const router = useRouter();
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  async function handleGenerate() {
+    setGenerating(true);
+    setGenerateError(null);
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}/win-back/generate-cadence`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to generate cadence.");
+      router.refresh();
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : "Failed to generate cadence.");
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   if (!assetMap) {
     return (
-      <div className="no-ambient-glow surface-glass-2 rounded-2xl p-5 font-sans">
+      <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-5 font-sans">
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-400">
-            <Sparkles size={13} />
-          </span>
           <div className="min-w-0">
             <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans mt-1 max-w-md">
               No cadence has been generated yet. Win-Back builds this the first time its sequence runs for this
               engagement — run it now to generate the emails and texts every recovered prospect will receive.
             </p>
-            <div className="mt-3 w-56">
-              <TriggerSkillButton engagementId={engagementId} skillName="win-back" label="Generate cadence now" />
+            <div className="mt-3 space-y-1.5 w-56">
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={generating}
+                className="hover-lift press-settle shadow-elevation-1 w-full flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {generating ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+                {generating ? "Generating…" : "Generate cadence now"}
+              </button>
+              {generateError && (
+                <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">{generateError}</p>
+              )}
             </div>
           </div>
         </div>
@@ -64,7 +90,7 @@ export function WinBackCadencePreview({
   ].sort((a, b) => a.offsetDays - b.offsetDays);
 
   return (
-    <div className="no-ambient-glow surface-glass-2 rounded-2xl overflow-hidden font-sans">
+    <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden font-sans">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/40 px-5 py-3">
         <div>
           <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
@@ -107,7 +133,7 @@ export function WinBackCadencePreview({
               </button>
               {expanded && (
                 <div className="px-5 pb-4 pl-[3.25rem]">
-                  <p className="text-xs text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans no-ambient-glow surface-glass-1 rounded-xl p-3">
+                  <p className="text-xs text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-3">
                     {t.body}
                   </p>
                 </div>
