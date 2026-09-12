@@ -412,7 +412,6 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                 ))}
               </div>
             )}
-          </div>
         </div>
 
         {/* RIGHT: Diagnostic detail — just enough context to place it (which

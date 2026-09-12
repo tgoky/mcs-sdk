@@ -1,0 +1,40 @@
+From 6e87a295d5c6c2d31a58dcff20c13dbefe942641 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 12 Sep 2026 20:21:38 +0000
+Subject: [PATCH] Fix build-breaking extra closing div in leak-map-schedule.tsx
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The master-detail rewrite left one stray extra </div> right after the
+timeline list, closing the grid wrapper a level early instead of just
+the left column — the right column then ended up outside the grid, and
+the file ran one </div> short at the end. Turbopack reported this as
+"Unterminated regexp literal" (the desynced tag matching eventually
+misreads a later "/" as regex), not as the real mismatched-tag error.
+
+My earlier "balance check" only counted {} and () — it never actually
+validated JSX tag matching, which is exactly the class of bug this was.
+Verified this fix with a real open/close tag count instead.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AkznvRLnBokzbdmJ2WwaEM
+---
+ src/app/dashboard/engagements/[id]/leak-map-schedule.tsx | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/app/dashboard/engagements/[id]/leak-map-schedule.tsx b/src/app/dashboard/engagements/[id]/leak-map-schedule.tsx
+index fa1f9f0..a584cff 100644
+--- a/src/app/dashboard/engagements/[id]/leak-map-schedule.tsx
++++ b/src/app/dashboard/engagements/[id]/leak-map-schedule.tsx
+@@ -412,7 +412,6 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
+                 ))}
+               </div>
+             )}
+-          </div>
+         </div>
+ 
+         {/* RIGHT: Diagnostic detail — just enough context to place it (which
+-- 
+2.43.0
+
