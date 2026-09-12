@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { 
+import { useRouter } from "next/navigation";
+import {
   ChevronDown, 
   ChevronRight, 
   Radio, 
@@ -179,7 +180,7 @@ function DeliverableRow({
     <div
       className={
         isOpen
-          ? "no-ambient-glow surface-glass-2 text-zinc-900 dark:text-zinc-100 rounded-2xl my-3 transition-all duration-200"
+          ? "bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 text-zinc-900 dark:text-zinc-100 rounded-2xl my-3 transition-all duration-200"
           : "border-b border-zinc-200/80 dark:border-zinc-800/60 last:border-b-0 transition-all duration-200"
       }
     >
@@ -248,6 +249,7 @@ export function DeliverablesPanel({
   pinDownPageAudit: PinDownPageAudit;
   conversationIntelligence?: ConversationIntelligenceState;
 }) {
+  const router = useRouter();
   const isAiExtracted = brandVoiceProfile?.source_path === "ai_extracted";
   const briefs = adCreativeBriefs?.briefs ?? [];
 
@@ -257,6 +259,34 @@ export function DeliverablesPanel({
   const toggleRow = (id: string) => {
     setOpenRowId((prev) => (prev === id ? null : id));
   };
+
+  // Ad briefs and the script pack were only ever regenerable from the
+  // "Edit client details" drawer (client-details-drawer.tsx), nowhere
+  // near where they're actually displayed — same /regenerate endpoints,
+  // now reachable from the deliverables themselves too.
+  const [regeneratingBriefs, setRegeneratingBriefs] = useState(false);
+  const [regeneratingScripts, setRegeneratingScripts] = useState(false);
+  const [regenerateMessage, setRegenerateMessage] = useState<{ kind: "briefs" | "scripts"; text: string; ok: boolean } | null>(
+    null
+  );
+
+  async function handleRegenerate(kind: "briefs" | "scripts") {
+    const setLoading = kind === "briefs" ? setRegeneratingBriefs : setRegeneratingScripts;
+    const path = kind === "briefs" ? "ad-creative-briefs" : "scripts";
+    setLoading(true);
+    setRegenerateMessage(null);
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}/regenerate/${path}`, { method: "POST" });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error ?? "Regeneration failed.");
+      setRegenerateMessage({ kind, ok: true, text: kind === "briefs" ? "Ad creative briefs regenerated." : "Scripts regenerated." });
+      router.refresh();
+    } catch (err) {
+      setRegenerateMessage({ kind, ok: false, text: err instanceof Error ? err.message : "Regeneration failed." });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const scrapedWordCount = voiceScrapeArtifacts?.totalWordCount ?? 0;
   const scrapedSourceCount = voiceScrapeArtifacts?.sources?.length ?? 0;
@@ -280,7 +310,7 @@ export function DeliverablesPanel({
     <div className="w-full space-y-6 font-sans">
       {/* CALL INTELLIGENCE STATUS HEADER */}
       {conversationIntelligence?.enabled ? (
-        <div className="flex items-center justify-between p-3.5 no-ambient-glow surface-glass-1 rounded-xl text-xs">
+        <div className="flex items-center justify-between p-3.5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-xs">
           <div className="flex items-center gap-3">
             <Radio size={16} className="text-emerald-500 dark:text-emerald-400 animate-pulse shrink-0" />
             <div>
@@ -299,7 +329,7 @@ export function DeliverablesPanel({
           </span>
         </div>
       ) : (
-        <div className="flex items-center justify-between p-3.5 no-ambient-glow surface-glass-1 rounded-xl text-xs">
+        <div className="flex items-center justify-between p-3.5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-xs">
           <div className="flex items-center gap-3">
             <div className="p-1.5 rounded-lg bg-zinc-200 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-800 shrink-0">
               <Radio size={16} />
@@ -414,7 +444,7 @@ export function DeliverablesPanel({
                     const clamped = Math.max(1, Math.min(5, val.score));
                     const pct = ((clamped - 1) / 4) * 100;
                     return (
-                      <div key={key} className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-2">
+                      <div key={key} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-2">
                         <div className="flex justify-between text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
                           <span>{axis?.left ?? key}</span>
                           <span className="text-zinc-900 dark:text-zinc-100 font-bold">{val.score}/5</span>
@@ -494,7 +524,7 @@ export function DeliverablesPanel({
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {voiceScrapeArtifacts.sources.map((s, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-2 no-ambient-glow surface-glass-1 rounded-lg text-xs">
+                    <div key={i} className="flex items-center justify-between px-3 py-2 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg text-xs">
                       <span className="text-zinc-800 dark:text-zinc-200 truncate max-w-[80%]" title={s.url}>
                         <strong className="font-semibold">{SOURCE_KIND_LABELS[s.kind] ?? s.kind}</strong>
                         {s.url ? ` — ${s.url}` : ""}
@@ -507,6 +537,34 @@ export function DeliverablesPanel({
             )}
           </div>
         </DeliverableRow>
+
+        {/* Regenerate control — same /regenerate/ad-creative-briefs
+            endpoint client-details-drawer.tsx already calls, surfaced
+            here too since that's where these briefs actually live. */}
+        {briefs.length > 0 && (
+          <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              Generated once during onboarding — regenerate to refresh from the current brand voice and offer details.
+            </p>
+            <button
+              type="button"
+              onClick={() => handleRegenerate("briefs")}
+              disabled={regeneratingBriefs}
+              className="hover-lift press-settle shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              {regeneratingBriefs ? "Regenerating…" : "Regenerate"}
+            </button>
+          </div>
+        )}
+        {regenerateMessage?.kind === "briefs" && (
+          <p
+            className={`px-3 pb-2 text-[11px] font-semibold ${
+              regenerateMessage.ok ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+            }`}
+          >
+            {regenerateMessage.text}
+          </p>
+        )}
 
         {/* INDIVIDUAL AD BRIEFS */}
         {briefs.map((b) => {
@@ -581,6 +639,31 @@ export function DeliverablesPanel({
             }
           >
             <div className="space-y-5 pt-2 text-xs">
+              {/* Regenerate control — same /regenerate/scripts endpoint
+                  client-details-drawer.tsx already calls. */}
+              <div className="flex items-center justify-between gap-3 pb-1">
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Regenerate from the current brand voice, offer, call questions, and casting choice.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleRegenerate("scripts")}
+                  disabled={regeneratingScripts}
+                  className="hover-lift press-settle shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                  {regeneratingScripts ? "Regenerating…" : "Regenerate"}
+                </button>
+              </div>
+              {regenerateMessage?.kind === "scripts" && (
+                <p
+                  className={`text-[11px] font-semibold -mt-3 ${
+                    regenerateMessage.ok ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                  }`}
+                >
+                  {regenerateMessage.text}
+                </p>
+              )}
+
               {pinDownScriptPack.heroScript && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between pb-1 border-b border-zinc-200 dark:border-zinc-800">
@@ -589,7 +672,7 @@ export function DeliverablesPanel({
                   </div>
                   <div className="space-y-2">
                     {pinDownScriptPack.heroScript.chapters.map((c, i) => (
-                      <div key={i} className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-1">
+                      <div key={i} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="text-zinc-700 dark:text-zinc-300 font-mono font-bold text-[11px]">{c.timestampLabel}</span>
                           <span className="text-zinc-900 dark:text-zinc-100 font-semibold">{c.beat}</span>
@@ -611,7 +694,7 @@ export function DeliverablesPanel({
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {pinDownScriptPack.breakoutScripts.map((s) => (
-                      <div key={s.id} className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-2">
+                      <div key={s.id} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-zinc-900 dark:text-zinc-100">{s.title}</span>
                           <span className="text-[11px] font-mono text-zinc-500">~{s.targetLengthSeconds}s</span>
@@ -635,7 +718,7 @@ export function DeliverablesPanel({
                     Recording Logistics Checklist
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-1.5">
+                    <div className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1.5">
                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
                         <Wrench size={13} className="text-zinc-500" /> Equipment
                       </span>
@@ -646,7 +729,7 @@ export function DeliverablesPanel({
                       </ul>
                     </div>
 
-                    <div className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-1.5">
+                    <div className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1.5">
                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
                         <Camera size={13} className="text-zinc-500" /> Environment
                       </span>
@@ -657,7 +740,7 @@ export function DeliverablesPanel({
                       </ul>
                     </div>
 
-                    <div className="p-3 no-ambient-glow surface-glass-1 rounded-lg space-y-1.5">
+                    <div className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1.5">
                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
                         <Shirt size={13} className="text-zinc-500" /> Wardrobe &amp; Framing
                       </span>
@@ -686,7 +769,7 @@ export function DeliverablesPanel({
             subtitle={`Audited ${pinDownPageAudit.auditedUrl}`}
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
-              <div className="space-y-1.5 p-3 no-ambient-glow surface-glass-1 rounded-lg">
+              <div className="space-y-1.5 p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
                   <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400" /> Strengths
                 </span>
@@ -697,7 +780,7 @@ export function DeliverablesPanel({
                 </ul>
               </div>
 
-              <div className="space-y-1.5 p-3 no-ambient-glow surface-glass-1 rounded-lg">
+              <div className="space-y-1.5 p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
                   <AlertCircle size={12} className="text-rose-600 dark:text-rose-400" /> Weaknesses
                 </span>
@@ -708,7 +791,7 @@ export function DeliverablesPanel({
                 </ul>
               </div>
 
-              <div className="space-y-1.5 p-3 no-ambient-glow surface-glass-1 rounded-lg">
+              <div className="space-y-1.5 p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
                   v1 Improvements
                 </span>
@@ -721,7 +804,7 @@ export function DeliverablesPanel({
             </div>
 
             {pinDownPageAudit.competitorComparison && pinDownPageAudit.competitorComparison.notes.length > 0 && (
-              <div className="space-y-1.5 p-3 mt-3 no-ambient-glow surface-glass-1 rounded-lg text-xs">
+              <div className="space-y-1.5 p-3 mt-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg text-xs">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
                   Vs. {pinDownPageAudit.competitorComparison.url}
                 </span>

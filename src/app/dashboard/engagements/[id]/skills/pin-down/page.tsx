@@ -56,40 +56,45 @@ export default async function PinDownSkillPage({
   const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
 
   return (
-    <div className="space-y-6 font-sans antialiased">
-      <SetBreadcrumbLabel label={`${engagement.buyer} · Show Rate Setup`} />
+    <div className="relative min-h-screen w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200 overflow-hidden pb-10">
+      {/* Dot Grid Background — same as the main engagement page */}
+      <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
 
-      {/* Clean Single Header Section */}
-      <div className="flex items-center gap-3">
-        <Link
-          href={backHref}
-          className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
-          aria-label={backLabel}
-          title={backLabel}
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Link>
+      <div className="relative z-10 space-y-6 font-sans antialiased">
+        <SetBreadcrumbLabel label={`${engagement.buyer} · Show Rate Setup`} />
 
-        <div>
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
-            Show Rate Setup — {engagement.buyer}
-          </h1>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
-            Brand voice, ad creative briefs, video scripts, and confirmation page — the one-time onboarding output, not an ongoing run.
-          </p>
+        {/* Clean Single Header Section */}
+        <div className="flex items-center gap-3">
+          <Link
+            href={backHref}
+            className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
+            aria-label={backLabel}
+            title={backLabel}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Link>
+
+          <div>
+            <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
+              Show Rate Setup — {engagement.buyer}
+            </h1>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
+              Brand voice, ad creative briefs, video scripts, and confirmation page — the one-time onboarding output, not an ongoing run.
+            </p>
+          </div>
         </div>
-      </div>
 
-      <DeliverablesPanel
-        engagementId={id}
-        discoveryPrefill={engagement.discoveryPrefill}
-        voiceScrapeArtifacts={engagement.voiceScrapeArtifacts}
-        brandVoiceProfile={engagement.brandVoiceProfile as BrandVoiceProfile}
-        adCreativeBriefs={engagement.adCreativeBriefs}
-        pinDownScriptPack={engagement.pinDownScriptPack}
-        pinDownPageAudit={engagement.pinDownPageAudit}
-        conversationIntelligence={conversationIntelligenceState}
-      />
+        <DeliverablesPanel
+          engagementId={id}
+          discoveryPrefill={engagement.discoveryPrefill}
+          voiceScrapeArtifacts={engagement.voiceScrapeArtifacts}
+          brandVoiceProfile={engagement.brandVoiceProfile as BrandVoiceProfile}
+          adCreativeBriefs={engagement.adCreativeBriefs}
+          pinDownScriptPack={engagement.pinDownScriptPack}
+          pinDownPageAudit={engagement.pinDownPageAudit}
+          conversationIntelligence={conversationIntelligenceState}
+        />
+      </div>
     </div>
   );
 }
