@@ -141,7 +141,7 @@ export function LeakMapView({
           </div>
         )}
 
-        <ViewSwitcher value={mode} onChange={setMode} modes={["calendar", "list"]} className="ml-auto" />
+        <ViewSwitcher value={mode} onChange={setMode} modes={["calendar", "list"]} className={embedded ? undefined : "ml-auto"} />
       </div>
 
       {!audit ? (
@@ -288,12 +288,10 @@ export function LeakMapView({
               {/* Executive Report Reader — flows in the page's own scroll
                   now, no forced inner scrollbox hiding most of it. */}
               <div>
-                <div className="mb-2 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
+                <div className="mb-2 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2.5">
                   <div className="flex items-center gap-2">
-                    <FileText size={13} className="text-zinc-600 dark:text-zinc-400" />
-                    <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
-                      Executive Audit Report
-                    </h3>
+                    <FileText size={16} className="text-zinc-500 dark:text-zinc-400" />
+                    <h2 className="text-base font-bold text-zinc-900 dark:text-white">Executive Audit Report</h2>
                   </div>
                   {audit.reportMarkdown && (
                     <button

@@ -300,9 +300,10 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-transparent">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
-                <span className="text-xs font-bold text-zinc-900 dark:text-white">
-                  {monthName} Timeline
-                </span>
+                {/* Just "Timeline" — the month is already shown once, in
+                    the toolbar above (with its own prev/next/Today nav),
+                    repeating it here was pure duplication. */}
+                <span className="text-xs font-bold text-zinc-900 dark:text-white">Timeline</span>
               </div>
 
               <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px]">
