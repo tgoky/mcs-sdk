@@ -179,7 +179,7 @@ export function SimpleMarkdown({ text, className }: { text: string; className?: 
       }
       const segKey = key++;
       blocks.push(
-        <div key={segKey} className="rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/50 dark:bg-zinc-900/40 p-3 my-2.5">
+        <div key={segKey} className="border-t border-zinc-200/60 dark:border-zinc-800/60 pt-3 mt-3 first:mt-0 first:border-t-0 first:pt-0">
           <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-1.5">
             {renderInline(boldOnly[1], `seg-h-${segKey}`)}
           </p>
