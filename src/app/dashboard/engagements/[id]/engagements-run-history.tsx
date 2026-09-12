@@ -67,8 +67,9 @@ export function EngagementRunHistory({
         })}
       </div>
 
-      {/* Filtered Runs List */}
-      <div className="w-full overflow-hidden no-ambient-glow surface-glass-1 rounded-xl transition-colors">
+      {/* Filtered Runs List — transparent so the page's bg-dot-grid shows
+          through instead of the opaque glass fill hiding it. */}
+      <div className="w-full overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl transition-colors">
         <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
           {filteredRuns.slice(0, 20).map((run) => (
             <li key={run.id} className="group relative">

@@ -322,8 +322,9 @@ export function DeliverablesPanel({
         </div>
       )}
 
-      {/* MAIN DELIVERABLES CONTAINER */}
-      <div className="w-full no-ambient-glow surface-glass-2 rounded-2xl p-2 sm:p-4 divide-y divide-zinc-200 dark:divide-zinc-800/60">
+      {/* MAIN DELIVERABLES CONTAINER — transparent so the page's bg-dot-grid
+          shows through instead of the opaque glass fill hiding it. */}
+      <div className="w-full bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-2 sm:p-4 divide-y divide-zinc-200 dark:divide-zinc-800/60">
         
         {/* BRAND VOICE & SITE INTELLIGENCE ROW */}
         <DeliverableRow
