@@ -144,10 +144,10 @@ export function LeakMapView({
               {/* Status Strip */}
               <div
                 className={cn(
-                  "flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border-l-2 bg-transparent px-3.5 py-2.5 transition-all",
-                  overallSeverity === "high" && "border-rose-500/60",
-                  overallSeverity === "medium" && "border-orange-500/60",
-                  overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData && "border-amber-500/60",
+                  "flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border bg-transparent px-3.5 py-2.5 transition-all",
+                  overallSeverity === "high" && "border-rose-500/40",
+                  overallSeverity === "medium" && "border-orange-500/40",
+                  overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData && "border-amber-500/40",
                   overallSeverity !== "high" && overallSeverity !== "medium" && hasAnyUsableData && "border-zinc-200/60 dark:border-zinc-800/60"
                 )}
               >
@@ -191,7 +191,7 @@ export function LeakMapView({
                   real RM risk signal both moved unfavorably this same
                   week for this client. */}
               {correlationFlags.length > 0 && (
-                <div className="flex flex-col gap-1.5 rounded-xl border-l-2 border-orange-500/60 bg-transparent p-3">
+                <div className="flex flex-col gap-1.5 rounded-xl border border-orange-500/40 bg-transparent p-3">
                   {correlationFlags.map((flag, i) => (
                     <p key={i} className="flex items-start gap-2 text-xs leading-relaxed text-orange-800 dark:text-orange-300">
                       <AlertTriangle size={13} className="shrink-0 mt-0.5" />
@@ -205,7 +205,7 @@ export function LeakMapView({
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-3 items-start">
                 <div className="flex flex-col gap-3 min-w-0">
                   {filteredIssues.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                    <div className="rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
                       {filteredIssues.map((issue) => (
                         <IssueCard key={issue.name} issue={issue} />
                       ))}
@@ -256,7 +256,7 @@ export function LeakMapView({
 
                 {/* Data Gaps sidebar */}
                 {filteredGaps.length > 0 && (
-                  <div className="rounded-xl border-l-2 border-amber-500/60 bg-transparent p-3 lg:sticky lg:top-3">
+                  <div className="rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-3 lg:sticky lg:top-3">
                     <div className="mb-1.5 flex items-center gap-1.5">
                       <HelpCircle size={13} className="text-amber-700 dark:text-amber-400" />
                       <h3 className="text-[11px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">
@@ -356,22 +356,8 @@ export function LeakMapView({
 function IssueCard({ issue }: { issue: IssueType }) {
   const improved = issue.delta > 0;
   const tone = toneFromSeverity(issue.severity);
-  // A metric with insufficientData always has severity "none" (computeDelta
-  // forces this), but "none because unconfirmed" and "none because
-  // genuinely nominal" need to look different here, or this card ends up
-  // asserting "stable performance" for something that was never actually
-  // checked — which is exactly what it did before this field existed.
-  const cardTone = issue.insufficientData ? "gap" : tone;
   return (
-    <div
-      className={cn(
-        "rounded-xl border-l-2 bg-transparent p-3 transition-all",
-        cardTone === "danger" && "border-rose-500/60",
-        cardTone === "warning" && "border-orange-500/60",
-        cardTone === "gap" && "border-amber-500/60",
-        cardTone !== "danger" && cardTone !== "warning" && cardTone !== "gap" && "border-zinc-200/60 dark:border-zinc-800/60"
-      )}
-    >
+    <div className="p-3">
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">

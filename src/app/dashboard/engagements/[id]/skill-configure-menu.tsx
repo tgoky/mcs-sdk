@@ -6,14 +6,15 @@
 // the main engagement page (bridges/[skill]/page.tsx, a full page nav
 // away) — a skill's own dedicated page (skills/[skill]/page.tsx) had no
 // way to reach its settings at all. This puts the same config form
-// directly on that page instead, via the same glassy, portaled-to-body
-// overlay ActionMenu already uses elsewhere (action-menu.tsx) — it opens
-// over the current page rather than navigating away, and closes back to
-// exactly where you were.
+// directly on that page instead, via FloatingPanel — the same glassy,
+// portaled-to-body treatment ActionMenu uses, but sized and behaved for
+// a real form (wider, and doesn't close on internal scroll/resize the
+// way ActionMenu does — see floating-panel.tsx's own doc for why that
+// matters here specifically).
 
 import { useRouter } from "next/navigation";
 import { Settings } from "lucide-react";
-import { ActionMenu } from "@/components/action-menu";
+import { FloatingPanel } from "@/components/floating-panel";
 import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
 import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
 import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
@@ -25,9 +26,9 @@ export function SkillConfigureMenu({ skillId, engagementId }: { skillId: Configu
   const router = useRouter();
 
   return (
-    <ActionMenu
+    <FloatingPanel
       align="end"
-      panelWidth={440}
+      panelWidth={560}
       trigger={({ toggle, open }) => (
         <button
           type="button"
@@ -56,6 +57,6 @@ export function SkillConfigureMenu({ skillId, engagementId }: { skillId: Configu
           </div>
         );
       }}
-    </ActionMenu>
+    </FloatingPanel>
   );
 }

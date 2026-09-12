@@ -1,4 +1,48 @@
-import { callClaudeWithRetry, MODEL } from "@/lib/llm";
+import { callClaudeWithRetry, MODEL, type ClaudeCallOptions } from "@/lib/llm";
+
+// Pulls the JSON object out of a model response that's supposed to be
+// "ONLY JSON, no prose" but isn't guaranteed to be — strips ```json
+// fences first, then (if it still doesn't parse as-is) falls back to
+// slicing between the first "{" and the last "}", which survives a
+// stray "Here's the cadence:" preamble or trailing commentary that a
+// plain fence-strip doesn't.
+function extractJson<T>(text: string): T {
+  const fenceStripped = text.replace(/^```json\s*|```$/g, "").trim();
+  try {
+    return JSON.parse(fenceStripped);
+  } catch {
+    // fall through to bracket-slicing below
+  }
+  const start = fenceStripped.indexOf("{");
+  const end = fenceStripped.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("No JSON object found in response");
+  }
+  return JSON.parse(fenceStripped.slice(start, end + 1));
+}
+
+// callClaudeWithRetry only retries on the API call itself throwing
+// (network/rate-limit errors) — a call that succeeds but returns
+// unparseable JSON was never retried at all, it just failed the whole
+// cadence generation outright. This retries the generation itself once,
+// with an explicit correction appended to the prompt, before giving up.
+async function callClaudeForJson<T>(opts: ClaudeCallOptions, failureLabel: string): Promise<T> {
+  const first = await callClaudeWithRetry(opts);
+  try {
+    return extractJson<T>(first.text);
+  } catch {
+    const retryOpts: ClaudeCallOptions = {
+      ...opts,
+      userMessage: `${opts.userMessage}\n\nYour previous response was not valid JSON. Return ONLY the JSON object — no prose before or after it, no markdown code fences.`,
+    };
+    const second = await callClaudeWithRetry(retryOpts);
+    try {
+      return extractJson<T>(second.text);
+    } catch {
+      throw new Error(`${failureLabel} returned non-JSON output after a retry: ${second.text.slice(0, 200)}`);
+    }
+  }
+}
 
 export type RecoveryWindowDays = 14 | 21 | 30 | 45 | 60;
 
@@ -167,23 +211,19 @@ Include every email id and sms id listed below, in order.`;
 Emails: ${plan.emails.map((e) => `${e.id} (${e.purpose})`).join(", ")}
 SMS: ${plan.sms.map((s) => `${s.id} (${s.purpose})`).join(", ")}`;
 
-  const result = await callClaudeWithRetry({
-    model: MODEL.SYNTHESIS,
-    system,
-    userMessage,
-    maxTokens: 2500,
-    runId,
-  });
-
-  let parsed: { emails: Array<{ id: string; subject: string; body: string }>; sms: Array<{ id: string; body: string }> };
-  try {
-    const cleaned = result.text.replace(/^```json\s*|\s*```$/g, "").trim();
-    parsed = JSON.parse(cleaned);
-  } catch {
-    throw new Error(
-      `Win-back cadence generation returned non-JSON output: ${result.text.slice(0, 200)}`
-    );
-  }
+  const parsed = await callClaudeForJson<{
+    emails: Array<{ id: string; subject: string; body: string }>;
+    sms: Array<{ id: string; body: string }>;
+  }>(
+    {
+      model: MODEL.SYNTHESIS,
+      system,
+      userMessage,
+      maxTokens: 2500,
+      runId,
+    },
+    "Win-back cadence generation"
+  );
 
   const emails: CadenceAsset[] = plan.emails.map((slot) => {
     const match = parsed.emails.find((e) => e.id === slot.id);
@@ -278,23 +318,16 @@ Include every email id listed below, in order.`;
   const userMessage = `Generate the sequence for this touch plan:
 Emails: ${LONG_TERM_NURTURE_PLAN.map((e) => `${e.id} (${e.purpose})`).join(", ")}`;
 
-  const result = await callClaudeWithRetry({
-    model: MODEL.SYNTHESIS,
-    system,
-    userMessage,
-    maxTokens: 3000,
-    runId,
-  });
-
-  let parsed: { emails: Array<{ id: string; subject: string; body: string }> };
-  try {
-    const cleaned = result.text.replace(/^```json\s*|\s*```$/g, "").trim();
-    parsed = JSON.parse(cleaned);
-  } catch {
-    throw new Error(
-      `Long-term nurture generation returned non-JSON output: ${result.text.slice(0, 200)}`
-    );
-  }
+  const parsed = await callClaudeForJson<{ emails: Array<{ id: string; subject: string; body: string }> }>(
+    {
+      model: MODEL.SYNTHESIS,
+      system,
+      userMessage,
+      maxTokens: 3000,
+      runId,
+    },
+    "Long-term nurture generation"
+  );
 
   const emails: CadenceAsset[] = LONG_TERM_NURTURE_PLAN.map((slot) => {
     const match = parsed.emails.find((e) => e.id === slot.id);

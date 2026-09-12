@@ -386,8 +386,8 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                             className={cn(
                               "hover-lift press-settle flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-0",
                               isSelected
-                                ? "bg-zinc-100/80 dark:bg-zinc-800 text-zinc-900 dark:text-white"
-                                : "bg-white dark:bg-transparent hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                                ? "bg-zinc-100/70 dark:bg-zinc-800/70 text-zinc-900 dark:text-white"
+                                : "bg-transparent hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                             )}
                           >
                             <div className="flex items-center gap-3 min-w-0 flex-1">
