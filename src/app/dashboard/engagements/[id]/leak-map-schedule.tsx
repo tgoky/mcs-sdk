@@ -98,12 +98,18 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
   const handleMonthChange = (newDate: Date) => {
     setCurrentDate(newDate);
     setSelectedDate(newDate);
+    // Clear the explicit pick so `selected` falls through to whatever's
+    // first in the new month — otherwise it keeps resolving the old
+    // selectedId straight out of the full (unfiltered-by-month) history
+    // list below, and the detail panel never actually changes.
+    setSelectedId(null);
   };
 
   const handleTodayClick = () => {
     const now = new Date();
     setCurrentDate(now);
     setSelectedDate(now);
+    setSelectedId(null);
   };
 
   const handleUpdateSelectedDate = (newDate: Date) => {
@@ -154,10 +160,17 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
     return monthWeeksGrouped.reduce((acc, curr) => acc + curr.audits.length, 0);
   }, [monthWeeksGrouped]);
 
-  const selected = useMemo(
-    () => history.find((h) => h.id === selectedId) ?? monthWeeksGrouped[0]?.audits[0] ?? history[0] ?? null,
-    [history, selectedId, monthWeeksGrouped]
-  );
+  const selected = useMemo(() => {
+    // Only trust selectedId when it's actually a pick within the current
+    // month's list — otherwise (e.g. right after switching months, before
+    // the auto-select effect below runs) fall through to that month's
+    // first audit, or null if it has none. Never fall back to the most
+    // recent audit overall regardless of month — that's what made the
+    // month arrows look like they did nothing.
+    const byId = selectedId ? history.find((h) => h.id === selectedId) : null;
+    if (byId) return byId;
+    return monthWeeksGrouped[0]?.audits[0] ?? null;
+  }, [history, selectedId, monthWeeksGrouped]);
 
   useEffect(() => {
     if (monthWeeksGrouped.length > 0 && !selectedId) {
@@ -442,7 +455,9 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
         ) : (
           <div className="py-12 text-center text-zinc-500 space-y-2">
             <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-            <p className="text-xs">No audits recorded yet.</p>
+            <p className="text-xs">
+              {history.length === 0 ? "No audits recorded yet." : `No audits recorded in ${monthName} ${year}.`}
+            </p>
           </div>
         )}
       </div>
